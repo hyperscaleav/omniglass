@@ -26,3 +26,15 @@ carries one, and on any `os.Getenv` in the command package that would dodge that
 variable unset and set, and the committed page holds nothing token-shaped (`cmd/docsgen`). The
 token still authenticates from the environment, a flag still wins over it, in process and against
 the built binary and a live server (`TestCLIEndToEnd`).
+
+The security review found the same credential leaking through error paths the fix had not
+touched, each fixed with a test that failed first. `url.Parse` quotes its whole input, and its
+detail quotes pieces of it (the port it read, a bad escape), so a password with a reserved
+character printed through the parse error alone: on every generated command for
+`OMNIGLASS_SERVER`, and for `OMNIGLASS_DSN` on every command that migrates first, a crash-looping
+server writing it to its logs on each restart. One primitive, `redact.ParseURL`, now parses the
+CLI's server URL, the node's claim URL, the migration DSN and the Gateway's URL-form DSN, naming
+the value and withholding the detail. A claim that could not reach its server wrapped the raw
+URL around net/http's already masked error, which `sim run` logged on every retry; it now carries
+the masked one alone. The node variables' reference entries stop calling the token a flag
+default.

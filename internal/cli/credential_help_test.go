@@ -196,6 +196,10 @@ func TestNoFlagDefaultReadsTheEnvironment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	envReads := map[string]map[string]bool{
+		"os":      {"Getenv": true, "LookupEnv": true, "Environ": true, "ExpandEnv": true},
+		"syscall": {"Getenv": true, "Environ": true},
+	}
 	fset := token.NewFileSet()
 	for _, name := range files {
 		if strings.HasSuffix(name, "_test.go") {
@@ -210,10 +214,9 @@ func TestNoFlagDefaultReadsTheEnvironment(t *testing.T) {
 			if !ok {
 				return true
 			}
-			if pkg, ok := sel.X.(*ast.Ident); ok && pkg.Name == "os" &&
-				(sel.Sel.Name == "Getenv" || sel.Sel.Name == "LookupEnv" || sel.Sel.Name == "Environ") {
-				t.Errorf("%s: os.%s reads the environment around config.Get, out of this guard's sight",
-					fset.Position(sel.Pos()), sel.Sel.Name)
+			if pkg, ok := sel.X.(*ast.Ident); ok && envReads[pkg.Name][sel.Sel.Name] {
+				t.Errorf("%s: %s.%s reads the environment around config.Get, out of this guard's sight",
+					fset.Position(sel.Pos()), pkg.Name, sel.Sel.Name)
 			}
 			return true
 		})

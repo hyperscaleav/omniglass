@@ -69,8 +69,11 @@ for the CLI as for any caller: the CLI is just another client, with no privilege
 The environment is read at that moment, never copied into a flag's default, because a default
 is what `--help`, shell completion and the CLI reference print. So every one of them names
 `$OMNIGLASS_TOKEN` and never shows its value, and help output is safe to paste into a ticket or
-a chat ([#979](https://github.com/hyperscaleav/omniglass/issues/979)). Prefer the variable to
-typing `--token` itself, which leaves the secret in your shell history and the process list.
+a chat ([#979](https://github.com/hyperscaleav/omniglass/issues/979)). Errors hold the same line:
+a server URL or a database DSN carrying a `user:password` that does not parse is reported by
+name, with the parser's detail withheld (it can quote the password), so percent-encode any
+reserved character in it. Prefer the variable to typing `--token` itself, which leaves the
+secret in your shell history and the process list.
 
 ```sh
 export OMNIGLASS_SERVER=https://omniglass.example.com

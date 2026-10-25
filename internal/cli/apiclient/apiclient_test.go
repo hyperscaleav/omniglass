@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/cli/apiclient"
@@ -88,5 +89,27 @@ func TestDoOmitsAuthWhenTokenEmpty(t *testing.T) {
 	}
 	if hadAuth {
 		t.Error("Authorization header sent with an empty token")
+	}
+}
+
+// TestAMalformedServerNeverEchoesItsPassword: a server URL whose password
+// carries a reserved character does not parse, and the parser's error quotes
+// the whole URL, so every generated command printed the password (#979's
+// review). The error names the server URL and holds no piece of the password.
+func TestAMalformedServerNeverEchoesItsPassword(t *testing.T) {
+	for _, server := range []string{
+		"https://operator:hunter2@omniglass.example:80a",
+		"https://operator:hun/ter2@omniglass.example",
+	} {
+		_, err := apiclient.New(server, "ogp_x").Do(context.Background(), http.MethodGet, "/api/v1/auth/me", nil)
+		if err == nil {
+			t.Fatalf("%q: Do succeeded; the case needs a server URL that does not parse", server)
+		}
+		if strings.Contains(err.Error(), "hunter2") || strings.Contains(err.Error(), "hun") {
+			t.Errorf("%q: the error %q carries the password", server, err)
+		}
+		if !strings.Contains(err.Error(), "server URL") {
+			t.Errorf("%q: the error %q does not name the server URL", server, err)
+		}
 	}
 }

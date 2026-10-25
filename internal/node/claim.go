@@ -12,6 +12,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+
+	"github.com/hyperscaleav/omniglass/internal/redact"
 )
 
 // Credentials is the NATS credential a node receives from the claim exchange.
@@ -32,7 +34,14 @@ func Claim(ctx context.Context, serverURL, name, token string) (Credentials, err
 	if err != nil {
 		return Credentials{}, fmt.Errorf("node: encode claim: %w", err)
 	}
+	// The server URL can carry a user:password, so neither error below names
+	// the raw URL: redact checks it without quoting it, and net/http's own
+	// transport error already names the URL with the password masked. sim run
+	// logs a failed claim on every retry, so a raw URL here reached the logs.
 	url := strings.TrimRight(serverURL, "/") + "/api/v1/nodes:claim"
+	if _, err := redact.ParseURL(url, "the server URL (--server or $OMNIGLASS_SERVER)"); err != nil {
+		return Credentials{}, fmt.Errorf("node: claim: %w", err)
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return Credentials{}, fmt.Errorf("node: build claim request: %w", err)
@@ -40,7 +49,7 @@ func Claim(ctx context.Context, serverURL, name, token string) (Credentials, err
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return Credentials{}, fmt.Errorf("node: claim to %s: %w", url, err)
+		return Credentials{}, fmt.Errorf("node: claim: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {

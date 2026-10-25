@@ -62,9 +62,9 @@ var Registry = []Var{
 	{Key: "OMNIGLASS_TOKEN", Scope: "cli",
 		Doc: "bearer token the CLI uses when --token is omitted, read when the command runs and never printed by help"},
 	{Key: "OMNIGLASS_NODE_NAME", Scope: "node",
-		Doc: "the node's registered name, the --name default for omniglass node run"},
+		Doc: "the node's registered name, used by omniglass node run and sim run when --name is omitted"},
 	{Key: "OMNIGLASS_NODE_TOKEN", Scope: "node",
-		Doc: "the node's enrollment token, the --token default for omniglass node run"},
+		Doc: "the node's enrollment token, used by omniglass node run and sim run when --token is omitted, read when the command runs and never printed by help"},
 	{Key: "OMNIGLASS_TEST_ADMIN_DSN", Scope: "test",
 		Doc: "points the storage test harness at an existing admin database instead of a testcontainer"},
 }

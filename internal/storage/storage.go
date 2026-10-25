@@ -14,12 +14,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/hyperscaleav/omniglass/internal/blob"
 	"github.com/hyperscaleav/omniglass/internal/label"
+	"github.com/hyperscaleav/omniglass/internal/redact"
 	"github.com/hyperscaleav/omniglass/internal/rules"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/secret"
@@ -996,6 +998,14 @@ func NewPG(ctx context.Context, dsn string, opts ...Option) (*PG, error) {
 	p := &PG{}
 	for _, opt := range opts {
 		opt(p)
+	}
+	// A URL-form DSN is checked through redact first: pgx masks the password
+	// it quotes, but its parse detail still quotes the piece of a password
+	// with a reserved character that it misread as a port or an escape.
+	if strings.HasPrefix(dsn, "postgres://") || strings.HasPrefix(dsn, "postgresql://") {
+		if _, err := redact.ParseURL(dsn, "the database DSN ($OMNIGLASS_DSN or $DATABASE_URL)"); err != nil {
+			return nil, fmt.Errorf("storage: %w", err)
+		}
 	}
 	cfg, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
