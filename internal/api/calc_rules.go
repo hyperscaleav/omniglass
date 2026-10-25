@@ -18,15 +18,19 @@ import (
 type calcInputBody struct {
 	Alias string `json:"alias" minLength:"1" maxLength:"64" pattern:"^[A-Za-z_][A-Za-z0-9_]*$" doc:"The name the reduce's expression binds the input by: an identifier of at most 64, not a keyword, a builtin or list function's name, or one of the calc site's own bindings (component, has, members, system, value); unique in the rule"`
 	Key   string `json:"key" minLength:"1" doc:"The property or metric the input reads, by name or uuid; the rule holds it by uuid, so a rename changes nothing"`
+	// The ceiling is rules.MaxCalcWindow, refused by the gateway on this
+	// field, so the contract does not restate it.
+	WindowSeconds int `json:"window_seconds,omitempty" required:"false" minimum:"0" doc:"Read the key over the last this many seconds (1 to 3600, a component rule's only) instead of its current values: the alias binds as the list of its samples in the window, oldest first, each a record with value, at (unix seconds) and instance, and the list functions fold it by value, so avg over it is a rolling mean. Absent or 0 reads current values"`
 }
 
 // calcInputReadBody is an input as a rule holds it: its alias, and its key
 // by uuid on its lane, with the key's name now.
 type calcInputReadBody struct {
-	Alias string `json:"alias" doc:"The name the reduce's expression binds the input by"`
-	Key   string `json:"key" doc:"The key's name now"`
-	KeyID string `json:"key_id" doc:"The key's uuid, which the rule holds it by"`
-	Lane  string `json:"lane" enum:"property,metric" doc:"Which registry the key is in"`
+	Alias         string `json:"alias" doc:"The name the reduce's expression binds the input by"`
+	Key           string `json:"key" doc:"The key's name now"`
+	KeyID         string `json:"key_id" doc:"The key's uuid, which the rule holds it by"`
+	Lane          string `json:"lane" enum:"property,metric" doc:"Which registry the key is in"`
+	WindowSeconds int    `json:"window_seconds,omitempty" required:"false" doc:"The window the input reads its key over, in seconds; absent for an input that reads current values"`
 }
 
 type calcReduceBody struct {
@@ -95,7 +99,7 @@ func toCalcRuleBody(r *storage.CalcRule) calcRuleBody {
 	}
 	b.Inputs = make([]calcInputReadBody, len(r.Inputs))
 	for i, in := range r.Inputs {
-		b.Inputs[i] = calcInputReadBody{Alias: in.Alias, Key: in.Key, KeyID: in.KeyID, Lane: string(in.Lane)}
+		b.Inputs[i] = calcInputReadBody{Alias: in.Alias, Key: in.Key, KeyID: in.KeyID, Lane: string(in.Lane), WindowSeconds: in.Window}
 	}
 	return b
 }
@@ -103,7 +107,7 @@ func toCalcRuleBody(r *storage.CalcRule) calcRuleBody {
 func fromCalcInputs(in []calcInputBody) []rules.CalcInput {
 	out := make([]rules.CalcInput, len(in))
 	for i, x := range in {
-		out[i] = rules.CalcInput{Alias: x.Alias, Key: x.Key}
+		out[i] = rules.CalcInput{Alias: x.Alias, Key: x.Key, Window: x.WindowSeconds}
 	}
 	return out
 }

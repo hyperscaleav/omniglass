@@ -4780,6 +4780,11 @@ export interface components {
             alias: string;
             /** @description The property or metric the input reads, by name or uuid; the rule holds it by uuid, so a rename changes nothing */
             key: string;
+            /**
+             * Format: int64
+             * @description Read the key over the last this many seconds (1 to 3600, a component rule's only) instead of its current values: the alias binds as the list of its samples in the window, oldest first, each a record with value, at (unix seconds) and instance, and the list functions fold it by value, so avg over it is a rolling mean. Absent or 0 reads current values
+             */
+            window_seconds?: number;
         };
         CalcInputReadBody: {
             /** @description The name the reduce's expression binds the input by */
@@ -4793,6 +4798,11 @@ export interface components {
              * @enum {string}
              */
             lane: "property" | "metric";
+            /**
+             * Format: int64
+             * @description The window the input reads its key over, in seconds; absent for an input that reads current values
+             */
+            window_seconds?: number;
         };
         CalcMemberBody: {
             /** @description The member component, by name */

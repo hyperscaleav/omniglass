@@ -8,3 +8,7 @@
   readings are judged stale, and the control reads hand the new node the old one's gate and pin.
 - **Fix:** cap a node-probe sample's time at the database's now past a small skew
   (`sampleClock`, internal/storage/key_writer.go), or order control reads by arrival.
+- **Second instance (open, #1143):** a calc window measured as the producer's `ts` against the
+  server's now (`readCalcWindow`): a lagging collector has no sample in the window and the input reads
+  missing; one running ahead widens the window. Documented on the calculations page; an arrival-time
+  window is filed.
