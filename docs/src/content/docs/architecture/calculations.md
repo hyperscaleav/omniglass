@@ -39,7 +39,9 @@ sibling table of `event_rule` (ADR-0144 ruling 1), with typed columns rather tha
   in its lane's registry (the lane recorded), so renaming the key changes nothing the rule computes and
   a key a rule reads cannot be deleted; a read answers both its name now (`key`) and its uuid
   (`key_id`, with `lane`). `alias` is the name the expression binds the input by (the
-  [alias rules](#aliases) below).
+  [alias rules](#aliases) below). An input may carry a **`window_seconds`** (1 to 3600, a component
+  rule's only for now, #1143) to read its key over a time window instead of its current values
+  ([windowed inputs](#windowed-inputs) below).
 - **`reduce`**: always an **expression** `{expr}` over the aliases (#1018 retired the named reducers;
   the list functions below compute what they did).
 - **`output_key`**: a registered property or metric, held by its id in its lane's registry (the lane
@@ -63,12 +65,15 @@ its own (its bindings, list functions, builtins and budget are in the generated 
   numbers, a property's text, a bool property's bools). On a **component** the list holds one value per
   instance of the key (the [instance rules](#how-a-calc-rule-runs) below); a key reported once is a
   one-element list. On a **system** it holds every role-bound member's values, in member order (name,
-  then id), and the members' records stay beside it ([system rules](#system-rules)).
+  then id), and the members' records stay beside it ([system rules](#system-rules)). A **windowed**
+  input binds instead as its samples over the window, one record each ([windowed inputs](#windowed-inputs)).
 - **List functions fold a list into one value**, each vetted as a builtin is (one charged pass, one
   value out): `max`, `min` (also over numbers), `avg`, `sum`, `majority` (the most common text or bool,
   a tie to the value that sorts first) and `any`, `all` (over bools; with a predicate, as before);
   `len` counts the values, and `count` counts a predicate's matches (`count(members, .has.t)`). A list
-  function given anything but its list is refused at compile time, placed on the argument.
+  of records with a `value` field (a window's samples) folds by that field, so `avg(rtt)` over a window
+  is the mean of its samples' values. A list function given anything but its list is refused at compile
+  time, placed on the argument.
 - The result must be the **output key's type**; an expression yielding anything else is a type error
   at line 1, and a fault inside one is a 422 at its line and column. A name no alias binds is refused at
   its position, saying which name (the console offers to bind it to a key), and a `let` that would shadow
@@ -172,6 +177,34 @@ describes ([ADR-0148](/architecture/decisions/#adr-0148-calc-rules-run-on-a-dura
   gateway is out of contract
   ([ADR-0069](/architecture/decisions/#adr-0069-cycle-safety-is-provenance-based-not-topology-based)
   stands behind both).
+
+### Windowed inputs
+
+An input with a `window_seconds` reads its key **over a time window** (#1142, the first cut of #1065):
+its alias binds as the list of the key's samples on the component in the last `window_seconds`, oldest
+first, each a record with `value` (of the key's type), `at` (when it was taken, in unix seconds, since
+an expression holds no clock type) and `instance`. The instance rule is a current-value input's: the
+named instances' samples when the window holds one, else the aggregate instance's. The list functions
+fold it by `value`, so `avg(rtt)` over a 300s window is a 5-minute rolling mean, `max(rtt)` its peak,
+and `len(rtt)` how many samples it holds; a predicate reads a record's fields as they are
+(`count(rtt, .value > 50)`, `sum(rtt, .value > 50 ? 1.0 : 0.0)`).
+
+- **Bounds.** A window is 1s to an hour, the staleness bound on a current value, so a window never
+  trusts what a current-value input would leave out. One read keeps the window's newest 1000 samples,
+  so a key sampled faster than its window expects cannot make a computation unbounded. A window or a
+  ceiling outside them is refused at write on the input's `window_seconds`.
+- **Reading.** One range read of the series index (owner, type, then time), through the gateway's
+  calc read like every other input; intended values are never read.
+- **Aging out.** A window moves with no new sample, so its value must too. Each computation records,
+  in the owner's `calc_rule_state.window_due_at`, when its oldest kept sample leaves the window, and the
+  tick marks every owner whose due time has passed since it last computed there, one statement a mark
+  (so it holds no lock while it waits, and joins no lock cycle). The recompute writes a new due time, or
+  none when the window is left empty; an empty window is a missing input, as a key with no value is: the
+  rule writes nothing and its state names the input.
+- **Not yet** (#1143): a sample's outcome (a lost probe) and `rate`, which need the observation model
+  #1063 introduces; windows on a system rule; the console's window field and editor completion (a
+  windowed rule is written from the CLI or the API today, and the console shows its other fields); a cap
+  refused at write from the key's declared cadence; and a backtest over the window.
 
 ### System rules
 
