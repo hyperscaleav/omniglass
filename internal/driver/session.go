@@ -41,6 +41,11 @@ type SessionSpec struct {
 	// names; APIKey places an api key in a header or a query parameter.
 	Scheme string           `json:"scheme,omitempty"`
 	APIKey *APIKeyPlacement `json:"api_key,omitempty"`
+	// Stream is the server-sent events stream an http session holds
+	// (#1038): a GET held open, its events offered to the listeners, read
+	// in the request's format (json or text). It rides the session's scheme
+	// or its login, as every request does.
+	Stream *Request `json:"stream,omitempty"`
 }
 
 // Login is a declared login dialog: each step waits for its prompt and then
