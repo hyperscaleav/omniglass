@@ -112,8 +112,19 @@ func scanDemoDir(root string) ([]Finding, int, error) {
 		read     int
 	)
 	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
+		if err != nil {
 			return err
+		}
+		// A demo is a tape (or a script) at the top of the directory; what sits
+		// below it (out/, the recorder's output) is a recording, not a demo.
+		if info.IsDir() {
+			if path != root {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if ext := filepath.Ext(path); ext != ".tape" && ext != ".sh" {
+			return nil
 		}
 		b, err := os.ReadFile(path)
 		if err != nil {

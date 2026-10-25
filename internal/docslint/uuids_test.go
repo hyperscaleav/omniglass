@@ -103,6 +103,13 @@ func TestTheGateCatchesAUUIDInADemo(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "regressed.sh"), []byte(script), 0o755); err != nil {
 		t.Fatalf("write: %v", err)
 	}
+	// A recording under out/ is not a demo: the recorder's output is skipped.
+	if err := os.MkdirAll(filepath.Join(dir, "out", "regressed"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "out", "regressed", "demo.log"), []byte("0198f2a4-7c1e-7b3d-9a55-3c1f2d7a9e10\n"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
 	findings, read, err := scanDemoDir(dir)
 	if err != nil || read != 1 {
 		t.Fatalf("scan = %v (read %d, err %v)", findings, read, err)
