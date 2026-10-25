@@ -28,7 +28,7 @@ import (
 // NodeRunner is the server's line to its nodes for on-demand runs: the bus
 // asks the node named and returns its answer.
 type NodeRunner interface {
-	RunPreview(ctx context.Context, node string, tasks []storage.WorklistTask, timeout time.Duration) (collection.RunReply, error)
+	RunPreview(ctx context.Context, node string, tasks []storage.WorklistTask, mask []string, timeout time.Duration) (collection.RunReply, error)
 	RunTaskNow(ctx context.Context, node, taskID string, timeout time.Duration) (collection.RunReply, error)
 }
 
@@ -174,7 +174,7 @@ func registerNodeRunRoutes(api huma.API, a *authenticator, gw storage.Gateway, r
 		if err != nil {
 			return nil, mapNodeRunErr(err)
 		}
-		reply, err := runner.RunPreview(ctx, plan.NodeName, plan.Tasks, runBudget(in.Body.TimeoutSeconds))
+		reply, err := runner.RunPreview(ctx, plan.NodeName, plan.Tasks, plan.Sealed, runBudget(in.Body.TimeoutSeconds))
 		if err != nil {
 			return nil, mapNodeRunErr(err)
 		}
@@ -217,6 +217,8 @@ func registerNodeRunRoutes(api huma.API, a *authenticator, gw storage.Gateway, r
 			return nil, mapNodeRunErr(err)
 		}
 		switch {
+		case reply.Pending:
+			return nil, huma.Error409Conflict(reply.Error)
 		case reply.Gated:
 			return nil, huma.Error409Conflict("the endpoint is gated, so the poll was not sent: " + reply.Error + "; fix what refused it, or retry the endpoint (retry-endpoint)")
 		case reply.Error != "":

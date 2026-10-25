@@ -58,7 +58,7 @@ func subscribeRuns(ctx context.Context, nc *nats.Conn, node string, runner *coll
 		}
 		switch req.Kind {
 		case collection.RunPreview:
-			go func() { respond(previewRun(ctx, runner, req.Tasks, timeout)) }()
+			go func() { respond(previewRun(ctx, runner, req.Tasks, req.Mask, timeout)) }()
 		case collection.RunNow:
 			if len(req.Tasks) != 1 {
 				respond(collection.RunReply{Error: "a run now runs exactly one task"})
@@ -77,7 +77,7 @@ func subscribeRuns(ctx context.Context, nc *nats.Conn, node string, runner *coll
 
 // previewRun runs each preview task once, within the budget, and answers with
 // what each read. Nothing is published, so nothing is stored.
-func previewRun(ctx context.Context, runner *collection.Runner, tasks []collection.TaskSpec, timeout time.Duration) collection.RunReply {
+func previewRun(ctx context.Context, runner *collection.Runner, tasks []collection.TaskSpec, mask []string, timeout time.Duration) collection.RunReply {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	reply := collection.RunReply{Results: make([]collection.RunResult, 0, len(tasks))}
@@ -87,7 +87,7 @@ func previewRun(ctx context.Context, runner *collection.Runner, tasks []collecti
 		if fn, err := driver.ParseBaked(task.Spec); err == nil {
 			res.Function = fn.Function
 		}
-		dps, faults, excerpt, cut := collectPreviewTask(ctx, runner, task)
+		dps, faults, excerpt, cut := collectPreviewTask(ctx, runner, task, mask)
 		for _, s := range dps {
 			res.Samples = append(res.Samples, collection.RunSampleOf(s))
 		}
@@ -108,7 +108,7 @@ func previewRun(ctx context.Context, runner *collection.Runner, tasks []collecti
 // needs a held session or a bound udp socket faults naming why (the server
 // refuses such a preview before it asks, so this is the node's own guard).
 // The excerpt is what the fetch answered, before any emit read it.
-func collectPreviewTask(ctx context.Context, runner *collection.Runner, task collection.TaskSpec) (dps []collection.Sample, faults []error, excerpt string, cut bool) {
+func collectPreviewTask(ctx context.Context, runner *collection.Runner, task collection.TaskSpec, mask []string) (dps []collection.Sample, faults []error, excerpt string, cut bool) {
 	fn, err := driver.ParseBaked(task.Spec)
 	if err != nil {
 		return nil, []error{fmt.Errorf("node: preview task %s: %w", task.ID, err)}, "", false
@@ -129,12 +129,6 @@ func collectPreviewTask(ctx context.Context, runner *collection.Runner, task col
 	// form an answer echoes it (a basic header's value too), and only then cut,
 	// so a secret straddling the cut leaves no prefix behind.
 	cred, _ := driver.ResolveHTTPCredential(task.Session, task.Secrets)
-	var fieldValues []string
-	for _, fields := range task.Secrets {
-		for _, v := range fields {
-			fieldValues = append(fieldValues, v)
-		}
-	}
 	pt := collection.DriverPollTask{
 		Fn:        fn,
 		Transport: task.Transport,
@@ -142,7 +136,7 @@ func collectPreviewTask(ctx context.Context, runner *collection.Runner, task col
 		Secrets:   task.Secrets,
 		Auth:      task.Session,
 		Capture: func(payload driver.Payload) {
-			excerpt, cut = previewExcerpt(payload, cred, fieldValues)
+			excerpt, cut = previewExcerpt(payload, cred, mask)
 		},
 	}
 	if p.Timeout != "" {
@@ -170,13 +164,12 @@ func previewExcerpt(payload driver.Payload, cred *driver.HTTPCredential, secretV
 
 // landableRun is what a run now publishes: its samples held to the #1145
 // change memory a scheduled run keeps (an event or a log line that has not
-// changed since the last run, either kind, is not landed again), and what it
-// lands committed to that memory, so the next scheduled run compares against
-// it. Metrics and properties pass whole.
+// changed since the last run, either kind, is not landed again). The caller
+// commits the landing to that memory once it has published, as a scheduled
+// run does, so a landing that failed to publish is offered again. Metrics and
+// properties pass whole.
 func landableRun(sched *pollSchedule, taskID string, dps []collection.Sample) []collection.Sample {
-	landed := sched.changed(taskID, dps)
-	sched.commitChanged(taskID, landed)
-	return landed
+	return sched.changed(taskID, dps)
 }
 
 // runNowTask runs one of the node's poll tasks now, on the run loop, exactly
@@ -195,7 +188,7 @@ func runNowTask(ctx context.Context, nc *nats.Conn, node string, runner *collect
 	if driver.IsHTTP(task.Transport) && sessions.streamPending(task.EndpointID) {
 		// The endpoint's stream is making its first attempt under this
 		// fingerprint (#1038): a poll would send the credential beside it.
-		return collection.RunReply{Gated: true, Error: "the endpoint's stream is still making its first attempt; run the poll again once it has"}
+		return collection.RunReply{Pending: true, Error: "the endpoint's stream is still making its first attempt; run the poll again once it has"}
 	}
 	ownRequest := sessions.lookup(task.EndpointID) == nil || driver.IsHTTP(task.Transport)
 	if gt, gated := sessions.blocked(task.EndpointID, statelessRung(task)); gated && ownRequest {
@@ -226,6 +219,7 @@ func runNowTask(ctx context.Context, nc *nats.Conn, node string, runner *collect
 		if err := publishBatch(nc, node, task.ID, landed); err != nil {
 			return collection.RunReply{Error: "the node could not publish the run's samples: " + err.Error()}
 		}
+		sched.commitChanged(task.ID, landed)
 	}
 	for _, s := range dps {
 		res.Samples = append(res.Samples, collection.RunSampleOf(s))

@@ -38,7 +38,7 @@ type recordingRunner struct {
 	release  chan struct{}
 }
 
-func (r *recordingRunner) RunPreview(_ context.Context, node string, tasks []storage.WorklistTask, _ time.Duration) (collection.RunReply, error) {
+func (r *recordingRunner) RunPreview(_ context.Context, node string, tasks []storage.WorklistTask, _ []string, _ time.Duration) (collection.RunReply, error) {
 	r.mu.Lock()
 	r.previews = append(r.previews, tasks)
 	rel := r.release

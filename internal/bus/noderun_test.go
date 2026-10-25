@@ -41,7 +41,7 @@ func TestRunOnNode(t *testing.T) {
 
 	task := storage.WorklistTask{ID: "preview-1", Mode: "poll", Transport: "http", EndpointParams: []byte(`{"target":"10.0.0.1:80"}`),
 		Spec: []byte(`{"driver":"d","function":"identity","emits":[]}`), Secrets: map[string]map[string]string{"login": {"password": "pw"}}}
-	if _, err := srv.RunPreview(ctx, "node-a", []storage.WorklistTask{task}, time.Second); !errors.Is(err, bus.ErrNodeAbsent) {
+	if _, err := srv.RunPreview(ctx, "node-a", []storage.WorklistTask{task}, []string{"pw"}, time.Second); !errors.Is(err, bus.ErrNodeAbsent) {
 		t.Fatalf("with no node listening: err = %v, want ErrNodeAbsent", err)
 	}
 
@@ -65,11 +65,11 @@ func TestRunOnNode(t *testing.T) {
 	}
 	_ = nc.Flush()
 
-	reply, err := srv.RunPreview(ctx, "node-a", []storage.WorklistTask{task}, 5*time.Second)
+	reply, err := srv.RunPreview(ctx, "node-a", []storage.WorklistTask{task}, []string{"pw"}, 5*time.Second)
 	if err != nil {
 		t.Fatalf("run preview: %v", err)
 	}
-	if got.Kind != collection.RunPreview || len(got.Tasks) != 1 || got.Tasks[0].Secrets["login"]["password"] != "pw" || got.TimeoutMs != 5000 {
+	if got.Kind != collection.RunPreview || len(got.Tasks) != 1 || got.Tasks[0].Secrets["login"]["password"] != "pw" || got.TimeoutMs != 5000 || len(got.Mask) != 1 {
 		t.Fatalf("the node was asked %+v", got)
 	}
 	if len(reply.Results) != 1 || *reply.Results[0].Samples[0].Value != 42 {

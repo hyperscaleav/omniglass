@@ -53,6 +53,10 @@ type RunRequest struct {
 	Kind      string     `json:"kind"`
 	Tasks     []TaskSpec `json:"tasks"`
 	TimeoutMs int64      `json:"timeout_ms,omitempty"`
+	// Mask is a preview's secret field values (the tasks carry every field,
+	// a username among them, and only these are secret), which the node
+	// scrubs from the excerpt before it cuts it.
+	Mask []string `json:"mask,omitempty"`
 }
 
 // RunSample is one sample as the run wire carries it: a metric's number, a
@@ -93,11 +97,15 @@ type RunResult struct {
 
 // RunReply is the node's answer to a run: a result per task, or, when the run
 // could not start, why (Gated when the endpoint's gate holds and so refused
-// the run, the gate's refusal in Error).
+// the run, the gate's refusal in Error; Pending when its stream is still on
+// its first attempt).
 type RunReply struct {
 	Results []RunResult `json:"results,omitempty"`
 	Error   string      `json:"error,omitempty"`
 	Gated   bool        `json:"gated,omitempty"`
+	// Pending is a run now held back because the endpoint's stream is still
+	// making its first attempt (#1038): nothing has refused it yet.
+	Pending bool `json:"pending,omitempty"`
 }
 
 // ExcerptLimit bounds a run's excerpt of an answer.

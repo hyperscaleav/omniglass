@@ -29,7 +29,7 @@ func snmpPreviewTask() collection.TaskSpec {
 // own: nothing an endpoint holds is touched (#1163).
 func TestPreviewRunAnswersWhatThePollRead(t *testing.T) {
 	runner := &collection.Runner{SNMP: fakeGetter{res: map[string]string{"1.3.6.1.2.1.1.1.0": "Boreal Edge 86", "1.3.6.1.2.1.1.3.0": "812"}}}
-	reply := previewRun(t.Context(), runner, []collection.TaskSpec{snmpPreviewTask()}, 5*time.Second)
+	reply := previewRun(t.Context(), runner, []collection.TaskSpec{snmpPreviewTask()}, nil, 5*time.Second)
 	if reply.Error != "" || len(reply.Results) != 1 {
 		t.Fatalf("reply = %+v", reply)
 	}
@@ -50,18 +50,18 @@ func TestPreviewRunAnswersWhatThePollRead(t *testing.T) {
 func TestPreviewRunRefusesWhatOnlyAnEndpointHolds(t *testing.T) {
 	udp := snmpPreviewTask()
 	udp.Transport = "udp"
-	_, faults, _, _ := collectPreviewTask(t.Context(), &collection.Runner{}, udp)
+	_, faults, _, _ := collectPreviewTask(t.Context(), &collection.Runner{}, udp, nil)
 	if len(faults) != 1 || !strings.Contains(faults[0].Error(), "udp") {
 		t.Errorf("udp preview faults = %v", faults)
 	}
 	held := snmpPreviewTask()
 	held.Transport = "tcp"
 	held.Session = &driver.SessionSpec{}
-	_, faults, _, _ = collectPreviewTask(t.Context(), &collection.Runner{}, held)
+	_, faults, _, _ = collectPreviewTask(t.Context(), &collection.Runner{}, held, nil)
 	if len(faults) != 1 || !strings.Contains(faults[0].Error(), "held session") {
 		t.Errorf("held-session preview faults = %v", faults)
 	}
-	_, faults, excerpt, _ := collectPreviewTask(t.Context(), &collection.Runner{SNMP: fakeGetter{err: errTimeout{}}}, snmpPreviewTask())
+	_, faults, excerpt, _ := collectPreviewTask(t.Context(), &collection.Runner{SNMP: fakeGetter{err: errTimeout{}}}, snmpPreviewTask(), nil)
 	if len(faults) != 1 || excerpt != "" {
 		t.Errorf("a failed fetch = %v %q", faults, excerpt)
 	}
@@ -87,9 +87,11 @@ func (errTimeout) Error() string { return "i/o timeout" }
 func TestRunNowSharesTheChangeMemory(t *testing.T) {
 	sched := newPollSchedule(time.Second)
 	ev := collection.Sample{Name: "last-error", Lane: driver.LaneEvent, Text: "A"}
-	if got := landableRun(sched, "t1", []collection.Sample{ev}); len(got) != 1 {
-		t.Fatalf("first run lands %v, want the event", got)
+	first := landableRun(sched, "t1", []collection.Sample{ev})
+	if len(first) != 1 {
+		t.Fatalf("first run lands %v, want the event", first)
 	}
+	sched.commitChanged("t1", first) // published, as runNowTask commits it
 	if got := landableRun(sched, "t1", []collection.Sample{ev}); len(got) != 0 {
 		t.Fatalf("an unchanged event landed again: %v", got)
 	}
@@ -119,5 +121,24 @@ func TestPreviewExcerptIsScrubbedBeforeTheCut(t *testing.T) {
 	snmp, _ := previewExcerpt(driver.Payload{Values: map[string]string{"1.3.6.1.4.1.9.1": "community=lab-public"}}, nil, []string{"lab-public"})
 	if strings.Contains(snmp, "lab-public") {
 		t.Errorf("an snmp excerpt carries the community: %q", snmp)
+	}
+}
+
+// A run now's change memory is committed only once its landing is published:
+// a landing that failed to publish is offered again by the next run.
+func TestRunNowCommitsOnlyWhatPublished(t *testing.T) {
+	sched := newPollSchedule(time.Second)
+	ev := collection.Sample{Name: "last-error", Lane: driver.LaneEvent, Text: "B"}
+	landed := landableRun(sched, "t1", []collection.Sample{ev})
+	if len(landed) != 1 {
+		t.Fatalf("landable = %v", landed)
+	}
+	// The publish failed, so nothing was committed: the event is still owed.
+	if got := sched.changed("t1", []collection.Sample{ev}); len(got) != 1 {
+		t.Fatalf("an unpublished landing was committed: %v", got)
+	}
+	sched.commitChanged("t1", landed)
+	if got := sched.changed("t1", []collection.Sample{ev}); len(got) != 0 {
+		t.Fatalf("a published landing was not committed: %v", got)
 	}
 }

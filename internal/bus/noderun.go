@@ -36,13 +36,14 @@ var (
 )
 
 // RunPreview asks node to run tasks once and answer with what they read,
-// storing nothing. timeout bounds the whole run, capped at the run budget.
-func (s *Server) RunPreview(ctx context.Context, node string, tasks []storage.WorklistTask, timeout time.Duration) (collection.RunReply, error) {
+// storing nothing; mask is the secret field values the node scrubs from what
+// it answers. timeout bounds the whole run, capped at the run budget.
+func (s *Server) RunPreview(ctx context.Context, node string, tasks []storage.WorklistTask, mask []string, timeout time.Duration) (collection.RunReply, error) {
 	specs := make([]collection.TaskSpec, 0, len(tasks))
 	for _, t := range tasks {
 		specs = append(specs, taskSpecOf(t))
 	}
-	return s.runOnNode(ctx, node, collection.RunPreview, specs, timeout)
+	return s.runOnNode(ctx, node, collection.RunRequest{Kind: collection.RunPreview, Tasks: specs, Mask: mask}, timeout)
 }
 
 // RunTaskNow asks node to run one of its own worklist tasks now, landing what
@@ -55,18 +56,19 @@ func (s *Server) RunTaskNow(ctx context.Context, node, taskID string, timeout ti
 	}
 	for _, t := range wl.Tasks {
 		if t.ID == taskID {
-			return s.runOnNode(ctx, node, collection.RunNow, []collection.TaskSpec{t}, timeout)
+			return s.runOnNode(ctx, node, collection.RunRequest{Kind: collection.RunNow, Tasks: []collection.TaskSpec{t}}, timeout)
 		}
 	}
 	return collection.RunReply{}, ErrTaskNotOnWorklist
 }
 
-func (s *Server) runOnNode(ctx context.Context, node, kind string, tasks []collection.TaskSpec, timeout time.Duration) (collection.RunReply, error) {
+func (s *Server) runOnNode(ctx context.Context, node string, req collection.RunRequest, timeout time.Duration) (collection.RunReply, error) {
 	var reply collection.RunReply
 	if timeout <= 0 || timeout > runTimeout {
 		timeout = runTimeout
 	}
-	b, err := json.Marshal(collection.RunRequest{Kind: kind, Tasks: tasks, TimeoutMs: timeout.Milliseconds()})
+	req.TimeoutMs = timeout.Milliseconds()
+	b, err := json.Marshal(req)
 	if err != nil {
 		return reply, err
 	}
