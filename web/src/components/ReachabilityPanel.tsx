@@ -7,6 +7,7 @@ import SessionPill from "./SessionPill";
 import ReachLadder from "./ReachLadder";
 import SessionNotice from "./SessionNotice";
 import InfoTip from "./InfoTip";
+import WebhookEndpointRow from "./WebhookEndpointRow";
 import { rel } from "../lib/format";
 import { certTone, daysLeftWord, expiryDay, shortKey, tlsMode, type ReachTLS, type Tone } from "../lib/tls";
 import { CLOCK_TICK_MS, createClock } from "../lib/clock";
@@ -364,7 +365,15 @@ export default function ReachabilityPanel(p: {
           <For each={keys()}>
             {(key) => (
               <Show when={byKey().get(key)}>
-                {(iface) => <EndpointRow iface={iface()} component={p.name} manageId={idByName().get(iface().endpoint)} onManage={p.onOpenEndpoint} />}
+                {(iface) => (
+                  // A push endpoint (#1024) has no ladder to draw: its own row.
+                  <Show
+                    when={iface().webhook}
+                    fallback={<EndpointRow iface={iface()} component={p.name} manageId={idByName().get(iface().endpoint)} onManage={p.onOpenEndpoint} />}
+                  >
+                    <WebhookEndpointRow iface={iface()} manageId={idByName().get(iface().endpoint)} onManage={p.onOpenEndpoint} />
+                  </Show>
+                )}
               </Show>
             )}
           </For>
