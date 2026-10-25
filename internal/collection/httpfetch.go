@@ -46,6 +46,16 @@ type HTTPExchange struct {
 	Session    *driver.SessionSpec
 	Timeout    time.Duration
 	BodyCap    int64
+	// State is the endpoint's learned auth (#1114): the cookie jar the
+	// component's cookies ride, the digest challenge a digest scheme reuses,
+	// the headers a login's captures fill. Nil for none.
+	State *HTTPAuthState
+	// SessionHeaders are the headers a login's captures fill, sent on this
+	// request (never on a login step's own).
+	SessionHeaders map[string]string
+	// Redact is every further value no error or reason may carry: a login's
+	// secret fields, its captures, the component's cookies.
+	Redact []string
 }
 
 // HTTPAnswer is what a request drew: the status, the body (capped), the
@@ -79,10 +89,6 @@ func (httpFetcher) Exchange(ctx context.Context, x HTTPExchange) (HTTPAnswer, er
 	if x.BodyCap <= 0 {
 		x.BodyCap = DefaultBodyCap
 	}
-	req, err := BuildHTTPRequest(ctx, x)
-	if err != nil {
-		return HTTPAnswer{}, err
-	}
 	dialer := &net.Dialer{Timeout: x.Timeout}
 	tr := &http.Transport{DialContext: dialer.DialContext, DisableKeepAlives: true, ResponseHeaderTimeout: x.Timeout}
 	if x.TLS != nil {
@@ -102,20 +108,53 @@ func (httpFetcher) Exchange(ctx context.Context, x HTTPExchange) (HTTPAnswer, er
 	client := &http.Client{Transport: tr, Timeout: x.Timeout, CheckRedirect: func(*http.Request, []*http.Request) error {
 		return http.ErrUseLastResponse
 	}}
-	resp, err := client.Do(req)
-	if err != nil {
-		return HTTPAnswer{}, redactedRequestError(req, x, err)
+	if x.State != nil {
+		client.Jar = x.State.cookieJar()
 	}
-	defer func() { _ = resp.Body.Close() }()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, x.BodyCap+1))
-	if err != nil {
-		return HTTPAnswer{}, fmt.Errorf("collection: %s %s: reading the body: %w", req.Method, RedactedURL(req.URL, x.Credential), err)
+	digest := x.Credential != nil && x.Credential.Scheme == driver.SchemeDigest
+	var ds *DigestState
+	if digest {
+		if x.State == nil {
+			x.State = NewHTTPAuthState()
+		}
+		ds = &x.State.digest
 	}
-	if int64(len(body)) > x.BodyCap {
-		return HTTPAnswer{}, &RequestFault{Status: resp.StatusCode, Reason: fmt.Sprintf("the response body exceeds the cap of %d bytes", x.BodyCap)}
+	// A digest request answers the held challenge preemptively; a 401
+	// carrying a fresh challenge (none held yet, or the held nonce stale) is
+	// answered once more, and a 401 to an answer that was not stale is the
+	// credential's refusal, which the status table reads.
+	for attempt := 0; ; attempt++ {
+		req, err := BuildHTTPRequest(ctx, x)
+		if err != nil {
+			return HTTPAnswer{}, err
+		}
+		answered := false
+		if digest {
+			if answered, err = ds.authorize(req, x.Credential.Username, x.Credential.Password); err != nil {
+				return HTTPAnswer{}, err
+			}
+		}
+		resp, err := client.Do(req)
+		if err != nil {
+			return HTTPAnswer{}, redactedRequestError(req, x, err)
+		}
+		body, err := io.ReadAll(io.LimitReader(resp.Body, x.BodyCap+1))
+		_ = resp.Body.Close()
+		if err != nil {
+			return HTTPAnswer{}, fmt.Errorf("collection: %s %s: reading the body: %w", req.Method, RedactedURL(req.URL, x.Credential), err)
+		}
+		if digest && resp.StatusCode == http.StatusUnauthorized && attempt < 2 {
+			if ch, ok := parseDigestChallenges(resp.Header); ok && (!answered || ch.stale) {
+				ds.learn(ch)
+				continue
+			}
+		}
+		if int64(len(body)) > x.BodyCap {
+			return HTTPAnswer{}, &RequestFault{Status: resp.StatusCode, Reason: fmt.Sprintf("the response body exceeds the cap of %d bytes", x.BodyCap)}
+		}
+		return HTTPAnswer{Status: resp.StatusCode, Body: body, RetryAfter: resp.Header.Get("Retry-After"),
+			Credentialed: x.Credential != nil, Location: resp.Header.Get("Location")}, nil
 	}
-	return HTTPAnswer{Status: resp.StatusCode, Body: body, RetryAfter: resp.Header.Get("Retry-After"),
-		Credentialed: x.Credential != nil, Location: resp.Header.Get("Location")}, nil
 }
 
 // BuildHTTPRequest builds the request an exchange sends: the URL from the
@@ -159,6 +198,9 @@ func BuildHTTPRequest(ctx context.Context, x HTTPExchange) (*http.Request, error
 	}
 	req.Header.Set("User-Agent", "omniglass-node")
 	for k, v := range r.Headers {
+		req.Header.Set(k, v)
+	}
+	for k, v := range x.SessionHeaders {
 		req.Header.Set(k, v)
 	}
 	if len(r.Body) > 0 {
@@ -210,7 +252,7 @@ func redactedRequestError(req *http.Request, x HTTPExchange, err error) error {
 	if errors.As(err, &uerr) {
 		cause = uerr.Err
 	}
-	return &httpTransportError{msg: fmt.Sprintf("collection: %s %s: %s", req.Method, RedactedURL(req.URL, x.Credential), Scrub(strings.ToValidUTF8(cause.Error(), "\uFFFD"), x.Credential)), cause: cause}
+	return &httpTransportError{msg: fmt.Sprintf("collection: %s %s: %s", req.Method, RedactedURL(req.URL, x.Credential), Scrub(strings.ToValidUTF8(cause.Error(), "\uFFFD"), x.Credential, x.Redact...)), cause: cause}
 }
 
 // httpTransportError is a request that drew no answer, its message free of
@@ -228,14 +270,26 @@ func (e *httpTransportError) Unwrap() error { return e.cause }
 // base64, each raw, url-escaped, JSON-escaped with or without an escaped
 // slash, and html-escaped), so it never reaches an error or a reason. It
 // runs on the whole text before anything collapses or cuts it, so no
-// transform can hide a form from it.
-func Scrub(text string, c *driver.HTTPCredential) string {
-	if c == nil {
+// transform can hide a form from it. extra are further secrets the request
+// carried (a login's secret fields, its captures, the component's cookies),
+// masked in the same forms.
+func Scrub(text string, c *driver.HTTPCredential, extra ...string) string {
+	if c == nil && len(extra) == 0 {
 		return text
 	}
-	secrets := []string{c.Password, c.Token, c.Key}
-	if c.Scheme == driver.SchemeBasic {
-		secrets = append(secrets, base64.StdEncoding.EncodeToString([]byte(c.Username+":"+c.Password)))
+	var secrets []string
+	if c != nil {
+		secrets = append(secrets, c.Password, c.Token, c.Key)
+		if c.Scheme == driver.SchemeBasic {
+			secrets = append(secrets, base64.StdEncoding.EncodeToString([]byte(c.Username+":"+c.Password)))
+		}
+	}
+	for _, v := range extra {
+		// A value too short to be a secret (a cookie's "1") would mask every
+		// such digit of a reason and hide nothing.
+		if len(v) >= 4 {
+			secrets = append(secrets, v)
+		}
 	}
 	var forms []string
 	for _, v := range secrets {
@@ -311,8 +365,8 @@ const snippetLimit = 200
 // the credential first (on the whole text, before whitespace collapses and
 // the cut), then cut on a character boundary, so a reason is always a string
 // a protobuf message carries and never carries a credential.
-func snippet(body []byte, c *driver.HTTPCredential) string {
-	s := Scrub(strings.ToValidUTF8(string(body), "\uFFFD"), c)
+func snippet(body []byte, c *driver.HTTPCredential, extra ...string) string {
+	s := Scrub(strings.ToValidUTF8(string(body), "\uFFFD"), c, extra...)
 	s = strings.Join(strings.Fields(s), " ")
 	if r := []rune(s); len(r) > snippetLimit {
 		s = string(r[:snippetLimit]) + "..."
@@ -327,13 +381,18 @@ func snippet(body []byte, c *driver.HTTPCredential) string {
 // followed; and every other 4xx (a 403 among them, unless declared) faults
 // the request alone. Pure.
 func JudgeHTTPAnswer(a HTTPAnswer, x HTTPExchange) error {
-	text := snippet(a.Body, x.Credential)
-	if class, ok := x.Session.TerminalForResponse(a.Status, Scrub(strings.ToValidUTF8(string(a.Body), "\uFFFD"), x.Credential)); ok {
+	text := snippet(a.Body, x.Credential, x.Redact...)
+	if class, ok := x.Session.TerminalForResponse(a.Status, Scrub(strings.ToValidUTF8(string(a.Body), "\uFFFD"), x.Credential, x.Redact...)); ok {
 		reason := fmt.Sprintf("the component answered %d", a.Status)
 		if text != "" {
 			reason += ": " + text
 		}
 		return &TerminalError{Class: class, Reason: reason}
+	}
+	// DoHTTP has logged in once more and replayed by the time an answer is
+	// judged, so a lapsed session here followed a fresh login (#1114).
+	if why, lapsed := SessionLapse(a, x); lapsed {
+		return &TerminalError{Class: driver.ClassAuth, Reason: "the component refused the session a fresh login opened (" + why + ")"}
 	}
 	switch {
 	case a.Status >= 200 && a.Status < 300:
@@ -347,7 +406,7 @@ func JudgeHTTPAnswer(a HTTPAnswer, x HTTPExchange) error {
 	case a.Status >= 300 && a.Status < 400:
 		where := "elsewhere"
 		if a.Location != "" {
-			where = "to " + snippet([]byte(a.Location), x.Credential)
+			where = "to " + snippet([]byte(a.Location), x.Credential, x.Redact...)
 		}
 		return &RequestFault{Status: a.Status, Reason: "the component redirected " + where + ", and a request does not follow a redirect"}
 	default:
