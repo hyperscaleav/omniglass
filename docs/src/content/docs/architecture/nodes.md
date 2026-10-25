@@ -155,7 +155,7 @@ HTTPS and a node behind NAT cannot, so it takes no node and its URL is the serve
 ports, syslog, SNMP traps) are hosted by the **node** next to the gear (#1148, #1149, #1150), one
 listener primitive serving both placements.
 
-:::design[Target design: cascaded placement]
+:::design[Target design: cascaded placement, the cross pairings tracked in #1157 and #1158]
 Collection follows **ETL**: extract **and transform** (including the extractor's Expr transform)
 default to the **edge**; the shaped samples **load** to the server, where resolve / bind / calc /
 evaluate default to **central**. Placement is a **cascaded property**
