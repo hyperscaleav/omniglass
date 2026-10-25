@@ -16,7 +16,7 @@ import (
 // wrote stays. Driven from the embedded migration text, so the test runs the
 // statements the migration applies.
 
-const outcomeBackfill = "migrations/20261025120100_command_outcome_backfill.sql"
+const outcomeBackfill = "migrations/20261025130100_command_outcome_backfill.sql"
 
 func outcomeBackfillSQL(t *testing.T) (up, down string) {
 	t.Helper()

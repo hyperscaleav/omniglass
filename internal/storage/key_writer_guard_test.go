@@ -170,7 +170,7 @@ var sampleMigrations = map[string]string{
 	"20260805170000_state_becomes_property.sql":              "reshapes the value column of every existing property row in place (#591); no key, provenance or writer changes",
 	"20260805210000_command_status_and_intended_lineage.sql": "repoints the lineage of existing intended rows onto the command that opened them (command_id); no key, value or writer changes",
 	"20261024120100_legacy_writer_backfill.sql":              "holds legacy rows to the ruling (ADR-1100): stamps the source of a declared pin its audited :retry wrote, moves rows the ruling refuses into retired_sample, and its down restores them as they were; no key or value changes",
-	"20261025120100_command_outcome_backfill.sql":            "holds the newly reserved command outcome events to their class (ADR-1155): moves those no command's outcome wrote into retired_sample, and its down restores them as they were; no key or value changes",
+	"20261025130100_command_outcome_backfill.sql":            "holds the newly reserved command outcome events to their class (ADR-1155): moves those no command's outcome wrote into retired_sample, and its down restores them as they were; no key or value changes",
 }
 
 // TestMigrationsWriteNoSamples: a migration is a write path that runs outside
