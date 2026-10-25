@@ -95,14 +95,11 @@ PIDS+=($!)
 $OG sim run --name edge-hq --token "$NODE_TOKEN" --port-offset 10000 >"$SCRATCH/sim.log" 2>&1 &
 PIDS+=($!)
 
-# The endpoint's verdict, its authenticated rung, and the gate's reason,
-# from the reachability read.
-reach() {
-	$OG component reachability list "$1" | jq -c --arg t "$2" \
-		'.endpoints[] | select(.endpoint == $t) | {endpoint, verdict: .verdict.value, responsive: .responsive.value, authenticated: .authenticated.value, rejection: (.rejection.reason // null)}'
-}
+# The jq filter picking an endpoint's verdict, its authenticated rung and
+# the gate's reason out of the reachability read.
+reach_filter() { printf '.endpoints[] | select(.endpoint == "%s") | {endpoint, verdict: .verdict.value, responsive: .responsive.value, authenticated: .authenticated.value, rejection: (.rejection.reason // null)}' "$1"; }
 # The node's http login log lines for an endpoint: when, and why, never a value.
-logins() { grep 'msg="http login"' "$SCRATCH/node.log" | grep "endpoint_id=$1" | sed -e 's/^time=//' -e 's/ level=INFO msg="http login" node=edge-hq facility=session / http login /' || true; }
+logins() { grep 'msg="http login"' "$SCRATCH/node.log" | grep "endpoint_id=$1" | cut -d' ' -f1,7- || true; }
 login_count() { logins "$1" | wc -l | tr -d ' '; }
 # Waits for a jq predicate over an endpoint's reachability row.
 wait_reach() {
@@ -166,8 +163,8 @@ for i in $(seq 1 60); do
 	sleep 1
 done
 say "Each logs in and collects"
-run "reach $PANEL https"
-run "reach $DISPLAY http"
+run "$OG component reachability list $PANEL | jq -c '$(reach_filter https)'"
+run "$OG component reachability list $DISPLAY | jq -c '$(reach_filter http)'"
 for prop in model-number serial-number firmware-version; do
 	run "$OG component property sample list $PANEL $prop --limit 5 | jq -c '[.samples[] | select(.instance == \"https\")][0] | {property: \"$prop\", instance, value}'"
 done
@@ -175,7 +172,7 @@ for prop in model-number serial-number; do
 	run "$OG component property sample list $DISPLAY $prop --limit 5 | jq -c '[.samples[] | select(.instance == \"http\")][0] | {property: \"$prop\", instance, value}'"
 done
 echo "The node logs each login and why, never a value:"
-run "logins $PANEL_EP"
+run "grep 'msg=\"http login\"' $SCRATCH/node.log | grep endpoint_id=$PANEL_EP | cut -d' ' -f1,7-"
 
 say "A command rides the display's held digest challenge"
 run "$OG component command issue $DISPLAY --command-type set-power --value '\"standby\"' | jq -c '{id, status}'"
@@ -184,38 +181,40 @@ run "$OG component property sample list $DISPLAY power-state --limit 3 | jq -c '
 
 say "2. The panel forgets its sessions (a reboot): the node logs in exactly once more"
 echo "(the panel's status poll runs every 30s: two more polls ride the one session first)"
-before=$($OG component simulation get "$PANEL" | jq '.activity.hits')
+before=$($OG component simulation get "$PANEL" | jq '.activity.hits_by_protocol.http // 0')
 sleep 62
-after=$($OG component simulation get "$PANEL" | jq '.activity.hits')
-run "echo panel logins so far: \$(login_count $PANEL_EP), requests the panel answered in the last 62s: $((after - before))"
+after=$($OG component simulation get "$PANEL" | jq '.activity.hits_by_protocol.http // 0')
+echo "(the panel answered $((after - before)) http requests in those 62s, its probe's and its polls')"
+run "grep 'msg=\"http login\"' $SCRATCH/node.log | grep -c endpoint_id=$PANEL_EP"
 run "$OG component simulation fire $PANEL --surface http-api --method POST --path /api/admin/sessions/expire | jq -c ."
 for i in $(seq 1 90); do
 	logins "$PANEL_EP" | grep -q 'the session lapsed' && break
 	sleep 1
 done
 sleep 2
-run "logins $PANEL_EP"
-run "reach $PANEL https"
+run "grep 'msg=\"http login\"' $SCRATCH/node.log | grep endpoint_id=$PANEL_EP | cut -d' ' -f1,7-"
+run "$OG component reachability list $PANEL | jq -c '$(reach_filter https)'"
 
 say "The display rotates its nonce: the node answers the stale challenge afresh, never a refusal"
 run "$OG component simulation fire $DISPLAY --surface web-admin --method POST --path /api/admin/sessions/expire | jq -c ."
 run "$OG component command issue $DISPLAY --command-type set-power --value '\"on\"' | jq -c '{id, status}'"
 wait_latest "$DISPLAY" http power-state on || true
 run "$OG component property sample list $DISPLAY power-state --limit 3 | jq -c '.samples[0] | {instance, value, ts}'"
-run "reach $DISPLAY http"
+run "$OG component reachability list $DISPLAY | jq -c '$(reach_filter http)'"
 
 say "3. A wrong password: rejected with its reason, after one attempt"
 run "$OG secret update $PANEL_SECRET --fields '{\"password\":\"wrong-password\"}' | jq -c '{name, fields: [.fields[] | {name, value}]}'"
 run "$OG secret update $DISPLAY_SECRET --fields '{\"password\":\"wrong-password\"}' | jq -c '{name, fields: [.fields[] | {name, value}]}'"
 wait_reach "$PANEL" https "$REFUSED"
 wait_reach "$DISPLAY" http "$REFUSED"
-run "reach $PANEL https"
-run "reach $DISPLAY http"
+run "$OG component reachability list $PANEL | jq -c '$(reach_filter https)'"
+run "$OG component reachability list $DISPLAY | jq -c '$(reach_filter http)'"
 n=$(login_count "$PANEL_EP")
 echo "(waiting 70s, more than two poll intervals, to show no second attempt)"
 sleep 70
-run "logins $PANEL_EP"
-run "echo panel logins before the wait: $n, after: \$(login_count $PANEL_EP)"
+run "grep 'msg=\"http login\"' $SCRATCH/node.log | grep endpoint_id=$PANEL_EP | cut -d' ' -f1,7-"
+echo "(panel logins before the wait: $n)"
+run "grep 'msg=\"http login\"' $SCRATCH/node.log | grep -c endpoint_id=$PANEL_EP"
 echo "The node's poll faults for the two endpoints: the refused attempt, then the gate holding every poll:"
 run "grep 'driver poll fault' $SCRATCH/node.log | grep -E 'newtron-panel-web|boreal-edge-web|the endpoint is gated: auth' | sed -e 's/^time=//' -e 's/ level=WARN msg=\"driver poll fault\" node=edge-hq facility=collection task=[0-9a-f]* / /' | tail -6"
 
@@ -224,9 +223,9 @@ run "$OG secret update $PANEL_SECRET --fields '{\"password\":\"newtron\"}' | jq 
 run "$OG secret update $DISPLAY_SECRET --fields '{\"password\":\"boreal\"}' | jq -c '{name, fields: [.fields[] | {name, value}]}'"
 wait_reach "$PANEL" https "$AUTHED and (.rejection.reason // \"\") == \"\""
 wait_reach "$DISPLAY" http "$AUTHED and (.rejection.reason // \"\") == \"\""
-run "reach $PANEL https"
-run "reach $DISPLAY http"
-run "logins $PANEL_EP"
+run "$OG component reachability list $PANEL | jq -c '$(reach_filter https)'"
+run "$OG component reachability list $DISPLAY | jq -c '$(reach_filter http)'"
+run "grep 'msg=\"http login\"' $SCRATCH/node.log | grep endpoint_id=$PANEL_EP | cut -d' ' -f1,7-"
 
 say "Nothing the node held reached its log: no password, cookie, digest answer or authorization"
 run "grep -c -E 'wrong-password|password=|Cookie|sid=|Authorization|Digest username|response=' $SCRATCH/node.log || true"
