@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"encoding/json"
+	"github.com/hyperscaleav/omniglass/internal/driver"
 	"time"
 
 	"github.com/google/uuid"
@@ -969,4 +970,14 @@ func (UnimplementedGateway) PreviewEventRule(context.Context, RulePreviewSpec, s
 
 func (UnimplementedGateway) EventRuleState(context.Context, string, scope.Set) (*EventRuleLive, error) {
 	return nil, ErrEventRuleNotFound
+}
+
+func (UnimplementedGateway) DriverSpecFindings(context.Context, []byte) ([]driver.Finding, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) PlanDriverPreview(context.Context, string, PreviewInput) (*PreviewPlan, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) PlanEndpointRun(context.Context, string, string, string, scope.Set, scope.Set) (*EndpointPoll, error) {
+	return nil, nil
 }
