@@ -121,3 +121,22 @@ omniglass calc-rule create --name rtt-worst --label "Worst round trip" --owner-k
   --inputs '[{"alias":"rtt","key":"icmp-rtt-avg"}]' --reduce '{"expr":"max(rtt)"}' --output-key rtt-worst
 omniglass calc-rule state list rtt-worst --limit 20
 ```
+
+### A rolling figure: an input over a time window
+
+An input with `window_seconds` reads its key over the last that many seconds (1 to 3600) instead of
+its current values: its alias is the list of the key's samples in the window, oldest first, each with
+`value`, `at` (unix seconds) and `instance`, and `avg`, `max`, `min`, `sum`, `majority`, `any` and
+`all` fold it by `value`. So a 5-minute rolling mean of a component's round trip is:
+
+```sh
+omniglass metric-type create --name rtt-5m --data-type float --unit ms --label "RTT, 5 minute mean"
+omniglass calc-rule create --name rtt-5m --owner-kind component \
+  --inputs '[{"alias":"rtt","key":"icmp-rtt-avg","window_seconds":300}]' \
+  --reduce '{"expr":"avg(rtt)"}' --output-key rtt-5m
+```
+
+The value moves as samples arrive and again as old ones leave the window, with no new sample needed;
+a window left empty writes nothing and the rule's state names the input missing. Windows are for
+component rules, and are written from the CLI or the API for now: the console's form does not show a
+window yet ([what is not built yet](/architecture/calculations/#windowed-inputs)).

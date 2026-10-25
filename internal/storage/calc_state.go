@@ -259,6 +259,26 @@ const CalcPreviewOwnerCap = 200
 // systems stops at it, a whole owner at a time, and says so as truncation.
 const CalcPreviewWorkCap = 5000
 
+// calcWindowWork is what one windowed input's read weighs on the work cap:
+// a range read of up to rules.MaxCalcWindowSamples rows, counted as a tenth
+// of its bound in current-value reads (each of which walks a key's instances
+// one index probe at a time).
+const calcWindowWork = rules.MaxCalcWindowSamples / 10
+
+// calcInputWork is one member's reads of a rule's inputs, in work units: one
+// a current-value input, calcWindowWork a windowed one.
+func calcInputWork(inputs []rules.CalcInput) int {
+	n := 0
+	for _, in := range inputs {
+		if in.Window > 0 {
+			n += calcWindowWork
+			continue
+		}
+		n++
+	}
+	return n
+}
+
 // calcPreviewOwnerCap and calcPreviewWorkCap are the caps; variables only so
 // a test can lower them.
 var (
@@ -388,11 +408,12 @@ func (p *PG) PreviewCalcRule(ctx context.Context, spec CalcRuleSpec, components,
 				Error: fmt.Sprintf("withheld: %d of the system's members are outside your read scope, and an expression can read a member by position", hidden)}})
 			continue
 		}
-		if work+members*len(r.Inputs) > calcPreviewWorkCap && i > 0 {
+		cost := members * calcInputWork(r.Inputs)
+		if work+cost > calcPreviewWorkCap && i > 0 {
 			pv.Truncated = true
 			break
 		}
-		work += members * len(r.Inputs)
+		work += cost
 		res, err := p.reduceWith(ctx, tx, r, o.owner, plan)
 		if err != nil {
 			return nil, err

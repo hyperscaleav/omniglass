@@ -412,6 +412,11 @@ components:
           description: The property or metric the input reads, by name or uuid; the rule holds it by uuid, so a rename changes nothing
           minLength: 1
           type: string
+        window_seconds:
+          description: "Read the key over the last this many seconds (1 to 3600, a component rule's only) instead of its current values: the alias binds as the list of its samples in the window, oldest first, each a record with value, at (unix seconds) and instance, and the list functions fold it by value, so avg over it is a rolling mean. Absent or 0 reads current values"
+          format: int64
+          minimum: 0
+          type: integer
       required:
         - alias
         - key
@@ -434,6 +439,10 @@ components:
             - property
             - metric
           type: string
+        window_seconds:
+          description: The window the input reads its key over, in seconds; absent for an input that reads current values
+          format: int64
+          type: integer
       required:
         - alias
         - key

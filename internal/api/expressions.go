@@ -163,7 +163,8 @@ func calcValidateEnv(ctx context.Context, gw storage.Gateway, ownerKind string, 
 		if err != nil {
 			return expression.Env{}, huma.Error500InternalServerError("reading the input key failed")
 		}
-		typed[i] = rules.TypedInput{Alias: x.Alias, Key: k.Name, KeyID: k.ID, Lane: k.Lane, ValueType: rules.ValueTypeFor(k.Lane, k.DataType)}
+		typed[i] = rules.TypedInput{Alias: x.Alias, Key: k.Name, KeyID: k.ID, Lane: k.Lane, ValueType: rules.ValueTypeFor(k.Lane, k.DataType),
+			Window: x.WindowSeconds}
 	}
 	env, err := rules.CalcEnv(ownerKind, typed, output)
 	var ce *rules.CalcError
