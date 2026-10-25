@@ -73,19 +73,31 @@ func TestAnHMACRefusesWithoutSayingWhichPartFailed(t *testing.T) {
 		post ingress.Post
 		want string
 	}{
-		"a wrong key":         {signedPost(body, now, "not-the-key"), ingress.ReasonBadSignature},
-		"a stale timestamp":   {signedPost(body, now.Add(-6*time.Minute), key), ingress.ReasonStaleTimestamp},
-		"a future timestamp":  {signedPost(body, now.Add(6*time.Minute), key), ingress.ReasonStaleTimestamp},
-		"a tampered body":     {func() ingress.Post { p := signedPost(body, now, key); p.Body = []byte(`{"event":"meeting.ended"}`); return p }(), ingress.ReasonBadSignature},
-		"no signature":        {func() ingress.Post { p := signedPost(body, now, key); p.Header.Del("X-UCC-Signature"); return p }(), ingress.ReasonMissingSignature},
-		"no timestamp":        {func() ingress.Post { p := signedPost(body, now, key); p.Header.Del("X-UCC-Timestamp"); return p }(), ingress.ReasonMissingTimestamp},
-		"a timestamp of text": {func() ingress.Post { p := signedPost(body, now, key); p.Header.Set("X-UCC-Timestamp", "yesterday"); return p }(), ingress.ReasonMissingTimestamp},
+		"a wrong key":        {signedPost(body, now, "not-the-key"), ingress.ReasonBadSignature},
+		"a stale timestamp":  {signedPost(body, now.Add(-6*time.Minute), key), ingress.ReasonStaleTimestamp},
+		"a future timestamp": {signedPost(body, now.Add(6*time.Minute), key), ingress.ReasonStaleTimestamp},
+		"a tampered body": {func() ingress.Post {
+			p := signedPost(body, now, key)
+			p.Body = []byte(`{"event":"meeting.ended"}`)
+			return p
+		}(), ingress.ReasonBadSignature},
+		"no signature": {func() ingress.Post { p := signedPost(body, now, key); p.Header.Del("X-UCC-Signature"); return p }(), ingress.ReasonMissingSignature},
+		"no timestamp": {func() ingress.Post { p := signedPost(body, now, key); p.Header.Del("X-UCC-Timestamp"); return p }(), ingress.ReasonMissingTimestamp},
+		"a timestamp of text": {func() ingress.Post {
+			p := signedPost(body, now, key)
+			p.Header.Set("X-UCC-Timestamp", "yesterday")
+			return p
+		}(), ingress.ReasonMissingTimestamp},
 		"a missing prefix": {func() ingress.Post {
 			p := signedPost(body, now, key)
 			p.Header.Set("X-UCC-Signature", strings.TrimPrefix(p.Header.Get("X-UCC-Signature"), "sha256="))
 			return p
 		}(), ingress.ReasonBadSignature},
-		"a signature that is not hex": {func() ingress.Post { p := signedPost(body, now, key); p.Header.Set("X-UCC-Signature", "sha256=zz"); return p }(), ingress.ReasonBadSignature},
+		"a signature that is not hex": {func() ingress.Post {
+			p := signedPost(body, now, key)
+			p.Header.Set("X-UCC-Signature", "sha256=zz")
+			return p
+		}(), ingress.ReasonBadSignature},
 	}
 	for name, c := range cases {
 		err := ingress.Authenticate(driver.WebhookHMAC, hmacSpec(), cred, c.post, now)
