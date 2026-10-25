@@ -22,7 +22,6 @@ import { EVENTS_KEY } from "../lib/events";
 import { ENDPOINTS_KEY } from "../lib/endpoints";
 import { DRIVERS_KEY } from "../lib/drivers";
 import { uuidFor } from "../lib/testids";
-import { EVENTS_KEY } from "../lib/events";
 import { LOGS_KEY } from "../lib/logs";
 import { seedSeverityLevels } from "../lib/testseverity";
 
