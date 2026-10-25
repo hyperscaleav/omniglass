@@ -8018,7 +8018,7 @@ export interface components {
             layers: components["schemas"]["ReachLayerBody"][] | null;
             /** @description The node that probes this endpoint */
             node?: string;
-            /** @description The gate a terminal refusal holds on the endpoint, its rung and class; absent when none holds */
+            /** @description The gate a terminal refusal holds on the endpoint, its rung, class and reason, whether or not the endpoint holds a session (a reachability probe's refusal gates it too); absent when none holds */
             rejection?: components["schemas"]["ReachRejectionBody"];
             /** @description The layer-7 responds rung (the protocol itself answered), when a probe has climbed it */
             responsive?: components["schemas"]["ReachVerdictBody"];
@@ -8061,11 +8061,18 @@ export interface components {
             offered_key?: string;
             /** @description A refusal of a changed key only (class host-key, or certificate for a pinned tls key): the SHA256 fingerprint of the key the endpoint pins, as the node refused against it. Present with offered_key or not at all */
             pinned_key?: string;
+            /** @description Why the gate holds (endpoint-rejection-reason): the class and the component's own text (auth: the agent answered authorizationError for the community), scrubbed by the node of anything it sent. Published beside the gate by whatever the node was connecting with, its reachability probe, a poll or a held session, so an endpoint holding no session still says why it was refused. Absent when the node recorded none (a gate published before it did). Cut to 500 characters; the property's series keeps the whole */
+            reason?: string;
             /**
              * @description The ladder rung the refusal holds: responsive for a host key, certificate or protocol refusal, authenticated for a credential. Nothing at or above it is attempted until the connection fingerprint moves
              * @enum {string}
              */
             rung: "reachable" | "responsive" | "authenticated";
+            /**
+             * Format: date-time
+             * @description When the node last published the gate: a retry that lifts it and a refusal that sets it again each move it
+             */
+            ts: string;
         };
         ReachSessionBody: {
             /** @description Why the session is in its state (session-reason), the reason of its latest transition; a rejected session's is its class and the component's own text (auth: auth rejected), scrubbed by the node of anything it sent. Cut to 500 characters; the property's series keeps the whole */

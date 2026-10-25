@@ -245,7 +245,7 @@ describe("a held session on the row", () => {
     id: uuidFor("if-telnet"), endpoint: "telnet", transport: "telnet", node: "node-a", last_seen: lastSeen,
     verdict: { value: "up", ts: lastSeen }, responsive: { value: "up", ts: lastSeen },
     ...(state === "rejected"
-      ? { authenticated: { value: "no", ts: lastSeen }, session: { state, ts: lastSeen, reason: "auth: auth rejected" }, rejection: { rung: "authenticated" as const, class: "auth" } }
+      ? { authenticated: { value: "no", ts: lastSeen }, session: { state, ts: lastSeen, reason: "auth: auth rejected" }, rejection: { rung: "authenticated" as const, class: "auth", ts: "2026-10-23T11:58:00.000Z" } }
       : { session: { state, ts: lastSeen } }),
     layers: [], history: [],
   });
@@ -283,6 +283,36 @@ describe("a held session on the row", () => {
     await new Promise((r) => setTimeout(r, 20));
     expect(document.body.contains(toggle)).toBe(true);
     expect(screen.getByText(/probed by/)).toBeTruthy();
+  });
+});
+
+// #1110: an endpoint gated by its reachability probe alone holds no session,
+// and its refusal shows beneath the row the same way, unexpanded: the reason,
+// Retry, and the way into the endpoint; a row with neither a session nor a
+// gate carries no notice and no empty slot.
+describe("a probe's gate on the row, no session held", () => {
+  const snmpRow = (gated: boolean) => ({
+    id: uuidFor("if-snmp"), endpoint: "snmp", label: "Panel SNMP", transport: "snmp", address: "127.60.0.9:10161", node: "node-a", last_seen: nowIso,
+    verdict: { value: gated ? "down" : "up", ts: nowIso }, responsive: { value: gated ? "down" : "up", ts: nowIso },
+    ...(gated
+      ? { authenticated: { value: "no", ts: nowIso }, rejection: { rung: "authenticated" as const, class: "auth", ts: nowIso, reason: "auth: the agent answered authorizationError for the community" } }
+      : {}),
+    layers: [{ layer: "ping", check: "icmp-reachable", value: 1, ts: nowIso }],
+    history: [],
+  });
+
+  it("shows the refusal's reason and Retry beneath the row, with no session pill", () => {
+    mount({ component: compId, endpoints: [snmpRow(true)] });
+    expect(screen.queryByTestId("session-pill")).toBeNull();
+    expect(screen.getByTestId("session-notice").dataset.state).toBe("rejected");
+    expect(screen.getByTestId("session-reason").textContent).toBe("auth: the agent answered authorizationError for the community");
+    expect(screen.getByRole("button", { name: /retry/i })).toBeTruthy();
+  });
+
+  it("carries no notice slot on a row that is neither gated nor holding a session", () => {
+    const { container } = mount({ component: compId, endpoints: [snmpRow(false)] });
+    expect(screen.queryByTestId("session-notice")).toBeNull();
+    expect(container.querySelector("[data-testid=endpoint-notice-slot]")).toBeNull();
   });
 });
 
@@ -345,7 +375,7 @@ describe("a tls endpoint", () => {
   // only, so the read withholds the last accepted certificate's facts; the
   // row says the offered certificate is refused rather than "none yet".
   it("reads a refused certificate under a certificate gate", () => {
-    const row = { ...tlsRow("pin", undefined), rejection: { rung: "responsive" as const, class: "certificate", pinned_key: key, offered_key: "SHA256:" + "Z".repeat(43) } };
+    const row = { ...tlsRow("pin", undefined), rejection: { rung: "responsive" as const, class: "certificate", ts: "2026-10-23T11:58:00.000Z", pinned_key: key, offered_key: "SHA256:" + "Z".repeat(43) } };
     const { getByText, getByTestId, queryByText } = mount({ component: "panel-1", endpoints: [row] });
     fireEvent.click(getByText("Panel over TLS"));
     expect(getByText("the offered certificate is refused")).toBeTruthy();
@@ -405,7 +435,7 @@ describe("a udp endpoint", () => {
   });
 
   it("reads a gated request rung as refused beneath the gate", () => {
-    const row = { ...udpRow(false), rejection: { rung: "responsive" as const, class: "auth" } };
+    const row = { ...udpRow(false), rejection: { rung: "responsive" as const, class: "auth", ts: "2026-10-23T11:58:00.000Z" } };
     const { getByText, getByTestId } = mount({ component: "panel-1", endpoints: [row] });
     fireEvent.click(getByText("Panel over UDP"));
     expect(getByTestId("request-rung").textContent).toMatch(/refused/);
@@ -421,7 +451,7 @@ describe("a udp endpoint", () => {
   });
 
   it("reads an snmp get beneath its auth gate as refused, not unanswered", () => {
-    const row = { ...udpRow(false), endpoint: "snmp", label: "Panel SNMP", transport: "snmp", rejection: { rung: "authenticated" as const, class: "auth" } };
+    const row = { ...udpRow(false), endpoint: "snmp", label: "Panel SNMP", transport: "snmp", rejection: { rung: "authenticated" as const, class: "auth", ts: "2026-10-23T11:58:00.000Z" } };
     const { getByText, getByTestId } = mount({ component: "panel-1", endpoints: [row] });
     fireEvent.click(getByText("Panel SNMP"));
     expect(getByTestId("request-rung").textContent).toMatch(/refused/);

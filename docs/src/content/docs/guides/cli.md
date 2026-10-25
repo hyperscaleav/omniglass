@@ -259,8 +259,9 @@ omniglass endpoint update <id> --node edge-hq --params '{"target":"10.0.0.2:22"}
 omniglass endpoint update <id> --inputs '{"port":"2323","login":"panel-login-2"}'
 omniglass endpoint delete <id>                                  # refused (409) while its task references it
 
-# An endpoint a refusal gated (session-state reads rejected, endpoint-rejection names the rung)
-# is not attempted again until what it connects with changes, or an operator retries it:
+# An endpoint a refusal gated (endpoint-rejection names the rung, endpoint-rejection-reason says why,
+# held session or not) is not attempted again until what it connects with changes, or an operator
+# retries it:
 omniglass endpoint retry <id>                                   # needs endpoint:retry; audited
 omniglass endpoint retry <id> --host-key SHA256:...             # ssh: trust the offered key the refusal names (409 for any other)
 omniglass endpoint retry <id> --certificate SHA256:...          # tls: the same for a certificate's public key (--host-key works too)

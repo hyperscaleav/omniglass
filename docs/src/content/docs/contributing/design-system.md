@@ -194,7 +194,10 @@ staleness window takes the grey `badge-ghost` chip, its tooltip saying what it l
 **reachability ladder** (`ReachLadder`) is a row of rung chips, each an `InfoTip` trigger of its own
 (InfoTip takes children in place of its (i) for exactly this), the informational ping's chip dashed
 and a held rung amber with the refusal glyph. A list whose rows hold state (an expanded row, a retry
-waiting on its session) keys its rows by id, never by the objects a poll hands back.
+waiting on its session) keys its rows by id, never by the objects a poll hands back. The notice
+beneath (`SessionNotice`, its words from `endpointNotice`) keys on the gate, not the session, so an
+endpoint its probe alone refused reads the same as a rejected session, with no pill beside it
+(#1110); there is one refusal notice, never a second for probes.
 
 A refusal of a changed key (#1078) renders `PinnedKeyNotice` in place of the reason: the **pinned**
 and the **offered** key, each a `KVStacked` fact whose `hint` (an `(i)` beside the label) says what

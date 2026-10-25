@@ -93,6 +93,17 @@ property_types:
       retry, lifts it. The fingerprint is a digest only. A refusal of a
       changed key (class host-key) appends its evidence, the pinned key and
       the key the component offered instead, each a SHA256 fingerprint.
+  - name: endpoint-rejection-reason
+    data_type: string
+    label: Endpoint Rejection Reason
+    description: >-
+      Why an endpoint's gate holds: the refusal's class and the component's
+      own text (auth: the agent answered authorizationError for the
+      community), scrubbed by the node of anything it sent. Written beside
+      endpoint-rejection whenever the node records a gate, held session or
+      not, so an endpoint gated by its reachability probe alone still says
+      why it was refused. A gate a restarted node adopts writes none, and the
+      read serves the reason only while a gate holds.
   - name: health
     data_type: string
     validation: { enum: [healthy, incomplete, degraded, outage] }

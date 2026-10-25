@@ -100,6 +100,9 @@ func TestNodeSNMPRungIsAStandardGetAnswered(t *testing.T) {
 	s.waitFor("panel-refused", refused.Name, "endpoint-rejection", func(v string) bool {
 		return strings.HasPrefix(v, "authenticated auth ")
 	}, "the session rung gated, class auth")
+	// No session holds this endpoint, so the gate says why itself (#1110).
+	const why = "auth: the agent answered authorizationError for the community"
+	s.waitFor("panel-refused", refused.Name, "endpoint-rejection-reason", is(why), "the gate's reason beside it")
 	agent := s.panels[ipRefused]
 	time.Sleep(500 * time.Millisecond) // a get already in flight lands first
 	s.settles("gets to the refusing agent under the refused community", agent.SNMPRequests, agent.SNMPRequests())
@@ -118,6 +121,10 @@ func TestNodeSNMPRungIsAStandardGetAnswered(t *testing.T) {
 	s.runNode("edge-snmp")
 	time.Sleep(2 * time.Second) // the restarted node's first ticks, its poll among them
 	s.settles("gets to the refusing agent after a node restart", agent.SNMPRequests, before)
+	// The adopted gate never saw the refusal: the reason on record stands.
+	if got := s.latest("panel-refused", refused.Name, "endpoint-rejection-reason"); got != why {
+		t.Fatalf("after a node restart the gate's reason reads %q, want the refusal's own %q", got, why)
+	}
 
 	// The community rotated in the secret store: up within a tick.
 	if _, err := s.gw.UpdateSecret(s.ctx, "", revoked.ID, storage.SecretPatch{Fields: map[string]string{"community": "public"}}, s.all, s.all, true, true); err != nil {

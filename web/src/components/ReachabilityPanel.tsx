@@ -10,6 +10,7 @@ import InfoTip from "./InfoTip";
 import { rel } from "../lib/format";
 import { certTone, daysLeftWord, expiryDay, shortKey, tlsMode, type ReachTLS, type Tone } from "../lib/tls";
 import { CLOCK_TICK_MS, createClock } from "../lib/clock";
+import { endpointNotice } from "../lib/session";
 import { entityLabel } from "../lib/entities";
 import { ENDPOINTS_KEY, listEndpoints } from "../lib/endpoints";
 import {
@@ -44,7 +45,9 @@ import {
 // A held session (#1059) rides the row too: the reachability ladder (ping,
 // transport, login, the layered gate visible), the session pill, and for a
 // rejected or down session the reason beneath the row without expanding it,
-// with Retry and the way into the endpoint's own edit. The ladder's chips are
+// with Retry and the way into the endpoint's own edit. A refusal the
+// reachability probe met on an endpoint holding no session shows the same
+// notice (#1110): the gate, not the session, is what it keys on. The ladder's chips are
 // buttons (each teaches its rung), so they sit beside the row's expand toggle,
 // never inside it.
 
@@ -270,8 +273,11 @@ function EndpointRow(p: { iface: ReachEndpoint; component: string; manageId?: st
           </button>
         </Show>
       </div>
-      <Show when={p.iface.session}>
-        <div class="px-3 pb-2.5 empty:hidden">
+      {/* The notice beneath the row: a refusal, whatever met it (the
+          reachability probe, a poll, a held session, #1110), or a down
+          session. A row with nothing to say carries no slot. */}
+      <Show when={endpointNotice(p.iface, now())}>
+        <div data-testid="endpoint-notice-slot" class="px-3 pb-2.5">
           <SessionNotice
             iface={p.iface}
             component={p.component}
