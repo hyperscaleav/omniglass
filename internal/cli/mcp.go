@@ -12,7 +12,6 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/spf13/cobra"
 
-	"github.com/hyperscaleav/omniglass/internal/config"
 	"github.com/hyperscaleav/omniglass/internal/mcp"
 )
 
@@ -129,17 +128,21 @@ func newMCPCallCmd(version string) *cobra.Command {
 }
 
 // stdioSession connects an MCP client to `omniglass mcp` launched as a child,
-// over its stdio: the path a local agent takes. The connection reaches the
-// child through its environment, never its arguments, so the token is not on a
-// process listing.
+// over its stdio: the path a local agent takes. The child inherits this
+// process's environment, so a token from OMNIGLASS_TOKEN reaches it there and
+// never on a process listing; only a token the operator typed as --token (and
+// so already on this process's command line) is passed on as one.
 func stdioSession(cmd *cobra.Command, version string) (*sdk.ClientSession, error) {
 	server, token := connection(cmd)
 	exe, err := os.Executable()
 	if err != nil {
 		return nil, fmt.Errorf("locate the omniglass binary: %w", err)
 	}
-	child := exec.CommandContext(cmd.Context(), exe, "mcp")
-	child.Env = append(os.Environ(), "OMNIGLASS_SERVER="+server, "OMNIGLASS_TOKEN="+token)
+	args := []string{"mcp", "--server", server}
+	if cmd.Flags().Changed("token") {
+		args = append(args, "--token", token)
+	}
+	child := exec.CommandContext(cmd.Context(), exe, args...)
 	child.Stderr = os.Stderr
 	cl := sdk.NewClient(&sdk.Implementation{Name: "omniglass-cli", Version: version}, nil)
 	cs, err := cl.Connect(cmd.Context(), &sdk.CommandTransport{Command: child}, nil)
@@ -149,21 +152,12 @@ func stdioSession(cmd *cobra.Command, version string) (*sdk.ClientSession, error
 	return cs, nil
 }
 
-// connection is the --server and --token pair every client command shares: a
-// flag the operator gave, else its environment variable, read now (never from a
-// flag default, which --help would print), else the flag's literal default.
+// connection is the --server and --token pair every client command shares,
+// resolved the way the generated commands resolve theirs (flagOrEnv): a flag the
+// operator gave, else its environment variable read now, never a flag default
+// (which --help would print, #979).
 func connection(cmd *cobra.Command) (server, token string) {
-	resolve := func(flag, env string) string {
-		v, _ := cmd.Flags().GetString(flag)
-		if cmd.Flags().Changed(flag) {
-			return v
-		}
-		if e := config.Get(env); e != "" {
-			return e
-		}
-		return v
-	}
-	return resolve("server", "OMNIGLASS_SERVER"), resolve("token", "OMNIGLASS_TOKEN")
+	return flagOrEnv(cmd, "server", "OMNIGLASS_SERVER"), flagOrEnv(cmd, "token", "OMNIGLASS_TOKEN")
 }
 
 // endpointOf is the MCP endpoint of a server root.
