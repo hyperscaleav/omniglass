@@ -21,7 +21,7 @@ per approved definition) while this lifecycle holds inside each slice: see
 | **Build** | [test-first](/contributing/test-driven/): the failing test, then the feature, committing each increment. A slice cuts every entry point it touches, **API + CLI + UI**: the CLI command is generated from the OpenAPI (`make gen`); the UI view is built where the entity is live, or rendered as an honest stub where its backend does not exist yet | RED then GREEN; all three surfaces present (stub allowed) |
 | **Document** | the teaching [docs ship with it](/contributing/docs-with-everything/): the **architecture** page (the model) and, when the slice ships or changes an operator surface, its **operator guide** in `/guides/` (the how-to); plus a build-progress note on the status page, the page's **status badge advanced** to its new floor, and a [decision-log](/architecture/decisions/) entry for any divergence | docs in the same PR; badge advanced; divergence logged |
 | **Validate** | `make test` green (run fresh), `make gen` clean, no drift | green, fresh |
-| **Demo** | the feature recorded working, on the PR: a [terminal demo](/contributing/demos/) for CLI and API behavior, a walkthrough for a console flow, posted by the `run:demo` label | the demo comment linked, or "n/a" with a reason |
+| **Demo** | the feature recorded working, on the PR: a [terminal demo](/contributing/demos/) for CLI and API behavior, a walkthrough for a console flow, tagged in the PR body (`demo: <id>`) and recorded by the `run:demo` label, which writes its clip into the body | the tag and the clip, or `demo: none (<reason>)` |
 | **Review** | a reviewer pass over the diff, findings addressed; a security lens when it touches authz, secrets, the edge, or an invariant | findings cleared |
 | **Ship** | the ship-review (below), then squash-merge | architect approves |
 | **Log** | record what shipped, the decisions, and the follow-ups | logged |
@@ -88,8 +88,9 @@ Scope:     in / thin cut / deferred (#issues)
 Proof:     make test green (fresh, N packages); the load-bearing behaviors; tiers; make gen clean
 Visual:    live screenshots for any operator-facing surface (the PR template's
            Visual confirmation section) | n/a (no UI surface)
-Demo:      the run:demo comment: a terminal demo for CLI and API behavior, a walkthrough
-           for a console flow (the PR template's Demo section) | n/a (why)
+Demo:      the tag (demo: <id>) and the clip run:demo writes into the Demo section: a
+           terminal demo for CLI and API behavior, a walkthrough for a console flow |
+           demo: none (<reason>)
 Docs:      what shipped; arch-of-record consistent or a divergence note
 Status:    pages advanced (page: Design->Partial); build-log entry; ADR-#### if diverged
 Review:    findings and how addressed; security note if relevant
