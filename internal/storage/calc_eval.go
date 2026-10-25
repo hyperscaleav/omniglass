@@ -214,6 +214,9 @@ type CalcDrain struct {
 // and pushed back by calcRetryBackoff, and the pass goes on.
 func (p *PG) DrainCalcPending(ctx context.Context, limit int) (CalcDrain, error) {
 	var d CalcDrain
+	if err := p.markCalcWindowsDue(ctx, limit); err != nil {
+		return d, err
+	}
 	held := []string{}
 pass:
 	for d.Served+d.Deferred < limit {
@@ -236,6 +239,44 @@ pass:
 		return d, fmt.Errorf("storage: calc pending depth: %w", err)
 	}
 	return d, nil
+}
+
+// markCalcWindowsDue marks, for the pass, up to limit owners whose windowed
+// rule's oldest sample has left its window since the rule last computed there
+// (calc_rule_state.window_due_at, set by that computation), so a window that
+// ages out with no new sample still recomputes (#1142). Each mark is its own
+// statement: it holds no lock while it waits on a mark a serve holds, so it
+// joins no lock cycle. A due time stays set until the recompute replaces it,
+// so a mark lost to a crash is made again on the next tick.
+func (p *PG) markCalcWindowsDue(ctx context.Context, limit int) error {
+	rows, err := p.pool.Query(ctx, `select rule_id::text, component_id::text from calc_rule_state
+		where window_due_at <= now() and computed_at < window_due_at and component_id is not null
+		order by window_due_at, rule_id limit $1`, limit)
+	if err != nil {
+		return fmt.Errorf("storage: find due calc windows: %w", err)
+	}
+	type due struct{ rule, comp string }
+	var found []due
+	for rows.Next() {
+		var x due
+		if err := rows.Scan(&x.rule, &x.comp); err != nil {
+			rows.Close()
+			return fmt.Errorf("storage: find due calc windows: %w", err)
+		}
+		found = append(found, x)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, x := range found {
+		if _, err := p.pool.Exec(ctx, `insert into calc_pending (rule_id, owner_kind, component_id)
+			select $1::uuid, 'component', $2::uuid where exists (select 1 from calc_rule where id = $1::uuid and enabled)
+			on conflict on constraint calc_pending_key do update set marked_at = calc_pending.marked_at`, x.rule, x.comp); err != nil {
+			return fmt.Errorf("storage: mark a due calc window: %w", err)
+		}
+	}
+	return nil
 }
 
 type markOutcome int
@@ -393,6 +434,9 @@ type calcOutcome struct {
 	// noMembers is a system with no role-bound member.
 	noMembers bool
 	err       string
+	// windowDue is when the soonest windowed input's oldest sample leaves its
+	// window; nil when no windowed input held a sample.
+	windowDue *time.Time
 }
 
 // staleInstance is an instance an input's list left out as stale: the component
@@ -497,6 +541,26 @@ func (p *PG) reduceWith(ctx context.Context, tx pgx.Tx, r CalcRule, owner calcOw
 		read[j] = rules.CalcMember{ID: m.id, Name: m.name, Values: make([][]any, len(typed)), Record: make([]any, len(typed))}
 	}
 	for i, in := range typed {
+		if in.Window > 0 {
+			// A windowed input is a component rule's (rules.checkWindow): one
+			// member, the owner.
+			vs, due, err := readCalcWindow(ctx, tx, owner, in)
+			if err != nil {
+				var bad *calcValueError
+				if errors.As(err, &bad) {
+					return calcOutcome{err: err.Error()}, nil
+				}
+				return calcOutcome{}, err
+			}
+			if due != nil && (out.windowDue == nil || due.Before(*out.windowDue)) {
+				out.windowDue = due
+			}
+			values[i] = vs
+			if len(vs) == 0 {
+				out.missing = append(out.missing, in.Key)
+			}
+			continue
+		}
 		for j, m := range members {
 			vs, own, stale, err := readCalcInput(ctx, tx, calcOwner{kind: rules.OwnerComponent, id: m.id}, in, false)
 			if err != nil {
@@ -572,6 +636,69 @@ type calcValueError struct{ msg string }
 
 func (e *calcValueError) Error() string { return e.msg }
 
+// calcSeries is the table, type column and value text a lane's samples are
+// read by.
+func calcSeries(lane rules.Lane) (table, typeCol, value string) {
+	if lane == rules.LaneMetric {
+		return "metric", "metric_type_id", "value::text"
+	}
+	return "property", "property_type_id", "value #>> '{}'"
+}
+
+// readCalcWindow is one key's samples on an owner over a windowed input's
+// window (#1142), oldest first, each a rules.CalcSample: observed and
+// calculated values only, as readCalcInput reads; the named instances' when
+// the window holds one, else the aggregate instance's; the newest
+// rules.MaxCalcWindowSamples kept. due is when the oldest kept sample leaves
+// the window (nil for an empty window). One range read of the series index,
+// which leads with owner and type.
+func readCalcWindow(ctx context.Context, tx pgx.Tx, owner calcOwner, in rules.TypedInput) (samples []any, due *time.Time, err error) {
+	table, typeCol, value := calcSeries(in.Lane)
+	rows, err := tx.Query(ctx, fmt.Sprintf(`select instance, %[3]s, ts from %[1]s
+		where %[4]s = $1::uuid and %[2]s = $2::uuid and provenance in ('observed', 'calculated')
+			and ts > now() - make_interval(secs => $3)
+		order by ts desc, id desc limit $4`, table, typeCol, value, owner.col()),
+		owner.id, in.KeyID, in.Window, rules.MaxCalcWindowSamples)
+	if err != nil {
+		return nil, nil, fmt.Errorf("storage: read calc window %s: %w", in.Key, err)
+	}
+	type row struct {
+		instance, raw string
+		ts            time.Time
+	}
+	var got []row
+	named := false
+	for rows.Next() {
+		var x row
+		if err := rows.Scan(&x.instance, &x.raw, &x.ts); err != nil {
+			rows.Close()
+			return nil, nil, fmt.Errorf("storage: read calc window %s: %w", in.Key, err)
+		}
+		named = named || x.instance != ""
+		got = append(got, x)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, nil, err
+	}
+	for i := len(got) - 1; i >= 0; i-- {
+		x := got[i]
+		if named && x.instance == "" {
+			continue
+		}
+		v, err := rules.CalcValue(in.ValueType, x.raw)
+		if err != nil {
+			return nil, nil, &calcValueError{msg: fmt.Sprintf("input %s: %v", in.Alias, err)}
+		}
+		if due == nil {
+			d := x.ts.Add(time.Duration(in.Window) * time.Second)
+			due = &d
+		}
+		samples = append(samples, rules.CalcSample{Value: v, At: x.ts, Instance: x.instance})
+	}
+	return samples, due, nil
+}
+
 // readCalcInput is one key's current values on an owner, held by its key's
 // id on its lane, ignoring intended values (calc reads observed and
 // calculated as truth, never intended): each instance's newest value, the
@@ -584,10 +711,7 @@ func (e *calcValueError) Error() string { return e.msg }
 // aggregateOnly it reads the aggregate instance alone, as own (an output's
 // current value).
 func readCalcInput(ctx context.Context, tx pgx.Tx, owner calcOwner, in rules.TypedInput, aggregateOnly bool) (values []any, own any, stale []staleInstance, err error) {
-	table, typeCol, value := "property", "property_type_id", "value #>> '{}'"
-	if in.Lane == rules.LaneMetric {
-		table, typeCol, value = "metric", "metric_type_id", "value::text"
-	}
+	table, typeCol, value := calcSeries(in.Lane)
 	col := owner.col()
 	var sql string
 	if !aggregateOnly {
@@ -723,13 +847,14 @@ func recordCalcState(ctx context.Context, tx pgx.Tx, r CalcRule, owner calcOwner
 		value = b
 	}
 	if _, err := tx.Exec(ctx, `insert into calc_rule_state (rule_id, owner_kind, `+owner.col()+`, computed_at, rule_version, value, missing, stale, skipped, error,
-			no_members_since)
-		values ($1::uuid, $2, $3::uuid, now(), $4, $5::jsonb, $6::jsonb, $7::jsonb, $8::jsonb, $9, case when $10::bool then now() end)
+			no_members_since, window_due_at)
+		values ($1::uuid, $2, $3::uuid, now(), $4, $5::jsonb, $6::jsonb, $7::jsonb, $8::jsonb, $9, case when $10::bool then now() end, $11)
 		on conflict on constraint calc_rule_state_key do update set computed_at = excluded.computed_at, rule_version = excluded.rule_version,
 			value = excluded.value, missing = excluded.missing, stale = excluded.stale, skipped = excluded.skipped, error = excluded.error,
-			no_members_since = case when $10::bool then coalesce(calc_rule_state.no_members_since, excluded.no_members_since) end`,
+			no_members_since = case when $10::bool then coalesce(calc_rule_state.no_members_since, excluded.no_members_since) end,
+			window_due_at = excluded.window_due_at`,
 		r.ID, owner.kind, owner.id, r.Version, value, jsonList(out.missing, len(out.missing)), jsonList(out.stale, len(out.stale)),
-		jsonList(out.skipped, len(out.skipped)), out.err, out.noMembers); err != nil {
+		jsonList(out.skipped, len(out.skipped)), out.err, out.noMembers, out.windowDue); err != nil {
 		return fmt.Errorf("storage: record calc state: %w", err)
 	}
 	return nil

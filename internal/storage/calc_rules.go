@@ -149,7 +149,8 @@ func invalidCalc(field, format string, a ...any) error {
 // key's name and id, from whichever registry its lane names.
 const calcRuleSelect = `select c.id, c.name, coalesce(c.label, ''), c.description, c.owner_kind, c.selector,
 	(select coalesce(jsonb_agg(jsonb_build_object('alias', i.alias, 'key', coalesce(ipt.name, imt.name),
-			'key_id', coalesce(i.property_type_id, i.metric_type_id), 'lane', i.lane, 'data_type', coalesce(ipt.data_type, ''))
+			'key_id', coalesce(i.property_type_id, i.metric_type_id), 'lane', i.lane, 'data_type', coalesce(ipt.data_type, ''),
+			'window_seconds', i.window_seconds)
 			order by i.position), '[]'::jsonb)
 		from calc_rule_input i left join property_type ipt on ipt.id = i.property_type_id
 		left join metric_type imt on imt.id = i.metric_type_id where i.rule_id = c.id),
@@ -333,7 +334,7 @@ func resolveCalcInputs(ctx context.Context, q querier, r *CalcRule) error {
 		if k.name == healthKey {
 			return invalidCalc(fmt.Sprintf("inputs[%d].key", i), "%s may not be an input: an alarm moves it, so a rule reading it could feed back through an event rule", healthKey)
 		}
-		r.Inputs[i] = rules.CalcInput{Alias: in.Alias, Key: k.name, KeyID: k.id, Lane: k.lane}
+		r.Inputs[i] = rules.CalcInput{Alias: in.Alias, Key: k.name, KeyID: k.id, Lane: k.lane, Window: in.Window}
 		r.inputTypes[i] = k.valueType
 	}
 	return nil
@@ -554,7 +555,7 @@ func typedInputs(r CalcRule) []rules.TypedInput {
 		if i < len(r.inputTypes) {
 			vt = r.inputTypes[i]
 		}
-		typed[i] = rules.TypedInput{Alias: in.Alias, Key: in.Key, KeyID: in.KeyID, Lane: in.Lane, ValueType: vt}
+		typed[i] = rules.TypedInput{Alias: in.Alias, Key: in.Key, KeyID: in.KeyID, Lane: in.Lane, ValueType: vt, Window: in.Window}
 	}
 	return typed
 }
@@ -564,14 +565,14 @@ func writeCalcInputs(ctx context.Context, tx pgx.Tx, r CalcRule) error {
 	if _, err := tx.Exec(ctx, `delete from calc_rule_input where rule_id = $1::uuid`, r.ID); err != nil {
 		return fmt.Errorf("storage: clear calc rule %q inputs: %w", r.Name, err)
 	}
-	pos := make([]int, len(r.Inputs))
+	pos, windows := make([]int, len(r.Inputs)), make([]int, len(r.Inputs))
 	aliases, lanes, ids := make([]string, len(r.Inputs)), make([]string, len(r.Inputs)), make([]string, len(r.Inputs))
 	for i, in := range r.Inputs {
-		pos[i], aliases[i], lanes[i], ids[i] = i, in.Alias, string(in.Lane), in.KeyID
+		pos[i], aliases[i], lanes[i], ids[i], windows[i] = i, in.Alias, string(in.Lane), in.KeyID, in.Window
 	}
-	if _, err := tx.Exec(ctx, `insert into calc_rule_input (rule_id, position, alias, lane, property_type_id, metric_type_id)
-		select $1::uuid, p, a, l, case when l = 'property' then k end, case when l = 'metric' then k end
-		from unnest($2::int[], $3::text[], $4::text[], $5::uuid[]) as x(p, a, l, k)`, r.ID, pos, aliases, lanes, ids); err != nil {
+	if _, err := tx.Exec(ctx, `insert into calc_rule_input (rule_id, position, alias, lane, property_type_id, metric_type_id, window_seconds)
+		select $1::uuid, p, a, l, case when l = 'property' then k end, case when l = 'metric' then k end, nullif(w, 0)
+		from unnest($2::int[], $3::text[], $4::text[], $5::uuid[], $6::int[]) as x(p, a, l, k, w)`, r.ID, pos, aliases, lanes, ids, windows); err != nil {
 		return mapCalcWriteErr(err, r.Name)
 	}
 	return nil
