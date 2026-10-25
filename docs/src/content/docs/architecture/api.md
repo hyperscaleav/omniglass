@@ -404,13 +404,15 @@ rule-raised one its rule (`raised_by_rule`, `raised_by_rule_id`).
 written only on an all-scope grant; `omniglass calc-rule`) authors the rules that derive an output key
 on each component or system ([calculations](/architecture/calculations/)): an `owner_kind`, a
 `selector` (a component rule's `component_types` and `components`, or a system rule's `system_types` and `systems`, subtypes included), `inputs` as `{alias, key}` pairs (the key by name or uuid, held by uuid; a read answers `key`,
-`key_id` and `lane`), a `reduce` that is an `expr` over the aliases, each bound as the list of its
-values (#1018), and an `output_key`, its lane answered as `output_lane`. A rule is addressed by name or uuid and every write answers the rule with its `id`. A
+`key_id` and `lane`; an optional `window_seconds`, 1 to 3600 on a component rule, reads the key over
+that window, #1142), a `reduce` that is an `expr` over the aliases, each bound as the list of its
+values (#1018; a windowed input's as its samples in the window, one record each), and an `output_key`, its lane answered as `output_lane`. A rule is addressed by name or uuid and every write answers the rule with its `id`. A
 reduce that does not compile, or yields a type other than the output key's, is a 422 located at
 `body.reduce.expr` with the fault's `line` and `column` (and `unbound`, the name, when it is one no
 alias binds); any other refusal is a 422 located at the field
-it names (`body.inputs[0].key`, `body.inputs[0].alias`, `body.output_key`, `body.selector`): an unknown
-key, an alias that is not an identifier of at most 64, is reserved or repeats, `health` as an input or
+it names (`body.inputs[0].key`, `body.inputs[0].alias`, `body.inputs[0].window_seconds`, `body.output_key`,
+`body.selector`): an unknown key, an alias that is not an identifier of at most 64, is reserved or repeats, a
+window outside 1 to 3600 seconds or on a system rule, `health` as an input or
 output, an output of the reserved family (a native probe key, `health`), an output a driver's declared
 emits write or a command type targets, an output another enabled rule
 writes (the refusal names it; enabling a rule is checked too). A list or get carries `calc_error` (`field`, `line`, `column`, `message`, `code`) when a stored reduce no
