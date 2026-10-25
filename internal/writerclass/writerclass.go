@@ -101,8 +101,8 @@ var platform = map[string]string{
 const CommandIssued = "command-issued"
 
 // The events a command's terminal status lands on its owner's timeline
-// (#1155), one per recorded outcome, so an event rule can match a failure
-// without reading a status out of a message.
+// (#1155), one per recorded outcome, so a failure reads by its type rather
+// than out of a message.
 const (
 	CommandSettled  = "command-settled"
 	CommandFailed   = "command-failed"

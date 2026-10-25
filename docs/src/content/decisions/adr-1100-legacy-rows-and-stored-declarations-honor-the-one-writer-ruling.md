@@ -58,6 +58,9 @@ refs: [1100]
      line stored before the refusal lends the key no default in the effective reads.
   7. **A command's lifecycle is a reserved class.** `command-lifecycle` holds `command-issued` and
      admits a command alone, so no push, node, driver or event rule puts a command on a timeline.
+     **Amended (#1155):** the class also holds a command's terminal events, `command-settled`,
+     `command-failed` and `command-timed-out`, each written with the outcome it reports
+     ([ADR-1155](#adr-1155-a-command-is-read-whole-its-evidence-kept-and-masked-and-an-issue-may-wait)).
 - **Context:** A write-side invariant shipped over existing data rules only what is written next.
   Rows and declarations from before it kept acting where nothing re-read them against it: a
   declared row the pin reads still took, a forward-dated row still read as the latest, a stored

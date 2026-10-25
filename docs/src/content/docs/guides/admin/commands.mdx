@@ -18,9 +18,9 @@ A command type is used in two moves, and this page walks both: the **catalog** n
 instruction, and **issuing records** an invocation typed by it, which a settleable command then
 reconciles against what the device reports ([commands](/architecture/commands/)).
 
-The console page lives at `/command-types`, and the nav says why: the address reserves
-`/commands` for the command history surface when it lands, so the catalog keeps the type-named
-route.
+The console page lives at `/command-types`, the type-named route, since what a component was told
+is read on the component itself: its **Activity** tab carries its command history
+([commands on a component](/guides/operator/entities/#commands-on-a-component)).
 
 The catalog is fleet-wide reference data, not a scoped resource, so every command type is
 visible to every reader; the write gates decide who may change it.
@@ -114,8 +114,43 @@ target ([commands](/architecture/commands/)). The check runs at issue, when the 
 lands, when an observation of the target lands, and on a sweep every few seconds for commands
 past their window, so a zero-window command returns already terminal, a fire-and-forget command
 records `settled` at issue since it has nothing to wait on, and no command stays `issued` past
-its window. This surface records and reconciles; carrying the invocation to the device is not part of
-it.
+its window. A node carries the invocation to the device over the endpoint whose driver binds the
+type ([commands](/architecture/commands/#actuation-the-wire-to-the-device)).
 
-From the CLI, the catalog is `omniglass command-type list|get|create|update|delete`, and
-issuing is `omniglass component command issue` (see the [CLI reference](/reference/cli/)).
+## Read a command back
+
+The issue answers with the command as it stands, and every command reads back whole afterwards,
+under its component (with `command:read`, which every viewer's `*:read` floor carries and every
+issuer holds where it may issue): `GET /components/{name}/commands/{id}` for one, and
+`GET /components/{name}/commands` for the history, newest first, narrowed by `status`, `since` and
+`until` (RFC3339) and `limit`. A component you cannot read is a non-disclosing 404, and one you can
+read but whose commands you may not is a 403. Each command carries:
+
+- its **status** and a time for each transition: issued, delivered (a node took it), executed (the
+  node's report landed) and settled;
+- its **phase**, where it sits while in flight: **queued** for its node, **delivered** (its binding
+  settles on observation, so the reply decides nothing), **awaiting reply**, or **awaiting
+  observation** within its window, with the `deadline` when the window closes;
+- how it **settles** (from the reply, from an observation, or not at all) and the endpoint, node and
+  driver that carry it;
+- the **evidence**: the component's **reply**, masked of the endpoint's credentials and of anything
+  labeled a credential before it is stored, or the **observed** sample that decided it, plus what
+  decided it (`settled_by`) and a **reason** in words. A timed-out command's reason says where it
+  stopped: queued for a node that never took it, delivered with no report, answered with nothing
+  observed after, or carried by no endpoint at all;
+- who **issued** it.
+
+Each terminal status also lands on the component's [event log](/guides/admin/events/#the-occurrences-behind-the-catalog)
+as `command-settled`, `command-failed` or `command-timed-out`, with the reason.
+
+**Waiting on an issue.** Add `wait=true` to the issue (`--wait` on the CLI) and it answers once the
+command settles, fails or times out, or once `wait_timeout` passes (1 to 120 seconds, 30 by default),
+with the command as it stands then. A waiting issue judges the command itself when its window closes,
+so a timeout comes back at the window. Waits are bounded: a server holds 64 at once and a principal 4,
+and a wait past either is refused with a 429 before anything is issued, so issue without `wait` and
+read the command back, or retry.
+
+From the CLI, the catalog is `omniglass command-type list|get|create|update|delete`; issuing is
+`omniglass component command issue <component> --command-type <type> [--value <v>] [--wait]`, and the
+reads are `omniglass component command list <component> [--status <s>] [--since <t>] [--limit <n>]`
+and `omniglass component command get <component> <id>` (see the [CLI reference](/reference/cli/)).

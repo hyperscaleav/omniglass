@@ -574,9 +574,19 @@ deferred). `POST /components/{name}/commands:issue` (gated `command:issue`, and 
 own scope** on the component tier rather than by `component:read`,
 [ADR-0117](/architecture/decisions/#adr-0117-an-actuation-is-fenced-by-the-permission-that-authorizes-it))
 is the write: it records the invocation, writes a caused event,
-and (for a settleable command) opens an intended value, returning the computed settlement verdict
-(none/pending/settled/failed); the invocation then actuates over the per-node command queue
-([commands](/architecture/commands/#actuation-the-wire-to-the-device), #815).
+and (for a settleable command) opens an intended value, answering with the command as the read
+returns it beside the computed settlement verdict (none/pending/settled/failed); the invocation then
+actuates over the per-node command queue
+([commands](/architecture/commands/#actuation-the-wire-to-the-device), #815). With `wait` the issue
+holds until the command is terminal or `wait_timeout` passes (1 to 120 seconds), bounded to 64 waits
+at once and 4 per principal, a wait past either a 429 refused before anything is issued.
+`GET /components/{name}/commands` and `GET /components/{name}/commands/{id}` read commands back whole (#1155): one by its id under its
+component, or the history newest first, narrowed by `status`, `since`, `until` and `limit`, each
+carrying a time per transition, the derived in-flight `phase`, the settle mode, what carried it, the
+evidence (the reply, masked of credentials, or the observed sample) with a `reason`, and the issuer.
+Both are gated `command:read`, resolved on the component tier with the read and action split
+([commands](/architecture/commands/#reading-a-command-from-issue-to-settlement),
+[ADR-1155](/architecture/decisions/#adr-1155-a-command-is-read-whole-its-evidence-kept-and-masked-and-an-issue-may-wait)).
 
 :::note[Thin cuts today]
 The operationally useful slice, not the full CRUD matrix. A **node** carries the full set (create,

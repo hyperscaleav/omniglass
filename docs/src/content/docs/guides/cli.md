@@ -554,6 +554,29 @@ omniglass component command issue disp-1 --command-type set-input --value '"hdmi
 A target must be a key a command may write: a native probe key, `health` or a calc rule's output is
 refused (422) naming the key.
 
+### A command's status, from issue to settlement
+
+The issue answers with the command as it stands: its `status`, its `phase` (where it sits while in
+flight: `queued` for its node, `delivered`, `awaiting-reply` or `awaiting-observation`), and the
+evidence once there is some. `--wait` holds the issue until the command settles, fails or times out,
+or until `--wait-timeout` seconds pass (1 to 120, 30 by default), which is what a script wants; a
+server holds 64 waits at once and a principal 4, and a wait past either is a 429 refused before
+anything is issued. Every command reads back by its id under its component, with `command:read`
+([commands](/architecture/commands/#reading-a-command-from-issue-to-settlement)):
+
+```sh
+bar='depot.bay-1.$comp.videobar-1'
+omniglass component command issue "$bar" --command-type set-volume --value 42 --wait \
+  | jq -c '{status, settled_by, reason, reply}'
+# {"status":"settled","settled_by":"reply","reason":"the reply confirmed it","reply":"{\"ok\": true}\n"}
+omniglass component command list "$bar" --status timed-out --since 2026-10-25T09:00:00Z
+omniglass component command get "$bar" 42 | jq -c '{status, phase, reason, endpoint, node, driver}'
+```
+
+The `reply` is the component's answer as its node reported it, masked of the endpoint's credentials
+and of anything labeled a credential before it was stored; a timed-out command's `reason` says where
+it stopped (`queued for node edge-depot-dark, which did not take it within its 15s settle window`).
+
 ## Property contracts and values
 
 A classifier **declares** which properties its instances carry; an instance **sets** a value. Both sides
