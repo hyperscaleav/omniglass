@@ -281,11 +281,19 @@ func (rc *webhookReceiver) receive(ctx context.Context, in *webhookInput) (*webh
 		return nil, tooManyErr(wait)
 	}
 	post := ingress.Post{Header: in.header, Body: in.RawBody}
-	cred := credentialOf(t)
-	if err := ingress.Authenticate(t.Scheme, t.Webhook, cred, post, now); err != nil {
+	// Fail closed: a scheme whose credential no longer resolves (its secret
+	// deleted or renamed) refuses every post, never checks one against
+	// nothing. Authenticate refuses an empty credential too, in depth.
+	var authErr error
+	if t.Scheme != driver.WebhookNone && t.CredentialMissing {
+		authErr = &ingress.Refusal{Reason: ingress.ReasonNoCredential}
+	} else {
+		authErr = ingress.Authenticate(t.Scheme, t.Webhook, credentialOf(t), post, now)
+	}
+	if authErr != nil {
 		reason := ingress.ReasonUnknownScheme
 		var r *ingress.Refusal
-		if errors.As(err, &r) {
+		if errors.As(authErr, &r) {
 			reason = r.Reason
 		}
 		rc.tally.Refused(t.EndpointID, in.source, reason, now)

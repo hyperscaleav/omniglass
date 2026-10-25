@@ -7,10 +7,12 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
+	neturl "net/url"
 	"strconv"
 	"strings"
 	"text/template"
@@ -242,7 +244,7 @@ func dispatchEmit(r renderedEmit) error {
 		resp, err := emitClient.Do(req)
 		if err != nil {
 			cancel()
-			return fmt.Errorf("posting emit to %s: %w", r.url, err)
+			return fmt.Errorf("posting emit to %s: %w", emitTarget(r.url), redactURLError(err))
 		}
 		// Drain so the connection can be reused, then bound the response: we
 		// don't care about the collector's reply, only that it accepted.
@@ -250,7 +252,7 @@ func dispatchEmit(r renderedEmit) error {
 		_ = resp.Body.Close()
 		cancel()
 		if resp.StatusCode >= 400 {
-			return fmt.Errorf("emit to %s returned %s", r.url, resp.Status)
+			return fmt.Errorf("emit to %s returned %s", emitTarget(r.url), resp.Status)
 		}
 	}
 	return nil
@@ -290,7 +292,26 @@ func (d *Device) runEmit(a *emitAction, behaviorName string, data templateData) 
 		slog.Debug("behavior emit sent",
 			"device_id", d.DeviceID,
 			"behavior", behaviorName,
-			"url", r.url,
+			"target", emitTarget(r.url),
 		)
 	}()
+}
+
+// emitTarget is where a post went, its scheme and host alone: a webhook
+// URL's path carries the receiver's token (#1024), which no log keeps.
+func emitTarget(raw string) string {
+	u, err := neturl.Parse(raw)
+	if err != nil {
+		return "an unparseable url"
+	}
+	return u.Scheme + "://" + u.Host
+}
+
+// redactURLError drops the url a client error names, keeping its cause.
+func redactURLError(err error) error {
+	var ue *neturl.Error
+	if errors.As(err, &ue) {
+		return ue.Err
+	}
+	return err
 }

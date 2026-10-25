@@ -154,6 +154,18 @@ func TestATokenAndABasicLoginCompareWhole(t *testing.T) {
 			t.Errorf("login %v admitted or misnamed", login)
 		}
 	}
+	// A credential with an empty half refuses, never compares against the
+	// empty string: a basic login whose password is empty admits nothing.
+	req.SetBasicAuth("ucc", "")
+	for _, half := range []ingress.Credential{{Username: "ucc"}, {Password: "lab"}} {
+		if reasonOf(t, ingress.Authenticate(driver.WebhookBasic, nil, half, ingress.Post{Header: req.Header}, now)) != ingress.ReasonNoCredential {
+			t.Errorf("a basic credential with an empty half %+v admitted or misnamed", half)
+		}
+	}
+	h.Set("Authorization", "Bearer ")
+	if reasonOf(t, ingress.Authenticate(driver.WebhookToken, tok, ingress.Credential{}, ingress.Post{Header: h}, now)) != ingress.ReasonNoCredential {
+		t.Error("an empty token admitted an empty bearer")
+	}
 	// none checks nothing: the endpoint reads unsigned, and the URL's token
 	// was the only gate.
 	if err := ingress.Authenticate(driver.WebhookNone, nil, ingress.Credential{}, ingress.Post{Header: http.Header{}}, now); err != nil {

@@ -69,7 +69,7 @@ interfaces:
         example: |
           {"url": "https://omniglass.example/api/v1/webhooks/TOKEN", "scheme": "hmac", "secret": "ucc-lab-signing-key"}
         mutations:
-          - { path: configuration.webhook.target_url, value: "{{ .Request.Body.url }}", pattern: '^(https?://[^\s]{1,2000})?$' }
+          - { path: configuration.webhook.target_url, value: "{{ .Request.Body.url }}", pattern: '^(https?://\S{1,1000})?$' }
           - { path: configuration.webhook.scheme, value: '{{ or .Request.Body.scheme "hmac" }}', enum: [hmac, token, basic, none] }
           - { path: configuration.webhook.secret, value: '{{ or .Request.Body.secret "" }}' }
           - { path: configuration.webhook.fault, value: '{{ or .Request.Body.fault "" }}', enum: ["", bad-signature, stale, redeliver] }

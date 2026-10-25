@@ -69,9 +69,13 @@ func (r *Refusal) Error() string { return "webhook refused: " + r.Reason }
 func refuse(reason string) error { return &Refusal{Reason: reason} }
 
 // Authenticate checks one post against the endpoint's declared scheme at
-// now. A nil error admits it; otherwise the error is a *Refusal. Every
-// comparison of a secret runs in constant time over a fixed-length digest,
-// so neither a near miss nor a length leaks through timing.
+// now. A nil error admits it; otherwise the error is a *Refusal. It fails
+// closed: every scheme but none refuses a credential with an empty field
+// (a key, a token, either half of a login) before comparing anything, so a
+// missing or blank secret never admits a sender presenting the empty
+// string. Every comparison of a secret runs in constant time over a
+// fixed-length digest, so neither a near miss nor a length leaks through
+// timing.
 func Authenticate(scheme string, w *driver.WebhookSpec, cred Credential, p Post, now time.Time) error {
 	switch scheme {
 	case driver.WebhookNone:
@@ -98,7 +102,9 @@ func Authenticate(scheme string, w *driver.WebhookSpec, cred Credential, p Post,
 		}
 		return nil
 	case driver.WebhookBasic:
-		if cred.Username == "" && cred.Password == "" {
+		// Either half empty refuses: a login is never compared against the
+		// empty string, which any sender could present.
+		if cred.Username == "" || cred.Password == "" {
 			return refuse(ReasonNoCredential)
 		}
 		r := http.Request{Header: p.Header}
