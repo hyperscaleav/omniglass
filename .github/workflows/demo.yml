@@ -1,111 +1,145 @@
 name: demo
 
-# Demos as PR evidence (#925, #939, #1132). A demo is a recording of the PR's
+# Demos as PR evidence (#925, #939, #1132, #1180). A demo is a recording of a
 # feature working, made by one of two recorders: a terminal demo, a VHS tape
 # (scripts/demo/<id>.tape) typed into a real terminal, for CLI and API work; or
 # a walkthrough, a Playwright script (web/e2e/walkthroughs/<id>.yaml) played in
-# the console, for a console flow. Applying the `run:demo` label (its earlier
-# name, `run:walkthrough`, still works) records the PR's demos on the
-# walkthrough stack, exactly as `make demo` does locally, then:
+# the console, for a console flow. Two runs:
 #
-# - uploads the recorders' output as a workflow artifact (it keeps a failed
-#   demo's partial output, and the stack's logs);
-# - commits each passing demo's files under <id>/ to the PR's own evidence
-#   ref, refs/walkthroughs/pr-<n> (#939, ADR-0149; named when walkthroughs were
-#   the only demos), never to the PR branch: a terminal demo's GIF and MP4, a
-#   walkthrough's mp4, animated preview (#937), poster and per-step stills. The
-#   PR head and its checks are untouched, a squash-merge carries none of it
-#   into main, and a ref outside refs/heads/ is not fetched by a default clone,
-#   while GitHub's raw host and jsDelivr serve its commits by SHA like any
-#   other;
-# - upserts one PR comment listing every demo (found again by its marker, or
-#   by the walkthrough comment's earlier one): each leads with a "Watch
-#   (scrubbable)" link to its video through jsDelivr (video/mp4 with range
-#   requests, so the browser's player seeks), then what plays inline from the
-#   raw host (a terminal demo's GIF; a walkthrough's animated preview, poster
-#   and folded stills), all pinned to the evidence commit's SHA, linking the
-#   run and the artifact, and naming any demo that failed. A failed demo fails
-#   the record job: a demo is a test.
+# - On a PR, the `run:demo` label (its earlier name, `run:walkthrough`, still
+#   works) records the demos the PR is about: exactly those its body tags in
+#   its Demo section (`demo: <id> ...`), plus any tape or walkthrough script it
+#   adds or changes (web/e2e/walkthroughpr.mjs selectDemos, unit-tested).
+#   Nothing fans out from what else it touches: a change to the console, a
+#   recorder or the stack records no demo it did not name. A PR that tags
+#   `demo: none (<reason>)` and changes no demo records none; one that tags
+#   nothing fails here, saying how to tag (demo-tag.yml lints the tag on every
+#   PR). Then it:
+#   - commits each passing demo's files under <id>/ to the PR's own evidence
+#     ref, refs/walkthroughs/pr-<n> (#939, ADR-0149), never to the PR branch:
+#     a terminal demo's GIF and MP4, a walkthrough's mp4, animated preview
+#     (#937), poster and per-step stills. A squash-merge carries none of it
+#     into main, and a ref outside refs/heads/ is not fetched by a default
+#     clone, while GitHub's raw host and jsDelivr serve its commits by SHA;
+#   - upserts one PR comment listing every demo (found again by its marker,
+#     or by the walkthrough comment's earlier one), the full record: each
+#     demo's "Watch (scrubbable)" link to its video through jsDelivr, what
+#     plays inline from the raw host, a walkthrough's folded stills, the run
+#     and its artifacts, and any demo that failed or never ran;
+#   - writes the clip (each demo's GIF or animated preview and its scrubbable
+#     link) into the PR body's Demo section, between the clip markers, so the
+#     PR carries its video where a reviewer starts reading. Only the block
+#     between the markers is replaced; with none yet, it goes after the tag
+#     line, else at the end. Every link is pinned to the evidence commit's SHA.
+# - On main, nightly (or by hand), the freshness run records every demo, since
+#   a PR records only the demos it names and a change can break one it never
+#   named. Its recordings stay in the run's artifacts (no evidence ref: main
+#   needs no comment, and a nightly commit would grow the repository for
+#   nothing), and a demo that fails opens or updates one issue, which the next
+#   green run closes.
 #
-# Which demos (web/e2e/walkthroughpr.mjs selectDemos, unit-tested): the tapes
-# and walkthrough scripts the PR adds or changes; every tape when it changes
-# the terminal recorder, every walkthrough when it changes anything else under
-# web/; every demo when it changes the stack both play on, or names none. The
-# run records the branch tip at run time. Re-run the workflow, or remove and
-# re-add the label, to record the current head again; the comment updates in
-# place. GitHub runs no pull_request workflow on a PR with merge conflicts, so
-# resolve them first. demo-prune.yml deletes an evidence ref 30 days after its
-# PR closes.
+# Each selected demo records on a runner of its own, with a stack of its own,
+# in parallel (the record matrix), so a run takes as long as its slowest demo
+# rather than the sum. The run records the branch tip as `select` resolves it,
+# every leg the same commit. GitHub runs no pull_request workflow on a PR with
+# merge conflicts, so resolve them first. demo-prune.yml deletes an evidence
+# ref 30 days after its PR closes.
 #
-# Two jobs, so no write token ever shares a runner with the PR's code. `record`
-# runs the PR's code (npm install scripts, both recorders and every command a
-# tape types, the walkthrough-pr.mjs that stages the evidence and writes the
-# comment) with a read-only token, and hands the staged files and the comment
-# body on as an artifact. `publish` holds the write token, checks nothing out
-# and runs nothing from the PR: it builds the evidence commit in a fresh
-# repository under a random temporary directory with no global, system, hook
-# or fsmonitor configuration, pushes only to the ref it derives from the
-# event's PR number, and upserts the comment with gh. An earlier step on the
-# same runner can plant a git config, a hook, an env var or a PATH entry for
-# every later step ($GITHUB_ENV, $GITHUB_PATH, ~/.gitconfig); a separate job on
-# a fresh runner shares none.
+# The token boundary: no write token ever shares a runner with the tree's
+# code. `select`, every `record` leg and `combine` check the tree out and run
+# its code (npm install scripts, both recorders and every command a tape
+# types, the walkthrough-pr.mjs that stages the evidence and writes the
+# comment, the clip and the report) with a read-only token, and hand their
+# results on as artifacts. `publish` (contents and pull-requests write) and
+# `report` (issues write) check nothing out and run nothing from the tree:
+# publish builds the evidence commit in a fresh repository under a random
+# temporary directory with no global, system, hook or fsmonitor
+# configuration, pushes only to the ref it derives from the event's PR number,
+# upserts the comment with gh and splices the clip into the body with the
+# inline node program below; report upserts the issue with gh. An earlier
+# step on the same runner can plant a git config, a hook, an env var or a PATH
+# entry for every later step ($GITHUB_ENV, $GITHUB_PATH, ~/.gitconfig); a
+# separate job on a fresh runner shares none. web/src/demo-workflow.test.ts
+# holds these invariants against this file.
 #
-# No loop: the workflow runs only on the `labeled` event, never on a push, and
-# GitHub starts no workflow for a push made with the workflow token; the only
-# push is to the evidence ref anyway, which no workflow watches. Fork PRs are
-# skipped. No untrusted input reaches a shell: event fields pass through env.
-# The upsert edits only a comment the workflow's own bot wrote.
+# No loop: the PR run starts only on the `labeled` event, never on a push or
+# an edit, and GitHub starts no workflow for a push or an edit made with the
+# workflow token; the only push is to the evidence ref anyway, which no
+# workflow watches. Fork PRs are skipped. No untrusted input reaches a shell:
+# event fields and job outputs pass through env. The upserts edit only a
+# comment or an issue the workflow's own bot wrote, and only the marked block
+# of the PR body.
 
 on:
   pull_request:
     types: [labeled]
+  schedule:
+    - cron: "41 5 * * *"
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+# One demo pipeline per PR at a time: a newer run:demo run cancels an older one
+# whole (its legs, its combine and its publish), so two runs never race to
+# write one comment or one body. Every other label applied also starts this
+# workflow; its group is its own run, so it cancels nothing. The freshness run
+# queues behind itself rather than cancelling.
+concurrency:
+  group: >-
+    ${{ github.event_name != 'pull_request' && 'demo-fresh' ||
+    ((github.event.label.name == 'run:demo' || github.event.label.name == 'run:walkthrough') &&
+    format('demo-pr-{0}', github.event.pull_request.number) || format('demo-other-{0}', github.run_id)) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  record:
-    # On the job, not the workflow: every label applied starts this workflow,
-    # and a workflow-level group would let an unrelated label's skipped run
-    # cancel a recording in flight.
-    concurrency:
-      group: demo-record-${{ github.event.pull_request.number }}
-      cancel-in-progress: true
+  select:
     if: >-
+      (github.event_name == 'pull_request' &&
       (github.event.label.name == 'run:demo' || github.event.label.name == 'run:walkthrough') &&
       github.event.pull_request.head.repo.full_name == github.repository &&
-      github.actor != 'github-actions[bot]'
+      github.actor != 'github-actions[bot]') ||
+      (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
-    # Generous: building the images, a stack per recorder, and every demo with
-    # its encodes; a wedged container must not hold the runner for the
-    # default six hours.
-    timeout-minutes: 60
+    timeout-minutes: 5
     permissions:
       contents: read
+      pull-requests: read
     outputs:
-      staged: ${{ steps.stage.outputs.staged }}
+      matrix: ${{ steps.select.outputs.matrix }}
+      ids: ${{ steps.select.outputs.ids }}
+      head: ${{ steps.select.outputs.head }}
     env:
-      PR: ${{ github.event.pull_request.number }}
-      HEAD_REF: ${{ github.event.pull_request.head.ref }}
+      EVENT: ${{ github.event_name }}
       BASE_REF: ${{ github.event.pull_request.base.ref }}
+      PR: ${{ github.event.pull_request.number }}
       REPO: ${{ github.repository }}
-      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
-      # The branch tip at run time (not the event's SHA), so a re-run records
-      # the current head.
+      # The body as it is now, not as the event carried it: a re-run replays
+      # its original event, so reading the event's body would let a re-run of
+      # an older run record the tag the body no longer has. Read by gh alone,
+      # in a step of its own, so the token is never in the tree's code's env.
+      - name: Read the PR body as it is now
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api "repos/${REPO}/pulls/${PR}" --jq '.body // ""' >"$RUNNER_TEMP/pr-body.md"
+
+      # A PR's branch tip at run time (not the event's SHA), so a re-run
+      # records the current head; main's commit for the freshness run.
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.ref }}
+          ref: ${{ github.event.pull_request.head.ref || github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
-      # The record steps run the branch's own scripts, so a branch cut before
-      # demos (#1132) cannot record under this workflow; say so plainly rather
-      # than fail somewhere downstream.
-      - name: Check the branch carries the demo recorders
+      # Every job below runs the branch's own scripts, so a branch cut before
+      # the explicit selection (#1180) cannot record under this workflow; say so
+      # plainly rather than fail somewhere downstream.
+      - name: Check the branch carries the demo selection
         run: |
-          if [ ! -f web/e2e/demo.sh ]; then
-            echo "::error::this branch predates run:demo (#1132): merge main into it, then re-apply the label"
+          if ! grep -qF "case 'every'" web/e2e/walkthrough-pr.mjs 2>/dev/null; then
+            echo "::error::this branch predates the explicit demo selection (#1180): merge main into it, then re-apply the label"
             exit 1
           fi
 
@@ -117,109 +151,202 @@ jobs:
         id: select
         run: |
           set -euo pipefail
-          git diff --name-only "origin/${BASE_REF}...HEAD" >"$RUNNER_TEMP/changed.txt"
-          ids=$(node web/e2e/walkthrough-pr.mjs select <"$RUNNER_TEMP/changed.txt")
-          walkthroughs=0
-          for id in $ids; do
-            if [ -f "web/e2e/walkthroughs/$id.yaml" ]; then walkthroughs=1; fi
-          done
+          if [ "$EVENT" = pull_request ]; then
+            PR_BODY=$(cat "$RUNNER_TEMP/pr-body.md")
+            export PR_BODY
+            git diff --name-only "origin/${BASE_REF}...HEAD" >"$RUNNER_TEMP/changed.txt"
+            node web/e2e/walkthrough-pr.mjs select <"$RUNNER_TEMP/changed.txt" >"$RUNNER_TEMP/selected.json"
+          else
+            node web/e2e/walkthrough-pr.mjs every >"$RUNNER_TEMP/selected.json"
+          fi
+          matrix=$(jq -c '[.[] | select(.id | test("^[a-z0-9][a-z0-9-]*$")) | {id, kind}]' "$RUNNER_TEMP/selected.json")
+          ids=$(jq -r 'map(.id) | join(" ")' <<<"$matrix")
           {
+            echo "matrix=$matrix"
             echo "ids=$ids"
-            echo "walkthroughs=$walkthroughs"
             echo "head=$(git rev-parse HEAD)"
           } >>"$GITHUB_OUTPUT"
-          echo "recording: $ids"
+          {
+            echo "### Demos to record"
+            echo
+            jq -r '.[] | "- `\(.id)` (\(.kind)): \(.why)"' "$RUNNER_TEMP/selected.json"
+          } >>"$GITHUB_STEP_SUMMARY"
+          echo "recording: ${ids:-nothing}"
+          if [ -z "$ids" ] && [ "$EVENT" = pull_request ]; then
+            if note=$(node web/e2e/walkthrough-pr.mjs tag); then
+              echo "- nothing: $note" >>"$GITHUB_STEP_SUMMARY"
+              echo "nothing to record: $note"
+            else
+              echo "::error::this PR tags no demo, or its tag is malformed (this step's log says which): add demo: <id> (or demo: none (<reason>)) to the PR body's Demo section, then re-apply run:demo"
+              exit 1
+            fi
+          fi
 
-      # The walkthrough recorder runs in the pinned Playwright container against
-      # the repo mounted from the runner, so it needs the web deps installed
-      # here; the terminal recorder needs none.
+  record:
+    needs: select
+    if: ${{ needs.select.outputs.ids != '' }}
+    name: record ${{ matrix.id }}
+    runs-on: ubuntu-latest
+    # Generous: building the images, the stack and the demo with its encodes;
+    # a wedged container must not hold the runner for the default six hours.
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.select.outputs.matrix) }}
+    env:
+      ID: ${{ matrix.id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.select.outputs.head }}
+          persist-credentials: false
+
+      # The commit this leg records, marked before anything can fail, so the
+      # upload below always replaces an earlier attempt's artifact of this
+      # name, and combine counts a leg that marked another commit (an earlier
+      # attempt's, left by a job that ended before uploading) as never run.
+      - name: Mark the commit this leg records
+        env:
+          KIND: ${{ matrix.kind }}
+        run: |
+          out=web/e2e/walkthroughs/out
+          [ "$KIND" != tape ] || out=scripts/demo/out
+          mkdir -p "$out"
+          git rev-parse HEAD >"$out/head"
+
+      # The walkthrough recorder runs in the pinned Playwright container
+      # against the repo mounted from the runner, so it needs the web deps
+      # installed here; the terminal recorder needs none.
+      - uses: actions/setup-node@v4
+        if: ${{ matrix.kind == 'walkthrough' }}
+        with:
+          node-version: "22"
+
       - name: Install web deps
-        if: ${{ steps.select.outputs.walkthroughs == '1' }}
+        if: ${{ matrix.kind == 'walkthrough' }}
         run: cd web && npm ci
 
-      # Each recorder brings up a walkthrough stack of its own, all in Docker
-      # (the simulator's NET_ADMIN is a container capability inside its own
-      # namespace, as make test-netadmin already uses on this runner). A
-      # failure is recorded, not fatal yet, so the passing demos still reach
-      # the PR.
+      # The demo's recorder brings up a walkthrough stack of its own, all in
+      # Docker (the simulator's NET_ADMIN is a container capability inside its
+      # own namespace, as make test-netadmin already uses on this runner). A
+      # failure is recorded, not fatal yet, so the recording still uploads.
       - name: Record
         id: record
-        env:
-          IDS: ${{ steps.select.outputs.ids }}
         run: |
-          # shellcheck disable=SC2086
-          if bash web/e2e/demo.sh record $IDS; then
+          if bash web/e2e/demo.sh record "$ID"; then
             echo "failed=0" >>"$GITHUB_OUTPUT"
           else
             echo "failed=1" >>"$GITHUB_OUTPUT"
           fi
 
-      - name: Upload the recordings
-        id: artifact
-        if: ${{ !cancelled() && steps.select.outcome == 'success' }}
+      # The recorder's whole out/ (the demo's files, its failed.txt and its
+      # stack-up mark, the stack's logs): combine reads the leg from it, and
+      # the artifact keeps a failed demo's partial output.
+      - name: Upload the recording
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: demos-pr${{ github.event.pull_request.number }}
-          path: |
-            web/e2e/walkthroughs/out/
-            scripts/demo/out/
-            !web/e2e/walkthroughs/out/_selftest/
-            !scripts/demo/out/_selftest/
+          name: demo-leg-${{ matrix.id }}
+          path: ${{ matrix.kind == 'tape' && 'scripts/demo/out/' || 'web/e2e/walkthroughs/out/' }}
           if-no-files-found: warn
+          overwrite: true
+          retention-days: ${{ github.event_name == 'pull_request' && 30 || 14 }}
 
-      # The evidence is staged here, by the PR's code and with no write token:
-      # the files each passing demo's evidence carries (a fresh set, so a
-      # removed step or a renamed or deleted demo leaves nothing behind), the
-      # ref they go to, and the comment body, written against a placeholder SHA
-      # that publish swaps for the evidence commit's once it exists.
+      - name: Fail on a failed demo
+        if: ${{ steps.record.outputs.failed == '1' }}
+        run: |
+          echo "demo $ID failed, or its stack never came up (the Record step says which)" >&2
+          exit 1
+
+  # Every leg, passed or failed, into one result, by the tree's code with a
+  # read-only token: on a PR the evidence tree, the comment and the clip,
+  # written against a placeholder SHA that publish swaps for the evidence
+  # commit's; on main the freshness report. A leg that left no recording
+  # (cancelled, or ended before recording) counts as a demo that never ran.
+  combine:
+    needs: [select, record]
+    if: ${{ !cancelled() && needs.select.result == 'success' && needs.select.outputs.ids != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      staged: ${{ steps.stage.outputs.staged }}
+      reported: ${{ steps.report.outputs.reported }}
+    env:
+      EVENT: ${{ github.event_name }}
+      PR: ${{ github.event.pull_request.number }}
+      REPO: ${{ github.repository }}
+      IDS: ${{ needs.select.outputs.ids }}
+      HEAD_SHA: ${{ needs.select.outputs.head }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.select.outputs.head }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: demo-leg-*
+          path: ${{ runner.temp }}/legs
+
       - name: Stage the evidence
         id: stage
-        if: ${{ !cancelled() && steps.select.outcome == 'success' }}
-        env:
-          IDS: ${{ steps.select.outputs.ids }}
-          HEAD_SHA: ${{ steps.select.outputs.head }}
-          ARTIFACT_URL: ${{ steps.artifact.outputs.artifact-url || format('{0}/{1}/actions/runs/{2}', github.server_url, github.repository, github.run_id) }}
+        if: ${{ github.event_name == 'pull_request' }}
         run: |
           set -euo pipefail
+          export LEGS="$RUNNER_TEMP/legs" ARTIFACT_URL="${RUN_URL}#artifacts"
           stage="$RUNNER_TEMP/evidence"
           mkdir -p "$stage/tree"
           node web/e2e/walkthrough-pr.mjs stage "$stage/tree"
           node web/e2e/walkthrough-pr.mjs ref "$PR" >"$stage/ref"
           # walkthroughpr.mjs PENDING_SHA, which publish replaces.
-          SHA=0000000000000000000000000000000000000000 node web/e2e/walkthrough-pr.mjs comment >"$stage/body.md"
+          export SHA=0000000000000000000000000000000000000000
+          node web/e2e/walkthrough-pr.mjs comment >"$stage/body.md"
+          node web/e2e/walkthrough-pr.mjs clip >"$stage/clip.md"
           echo "staged=true" >>"$GITHUB_OUTPUT"
 
       - name: Upload the evidence
-        if: ${{ !cancelled() && steps.stage.outcome == 'success' }}
+        if: ${{ steps.stage.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
           name: demo-evidence-pr${{ github.event.pull_request.number }}
           path: ${{ runner.temp }}/evidence/
           if-no-files-found: error
-          retention-days: 1
+          overwrite: true
+          retention-days: 30
 
-      - name: Fail on a failed demo
-        if: ${{ steps.record.outputs.failed == '1' }}
+      - name: Judge the freshness run
+        id: report
+        if: ${{ github.event_name != 'pull_request' }}
         run: |
-          for pair in "web/e2e/walkthroughs/out:walkthroughs" "scripts/demo/out:terminal demos"; do
-            out=${pair%%:*}
-            if [ -s "$out/failed.txt" ]; then
-              echo "${pair#*:} failed: $(tr '\n' ' ' <"$out/failed.txt")" >&2
-            fi
-          done
-          echo "a demo failed, or a recorder's stack never came up (the Record step says which)" >&2
-          exit 1
+          set -euo pipefail
+          LEGS="$RUNNER_TEMP/legs" node web/e2e/walkthrough-pr.mjs report "$RUNNER_TEMP/report" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "reported=true" >>"$GITHUB_OUTPUT"
+
+      - name: Upload the report
+        if: ${{ steps.report.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: demo-fresh-report
+          path: ${{ runner.temp }}/report/
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 14
 
   publish:
-    needs: record
-    # Runs whether or not a demo failed (record then fails), so the passing
+    needs: combine
+    # Runs whether or not a demo failed (its leg then fails), so the passing
     # ones still reach the PR; not when nothing was staged.
-    if: ${{ !cancelled() && needs.record.outputs.staged == 'true' }}
-    # Its own group, queued rather than cancelled, so a new run's recording
-    # never cancels an older run's publish mid-push, or the reverse.
-    concurrency:
-      group: demo-publish-${{ github.event.pull_request.number }}
-      cancel-in-progress: false
+    if: ${{ !cancelled() && github.event_name == 'pull_request' && needs.combine.outputs.staged == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -236,7 +363,7 @@ jobs:
 
       # Each run commits the staged tree on top of the evidence ref's last
       # commit, so an older comment's SHA stays reachable, and fast-forwards
-      # the ref; an unchanged tree reuses the last commit. Nothing from the PR
+      # the ref; an unchanged tree reuses the last commit. Nothing from the tree
       # runs here: git, in a fresh repository under a random directory, with
       # no global or system config and hooks and fsmonitor off, so neither the
       # staged files nor anything an earlier job wrote can configure it. The
@@ -285,7 +412,7 @@ jobs:
           fi
           echo "sha=$sha" >>"$GITHUB_OUTPUT"
 
-      # The body was written by record against a placeholder SHA
+      # The body was written by combine against a placeholder SHA
       # (walkthroughpr.mjs PENDING_SHA); it is pinned to the evidence commit
       # here, and must open with the demo marker. Slurp every page into one
       # array and match the markers through jq --arg, so neither is ever
@@ -294,6 +421,7 @@ jobs:
       # walkthrough comment's earlier one, which this run takes over): anyone
       # can paste a marker into theirs.
       - name: Upsert the demo comment
+        id: comment
         env:
           GH_TOKEN: ${{ github.token }}
           SHA: ${{ steps.commit.outputs.sha }}
@@ -313,6 +441,148 @@ jobs:
             gh api "repos/${REPO}/issues/comments/${cid}" -X PATCH -F body=@"$RUNNER_TEMP/body.md" >/dev/null
             echo "updated comment $cid"
           else
-            gh api "repos/${REPO}/issues/${PR}/comments" -X POST -F body=@"$RUNNER_TEMP/body.md" >/dev/null
-            echo "created comment"
+            cid=$(gh api "repos/${REPO}/issues/${PR}/comments" -X POST -F body=@"$RUNNER_TEMP/body.md" --jq .id)
+            echo "created comment $cid"
+          fi
+          echo "cid=$cid" >>"$GITHUB_OUTPUT"
+
+      # The clip into the PR body's Demo section (#1180): read the body as it
+      # is now, replace only the block between the clip markers (each a line of
+      # its own outside a code fence, so a body that quotes one keeps its text),
+      # or, with none yet, add the block after the tag line, else at the end;
+      # read the body again, and splice again if it changed meanwhile, then
+      # write it back only if the splice changed it. The REST API has no
+      # conditional write, so the re-read narrows an author's concurrent save
+      # to the one PATCH rather than closing it. The staged clip is pinned to
+      # the evidence commit here and may carry no marker, no HTML and no code
+      # fence (the escaped clip combine writes has none), so it can neither
+      # move the block's edge nor hide or swallow the text after it; the line
+      # linking the comment is written here, from the comment this job
+      # upserted. The splice is the inline program in SPLICE (the workflow's
+      # own text, nothing from the tree), played against fixtures by
+      # web/src/demo-workflow.test.ts.
+      - name: Write the clip into the PR body
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ steps.commit.outputs.sha }}
+          CID: ${{ steps.comment.outputs.cid }}
+          SPLICE: |
+            const fs = require('fs');
+            const START = '<!-- omniglass-demo-clip -->';
+            const END = '<!-- /omniglass-demo-clip -->';
+            const FENCE = /^[ \t]*(?:```|~~~)/;
+            const fail = (m) => { console.error(m); process.exit(1); };
+            const body = fs.readFileSync(process.env.BODY_FILE, 'utf8');
+            const clip = fs.readFileSync(process.env.CLIP_FILE, 'utf8').replace(/\s+$/, '');
+            if (clip.includes(START) || clip.includes(END)) fail('the staged clip carries a clip marker; refusing to edit the PR body');
+            if (/<|^[ \t]*(?:```|~~~)/m.test(clip)) fail('the staged clip carries HTML or a code fence; refusing to edit the PR body');
+            const eol = body.includes('\r\n') ? '\r\n' : '\n';
+            const lines = body.split(eol);
+            const masked = body.replace(/<!--[\s\S]*?-->/g, (c) => c.replace(/[^\r\n]/g, ' ')).split(eol);
+            const starts = [];
+            const ends = [];
+            let tag = -1;
+            let fenced = false;
+            for (let i = 0; i < lines.length; i++) {
+              const m = masked[i].replace(/\r$/, '');
+              if (FENCE.test(m)) { fenced = !fenced; continue; }
+              if (fenced) continue;
+              const t = lines[i].trim();
+              if (t === START) starts.push(i);
+              else if (t === END) ends.push(i);
+              else if (tag < 0 && /^[ \t]*(?:[-*+][ \t]+)?demo:/.test(m)) tag = i;
+            }
+            const block = [START, ...clip.split(/\r?\n/), END];
+            let out;
+            if (starts.length === 1 && ends.length === 1 && starts[0] < ends[0]) {
+              out = [...lines.slice(0, starts[0]), ...block, ...lines.slice(ends[0] + 1)].join(eol);
+            } else if (starts.length + ends.length > 0) {
+              fail('the PR body has an unpaired, doubled or reversed clip marker line; fix it by hand, then re-apply run:demo');
+            } else if (tag < 0) {
+              const kept = body.replace(/\s+$/, '');
+              out = kept ? kept + eol + eol + block.join(eol) : block.join(eol);
+            } else {
+              const after = lines.slice(tag + 1);
+              const gap = after.length && after[0].trim() !== '' ? [''] : [];
+              out = [...lines.slice(0, tag + 1), '', ...block, ...gap, ...after].join(eol);
+            }
+            fs.writeFileSync(process.env.OUT_FILE, out);
+        run: |
+          set -euo pipefail
+          pending=0000000000000000000000000000000000000000
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "not a commit SHA: $SHA" >&2; exit 1; }
+          [[ "$CID" =~ ^[0-9]+$ ]] || { echo "not a comment id: $CID" >&2; exit 1; }
+          clip=$(cat "$RUNNER_TEMP/evidence/clip.md")
+          {
+            printf '%s\n\n' "${clip//$pending/$SHA}"
+            printf 'Every step, the run and its artifacts: [the demo comment](https://github.com/%s/pull/%s#issuecomment-%s).\n' "$REPO" "$PR" "$CID"
+          } >"$RUNNER_TEMP/clip.md"
+          read_body() { gh api "repos/${REPO}/pulls/${PR}" | jq -j '.body // ""' >"$1"; }
+          for attempt in 1 2 3; do
+            read_body "$RUNNER_TEMP/pr-body.md"
+            BODY_FILE="$RUNNER_TEMP/pr-body.md" CLIP_FILE="$RUNNER_TEMP/clip.md" OUT_FILE="$RUNNER_TEMP/new-body.md" node -e "$SPLICE"
+            read_body "$RUNNER_TEMP/pr-body-again.md"
+            if cmp -s "$RUNNER_TEMP/pr-body.md" "$RUNNER_TEMP/pr-body-again.md"; then break; fi
+            [ "$attempt" -lt 3 ] || { echo "the PR body kept changing while the clip was spliced in; left it alone" >&2; exit 1; }
+            echo "the PR body changed while the clip was spliced in; splicing again"
+          done
+          if cmp -s "$RUNNER_TEMP/pr-body.md" "$RUNNER_TEMP/new-body.md"; then
+            echo "the PR body's clip is already current"
+          else
+            gh api "repos/${REPO}/pulls/${PR}" -X PATCH -F body=@"$RUNNER_TEMP/new-body.md" >/dev/null
+            echo "wrote the clip into the PR body"
+          fi
+
+  # The freshness run's issue, by the bot alone: opened when a demo on main
+  # fails (or updated, with a comment, when one is already open), closed with
+  # a note by the next green run. Nothing from the tree runs here; the report
+  # was written by combine, and is checked to open with its marker.
+  report:
+    needs: combine
+    if: ${{ !cancelled() && github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.combine.outputs.reported == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    env:
+      REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: demo-fresh-report
+          path: ${{ runner.temp }}/report
+
+      - name: Open, update or close the freshness issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/report"
+          MARKER='<!-- omniglass-demo-freshness -->'
+          TITLE='The nightly demo run is failing on main'
+          status=$(cat "$dir/status")
+          case "$status" in pass | fail) ;; *) echo "unknown status: $status" >&2; exit 1 ;; esac
+          [ "$(head -n1 "$dir/body.md")" = "$MARKER" ] || { echo "the report does not open with the marker" >&2; exit 1; }
+          num=$(gh api "repos/${REPO}/issues?state=open&per_page=100" --paginate \
+                | jq -rs --arg m "$MARKER" \
+                  'add | map(select(.pull_request == null and .user.login == "github-actions[bot]" and ((.body // "") | startswith($m))))[0].number // empty')
+          if [ "$status" = fail ]; then
+            if [ -n "$num" ]; then
+              gh api "repos/${REPO}/issues/${num}" -X PATCH -F body=@"$dir/body.md" >/dev/null
+              gh api "repos/${REPO}/issues/${num}/comments" -X POST -F body=@"$dir/summary.md" >/dev/null
+              echo "updated issue #$num"
+            else
+              num=$(gh api "repos/${REPO}/issues" -X POST -f title="$TITLE" -F body=@"$dir/body.md" \
+                      -f 'labels[]=area:foundation' -f type=Bug --jq .number 2>/dev/null ||
+                    gh api "repos/${REPO}/issues" -X POST -f title="$TITLE" -F body=@"$dir/body.md" \
+                      -f 'labels[]=area:foundation' --jq .number)
+              echo "opened issue #$num"
+            fi
+          elif [ -n "$num" ]; then
+            gh api "repos/${REPO}/issues/${num}/comments" -X POST -F body=@"$dir/summary.md" >/dev/null
+            gh api "repos/${REPO}/issues/${num}" -X PATCH -f state=closed -f state_reason=completed >/dev/null
+            echo "closed issue #$num"
+          else
+            echo "every demo recorded green; no issue open"
           fi

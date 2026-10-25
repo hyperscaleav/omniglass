@@ -226,7 +226,7 @@ Returns the component's recent log occurrences (the log-kind sink), newest first
 
 List a component's recent log lines
 
-Returns the component's recent raw log lines (the ingest lane of ADR-0066, distinct from typed events), newest first, bounded to the last 24 hours. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+Returns the component's recent raw log lines (the ingest lane of ADR-0066, distinct from typed events), newest first, bounded to the last 24 hours, narrowed by an optional severity threshold and source, with the sources the window carries. Gated by component:read; an out-of-scope component is a non-disclosing 404.
 
 - Route: `GET /api/v1/components/{name}/logs`
 - Gate: `component:read`
@@ -235,6 +235,8 @@ Returns the component's recent raw log lines (the ingest lane of ADR-0066, disti
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `name` | string | yes | The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
+| `severity` | string | no | Only lines at this severity or more severe (RFC 5424's eight levels); a line with no severity is left out |
+| `source` | string | no | Only lines that arrived on this channel |
 
 ## `list-component-metrics`
 

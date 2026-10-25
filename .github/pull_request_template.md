@@ -53,13 +53,15 @@ $ make test
      - An operator flow in the console (a form, a multi-step path, a navigation
        change): a walkthrough, a script at web/e2e/walkthroughs/<id>.yaml.
      - Both, when the PR has both.
-     Prove it locally with `make demo ID=<id>`, then apply the `run:demo` label: CI
-     records it and posts one comment listing every demo (a terminal demo's GIF
-     inline with its MP4 linked; a walkthrough's scrubbable video, preview, poster
-     and stills). Link that comment here. "n/a" only with a reason, e.g.
-     "n/a (test-only change)". /ship-slice refuses a PR with no Demo line. -->
+     TAG IT on the line below, by id, one or more (spaces between), or say none
+     with the reason in parentheses, e.g. none (test-only change). The run:demo
+     label records exactly the tagged demos, plus any the PR adds or changes, and
+     writes each one's clip (GIF or preview, with its scrubbable link) into this
+     section under the tag; the demo comment keeps the full record. Prove it
+     locally with `make demo ID=<id>` first. demo-tag.yml and /ship-slice refuse a
+     PR with no tag. -->
 
-- **Demo:**
+demo: 
 
 ## Docs and review
 
@@ -79,7 +81,7 @@ $ make test
 
 - [ ] Tests failed before, pass after; `make test` green run fresh, **output pasted above**
 - [ ] **Screenshots** of any operator-facing change, driven live (or "n/a")
-- [ ] **Demo** comment from `run:demo`: a terminal demo for CLI or API behavior, a walkthrough for a console flow (or "n/a" with a reason)
+- [ ] **Demo** tagged (`demo: <id>`) and its clip in the body from `run:demo`: a terminal demo for CLI or API behavior, a walkthrough for a console flow (or `demo: none (<reason>)`)
 - [ ] Docs ship in this PR (or `no-docs` label with justification); status build-progress noted
 - [ ] Operator-facing surface teaches its concept (learning-tool), if applicable
 - [ ] `make gen` clean; no em dashes; no AI attribution

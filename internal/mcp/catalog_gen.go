@@ -121,13 +121,14 @@ var catalog = []tooldef.Def{
 	{
 		Name:        "list-component-logs",
 		Title:       "List a component's recent log lines",
-		Description: "Returns the component's recent raw log lines (the ingest lane of ADR-0066, distinct from typed events), newest first, bounded to the last 24 hours. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
+		Description: "Returns the component's recent raw log lines (the ingest lane of ADR-0066, distinct from typed events), newest first, bounded to the last 24 hours, narrowed by an optional severity threshold and source, with the sources the window carries. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
 		Method:      "GET",
 		Path:        "/components/{name}/logs",
 		Permission:  "component:read",
 		PathParams:  []string{"name"},
+		QueryParams: []string{"severity", "source"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
-		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"name\":{\"description\":\"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)\",\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"}",
+		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"name\":{\"description\":\"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)\",\"type\":\"string\"},\"severity\":{\"description\":\"Only lines at this severity or more severe (RFC 5424's eight levels); a line with no severity is left out\",\"enum\":[\"emergency\",\"alert\",\"critical\",\"error\",\"warning\",\"notice\",\"info\",\"debug\"],\"type\":\"string\"},\"source\":{\"description\":\"Only lines that arrived on this channel\",\"maxLength\":100,\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"}",
 	},
 	{
 		Name:        "list-component-metrics",
