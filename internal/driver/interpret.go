@@ -52,6 +52,9 @@ type BakedFunction struct {
 	Emits    []BakedEmit `json:"emits"`
 	// Unmatched rides listen tasks: the spec's unmatched-line policy (#817).
 	Unmatched string `json:"unmatched,omitempty"`
+	// Log rides a push transport's listen tasks: whether a claimed message
+	// also lands its raw log line (#1024, decision 5); nil is true.
+	Log *bool `json:"log,omitempty"`
 }
 
 // ParseBaked decodes a derived task's spec. Strict like Parse: the writer is

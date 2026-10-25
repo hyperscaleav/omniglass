@@ -25,8 +25,12 @@ type Message struct {
 	// ID is a server-sent event's own id, empty when it carried none.
 	ID string
 	// Format is the response format the data is read in (json or text, the
-	// stream's declared format); empty for a line, which is text.
+	// stream's declared format; a webhook's json, xml, form or text); empty
+	// for a line, which is text.
 	Format string
+	// Header is a pushed message's headers (a webhook's post, #1024), by
+	// canonical name, which a listener's header match reads.
+	Header map[string][]string
 }
 
 // LineMessage is a line as a message.
@@ -36,6 +40,9 @@ func LineMessage(line string) Message { return Message{Data: line} }
 // event's data in its declared format, a JSON event read by jsonpath as an
 // http answer is.
 func (m Message) Payload() Payload {
+	if m.Format == FormatForm {
+		return formPayload(m.Data)
+	}
 	if m.Format == "" {
 		// A line, or a websocket frame, is text a regex reads, and a JSON
 		// one a jsonpath reads too.
@@ -77,6 +84,9 @@ func (m Match) MatchesMessage(msg Message) bool {
 	if m.Event != "" && msg.Event != m.Event {
 		return false
 	}
+	if m.Header != nil && !m.Header.matches(msg.Header) {
+		return false
+	}
 	switch {
 	case m.Prefix != "":
 		return strings.HasPrefix(msg.Data, m.Prefix)
@@ -86,7 +96,7 @@ func (m Match) MatchesMessage(msg Message) bool {
 	case m.Field != nil:
 		return m.Field.matches(msg.Data)
 	}
-	return m.Event != ""
+	return m.Event != "" || m.Header != nil
 }
 
 // validateListenerMatch refuses a listener's match no router could apply:
@@ -103,8 +113,13 @@ func validateListenerMatch(what string, m Match, transport string, stream *Reque
 	if data > 1 {
 		return fmt.Errorf("driver: %s declares more than one data rule; a match is an event name and at most one data rule (a prefix, a regex or a field)", what)
 	}
-	if data == 0 && m.Event == "" {
-		return fmt.Errorf("driver: %s needs a match rule: an event name, a prefix, a regex or a field", what)
+	if data == 0 && m.Event == "" && m.Header == nil {
+		return fmt.Errorf("driver: %s needs a match rule: an event name, a header, a prefix, a regex or a field", what)
+	}
+	if m.Header != nil {
+		if err := validateHeaderMatch(what, m.Header, transport); err != nil {
+			return err
+		}
 	}
 	if m.Event != "" && !IsHTTP(transport) {
 		return fmt.Errorf("driver: %s names an event, which only a server-sent events stream carries; a line has none", what)
@@ -127,7 +142,7 @@ func validateListenerMatch(what string, m Match, transport string, stream *Reque
 			}
 		}
 		if stream != nil && stream.FormatOf() != FormatJSON {
-			return fmt.Errorf("driver: %s field match reads json, and the stream's events are %s", what, stream.FormatOf())
+			return fmt.Errorf("driver: %s field match reads json, and the data it claims is %s", what, stream.FormatOf())
 		}
 	}
 	return nil

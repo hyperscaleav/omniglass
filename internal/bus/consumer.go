@@ -411,6 +411,7 @@ func logLineWrites(ev *ogv1.TelemetryBatch, component string) []storage.LogLineW
 		out = append(out, storage.LogLineWrite{
 			OwnerKind:     "component",
 			OwnerID:       component,
+			Instance:      l.GetInstance(),
 			Source:        lineSource(ev, l),
 			Severity:      l.GetSeverity(),
 			Facility:      l.GetFacility(),

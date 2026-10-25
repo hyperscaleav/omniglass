@@ -50,6 +50,11 @@ type SessionSpec struct {
 	// (the root when absent), the query and the headers of the GET that
 	// opens it, riding the session's scheme or login.
 	Upgrade *Request `json:"upgrade,omitempty"`
+	// Webhook is a webhook driver's block (#1024): the body's format, the
+	// hmac signature's shape or the token's header, the delivery id and the
+	// verification challenge. Scheme and Credential above say which scheme
+	// checks a post and the secret input it checks against.
+	Webhook *WebhookSpec `json:"webhook,omitempty"`
 }
 
 // Login is a declared login dialog: each step waits for its prompt and then
@@ -219,6 +224,12 @@ func (l *Login) Render(secrets map[string]map[string]string) ([]string, error) {
 // authenticate on its own.
 func (s *Spec) validateSession() error {
 	ss := s.Session
+	if transport.IsPush(s.Transport) {
+		return nil // validatePush holds a push transport's session block
+	}
+	if ss != nil && ss.Webhook != nil {
+		return fmt.Errorf("driver: a session webhook block is a webhook driver's; %q is dialed", s.Transport)
+	}
 	if ss == nil {
 		if s.Transport == "ssh" && (len(s.Polls) > 0 || len(s.Listeners) > 0 || len(s.Commands) > 0) {
 			return fmt.Errorf("driver: an ssh session authenticates on every connection; declare session.credential")

@@ -146,6 +146,18 @@ func TestLogLineSourceFallsBackToTheBatch(t *testing.T) {
 	}
 }
 
+// A pushed line names the endpoint it arrived through (#1024): a webhook's
+// post lands under its endpoint's name, as a task's collected line does.
+func TestAPushedLineKeepsItsEndpointInstance(t *testing.T) {
+	logs := logLineWrites(&ogv1.TelemetryBatch{
+		Source: "webhook",
+		Logs:   []*ogv1.LogLine{{Message: "{}", Instance: "webhook"}, {Message: "bare"}},
+	}, "ucc-1")
+	if logs[0].Instance != "webhook" || logs[1].Instance != "" {
+		t.Fatalf("instances = %q, %q; want webhook, then none", logs[0].Instance, logs[1].Instance)
+	}
+}
+
 // A node's self-logs resolve ts and source exactly as a push's lines do (the
 // shared per-line helpers), and every write is stamped with the publishing
 // node: the origin-true landing #589 split out of log_line.

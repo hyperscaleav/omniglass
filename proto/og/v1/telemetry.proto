@@ -194,4 +194,8 @@ message LogLine {
   bytes labels = 6;
   string correlation_id = 7;
   google.protobuf.Timestamp ts = 8;
+  // instance is the endpoint a pushed line arrived through, on the API lane
+  // (a webhook's post, #1024): a task's collected line takes its task's
+  // endpoint server-side, and a self-log has none.
+  string instance = 9;
 }

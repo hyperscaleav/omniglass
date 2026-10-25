@@ -551,6 +551,10 @@ type LogLine struct {
 	Labels        []byte                 `protobuf:"bytes,6,opt,name=labels,proto3" json:"labels,omitempty"`
 	CorrelationId string                 `protobuf:"bytes,7,opt,name=correlation_id,json=correlationId,proto3" json:"correlation_id,omitempty"`
 	Ts            *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=ts,proto3" json:"ts,omitempty"`
+	// instance is the endpoint a pushed line arrived through, on the API lane
+	// (a webhook's post, #1024): a task's collected line takes its task's
+	// endpoint server-side, and a self-log has none.
+	Instance      string `protobuf:"bytes,9,opt,name=instance,proto3" json:"instance,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -641,6 +645,13 @@ func (x *LogLine) GetTs() *timestamppb.Timestamp {
 	return nil
 }
 
+func (x *LogLine) GetInstance() string {
+	if x != nil {
+		return x.Instance
+	}
+	return ""
+}
+
 var File_proto_og_v1_telemetry_proto protoreflect.FileDescriptor
 
 const file_proto_og_v1_telemetry_proto_rawDesc = "" +
@@ -692,7 +703,7 @@ const file_proto_og_v1_telemetry_proto_rawDesc = "" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\x18\n" +
 	"\apayload\x18\x03 \x01(\fR\apayload\x12*\n" +
 	"\x02ts\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x02ts\x12\x1a\n" +
-	"\binstance\x18\x05 \x01(\tR\binstance\"\xfe\x01\n" +
+	"\binstance\x18\x05 \x01(\tR\binstance\"\x9a\x02\n" +
 	"\aLogLine\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage\x12\x16\n" +
 	"\x06source\x18\x02 \x01(\tR\x06source\x12\x1a\n" +
@@ -703,7 +714,8 @@ const file_proto_og_v1_telemetry_proto_rawDesc = "" +
 	"attributes\x12\x16\n" +
 	"\x06labels\x18\x06 \x01(\fR\x06labels\x12%\n" +
 	"\x0ecorrelation_id\x18\a \x01(\tR\rcorrelationId\x12*\n" +
-	"\x02ts\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\x02tsB4Z2github.com/hyperscaleav/omniglass/proto/og/v1;ogv1b\x06proto3"
+	"\x02ts\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\x02ts\x12\x1a\n" +
+	"\binstance\x18\t \x01(\tR\binstanceB4Z2github.com/hyperscaleav/omniglass/proto/og/v1;ogv1b\x06proto3"
 
 var (
 	file_proto_og_v1_telemetry_proto_rawDescOnce sync.Once

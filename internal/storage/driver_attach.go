@@ -427,7 +427,7 @@ func derivedDriverTasks(endpointID string, d *Driver, sp *driver.Spec, cat catal
 		match := l.Match
 		if err := add("listen", driver.BakedFunction{
 			Driver: d.Name, Version: d.Version, Function: l.Name,
-			Arm: l.Arm, Match: &match, Emits: emits, Unmatched: sp.Unmatched,
+			Arm: l.Arm, Match: &match, Emits: emits, Unmatched: sp.Unmatched, Log: l.Log,
 		}); err != nil {
 			return nil, err
 		}
