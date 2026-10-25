@@ -162,7 +162,16 @@ servers resend it, so a collector's dedup is exercised on every resume); `retry_
 reconnection time it asks for, and the console drops every stream by firing `POST` at its
 `drop_path`, as a restart would. The Kestrel bar streams its call, volume, mute and power;
 `EventStreams`, `EventStreamAttempts`, `DropEventStreams` and `HTTPCredentialRefusals` are what a
-test reads and drives. The DSP serves
+test reads and drives. A `websocket` face (#1034) is a control socket of its own, plain or (with
+`tls`) under the device's https identity, its upgrade at the `websocket` block's `path` behind the
+face's own auth (`basic`, `header`, `bearer` or `query`): a message per JSON text frame, where a
+`subscribe` is acknowledged and then pushes every change to the paths it names (among the block's
+`paths`), a `get` is answered by a `result` carrying the request's `id`, a `set` on one of the
+block's `settable` paths pushes the change to every subscriber before its `result`, and anything
+else is an `error` carrying the id. The console drops every socket with a going-away close by
+firing `POST` at its `drop_path`. The Kestrel bar serves its control socket over wss on 9443;
+`WebSocketAttempts`, `WebSocketUpgrades`, `WebSocketRefusals`, `WebSocketSubscribes` and
+`DropWebSockets` are what a test reads and drives. The DSP serves
 its status as namespaced XML (`GET /api/status.xml`) beside its JSON and its HTML dashboard, the
 three formats an http driver reads. A test that drives the run mode out of
 process (the end-to-end tests run `omniglass sim run` beside a node) cannot take an ephemeral

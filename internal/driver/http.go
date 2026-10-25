@@ -349,6 +349,15 @@ func (s *Spec) validateHTTPSession() error {
 	if err := s.validateStream(); err != nil {
 		return err
 	}
+	return s.validateHTTPScheme()
+}
+
+// validateHTTPScheme refuses a session scheme no request could carry: the
+// scheme and the credential come together, the credential names a secret
+// input of the scheme's type, and an api key is placed where a node can put
+// it. http's and a websocket upgrade's (#1034).
+func (s *Spec) validateHTTPScheme() error {
+	ss := s.Session
 	switch {
 	case ss.Scheme == "" && ss.Credential != "":
 		return fmt.Errorf("driver: the session credential %q needs a scheme (one of %s)", ss.Credential, strings.Join(Schemes(), ", "))

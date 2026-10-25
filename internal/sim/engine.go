@@ -464,6 +464,11 @@ func (e *Engine) bindInterface(dev *Device, iface profile.Interface) (net.Addr, 
 			}
 		}
 		return dev.startUDP(port)
+	case "websocket":
+		// A control socket of its own (#1034), behind the face's own auth,
+		// over the device's https identity when it serves tls.
+		dev.SetWebSocket(iface.WebSocket, httpAuthFromProfile(iface.Auth))
+		return dev.StartWebSocket(port, iface.TLS)
 	case "icmp":
 		// Kernel answers ICMP in the shared netns; nothing to listen for.
 		return nil, nil
@@ -489,6 +494,7 @@ func (e *Engine) stopDevice(dev *Device) {
 	dev.StopBehaviors()
 	dev.StopBehaviorOverrides()
 	dev.StopHTTP()
+	dev.StopWebSocket()
 	dev.StopSNMP()
 	dev.StopSSH()
 	dev.StopTelnet()

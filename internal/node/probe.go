@@ -262,7 +262,7 @@ func collectDriverTask(ctx context.Context, runner *collection.Runner, task coll
 		Secrets:     task.Secrets,
 		Timeout:     timeout,
 		Session:     sessions.lookup(task.EndpointID),
-		SessionOnly: task.Session != nil,
+		SessionOnly: task.Session != nil || driver.IsWebSocket(task.Transport),
 		Auth:        task.Session,
 	}
 	if driver.IsHTTP(task.Transport) {
@@ -357,7 +357,10 @@ func collectProbe(ctx context.Context, runner *collection.Runner, task collectio
 		return collectSSHProbe(ctx, runner, task, sessions)
 	case "tls":
 		return collectTLSProbe(ctx, runner, task, sessions)
-	case "https":
+	case "https", "wss":
+		// wss's probe is https's (#1034): the handshake under the
+		// endpoint's trust, then a credential-free GET / that any status
+		// answers.
 		return collectHTTPSProbe(ctx, runner, task, sessions)
 	}
 	return collectTask(ctx, runner, task)
@@ -561,7 +564,10 @@ func collectTask(ctx context.Context, runner *collection.Runner, task collection
 			return nil, err
 		}
 		return runner.CollectTCP(ctx, t)
-	case "http":
+	case "http", "websocket":
+		// A websocket's probe is http's (#1034): a credential-free GET /,
+		// any status an answer, so the rung stays observed beneath an
+		// upgrade the credential gates.
 		t, err := parseHTTPTask(task)
 		if err != nil {
 			return nil, err

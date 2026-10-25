@@ -177,6 +177,19 @@ func (p *PG) PendingNodeCommands(ctx context.Context, node string) ([]CommandDel
 			// no line, the rendered request whole.
 			d.Line, d.SessionOnly, d.Retries, d.Request = "", false, 0, &req
 		}
+		if driver.IsWebSocket(r.transport) {
+			// A websocket command is a frame over the held session (#1034):
+			// its line, or its JSON body rendered injection-safe; the node
+			// mints the correlation into it at execute.
+			frame, err := req.Frame()
+			if err != nil {
+				if _, uerr := p.pool.Exec(ctx, `update command set executed_at = now(), exec_error = $2, dispatched_endpoint_id = $3 where id = $1 and executed_at is null`, r.id, err.Error(), r.endpointID); uerr != nil {
+					return nil, fmt.Errorf("storage: record render fault for command %d: %w", r.id, uerr)
+				}
+				continue
+			}
+			d.Line = frame
+		}
 		out = append(out, d)
 		delivered = append(delivered, dispatch{r.id, r.endpointID})
 	}

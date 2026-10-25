@@ -62,8 +62,12 @@ var rungsOf = map[string][]string{
 	"ssh":    {RungHandshake, RungConnect},
 	"http":   {RungConnect, RungRequest},
 	"https":  {RungHandshake, RungConnect},
-	"udp":    {RungRequest},
-	"snmp":   {RungRequest},
+	// A websocket's rung is http's: a connect answered by a credential-free
+	// GET / (#1034), the handshake first over wss.
+	"websocket": {RungConnect},
+	"wss":       {RungHandshake, RungConnect},
+	"udp":       {RungRequest},
+	"snmp":      {RungRequest},
 }
 
 // EffectiveLadder is a resolved ladder: every rung decided.
@@ -148,7 +152,7 @@ func (s *Spec) validateLadder() error {
 		if (s.Transport != "tcp" && s.Transport != "udp") || req.Line == "" {
 			return fmt.Errorf("driver: a request rung runs as a line over tcp or a datagram over udp, or as a get over snmp")
 		}
-		if err := validateReply("ladder request", *req); err != nil {
+		if err := validateReply(s.Transport, "ladder request", *req); err != nil {
 			return err
 		}
 		if err := validateRetries(s.Transport, "the ladder request", *req); err != nil {

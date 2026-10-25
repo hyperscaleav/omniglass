@@ -113,6 +113,82 @@ drivers:
         - command_type: set-power
           request: { method: POST, path: /api/system/standby, body: { power: "${value}" } }
           settle: { from: response, extract: { jsonpath: power } }
+  - id: kestrel-ws
+    label: Kestrel Control Socket
+    version: "1.0.0"
+    spec:
+      version: 1
+      # The Kestrel bar's control socket (#1034): a JSON message per text
+      # frame over wss on 9443, the bar's self-signed key pinned on first
+      # use, the upgrade carrying basic auth. One held socket carries it all:
+      # the subscription armed on every connection, the pushes the listeners
+      # land, and the polls and commands, each answered by the frame that
+      # carries back the id the node mints into it, whatever pushes arrive
+      # between.
+      transport: wss
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "9443" }
+        - { name: tls-mode, kind: string, default: pin }
+        - { name: login, kind: secret, secret_type: basic-auth, required: true }
+      session:
+        credential: login
+        scheme: basic
+        upgrade: { path: /api/ws }
+      listeners:
+        # A push names the state path it changed and the new value: a JSON
+        # field match claims it, a jsonpath reads the value. The one
+        # subscribe, sent on every connection before anything else, rides
+        # the first listener.
+        - name: call-change
+          arm: ['{"type":"subscribe","paths":["status.audio.volume","status.audio.mic_mute","status.call","status.device.power"]}']
+          match: { field: { path: path, equals: status.call.active } }
+          emits:
+            - { name: call-state, extract: { jsonpath: value }, transform: { map: { "true": active, "false": idle } } }
+        - name: mute-change
+          match: { field: { path: path, equals: status.audio.mic_mute } }
+          emits:
+            - { name: mute, extract: { jsonpath: value } }
+        - name: participants-change
+          match: { field: { path: path, equals: status.call.participants } }
+          emits:
+            - { name: participant-count, extract: { jsonpath: value } }
+        - name: power-change
+          match: { field: { path: path, equals: status.device.power } }
+          emits:
+            - { name: power-state, extract: { jsonpath: value } }
+        - name: volume-change
+          match: { field: { path: path, equals: status.audio.volume } }
+          emits:
+            - { name: volume, extract: { jsonpath: value } }
+      polls:
+        # A get is a frame; reply.correlate names the field the node writes
+        # a fresh id into, and the answer is the frame carrying it back.
+        - name: volume
+          schedule: { every: 60s }
+          request: { body: { type: get, path: status.audio.volume }, reply: { correlate: id, error: { regex: '"type":"error"' } } }
+          emits:
+            - { name: volume, extract: { jsonpath: value } }
+        - name: mute
+          schedule: { every: 60s }
+          request: { body: { type: get, path: status.audio.mic_mute }, reply: { correlate: id, error: { regex: '"type":"error"' } } }
+          emits:
+            - { name: mute, extract: { jsonpath: value } }
+        - name: power
+          schedule: { every: 60s }
+          request: { body: { type: get, path: status.device.power }, reply: { correlate: id, error: { regex: '"type":"error"' } } }
+          emits:
+            - { name: power-state, extract: { jsonpath: value } }
+      commands:
+        # A whole-leaf ${value} keeps the intended value's type. The bar
+        # pushes the change, then answers with the value it set, which
+        # settles the command against its intent.
+        - command_type: set-volume
+          request: { body: { type: set, path: status.audio.volume, value: "${value}" }, reply: { correlate: id, error: { regex: '"type":"error"' } } }
+          settle: { from: response, extract: { jsonpath: value } }
+        - command_type: set-mute
+          request: { body: { type: set, path: status.audio.mic_mute, value: "${value}" }, reply: { correlate: id, error: { regex: '"type":"error"' } } }
+          settle: { from: response, extract: { jsonpath: value } }
   - id: newtron-nvp
     label: Newtron NVP
     version: "1.0.0"

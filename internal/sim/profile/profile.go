@@ -80,7 +80,9 @@ type Interface struct {
 	Doc     Doc  `yaml:"doc"`
 	Auth    Auth `yaml:"auth"`
 	// Events is an http face's server-sent events stream (#1038).
-	Events        Events            `yaml:"events"`
+	Events Events `yaml:"events"`
+	// WebSocket is a websocket face's protocol (#1034).
+	WebSocket     WebSocket         `yaml:"websocket"`
 	APISurface    string            `yaml:"api_surface"`
 	Routes        []Route           `yaml:"routes"`
 	Commands      []Command         `yaml:"commands"`
@@ -286,6 +288,18 @@ type Events struct {
 	Path     string   `yaml:"path"`
 	RetryMS  int      `yaml:"retry_ms"`
 	Paths    []string `yaml:"paths"`
+	DropPath string   `yaml:"drop_path"`
+}
+
+// WebSocket declares a websocket face (#1034): the path its upgrade is
+// served at (behind the face's auth), the state paths a subscriber may
+// watch and a get may read (each with everything beneath it; none is every
+// path), the paths a set may write, and the path the console fires (POST)
+// to drop every socket, as a restart would.
+type WebSocket struct {
+	Path     string   `yaml:"path"`
+	Paths    []string `yaml:"paths"`
+	Settable []string `yaml:"settable"`
 	DropPath string   `yaml:"drop_path"`
 }
 
@@ -657,6 +671,9 @@ func validateInterfaces(p *DeviceProfile) error {
 		if iface.LossPct < 0 || iface.LossPct > 100 {
 			return fmt.Errorf("interface %q sets loss_pct %d; want 0 to 100", iface.Name, iface.LossPct)
 		}
+		if err := validateWebSocketFace(iface); err != nil {
+			return err
+		}
 		if iface.Protocol != "ssh" && iface.Protocol != "telnet" && iface.Protocol != "snmp" {
 			continue
 		}
@@ -664,6 +681,33 @@ func validateInterfaces(p *DeviceProfile) error {
 			return fmt.Errorf("interfaces %q and %q are both %s; a device serves one %s interface", prev, iface.Name, iface.Protocol, iface.Protocol)
 		}
 		seen[iface.Protocol] = iface.Name
+	}
+	return nil
+}
+
+// validateWebSocketFace rejects a websocket block the simulator could not
+// serve: one on another protocol, a websocket face with no path, and an
+// auth whose credential only a login face issues (the face's auth is its
+// own, one of the static modes).
+func validateWebSocketFace(iface Interface) error {
+	ws := iface.WebSocket
+	declared := ws.Path != "" || len(ws.Paths) > 0 || len(ws.Settable) > 0 || ws.DropPath != ""
+	if iface.Protocol != "websocket" {
+		if declared {
+			return fmt.Errorf("interface %q declares a websocket block but is not a websocket face", iface.Name)
+		}
+		return nil
+	}
+	if !strings.HasPrefix(ws.Path, "/") {
+		return fmt.Errorf("websocket interface %q needs a websocket.path starting with /", iface.Name)
+	}
+	if ws.DropPath != "" && !strings.HasPrefix(ws.DropPath, "/") {
+		return fmt.Errorf("websocket interface %q drop_path %q does not start with /", iface.Name, ws.DropPath)
+	}
+	switch iface.Auth.Type {
+	case "", "basic", "header", "bearer", "query":
+	default:
+		return fmt.Errorf("websocket interface %q declares %s auth; a websocket face's own auth is basic, header, bearer or query", iface.Name, iface.Auth.Type)
 	}
 	return nil
 }

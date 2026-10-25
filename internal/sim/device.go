@@ -348,6 +348,8 @@ type Device struct {
 	// events is the http face's server-sent events stream (#1038), nil for
 	// none.
 	events *eventHub
+	// ws is the device's websocket face (#1034), nil without one.
+	ws *wsFace
 	// httpDigestAnswers counts the requests that answered a digest face's
 	// challenge, right or wrong.
 	httpDigestAnswers atomic.Int64
@@ -435,6 +437,9 @@ func (d *Device) CommandList() []string {
 func (d *Device) fanoutToSessions(diffs map[string]any) {
 	if d.events != nil {
 		d.events.fanout(diffs)
+	}
+	if d.ws != nil {
+		d.ws.fanout(diffs)
 	}
 	if d.sshSession != nil {
 		d.sshSession.Fanout(diffs)

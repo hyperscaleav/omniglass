@@ -4,11 +4,15 @@ go 1.25.3
 
 require (
 	github.com/amacneil/dbmate/v2 v2.33.0
+	github.com/antchfx/htmlquery v1.3.5
+	github.com/antchfx/xmlquery v1.5.0
+	github.com/antchfx/xpath v1.3.5
 	github.com/danielgtaylor/huma/v2 v2.38.0
 	github.com/expr-lang/expr v1.17.8
 	github.com/go-chi/chi/v5 v5.2.5
 	github.com/google/nftables v0.3.0
 	github.com/google/uuid v1.6.0
+	github.com/gorilla/websocket v1.5.3
 	github.com/gosnmp/gosnmp v1.44.0
 	github.com/jackc/pgx/v5 v5.9.2
 	github.com/nats-io/nats-server/v2 v2.14.3
@@ -22,6 +26,7 @@ require (
 	github.com/vishvananda/netlink v1.3.1
 	golang.org/x/crypto v0.53.0
 	golang.org/x/image v0.44.0
+	golang.org/x/net v0.56.0
 	golang.org/x/sys v0.46.0
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/yaml.v3 v3.0.1
@@ -31,9 +36,6 @@ require (
 	dario.cat/mergo v1.0.2 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
-	github.com/antchfx/htmlquery v1.3.5 // indirect
-	github.com/antchfx/xmlquery v1.5.0 // indirect
-	github.com/antchfx/xpath v1.3.5 // indirect
 	github.com/antithesishq/antithesis-sdk-go v0.7.0-default-no-op // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -96,7 +98,6 @@ require (
 	go.opentelemetry.io/otel v1.43.0 // indirect
 	go.opentelemetry.io/otel/metric v1.43.0 // indirect
 	go.opentelemetry.io/otel/trace v1.43.0 // indirect
-	golang.org/x/net v0.56.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/text v0.40.0 // indirect
 	golang.org/x/time v0.15.0 // indirect

@@ -11,17 +11,19 @@ import (
 // source the storage validator, the API route, and the node's probe dispatch
 // all read. These tests pin the contract the rest of slice 1 hangs off.
 
-func TestRegistryCarriesTheNineTransports(t *testing.T) {
+func TestRegistryCarriesTheElevenTransports(t *testing.T) {
 	want := map[string]struct{ held, built bool }{
-		"icmp":   {held: false, built: true},
-		"tcp":    {held: true, built: true},  // the line protocol holds a session over it (#817)
-		"tls":    {held: true, built: true},  // the line protocol over a tls handshake (#1035)
-		"udp":    {held: false, built: true}, // datagrams, stateless: its rung is a request answered (#1037)
-		"telnet": {held: true, built: true},  // the line protocol behind a login (#1033)
-		"ssh":    {held: true, built: true},
-		"http":   {held: true, built: true},  // a server-sent events stream holds a session (#1038); requests stay their own
-		"https":  {held: true, built: true},  // http over the tls handshake, its own entry (#902, ADR-0160's rule)
-		"snmp":   {held: false, built: true}, // stateless: its rung is a standard get answered (#821)
+		"icmp":      {held: false, built: true},
+		"tcp":       {held: true, built: true},  // the line protocol holds a session over it (#817)
+		"tls":       {held: true, built: true},  // the line protocol over a tls handshake (#1035)
+		"udp":       {held: false, built: true}, // datagrams, stateless: its rung is a request answered (#1037)
+		"telnet":    {held: true, built: true},  // the line protocol behind a login (#1033)
+		"ssh":       {held: true, built: true},
+		"http":      {held: true, built: true},  // a server-sent events stream holds a session (#1038); requests stay their own
+		"https":     {held: true, built: true},  // http over the tls handshake, its own entry (#902, ADR-0160's rule)
+		"websocket": {held: true, built: true},  // text frames over a held upgrade, a reply matched by its minted id (#1034)
+		"wss":       {held: true, built: true},  // websocket over the tls handshake (#1034)
+		"snmp":      {held: false, built: true}, // stateless: its rung is a standard get answered (#821)
 	}
 	all := transport.All()
 	if len(all) != len(want) {
@@ -52,7 +54,7 @@ func TestRegistryOrderIsStable(t *testing.T) {
 	for _, tr := range transport.All() {
 		names = append(names, tr.Name)
 	}
-	want := []string{"icmp", "tcp", "tls", "udp", "telnet", "ssh", "http", "https", "snmp"}
+	want := []string{"icmp", "tcp", "tls", "udp", "telnet", "ssh", "http", "https", "websocket", "wss", "snmp"}
 	for i, n := range want {
 		if names[i] != n {
 			t.Fatalf("order = %v, want %v", names, want)
@@ -86,7 +88,7 @@ func TestAllReturnsACopy(t *testing.T) {
 // connect where an open port can be detected, the protocol's handshake for
 // ssh, a named request where it cannot (udp, snmp); icmp has none.
 func TestRegistryCarriesTheTransportRung(t *testing.T) {
-	want := map[string]string{"icmp": "", "tcp": "connect", "tls": "handshake", "udp": "request", "telnet": "connect", "ssh": "handshake", "http": "connect", "https": "handshake", "snmp": "request"}
+	want := map[string]string{"icmp": "", "tcp": "connect", "tls": "handshake", "udp": "request", "telnet": "connect", "ssh": "handshake", "http": "connect", "https": "handshake", "websocket": "connect", "wss": "handshake", "snmp": "request"}
 	for _, tr := range transport.All() {
 		if tr.Rung != want[tr.Name] {
 			t.Errorf("%s: rung %q, want %q", tr.Name, tr.Rung, want[tr.Name])
@@ -120,12 +122,12 @@ func TestUDPIsBuiltStatelessAndItsRungIsARequest(t *testing.T) {
 }
 
 // The transports whose every connection runs the TLS handshake (#902): the
-// line protocol's tls and http's https, each its own entry over the one TLS
+// line protocol's tls, http's https and websocket's wss (#1034), each its own entry over the one TLS
 // primitive, so the tls mode input, the public key pin and :retry with
 // certificate apply to both by this one flag, never a second list.
 func TestTLSMarksTheTransportsOverTheHandshake(t *testing.T) {
 	for _, tr := range transport.All() {
-		want := tr.Name == "tls" || tr.Name == "https"
+		want := tr.Name == "tls" || tr.Name == "https" || tr.Name == "wss"
 		if tr.TLS != want {
 			t.Errorf("%s: TLS = %v, want %v", tr.Name, tr.TLS, want)
 		}

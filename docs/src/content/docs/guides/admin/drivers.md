@@ -277,6 +277,41 @@ resumes from the last event id after the server's `retry`, landing nothing twice
 when the component refuses its credential, which also gates the endpoint's polls and commands. A
 stream needs a listener (with none, nothing holds it), and a listener over http needs the stream.
 
+A component whose control API is a websocket declares `transport: websocket` (or `wss`, over the
+TLS handshake, with a `tls-mode` input as `tls` and `https` take), and one held socket carries its
+polls, its commands and its listeners ([websocket and wss](/architecture/collection/#websocket-and-wss)).
+`session.upgrade` is the `GET` that opens it (a `path`, the root when absent, a `query`, `headers`,
+never one the handshake owns), riding the session's scheme (`basic`, `bearer` or `api-key`; not
+`digest`) or an http login. A request is a frame: a `line` sent as is, or a JSON `body` (a
+whole-leaf `${value}` keeps the intended value's type). Its `reply` may `correlate` by a field: the
+node writes a fresh id into that field of the body each time it sends it, and the answer is the
+frame carrying the id back, so pushes and other answers between never confuse it. A listener's
+`arm` is the subscribe frame, sent on every connection (one line, compact JSON), and its `match`
+claims a push as any held session's does, a JSON `field` match the usual choice:
+
+```yaml
+transport: wss
+session:
+  credential: login
+  scheme: basic
+  upgrade: { path: /api/ws }
+listeners:
+  - name: volume-change
+    arm: ['{"type":"subscribe","paths":["status.audio.volume"]}']
+    match: { field: { path: path, equals: status.audio.volume } }
+    emits:
+      - { name: volume, extract: { jsonpath: value } }
+commands:
+  - command_type: set-volume
+    request: { body: { type: set, path: status.audio.volume, value: "${value}" }, reply: { correlate: id, error: { regex: '"type":"error"' } } }
+    settle: { from: response, extract: { jsonpath: value } }
+```
+
+A component that answers a request without echoing an id declares a `field` reply instead (`reply:
+{ field: { path: type, equals: result } }`), or a `prefix` or `regex` for a text frame. The socket
+reads `up`, `recovering` when the component drops it or stops answering the node's pings, and
+`rejected` when the upgrade is refused with a `401` or a `403`, after one attempt.
+
 A telnet driver:
 
 ```yaml

@@ -108,11 +108,21 @@ func (r *Runner) CollectDriverPoll(ctx context.Context, t DriverPollTask) ([]Sam
 		payload.Text = ans.Line
 	case IsLineTransport(t.Transport):
 		if t.Session != nil {
-			answer, err := t.Session.Exchange(ctx, t.Fn.Request.Line, t.Fn.Request.Reply, t.Timeout)
+			line, reply := t.Fn.Request.Line, t.Fn.Request.Reply
+			if driver.IsWebSocket(t.Transport) {
+				// A frame: the line, or the JSON body, with a fresh id
+				// minted into it when its reply correlates (#1034).
+				var err error
+				if line, reply, err = t.Fn.Request.Bind(); err != nil {
+					return nil, []error{fmt.Errorf("collection: driver poll %s/%s: %w", t.Fn.Driver, t.Fn.Function, err)}
+				}
+			}
+			answer, err := t.Session.Exchange(ctx, line, reply, t.Timeout)
 			if err != nil {
 				return nil, []error{fmt.Errorf("collection: driver poll %s/%s: %w", t.Fn.Driver, t.Fn.Function, err)}
 			}
-			payload.Text = answer
+			// A line reads as text, and a JSON one by jsonpath too.
+			payload = driver.LineMessage(answer).Payload()
 			break
 		}
 		if t.SessionOnly || t.Transport != "tcp" {

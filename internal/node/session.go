@@ -152,6 +152,9 @@ func sessionAuthOf(task collection.TaskSpec) (*collection.SessionAuth, error) {
 	if driver.IsHTTP(task.Transport) {
 		return streamAuthOf(task)
 	}
+	if driver.IsWebSocket(task.Transport) {
+		return upgradeAuthOf(task)
+	}
 	auth := &collection.SessionAuth{}
 	if ss != nil && ss.Login != nil {
 		sends, err := ss.Login.Render(task.Secrets)
@@ -199,6 +202,26 @@ func streamAuthOf(task collection.TaskSpec) (*collection.SessionAuth, error) {
 	}
 	return &collection.SessionAuth{HTTP: &collection.HTTPStreamAuth{
 		Request: *ss.Stream, Session: ss, Credential: cred, Secrets: task.Secrets,
+	}}, nil
+}
+
+// upgradeAuthOf is a websocket endpoint's upgrade as its session's auth step
+// (#1034): the upgrade request (the root when the driver declares none), the
+// session block whose scheme or login it rides, and the credential resolved
+// from the delivered secrets. The endpoint's learned auth, the fetcher and
+// the trust join at start, as a stream's do.
+func upgradeAuthOf(task collection.TaskSpec) (*collection.SessionAuth, error) {
+	ss := task.Session
+	req := driver.Request{Path: "/"}
+	if ss != nil && ss.Upgrade != nil {
+		req = *ss.Upgrade
+	}
+	cred, err := driver.ResolveHTTPCredential(ss, task.Secrets)
+	if err != nil {
+		return nil, err
+	}
+	return &collection.SessionAuth{HTTP: &collection.HTTPStreamAuth{
+		Request: req, Session: ss, Credential: cred, Secrets: task.Secrets,
 	}}, nil
 }
 
@@ -552,10 +575,21 @@ func (m *sessionManager) syncHTTPEndpoints(tasks []collection.TaskSpec) {
 		eps[t.EndpointID] = ep
 	}
 	m.httpEndpoints = eps
+	// A websocket's upgrade keeps its learned auth too (#1034): its login's
+	// session and cookies, under the fingerprint they were learned with.
+	authed := map[string]string{}
+	for id, ep := range eps {
+		authed[id] = ep.task.Fingerprint
+	}
+	for _, t := range tasks {
+		if driver.IsWebSocket(t.Transport) && t.EndpointID != "" {
+			authed[t.EndpointID] = t.Fingerprint
+		}
+	}
 	m.authMu.Lock()
 	defer m.authMu.Unlock()
 	for id, held := range m.httpAuth {
-		if ep, ok := eps[id]; !ok || ep.task.Fingerprint != held.fingerprint {
+		if fp, ok := authed[id]; !ok || fp != held.fingerprint {
 			delete(m.httpAuth, id)
 		}
 	}
