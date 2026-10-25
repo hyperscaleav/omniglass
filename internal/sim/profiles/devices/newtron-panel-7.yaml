@@ -83,6 +83,18 @@ interfaces:
         mutate:
           status.room.source: "{{ .Request.Body.source }}"
 
+      # The panel's diagnostics log (#1145): a line written here is what the
+      # panel logs next, pushed on its NVP face as "LOG <severity> <text>"
+      # to a subscriber, the simulator's way to make the panel say
+      # something a driver maps to a log line.
+      - match: "POST /api/diagnostics/log"
+        template: api/newtron-panel/diagnostics-ack.json.gotempl
+        doc: { summary: "Write a line to the panel's diagnostics log", tags: [api, admin] }
+        example: |
+          {"line": "WARN backlight driver reset"}
+        mutations:
+          - { path: status.diagnostics.log, value: "{{ .Request.Body.line }}", pattern: "^[^\\r\\n]{1,200}$" }
+
       - match: "POST /api/panel/brightness"
         template: api/newtron-panel/room-ack.json.gotempl
         doc: { summary: "Set panel backlight brightness (0-100)", tags: [api, control] }
@@ -182,6 +194,16 @@ interfaces:
         path: "status.video.input"
         publish_token: "INPUT"
         push_format: "EVT INPUT {{ .Raw }}"
+      # The diagnostics log and the room scene (#1145): SUBSCRIBE LOG pushes
+      # each line the panel logs, SUBSCRIBE SCENE each scene it enters.
+      - match: "status.diagnostics.log"
+        path: "status.diagnostics.log"
+        publish_token: "LOG"
+        push_format: "LOG {{ .Raw }}"
+      - match: "status.room.scene"
+        path: "status.room.scene"
+        publish_token: "SCENE"
+        push_format: "EVT SCENE {{ .Raw }}"
     commands:
       - match: "GET INPUT"
         response: 'INPUT {{ .State | get "status" | get "video" | get "input" }}'
@@ -213,6 +235,16 @@ interfaces:
       - match: "UNSUBSCRIBE INPUT"
         action: unsubscribe
         subject: "status.video.input"
+        response: "OK"
+      - match: "SUBSCRIBE LOG"
+        action: subscribe
+        subject: "status.diagnostics.log"
+        token: "LOG"
+        response: "OK"
+      - match: "SUBSCRIBE SCENE"
+        action: subscribe
+        subject: "status.room.scene"
+        token: "SCENE"
         response: "OK"
 
   # NVP over TLS (#1035): the same line protocol behind a real TLS handshake,
@@ -337,6 +369,9 @@ defaults:
     room:
       scene: "idle"
       source: "none"
+    diagnostics:
+      # The last line the panel logged (#1145), pushed as LOG on its NVP face.
+      log: ""
     video:
       # The selected video input, as the NVP line protocol reports and sets
       # it; one of the video-input property's values.

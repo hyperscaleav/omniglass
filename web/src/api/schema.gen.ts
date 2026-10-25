@@ -789,7 +789,7 @@ export interface paths {
         };
         /**
          * List a component's recent log lines
-         * @description Returns the component's recent raw log lines (the ingest lane of ADR-0066, distinct from typed events), newest first, bounded to the last 24 hours. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+         * @description Returns the component's recent raw log lines (the ingest lane of ADR-0066, distinct from typed events), newest first, bounded to the last 24 hours, narrowed by an optional severity threshold and source, with the sources the window carries. Gated by component:read; an out-of-scope component is a non-disclosing 404.
          */
         get: operations["list-component-logs"];
         put?: never;
@@ -3753,7 +3753,7 @@ export interface paths {
         };
         /**
          * List a system's members' recent log lines
-         * @description Returns the members' raw log lines merged newest first, bounded to the last 24 hours and capped, each naming the component that wrote it. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+         * @description Returns the members' raw log lines merged newest first, bounded to the last 24 hours and capped, each naming the component that wrote it, narrowed by an optional severity threshold and source, with the sources the window carries. Gated by system:read; an out-of-scope system is a non-disclosing 404.
          */
         get: operations["list-system-logs"];
         put?: never;
@@ -7425,19 +7425,24 @@ export interface components {
             correlation_id?: string;
             /** @description The line's facility, when classified */
             facility?: string;
-            /** @description The series discriminator, when set */
+            /** @description The endpoint that collected the line, when a node collected it */
             instance?: string;
             /** @description Freeform classification labels, when present */
             labels?: unknown;
             /** @description The raw log text */
             message: string;
+            /**
+             * Format: date-time
+             * @description When the server received the line, beside the time it claims; absent for a line stored before it was recorded
+             */
+            received_at?: string;
             /** @description The line's severity, when classified */
             severity?: string;
             /** @description The channel the line arrived on (e.g. syslog) */
             source?: string;
             /**
              * Format: date-time
-             * @description When the line arrived
+             * @description The line's time: the one it carried when its collector read it from the line, else when it arrived
              */
             ts: string;
         };
@@ -7462,6 +7467,8 @@ export interface components {
             readonly $schema?: string;
             component: string;
             logs: components["schemas"]["LogBody"][] | null;
+            /** @description The channels the window's lines arrived on, whatever the filter: the source filter's choices */
+            sources: string[] | null;
         };
         MeOutputBody: {
             /**
@@ -9159,19 +9166,24 @@ export interface components {
             correlation_id?: string;
             /** @description The line's facility, when classified */
             facility?: string;
-            /** @description The series discriminator, when set */
+            /** @description The endpoint that collected the line, when a node collected it */
             instance?: string;
             /** @description Freeform classification labels, when present */
             labels?: unknown;
             /** @description The raw log text */
             message: string;
+            /**
+             * Format: date-time
+             * @description When the server received the line, beside the time it claims; absent for a line stored before it was recorded
+             */
+            received_at?: string;
             /** @description The line's severity, when classified */
             severity?: string;
             /** @description The channel the line arrived on (e.g. syslog) */
             source?: string;
             /**
              * Format: date-time
-             * @description When the line arrived
+             * @description The line's time: the one it carried when its collector read it from the line, else when it arrived
              */
             ts: string;
         };
@@ -9183,6 +9195,8 @@ export interface components {
              */
             readonly $schema?: string;
             logs: components["schemas"]["SystemLogBody"][] | null;
+            /** @description The channels the window's lines arrived on, whatever the filter: the source filter's choices */
+            sources: string[] | null;
             system: string;
         };
         SystemMemberBody: {
@@ -11608,7 +11622,12 @@ export interface operations {
     };
     "list-component-logs": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Only lines at this severity or more severe (RFC 5424's eight levels); a line with no severity is left out */
+                severity?: "emergency" | "alert" | "critical" | "error" | "warning" | "notice" | "info" | "debug";
+                /** @description Only lines that arrived on this channel */
+                source?: string;
+            };
             header?: never;
             path: {
                 /** @description The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
@@ -18149,7 +18168,12 @@ export interface operations {
     };
     "list-system-logs": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Only lines at this severity or more severe (RFC 5424's eight levels); a line with no severity is left out */
+                severity?: "emergency" | "alert" | "critical" | "error" | "warning" | "notice" | "info" | "debug";
+                /** @description Only lines that arrived on this channel */
+                source?: string;
+            };
             header?: never;
             path: {
                 /** @description The system's name, or a dotted address (e.g. boi.17c.$sys.av) */

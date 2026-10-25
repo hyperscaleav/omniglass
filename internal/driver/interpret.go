@@ -178,16 +178,28 @@ func interpretEmit(em BakedEmit, p Payload, arrival time.Time) (Emitted, bool, e
 	}
 	ts, claimed, tsErr := emitTime(em.TS, p, arrival)
 	clamped := claimed != ""
-	if em.Lane == LaneEvent || em.Lane == LaneLog {
-		e, err := interpretRecord(em, p)
+	if em.Lane == LaneEvent {
+		e, err := interpretEvent(em, p)
 		if err != nil {
 			return Emitted{}, false, err
 		}
 		e.TS, e.Clamped = ts, clamped
-		if clamped && em.Lane == LaneLog {
+		return e, true, tsErr
+	}
+	if em.Lane == LaneLog {
+		e, missed := interpretLogLine(em, p)
+		e.TS, e.Clamped = ts, clamped
+		if clamped {
 			e.Attributes = mergeAttributes(e.Attributes, map[string]any{"ts_claimed": claimed})
 		}
-		return e, true, tsErr
+		e.Text, e.Attributes = logline.Cap(e.Text, e.Attributes)
+		if tsErr != nil {
+			missed = append(missed, tsErr.Error())
+		}
+		if len(missed) > 0 {
+			return e, true, fmt.Errorf("the line landed with %s", strings.Join(missed, "; "))
+		}
+		return e, true, nil
 	}
 	e, err := interpretSample(em, p)
 	if err != nil {
@@ -258,20 +270,18 @@ func numericText(raw string, tr *Transform) (string, error) {
 	return raw, nil
 }
 
-// interpretRecord reads an event or a log line (#1145): its message (a
-// constant or an extract, by default the whole payload text), its
-// attributes, and for a log line its severity, facility and source, held to
-// the log line's caps.
-func interpretRecord(em BakedEmit, p Payload) (Emitted, error) {
-	e := Emitted{Name: em.Name, Lane: em.Lane, IsText: true}
+// interpretEvent reads an event (#1145): its message (a constant or an
+// extract, by default the whole payload text) and its attributes, rendered
+// into its payload. An event is a semantic assertion, so a field that does
+// not locate lands nothing, as a metric that does not locate lands nothing.
+func interpretEvent(em BakedEmit, p Payload) (Emitted, error) {
+	e := Emitted{Name: em.Name, Lane: em.Lane, IsText: true, Text: p.Text}
 	if em.Message != nil {
 		text, _, err := em.Message.resolve(p)
 		if err != nil {
 			return Emitted{}, fmt.Errorf("message: %w", err)
 		}
 		e.Text = text
-	} else {
-		e.Text = p.Text
 	}
 	attrs := map[string]any{}
 	for _, k := range sortedKeys(em.Attributes) {
@@ -284,31 +294,57 @@ func interpretRecord(em BakedEmit, p Payload) (Emitted, error) {
 	if len(attrs) > 0 {
 		e.Attributes = mustJSON(attrs)
 	}
-	if em.Lane == LaneEvent {
-		if e.Text == "" && len(attrs) == 0 {
-			return Emitted{}, fmt.Errorf("the event carries no message and no attributes, so it says nothing")
+	if e.Text == "" && len(attrs) == 0 {
+		return Emitted{}, fmt.Errorf("the event carries no message and no attributes, so it says nothing")
+	}
+	return e, nil
+}
+
+// interpretLogLine reads a log line (#1145): its message, attributes,
+// severity, facility and source. A log line is raw arrival, so it always
+// lands: a message extract that misses falls back to the whole payload text,
+// and a severity, facility or attribute that misses is left out. missed
+// names every field that did, which the caller reports as a fault.
+func interpretLogLine(em BakedEmit, p Payload) (Emitted, []string) {
+	e := Emitted{Lane: LaneLog, IsText: true, Text: p.Text}
+	var missed []string
+	if em.Message != nil {
+		if text, _, err := em.Message.resolve(p); err != nil {
+			missed = append(missed, "its whole text, its message missing: "+err.Error())
+		} else {
+			e.Text = text
 		}
-		return e, nil
+	}
+	attrs := map[string]any{}
+	for _, k := range sortedKeys(em.Attributes) {
+		_, typed, err := em.Attributes[k].resolve(p)
+		if err != nil {
+			missed = append(missed, fmt.Sprintf("no attribute %q: %v", k, err))
+			continue
+		}
+		attrs[k] = typed
+	}
+	if len(attrs) > 0 {
+		e.Attributes = mustJSON(attrs)
 	}
 	if em.Log != nil {
 		if em.Log.Severity != nil {
-			word, _, err := em.Log.Severity.resolve(p)
-			if err != nil {
-				return Emitted{}, fmt.Errorf("severity: %w", err)
+			if word, _, err := em.Log.Severity.resolve(p); err != nil {
+				missed = append(missed, "no severity: "+err.Error())
+			} else {
+				e.Severity, e.Attributes = logline.Normalize(word, e.Attributes)
 			}
-			e.Severity, e.Attributes = logline.Normalize(word, e.Attributes)
 		}
 		if em.Log.Facility != nil {
-			fac, _, err := em.Log.Facility.resolve(p)
-			if err != nil {
-				return Emitted{}, fmt.Errorf("facility: %w", err)
+			if fac, _, err := em.Log.Facility.resolve(p); err != nil {
+				missed = append(missed, "no facility: "+err.Error())
+			} else {
+				e.Facility = fac
 			}
-			e.Facility = fac
 		}
 		e.Source = em.Log.Source
 	}
-	e.Text, e.Attributes = logline.Cap(e.Text, e.Attributes)
-	return e, nil
+	return e, missed
 }
 
 // resolve reads a field: its constant, or its extract located in the

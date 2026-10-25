@@ -100,19 +100,33 @@ func (h *eventHub) fanout(diffs map[string]any) {
 		if err != nil {
 			continue
 		}
-		h.seq++
-		ev := streamEvent{id: h.seq, name: "change", data: string(data)}
-		h.ring = append(h.ring, ev)
-		if len(h.ring) > maxEventReplay {
-			h.ring = h.ring[len(h.ring)-maxEventReplay:]
-		}
-		for s := range h.subs {
-			select {
-			case s.ch <- ev:
-			default:
-				s.end()
-				delete(h.subs, s)
-			}
+		h.emitLocked("change", string(data))
+	}
+}
+
+// publish streams one named event a route reports (#1145), numbered with
+// the changes and kept for a replay as they are.
+func (h *eventHub) publish(name, data string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.emitLocked(name, data)
+}
+
+// emitLocked numbers an event, keeps it for a replay, and hands it to every
+// connected stream; a stream that falls behind is ended. Caller holds mu.
+func (h *eventHub) emitLocked(name, data string) {
+	h.seq++
+	ev := streamEvent{id: h.seq, name: name, data: data}
+	h.ring = append(h.ring, ev)
+	if len(h.ring) > maxEventReplay {
+		h.ring = h.ring[len(h.ring)-maxEventReplay:]
+	}
+	for s := range h.subs {
+		select {
+		case s.ch <- ev:
+		default:
+			s.end()
+			delete(h.subs, s)
 		}
 	}
 }

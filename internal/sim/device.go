@@ -623,6 +623,15 @@ type routeEntry struct {
 	Path      string
 	Template  *template.Template
 	Mutations []mutation
+	// Events are the named events the route reports after its mutations
+	// (#1145), each data template compiled once.
+	Events []routeEvent
+}
+
+// routeEvent is one compiled named event a route reports.
+type routeEvent struct {
+	name string
+	data *template.Template
 }
 
 // commandEntry pairs a CLI command match with a compiled template. Used
@@ -996,7 +1005,7 @@ func (d *Device) SetDefaults(defaults map[string]any) {
 // declare the list-of-objects mutation shape (with enum / pattern
 // validation).
 func (d *Device) AddRoute(match, tmplPath string, tmplContent string, mutate map[string]any) error {
-	return d.addRoute(match, tmplPath, tmplContent, mutate, nil)
+	return d.addRoute(match, tmplPath, tmplContent, mutate, nil, nil)
 }
 
 // AddRouteFromProfile registers a route from a profile.Route. Accepts
@@ -1005,10 +1014,10 @@ func (d *Device) AddRoute(match, tmplPath string, tmplContent string, mutate map
 // list with list items running first. Pattern regex compile errors
 // surface here so a malformed profile fails loudly at load time.
 func (d *Device) AddRouteFromProfile(route *profile.Route, tmplContent string) error {
-	return d.addRoute(route.Match, route.Template, tmplContent, route.Mutate, route.Mutations)
+	return d.addRoute(route.Match, route.Template, tmplContent, route.Mutate, route.Mutations, route.Events)
 }
 
-func (d *Device) addRoute(match, tmplPath, tmplContent string, mutate map[string]any, items []profile.Mutation) error {
+func (d *Device) addRoute(match, tmplPath, tmplContent string, mutate map[string]any, items []profile.Mutation, events []profile.RouteEvent) error {
 	method, path, err := parseMatch(match)
 	if err != nil {
 		return err
@@ -1024,11 +1033,24 @@ func (d *Device) addRoute(match, tmplPath, tmplContent string, mutate map[string
 		return fmt.Errorf("compiling mutations for %q: %w", match, err)
 	}
 
+	var evs []routeEvent
+	for _, e := range events {
+		if strings.TrimSpace(e.Name) == "" || strings.ContainsAny(e.Name, "\r\n") {
+			return fmt.Errorf("route %q declares an event with no name, or a name with a line break", match)
+		}
+		dt, err := template.New(match + " event " + e.Name).Funcs(templateFuncs).Parse(e.Data)
+		if err != nil {
+			return fmt.Errorf("parsing route %q event %q data: %w", match, e.Name, err)
+		}
+		evs = append(evs, routeEvent{name: e.Name, data: dt})
+	}
+
 	d.routes = append(d.routes, routeEntry{
 		Method:    method,
 		Path:      path,
 		Template:  tmpl,
 		Mutations: muts,
+		Events:    evs,
 	})
 	return nil
 }
@@ -1197,6 +1219,18 @@ func (d *Device) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				})
 			}
 			d.fanoutToSessions(diffs)
+		}
+		// The route's named events (#1145), after its changes, rendered
+		// against the state they left, in the same numbered stream.
+		if d.events != nil {
+			for _, ev := range route.Events {
+				var buf bytes.Buffer
+				if err := ev.data.Execute(&buf, data); err != nil {
+					slog.Warn("route event not rendered", "device", d.DeviceID, "route", route.Method+" "+route.Path, "event", ev.name, "error", err)
+					continue
+				}
+				d.events.publish(ev.name, buf.String())
+			}
 		}
 
 		// Render against resolved state so a response template that emits

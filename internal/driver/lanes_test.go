@@ -304,3 +304,30 @@ func TestAnUnparsableTimeLandsAtArrivalAndFaults(t *testing.T) {
 		t.Fatalf("faults = %v", faults)
 	}
 }
+
+// TestALogLineIsNeverLostToAClassificationMiss: a log line is raw arrival,
+// so an extract that misses (its message, its severity, an attribute) still
+// lands the line (the whole text as its message, the missed field left out)
+// and reports the miss as a fault, which names it.
+func TestALogLineIsNeverLostToAClassificationMiss(t *testing.T) {
+	fn := lineFn(driver.BakedEmit{
+		Lane:       "log",
+		Log:        &driver.LogEmit{Severity: &driver.Field{Extract: rx(`^\[(\w+)\]`)}},
+		Message:    &driver.Field{Extract: rx(`^\[\w+\] (.*)$`)},
+		Attributes: map[string]driver.Field{"code": {Extract: rx(`code=(\d+)`)}},
+	})
+	out, faults := fn.Interpret(driver.LineMessage("an unbracketed line").Payload(), time.Now())
+	if len(out) != 1 || out[0].Text != "an unbracketed line" || out[0].Severity != "" || out[0].Attributes != nil {
+		t.Fatalf("out = %+v, want the whole line with nothing classified", out)
+	}
+	if len(faults) != 1 || !strings.Contains(faults[0].Error(), "message") || !strings.Contains(faults[0].Error(), "severity") || !strings.Contains(faults[0].Error(), "code") {
+		t.Fatalf("faults = %v, want one naming every field that missed", faults)
+	}
+	// An event is a semantic assertion: an attribute that misses lands
+	// nothing, as a metric that misses does.
+	ev := lineFn(driver.BakedEmit{Name: "input-changed", Lane: "event", Attributes: map[string]driver.Field{"code": {Extract: rx(`code=(\d+)`)}}})
+	out, faults = ev.Interpret(driver.LineMessage("no code here").Payload(), time.Now())
+	if len(out) != 0 || len(faults) != 1 {
+		t.Fatalf("an event whose attribute missed = %+v %v, want a fault and nothing landed", out, faults)
+	}
+}

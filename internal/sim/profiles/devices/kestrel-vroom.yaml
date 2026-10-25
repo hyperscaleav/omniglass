@@ -155,6 +155,24 @@ interfaces:
             value: "{{ .Request.Body.power }}"
             enum: ["on", "off", "standby"]
 
+      # A call starts and ends as named occurrences on the live feed
+      # (#1145), as a codec's xAPI reports CallSuccessful and CallDisconnect
+      # with the call's id, beside the state changes the feed streams: a
+      # driver maps each to one event. The id is the caller's to choose, so
+      # a test or a demo names the call it places.
+      - match: "POST /api/call/dial"
+        template: api/kestrel-vroom/system-ack.json.gotempl
+        doc: { summary: "Place a call (the room joins a meeting)", tags: [api, control] }
+        example: |
+          {"id": "c9001", "participants": 3}
+        mutations:
+          - { path: status.call.id, value: "{{ .Request.Body.id }}", pattern: "^[A-Za-z0-9-]{1,32}$" }
+          - { path: status.call.active, value: true }
+          - { path: status.call.participants, value: "{{ or .Request.Body.participants 2 }}" }
+        events:
+          - name: call-started
+            data: '{"id":"{{ .Request.Body.id }}","participants":{{ or .Request.Body.participants 2 }}}'
+
       - match: "POST /api/call/disconnect"
         template: api/kestrel-vroom/system-ack.json.gotempl
         doc: { summary: "Disconnect active call", tags: [api, control] }
@@ -162,6 +180,9 @@ interfaces:
         mutate:
           status.call.active: false
           status.call.participants: 0
+        events:
+          - name: call-ended
+            data: '{"id":"{{ .State | get "status" | get "call" | get "id" }}"}'
 
       # Reboot resets uptime and a small set of volatile call/audio
       # state back to declared defaults. HTTP-only now (the SSH/Telnet
@@ -278,6 +299,8 @@ defaults:
     call:
       active: false
       participants: 0
+      # The id of the call in progress, or the last one (#1145).
+      id: ""
     audio:
       volume: 50
       mic_mute: false

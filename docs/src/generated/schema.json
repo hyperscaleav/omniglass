@@ -4237,6 +4237,12 @@
       "name": "correlation_id",
       "type": "text",
       "nullable": true
+     },
+     {
+      "name": "received_at",
+      "type": "timestamp with time zone",
+      "nullable": true,
+      "default": "now()"
      }
     ]
    },
