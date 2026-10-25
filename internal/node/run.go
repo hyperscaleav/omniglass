@@ -316,6 +316,15 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 		return wl, nil
 	}
 
+	// The server's on-demand runs (#1163): a preview runs on its request's
+	// goroutine, a run now waits for the loop below, which owns the sessions.
+	runJobs := make(chan runJob, 1)
+	runSub, err := subscribeRuns(ctx, nc, cfg.Name, runner, runJobs)
+	if err != nil {
+		return wl, fmt.Errorf("node: subscribe runs: %w", err)
+	}
+	defer func() { _ = runSub.Unsubscribe() }()
+
 	every := cfg.HeartbeatEvery
 	if every <= 0 {
 		every = 30 * time.Second
@@ -327,6 +336,9 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 		case <-ctx.Done():
 			_ = nc.Flush()
 			return wl, nil
+		case job := <-runJobs:
+			job.respond(runNowTask(ctx, nc, cfg.Name, runner, sessions, job.task, job.timeout))
+			publishSelfLogs(nc, cfg.Name, sink)
 		case <-ticker.C:
 			_ = publishHeartbeat(nc, cfg.Name)
 			// Re-pull each tick; a changed config generation drives a refresh in

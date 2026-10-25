@@ -28,6 +28,7 @@ func TestNodePermissionsScoped(t *testing.T) {
 		collection.WorklistChangedSubject("node-a"),
 		collection.InboxPrefix("node-a") + ".>",
 		collection.SimopSubject("node-a"),
+		collection.RunSubject("node-a"),
 	}
 	if got := perms.Subscribe.Allow; !equal(got, wantSub) {
 		t.Errorf("subscribe allow = %v, want %v", got, wantSub)
@@ -36,6 +37,11 @@ func TestNodePermissionsScoped(t *testing.T) {
 	// request it received, and nothing else outside its grant.
 	if perms.Response == nil || perms.Response.MaxMsgs != 1 {
 		t.Errorf("response = %+v, want one reply per request", perms.Response)
+	}
+	// A run on demand (#1163) may take as long as its polls: the one reply
+	// stays permitted for the run's whole budget, not only a simulator's.
+	if perms.Response.Expires < runTimeout {
+		t.Errorf("response expires %v, want at least the run budget %v", perms.Response.Expires, runTimeout)
 	}
 
 	// No grant may reference another node's name.
