@@ -1368,6 +1368,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/endpoints/{endpoint}:rotateToken": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rotate a webhook endpoint's token
+         * @description Mints a webhook endpoint's token anew (#1024): a post bearing the old one answers 404 at once, exactly as a token that never existed, and the new one is revealed through the endpoint's secret, to give the sender. A token deleted with its secret is minted again. A dialed endpoint has no token, a 422. Audited on the endpoint and the secret. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
+         */
+        post: operations["rotate-endpoint-token"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/event-rules": {
         parameters: {
             query?: never;
@@ -4468,6 +4488,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/unclaimed-sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the sources no endpoint claims
+         * @description The unclaimed-source inbox: each source a listener heard from that no endpoint claims (a webhook post to an unknown or rotated token), with how often, when first and last, and its last message cut to 512 bytes. Bounded at 256 sources per listener, the least recently heard evicted, and aged out after seven days; a source is let go once its messages land on an endpoint. Claim one by creating its endpoint. Gated by node:read: it is the listener's own observation.
+         */
+        get: operations["list-unclaimed-sources"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/variables": {
         parameters: {
             query?: never;
@@ -4585,6 +4625,34 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/webhooks/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Answer a webhook sender's verification of its URL
+         * @description A sender checking its URL before it posts (#1024): an unknown or rotated token is the receiver's identical 404; a known one answers 200, echoing the query parameter its driver declares as the challenge (text, bounded), and 204 when it declares none. Public by necessity, as the receiver is.
+         */
+        get: operations["verify-webhook"];
+        put?: never;
+        /**
+         * Receive a webhook post for an endpoint
+         * @description The webhook transport's listener (#1024): a component or a cloud service posts here, to the URL its webhook endpoint was given. The token names one endpoint; the scheme its driver declares authenticates the post (an hmac signature over a signed timestamp, a token, basic, or none, which reads unsigned); a signed timestamp outside five minutes is refused, and a declared delivery id lands once. The driver's listeners map the body (json, xml, form or text) onto any lane, and the post also lands as a log line unless its listener says otherwise. Public by necessity: the sender is not a principal, and the endpoint's scheme is the authentication. Answers 202 once the post is published, 401 for a refused scheme (saying nothing of which part failed), 404 for an unknown or rotated token (identical either way), 413 past 1 MiB, 429 with Retry-After past a rate limit.
+         */
+        post: operations["receive-webhook"];
+        delete?: never;
+        options?: never;
+        /**
+         * Answer a webhook sender's verification of its URL
+         * @description A sender checking its URL before it posts (#1024): an unknown or rotated token is the receiver's identical 404; a known one answers 200, echoing the query parameter its driver declares as the challenge (text, bounded), and 204 when it declares none. Public by necessity, as the receiver is.
+         */
+        head: operations["probe-webhook"];
         patch?: never;
         trace?: never;
     };
@@ -6343,6 +6411,25 @@ export interface components {
             params?: unknown;
             /** @description The transport name (the wire this endpoint speaks over), from the code registry */
             transport: string;
+            /** @description A webhook endpoint's own block (#1024): where a sender posts, the scheme that checks it, and what the scheme has refused; absent on every other transport, and on a list */
+            webhook?: components["schemas"]["EndpointWebhookBody"];
+        };
+        EndpointWebhookBody: {
+            /**
+             * Format: date-time
+             * @description When the token was minted or last rotated
+             */
+            minted_at?: string;
+            /** @description The path a sender posts to, under the server's /api/v1 base, its token masked: reveal the token through secret (gated by secret:reveal, audited) */
+            path: string;
+            /** @description What the scheme has refused: the count, and the latest one's time, source and reason (never the credential); absent until one is */
+            refused?: components["schemas"]["WebhookRefusedBody"];
+            /** @description The scheme the driver declares: hmac, token, basic, or none for a bare endpoint or a driver that checks nothing */
+            scheme: string;
+            /** @description The secret holding the token, <component id>/webhook-token; absent once deleted (rotate to mint another) */
+            secret?: string;
+            /** @description False when the scheme is none: the endpoint reads unsigned, anyone holding its URL can post, and there is no replay protection */
+            signed: boolean;
         };
         EnrollOutputBody: {
             /**
@@ -7445,6 +7532,15 @@ export interface components {
             readonly $schema?: string;
             transports: components["schemas"]["Transport"][] | null;
         };
+        ListUnclaimedSourcesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListUnclaimedSourcesOutputBody.json
+             */
+            readonly $schema?: string;
+            sources: components["schemas"]["UnclaimedSourceBody"][] | null;
+        };
         ListVariablesOutputBody: {
             /**
              * Format: uri
@@ -8208,6 +8304,8 @@ export interface components {
             transport: string;
             /** @description The latest reachability verdict, or null if none yet */
             verdict: components["schemas"]["ReachVerdictBody"];
+            /** @description A webhook endpoint's block (#1024): a push endpoint has no ladder and reads last_seen (last heard) in place of a verdict, never down for silence; its scheme, whether it is signed, its token's secret and what its scheme refused. Absent on every dialed transport */
+            webhook?: components["schemas"]["EndpointWebhookBody"];
         };
         ReachHistoryBody: {
             /** Format: date-time */
@@ -9580,6 +9678,7 @@ export interface components {
             held: boolean;
             line: boolean;
             name: string;
+            push?: boolean;
             rung?: string;
             tls?: boolean;
         };
@@ -9595,6 +9694,31 @@ export interface components {
              * @enum {string}
              */
             theme: "omniglass-dark" | "omniglass-light";
+        };
+        UnclaimedSourceBody: {
+            /**
+             * Format: int64
+             * @description How many messages it sent that nothing claimed
+             */
+            count: number;
+            /**
+             * Format: date-time
+             * @description When the listener first heard from it
+             */
+            first_heard_at: string;
+            /** @description The listener's host: server, for the webhook route */
+            host: string;
+            /**
+             * Format: date-time
+             * @description When the listener last heard from it
+             */
+            last_heard_at: string;
+            /** @description Its last message, cut to 512 bytes: a stranger's body is untrusted data, so no more of it is kept */
+            last_message: string;
+            /** @description The sender's address */
+            source: string;
+            /** @description The push transport the source sent over */
+            transport: string;
         };
         UpdateCalcRuleInputBody: {
             /**
@@ -10114,6 +10238,22 @@ export interface components {
             official: boolean;
             support_phone?: string;
             website?: string;
+        };
+        WebhookRefusedBody: {
+            /**
+             * Format: date-time
+             * @description When the latest was refused, flushed once per tick
+             */
+            at: string;
+            /**
+             * Format: int64
+             * @description Posts the scheme refused, each answered 401
+             */
+            count: number;
+            /** @description Why the latest was refused: a missing or mismatched signature, a timestamp outside the window, a mismatched token or login */
+            reason: string;
+            /** @description The latest refused sender's address */
+            source: string;
         };
     };
     responses: never;
@@ -12949,6 +13089,38 @@ export interface operations {
                 "application/json": components["schemas"]["RetryEndpointInputBody"];
             };
         };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EndpointBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "rotate-endpoint-token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does */
+                endpoint: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description OK */
             200: {
@@ -19708,6 +19880,35 @@ export interface operations {
             };
         };
     };
+    "list-unclaimed-sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListUnclaimedSourcesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "list-variables": {
         parameters: {
             query?: never;
@@ -20016,6 +20217,207 @@ export interface operations {
             };
             /** @description Error */
             default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "verify-webhook": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The endpoint's webhook token */
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Content-Type"?: string;
+                    "X-Content-Type-Options"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string;
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "receive-webhook": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The endpoint's webhook token, minted by the server when the endpoint was created or its token rotated */
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": string;
+            };
+        };
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "probe-webhook": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The endpoint's webhook token */
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Content-Type"?: string;
+                    "X-Content-Type-Options"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string;
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };

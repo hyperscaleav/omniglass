@@ -4771,6 +4771,112 @@
      }
     ]
    }
+  },
+  "unclustered": {
+   "unclaimed_source": {
+    "columns": [
+     {
+      "name": "host",
+      "type": "text",
+      "nullable": false,
+      "pk": true
+     },
+     {
+      "name": "transport",
+      "type": "text",
+      "nullable": false,
+      "pk": true
+     },
+     {
+      "name": "source",
+      "type": "text",
+      "nullable": false,
+      "pk": true
+     },
+     {
+      "name": "first_heard_at",
+      "type": "timestamp with time zone",
+      "nullable": false
+     },
+     {
+      "name": "last_heard_at",
+      "type": "timestamp with time zone",
+      "nullable": false
+     },
+     {
+      "name": "heard_count",
+      "type": "bigint",
+      "nullable": false
+     },
+     {
+      "name": "last_message",
+      "type": "text",
+      "nullable": false,
+      "default": "''::text"
+     }
+    ]
+   },
+   "webhook_token": {
+    "columns": [
+     {
+      "name": "endpoint_id",
+      "type": "uuid",
+      "nullable": false,
+      "pk": true,
+      "fk": true,
+      "fk_target": "endpoint.id"
+     },
+     {
+      "name": "secret_id",
+      "type": "uuid",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "secret.id"
+     },
+     {
+      "name": "token_hash",
+      "type": "bytea",
+      "nullable": false
+     },
+     {
+      "name": "minted_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "refused_count",
+      "type": "bigint",
+      "nullable": false,
+      "default": "0"
+     },
+     {
+      "name": "refused_at",
+      "type": "timestamp with time zone",
+      "nullable": true
+     },
+     {
+      "name": "refused_reason",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "refused_source",
+      "type": "text",
+      "nullable": true
+     }
+    ],
+    "uniques": [
+     {
+      "name": "webhook_token_secret_id_key",
+      "definition": "CREATE UNIQUE INDEX webhook_token_secret_id_key ON public.webhook_token USING btree (secret_id)"
+     },
+     {
+      "name": "webhook_token_token_hash_key",
+      "definition": "CREATE UNIQUE INDEX webhook_token_token_hash_key ON public.webhook_token USING btree (token_hash)"
+     }
+    ]
+   }
   }
  }
 }

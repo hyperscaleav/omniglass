@@ -650,6 +650,32 @@
      "origin": "operator"
     }
    ]
+  },
+  {
+   "id": "webhook-token",
+   "label": "Webhook Token",
+   "default_admin_sensitive": false,
+   "fields": [
+    {
+     "name": "token",
+     "type": "string",
+     "secret": true,
+     "origin": "lifecycle"
+    }
+   ]
+  },
+  {
+   "id": "hmac-key",
+   "label": "HMAC Key",
+   "default_admin_sensitive": false,
+   "fields": [
+    {
+     "name": "key",
+     "type": "string",
+     "secret": true,
+     "origin": "operator"
+    }
+   ]
   }
  ],
  "transports": [
@@ -716,6 +742,12 @@
   {
    "name": "snmp",
    "description": "SNMP v2c, stateless: the probe gets a standard OID (sysUpTime.0 unless the driver names another) with the endpoint's community, and an answer is the rung; a wrong community is dropped silently and reads as no answer, while an authorizationError reads as an auth refusal.",
+   "held": false,
+   "built": true
+  },
+  {
+   "name": "webhook",
+   "description": "Webhook: a push transport the server hosts, not one a node dials: a component or a cloud service posts each message to the endpoint's own URL (/api/v1/webhooks/ and a token the server mints, held as a secret), authenticated by the scheme its driver declares (an hmac signature over a signed timestamp, a token, basic, or none, which reads unsigned) and mapped by its listeners onto any lane; nothing is dialed, so it has no reachability ladder and reads last heard.",
    "held": false,
    "built": true
   }
@@ -2024,6 +2056,13 @@
    "transport": "http",
    "polls": 1,
    "commands": 1
+  },
+  {
+   "id": "ucc-webhook",
+   "label": "UCC Webhooks",
+   "version": "1.0.0",
+   "transport": "webhook",
+   "listeners": 2
   }
  ],
  "products": [
@@ -2272,6 +2311,13 @@
    "driver_id": "http-json",
    "component_type": "occupancy-sensor",
    "kind": "device"
+  },
+  {
+   "id": "ucc-service",
+   "label": "Shinra UCC Platform",
+   "vendor_id": "shinra-cloud",
+   "component_type": "generic-service",
+   "kind": "service"
   },
   {
    "id": "generic-device",

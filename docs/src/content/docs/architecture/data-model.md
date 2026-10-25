@@ -470,6 +470,20 @@ audit: {
   }
 }
 
+unclustered: {
+  unclaimed_source: {
+    shape: sql_table
+    host: text {constraint: primary_key}
+    source: text {constraint: primary_key}
+    transport: text {constraint: primary_key}
+  }
+  webhook_token: {
+    shape: sql_table
+    endpoint_id: uuid {constraint: primary_key}
+    secret_id: uuid {constraint: foreign_key}
+  }
+}
+
 audit.audit_log.actor_principal_id -> identity.principal.id
 audit.audit_log.real_actor_principal_id -> identity.principal.id
 catalog.component_type.parent_id -> catalog.component_type.id
@@ -609,6 +623,8 @@ telemetry.property.location_id -> fleet.location.id
 telemetry.property.node_id -> collection.node.principal_id
 telemetry.property.property_type_id -> telemetry.property_type.id
 telemetry.property.system_id -> fleet.system.id
+unclustered.webhook_token.endpoint_id -> fleet.endpoint.id
+unclustered.webhook_token.secret_id -> config.secret.id
 ```
 
 <!-- erd:end -->

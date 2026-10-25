@@ -21,7 +21,7 @@ Each tool says what a client may assume of it, from one rule over the route's me
 
 A tool that is not read-only and not destructive adds something (a create).
 
-46 tools.
+48 tools.
 
 | Tool | What it does | Gate | Assume |
 |---|---|---|---|
@@ -52,6 +52,7 @@ A tool that is not read-only and not destructive adds something (a create).
 | [`update-endpoint`](#update-endpoint) | Update an endpoint | `endpoint:update` | destructive, open-world |
 | [`delete-endpoint`](#delete-endpoint) | Delete an endpoint | `endpoint:delete` | destructive, idempotent |
 | [`retry-endpoint`](#retry-endpoint) | Retry an endpoint's gated connections | `endpoint:retry` | destructive, open-world |
+| [`rotate-endpoint-token`](#rotate-endpoint-token) | Rotate a webhook endpoint's token | `endpoint:update` | destructive |
 | [`list-locations`](#list-locations) | List locations in scope | `location:read` | read-only, idempotent |
 | [`get-location`](#get-location) | Get a location | `location:read` | read-only, idempotent |
 | [`get-location-health`](#get-location-health) | Read a location's health | `location:read` | read-only, idempotent |
@@ -70,6 +71,7 @@ A tool that is not read-only and not destructive adds something (a create).
 | [`list-system-property-series`](#list-system-property-series) | Read one property series' change history | `system:read` | read-only, idempotent |
 | [`list-tasks`](#list-tasks) | List tasks in scope | `task:read` | read-only, idempotent |
 | [`list-transports`](#list-transports) | List the transports the platform speaks | `endpoint:read` | read-only, idempotent |
+| [`list-unclaimed-sources`](#list-unclaimed-sources) | List the sources no endpoint claims | `node:read` | read-only, idempotent |
 | [`list-vendors`](#list-vendors) | List vendors | `vendor:read` | read-only, idempotent |
 
 ## `get-auth-me`
@@ -226,7 +228,7 @@ Returns the component's recent log occurrences (the log-kind sink), newest first
 
 List a component's recent log lines
 
-Returns the component's recent raw log lines (the ingest lane of ADR-0066, distinct from typed events), newest first, bounded to the last 24 hours. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+Returns the component's recent raw log lines (the ingest lane of ADR-0066, distinct from typed events), newest first, bounded to the last 24 hours, narrowed by an optional severity threshold and source, with the sources the window carries. Gated by component:read; an out-of-scope component is a non-disclosing 404.
 
 - Route: `GET /api/v1/components/{name}/logs`
 - Gate: `component:read`
@@ -235,6 +237,8 @@ Returns the component's recent raw log lines (the ingest lane of ADR-0066, disti
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `name` | string | yes | The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
+| `severity` | string | no | Only lines at this severity or more severe (RFC 5424's eight levels); a line with no severity is left out |
+| `source` | string | no | Only lines that arrived on this channel |
 
 ## `list-component-metrics`
 
@@ -479,6 +483,20 @@ Moves the endpoint's retry counter, which is part of its connection fingerprint:
 | `endpoint` | string | yes | The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does |
 | `host_key` | string | no | The SHA256 fingerprint of a changed key the operator now trusts, the key the endpoint's transport pins (the offered_key a key refusal names on the component's reachability read): an ssh endpoint's host key, which becomes its declared ssh-host-key, or a tls or https endpoint's certificate public key, which becomes its declared tls-certificate. The session redials onto it. While a key refusal holds, it must be that exact offered key: any other is a 409 that changes nothing (the refusal on record is the node's last word, so to trust a key the component presents since, retry without a key first). With no key refusal held it declares a pin ahead of time. Omit to retry with the pin unchanged |
 
+## `rotate-endpoint-token`
+
+Rotate a webhook endpoint's token
+
+Mints a webhook endpoint's token anew (#1024): a post bearing the old one answers 404 at once, exactly as a token that never existed, and the new one is revealed through the endpoint's secret, to give the sender. A token deleted with its secret is minted again. A dialed endpoint has no token, a 422. Audited on the endpoint and the secret. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
+
+- Route: `POST /api/v1/endpoints/{endpoint}:rotateToken`
+- Gate: `endpoint:update`
+- Assume: destructive
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `endpoint` | string | yes | The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does |
+
 ## `list-locations`
 
 List locations in scope
@@ -716,6 +734,17 @@ Lists the transport registry: the wires an endpoint can speak over, a build-time
 
 - Route: `GET /api/v1/transports`
 - Gate: `endpoint:read`
+- Assume: read-only, idempotent
+- Arguments: none
+
+## `list-unclaimed-sources`
+
+List the sources no endpoint claims
+
+The unclaimed-source inbox: each source a listener heard from that no endpoint claims (a webhook post to an unknown or rotated token), with how often, when first and last, and its last message cut to 512 bytes. Bounded at 256 sources per listener, the least recently heard evicted, and aged out after seven days; a source is let go once its messages land on an endpoint. Claim one by creating its endpoint. Gated by node:read: it is the listener's own observation.
+
+- Route: `GET /api/v1/unclaimed-sources`
+- Gate: `node:read`
 - Assume: read-only, idempotent
 - Arguments: none
 

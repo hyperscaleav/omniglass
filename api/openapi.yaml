@@ -3012,10 +3012,40 @@ components:
         transport:
           description: The transport name (the wire this endpoint speaks over), from the code registry
           type: string
+        webhook:
+          $ref: "#/components/schemas/EndpointWebhookBody"
+          description: "A webhook endpoint's own block (#1024): where a sender posts, the scheme that checks it, and what the scheme has refused; absent on every other transport, and on a list"
       required:
         - id
         - name
         - transport
+      type: object
+    EndpointWebhookBody:
+      additionalProperties: false
+      properties:
+        minted_at:
+          description: When the token was minted or last rotated
+          format: date-time
+          type: string
+        path:
+          description: "The path a sender posts to, under the server's /api/v1 base, its token masked: reveal the token through secret (gated by secret:reveal, audited)"
+          type: string
+        refused:
+          $ref: "#/components/schemas/WebhookRefusedBody"
+          description: "What the scheme has refused: the count, and the latest one's time, source and reason (never the credential); absent until one is"
+        scheme:
+          description: "The scheme the driver declares: hmac, token, basic, or none for a bare endpoint or a driver that checks nothing"
+          type: string
+        secret:
+          description: The secret holding the token, <component id>/webhook-token; absent once deleted (rotate to mint another)
+          type: string
+        signed:
+          description: "False when the scheme is none: the endpoint reads unsigned, anyone holding its URL can post, and there is no replay protection"
+          type: boolean
+      required:
+        - path
+        - scheme
+        - signed
       type: object
     EnrollOutputBody:
       additionalProperties: false
@@ -5030,6 +5060,25 @@ components:
       required:
         - transports
       type: object
+    ListUnclaimedSourcesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListUnclaimedSourcesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        sources:
+          items:
+            $ref: "#/components/schemas/UnclaimedSourceBody"
+          type:
+            - array
+            - "null"
+      required:
+        - sources
+      type: object
     ListVariablesOutputBody:
       additionalProperties: false
       properties:
@@ -6408,6 +6457,9 @@ components:
         verdict:
           $ref: "#/components/schemas/ReachVerdictBody"
           description: The latest reachability verdict, or null if none yet
+        webhook:
+          $ref: "#/components/schemas/EndpointWebhookBody"
+          description: "A webhook endpoint's block (#1024): a push endpoint has no ladder and reads last_seen (last heard) in place of a verdict, never down for silence; its scheme, whether it is signed, its token's secret and what its scheme refused. Absent on every dialed transport"
       required:
         - id
         - endpoint
@@ -8904,6 +8956,8 @@ components:
           type: boolean
         name:
           type: string
+        push:
+          type: boolean
         rung:
           type: string
         tls:
@@ -8933,6 +8987,42 @@ components:
       required:
         - theme
         - default_landing
+      type: object
+    UnclaimedSourceBody:
+      additionalProperties: false
+      properties:
+        count:
+          description: How many messages it sent that nothing claimed
+          format: int64
+          type: integer
+        first_heard_at:
+          description: When the listener first heard from it
+          format: date-time
+          type: string
+        host:
+          description: "The listener's host: server, for the webhook route"
+          type: string
+        last_heard_at:
+          description: When the listener last heard from it
+          format: date-time
+          type: string
+        last_message:
+          description: "Its last message, cut to 512 bytes: a stranger's body is untrusted data, so no more of it is kept"
+          type: string
+        source:
+          description: The sender's address
+          type: string
+        transport:
+          description: The push transport the source sent over
+          type: string
+      required:
+        - host
+        - transport
+        - source
+        - first_heard_at
+        - last_heard_at
+        - count
+        - last_message
       type: object
     UpdateCalcRuleInputBody:
       additionalProperties: false
@@ -9743,6 +9833,29 @@ components:
         - label
         - kind
         - official
+      type: object
+    WebhookRefusedBody:
+      additionalProperties: false
+      properties:
+        at:
+          description: When the latest was refused, flushed once per tick
+          format: date-time
+          type: string
+        count:
+          description: Posts the scheme refused, each answered 401
+          format: int64
+          type: integer
+        reason:
+          description: "Why the latest was refused: a missing or mismatched signature, a timestamp outside the window, a mismatched token or login"
+          type: string
+        source:
+          description: The latest refused sender's address
+          type: string
+      required:
+        - count
+        - at
+        - reason
+        - source
       type: object
 info:
   title: Omniglass
@@ -12236,6 +12349,37 @@ paths:
         destructive: true
         open_world: true
       x-omniglass-permission: endpoint:retry
+  /endpoints/{endpoint}:rotateToken:
+    post:
+      description: "Mints a webhook endpoint's token anew (#1024): a post bearing the old one answers 404 at once, exactly as a token that never existed, and the new one is revealed through the endpoint's secret, to give the sender. A token deleted with its secret is minted again. A dialed endpoint has no token, a 422. Audited on the endpoint and the secret. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split."
+      operationId: rotate-endpoint-token
+      parameters:
+        - description: The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does
+          in: path
+          name: endpoint
+          required: true
+          schema:
+            description: The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does
+            examples:
+              - boi.17c.415a.$comp.display-1/https
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EndpointBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Rotate a webhook endpoint's token
+      x-omniglass-mcp:
+        destructive: true
+      x-omniglass-permission: endpoint:update
   /event-rules:
     get:
       description: "Lists the event rules, the authored config that raises alarms, each with its live state as counts (conditions_in_force, open_alarms, pending_streaks) read in the same query. Rules read like a registry: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read."
@@ -17974,6 +18118,26 @@ paths:
       summary: List the transports the platform speaks
       x-omniglass-mcp: {}
       x-omniglass-permission: endpoint:read
+  /unclaimed-sources:
+    get:
+      description: "The unclaimed-source inbox: each source a listener heard from that no endpoint claims (a webhook post to an unknown or rotated token), with how often, when first and last, and its last message cut to 512 bytes. Bounded at 256 sources per listener, the least recently heard evicted, and aged out after seven days; a source is let go once its messages land on an endpoint. Claim one by creating its endpoint. Gated by node:read: it is the listener's own observation."
+      operationId: list-unclaimed-sources
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListUnclaimedSourcesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List the sources no endpoint claims
+      x-omniglass-mcp: {}
+      x-omniglass-permission: node:read
   /variables:
     get:
       description: Lists every variable. Requires an all-scope read. Gated by variable:read.
@@ -18229,6 +18393,168 @@ paths:
           description: Error
       summary: Read the whole in-scope fleet in one call
       x-omniglass-permission: location:read
+  /webhooks/{token}:
+    get:
+      description: "A sender checking its URL before it posts (#1024): an unknown or rotated token is the receiver's identical 404; a known one answers 200, echoing the query parameter its driver declares as the challenge (text, bounded), and 204 when it declares none. Public by necessity, as the receiver is."
+      operationId: verify-webhook
+      parameters:
+        - description: The endpoint's webhook token
+          in: path
+          name: token
+          required: true
+          schema:
+            description: The endpoint's webhook token
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                contentEncoding: base64
+                type: string
+          description: OK
+          headers:
+            Content-Type:
+              schema:
+                type: string
+            X-Content-Type-Options:
+              schema:
+                type: string
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Not Found
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Unprocessable Entity
+        "429":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Too Many Requests
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Internal Server Error
+      summary: Answer a webhook sender's verification of its URL
+    head:
+      description: "A sender checking its URL before it posts (#1024): an unknown or rotated token is the receiver's identical 404; a known one answers 200, echoing the query parameter its driver declares as the challenge (text, bounded), and 204 when it declares none. Public by necessity, as the receiver is."
+      operationId: probe-webhook
+      parameters:
+        - description: The endpoint's webhook token
+          in: path
+          name: token
+          required: true
+          schema:
+            description: The endpoint's webhook token
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                contentEncoding: base64
+                type: string
+          description: OK
+          headers:
+            Content-Type:
+              schema:
+                type: string
+            X-Content-Type-Options:
+              schema:
+                type: string
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Not Found
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Unprocessable Entity
+        "429":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Too Many Requests
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Internal Server Error
+      summary: Answer a webhook sender's verification of its URL
+    post:
+      description: "The webhook transport's listener (#1024): a component or a cloud service posts here, to the URL its webhook endpoint was given. The token names one endpoint; the scheme its driver declares authenticates the post (an hmac signature over a signed timestamp, a token, basic, or none, which reads unsigned); a signed timestamp outside five minutes is refused, and a declared delivery id lands once. The driver's listeners map the body (json, xml, form or text) onto any lane, and the post also lands as a log line unless its listener says otherwise. Public by necessity: the sender is not a principal, and the endpoint's scheme is the authentication. Answers 202 once the post is published, 401 for a refused scheme (saying nothing of which part failed), 404 for an unknown or rotated token (identical either way), 413 past 1 MiB, 429 with Retry-After past a rate limit."
+      operationId: receive-webhook
+      parameters:
+        - description: The endpoint's webhook token, minted by the server when the endpoint was created or its token rotated
+          in: path
+          name: token
+          required: true
+          schema:
+            description: The endpoint's webhook token, minted by the server when the endpoint was created or its token rotated
+            type: string
+      requestBody:
+        content:
+          application/octet-stream:
+            schema:
+              contentMediaType: application/octet-stream
+              format: binary
+              type: string
+        required: true
+      responses:
+        "202":
+          description: Accepted
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Unauthorized
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Not Found
+        "413":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Request Entity Too Large
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Unprocessable Entity
+        "429":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Too Many Requests
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Internal Server Error
+      summary: Receive a webhook post for an endpoint
 servers:
   - url: /api/v1
 

@@ -47,7 +47,7 @@ type emitAction struct {
 // emitSign is a compiled signing block (#1024): its templated scheme,
 // secret and fault, and its fixed header names.
 type emitSign struct {
-	scheme, secret, fault                  *template.Template
+	scheme, secret, fault               *template.Template
 	header, prefix, timestamp, delivery string
 }
 
