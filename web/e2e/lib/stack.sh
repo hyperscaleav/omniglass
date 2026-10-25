@@ -98,11 +98,15 @@ stack__down() {
   if [ -n "$STACK_FG_PID" ]; then
     wait "$STACK_FG_PID" 2>/dev/null || true
   fi
-  # The run's image tag, if it built one (stack_image). Untagging only: the
-  # layers stay in the build cache for the next run.
-  if docker image inspect "omniglass-stack:$id" >/dev/null 2>&1; then
-    docker image rm "omniglass-stack:$id" >/dev/null 2>&1 || true
-  fi
+  # The run's image tags, if it built any (stack_image, and the terminal
+  # recorder's, web/e2e/tapes.sh). Untagging only: the layers stay in the
+  # build cache for the next run.
+  local repo
+  for repo in omniglass-demo omniglass-stack; do
+    if docker image inspect "$repo:$id" >/dev/null 2>&1; then
+      docker image rm "$repo:$id" >/dev/null 2>&1 || true
+    fi
+  done
   local n=0
   while docker network inspect "$id" >/dev/null 2>&1; do
     docker network rm "$id" >/dev/null 2>&1 && break

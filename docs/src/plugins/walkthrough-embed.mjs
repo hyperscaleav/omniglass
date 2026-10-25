@@ -9,7 +9,7 @@
 //
 // The manifest is web/e2e/walkthroughs/out/<id>/walkthrough.json, written by the
 // recorder; its types and the id and still rules are the shared core the
-// run:walkthrough comment also reads (web/e2e/walkthroughcore.mjs). The docs
+// run:demo comment also reads (web/e2e/walkthroughcore.mjs). The docs
 // never restate a caption: they copy the manifest and render from it.
 import { checkId, checkPreview, checkStep, checkStill, plural, videoName } from '../../../web/e2e/walkthroughcore.mjs';
 

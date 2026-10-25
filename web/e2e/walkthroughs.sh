@@ -8,7 +8,7 @@
 #                                 walkthrough.json; the ids
 #                                 that failed are listed in out/failed.txt, and
 #                                 out/stack-up marks that the stack came up (the
-#                                 run:walkthrough workflow reads both, #925)
+#                                 run:demo workflow reads both, #925, #1132)
 #   walkthroughs.sh selftest      the recorder's own test: a broken step fails naming the
 #                                 step and its wait, keeping its stills; an over-budget
 #                                 walkthrough (or preview) fails naming which limit,
