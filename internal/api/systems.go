@@ -212,6 +212,7 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	registerSystemLabelDraft(api, a, gw)
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-systems",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/systems",
 		Summary:     "List systems in scope",
@@ -246,6 +247,7 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-system",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/systems/{name}",
 		Summary:     "Get a system",

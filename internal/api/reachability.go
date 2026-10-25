@@ -137,6 +137,7 @@ type reachabilityOutput struct {
 func registerReachabilityRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-component-reachability",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/components/{name}/reachability",
 		Summary:     "Read a component's per-endpoint reachability",

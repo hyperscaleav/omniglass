@@ -49,6 +49,7 @@ type eventsOutput struct {
 func registerEventRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-component-events",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/components/{name}/events",
 		Summary:     "List a component's recent events",

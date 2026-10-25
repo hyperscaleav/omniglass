@@ -76,6 +76,7 @@ type locationMetricsOutput struct {
 func registerEffectiveMetricRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-component-metrics",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/components/{name}/metrics",
 		Summary:     "List a component's effective metrics",

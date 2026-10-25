@@ -13145,7 +13145,8 @@
             "description": "Error"
           }
         },
-        "summary": "The authenticated principal, its permissions, and grants"
+        "summary": "The authenticated principal, its permissions, and grants",
+        "x-omniglass-mcp": {}
       },
       "patch": {
         "description": "Updates the caller's own label (email is administrator-set). Requires authentication; self-scoped (edits only your own principal).",
@@ -14083,6 +14084,7 @@
           }
         },
         "summary": "List component types",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "component_type:read"
       },
       "post": {
@@ -14287,6 +14289,7 @@
           }
         },
         "summary": "List components in scope",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "component:read"
       },
       "post": {
@@ -14326,6 +14329,7 @@
         },
         "summary": "Create a component",
         "x-omniglass-conditional-permission": "system:update",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "component:create"
       }
     },
@@ -14401,6 +14405,7 @@
           }
         },
         "summary": "Get a component",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "component:read"
       },
       "patch": {
@@ -14513,6 +14518,7 @@
           }
         },
         "summary": "List a component's alarms",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "component:read"
       },
       "post": {
@@ -14764,6 +14770,9 @@
           }
         },
         "summary": "Issue a command to a component",
+        "x-omniglass-mcp": {
+          "destructive": true
+        },
         "x-omniglass-permission": "command:issue"
       }
     },
@@ -14942,6 +14951,7 @@
           }
         },
         "summary": "List a component's recent events",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "component:read"
       }
     },
@@ -15076,6 +15086,7 @@
           }
         },
         "summary": "List a component's recent log lines",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "component:read"
       }
     },
@@ -15160,6 +15171,7 @@
           }
         },
         "summary": "List a component's effective metrics",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "component:read"
       }
     },
@@ -15238,6 +15250,7 @@
           }
         },
         "summary": "Read one metric series' raw samples",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "component:read"
       }
     },
@@ -15280,6 +15293,7 @@
           }
         },
         "summary": "List a component's effective properties",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "component:read"
       }
     },
@@ -15463,6 +15477,7 @@
           }
         },
         "summary": "Read one property series' change history",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "component:read"
       }
     },
@@ -15505,6 +15520,7 @@
           }
         },
         "summary": "Read a component's per-endpoint reachability",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "component:read"
       }
     },
@@ -15547,6 +15563,7 @@
           }
         },
         "summary": "Read a component's property reconciliation (want/told/is)",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "component:read"
       }
     },
@@ -16097,6 +16114,7 @@
           }
         },
         "summary": "List drivers",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "driver:read"
       },
       "post": {
@@ -16135,6 +16153,7 @@
           }
         },
         "summary": "Create a driver",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "driver:create"
       }
     },
@@ -16216,6 +16235,7 @@
           }
         },
         "summary": "Get a driver",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "driver:read"
       },
       "patch": {
@@ -16269,6 +16289,7 @@
           }
         },
         "summary": "Update a driver",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "driver:update"
       }
     },
@@ -16299,6 +16320,7 @@
           }
         },
         "summary": "List endpoints in scope",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "endpoint:read"
       },
       "post": {
@@ -16337,6 +16359,7 @@
           }
         },
         "summary": "Create an endpoint",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "endpoint:create"
       }
     },
@@ -16375,6 +16398,7 @@
           }
         },
         "summary": "Delete an endpoint",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "endpoint:delete"
       },
       "get": {
@@ -16418,6 +16442,7 @@
           }
         },
         "summary": "Get an endpoint",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "endpoint:read"
       },
       "patch": {
@@ -16471,6 +16496,7 @@
           }
         },
         "summary": "Update an endpoint",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "endpoint:update"
       }
     },
@@ -16525,6 +16551,7 @@
           }
         },
         "summary": "Retry an endpoint's gated connections",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "endpoint:retry"
       }
     },
@@ -17854,6 +17881,7 @@
           }
         },
         "summary": "List locations in scope",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "location:read"
       },
       "post": {
@@ -17967,6 +17995,7 @@
           }
         },
         "summary": "Get a location",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "location:read"
       },
       "patch": {
@@ -18059,6 +18088,7 @@
           }
         },
         "summary": "Read a location's health",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "location:read"
       }
     },
@@ -18896,6 +18926,7 @@
           }
         },
         "summary": "List nodes",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "node:read"
       },
       "post": {
@@ -19009,6 +19040,7 @@
           }
         },
         "summary": "Get a node",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "node:read"
       },
       "patch": {
@@ -19099,6 +19131,7 @@
           }
         },
         "summary": "List a node's recent self-logs",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "node:read"
       }
     },
@@ -20996,6 +21029,7 @@
           }
         },
         "summary": "List products",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "product:read"
       },
       "post": {
@@ -21115,6 +21149,7 @@
           }
         },
         "summary": "Get a product",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "product:read"
       },
       "patch": {
@@ -21733,6 +21768,7 @@
           }
         },
         "summary": "List secret types",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "secret:read"
       }
     },
@@ -21763,6 +21799,7 @@
           }
         },
         "summary": "List secrets",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "secret:read"
       },
       "post": {
@@ -21801,6 +21838,7 @@
           }
         },
         "summary": "Create a secret",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "secret:create",
         "x-omniglass-platform-permission": "platform:create"
       }
@@ -23311,6 +23349,7 @@
           }
         },
         "summary": "List systems in scope",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "system:read"
       },
       "post": {
@@ -23424,6 +23463,7 @@
           }
         },
         "summary": "Get a system",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "system:read"
       },
       "patch": {
@@ -23600,6 +23640,7 @@
           }
         },
         "summary": "Read a system's health",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "system:read"
       }
     },
@@ -23937,6 +23978,7 @@
           }
         },
         "summary": "Read one metric series' raw samples",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "system:read"
       }
     },
@@ -24162,6 +24204,7 @@
           }
         },
         "summary": "Read one property series' change history",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "system:read"
       }
     },
@@ -25241,6 +25284,7 @@
           }
         },
         "summary": "List tasks in scope",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "task:read"
       }
     },
@@ -25353,6 +25397,7 @@
           }
         },
         "summary": "List the transports the platform speaks",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "endpoint:read"
       }
     },
@@ -25545,6 +25590,7 @@
           }
         },
         "summary": "List vendors",
+        "x-omniglass-mcp": {},
         "x-omniglass-permission": "vendor:read"
       },
       "post": {

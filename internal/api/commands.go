@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/hyperscaleav/omniglass/internal/mcp/tooldef"
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -49,6 +50,7 @@ type commandOutput struct {
 func registerCommandRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "issue-component-command",
+		Extensions:  mcpExposed(tooldef.Hints{Destructive: true}),
 		Method:      http.MethodPost,
 		Path:        "/components/{name}/commands:issue",
 		Summary:     "Issue a command to a component",

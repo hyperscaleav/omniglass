@@ -37,6 +37,7 @@ type reconciliationOutput struct {
 func registerReconciliationRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-component-reconciliation",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/components/{name}/reconciliation",
 		Summary:     "Read a component's property reconciliation (want/told/is)",

@@ -166,6 +166,7 @@ func resolveComponentTypeParent(ctx context.Context, gw storage.Gateway, ref str
 func registerComponentTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-component-types",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/component-types",
 		Summary:     "List component types",

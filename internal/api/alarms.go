@@ -150,6 +150,7 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-component-alarms",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/components/{name}/alarms",
 		Summary:     "List a component's alarms",

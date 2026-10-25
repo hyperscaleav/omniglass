@@ -16,6 +16,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
+	mcpserver "github.com/hyperscaleav/omniglass/internal/mcp"
 	"github.com/hyperscaleav/omniglass/internal/settings"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/webui"
@@ -48,6 +49,8 @@ type options struct {
 	// simHub is the server's line to its simulators: the fleet view and
 	// firing operations. Nil reads as no simulator anywhere.
 	simHub SimHub
+	// version is the server's build version, reported to MCP clients.
+	version string
 }
 
 // Option configures NewHandler.
@@ -55,6 +58,9 @@ type Option func(*options)
 
 // WithSecureCookies marks the session cookie Secure (set behind TLS).
 func WithSecureCookies(b bool) Option { return func(o *options) { o.secureCookies = b } }
+
+// WithVersion sets the build version the MCP server reports to its clients.
+func WithVersion(v string) Option { return func(o *options) { o.version = v } }
 
 // WithNatsURL sets the advertised NATS URL returned by the node-claim exchange.
 func WithNatsURL(u string) Option { return func(o *options) { o.natsURL = u } }
@@ -105,6 +111,16 @@ func NewHandler(gw storage.Gateway, opts ...Option) http.Handler {
 		http.Redirect(w, req, "/web/", http.StatusMovedPermanently)
 	})
 	r.Handle("/web/*", spa)
+
+	// The MCP server (#1162, ADR-1162) at /mcp, beside the API rather than in it:
+	// a protocol endpoint, not an operation. Every tool call is dispatched back
+	// through this same router with the caller's bearer token, so it takes the
+	// route's gate, scope and audit exactly as a direct call does.
+	version := o.version
+	if version == "" {
+		version = "dev"
+	}
+	r.Handle("/mcp", mcpserver.NewHandler(r, version))
 
 	return r
 }
@@ -162,6 +178,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 
 	huma.Register(api, huma.Operation{
 		OperationID: "get-auth-me",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/auth/me",
 		Summary:     "The authenticated principal, its permissions, and grants",

@@ -152,6 +152,7 @@ func mapProductErr(err error) error {
 func registerProductRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-products",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/products",
 		Summary:     "List products",
@@ -195,6 +196,7 @@ func registerProductRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-product",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/products/{id}",
 		Summary:     "Get a product",

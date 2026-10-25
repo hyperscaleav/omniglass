@@ -110,6 +110,7 @@ func registerSeriesRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		oc := oc
 		huma.Register(api, a.gated(huma.Operation{
 			OperationID: "list-" + oc.kind + "-metric-series",
+			Extensions:  mcpExposed(),
 			Method:      http.MethodGet,
 			Path:        "/" + oc.kind + "s/{name}/metrics/{metric}/samples",
 			Summary:     "Read one metric series' raw samples",
@@ -134,6 +135,7 @@ func registerSeriesRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		})
 		huma.Register(api, a.gated(huma.Operation{
 			OperationID: "list-" + oc.kind + "-property-series",
+			Extensions:  mcpExposed(),
 			Method:      http.MethodGet,
 			Path:        "/" + oc.kind + "s/{name}/properties/{property}/samples",
 			Summary:     "Read one property series' change history",

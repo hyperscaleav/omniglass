@@ -1,7 +1,8 @@
 name: gen-drift
 
 # The generation drift gate api-first.md promises: the committed generated
-# artifacts (OpenAPI, the cobra tree, the CLI reference, the ERD, the typed SPA
+# artifacts (OpenAPI, the cobra tree, the MCP tool catalog and its reference, the
+# CLI reference, the ERD, the typed SPA
 # client, the protobuf wire) must match what `make gen` produces from the Go
 # source of truth. A stale artifact means a route change shipped without its
 # regeneration; this fails the PR instead of leaving it to the reviewer.
@@ -62,7 +63,9 @@ jobs:
             api/openapi.json \
             api/openapi.yaml \
             internal/cli/api_gen.go \
+            internal/mcp/catalog_gen.go \
             docs/src/content/docs/reference/cli/index.md \
+            docs/src/content/docs/reference/mcp/index.md \
             docs/src/content/docs/architecture/data-model.md \
             web/src/api/ \
             proto/og/v1/ \

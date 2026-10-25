@@ -178,6 +178,7 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 	registerComponentLabelDraft(api, a, gw)
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-components",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/components",
 		Summary:     "List components in scope",
@@ -212,6 +213,7 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-component",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/components/{name}",
 		Summary:     "Get a component",
@@ -226,6 +228,7 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 
 	huma.Register(api, a.conditionalGated(a.gated(huma.Operation{
 		OperationID:   "create-component",
+		Extensions:    mcpExposed(),
 		Method:        http.MethodPost,
 		Path:          "/components",
 		DefaultStatus: http.StatusCreated,

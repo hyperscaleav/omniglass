@@ -61,6 +61,7 @@ type taskPathInput struct {
 func registerTaskRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-tasks",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/tasks",
 		Summary:     "List tasks in scope",
