@@ -239,7 +239,8 @@ reads carry it as `writer_class`. The ruling, rendered from the code the gateway
 Three classes form the **reserved system family**, fixed and internal: `node-probe` (the node's own
 account of an endpoint, declared in `internal/collection/probekeys`), `platform` (what only the
 Omniglass process writes; the self-monitoring follow-on, #1094, is its planned consumer) and
-`command-lifecycle` (`command-issued`, the event a command's issue puts on its owner's timeline). Their
+`command-lifecycle` (`command-issued`, the event a command's issue puts on its owner's timeline, and
+`command-settled`, `command-failed` and `command-timed-out`, the one its terminal status puts there). Their
 names are declared in code and closed to an operator-created type on every lane, and no product,
 standard or location-type contract declares one or gives it a default. A **writer** is the entry
 point a write comes through, and it fixes the provenance: the node lane and the push lane write

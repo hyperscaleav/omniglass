@@ -9,9 +9,9 @@ MCP client) drives the fleet through the same API every other client does
 ([ADR-1162](/architecture/decisions/#adr-1162-the-mcp-server-is-a-generated-client-of-the-operations-stamped-for-it-run-as-the-callers-token)).
 An operation is exposed by a stamp at its registration in Go (`Extensions: mcpExposed()`), and
 `cmd/mcpgen`, beside `cligen` in `make gen`, generates the tool catalog (`internal/mcp/catalog_gen.go`)
-and the [MCP tools reference](/reference/mcp/) from `api/openapi.json`. The first catalog is 44 tools:
+and the [MCP tools reference](/reference/mcp/) from `api/openapi.json`. The first catalog is 46 tools:
 the reads of places, systems, components, nodes, the catalog, endpoints, secrets (masked),
-reachability, samples, events and logs, and the writes an agent setting up monitoring needs (create a
+reachability, samples, events, logs and a command's status, and the writes an agent setting up monitoring needs (create a
 component, an endpoint, a secret or a driver, edit and retry an endpoint, issue a command). One pure
 rule (`tooldef.Annotate`) annotates each tool read-only, destructive, idempotent or open-world from its
 method and gate, and a stamp can only add caution.

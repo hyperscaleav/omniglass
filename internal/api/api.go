@@ -51,6 +51,10 @@ type options struct {
 	simHub SimHub
 	// version is the server's build version, reported to MCP clients.
 	version string
+	// commandWaiters and commandWaitersPerPrincipal bound the command issues
+	// waiting on their outcome at once, in all and per caller; zero takes the
+	// defaults.
+	commandWaiters, commandWaitersPerPrincipal int
 }
 
 // Option configures NewHandler.
@@ -64,6 +68,13 @@ func WithVersion(v string) Option { return func(o *options) { o.version = v } }
 
 // WithNatsURL sets the advertised NATS URL returned by the node-claim exchange.
 func WithNatsURL(u string) Option { return func(o *options) { o.natsURL = u } }
+
+// WithCommandWaitLimits bounds how many command issues may wait on their
+// outcome at once, in all and per principal (a wait past either is a 429,
+// refused before anything is issued). Zero keeps a default.
+func WithCommandWaitLimits(total, perPrincipal int) Option {
+	return func(o *options) { o.commandWaiters, o.commandWaitersPerPrincipal = total, perPrincipal }
+}
 
 // WithTelemetryPublisher supplies the bus seam the push-ingest route publishes
 // through. Without it the route is unavailable, so a handler built for a test or a
@@ -313,7 +324,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 	registerEventRulePreviewRoute(api, a, gw)
 	registerExpressionRoutes(api, a, gw)
 	registerCommandTypeRoutes(api, a, gw)
-	registerCommandRoutes(api, a, gw)
+	registerCommandRoutes(api, a, gw, newWaitLimiter(o.commandWaiters, o.commandWaitersPerPrincipal))
 	registerProductPropertyRoutes(api, a, gw)
 	registerComponentPropertyRoutes(api, a, gw)
 	registerStandardPropertyRoutes(api, a, gw)

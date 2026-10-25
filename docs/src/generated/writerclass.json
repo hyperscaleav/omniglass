@@ -65,7 +65,10 @@
     "reserved": true,
     "doc": "the events a command's own lifecycle writes on its owner's timeline",
     "keys": [
-      "command-issued"
+      "command-failed",
+      "command-issued",
+      "command-settled",
+      "command-timed-out"
     ],
     "admits": [
       {

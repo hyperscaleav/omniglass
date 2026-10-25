@@ -9,7 +9,7 @@ sidebar:
 
 import SchemaTable from '../../../components/SchemaTable.astro';
 
-:::note[Partial: record, reconcile, and actuation are built; derived producers are deferred]
+:::note[Partial: record, reconcile, actuation, and the status read are built; derived producers are deferred]
 The `command_type` registry, the `command` invocation log, computed settlement, the **recorded
 status** (`issued` / `settled` / `failed` / `timed-out`), and the **two-armed target** (a command
 may set a property or a metric; the metric arm is schema-and-storage deep, its authoring surface
@@ -20,6 +20,9 @@ are built
 and since #815 so is **actuation**: the invocation reaches the placed node over the per-node
 command queue and actuates the device through the driver's command binding (below,
 [ADR-0136](/architecture/decisions/#adr-0136-actuation-is-a-per-node-pull-rendered-at-dispatch)).
+Since #1155 a command's **status reads back whole**, from issue to settlement, over the API, the
+CLI and the console, with the evidence that decided it and an issue that can wait for it (below,
+[ADR-1155](/architecture/decisions/#adr-1155-a-command-is-read-whole-its-evidence-kept-and-masked-and-an-issue-may-wait)).
 :::
 
 :::design[Rule-issued and scheduled commands: the action layer (ADR-0050) and the clock, tracked in #419]
@@ -141,6 +144,65 @@ the finer vocabulary the verdict collapses (failed versus timed-out; a fire-and-
 `settled` while its verdict stays `none`), so a stuck command is distinguishable from one nobody
 has checked ([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)).
 
+## Reading a command: from issue to settlement
+
+A command is read whole, under the component it was issued to (#1155): `GET
+/components/{name}/commands/{id}` for one, `GET /components/{name}/commands` for the history, newest
+first, narrowed by recorded `status` (`issued` is what is in flight now), by when it was issued
+(`since`, `until`) and a page size (`limit`). A command has no name, so its id under its component is
+its address, the component taking every spelling the component routes take. Each carries:
+
+- **what it was told**: the command type, its params, the value it set (`intended`, by the
+  `command_id` lineage) and the property or metric it sets;
+- **its state machine**, a time per transition: `issued_at`, `delivered_at` (a node last took it from
+  its queue), `executed_at` (the node's report landed) and `settled_at`, beside the recorded `status`;
+- **where it sits now** (`phase`), derived on read and never stored: `queued` for its node,
+  `delivered` to it (a binding that settles on observation, so the reply decides nothing),
+  `awaiting-reply` (the reply settles it), `awaiting-observation` within its window (the report is in,
+  or no endpoint can carry it and only a sample of its target can settle it), and once terminal its
+  status. Its `deadline` is when the window closes;
+- **how it settles** (`settle_mode`: reply, observation, or none for fire-and-forget), read off the
+  binding of the endpoint it rides, and **what carried it**: that endpoint, its node and its driver;
+- **the evidence and the why**: the component's `reply`, the observed sample when an observation
+  decided it (`observed`), what decided it (`settled_by`: issue, reply, observation, or the window),
+  the execution error, and a `reason` in words (the reply that confirmed it, the value observed
+  instead, or, on a timeout, where it stopped: answered with nothing observed, delivered with no
+  report, queued for a node that never took it, carried by no endpoint);
+- **who issued it**, by name and uuid, the actor on its audit row.
+
+**The reply is masked before it is stored.** A reply crosses from a component the operator does not
+control, so the execution report's reply and error are masked of the dispatched endpoint's secret
+fields in the forms a component commonly echoes them (raw, url-escaped, JSON-escaped, html-escaped,
+base64, in any case, and a basic login's authorization value) and of any pair, element, header or
+config keyword the text labels a credential, then made valid text and capped at 4 KiB, before they
+reach the row; the binding's judgment reads the reply whole. The masking fails closed: a server that
+cannot read the endpoint's secrets withholds the reply and the error rather than store them
+half-masked. The masking is one primitive (`internal/redact`) that the node's own http scrub runs
+too. A form it does not know (a hash, a partial echo) is stored as echoed, which is why a driver
+should not ask a component to echo its login
+([ADR-1155](/architecture/decisions/#adr-1155-a-command-is-read-whole-its-evidence-kept-and-masked-and-an-issue-may-wait)).
+
+**Each terminal status lands on the component's timeline.** Settling, failing and timing out write
+`command-settled`, `command-failed` and `command-timed-out`, caused events naming the command and
+linked from the row (`settled_event_id`), in the transaction that records the outcome. They carry no
+evidence and no reason: those stay on the command, behind `command:read`. They are
+`command-lifecycle` keys beside `command-issued`, so only a command writes one, and a failure reads
+by its type rather than out of a message. A fire-and-forget command, settled by its issue, writes no second event.
+
+**Reading needs `command:read`**, resolved on the component tier with the same split an action's
+target makes: a component outside the caller's `component:read` is the non-disclosing 404, and one
+inside it whose commands the caller may not read is the truthful 403
+([identity and access](/architecture/identity-access/#the-three-way-status-split)). The viewer floor
+holds it, and the read floor gives every issuer it wherever it may issue.
+
+**An issue may wait.** `wait` holds the issue until the command is terminal or `wait_timeout` passes
+(1 to 120 seconds, 30 by default), answering with the command as it stands either way, its phase
+saying where. It polls quickly at first (a reply settles a command within a node's cycle) and backs
+off to once a second, and once the deadline passes it judges the command itself, so a timeout answers
+at the window rather than at the next sweep. At most 64 waits run at once across a server and 4 per
+principal; a wait past either is a 429 refused before anything is issued, so a refusal leaves nothing
+behind to retry around.
+
 ## Storage
 
 The physical layout (the owner arc, the caused-event lineage, partitioning) lives on [storage](/architecture/storage/).
@@ -169,6 +231,12 @@ The physical layout (the owner arc, the caused-event lineage, partitioning) live
     executed_at: 'When the node&#39;s execution report stamped, once; the actuation fact beside the settlement verdict',
     exec_error: 'A failed or unrenderable actuation&#39;s story; null on success',
     dispatched_endpoint_id: 'The endpoint a dispatch chose to actuate over; the confinement anchor for the execution report',
+    reply: 'The component&#39;s answer as its execution report carried it, masked of credentials and capped; null until a report lands',
+    reason: 'Why it reached its terminal status, in words; null while issued',
+    settled_by: 'What decided it: issue, reply, observation, or window (its settle window closed on no evidence)',
+    observed_value: 'The sample a settle-check judged it on, when an observation decided it',
+    observed_at: 'When that sample was observed',
+    settled_event_id: 'The lifecycle event its terminal status wrote: command-settled, command-failed or command-timed-out',
   }}
 />
 

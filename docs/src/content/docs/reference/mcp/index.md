@@ -21,7 +21,7 @@ Each tool says what a client may assume of it, from one rule over the route's me
 
 A tool that is not read-only and not destructive adds something (a create).
 
-44 tools.
+46 tools.
 
 | Tool | What it does | Gate | Assume |
 |---|---|---|---|
@@ -31,6 +31,8 @@ A tool that is not read-only and not destructive adds something (a create).
 | [`create-component`](#create-component) | Create a component | `component:create` | adds |
 | [`get-component`](#get-component) | Get a component | `component:read` | read-only, idempotent |
 | [`list-component-alarms`](#list-component-alarms) | List a component's alarms | `component:read` | read-only, idempotent |
+| [`list-component-commands`](#list-component-commands) | List a component's commands | `command:read` | read-only, idempotent |
+| [`get-component-command`](#get-component-command) | Read a command | `command:read` | read-only, idempotent |
 | [`issue-component-command`](#issue-component-command) | Issue a command to a component | `command:issue` | destructive, open-world |
 | [`list-component-events`](#list-component-events) | List a component's recent events | `component:read` | read-only, idempotent |
 | [`list-component-logs`](#list-component-logs) | List a component's recent log lines | `component:read` | read-only, idempotent |
@@ -153,11 +155,44 @@ What is currently wrong with this component, newest first, with the component's 
 | `name` | string | yes | The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
 | `unacknowledged` | boolean | no | Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the incidents that came and went unattended |
 
+## `list-component-commands`
+
+List a component's commands
+
+The component's command history, newest first, each command whole (as the single read returns it), narrowed by recorded status and by when it was issued, a page at a time. status=issued is what is in flight now. Gated by command:read, resolved on the component tier; a component outside the caller's component:read is a non-disclosing 404, and one it can read but whose commands it may not is a 403.
+
+- Route: `GET /api/v1/components/{name}/commands`
+- Gate: `command:read`
+- Assume: read-only, idempotent
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `limit` | integer | no | How many to return, newest first (1 to 500) |
+| `name` | string | yes | The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
+| `since` | string | no | Only the commands issued at or after this RFC3339 time |
+| `status` | string | no | Only the commands with this recorded status; issued is every command still in flight |
+| `until` | string | no | Only the commands issued at or before this RFC3339 time |
+
+## `get-component-command`
+
+Read a command
+
+One command, whole: what it was told and the value it set, its recorded status with a time for each transition (issued, delivered, executed, settled), where it sits now while in flight (queued, delivered, awaiting the reply, awaiting the observation), how its binding settles it, the evidence that decided it (the reply, masked of credentials, or the observed sample) and why, the endpoint, node and driver that carry it, and who issued it. Gated by command:read, resolved on the component tier; a component outside the caller's component:read, or a command not on that component, is a non-disclosing 404, and a component it can read but whose commands it may not is a 403.
+
+- Route: `GET /api/v1/components/{name}/commands/{id}`
+- Gate: `command:read`
+- Assume: read-only, idempotent
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `id` | integer | yes | The command's id, as its issue answered it |
+| `name` | string | yes | The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
+
 ## `issue-component-command`
 
 Issue a command to a component
 
-Records a command invocation, writes a caused event, and (for a settleable command) opens an intended value the observed value settles against. Returns the computed settlement verdict. Gated by command:issue, whose scope is resolved on the component tier from that permission (not from component:read); a component outside the caller's component:read is a non-disclosing 404, and one it can read but not command is a 403.
+Records a command invocation, writes a caused event, and (for a settleable command) opens an intended value the observed value settles against. Answers with the command as it stands (as the command read returns it) and the computed settlement verdict; with wait, once it settles, fails or times out, or wait_timeout passes. Gated by command:issue, whose scope is resolved on the component tier from that permission (not from component:read); a component outside the caller's component:read is a non-disclosing 404, and one it can read but not command is a 403.
 
 - Route: `POST /api/v1/components/{name}/commands:issue`
 - Gate: `command:issue`
@@ -170,6 +205,8 @@ Records a command invocation, writes a caused event, and (for a settleable comma
 | `name` | string | yes | The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
 | `params` | any | no | The invocation params, stored on the command and the caused event |
 | `value` | any | no | The intended value for the target property (a settleable command) |
+| `wait` | boolean | no | Block until the command settles, fails or times out, or until wait_timeout passes, and answer with where it stands then. Refused with a 429, before anything is issued, while too many commands are already being waited on |
+| `wait_timeout` | integer | no | How long a wait may block, in seconds (1 to 120). A command still in flight when it passes is answered as it stands, its phase saying where |
 
 ## `list-component-events`
 

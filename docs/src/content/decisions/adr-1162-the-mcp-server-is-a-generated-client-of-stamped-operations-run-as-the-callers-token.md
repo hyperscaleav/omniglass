@@ -18,7 +18,7 @@ refs: [1162, 1161]
      `x-omniglass-mcp` extension in the generated OpenAPI beside `x-omniglass-permission`, and
      `cmd/mcpgen` turns every stamped operation into a tool. What is exposed is reviewed in the same
      diff as the route, never in a hand list that drifts from it. The first catalog is the reads
-     and the core writes an agent setting up monitoring needs (44 tools of 296 operations): a model
+     and the core writes an agent setting up monitoring needs (46 tools of 298 operations): a model
      chooses worse among hundreds. A tool is named by its operation id, describes itself with the
      operation's description (which names its gate), and takes the path parameters, query
      parameters and body properties as one argument object, references inlined; a name used
