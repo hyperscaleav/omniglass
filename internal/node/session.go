@@ -329,11 +329,11 @@ func (r *listenerRouter) set(ls []routedListener, policy string) {
 // claims it, and its emits are interpreted at once and published (push, not
 // poll). A claimed line whose emits do not extract is a collection-failed
 // fault, landed once per change so a repeating push cannot flood the lane.
-func (r *listenerRouter) Claim(line string) bool {
+func (r *listenerRouter) Claim(msg driver.Message) bool {
 	r.mu.Lock()
 	var claimer *routedListener
 	for i := range r.listeners {
-		if m := r.listeners[i].fn.Match; m != nil && m.Matches(line) {
+		if m := r.listeners[i].fn.Match; m != nil && m.MatchesMessage(msg) {
 			claimer = &r.listeners[i]
 			break
 		}
@@ -342,7 +342,7 @@ func (r *listenerRouter) Claim(line string) bool {
 	if claimer == nil {
 		return false
 	}
-	emitted, faults := claimer.fn.Interpret(driver.Payload{Text: line}, time.Now().UTC())
+	emitted, faults := claimer.fn.Interpret(msg.Payload(), time.Now().UTC())
 	if len(emitted) > 0 && r.hooks.samples != nil {
 		r.hooks.samples(claimer.taskID, samplesOf(emitted))
 	}
@@ -362,13 +362,25 @@ func (r *listenerRouter) Claim(line string) bool {
 	return true
 }
 
-// Unclaimed counts a line no listener claimed and no exchange was owed.
-func (r *listenerRouter) Unclaimed(line string) {
+// Unclaimed counts a message no listener claimed and no exchange was owed:
+// a line, or an event named by its event name.
+func (r *listenerRouter) Unclaimed(msg driver.Message) {
+	last := msg.Data
+	if msg.Event != "" {
+		last = msg.Event + ": " + msg.Data
+	}
+	if len(last) > maxUnclaimedShown {
+		last = strings.ToValidUTF8(last[:maxUnclaimedShown], "") + "..."
+	}
 	r.mu.Lock()
 	r.unclaimed++
-	r.last = line
+	r.last = last
 	r.mu.Unlock()
 }
+
+// maxUnclaimedShown bounds the unclaimed message a log line or a fault names:
+// an event's data may be a whole document.
+const maxUnclaimedShown = 256
 
 // drain returns and resets the unclaimed count since the last drain, with
 // the last such line and the policy that decides what becomes of them.

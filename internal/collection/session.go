@@ -135,13 +135,14 @@ type HeldConn interface {
 	Close() error
 }
 
-// Inbound is how a held connection disposes of an inbound line (#817): Claim
-// offers it to the listeners (true when one took it, which also delivers
-// it), and Unclaimed reports a line nothing took, neither a listener nor an
-// exchange. Both are called on the connection's reader goroutine, in order.
+// Inbound is how a held connection disposes of an inbound message (#817): a
+// line, or a server-sent event (#1038). Claim offers it to the listeners
+// (true when one took it, which also delivers it), and Unclaimed reports one
+// nothing took, neither a listener nor an exchange. Both are called on the
+// connection's reader goroutine, in order.
 type Inbound interface {
-	Claim(line string) bool
-	Unclaimed(line string)
+	Claim(msg driver.Message) bool
+	Unclaimed(msg driver.Message)
 }
 
 // SessionDialer establishes a held connection to a target, routing its
@@ -576,9 +577,9 @@ func (s *Session) transition(state SessionState, reason string, conn HeldConn) {
 // pushes must not wait a poll's interval to read up again.
 type provingInbound struct{ s *Session }
 
-func (p provingInbound) Claim(line string) bool {
+func (p provingInbound) Claim(msg driver.Message) bool {
 	in := p.s.cfg.Inbound
-	if in == nil || !in.Claim(line) {
+	if in == nil || !in.Claim(msg) {
 		return false
 	}
 	p.s.mu.Lock()
@@ -593,9 +594,9 @@ func (p provingInbound) Claim(line string) bool {
 	return true
 }
 
-func (p provingInbound) Unclaimed(line string) {
+func (p provingInbound) Unclaimed(msg driver.Message) {
 	if in := p.s.cfg.Inbound; in != nil {
-		in.Unclaimed(line)
+		in.Unclaimed(msg)
 	}
 }
 

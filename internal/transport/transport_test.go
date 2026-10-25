@@ -19,8 +19,8 @@ func TestRegistryCarriesTheNineTransports(t *testing.T) {
 		"udp":    {held: false, built: true}, // datagrams, stateless: its rung is a request answered (#1037)
 		"telnet": {held: true, built: true},  // the line protocol behind a login (#1033)
 		"ssh":    {held: true, built: true},
-		"http":   {held: true, built: true}, // a server-sent events stream holds a session (#1038); requests stay their own
-		"https":  {held: true, built: true}, // http over the tls handshake, its own entry (#902, ADR-0160's rule)
+		"http":   {held: true, built: true},  // a server-sent events stream holds a session (#1038); requests stay their own
+		"https":  {held: true, built: true},  // http over the tls handshake, its own entry (#902, ADR-0160's rule)
 		"snmp":   {held: false, built: true}, // stateless: its rung is a standard get answered (#821)
 	}
 	all := transport.All()

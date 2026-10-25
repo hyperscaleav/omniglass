@@ -243,7 +243,7 @@ func (r *reader) keep(raw []byte) bool {
 func (r *reader) complete() {
 	line, pre := trimLine(string(r.carry)), r.carryPre
 	r.carry, r.carryPre = r.carry[:0], false
-	claimed := r.c.in != nil && r.c.in.Claim(line)
+	claimed := r.c.in != nil && r.c.in.Claim(driver.LineMessage(line))
 	if r.armed != nil && r.armed.abandoned() {
 		r.armed = nil
 	}
@@ -260,7 +260,7 @@ func (r *reader) complete() {
 		}
 	}
 	if !claimed && r.c.in != nil {
-		r.c.in.Unclaimed(line)
+		r.c.in.Unclaimed(driver.LineMessage(line))
 	}
 }
 

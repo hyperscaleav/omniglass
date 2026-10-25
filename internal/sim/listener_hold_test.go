@@ -27,7 +27,8 @@ type evtInbound struct {
 	got  chan string
 }
 
-func (in *evtInbound) Claim(line string) bool {
+func (in *evtInbound) Claim(msg driver.Message) bool {
+	line := msg.Data
 	if !strings.HasPrefix(line, "EVT ") {
 		return false
 	}
@@ -41,7 +42,7 @@ func (in *evtInbound) Claim(line string) bool {
 	return true
 }
 
-func (in *evtInbound) Unclaimed(string) {}
+func (in *evtInbound) Unclaimed(driver.Message) {}
 
 func TestPanelListenerHearsPushesAndReArms(t *testing.T) {
 	if testing.Short() {

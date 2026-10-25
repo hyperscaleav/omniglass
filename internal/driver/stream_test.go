@@ -19,7 +19,7 @@ func streamSpec() *driver.Spec {
 	s := httpSpec()
 	s.Session.Stream = &driver.Request{Path: "/api/events"}
 	s.Listeners = []driver.Listener{{
-		Name: "volume",
+		Name:  "volume",
 		Match: driver.Match{Event: "change", Field: &driver.FieldMatch{Path: "path", Equals: "status.audio.volume"}},
 		Emits: []driver.Emit{{Name: "volume", Extract: driver.Extract{JSONPath: "value"}}},
 	}}

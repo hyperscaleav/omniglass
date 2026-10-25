@@ -237,7 +237,7 @@ func (c *DatagramConn) read() {
 // no listener claims answers; an unclaimed line matching the error shape
 // answers as the component's refusal; whatever is left is unclaimed.
 func (c *DatagramConn) route(line string) {
-	claimed := c.cfg.Inbound != nil && c.cfg.Inbound.Claim(line)
+	claimed := c.cfg.Inbound != nil && c.cfg.Inbound.Claim(driver.LineMessage(line))
 	c.mu.Lock()
 	if g := c.ghost; !claimed && g.absorbs(line, time.Now()) {
 		g.remaining--
@@ -259,7 +259,7 @@ func (c *DatagramConn) route(line string) {
 		}
 	}
 	if !claimed && c.cfg.Inbound != nil {
-		c.cfg.Inbound.Unclaimed(line)
+		c.cfg.Inbound.Unclaimed(driver.LineMessage(line))
 	}
 }
 

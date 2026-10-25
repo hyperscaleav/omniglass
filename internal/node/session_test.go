@@ -350,26 +350,26 @@ func TestListenerRouterClaimsAndCountsTheRest(t *testing.T) {
 	r := newListenerRouter(c.hooks(&transitionLog{}))
 	r.set(w.listeners, w.policy)
 
-	if !r.Claim("EVT INPUT hdmi2") {
+	if !r.Claim(driver.LineMessage("EVT INPUT hdmi2")) {
 		t.Fatal("the listener did not claim its line")
 	}
 	got := c.samplesOf("l1")
 	if len(got) != 1 || got[0].Name != "video-input" || got[0].Text != "hdmi2" || !got[0].IsText {
 		t.Fatalf("pushed samples = %+v, want video-input hdmi2 under the listen task", got)
 	}
-	if r.Claim("INPUT hdmi1") {
+	if r.Claim(driver.LineMessage("INPUT hdmi1")) {
 		t.Fatal("a line the match rule does not pick was claimed")
 	}
 	// A claimed line whose emit does not extract lands one fault, not one
 	// per repeat.
-	r.Claim("EVT VOLUME 3")
-	r.Claim("EVT VOLUME 3")
+	r.Claim(driver.LineMessage("EVT VOLUME 3"))
+	r.Claim(driver.LineMessage("EVT VOLUME 3"))
 	if f := c.faultsOf("l1"); len(f) != 1 {
 		t.Fatalf("faults = %v, want one for the unextractable push", f)
 	}
 
-	r.Unclaimed("NOISE 1")
-	r.Unclaimed("NOISE 2")
+	r.Unclaimed(driver.LineMessage("NOISE 1"))
+	r.Unclaimed(driver.LineMessage("NOISE 2"))
 	n, last, policy := r.drain()
 	if n != 2 || last != "NOISE 2" || policy != driver.UnmatchedDiscard {
 		t.Fatalf("drain = %d, %q, %q; want the count, the last line, and the default discard", n, last, policy)
@@ -391,8 +391,8 @@ func TestSessionManagerFlushesUnclaimedByPolicy(t *testing.T) {
 	defer m.closeAll()
 	m.reconcile([]collection.TaskSpec{task})
 	h := m.held["ep-1"]
-	h.router.Unclaimed("NOISE")
-	h.router.Unclaimed("MORE NOISE")
+	h.router.Unclaimed(driver.LineMessage("NOISE"))
+	h.router.Unclaimed(driver.LineMessage("MORE NOISE"))
 	m.flushUnclaimed()
 	f := c.faultsOf("l1")
 	if len(f) != 1 || !strings.Contains(f[0], "2 ") || !strings.Contains(f[0], "MORE NOISE") {
