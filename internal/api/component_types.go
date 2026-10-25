@@ -82,7 +82,7 @@ type listComponentTypesOutput struct {
 }
 
 type componentTypePathInput struct {
-	ID string `path:"id" doc:"The component_type id"`
+	ID string `path:"id" doc:"The component type, by name or uuid" example:"display"`
 }
 
 type createComponentTypeInput struct {
@@ -102,7 +102,7 @@ type createComponentTypeInput struct {
 }
 
 type updateComponentTypeInput struct {
-	ID   string `path:"id"`
+	ID   string `path:"id" doc:"The component type, by name or uuid" example:"display"`
 	Body struct {
 		Label *string `json:"label,omitempty" doc:"A new operator-facing label"`
 		// Create's rule with one alternation added, and that alternation is the

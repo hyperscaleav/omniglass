@@ -87,6 +87,10 @@ type param struct {
 
 type paramSchema struct {
 	Type string `json:"type"`
+	// Examples carries a path parameter's `example:` tag (Huma writes it into
+	// the parameter's schema), which the command's Example line shows in place
+	// of a placeholder (#1133), so the CLI's help teaches a name, not <id>.
+	Examples []any `json:"examples"`
 }
 
 type requestBody struct {
@@ -154,11 +158,14 @@ type command struct {
 	Method  string   // GET, POST, ...
 	APIPath string   // Go format template, e.g. /api/v1/locations/%s
 	Args    []string // positional arg names, in path order
-	Body    []bodyField
-	Query   []queryField // OpenAPI query parameters, as optional flags
-	Short   string
-	Long    string
-	Example string
+	// ArgExamples parallels Args: the OpenAPI example for that path parameter,
+	// or "" where it has none.
+	ArgExamples []string
+	Body        []bodyField
+	Query       []queryField // OpenAPI query parameters, as optional flags
+	Short       string
+	Long        string
+	Example     string
 }
 
 type bodyField struct {
@@ -312,28 +319,45 @@ func buildCommand(doc spec, base, path, method string, op operation) command {
 	// method fuses the param and the verb in one segment ({id}:archive); the param
 	// still binds as a positional arg and the ":verb" suffix stays literal.
 	apiPath := base
-	var args []string
+	var args, argExamples []string
 	for _, seg := range splitPath(path) {
 		if name, suffix, ok := pathParamSeg(seg); ok {
 			apiPath += "/%s" + suffix
 			args = append(args, name)
+			argExamples = append(argExamples, pathParamExample(op, name))
 		} else {
 			apiPath += "/" + seg
 		}
 	}
 
 	c := command{
-		Words:   words,
-		Method:  strings.ToUpper(method),
-		APIPath: apiPath,
-		Args:    args,
-		Short:   op.Summary,
-		Long:    op.Description,
+		Words:       words,
+		Method:      strings.ToUpper(method),
+		APIPath:     apiPath,
+		Args:        args,
+		ArgExamples: argExamples,
+		Short:       op.Summary,
+		Long:        op.Description,
 	}
 	c.Body = bodyFields(doc, op)
 	c.Query = queryFields(op)
-	c.Example = example(words, args, c.Body)
+	c.Example = example(words, args, argExamples, c.Body)
 	return c
+}
+
+// pathParamExample is the first example the operation's path parameter carries,
+// as a string, or "" when it carries none.
+func pathParamExample(op operation, name string) string {
+	for _, p := range op.Parameters {
+		if p.In != "path" || p.Name != name || len(p.Schema.Examples) == 0 {
+			continue
+		}
+		if s, ok := p.Schema.Examples[0].(string); ok {
+			return s
+		}
+		return fmt.Sprint(p.Schema.Examples[0])
+	}
+	return ""
 }
 
 // queryFields maps an operation's OpenAPI query parameters (in: query) to
@@ -473,9 +497,13 @@ func bodyFields(doc spec, op operation) []bodyField {
 	return fields
 }
 
-func example(words, args []string, body []bodyField) string {
+func example(words, args, argExamples []string, body []bodyField) string {
 	parts := append([]string{"omniglass"}, words...)
-	for _, a := range args {
+	for i, a := range args {
+		if i < len(argExamples) && argExamples[i] != "" {
+			parts = append(parts, shellWord(argExamples[i]))
+			continue
+		}
 		parts = append(parts, "<"+a+">")
 	}
 	for _, f := range body {
@@ -484,6 +512,19 @@ func example(words, args []string, body []bodyField) string {
 		}
 	}
 	return "  " + strings.Join(parts, " ")
+}
+
+// shellWord renders a value as one shell word that runs as printed: bare when
+// it holds nothing a POSIX shell would expand or split, otherwise single-quoted
+// (a single quote inside closing, escaping and reopening the quote). A dotted
+// address carries a $comp accessor, which an unquoted shell would expand away.
+func shellWord(v string) string {
+	if v != "" && strings.IndexFunc(v, func(r rune) bool {
+		return !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune("-_./:@%+=,", r))
+	}) < 0 {
+		return v
+	}
+	return "'" + strings.ReplaceAll(v, "'", `'\''`) + "'"
 }
 
 // placeholder is what a required flag shows in the rendered example. A string

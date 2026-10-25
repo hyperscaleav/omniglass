@@ -63,25 +63,25 @@ type listPrincipalsOutput struct {
 }
 
 type principalPathInput struct {
-	ID string `path:"id" doc:"The principal, addressed by its uuid or a human username"`
+	ID string `path:"id" doc:"The principal, addressed by its uuid, a human's username, or a service account's name"`
 }
 
 type resetPasswordInput struct {
-	ID   string `path:"id" doc:"The principal, addressed by its uuid or a human username"`
+	ID   string `path:"id" doc:"The principal, addressed by its uuid, a human's username, or a service account's name"`
 	Body struct {
 		Password string `json:"password" minLength:"12" maxLength:"256" doc:"The new password (at least 12 characters, not a common password, not containing the username)"`
 	}
 }
 
 type setAvatarInput struct {
-	ID   string `path:"id" doc:"The principal, addressed by its uuid or a human username"`
+	ID   string `path:"id" doc:"The principal, addressed by its uuid, a human's username, or a service account's name"`
 	Body struct {
 		ImageBase64 string `json:"image_base64" doc:"The image (JPEG, PNG, or WebP), base64-encoded; normalized server-side to a 256x256 JPEG"`
 	}
 }
 
 type avatarPathInput struct {
-	ID string `path:"id" doc:"The principal, addressed by its uuid or a human username"`
+	ID string `path:"id" doc:"The principal, addressed by its uuid, a human's username, or a service account's name"`
 }
 
 // avatarOutput carries a principal's profile picture as base64. The read side is a
@@ -108,7 +108,7 @@ type createPrincipalInput struct {
 }
 
 type updatePrincipalInput struct {
-	ID   string `path:"id" doc:"The principal, addressed by its uuid or a human username"`
+	ID   string `path:"id" doc:"The principal, addressed by its uuid, a human's username, or a service account's name"`
 	Body struct {
 		Label    *string `json:"label,omitempty" maxLength:"200" doc:"Label; empty clears it"`
 		Email    *string `json:"email,omitempty" maxLength:"320" doc:"Email; empty clears it"`
@@ -117,11 +117,11 @@ type updatePrincipalInput struct {
 }
 
 type createGrantInput struct {
-	ID   string `path:"id" doc:"The principal, addressed by its uuid or a human username"`
+	ID   string `path:"id" doc:"The principal, addressed by its uuid, a human's username, or a service account's name"`
 	Body struct {
 		Role      string `json:"role" minLength:"1" doc:"A role id (viewer, operator, admin, owner, or a custom role)"`
 		ScopeKind string `json:"scope_kind" enum:"all,location,system,component" doc:"The scope kind; 'all' confers the whole fleet (group-as-scope is unbuilt and not offered)"`
-		ScopeID   string `json:"scope_id,omitempty" doc:"The scope root id; omit for the all scope"`
+		ScopeID   string `json:"scope_id,omitempty" doc:"The scope root, the location, system or component the scope kind names, by name, dotted address or uuid (stored as its uuid); omit for the all scope"`
 		ScopeOp   string `json:"scope_op,omitempty" enum:"subtree,subtree_excl_root,self" doc:"How the scope root matches the tree: subtree (root + descendants, the default), subtree_excl_root (descendants only for update/delete, root kept for read/create), or self (the root row only). Moot for the all scope."`
 	}
 }
@@ -131,7 +131,7 @@ type grantOutput struct {
 }
 
 type revokeGrantInput struct {
-	ID      string `path:"id" doc:"The principal, addressed by its uuid or a human username"`
+	ID      string `path:"id" doc:"The principal, addressed by its uuid, a human's username, or a service account's name"`
 	GrantID string `path:"grantId" doc:"The grant's id (uuid)"`
 }
 
@@ -145,14 +145,14 @@ type listPrincipalSessionsOutput struct {
 
 // revokePrincipalSessionInput addresses one of a target principal's credentials.
 type revokePrincipalSessionInput struct {
-	ID  string `path:"id" doc:"The principal, addressed by its uuid or a human username"`
+	ID  string `path:"id" doc:"The principal, addressed by its uuid, a human's username, or a service account's name"`
 	SID string `path:"sid" doc:"The credential id to revoke (from the principal's session list)"`
 }
 
 // revokeAllPrincipalSessionsInput bulk-revokes one purpose of a target's credentials
 // (all sessions, or all tokens), chosen by the body's purpose enum.
 type revokeAllPrincipalSessionsInput struct {
-	ID   string `path:"id" doc:"The principal, addressed by its uuid or a human username"`
+	ID   string `path:"id" doc:"The principal, addressed by its uuid, a human's username, or a service account's name"`
 	Body struct {
 		Purpose string `json:"purpose" enum:"session,token" doc:"Which credentials to revoke: all of the principal's web-login sessions, or all its CLI/API tokens"`
 	}
@@ -682,6 +682,9 @@ func normalizeAvatar(imageB64 string) (string, error) {
 // username is caught).
 func (a *authenticator) resolvePrincipalRef(ctx context.Context, ref string) (string, error) {
 	id, err := a.gw.ResolvePrincipalRef(ctx, ref)
+	if refErr, ok := mapRefErr(err); ok {
+		return "", refErr
+	}
 	switch {
 	case errors.Is(err, storage.ErrPrincipalNotFound):
 		return "", huma.Error404NotFound("principal not found")
@@ -692,6 +695,9 @@ func (a *authenticator) resolvePrincipalRef(ctx context.Context, ref string) (st
 }
 
 func mapPrincipalErr(err error) error {
+	if refErr, ok := mapRefErr(err); ok {
+		return refErr
+	}
 	switch {
 	case errors.Is(err, storage.ErrPrincipalNotFound):
 		return huma.Error404NotFound("principal not found")
@@ -712,7 +718,7 @@ func mapPrincipalErr(err error) error {
 	case errors.Is(err, storage.ErrUnknownRole):
 		return huma.Error422UnprocessableEntity("unknown role")
 	case errors.Is(err, storage.ErrBadScope):
-		return huma.Error422UnprocessableEntity("a scoped grant needs a scope_id")
+		return huma.Error422UnprocessableEntity("a scoped grant needs a scope_id naming an existing location, system or component of its scope_kind")
 	case errors.Is(err, storage.ErrGroupNotFound):
 		return huma.Error404NotFound("group not found")
 	case errors.Is(err, storage.ErrGroupExists):

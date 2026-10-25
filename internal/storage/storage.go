@@ -55,9 +55,11 @@ type Gateway interface {
 	// principal, its kind profile, and its grants. Returns ErrCredentialNotFound
 	// if no credential matches.
 	AuthenticateBearer(ctx context.Context, hash []byte) (*Principal, error)
-	// ResolvePrincipalRef maps a principal reference (a uuid or a human username) to
-	// the principal id: a uuid passes through, a username is looked up, and an unknown
-	// username is ErrPrincipalNotFound. Backs addressing a principal by username.
+	// ResolvePrincipalRef maps a principal reference (a uuid, a human username, or
+	// a service account's name, #1133) to the principal id: a uuid passes through,
+	// a name is looked up, an unknown one is ErrPrincipalNotFound, and one that is
+	// both a username and a service name is refused. Backs addressing a principal
+	// by name.
 	ResolvePrincipalRef(ctx context.Context, ref string) (string, error)
 	// The impersonation surface: an admin views/acts as another principal, audited
 	// with the real actor. BeginImpersonation persists a session (the API enforces
@@ -107,23 +109,25 @@ type Gateway interface {
 	// group management is all-scope admin work (like the principal directory). A
 	// member's effective grants are its direct grants unioned with its groups'
 	// grants, resolved in the grant loader, so a group grant scopes and flattens
-	// exactly like a direct one.
+	// exactly like a direct one. Every group reference is the group's uuid or its
+	// name, and a member's is a uuid, username or service account name (#1133),
+	// each resolved after the all-scope check.
 	CreateGroup(ctx context.Context, actorID string, spec GroupSpec, action scope.Set) (*Group, error)
 	ListGroups(ctx context.Context, read scope.Set) ([]Group, error)
-	GetGroup(ctx context.Context, id string, read scope.Set) (*Group, error)
-	UpdateGroup(ctx context.Context, actorID, id string, patch GroupPatch, action scope.Set) (*Group, error)
+	GetGroup(ctx context.Context, ref string, read scope.Set) (*Group, error)
+	UpdateGroup(ctx context.Context, actorID, ref string, patch GroupPatch, action scope.Set) (*Group, error)
 	// RenameGroup moves the group's name. Its own function, not a patch field,
 	// because a rename breaks the references an operator stored outside this
 	// system; the API gates it on principal_group:rename.
-	RenameGroup(ctx context.Context, actorID, id, newName string, action scope.Set) (*Group, error)
-	DeleteGroup(ctx context.Context, actorID, id string, action scope.Set) error
-	AddGroupMember(ctx context.Context, actorID, groupID, principalID string, action scope.Set) error
-	RemoveGroupMember(ctx context.Context, actorID, groupID, principalID string, action scope.Set) error
-	ListGroupMembers(ctx context.Context, groupID string, read scope.Set) ([]GroupMember, error)
+	RenameGroup(ctx context.Context, actorID, ref, newName string, action scope.Set) (*Group, error)
+	DeleteGroup(ctx context.Context, actorID, ref string, action scope.Set) error
+	AddGroupMember(ctx context.Context, actorID, groupRef, principalRef string, action scope.Set) error
+	RemoveGroupMember(ctx context.Context, actorID, groupRef, principalRef string, action scope.Set) error
+	ListGroupMembers(ctx context.Context, groupRef string, read scope.Set) ([]GroupMember, error)
 	ListGroupsForPrincipal(ctx context.Context, principalID string, read scope.Set) ([]Group, error)
-	CreateGroupGrant(ctx context.Context, actorID, groupID string, spec GrantSpec, action scope.Set) (*Grant, error)
-	RevokeGroupGrant(ctx context.Context, actorID, groupID, grantID string, action scope.Set) error
-	ListGroupGrants(ctx context.Context, groupID string, read scope.Set) ([]Grant, error)
+	CreateGroupGrant(ctx context.Context, actorID, groupRef string, spec GrantSpec, action scope.Set) (*Grant, error)
+	RevokeGroupGrant(ctx context.Context, actorID, groupRef, grantID string, action scope.Set) error
+	ListGroupGrants(ctx context.Context, groupRef string, read scope.Set) ([]Grant, error)
 	// SetPrincipalActive enables or disables a principal (soft), audited. Requires
 	// an all-scope grant. Disabling the last active owner is ErrLastOwner; a
 	// disabled principal cannot authenticate.
@@ -418,19 +422,21 @@ type Gateway interface {
 	// (endpoint.component), so every method's scope cascades THROUGH that component
 	// (a component-tier scope.Set, from applicableKinds). A component-less
 	// (server-hosted) endpoint is reachable only under an all scope. The read/action
-	// split drives the non-disclosing 404 versus 403.
+	// split drives the non-disclosing 404 versus 403. An endpoint reference is its
+	// uuid or `<component>/<endpoint name>` (#1133), resolved within the read scope
+	// and then checked exactly as a uuid is.
 	ListEndpoints(ctx context.Context, read scope.Set) ([]Endpoint, error)
-	GetEndpoint(ctx context.Context, id string, read scope.Set) (*Endpoint, error)
+	GetEndpoint(ctx context.Context, ref string, read scope.Set) (*Endpoint, error)
 	CreateEndpoint(ctx context.Context, actorID string, spec EndpointSpec, create scope.Set) (*Endpoint, error)
-	UpdateEndpoint(ctx context.Context, actorID, id string, patch EndpointPatch, read, action scope.Set) (*Endpoint, error)
+	UpdateEndpoint(ctx context.Context, actorID, ref string, patch EndpointPatch, read, action scope.Set) (*Endpoint, error)
 	// RetryEndpoint is an operator's retry of the endpoint's held session
 	// (#1049): it moves the endpoint's revision, which wakes a rejected
 	// session for one attempt, and is audited.
 	// pin, when set, is the key the operator now trusts (a replaced
 	// component's ssh host key, or a tls certificate's public key),
 	// declared as the endpoint's pin.
-	RetryEndpoint(ctx context.Context, actorID, id string, pin RetryPin, read, action scope.Set) (*Endpoint, error)
-	DeleteEndpoint(ctx context.Context, actorID, id string, read, action scope.Set) error
+	RetryEndpoint(ctx context.Context, actorID, ref string, pin RetryPin, read, action scope.Set) (*Endpoint, error)
+	DeleteEndpoint(ctx context.Context, actorID, ref string, read, action scope.Set) error
 
 	// The task tier: read-only over DERIVED collection work. A task is not
 	// operator-authored: it is derived when an interface is created (the node's
@@ -669,23 +675,26 @@ type Gateway interface {
 	// It gates admin-sensitive secrets: those are hidden from a lister/resolver
 	// without it, refused to a revealer/updater/deleter without it (non-disclosing),
 	// and cannot be created by a caller without it. Placement scope still fences
-	// where; canAdmin fences the sensitivity tier.
+	// where; canAdmin fences the sensitivity tier. A secret reference is its uuid,
+	// its name, or `<owner>/<name>` (#1133), resolved among the secrets the caller
+	// may see before the read/action split runs on the row it names.
 	ListSecrets(ctx context.Context, read scope.Set, canAdmin bool) ([]Secret, error)
 	CreateSecret(ctx context.Context, actorID string, spec SecretSpec, create scope.Set, canAdmin bool) (*Secret, error)
-	UpdateSecret(ctx context.Context, actorID, id string, patch SecretPatch, read, action scope.Set, canAdmin, canPlatform bool) (*Secret, error)
-	DeleteSecret(ctx context.Context, actorID, id string, read, action scope.Set, canAdmin, canPlatform bool) error
-	RevealSecret(ctx context.Context, actorID, id string, read, action scope.Set, canAdmin bool) (map[string]string, error)
-	CopySecret(ctx context.Context, actorID, id string, read, action scope.Set, canAdmin bool) (map[string]string, error)
+	UpdateSecret(ctx context.Context, actorID, ref string, patch SecretPatch, read, action scope.Set, canAdmin, canPlatform bool) (*Secret, error)
+	DeleteSecret(ctx context.Context, actorID, ref string, read, action scope.Set, canAdmin, canPlatform bool) error
+	RevealSecret(ctx context.Context, actorID, ref string, read, action scope.Set, canAdmin bool) (map[string]string, error)
+	CopySecret(ctx context.Context, actorID, ref string, read, action scope.Set, canAdmin bool) (map[string]string, error)
 	ResolveSecrets(ctx context.Context, componentID string, read scope.Set, canAdmin bool) ([]ResolvedSecret, error)
 
 	// The variable tier: a typed, cascade-resolved plaintext value (a macro),
 	// owned on the same exclusive arc as a secret but shown in the clear (no
 	// registry, no crypto, no reveal). ResolveVariables is the per-component
-	// effective-value view down the structural cascade.
+	// effective-value view down the structural cascade. A variable reference is
+	// addressed the way a secret's is (#1133).
 	ListVariables(ctx context.Context, read scope.Set) ([]Variable, error)
 	CreateVariable(ctx context.Context, actorID string, spec VariableSpec, create scope.Set) (*Variable, error)
-	UpdateVariable(ctx context.Context, actorID, id string, patch VariablePatch, read, action scope.Set, canPlatform bool) (*Variable, error)
-	DeleteVariable(ctx context.Context, actorID, id string, read, action scope.Set, canPlatform bool) error
+	UpdateVariable(ctx context.Context, actorID, ref string, patch VariablePatch, read, action scope.Set, canPlatform bool) (*Variable, error)
+	DeleteVariable(ctx context.Context, actorID, ref string, read, action scope.Set, canPlatform bool) error
 	ResolveVariables(ctx context.Context, componentID string, read scope.Set) ([]ResolvedVariable, error)
 
 	// The declared-property tier, the fold of the fields feature onto the fleet
@@ -860,12 +869,13 @@ type Gateway interface {
 	// scope; canAdmin gates the per-file sensitive flag (the :admin tier), mirroring
 	// the secret sensitivity axis. CreateFile stores the upload as a deduplicated
 	// blob and points the handle at it; DeleteFile drops the handle but leaves the
-	// blob (GC is a later slice).
+	// blob (GC is a later slice). A file reference is its uuid or its filename
+	// (#1133), the filename resolving only where exactly one visible file has it.
 	ListFiles(ctx context.Context, canAdmin bool) ([]File, error)
-	GetFile(ctx context.Context, id string, canAdmin bool) (*File, error)
+	GetFile(ctx context.Context, ref string, canAdmin bool) (*File, error)
 	CreateFile(ctx context.Context, actorID string, spec FileSpec, canAdmin bool) (*File, error)
-	DownloadFile(ctx context.Context, id string, canAdmin bool) (*File, []byte, error)
-	DeleteFile(ctx context.Context, actorID, id string, canAdmin bool) error
+	DownloadFile(ctx context.Context, ref string, canAdmin bool) (*File, []byte, error)
+	DeleteFile(ctx context.Context, actorID, ref string, canAdmin bool) error
 
 	// The settings engine (unscoped: platform config, not fleet data, so no ABAC
 	// scope applies; the route gates on settings:<action> only). The single

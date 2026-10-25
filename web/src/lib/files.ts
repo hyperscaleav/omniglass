@@ -37,7 +37,7 @@ export async function listFiles(): Promise<FileRow[]> {
 }
 
 export async function getFile(id: string): Promise<FileRow> {
-  const { data, error } = await api.GET("/files/{id}", { params: { path: { id } } });
+  const { data, error } = await api.GET("/files/{file}", { params: { path: { file: id } } });
   if (error) throw error;
   return data as FileRow;
 }
@@ -59,13 +59,13 @@ export async function createFile(input: CreateFile): Promise<FileRow> {
 
 // downloadFile reads a file's bytes back (base64), the hash verified server-side.
 export async function downloadFile(id: string): Promise<FileDownload> {
-  const { data, error } = await api.GET("/files/{id}:download", { params: { path: { id } } });
+  const { data, error } = await api.GET("/files/{file}:download", { params: { path: { file: id } } });
   if (error) throw error;
   return data as FileDownload;
 }
 
 export async function deleteFile(id: string): Promise<void> {
-  const { error } = await api.DELETE("/files/{id}", { params: { path: { id } } });
+  const { error } = await api.DELETE("/files/{file}", { params: { path: { file: id } } });
   if (error) throw error;
 }
 

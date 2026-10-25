@@ -345,3 +345,31 @@ func TestTypeRegistryCommandNames(t *testing.T) {
 		}
 	}
 }
+
+// TestExampleShowsThePathParamExample keeps the CLI's examples on names (#1133):
+// a path parameter whose OpenAPI schema carries an example renders that example
+// in the command's Example line instead of a <placeholder>, and a value the
+// shell would expand (a dotted address's $comp accessor) is single-quoted so the
+// line runs as printed. A parameter with no example keeps its placeholder.
+func TestExampleShowsThePathParamExample(t *testing.T) {
+	const opRaw = `{"operationId":"retry-endpoint","parameters":[
+	  {"name":"endpoint","in":"path","required":true,"schema":{"type":"string","examples":["boi.17c.415a.$comp.display-1/https"]}},
+	  {"name":"grantId","in":"path","required":true,"schema":{"type":"string"}}
+	]}`
+	var op operation
+	if err := json.Unmarshal([]byte(opRaw), &op); err != nil {
+		t.Fatalf("op: %v", err)
+	}
+	cmd := buildCommand(spec{}, "/api/v1", "/endpoints/{endpoint}/grants/{grantId}:retry", "post", op)
+	want := `omniglass endpoint grant retry 'boi.17c.415a.$comp.display-1/https' <grantId>`
+	if strings.TrimSpace(cmd.Example) != want {
+		t.Errorf("example = %q, want %q", strings.TrimSpace(cmd.Example), want)
+	}
+
+	if got := shellWord("demo-panel-login"); got != "demo-panel-login" {
+		t.Errorf("shellWord(a plain name) = %q, want it bare", got)
+	}
+	if got := shellWord("it's here"); got != `'it'\''s here'` {
+		t.Errorf("shellWord(a quote) = %q, want it escaped inside single quotes", got)
+	}
+}

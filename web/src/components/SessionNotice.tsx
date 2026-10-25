@@ -30,7 +30,7 @@ import {
 // reachability probe alone (a tls certificate, a udp terminal reply, an snmp
 // authorizationError, an ssh probe's credential) reads the same as a rejected
 // session (#1110). Retry moves the endpoint's retry counter (POST
-// /endpoints/{id}:retry, audited), so the node tries once more; it greys with
+// /endpoints/{endpoint}:retry, audited), so the node tries once more; it greys with
 // its reason for a caller without endpoint:retry (a hint only, the server is
 // the authority and says why it refused). The fix path is the host's: the
 // endpoint blade begins its own edit, where the credential is one of the

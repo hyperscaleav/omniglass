@@ -36,7 +36,7 @@ type listVendorsOutput struct {
 }
 
 type vendorPathInput struct {
-	ID string `path:"id" doc:"The vendor id"`
+	ID string `path:"id" doc:"The vendor, by name or uuid" example:"boreal"`
 }
 
 type createVendorInput struct {
@@ -51,7 +51,7 @@ type createVendorInput struct {
 }
 
 type updateVendorInput struct {
-	ID   string `path:"id"`
+	ID   string `path:"id" doc:"The vendor, by name or uuid" example:"boreal"`
 	Body struct {
 		Label        *string `json:"label,omitempty" doc:"A new operator-facing label"`
 		Kind         *string `json:"kind,omitempty" enum:"manufacturer,integrator,developer" doc:"A new organization role"`

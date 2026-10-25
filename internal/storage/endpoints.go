@@ -328,9 +328,14 @@ func (p *PG) ListEndpoints(ctx context.Context, read scope.Set) ([]Endpoint, err
 	return out, rows.Err()
 }
 
-// GetEndpoint resolves an endpoint by id within the caller's read scope;
-// absent or out of scope is the same non-disclosing ErrEndpointNotFound.
-func (p *PG) GetEndpoint(ctx context.Context, id string, read scope.Set) (*Endpoint, error) {
+// GetEndpoint resolves an endpoint by reference (its uuid, or
+// `<component>/<endpoint name>`, #1133) within the caller's read scope; absent
+// or out of scope is the same non-disclosing ErrEndpointNotFound.
+func (p *PG) GetEndpoint(ctx context.Context, ref string, read scope.Set) (*Endpoint, error) {
+	id, err := endpointIDByRef(ctx, p.pool, ref, read)
+	if err != nil {
+		return nil, err
+	}
 	it, err := loadEndpoint(ctx, p.pool, id)
 	if err != nil {
 		return nil, err
@@ -459,14 +464,14 @@ func (p *PG) createEndpointTx(ctx context.Context, tx pgx.Tx, actorID string, sp
 // and in-transaction audit. Type and component rebind are deferred, and the name
 // is not patchable at all: it is derived from the type, so the label is the only
 // identity string this route moves.
-func (p *PG) UpdateEndpoint(ctx context.Context, actorID, id string, patch EndpointPatch, read, action scope.Set) (*Endpoint, error) {
+func (p *PG) UpdateEndpoint(ctx context.Context, actorID, ref string, patch EndpointPatch, read, action scope.Set) (*Endpoint, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin update endpoint: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	before, err := resolveEndpointScoped(ctx, tx, id, read, action)
+	before, err := resolveEndpointScoped(ctx, tx, ref, read, action)
 	if err != nil {
 		return nil, err
 	}
@@ -679,14 +684,14 @@ func (p *PG) rederiveAttached(ctx context.Context, tx pgx.Tx, driverID, endpoint
 // ErrRetryHostKeyStale and changes nothing, so a trust confirmed against a
 // view the record has since moved past cannot pin a key nobody read.
 // The audit row carries the pin replaced (old) and the pin set (new).
-func (p *PG) RetryEndpoint(ctx context.Context, actorID, id string, pin RetryPin, read, action scope.Set) (*Endpoint, error) {
+func (p *PG) RetryEndpoint(ctx context.Context, actorID, ref string, pin RetryPin, read, action scope.Set) (*Endpoint, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin retry endpoint: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	before, err := resolveEndpointScoped(ctx, tx, id, read, action)
+	before, err := resolveEndpointScoped(ctx, tx, ref, read, action)
 	if err != nil {
 		return nil, err
 	}
@@ -893,14 +898,14 @@ var hostKeyFingerprint = regexp.MustCompile(`^SHA256:[A-Za-z0-9+/]{43}$`)
 // DeleteEndpoint removes an endpoint by id with the read/action split (through
 // the owning component) and in-transaction audit. Its derived tasks cascade-delete
 // with it (task.interface_id ON DELETE CASCADE).
-func (p *PG) DeleteEndpoint(ctx context.Context, actorID, id string, read, action scope.Set) error {
+func (p *PG) DeleteEndpoint(ctx context.Context, actorID, ref string, read, action scope.Set) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("storage: begin delete endpoint: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	before, err := resolveEndpointScoped(ctx, tx, id, read, action)
+	before, err := resolveEndpointScoped(ctx, tx, ref, read, action)
 	if err != nil {
 		return err
 	}
@@ -916,11 +921,18 @@ func (p *PG) DeleteEndpoint(ctx context.Context, actorID, id string, read, actio
 	return nil
 }
 
-// resolveEndpointScoped loads an endpoint and enforces the read-then-action
+// resolveEndpointScoped loads an endpoint by reference (its uuid, or
+// `<component>/<endpoint name>`, #1133) and enforces the read-then-action
 // scope split through its owning component: out of read scope is the
 // non-disclosing ErrEndpointNotFound, readable but out of action scope is
-// ErrEndpointForbidden.
-func resolveEndpointScoped(ctx context.Context, q querier, id string, read, action scope.Set) (*Endpoint, error) {
+// ErrEndpointForbidden. A name resolves to the uuid first, inside the caller's
+// transaction, and the split then runs on the row that uuid loads: the same
+// checks, on the resolved resource, whichever spelling found it.
+func resolveEndpointScoped(ctx context.Context, q querier, ref string, read, action scope.Set) (*Endpoint, error) {
+	id, err := endpointIDByRef(ctx, q, ref, read)
+	if err != nil {
+		return nil, err
+	}
 	it, err := loadEndpoint(ctx, q, id)
 	if err != nil {
 		return nil, err

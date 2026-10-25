@@ -1280,7 +1280,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/endpoints/{id}": {
+    "/endpoints/{endpoint}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1289,7 +1289,7 @@ export interface paths {
         };
         /**
          * Get an endpoint
-         * @description Fetches an endpoint by id. An endpoint whose component is out of the caller's read scope is a non-disclosing 404. Gated by endpoint:read.
+         * @description Fetches an endpoint by its address (<component>/<endpoint name>) or uuid. An endpoint whose component is out of the caller's read scope is a non-disclosing 404, and a name no endpoint the caller can see answers to is a 404 naming what was looked up (listing each match when more than one does). Gated by endpoint:read.
          */
         get: operations["get-endpoint"];
         put?: never;
@@ -1308,7 +1308,7 @@ export interface paths {
         patch: operations["update-endpoint"];
         trace?: never;
     };
-    "/endpoints/{id}:retry": {
+    "/endpoints/{endpoint}:retry": {
         parameters: {
             query?: never;
             header?: never;
@@ -1536,7 +1536,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/files/{id}": {
+    "/files/{file}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1560,7 +1560,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/files/{id}:download": {
+    "/files/{file}:download": {
         parameters: {
             query?: never;
             header?: never;
@@ -2400,7 +2400,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/principal-groups/{id}": {
+    "/principal-groups/{group}": {
         parameters: {
             query?: never;
             header?: never;
@@ -2409,7 +2409,7 @@ export interface paths {
         };
         /**
          * Get a principal group
-         * @description One principal group by id. Gated by principal_group:read:admin.
+         * @description One principal group, by name or uuid. Gated by principal_group:read:admin.
          */
         get: operations["get-group"];
         put?: never;
@@ -2428,7 +2428,7 @@ export interface paths {
         patch: operations["update-group"];
         trace?: never;
     };
-    "/principal-groups/{id}/grants": {
+    "/principal-groups/{group}/grants": {
         parameters: {
             query?: never;
             header?: never;
@@ -2452,7 +2452,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/principal-groups/{id}/grants/{grantId}": {
+    "/principal-groups/{group}/grants/{grantId}": {
         parameters: {
             query?: never;
             header?: never;
@@ -2472,7 +2472,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/principal-groups/{id}/members": {
+    "/principal-groups/{group}/members": {
         parameters: {
             query?: never;
             header?: never;
@@ -2496,7 +2496,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/principal-groups/{id}/members/{principalId}": {
+    "/principal-groups/{group}/members/{principal}": {
         parameters: {
             query?: never;
             header?: never;
@@ -2516,7 +2516,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/principal-groups/{id}:rename": {
+    "/principal-groups/{group}:rename": {
         parameters: {
             query?: never;
             header?: never;
@@ -3140,7 +3140,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/secrets/{id}": {
+    "/secrets/{secret}": {
         parameters: {
             query?: never;
             header?: never;
@@ -3152,7 +3152,7 @@ export interface paths {
         post?: never;
         /**
          * Delete a secret
-         * @description Removes a secret by id. Gated by secret:delete, plus platform:delete when the secret sits at the platform tier; read and delete scopes on the owner drive the 404 versus 403 split.
+         * @description Removes a secret, by name or uuid. Gated by secret:delete, plus platform:delete when the secret sits at the platform tier; read and delete scopes on the owner drive the 404 versus 403 split.
          */
         delete: operations["delete-secret"];
         options?: never;
@@ -3164,7 +3164,7 @@ export interface paths {
         patch: operations["update-secret"];
         trace?: never;
     };
-    "/secrets/{id}:copy": {
+    "/secrets/{secret}:copy": {
         parameters: {
             query?: never;
             header?: never;
@@ -3184,7 +3184,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/secrets/{id}:reveal": {
+    "/secrets/{secret}:reveal": {
         parameters: {
             query?: never;
             header?: never;
@@ -4452,7 +4452,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/variables/{id}": {
+    "/variables/{variable}": {
         parameters: {
             query?: never;
             header?: never;
@@ -4464,7 +4464,7 @@ export interface paths {
         post?: never;
         /**
          * Delete a variable
-         * @description Removes a variable by id. Gated by variable:delete, plus platform:delete when the variable sits at the platform tier; read and delete scopes on the owner drive the 404 versus 403 split.
+         * @description Removes a variable, by name or uuid. Gated by variable:delete, plus platform:delete when the variable sits at the platform tier; read and delete scopes on the owner drive the 404 versus 403 split.
          */
         delete: operations["delete-variable"];
         options?: never;
@@ -4569,7 +4569,7 @@ export interface components {
              * @example /api/v1/schemas/AddMemberInputBody.json
              */
             readonly $schema?: string;
-            /** @description The principal to add to the group */
+            /** @description The principal to add: a human's username, a service account's name, or its uuid */
             principal_id: string;
         };
         AddSimComponentInputBody: {
@@ -5551,7 +5551,7 @@ export interface components {
             readonly $schema?: string;
             /** @description A role id (viewer, operator, admin, owner, or a custom role) */
             role: string;
-            /** @description The scope root id; omit for the all scope */
+            /** @description The scope root, the location, system or component the scope kind names, by name, dotted address or uuid (stored as its uuid); omit for the all scope */
             scope_id?: string;
             /**
              * @description The scope kind; 'all' confers the whole fleet (group-as-scope is unbuilt and not offered)
@@ -5573,7 +5573,7 @@ export interface components {
             readonly $schema?: string;
             /** @description A role id (viewer, operator, admin, owner, or a custom role) */
             role: string;
-            /** @description The scope root id; omit for the all scope */
+            /** @description The scope root, the location, system or component the scope kind names, by name, dotted address or uuid (stored as its uuid); omit for the all scope */
             scope_id?: string;
             /**
              * @description The scope kind; 'all' confers the whole fleet (group-as-scope is unbuilt and not offered)
@@ -6168,7 +6168,7 @@ export interface components {
             driver?: string;
             /** @description The attached driver's id; the stable form of driver */
             driver_id?: string;
-            /** @description The endpoint's surrogate id (the address) */
+            /** @description The endpoint's uuid, the stable handle; <component>/<name> is the address an operator types */
             id: string;
             /** @description The effective inputs supplied at attach, defaults baked; secret inputs are reference names, never values */
             inputs?: unknown;
@@ -8005,7 +8005,7 @@ export interface components {
             endpoint: string;
             /** @description The recent verdict transitions, oldest first, for the availability strip */
             history: components["schemas"]["ReachHistoryBody"][] | null;
-            /** @description The endpoint's uuid, the address its custom methods take (POST /endpoints/{id}:retry) */
+            /** @description The endpoint's uuid, the address its custom methods take (POST /endpoints/{endpoint}:retry) */
             id: string;
             /** @description The friendly string an operator reads; absent when unset, and the row then reads the derived name verbatim */
             label?: string;
@@ -8057,7 +8057,7 @@ export interface components {
         ReachRejectionBody: {
             /** @description The refusal's class: auth, host-key, certificate or protocol */
             class: string;
-            /** @description A refusal of a changed key only: the SHA256 fingerprint of the key the component offered instead. Trusting it is POST /endpoints/{id}:retry with this exact value as host_key (a tls or https endpoint also takes it as certificate); while the refusal holds, any other value is refused (409) */
+            /** @description A refusal of a changed key only: the SHA256 fingerprint of the key the component offered instead. Trusting it is POST /endpoints/{endpoint}:retry with this exact value as host_key (a tls or https endpoint also takes it as certificate); while the refusal holds, any other value is refused (409) */
             offered_key?: string;
             /** @description A refusal of a changed key only (class host-key, or certificate for a pinned tls key): the SHA256 fingerprint of the key the endpoint pins, as the node refused against it. Present with offered_key or not at all */
             pinned_key?: string;
@@ -10945,7 +10945,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The component_type id */
+                /** @description The component type, by name or uuid */
                 id: string;
             };
             cookie?: never;
@@ -10975,6 +10975,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The component type, by name or uuid */
                 id: string;
             };
             cookie?: never;
@@ -11010,7 +11011,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The component_type id */
+                /** @description The component type, by name or uuid */
                 id: string;
             };
             cookie?: never;
@@ -12410,7 +12411,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The driver id */
+                /** @description The driver, by name or uuid */
                 id: string;
             };
             cookie?: never;
@@ -12442,7 +12443,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The driver id */
+                /** @description The driver, by name or uuid */
                 id: string;
             };
             cookie?: never;
@@ -12472,6 +12473,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The driver, by name or uuid */
                 id: string;
             };
             cookie?: never;
@@ -12569,8 +12571,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The endpoint's surrogate id */
-                id: string;
+                /** @description The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does */
+                endpoint: string;
             };
             cookie?: never;
         };
@@ -12601,8 +12603,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The endpoint's surrogate id */
-                id: string;
+                /** @description The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does */
+                endpoint: string;
             };
             cookie?: never;
         };
@@ -12631,7 +12633,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                id: string;
+                /** @description The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does */
+                endpoint: string;
             };
             cookie?: never;
         };
@@ -12666,8 +12669,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The endpoint's surrogate id */
-                id: string;
+                /** @description The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does */
+                endpoint: string;
             };
             cookie?: never;
         };
@@ -13218,8 +13221,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The file's id */
-                id: string;
+                /** @description The file: its filename, where exactly one file you can see carries it, or its uuid */
+                file: string;
             };
             cookie?: never;
         };
@@ -13250,8 +13253,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The file's id */
-                id: string;
+                /** @description The file: its filename, where exactly one file you can see carries it, or its uuid */
+                file: string;
             };
             cookie?: never;
         };
@@ -13280,8 +13283,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The file's id */
-                id: string;
+                /** @description The file: its filename, where exactly one file you can see carries it, or its uuid */
+                file: string;
             };
             cookie?: never;
         };
@@ -13403,7 +13406,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The location_type id */
+                /** @description The location type, by name or uuid */
                 id: string;
             };
             cookie?: never;
@@ -13433,6 +13436,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The location type, by name or uuid */
                 id: string;
             };
             cookie?: never;
@@ -13468,7 +13472,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The location_type id */
+                /** @description The location type, by name or uuid */
                 id: string;
             };
             cookie?: never;
@@ -13500,7 +13504,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The location type id */
+                /** @description The location type, by name or uuid */
                 id: string;
                 /** @description The metric name */
                 metric: string;
@@ -13538,7 +13542,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The location type id */
+                /** @description The location type, by name or uuid */
                 id: string;
                 /** @description The metric name */
                 metric: string;
@@ -13570,7 +13574,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The location_type id */
+                /** @description The location type, by name or uuid */
                 id: string;
             };
             cookie?: never;
@@ -13602,7 +13606,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The location type id */
+                /** @description The location type, by name or uuid */
                 id: string;
                 /** @description The property name */
                 property: string;
@@ -13640,7 +13644,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The location type id */
+                /** @description The location type, by name or uuid */
                 id: string;
                 /** @description The property name */
                 property: string;
@@ -13672,7 +13676,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The location_type id */
+                /** @description The location type, by name or uuid */
                 id: string;
             };
             cookie?: never;
@@ -15062,8 +15066,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The group's id (uuid) */
-                id: string;
+                /** @description The group, by name or uuid */
+                group: string;
             };
             cookie?: never;
         };
@@ -15094,8 +15098,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The group's id (uuid) */
-                id: string;
+                /** @description The group, by name or uuid */
+                group: string;
             };
             cookie?: never;
         };
@@ -15124,8 +15128,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The group's id (uuid) */
-                id: string;
+                /** @description The group, by name or uuid */
+                group: string;
             };
             cookie?: never;
         };
@@ -15160,8 +15164,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The group's id (uuid) */
-                id: string;
+                /** @description The group, by name or uuid */
+                group: string;
             };
             cookie?: never;
         };
@@ -15192,8 +15196,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The group's id (uuid) */
-                id: string;
+                /** @description The group, by name or uuid */
+                group: string;
             };
             cookie?: never;
         };
@@ -15228,8 +15232,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The group's id (uuid) */
-                id: string;
+                /** @description The group, by name or uuid */
+                group: string;
                 /** @description The grant's id (uuid) */
                 grantId: string;
             };
@@ -15260,8 +15264,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The group's id (uuid) */
-                id: string;
+                /** @description The group, by name or uuid */
+                group: string;
             };
             cookie?: never;
         };
@@ -15292,8 +15296,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The group's id (uuid) */
-                id: string;
+                /** @description The group, by name or uuid */
+                group: string;
             };
             cookie?: never;
         };
@@ -15326,10 +15330,10 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The group's id (uuid) */
-                id: string;
-                /** @description The member principal's id (uuid) */
-                principalId: string;
+                /** @description The group, by name or uuid */
+                group: string;
+                /** @description The member: a human's username, a service account's name, or the principal's uuid */
+                principal: string;
             };
             cookie?: never;
         };
@@ -15358,8 +15362,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The group's id (uuid) */
-                id: string;
+                /** @description The group, by name or uuid */
+                group: string;
             };
             cookie?: never;
         };
@@ -15461,7 +15465,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The principal, addressed by its uuid or a human username */
+                /** @description The principal, addressed by its uuid, a human's username, or a service account's name */
                 id: string;
             };
             cookie?: never;
@@ -15493,7 +15497,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The principal, addressed by its uuid or a human username */
+                /** @description The principal, addressed by its uuid, a human's username, or a service account's name */
                 id: string;
             };
             cookie?: never;
@@ -15529,7 +15533,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The principal, addressed by its uuid or a human username */
+                /** @description The principal, addressed by its uuid, a human's username, or a service account's name */
                 id: string;
             };
             cookie?: never;
@@ -15561,7 +15565,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The principal, addressed by its uuid or a human username */
+                /** @description The principal, addressed by its uuid, a human's username, or a service account's name */
                 id: string;
             };
             cookie?: never;
@@ -15597,7 +15601,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The principal, addressed by its uuid or a human username */
+                /** @description The principal, addressed by its uuid, a human's username, or a service account's name */
                 id: string;
                 /** @description The grant's id (uuid) */
                 grantId: string;
@@ -15629,7 +15633,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The principal, addressed by its uuid or a human username */
+                /** @description The principal, addressed by its uuid, a human's username, or a service account's name */
                 id: string;
             };
             cookie?: never;
@@ -15688,7 +15692,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The principal, addressed by its uuid or a human username */
+                /** @description The principal, addressed by its uuid, a human's username, or a service account's name */
                 id: string;
                 /** @description The credential id to revoke (from the principal's session list) */
                 sid: string;
@@ -15747,7 +15751,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The principal, addressed by its uuid or a human username */
+                /** @description The principal, addressed by its uuid, a human's username, or a service account's name */
                 id: string;
             };
             cookie?: never;
@@ -15810,7 +15814,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The principal, addressed by its uuid or a human username */
+                /** @description The principal, addressed by its uuid, a human's username, or a service account's name */
                 id: string;
             };
             cookie?: never;
@@ -15840,7 +15844,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The principal, addressed by its uuid or a human username */
+                /** @description The principal, addressed by its uuid, a human's username, or a service account's name */
                 id: string;
             };
             cookie?: never;
@@ -15870,7 +15874,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The principal, addressed by its uuid or a human username */
+                /** @description The principal, addressed by its uuid, a human's username, or a service account's name */
                 id: string;
             };
             cookie?: never;
@@ -15900,7 +15904,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The principal to impersonate, addressed by its uuid or a human username */
+                /** @description The principal to impersonate, addressed by its uuid, a human's username, or a service account's name */
                 id: string;
             };
             cookie?: never;
@@ -15963,7 +15967,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The principal, addressed by its uuid or a human username */
+                /** @description The principal, addressed by its uuid, a human's username, or a service account's name */
                 id: string;
             };
             cookie?: never;
@@ -15993,7 +15997,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The principal, addressed by its uuid or a human username */
+                /** @description The principal, addressed by its uuid, a human's username, or a service account's name */
                 id: string;
             };
             cookie?: never;
@@ -16023,7 +16027,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The principal, addressed by its uuid or a human username */
+                /** @description The principal, addressed by its uuid, a human's username, or a service account's name */
                 id: string;
             };
             cookie?: never;
@@ -16057,7 +16061,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The principal, addressed by its uuid or a human username */
+                /** @description The principal, addressed by its uuid, a human's username, or a service account's name */
                 id: string;
             };
             cookie?: never;
@@ -16087,7 +16091,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The principal, addressed by its uuid or a human username */
+                /** @description The principal, addressed by its uuid, a human's username, or a service account's name */
                 id: string;
             };
             cookie?: never;
@@ -16183,7 +16187,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The product id */
+                /** @description The product, by name or uuid */
                 id: string;
             };
             cookie?: never;
@@ -16215,7 +16219,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The product id */
+                /** @description The product, by name or uuid */
                 id: string;
             };
             cookie?: never;
@@ -16245,6 +16249,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The product, by name or uuid */
                 id: string;
             };
             cookie?: never;
@@ -16280,7 +16285,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The product id */
+                /** @description The product, by name or uuid */
                 id: string;
             };
             cookie?: never;
@@ -16312,7 +16317,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The product id */
+                /** @description The product, by name or uuid */
                 id: string;
                 /** @description The metric name */
                 metric: string;
@@ -16350,7 +16355,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The product id */
+                /** @description The product, by name or uuid */
                 id: string;
                 /** @description The metric name */
                 metric: string;
@@ -16382,7 +16387,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The product id */
+                /** @description The product, by name or uuid */
                 id: string;
             };
             cookie?: never;
@@ -16414,7 +16419,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The product id */
+                /** @description The product, by name or uuid */
                 id: string;
                 /** @description The property name */
                 property: string;
@@ -16452,7 +16457,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The product id */
+                /** @description The product, by name or uuid */
                 id: string;
                 /** @description The property name */
                 property: string;
@@ -16764,8 +16769,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The secret's id */
-                id: string;
+                /** @description The secret: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does */
+                secret: string;
             };
             cookie?: never;
         };
@@ -16794,8 +16799,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The secret's id */
-                id: string;
+                /** @description The secret: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does */
+                secret: string;
             };
             cookie?: never;
         };
@@ -16830,8 +16835,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The secret's id */
-                id: string;
+                /** @description The secret: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does */
+                secret: string;
             };
             cookie?: never;
         };
@@ -16862,8 +16867,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The secret's id */
-                id: string;
+                /** @description The secret: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does */
+                secret: string;
             };
             cookie?: never;
         };
@@ -17359,7 +17364,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The standard id */
+                /** @description The standard, by name or uuid */
                 id: string;
             };
             cookie?: never;
@@ -17391,7 +17396,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The standard id */
+                /** @description The standard, by name or uuid */
                 id: string;
             };
             cookie?: never;
@@ -17421,6 +17426,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The standard, by name or uuid */
                 id: string;
             };
             cookie?: never;
@@ -17456,7 +17462,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The standard id */
+                /** @description The standard, by name or uuid */
                 id: string;
             };
             cookie?: never;
@@ -17488,7 +17494,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The standard id */
+                /** @description The standard, by name or uuid */
                 id: string;
                 /** @description The metric name */
                 metric: string;
@@ -17526,7 +17532,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The standard id */
+                /** @description The standard, by name or uuid */
                 id: string;
                 /** @description The metric name */
                 metric: string;
@@ -17558,7 +17564,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The standard id */
+                /** @description The standard, by name or uuid */
                 id: string;
             };
             cookie?: never;
@@ -17590,7 +17596,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The standard id */
+                /** @description The standard, by name or uuid */
                 id: string;
                 /** @description The property name */
                 property: string;
@@ -17628,7 +17634,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The standard id */
+                /** @description The standard, by name or uuid */
                 id: string;
                 /** @description The property name */
                 property: string;
@@ -17660,7 +17666,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The standard id */
+                /** @description The standard, by name or uuid */
                 id: string;
             };
             cookie?: never;
@@ -17692,7 +17698,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The standard id */
+                /** @description The standard, by name or uuid */
                 id: string;
                 /** @description The role name */
                 role: string;
@@ -17724,7 +17730,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The standard id */
+                /** @description The standard, by name or uuid */
                 id: string;
                 /** @description The role name */
                 role: string;
@@ -17824,7 +17830,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The system_type id */
+                /** @description The system type, by name or uuid */
                 id: string;
             };
             cookie?: never;
@@ -17854,6 +17860,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The system type, by name or uuid */
                 id: string;
             };
             cookie?: never;
@@ -19493,8 +19500,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The variable's id */
-                id: string;
+                /** @description The variable: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does */
+                variable: string;
             };
             cookie?: never;
         };
@@ -19523,8 +19530,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The variable's id */
-                id: string;
+                /** @description The variable: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does */
+                variable: string;
             };
             cookie?: never;
         };
@@ -19621,7 +19628,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The vendor id */
+                /** @description The vendor, by name or uuid */
                 id: string;
             };
             cookie?: never;
@@ -19653,7 +19660,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The vendor id */
+                /** @description The vendor, by name or uuid */
                 id: string;
             };
             cookie?: never;
@@ -19683,6 +19690,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The vendor, by name or uuid */
                 id: string;
             };
             cookie?: never;

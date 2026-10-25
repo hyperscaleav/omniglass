@@ -47,12 +47,12 @@ type standardPropertyOutput struct {
 // standardPropertyPathInput addresses one contract line by the standard and the
 // property name (the pair the contract is unique on).
 type standardPropertyPathInput struct {
-	ID       string `path:"id" doc:"The standard id"`
+	ID       string `path:"id" doc:"The standard, by name or uuid" example:"meeting-room"`
 	Property string `path:"property" doc:"The property name"`
 }
 
 type setStandardPropertyInput struct {
-	ID       string `path:"id" doc:"The standard id"`
+	ID       string `path:"id" doc:"The standard, by name or uuid" example:"meeting-room"`
 	Property string `path:"property" doc:"The property name"`
 	Body     struct {
 		DefaultValue any  `json:"default_value,omitempty" doc:"The contract default, validated against the property's data_type; omit for no default"`

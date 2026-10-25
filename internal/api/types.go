@@ -41,7 +41,19 @@ import (
 // caller's Msg verbatim. storage.ErrAddressNotAccepted is a dotted or
 // accessor-bearing ref sent to a registry whose names stay a single global
 // token (node, tag, the four lane types): also a 422, naming the kind.
+//
+// storage.ErrUnresolvedRef is a name reference to one of the resources #1133
+// made addressable by name (an endpoint, a secret, a variable, a file, a
+// principal group, a principal) that resolves to no single row the caller may
+// see: a 404 naming what was looked up, and, when more than one visible row
+// answers to it, every one of them in the spelling that does resolve. Those
+// candidates are built after the scope filter, so an absent row and an
+// out-of-scope one read identically.
 func mapRefErr(err error) (error, bool) {
+	var unresolvedRef *storage.ErrUnresolvedRef
+	if errors.As(err, &unresolvedRef) {
+		return huma.Error404NotFound(unresolvedRefMessage(unresolvedRef)), true
+	}
 	var ambig *storage.ErrAmbiguousName
 	if errors.As(err, &ambig) {
 		if len(ambig.Candidates) == 0 {
@@ -186,4 +198,22 @@ func mapTypeErr(err error, kind string) error {
 	default:
 		return huma.Error500InternalServerError("type operation failed")
 	}
+}
+
+// unresolvedRefMessage is the operator-facing 404 for a name that resolves to no
+// single resource: what was looked up, and either nothing more (no row the
+// caller can see answers to it) or each row that does, spelled so it resolves.
+func unresolvedRefMessage(e *storage.ErrUnresolvedRef) string {
+	msg := fmt.Sprintf("%s %q not found", e.Kind, e.Ref)
+	switch n := len(e.Candidates); {
+	case n == 2:
+		msg += fmt.Sprintf(": 2 you can see answer to it; address one as %s or %s", e.Candidates[0], e.Candidates[1])
+	case n > 2:
+		msg += fmt.Sprintf(": %d you can see answer to it; address one as %s or %s",
+			n, strings.Join(e.Candidates[:n-1], ", "), e.Candidates[n-1])
+	}
+	if e.Hint != "" {
+		msg += "; " + e.Hint
+	}
+	return msg
 }

@@ -57,13 +57,13 @@ export type UpdateVariable = {
 };
 
 export async function updateVariable(id: string, body: UpdateVariable): Promise<Variable> {
-  const { data, error } = await api.PATCH("/variables/{id}", { params: { path: { id } }, body });
+  const { data, error } = await api.PATCH("/variables/{variable}", { params: { path: { variable: id } }, body });
   if (error) throw error;
   return data as Variable;
 }
 
 export async function deleteVariable(id: string): Promise<void> {
-  const { error } = await api.DELETE("/variables/{id}", { params: { path: { id } } });
+  const { error } = await api.DELETE("/variables/{variable}", { params: { path: { variable: id } } });
   if (error) throw error;
 }
 

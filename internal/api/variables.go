@@ -62,8 +62,10 @@ type createVariableInput struct {
 	}
 }
 
+// variableIDInput is the variable reference every per-variable route takes,
+// addressed the way a secret is (#1133, ADR-1133).
 type variableIDInput struct {
-	ID string `path:"id" doc:"The variable's id"`
+	Variable string `path:"variable" doc:"The variable: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does" example:"poll-interval"`
 }
 
 // updateVariableInput is the PATCH body: two independent instructions, either of
@@ -73,8 +75,8 @@ type variableIDInput struct {
 // through this route, since an explicit null is indistinguishable from an
 // omitted field on the wire.
 type updateVariableInput struct {
-	ID   string `path:"id" doc:"The variable's id"`
-	Body struct {
+	Variable string `path:"variable" doc:"The variable: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does" example:"poll-interval"`
+	Body     struct {
 		Value any     `json:"value,omitempty" doc:"The new value, validated against the fixed value_type; omit to leave it"`
 		Label *string `json:"label,omitempty" maxLength:"200" doc:"A new label; an empty string clears it, and the surface falls back to the name. Omit to leave it alone"`
 	}
@@ -197,7 +199,7 @@ func registerVariableRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 	huma.Register(api, a.platformGated(a.gated(huma.Operation{
 		OperationID: "update-variable",
 		Method:      http.MethodPatch,
-		Path:        "/variables/{id}",
+		Path:        "/variables/{variable}",
 		Summary:     "Update a variable",
 		Description: "Replaces a variable's value (validated against its fixed value_type) and patches its label; either may be omitted, and an empty label clears it. Name, type, and owner are fixed at creation. Gated by variable:update, plus platform:update when the variable sits at the platform tier.",
 	}, "variable", "update"), "update"), func(ctx context.Context, in *updateVariableInput) (*variableOutput, error) {
@@ -211,7 +213,7 @@ func registerVariableRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		}
 		// Only the stored row knows its tier, so the resolved permission rides with
 		// the call and the Gateway applies it beside the scope split.
-		v, err := gw.UpdateVariable(ctx, actorID(ctx), in.ID, storage.VariablePatch{Value: raw, Label: in.Body.Label},
+		v, err := gw.UpdateVariable(ctx, actorID(ctx), in.Variable, storage.VariablePatch{Value: raw, Label: in.Body.Label},
 			a.scopeFor(ctx, "variable", "read"), a.scopeFor(ctx, "variable", "update"),
 			a.canPlatform(ctx, "update"))
 		if err != nil {
@@ -223,12 +225,12 @@ func registerVariableRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 	huma.Register(api, a.platformGated(a.gated(huma.Operation{
 		OperationID:   "delete-variable",
 		Method:        http.MethodDelete,
-		Path:          "/variables/{id}",
+		Path:          "/variables/{variable}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a variable",
-		Description:   "Removes a variable by id. Gated by variable:delete, plus platform:delete when the variable sits at the platform tier; read and delete scopes on the owner drive the 404 versus 403 split.",
+		Description:   "Removes a variable, by name or uuid. Gated by variable:delete, plus platform:delete when the variable sits at the platform tier; read and delete scopes on the owner drive the 404 versus 403 split.",
 	}, "variable", "delete"), "delete"), func(ctx context.Context, in *variableIDInput) (*struct{}, error) {
-		if err := gw.DeleteVariable(ctx, actorID(ctx), in.ID,
+		if err := gw.DeleteVariable(ctx, actorID(ctx), in.Variable,
 			a.scopeFor(ctx, "variable", "read"), a.scopeFor(ctx, "variable", "delete"),
 			a.canPlatform(ctx, "delete")); err != nil {
 			return nil, mapVariableErr(err)

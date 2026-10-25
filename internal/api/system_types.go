@@ -65,7 +65,7 @@ type listSystemTypesOutput struct {
 }
 
 type systemTypePathInput struct {
-	ID string `path:"id" doc:"The system_type id"`
+	ID string `path:"id" doc:"The system type, by name or uuid" example:"av"`
 }
 
 type createSystemTypeInput struct {
@@ -83,7 +83,7 @@ type createSystemTypeInput struct {
 }
 
 type updateSystemTypeInput struct {
-	ID   string `path:"id"`
+	ID   string `path:"id" doc:"The system type, by name or uuid" example:"av"`
 	Body struct {
 		Label *string `json:"label,omitempty" doc:"A new operator-facing label"`
 		// Create's rule with the empty alternation added, the same #716 change

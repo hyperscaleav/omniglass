@@ -176,14 +176,14 @@ func (p *PG) ListVariables(ctx context.Context, read scope.Set) ([]Variable, err
 // ErrVariableNotFound. canPlatform is the caller's platform:update permission: a
 // variable at the platform tier is install-wide, so an all-scoped caller without
 // it is ErrVariableForbidden.
-func (p *PG) UpdateVariable(ctx context.Context, actorID, id string, patch VariablePatch, read, action scope.Set, canPlatform bool) (*Variable, error) {
+func (p *PG) UpdateVariable(ctx context.Context, actorID, ref string, patch VariablePatch, read, action scope.Set, canPlatform bool) (*Variable, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin update variable: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	row, err := p.variableRowForAction(ctx, tx, id, read, action, canPlatform)
+	row, err := p.variableRowForAction(ctx, tx, ref, read, action, canPlatform)
 	if err != nil {
 		return nil, err
 	}
@@ -203,7 +203,7 @@ func (p *PG) UpdateVariable(ctx context.Context, actorID, id string, patch Varia
 			label = case when $4::boolean then $3 else label end,
 			updated_at = now()
 		where id = $1
-		returning `+variableCols, id, nullableJSON(patch.Value), labelVal, setLabel))
+		returning `+variableCols, row.id, nullableJSON(patch.Value), labelVal, setLabel))
 	if err != nil {
 		return nil, mapVariableWriteErr(err)
 	}
@@ -220,14 +220,14 @@ func (p *PG) UpdateVariable(ctx context.Context, actorID, id string, patch Varia
 // action scope (all for a platform variable); an unknown id or one out of read scope
 // is the non-disclosing ErrVariableNotFound. canPlatform is the caller's
 // platform:delete permission, required to remove a variable at the platform tier.
-func (p *PG) DeleteVariable(ctx context.Context, actorID, id string, read, action scope.Set, canPlatform bool) error {
+func (p *PG) DeleteVariable(ctx context.Context, actorID, ref string, read, action scope.Set, canPlatform bool) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("storage: begin delete variable: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	row, err := p.variableRowForAction(ctx, tx, id, read, action, canPlatform)
+	row, err := p.variableRowForAction(ctx, tx, ref, read, action, canPlatform)
 	if err != nil {
 		return err
 	}
@@ -430,13 +430,24 @@ type variableRow struct {
 // for the action (canPlatform): the tier is install-wide, so scope alone does not
 // carry it. Only the stored row knows its tier, which is why the permission is
 // resolved by the API and passed in here rather than checked on the request body.
-func (p *PG) variableRowForAction(ctx context.Context, q querier, id string, read, action scope.Set, canPlatform bool) (variableRow, error) {
+//
+// ref is the variable's uuid or its name (#1133): `<name>`, or
+// `<owner>/<name>`. A name resolves to the uuid first, among the variables this
+// caller may read, so the split below runs on the resolved row exactly as it
+// does for a uuid.
+func (p *PG) variableRowForAction(ctx context.Context, q querier, ref string, read, action scope.Set, canPlatform bool) (variableRow, error) {
 	var (
 		row            variableRow
 		comp, sys, loc *string
 		value          []byte
 	)
-	err := q.QueryRow(ctx, `
+	id, err := ownedIDByRef(ctx, q, variableOwned, ref, func(c ownedCandidate) (bool, error) {
+		return p.variableOwnerInScope(ctx, q, c.ownerKind, c.ownerID, read)
+	})
+	if err != nil {
+		return variableRow{}, err
+	}
+	err = q.QueryRow(ctx, `
 		select id, name, value_type, owner_kind, component_id, system_id, location_id, value
 		from variable where id = $1`, id).
 		Scan(&row.id, &row.name, &row.valueType, &row.ownerKind, &comp, &sys, &loc, &value)

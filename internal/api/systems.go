@@ -92,7 +92,7 @@ type listStandardsOutput struct {
 }
 
 type standardPathInput struct {
-	ID string `path:"id" doc:"The standard id"`
+	ID string `path:"id" doc:"The standard, by name or uuid" example:"meeting-room"`
 }
 
 type createStandardInput struct {
@@ -104,7 +104,7 @@ type createStandardInput struct {
 }
 
 type updateStandardInput struct {
-	ID   string `path:"id"`
+	ID   string `path:"id" doc:"The standard, by name or uuid" example:"meeting-room"`
 	Body struct {
 		Label            *string         `json:"label,omitempty" doc:"A new operator-facing label"`
 		ParentStandardID *string         `json:"parent_standard_id,omitempty" doc:"A new variant parent, by handle or uuid"`

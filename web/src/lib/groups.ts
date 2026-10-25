@@ -35,7 +35,7 @@ export async function listGroups(): Promise<Group[]> {
 }
 
 export async function getGroup(id: string): Promise<Group> {
-  const { data, error } = await api.GET("/principal-groups/{id}", { params: { path: { id } } });
+  const { data, error } = await api.GET("/principal-groups/{group}", { params: { path: { group: id } } });
   if (error) throw error;
   return data as Group;
 }
@@ -46,48 +46,48 @@ export async function createGroup(body: { name: string; label?: string; descript
   return data as Group;
 }
 
-// No `name` here: a rename is POST /principal-groups/{id}:rename, and this body
+// No `name` here: a rename is POST /principal-groups/{group}:rename, and this body
 // declares `additionalProperties: false`, so sending one is a 422.
 export async function updateGroup(id: string, body: { label?: string; description?: string }): Promise<Group> {
-  const { data, error } = await api.PATCH("/principal-groups/{id}", { params: { path: { id } }, body });
+  const { data, error } = await api.PATCH("/principal-groups/{group}", { params: { path: { group: id } }, body });
   if (error) throw error;
   return data as Group;
 }
 
 export async function deleteGroup(id: string): Promise<void> {
-  const { error } = await api.DELETE("/principal-groups/{id}", { params: { path: { id } } });
+  const { error } = await api.DELETE("/principal-groups/{group}", { params: { path: { group: id } } });
   if (error) throw error;
 }
 
 export async function listGroupMembers(id: string): Promise<GroupMember[]> {
-  const { data, error } = await api.GET("/principal-groups/{id}/members", { params: { path: { id } } });
+  const { data, error } = await api.GET("/principal-groups/{group}/members", { params: { path: { group: id } } });
   if (error) throw error;
   return (data?.members ?? []) as GroupMember[];
 }
 
 export async function addGroupMember(id: string, principalId: string): Promise<void> {
-  const { error } = await api.POST("/principal-groups/{id}/members", { params: { path: { id } }, body: { principal_id: principalId } });
+  const { error } = await api.POST("/principal-groups/{group}/members", { params: { path: { group: id } }, body: { principal_id: principalId } });
   if (error) throw error;
 }
 
 export async function removeGroupMember(id: string, principalId: string): Promise<void> {
-  const { error } = await api.DELETE("/principal-groups/{id}/members/{principalId}", { params: { path: { id, principalId } } });
+  const { error } = await api.DELETE("/principal-groups/{group}/members/{principal}", { params: { path: { group: id, principal: principalId } } });
   if (error) throw error;
 }
 
 export async function listGroupGrants(id: string): Promise<Grant[]> {
-  const { data, error } = await api.GET("/principal-groups/{id}/grants", { params: { path: { id } } });
+  const { data, error } = await api.GET("/principal-groups/{group}/grants", { params: { path: { group: id } } });
   if (error) throw error;
   return (data?.grants ?? []) as Grant[];
 }
 
 export async function createGroupGrant(id: string, body: CreateGrant): Promise<Grant> {
-  const { data, error } = await api.POST("/principal-groups/{id}/grants", { params: { path: { id } }, body });
+  const { data, error } = await api.POST("/principal-groups/{group}/grants", { params: { path: { group: id } }, body });
   if (error) throw error;
   return data as Grant;
 }
 
 export async function revokeGroupGrant(id: string, grantId: string): Promise<void> {
-  const { error } = await api.DELETE("/principal-groups/{id}/grants/{grantId}", { params: { path: { id, grantId } } });
+  const { error } = await api.DELETE("/principal-groups/{group}/grants/{grantId}", { params: { path: { group: id, grantId } } });
   if (error) throw error;
 }

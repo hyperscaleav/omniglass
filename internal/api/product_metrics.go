@@ -47,12 +47,12 @@ type productMetricOutput struct {
 // productMetricPathInput addresses one contract line by the product and the
 // metric name (the pair the contract is unique on).
 type productMetricPathInput struct {
-	ID     string `path:"id" doc:"The product id"`
+	ID     string `path:"id" doc:"The product, by name or uuid" example:"boreal-edge-55"`
 	Metric string `path:"metric" doc:"The metric name"`
 }
 
 type setProductMetricInput struct {
-	ID     string `path:"id" doc:"The product id"`
+	ID     string `path:"id" doc:"The product, by name or uuid" example:"boreal-edge-55"`
 	Metric string `path:"metric" doc:"The metric name"`
 	Body   struct {
 		DefaultValue any  `json:"default_value,omitempty" doc:"The contract default, validated against the metric's data_type; omit for no default"`

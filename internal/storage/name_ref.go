@@ -1,0 +1,506 @@
+package storage
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"strings"
+
+	"github.com/hyperscaleav/omniglass/internal/scope"
+	"github.com/jackc/pgx/v5"
+)
+
+// Every operator resource answers to its name (#1133, ADR-1133). The three tree
+// entities already did (a uuid, a bare name, or a dotted address, through
+// resolveRef); this file is the same contract for the resources whose name is
+// unique only inside something else, or not unique at all:
+//
+//   - an endpoint is `<component>/<endpoint name>`, its name unique within its
+//     component (endpoint_component_name_key);
+//   - a secret or a variable is `<name>` or `<owner>/<name>`, its name unique
+//     within its owner on every tier (the four *_key_uuid / *_platform_name
+//     partial indexes per table), the owner a component, system or location
+//     reference or `$platform`, the tier that has no name of its own;
+//   - a file is its filename, unique nowhere;
+//   - a principal group is its name, unique outright.
+//
+// One rule runs through all of them, the one resolveRef already states: scope
+// decides before ambiguity does. Every candidate a name matches is narrowed to
+// what the caller may read FIRST, so a name an out-of-scope row shares never
+// makes an in-scope one ambiguous, and a refusal never names a row the caller
+// could not have listed. A uuid is tried first and passed straight through, so
+// the caller's existing load-then-check path (and its non-disclosing miss) runs
+// for it unchanged; a name resolves to the uuid and then runs the very same
+// path, which is what keeps every permission and scope check on the resolved
+// resource rather than on the spelling that found it.
+
+// ErrUnresolvedRef is a name reference that resolves to no single row the caller
+// may see: nothing visible answers to it, or more than one thing does. Either
+// way the request names no one resource, so the API answers 404 naming what was
+// looked up (#1133). It unwraps to the resource's own not-found sentinel, so a
+// caller that already folds that sentinel keeps working.
+//
+// Candidates is set only when the reference is ambiguous, and holds each match's
+// own unambiguous spelling (a full address, an owner-qualified name, or a uuid
+// where the resource has no better one). Every candidate is a row the caller may
+// read, because the list is built after the scope filter, never before: an
+// absent row and an out-of-scope one produce the identical refusal.
+//
+// Hint says how the kind is addressed, for a reference whose shape could not
+// name one at all (an endpoint reference with no `/`).
+type ErrUnresolvedRef struct {
+	Kind       string
+	Ref        string
+	Candidates []string
+	Hint       string
+	notFound   error
+}
+
+func (e *ErrUnresolvedRef) Error() string {
+	msg := fmt.Sprintf("storage: %s %q not found", e.Kind, e.Ref)
+	if len(e.Candidates) > 0 {
+		msg += fmt.Sprintf(": it names %d you can see (%s)", len(e.Candidates), strings.Join(e.Candidates, ", "))
+	}
+	if e.Hint != "" {
+		msg += ": " + e.Hint
+	}
+	return msg
+}
+
+// Unwrap returns the resource's not-found sentinel.
+func (e *ErrUnresolvedRef) Unwrap() error { return e.notFound }
+
+func unresolved(kind, ref string, notFound error) *ErrUnresolvedRef {
+	return &ErrUnresolvedRef{Kind: kind, Ref: ref, notFound: notFound}
+}
+
+// addressOf renders a tree row's dotted address, the spelling a candidate list
+// names it by. It is PathOf joined, the exact inverse of resolvePath.
+func addressOf(ctx context.Context, q querier, tbl scopeTable, id string) (string, error) {
+	segs, err := PathOf(ctx, q, tbl, id)
+	if err != nil {
+		return "", err
+	}
+	return strings.Join(segs, "."), nil
+}
+
+// --- endpoint ----------------------------------------------------------------
+
+// EndpointRefHint is how an endpoint is addressed, said whenever a reference's
+// shape could not name one.
+const EndpointRefHint = "address an endpoint as <component>/<endpoint> (the component by name, dotted address or uuid) or by its uuid"
+
+// endpointIDByRef resolves an endpoint reference to the endpoint's uuid within
+// the caller's read scope: a uuid passes through untouched (the caller's own
+// load-then-check runs for it), and `<component>/<name>` resolves the component
+// through the component resolver's own lookup (loadByRef: a uuid, a dotted
+// address, or a bare name) narrowed to the components the caller may read AND
+// that carry an endpoint of that name, before ambiguity is judged. Narrowing by
+// the relation is loadByRefWithin's reason to exist: a component that carries no
+// such endpoint was never a candidate for this reference, so `display-1/ssh`
+// resolves even where two rooms each hold a display-1 and only one of them
+// speaks ssh.
+//
+// A component-less (server-hosted) endpoint has no unique name, since
+// endpoint_component_name_key admits any number of null-component rows, so it
+// stays addressed by uuid alone.
+func endpointIDByRef(ctx context.Context, q querier, ref string, read scope.Set) (string, error) {
+	if isUUID(ref) {
+		return ref, nil
+	}
+	compRef, name, ok := strings.Cut(ref, "/")
+	if !ok || compRef == "" || name == "" || strings.Contains(name, "/") {
+		e := unresolved("endpoint", ref, ErrEndpointNotFound)
+		e.Hint = EndpointRefHint
+		return "", e
+	}
+	var endpointIDs []string
+	compIDs := map[string]string{} // endpoint id -> component id
+	_, within, err := loadByRefWithin(ctx, q, componentConfig, compRef, func(compID string) (bool, error) {
+		readable, err := componentInScope(ctx, q, &compID, read)
+		if err != nil || !readable {
+			return false, err
+		}
+		var epID string
+		err = q.QueryRow(ctx, `select id from endpoint where component = $1 and name = $2`, compID, name).Scan(&epID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
+		}
+		if err != nil {
+			return false, fmt.Errorf("storage: resolve endpoint %q: %w", ref, err)
+		}
+		endpointIDs = append(endpointIDs, epID)
+		compIDs[epID] = compID
+		return true, nil
+	})
+	var pathMiss *ErrPathNotFound
+	switch {
+	case errors.As(err, &pathMiss):
+		return "", unresolved("endpoint", ref, ErrEndpointNotFound)
+	case err != nil:
+		return "", err
+	}
+	switch len(within) {
+	case 0:
+		return "", unresolved("endpoint", ref, ErrEndpointNotFound)
+	case 1:
+		return endpointIDs[0], nil
+	}
+	e := unresolved("endpoint", ref, ErrEndpointNotFound)
+	for _, epID := range endpointIDs {
+		addr, err := addressOf(ctx, q, componentTable, compIDs[epID])
+		if err != nil {
+			return "", err
+		}
+		e.Candidates = append(e.Candidates, addr+"/"+name)
+	}
+	return "", e
+}
+
+// --- secret and variable -----------------------------------------------------
+
+// PlatformOwner is the owner spelling of the platform tier, which has no name of
+// its own. The `$` sigil is the one the address grammar already reserves for
+// words the platform defines (ADR-0089): a name can never contain it, so
+// `$platform` can never collide with a location or a component that happens to
+// be named platform.
+const PlatformOwner = "$platform"
+
+// ownedTable is a table whose rows hang off the exclusive owner arc (platform,
+// location, system, component) and carry a name unique within their owner:
+// secret and variable.
+type ownedTable struct {
+	table    string
+	kind     string
+	notFound error
+	// sensitive is the column (or constant) that fences a row to the admin tier.
+	sensitive string
+}
+
+var (
+	secretOwned   = ownedTable{table: "secret", kind: "secret", notFound: ErrSecretNotFound, sensitive: "admin_sensitive"}
+	variableOwned = ownedTable{table: "variable", kind: "variable", notFound: ErrVariableNotFound, sensitive: "false"}
+)
+
+// ownedCandidate is one row a name matched, as much of it as visibility and the
+// owner match need.
+type ownedCandidate struct {
+	id        string
+	ownerKind string
+	ownerID   *string
+	sensitive bool
+}
+
+// ownedIDByRef resolves a secret or variable reference to the row's uuid: a uuid
+// passes through, `<name>` matches every row so named, and `<owner>/<name>`
+// keeps the ones whose owner the owner part names. visible narrows the matches
+// to what the caller may read (its read scope on the owner, and for a secret the
+// admin tier) BEFORE the owner is matched or ambiguity judged, so neither step
+// can be told apart from absence for a row the caller cannot see.
+//
+// The owner part is `$platform`, a uuid, or any reference a tree resolver takes
+// (a bare name or a dotted address), matched against each visible candidate's
+// own owner: it resolves scope-blind, which is safe because it only ever
+// intersects with rows already proven visible, and it reports no outcome of its
+// own (a dotted address that misses its plane is simply no match).
+func ownedIDByRef(ctx context.Context, q querier, t ownedTable, ref string, visible func(ownedCandidate) (bool, error)) (string, error) {
+	if isUUID(ref) {
+		return ref, nil
+	}
+	owner, name, qualified := strings.Cut(ref, "/")
+	if !qualified {
+		owner, name = "", ref
+	}
+	if name == "" || (qualified && owner == "") || strings.Contains(name, "/") {
+		e := unresolved(t.kind, ref, t.notFound)
+		e.Hint = "address a " + t.kind + " as <name> or <owner>/<name> (the owner by name, dotted address, uuid, or " + PlatformOwner + ") or by its uuid"
+		return "", e
+	}
+	rows, err := q.Query(ctx, `select id, owner_kind, coalesce(component_id, system_id, location_id), `+t.sensitive+`
+		from `+t.table+` where name = $1 order by id`, name)
+	if err != nil {
+		return "", fmt.Errorf("storage: resolve %s %q: %w", t.kind, ref, err)
+	}
+	var matches []ownedCandidate
+	for rows.Next() {
+		var c ownedCandidate
+		if err := rows.Scan(&c.id, &c.ownerKind, &c.ownerID, &c.sensitive); err != nil {
+			rows.Close()
+			return "", fmt.Errorf("storage: scan %s %q: %w", t.kind, ref, err)
+		}
+		matches = append(matches, c)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return "", fmt.Errorf("storage: resolve %s %q: %w", t.kind, ref, err)
+	}
+
+	var seen []ownedCandidate
+	for _, c := range matches {
+		ok, err := visible(c)
+		if err != nil {
+			return "", err
+		}
+		if ok {
+			seen = append(seen, c)
+		}
+	}
+	if qualified {
+		owned, err := ownerMatches(ctx, q, owner, seen)
+		if err != nil {
+			return "", err
+		}
+		seen = owned
+	}
+	switch len(seen) {
+	case 0:
+		return "", unresolved(t.kind, ref, t.notFound)
+	case 1:
+		return seen[0].id, nil
+	}
+	e := unresolved(t.kind, ref, t.notFound)
+	for _, c := range seen {
+		spelled, err := ownerSpelling(ctx, q, c)
+		if err != nil {
+			return "", err
+		}
+		e.Candidates = append(e.Candidates, spelled+"/"+name)
+	}
+	return "", e
+}
+
+// ownerMatches keeps the candidates whose owner the owner reference names.
+func ownerMatches(ctx context.Context, q querier, owner string, cands []ownedCandidate) ([]ownedCandidate, error) {
+	if len(cands) == 0 {
+		return nil, nil
+	}
+	ids := map[string]bool{}
+	switch {
+	case owner == PlatformOwner:
+	case isUUID(owner):
+		ids[owner] = true
+	default:
+		kinds := map[string]bool{}
+		for _, c := range cands {
+			kinds[c.ownerKind] = true
+		}
+		var (
+			found []string
+			err   error
+		)
+		for kind := range kinds {
+			switch kind {
+			case "component":
+				found, err = treeRefIDs(ctx, q, componentConfig, owner)
+			case "system":
+				found, err = treeRefIDs(ctx, q, systemConfig, owner)
+			case "location":
+				found, err = treeRefIDs(ctx, q, locationConfig, owner)
+			default:
+				continue
+			}
+			if err != nil {
+				return nil, err
+			}
+			for _, id := range found {
+				ids[id] = true
+			}
+		}
+	}
+	var out []ownedCandidate
+	for _, c := range cands {
+		if owner == PlatformOwner {
+			if c.ownerKind == "platform" {
+				out = append(out, c)
+			}
+			continue
+		}
+		if c.ownerID != nil && ids[*c.ownerID] {
+			out = append(out, c)
+		}
+	}
+	return out, nil
+}
+
+// treeRefIDs is every row id a tree reference matches, scope-blind: a uuid, a
+// dotted address, or every row carrying a bare name. A dotted address whose
+// plane is not cfg's (a location address asked of the component table) is no
+// match rather than an error, since the owner part is tried against each tier.
+// A syntax error in an address is still returned: it discloses nothing.
+func treeRefIDs[T any](ctx context.Context, q querier, cfg scopedConfig[T], ref string) ([]string, error) {
+	rows, err := loadByRef(ctx, q, cfg, ref)
+	var pathMiss *ErrPathNotFound
+	if errors.As(err, &pathMiss) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, cfg.idOf(r))
+	}
+	return out, nil
+}
+
+// ownerSpelling is how a candidate's owner is written in a refusal: the
+// platform sigil, or the owner's dotted address.
+func ownerSpelling(ctx context.Context, q querier, c ownedCandidate) (string, error) {
+	if c.ownerKind == "platform" || c.ownerID == nil {
+		return PlatformOwner, nil
+	}
+	tbl, ok := scopeKindTable(c.ownerKind)
+	if !ok {
+		return *c.ownerID, nil
+	}
+	return addressOf(ctx, q, tbl, *c.ownerID)
+}
+
+// --- file --------------------------------------------------------------------
+
+// fileIDByRef resolves a file reference to its uuid: a uuid passes through, and
+// anything else is a filename, matched among the files the caller may see (a
+// sensitive file only with the admin tier). A filename is unique nowhere, so two
+// visible files of one name refuse with both uuids, the only spelling a file has
+// that is unique. A filename that is itself uuid-shaped is reached by its id,
+// since the uuid is always tried first.
+func fileIDByRef(ctx context.Context, q querier, ref string, canAdmin bool) (string, error) {
+	if isUUID(ref) {
+		return ref, nil
+	}
+	rows, err := q.Query(ctx, `select id from file where name = $1 and (not sensitive or $2) order by id`, ref, canAdmin)
+	if err != nil {
+		return "", fmt.Errorf("storage: resolve file %q: %w", ref, err)
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return "", fmt.Errorf("storage: scan file %q: %w", ref, err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return "", fmt.Errorf("storage: resolve file %q: %w", ref, err)
+	}
+	switch len(ids) {
+	case 0:
+		return "", unresolved("file", ref, ErrFileNotFound)
+	case 1:
+		return ids[0], nil
+	}
+	e := unresolved("file", ref, ErrFileNotFound)
+	e.Candidates = ids
+	return "", e
+}
+
+// --- principal group ---------------------------------------------------------
+
+// groupIDByRef resolves a principal group reference to its uuid: a uuid passes
+// through (the caller's existing not-found applies to it), and anything else is
+// the group's name, unique outright (principal_group_name_key). Every caller
+// runs it after the all-scope check, so a non-all caller learns nothing about
+// which names exist.
+func groupIDByRef(ctx context.Context, q querier, ref string) (string, error) {
+	if isUUID(ref) {
+		return ref, nil
+	}
+	var id string
+	err := q.QueryRow(ctx, `select id from principal_group where name = $1`, ref).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", unresolved("principal group", ref, ErrGroupNotFound)
+	}
+	if err != nil {
+		return "", fmt.Errorf("storage: resolve principal group %q: %w", ref, err)
+	}
+	return id, nil
+}
+
+// --- principal ---------------------------------------------------------------
+
+// principalIDByRef resolves a principal reference to its uuid: a uuid passes
+// through (any kind, and an unknown one too, so the caller's own not-found
+// applies unchanged), and anything else is a human's username or a service
+// account's name (#1133), each unique among its own kind. A word that is both
+// names no one principal and is refused with both uuids. A node is reached by
+// its name on /nodes, not here.
+func principalIDByRef(ctx context.Context, q querier, ref string) (string, error) {
+	if isUUID(ref) {
+		return ref, nil
+	}
+	rows, err := q.Query(ctx, `
+		select principal_id from human where username = $1
+		union all
+		select principal_id from service where name = $1
+		order by 1`, ref)
+	if err != nil {
+		return "", fmt.Errorf("storage: resolve principal ref %q: %w", ref, err)
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return "", fmt.Errorf("storage: scan principal ref %q: %w", ref, err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return "", fmt.Errorf("storage: resolve principal ref %q: %w", ref, err)
+	}
+	switch len(ids) {
+	case 0:
+		return "", unresolved("principal", ref, ErrPrincipalNotFound)
+	case 1:
+		return ids[0], nil
+	}
+	e := unresolved("principal", ref, ErrPrincipalNotFound)
+	e.Candidates = ids
+	return "", e
+}
+
+// --- grant scope root --------------------------------------------------------
+
+// resolveScopeRoot resolves a grant's scope root, a location, system or
+// component by uuid, bare name or dotted address (#1133), to the uuid the grant
+// stores and the scope filter matches. Granting is all-scope IAM work, so the
+// root resolves fleet-wide (scopedByName); a reference that names nothing is
+// ErrBadScope, as an unknown uuid always was, and one that names more than one
+// row is the tree resolver's own ErrAmbiguousName, listing every candidate to a
+// caller entitled to see all of them.
+func resolveScopeRoot(ctx context.Context, q querier, kind, ref string) (string, error) {
+	var (
+		id  string
+		err error
+	)
+	switch kind {
+	case "location":
+		var l *Location
+		if l, err = scopedByName(ctx, q, locationConfig, ref); l != nil {
+			id = l.ID
+		}
+	case "system":
+		var s *System
+		if s, err = scopedByName(ctx, q, systemConfig, ref); s != nil {
+			id = s.ID
+		}
+	case "component":
+		var c *Component
+		if c, err = scopedByName(ctx, q, componentConfig, ref); c != nil {
+			id = c.ID
+		}
+	default:
+		return "", ErrBadScope // "group" and any other non-tree kind are unsupported
+	}
+	var ambiguous *ErrAmbiguousName
+	switch {
+	case errors.As(err, &ambiguous):
+		return "", err
+	case errors.Is(err, ErrLocationNotFound), errors.Is(err, ErrSystemNotFound), errors.Is(err, ErrComponentNotFound):
+		return "", ErrBadScope
+	case err != nil:
+		return "", err
+	}
+	return id, nil
+}
