@@ -70,7 +70,12 @@ dialog carried over to http (request steps naming secret fields, a capture of wh
 carries, the headers that send it), its cookies and captured values kept per endpoint in the node's
 memory alone, a lapsed session logged in once more and replayed once; and `digest` answers its
 challenge on the `basic-auth` shape ([below](#logging-in-over-http),
-[ADR-1114](/architecture/decisions/#adr-1114-an-http-login-is-the-login-dialog-carried-over-to-http-and-its-session-lives-in-node-memory-alone)). See
+[ADR-1114](/architecture/decisions/#adr-1114-an-http-login-is-the-login-dialog-carried-over-to-http-and-its-session-lives-in-node-memory-alone)).
+Built since: **a server-sent events stream** (#1038): an http session may declare a `stream`, held
+open as a session riding the session's scheme or login, its events offered to the listeners, which
+claim one by its event name, a prefix or regex on its data, or a JSON field; a drop resumes from the
+last event id with nothing landed twice ([below](#a-server-sent-events-stream),
+[ADR-1038](/architecture/decisions/#adr-1038-an-http-session-holds-a-server-sent-events-stream-and-a-held-connection-carries-messages)). See
 [ADR-0037](/architecture/decisions/#adr-0037-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer),
 [ADR-0038](/architecture/decisions/#adr-0038-the-reachability-verdict-is-a-built-in-state),
 [ADR-0039](/architecture/decisions/#adr-0039-an-endpoint-is-a-device-api-the-endpoint-type-is-its-transport-not-its-driver),
@@ -169,7 +174,7 @@ All four cells are real:
 | | **poll** (we ask) | **listen** (we wait) |
 |---|---|---|
 | **stateless** | SNMP get, an HTTP request (a driver's poll over http or https), a udp datagram request | webhook, SNMP trap, syslog, a udp push to the endpoint's own port |
-| **stateful** | SSH-exec or xAPI `xStatus` on a held session | MQTT subscribe, xAPI feedback |
+| **stateful** | SSH-exec or xAPI `xStatus` on a held session | MQTT subscribe, xAPI feedback, an http server-sent events stream |
 
 Waiting for a frame is one mode (**listen**) regardless of transport; statefulness lives on the endpoint.
 
@@ -668,6 +673,72 @@ and log in exactly once more when the component forgets it; digest answers its c
 nonce, and a command; a wrong password reads `rejected` with its reason after exactly one attempt,
 across a node restart, and the secret fixed in place brings each back).
 
+#### A server-sent events stream
+
+Built (#1038, [ADR-1038](/architecture/decisions/#adr-1038-an-http-session-holds-a-server-sent-events-stream-and-a-held-connection-carries-messages)):
+many components' web pages update live from a server-sent events stream (`text/event-stream`), so
+a driver can hold that stream and land each change the moment the page would, with no poll. The
+session block declares it, a `GET` held open, and listeners claim its events:
+
+```yaml
+session:
+  credential: login
+  scheme: basic
+  stream: { path: /api/events }          # format json (the default) or text
+listeners:
+  - name: volume-change
+    match: { event: change, field: { path: path, equals: status.audio.volume } }
+    emits:
+      - { name: volume, extract: { jsonpath: value } }
+```
+
+**The stream is a held session.** A standing listen task holds it through the staged dialer every
+held session uses: the connect is the TCP connect (and the TLS handshake over https, its pin the
+endpoint's), the auth step logs in first when the session declares a login, then sends the stream's
+`GET` with the scheme's credential, the login's session and the component's cookies, and reads the
+answer's head, and only then does the reader start. A 200 carrying `text/event-stream` opens it; a
+refusal is judged as any request's is (a 401 is a terminal `auth`, a lapsed login logs in once more,
+a digest challenge is answered), and anything else (a 404, an answer that is not a stream) is a
+failed attempt the session retries on its backoff. `session-state` and `session-reason` land as for
+a held line session, `endpoint-authenticated` lands when the stream carries a credential, and the
+registry's `http` and `https` entries read `held` because they now are. The endpoint's learned auth
+(the jar, a login's session, the digest challenge) is the one its polls and commands share, so one
+login serves them all.
+
+**A message, not a line.** The held connection's unit is a message: a line on a line session, one
+event here (its data, its event name, its id). The router offers each to the listeners first, as it
+offers a line, and a listener's match claims one by its event name (`event`, alone or with a data
+rule), a `prefix` or `regex` on its data, or a **JSON field match** (`field: { path, equals }` or
+`{ path, regex }`, the dotted jsonpath grammar, compared as the extraction renders it). A claimed
+event is read through the one extraction primitive in the stream's declared format (a `jsonpath` on
+json data, a `regex` on text). An event no listener claims follows the spec's `unmatched` policy. A
+stream has no upstream, so its listeners declare no `arm`.
+
+**Resume.** The event-stream interpretation is the WHATWG standard's (`event`, `data`, `id`,
+`retry`, comments, every line terminator). A dropped stream reads `recovering` and reconnects with
+`Last-Event-ID`, the last event id it was sent, after the server's `retry` (held between 250 ms and
+30 s, the session backoff's bounds); an event whose own id the stream already landed is dropped, so a
+server that replays from that event (or before it) lands nothing twice. The resume lives with the
+endpoint in the node's memory, across a session's recycle, never persisted. A line or an event past
+1 MiB ends the connection with a reason.
+
+**Beside polls.** The endpoint's polls and commands stay requests of their own. A refusal on the
+stream gates them through the one fingerprint gate; a refusal a poll or a command meets stops the
+stream too, which restarts rejected under the gate; and while the stream makes its first attempt
+under a fingerprint, the endpoint's polls wait for its verdict rather than sending the same
+credential beside it.
+
+The seeded `kestrel-api` holds the simulated Kestrel bar's stream beside its polls: its call, volume,
+mute and power arrive the moment they change. Proven by the event-stream interpretation's tests
+(`internal/collection/sse_test.go`), over real sockets (`httpstream_integration_test.go`: events in
+order, a drop resumed after the server's retry with nothing lost or twice, a refused credential one
+attempt, digest answered across a reconnect, a form login run first and again on a lapse, an
+uncredentialed stream proving no credential, an answer that is not a stream never a refusal), in the
+simulator's events face, and end to end (`internal/node/run_http_stream_test.go`: a change on the bar
+lands within a second with no poll; a dropped stream reads recovering and resumes, landing each change
+once; a wrong password reads rejected with its reason, sent once under the fingerprint, across a
+restart; the secret fixed in place brings it back; a stream behind a form login logs in first).
+
 #### udp
 
 Built (#1037, [ADR-0163](/architecture/decisions/#adr-0163-a-udp-endpoint-binds-its-own-socket-and-its-rung-is-a-request-answered)):
@@ -757,11 +828,12 @@ silent and never rejected, the refused community gated and not sent again until 
 rotated, a stopped agent down), with loss injected through the impairments under NET_ADMIN.
 
 The other held transports are each their own
-issue: #1034 (websocket), #1036 (mqtt), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip). There is no serial transport: an RS-232 or RS-485 device is reached
+issue: #1034 (websocket), #1036 (mqtt), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip); a
+server-sent events stream is held over http and https ([above](#a-server-sent-events-stream)). There is no serial transport: an RS-232 or RS-485 device is reached
 through an IP-to-serial gateway, which is the `tcp` transport (or `tls` or `telnet`), so its driver is
 a line protocol like any other ([ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)).
 
-:::design[The remaining transports and their per-task spec, tracked in #603 and #1034 (websocket), #1036 (mqtt), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
+:::design[The remaining transports and their per-task spec, tracked in #603 and #1034 (websocket), #1036 (mqtt), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
 
 | endpoint type | shape | host/target | per-task params | samples |
 |---|---|---|---|---|
@@ -769,9 +841,9 @@ a line protocol like any other ([ADR-0153](/architecture/decisions/#adr-0153-the
 
 :::
 
-`icmp`/`tcp` are inline probes (config on `endpoint.params`); `snmp` is built as its own stateless transport, configured by its driver's inputs ([snmp](#snmp)), and `http` and `https` as stateless request transports configured by their driver's spec ([http and https](#http-and-https)); the rest, in the design model, are held connections: the connection lives on the endpoint, the task names what to read. The ship-with registry seeds the probe built-ins above, the endpoint verdicts, and `session-state` (`internal/seed/metric_types.yaml`, `internal/seed/property_types.yaml`; the [metrics](/guides/admin/metrics/) and [properties](/guides/admin/properties/) guides render each set from the seed); the wider per-transport set (`<proto>-reachable`/`<proto>-response-time` for the remaining text family; an http answer's status is a poll fault's reason, never a sample of its own; `telnet-response-time`, `udp-response-time` and `snmp-response-time` are seeded, and there is no `udp-open`, since an open udp port cannot be detected) is Design, and unregistered names would be reject-not-project dropped at ingest.
+`icmp`/`tcp` are inline probes (config on `endpoint.params`); `snmp` is built as its own stateless transport, configured by its driver's inputs ([snmp](#snmp)), and `http` and `https` as request transports configured by their driver's spec, a declared stream held as a session ([http and https](#http-and-https)); the rest, in the design model, are held connections: the connection lives on the endpoint, the task names what to read. The ship-with registry seeds the probe built-ins above, the endpoint verdicts, and `session-state` (`internal/seed/metric_types.yaml`, `internal/seed/property_types.yaml`; the [metrics](/guides/admin/metrics/) and [properties](/guides/admin/properties/) guides render each set from the seed); the wider per-transport set (`<proto>-reachable`/`<proto>-response-time` for the remaining text family; an http answer's status is a poll fault's reason, never a sample of its own; `telnet-response-time`, `udp-response-time` and `snmp-response-time` are seeded, and there is no `udp-open`, since an open udp port cannot be detected) is Design, and unregistered names would be reject-not-project dropped at ingest.
 
-:::design[The held-connection transports in detail, tracked in #603 and #1034 (websocket), #1036 (mqtt), #1038 (SSE over http), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
+:::design[The held-connection transports in detail, tracked in #603 and #1034 (websocket), #1036 (mqtt), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
 
 For `snmp`, each OID keeps its **native SNMP type**: numeric OIDs land as `metric`, string OIDs
 (OctetString / IPAddress / OID) as `property`, the lane decided at ingest by catalog membership;
@@ -813,7 +885,10 @@ node runs every listen task on an endpoint over that endpoint's one held session
   within the timeout is logged at warn (`session armed, unacknowledged`) and does not fail the
   attempt, while the connection dying during the arm does.
 - **Match** (`prefix` or `regex`): classifies an inbound line. Listeners are offered a line in
-  function-name order and the first whose rule picks it claims it.
+  function-name order and the first whose rule picks it claims it. The unit is a **message**
+  (#1038): a line on a line session, an event on an http stream, which a match may also claim by
+  its event name (`event`) or by a JSON field of its data (`field: { path, equals | regex }`)
+  ([a server-sent events stream](#a-server-sent-events-stream)).
 - **Extraction**: the claimed line runs through the same emit shape a poll's answer does (locate,
   transform, type by the baked lane), and lands at once as a sample under the listen task: the
   component owns it, the endpoint is its instance, and no poll schedule is involved. A claimed line
