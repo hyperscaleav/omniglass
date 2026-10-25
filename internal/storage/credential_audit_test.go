@@ -65,7 +65,12 @@ func TestTokenMintAndRevokeAreAudited(t *testing.T) {
 		}
 		return out
 	}
-	created := rows("create")
+	var created []storage.AuditEntry
+	for _, r := range rows("create") {
+		if !strings.Contains(string(r.New), "bootstrap token") {
+			created = append(created, r)
+		}
+	}
 	if len(created) != 2 {
 		t.Fatalf("credential create rows = %d, want 2 (the tokens, not the session)", len(created))
 	}
@@ -120,5 +125,34 @@ func TestTokenMintAndRevokeAreAudited(t *testing.T) {
 	}
 	if got := len(rows("revoke")); got != 2 {
 		t.Fatalf("revoke rows after bulk = %d, want 2", got)
+	}
+
+	// A token ended by a logout that presents it as the session (RevokeBearer, by
+	// hash) is a revoke too, by the principal it belonged to.
+	_, h, prefix, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := gw.IssueBearerCredential(ctx, storage.BearerIssue{ActorID: root.ID, Username: "root", SecretHash: h, Prefix: prefix, Purpose: "token", Description: "logged out"}); err != nil || !ok {
+		t.Fatalf("issue = (%v, %v)", ok, err)
+	}
+	if err := gw.RevokeBearer(ctx, h); err != nil {
+		t.Fatalf("revoke by hash: %v", err)
+	}
+	revoked = rows("revoke")
+	if len(revoked) != 3 || revoked[0].ActorID != root.ID || !strings.Contains(string(revoked[0].Old), "logged out") {
+		t.Fatalf("revoke rows after a logout by token = %+v, want a third, by root", revoked)
+	}
+
+	// The bootstrap token is minted too: by the trusted lane, so with no actor.
+	var bootstrap *storage.AuditEntry
+	for _, r := range rows("create") {
+		if strings.Contains(string(r.New), "bootstrap token") {
+			r := r
+			bootstrap = &r
+		}
+	}
+	if bootstrap == nil || bootstrap.ActorID != "" {
+		t.Fatalf("bootstrap token create row = %+v, want one with no actor", bootstrap)
 	}
 }

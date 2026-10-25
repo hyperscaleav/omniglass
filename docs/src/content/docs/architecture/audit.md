@@ -53,8 +53,9 @@ drawer. See [implementation status](/architecture/status/).
 - **An AI-taken action is one row.** An AI tool acts with a bearer token as a `human` or `service`
   principal, so the actor is that principal, and the channel is the AI-sourced marking riding
   alongside the row ([AI](/architecture/ai/)).
-- **A token is audited.** Minting one writes a `create` row and revoking one (singly or in bulk) a
-  `revoke` row on `resource = 'credential'`, carrying the token's prefix, purpose, description and
+- **A token is audited.** Minting one writes a `create` row (the bootstrap token's with no actor)
+  and revoking one (singly, in bulk, or by logging out with it) a `revoke` row on
+  `resource = 'credential'`, carrying the token's prefix, purpose, description and
   expiry, never the token or its hash: a token is how an agent or a script is given access.
 
 :::design[The backtest and reconcile consumers, tracked in #526]

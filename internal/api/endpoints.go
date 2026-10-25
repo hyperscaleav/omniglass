@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/hyperscaleav/omniglass/internal/mcp/tooldef"
 	"net/http"
 	"strings"
 
@@ -165,7 +166,7 @@ func registerEndpointRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "create-endpoint",
-		Extensions:    mcpExposed(),
+		Extensions:    mcpExposed(tooldef.Hints{OpenWorld: true}),
 		Method:        http.MethodPost,
 		Path:          "/endpoints",
 		DefaultStatus: http.StatusCreated,
@@ -198,7 +199,7 @@ func registerEndpointRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "update-endpoint",
-		Extensions:  mcpExposed(),
+		Extensions:  mcpExposed(tooldef.Hints{OpenWorld: true}),
 		Method:      http.MethodPatch,
 		Path:        "/endpoints/{endpoint}",
 		Summary:     "Update an endpoint",
@@ -223,7 +224,7 @@ func registerEndpointRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "retry-endpoint",
-		Extensions:  mcpExposed(),
+		Extensions:  mcpExposed(tooldef.Hints{Destructive: true, OpenWorld: true}),
 		Method:      http.MethodPost,
 		Path:        "/endpoints/{endpoint}:retry",
 		Summary:     "Retry an endpoint's gated connections",

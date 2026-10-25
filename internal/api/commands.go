@@ -50,7 +50,7 @@ type commandOutput struct {
 func registerCommandRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "issue-component-command",
-		Extensions:  mcpExposed(tooldef.Hints{Destructive: true}),
+		Extensions:  mcpExposed(tooldef.Hints{Destructive: true, OpenWorld: true}),
 		Method:      http.MethodPost,
 		Path:        "/components/{name}/commands:issue",
 		Summary:     "Issue a command to a component",

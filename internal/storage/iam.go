@@ -101,10 +101,17 @@ func (p *PG) BootstrapOwner(ctx context.Context, spec OwnerSpec) (created bool, 
 		pid, spec.Username, nullize(spec.Email), labelOrNull(spec.Label)); err != nil {
 		return false, fmt.Errorf("storage: bootstrap human: %w", err)
 	}
-	if _, err := tx.Exec(ctx,
-		`insert into credential (principal_id, kind, secret_hash, prefix, purpose, expires_at, description) values ($1, 'bearer', $2, $3, 'token', $4, 'bootstrap token')`,
-		pid, spec.SecretHash, spec.Prefix, spec.ExpiresAt); err != nil {
+	var credID string
+	if err := tx.QueryRow(ctx,
+		`insert into credential (principal_id, kind, secret_hash, prefix, purpose, expires_at, description) values ($1, 'bearer', $2, $3, 'token', $4, 'bootstrap token') returning id`,
+		pid, spec.SecretHash, spec.Prefix, spec.ExpiresAt).Scan(&credID); err != nil {
 		return false, fmt.Errorf("storage: bootstrap credential: %w", err)
+	}
+	// Every token's minting is audited (#1162); the bootstrap is the trusted lane,
+	// so its row carries no actor.
+	img := credentialAuditImage{PrincipalID: pid, Prefix: spec.Prefix, Purpose: credentialPurposeToken, Description: "bootstrap token", ExpiresAt: spec.ExpiresAt}
+	if err := writeAuditRes(ctx, tx, "", "create", "credential", credID, nil, img); err != nil {
+		return false, err
 	}
 	if spec.PasswordHash != "" {
 		if _, err := tx.Exec(ctx,
@@ -780,9 +787,28 @@ func (p *PG) AnyHuman(ctx context.Context) (bool, error) {
 // RevokeBearer deletes the bearer credential with the given sha256 hash (logout
 // of a session token). A no-op if none matches.
 func (p *PG) RevokeBearer(ctx context.Context, hash []byte) error {
-	if _, err := p.pool.Exec(ctx,
-		`delete from credential where kind = 'bearer' and secret_hash = $1`, hash); err != nil {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("storage: begin revoke bearer: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	rows, err := tx.Query(ctx, `delete from credential where kind = 'bearer' and secret_hash = $1 `+revokedCols, hash)
+	var revoked []revokedCredential
+	if err == nil {
+		revoked, err = scanRevoked(rows)
+	}
+	if err != nil {
 		return fmt.Errorf("storage: revoke bearer: %w", err)
+	}
+	// A token presented as the session and logged out is ended by the principal it
+	// belonged to (#1162).
+	for _, r := range revoked {
+		if err := auditRevokedTokens(ctx, tx, r.img.PrincipalID, []revokedCredential{r}); err != nil {
+			return err
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("storage: commit revoke bearer: %w", err)
 	}
 	return nil
 }

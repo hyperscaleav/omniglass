@@ -4,6 +4,20 @@
 # A stray built binary in the repo root (anchored so it does not swallow the
 # cmd/omniglass package directory).
 /omniglass
+# The same for every other cmd/ program: `go build ./cmd/<name>` from the root
+# drops a binary named for it there (a 70 MB docsgen nearly shipped with #1162).
+/adrrenumber
+/cligen
+/configgen
+/docsgen
+/erdgen
+/exprgen
+/identitygen
+/labelgen
+/mcpgen
+/openapigen
+/seedgen
+/writerclassgen
 *.exe
 *.test
 *.out

@@ -80,7 +80,7 @@ var catalog = []tooldef.Def{
 		Permission:  "command:issue",
 		PathParams:  []string{"name"},
 		BodyParams:  []string{"command_type", "instance", "params", "value"},
-		Annotations: tooldef.Annotations{ReadOnly: false, Destructive: true, Idempotent: false, OpenWorld: false},
+		Annotations: tooldef.Annotations{ReadOnly: false, Destructive: true, Idempotent: false, OpenWorld: true},
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"command_type\":{\"description\":\"The command_type to invoke\",\"minLength\":1,\"type\":\"string\"},\"instance\":{\"description\":\"The series discriminator (e.g. an endpoint), when the target is instanced\",\"type\":\"string\"},\"name\":{\"description\":\"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)\",\"type\":\"string\"},\"params\":{\"description\":\"The invocation params, stored on the command and the caused event\"},\"value\":{\"description\":\"The intended value for the target property (a settleable command)\"}},\"required\":[\"command_type\",\"name\"],\"type\":\"object\"}",
 	},
 	{
@@ -235,7 +235,7 @@ var catalog = []tooldef.Def{
 		Path:        "/endpoints",
 		Permission:  "endpoint:create",
 		BodyParams:  []string{"component", "driver", "inputs", "label", "node", "params", "transport"},
-		Annotations: tooldef.Annotations{ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false},
+		Annotations: tooldef.Annotations{ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: true},
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"component\":{\"description\":\"Owning component, by name or id; omit for a server-hosted endpoint (needs an all-scoped grant)\",\"type\":\"string\"},\"driver\":{\"description\":\"Attach this driver (by name or id): the spec derives the transport and params, and the endpoint's tasks derive from the spec's functions\",\"type\":\"string\"},\"inputs\":{\"additionalProperties\":{\"type\":\"string\"},\"description\":\"The inputs the driver's spec declares (host, port, credentials as secret reference names); required ones must be supplied, defaults fill the rest\",\"type\":\"object\"},\"label\":{\"description\":\"What an operator reads in lists (Control processor). Settable here because the name is derived from the transport, so it says how the device is reached and never what the connection is for\",\"maxLength\":200,\"type\":\"string\"},\"node\":{\"description\":\"Node placement, by name or id\",\"type\":\"string\"},\"params\":{\"description\":\"Address/target settings (jsonb); an attach derives them from the inputs instead\"},\"transport\":{\"description\":\"A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set\",\"type\":\"string\"}},\"type\":\"object\"}",
 	},
 	{
@@ -258,7 +258,7 @@ var catalog = []tooldef.Def{
 		Permission:  "endpoint:update",
 		PathParams:  []string{"endpoint"},
 		BodyParams:  []string{"inputs", "label", "node", "params", "transport"},
-		Annotations: tooldef.Annotations{ReadOnly: false, Destructive: true, Idempotent: false, OpenWorld: false},
+		Annotations: tooldef.Annotations{ReadOnly: false, Destructive: true, Idempotent: false, OpenWorld: true},
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"endpoint\":{\"description\":\"The endpoint, as \\u003ccomponent\\u003e/\\u003cendpoint name\\u003e (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does\",\"examples\":[\"boi.17c.415a.$comp.display-1/https\"],\"type\":\"string\"},\"inputs\":{\"additionalProperties\":{\"type\":\"string\"},\"description\":\"A driver-attached endpoint's inputs, edited in place (#1061): the host, the port, an attached secret's reference name, any input the driver declares. Merged over the stored inputs and validated against the driver; a value it refuses is a 400 naming the input. Changing where a credential is sent needs the caller to be able to use that credential\",\"type\":\"object\"},\"label\":{\"description\":\"A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone\",\"maxLength\":200,\"type\":\"string\"},\"node\":{\"description\":\"Reassign the node placement, by name or id\",\"type\":\"string\"},\"params\":{\"description\":\"Replace the address/target settings (jsonb). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs\"},\"transport\":{\"description\":\"The transport: a driver-attached endpoint takes only one its driver speaks\",\"type\":\"string\"}},\"required\":[\"endpoint\"],\"type\":\"object\"}",
 	},
 	{
@@ -281,7 +281,7 @@ var catalog = []tooldef.Def{
 		Permission:  "endpoint:retry",
 		PathParams:  []string{"endpoint"},
 		BodyParams:  []string{"certificate", "host_key"},
-		Annotations: tooldef.Annotations{ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false},
+		Annotations: tooldef.Annotations{ReadOnly: false, Destructive: true, Idempotent: false, OpenWorld: true},
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"certificate\":{\"description\":\"A tls or https endpoint only: the same as host_key, named for the certificate (the offered_key a certificate refusal names). It becomes the endpoint's declared tls-certificate pin, held to the same rule (the exact offered key while a key refusal holds), and the session redials onto it. Omit to retry with the pin unchanged\",\"type\":\"string\"},\"endpoint\":{\"description\":\"The endpoint, as \\u003ccomponent\\u003e/\\u003cendpoint name\\u003e (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does\",\"examples\":[\"boi.17c.415a.$comp.display-1/https\"],\"type\":\"string\"},\"host_key\":{\"description\":\"The SHA256 fingerprint of a changed key the operator now trusts, the key the endpoint's transport pins (the offered_key a key refusal names on the component's reachability read): an ssh endpoint's host key, which becomes its declared ssh-host-key, or a tls or https endpoint's certificate public key, which becomes its declared tls-certificate. The session redials onto it. While a key refusal holds, it must be that exact offered key: any other is a 409 that changes nothing (the refusal on record is the node's last word, so to trust a key the component presents since, retry without a key first). With no key refusal held it declares a pin ahead of time. Omit to retry with the pin unchanged\",\"type\":\"string\"}},\"required\":[\"endpoint\"],\"type\":\"object\"}",
 	},
 	{

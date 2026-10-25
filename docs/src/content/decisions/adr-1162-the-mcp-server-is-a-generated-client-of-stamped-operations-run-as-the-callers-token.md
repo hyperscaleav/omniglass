@@ -26,11 +26,15 @@ refs: [1162, 1161]
      rebuilds the catalog from the committed spec in `make test`, and `gen-drift` diffs it in CI.
   2. **Annotations are one rule, and a stamp only adds caution.** A tool is read-only when its
      route is a GET or a POST gated by a read (a preview, a validate); a PATCH, PUT or DELETE is
-     destructive; a POST is additive unless its stamp says destructive (issuing a command does);
-     reads, PUTs and DELETEs are idempotent; open-world comes only from a stamp. Every hint is
-     sent explicitly, since the protocol's defaults are the cautious opposite. A stamp has no
+     destructive; a POST is additive unless its stamp says destructive (issuing a command does, and
+     so does retrying an endpoint, which can replace the key it trusts); reads, PUTs and DELETEs
+     are idempotent; open-world comes only from a stamp, set where a node reaches the network on
+     the call's account (creating, editing or retrying an endpoint, issuing a command). Every hint
+     is sent explicitly, since the protocol's defaults are the cautious opposite. A stamp has no
      read-only hint, so it cannot present a write as a read; a destructive hint on a read is
-     refused as a contradiction.
+     refused as a contradiction. A route that panics behind a tool is that call's 500, recovered
+     in the dispatch, since a tool runs off the HTTP goroutine where net/http's recovery does not
+     reach.
   3. **One implementation, behind the caller's token.** The server is mounted at `/mcp` beside the
      API, not inside it, and dispatches each tool through the same router with the caller's
      Authorization header on a fresh request context: nothing ambient from the MCP request rides
@@ -39,7 +43,10 @@ refs: [1162, 1161]
      behave as on every route, and a browser's cookie cannot drive it. Stdio is `omniglass mcp`, a
      relay that connects to `/mcp` with `OMNIGLASS_TOKEN`, serves exactly the tools the server
      lists and forwards each call with the calling client's declared identity; the token goes only
-     to the named origin and never across a redirect. The token is the authority: there is no
+     to the named origin and never across a redirect. A call the server refuses for an expired
+     session (its idle timeout, or a restart) is sent once more over a fresh one, since it was
+     never dispatched; a dropped connection renews the session for the next call without
+     retrying, so a write never runs twice. The token is the authority: there is no
      `mcp:*` permission, and no OAuth for MCP until the OIDC work (ADR-0004).
   4. **The audit row says how it arrived.** `audit_log` gains `channel` (`mcp`, with `omnibot`
      reserved for #1166) and `client` (the name and version the MCP client declared, sanitized and
@@ -49,7 +56,8 @@ refs: [1162, 1161]
      impersonation): the channel is the AI-sourced marking the audit page promised, riding beside
      the row, not a new actor.
   5. **A token is audited.** A token is how an agent is given access, so minting one writes a
-     `create` row and revoking one (one at a time or in bulk) a `revoke` row, on resource
+     `create` row (the bootstrap token too, with no actor, from the trusted lane) and revoking one
+     (one at a time, in bulk, or by logging out with it as the session) a `revoke` row, on resource
      `credential`, keyed by the credential's id and carrying its prefix, purpose, description and
      expiry, never the token or its hash. A web-login session stays the auth lane's.
 - **Context:** The design pages fenced the MCP surface under #522, and `api-first.md` listed an MCP

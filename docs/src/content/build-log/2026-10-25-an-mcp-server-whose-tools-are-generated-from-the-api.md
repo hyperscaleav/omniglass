@@ -21,12 +21,15 @@ agent that launches a local command; `omniglass mcp tools` and `omniglass mcp ca
 client of that relay. Both transports answer only to a bearer token the API accepts, and every tool
 call runs its route through the same router with that token on a fresh request context, so the gate,
 the scope and the same-transaction audit row are the route's own. The relay sends the token only to
-the server it was given and follows no redirect.
+the server it was given and follows no redirect, and renews its session when the server has let
+it go (an idle timeout, a restart), resending only a call the server refused before running it. A
+route that panics behind a tool answers that call 500 instead of crashing the server.
 
 `audit_log` gained `channel` and `client`: an MCP call's row reads `channel: mcp` and the client's
 declared name, set on the request context by the dispatch so no direct caller can claim one, and
 `GET /audit-log` returns both. Minting and revoking a token now write `credential` audit rows, which
-they never did, since a token is how an agent is given access. The CLI reference generator learned to
+they never did, since a token is how an agent is given access: the bootstrap token's mint (with no
+actor) and a logout that presents a token as its session included. The CLI reference generator learned to
 document a command group that is itself runnable, which `omniglass mcp` is.
 
 Proof: an e2e test builds the binary, runs the server, a simulator and a node, and drives `omniglass
@@ -34,4 +37,8 @@ mcp tools` and `omniglass mcp call` over stdio, reading a simulated component's 
 and writing a secret whose audit row names the user and the MCP channel; API-level tests drive a real
 MCP client over HTTP through the gate (a viewer's write refused), the scope (a component-scoped
 principal sees its component alone), revocation mid-session and impersonation. The `mcp-server` tape
-demos it.
+demos it. The adversarial review's security lens found the auth, the channel guard and the relay's
+token handling sound; it caught a 70 MB generator binary about to be committed (now ignored, with
+the older stray `cligen` filed as #1174), a panic path, the relay's lost session, two annotations
+too weak (retrying an endpoint is destructive; the endpoint writes and issuing a command are
+open-world), and two token paths the audit missed, each fixed with its test.

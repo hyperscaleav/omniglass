@@ -14771,7 +14771,8 @@
         },
         "summary": "Issue a command to a component",
         "x-omniglass-mcp": {
-          "destructive": true
+          "destructive": true,
+          "open_world": true
         },
         "x-omniglass-permission": "command:issue"
       }
@@ -16359,7 +16360,9 @@
           }
         },
         "summary": "Create an endpoint",
-        "x-omniglass-mcp": {},
+        "x-omniglass-mcp": {
+          "open_world": true
+        },
         "x-omniglass-permission": "endpoint:create"
       }
     },
@@ -16496,7 +16499,9 @@
           }
         },
         "summary": "Update an endpoint",
-        "x-omniglass-mcp": {},
+        "x-omniglass-mcp": {
+          "open_world": true
+        },
         "x-omniglass-permission": "endpoint:update"
       }
     },
@@ -16551,7 +16556,10 @@
           }
         },
         "summary": "Retry an endpoint's gated connections",
-        "x-omniglass-mcp": {},
+        "x-omniglass-mcp": {
+          "destructive": true,
+          "open_world": true
+        },
         "x-omniglass-permission": "endpoint:retry"
       }
     },

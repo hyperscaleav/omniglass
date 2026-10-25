@@ -117,13 +117,15 @@ func TestMCPServesTheGeneratedCatalog(t *testing.T) {
 	if len(tools) < 40 {
 		t.Fatalf("listed %d tools, want the whole generated catalog (about forty)", len(tools))
 	}
-	for name, want := range map[string]struct{ readOnly, destructive bool }{
-		"list-components":            {true, false},
-		"get-component-reachability": {true, false},
-		"create-secret":              {false, false},
-		"update-endpoint":            {false, true},
-		"delete-endpoint":            {false, true},
-		"issue-component-command":    {false, true},
+	for name, want := range map[string]struct{ readOnly, destructive, openWorld bool }{
+		"list-components":            {true, false, false},
+		"get-component-reachability": {true, false, false},
+		"create-secret":              {false, false, false},
+		"create-endpoint":            {false, false, true},
+		"update-endpoint":            {false, true, true},
+		"retry-endpoint":             {false, true, true},
+		"delete-endpoint":            {false, true, false},
+		"issue-component-command":    {false, true, true},
 	} {
 		tool, ok := tools[name]
 		if !ok {
@@ -134,8 +136,8 @@ func TestMCPServesTheGeneratedCatalog(t *testing.T) {
 		if a == nil || a.ReadOnlyHint != want.readOnly || a.DestructiveHint == nil || *a.DestructiveHint != want.destructive {
 			t.Errorf("%s annotations = %+v, want read-only %v destructive %v", name, a, want.readOnly, want.destructive)
 		}
-		if a != nil && (a.OpenWorldHint == nil || *a.OpenWorldHint) {
-			t.Errorf("%s says open-world, want closed", name)
+		if a != nil && (a.OpenWorldHint == nil || *a.OpenWorldHint != want.openWorld) {
+			t.Errorf("%s open-world = %v, want %v (a node reaching the network is open-world)", name, a.OpenWorldHint, want.openWorld)
 		}
 	}
 	if _, ok := tools["delete-component"]; ok {

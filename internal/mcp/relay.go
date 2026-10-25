@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -29,7 +30,6 @@ func Relay(ctx context.Context, in io.Reader, out io.Writer, endpoint, token, ve
 	if err != nil {
 		return err
 	}
-	defer remote.Close()
 
 	info := remote.InitializeResult()
 	name, ver, instr := "omniglass", version, ""
@@ -40,6 +40,10 @@ func Relay(ctx context.Context, in io.Reader, out io.Writer, endpoint, token, ve
 		instr = info.Instructions
 	}
 	local := sdk.NewServer(&sdk.Implementation{Name: name, Title: "Omniglass", Version: ver}, &sdk.ServerOptions{Instructions: instr})
+	conn := &remoteConn{cs: remote, redial: func(ctx context.Context) (*sdk.ClientSession, error) {
+		return Dial(ctx, endpoint, token, &sdk.Implementation{Name: "omniglass-mcp", Version: version})
+	}}
+	defer conn.close()
 	for tool, err := range remote.Tools(ctx, nil) {
 		if err != nil {
 			return fmt.Errorf("omniglass mcp: list the server's tools: %w", err)
@@ -53,7 +57,7 @@ func Relay(ctx context.Context, in io.Reader, out io.Writer, endpoint, token, ve
 			if ci := req.ClientInfo(); ci != nil && ci.Name != "" {
 				params.Meta = sdk.Meta{metaKeyClientInfo: ci}
 			}
-			return remote.CallTool(ctx, params)
+			return conn.callTool(ctx, params)
 		})
 	}
 	err = local.Run(ctx, &sdk.IOTransport{Reader: io.NopCloser(in), Writer: nopWriteCloser{out}})
@@ -61,6 +65,69 @@ func Relay(ctx context.Context, in io.Reader, out io.Writer, endpoint, token, ve
 		return nil
 	}
 	return err
+}
+
+// remoteConn is the relay's session to the server, renewed when the server has
+// let it go: it closes an idle session after its timeout, and a restart drops
+// every one. A call the server refused for an unknown session (its 404) was
+// never dispatched, so it is sent once more over a fresh session. A closed
+// connection renews the session for the next call but is not retried, since a
+// connection can close with a call in flight and a write must never run twice.
+// Any other error is the caller's.
+type remoteConn struct {
+	mu     sync.Mutex
+	cs     *sdk.ClientSession
+	redial func(context.Context) (*sdk.ClientSession, error)
+}
+
+func (c *remoteConn) session() *sdk.ClientSession {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.cs
+}
+
+func (c *remoteConn) callTool(ctx context.Context, params *sdk.CallToolParams) (*sdk.CallToolResult, error) {
+	cs := c.session()
+	res, err := cs.CallTool(ctx, params)
+	switch {
+	case err == nil:
+		return res, nil
+	case errors.Is(err, sdk.ErrSessionMissing):
+		fresh, derr := c.renew(ctx, cs)
+		if derr != nil {
+			return nil, derr
+		}
+		return fresh.CallTool(ctx, params)
+	case errors.Is(err, sdk.ErrConnectionClosed):
+		if _, derr := c.renew(ctx, cs); derr != nil {
+			return nil, derr
+		}
+		return nil, err
+	default:
+		return nil, err
+	}
+}
+
+// renew replaces stale with a fresh session, unless another call already did.
+func (c *remoteConn) renew(ctx context.Context, stale *sdk.ClientSession) (*sdk.ClientSession, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.cs != stale {
+		return c.cs, nil
+	}
+	fresh, err := c.redial(ctx)
+	if err != nil {
+		return nil, err
+	}
+	_ = stale.Close()
+	c.cs = fresh
+	return fresh, nil
+}
+
+func (c *remoteConn) close() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	_ = c.cs.Close()
 }
 
 // Dial opens an MCP client session to the server's streamable HTTP endpoint

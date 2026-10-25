@@ -45,9 +45,11 @@ func TestMintingAndRevokingATokenAreAudited(t *testing.T) {
 		return out.Events
 	}
 
+	// The newest row is the token just minted; the owner's own bootstrap token
+	// was minted (with no actor, from the trusted lane) before it.
 	created := trail("create")
-	if len(created) != 1 {
-		t.Fatalf("credential create rows = %+v, want one", created)
+	if len(created) != 2 || created[1].ActorName != "" || created[1].New["description"] != "bootstrap token" {
+		t.Fatalf("credential create rows = %+v, want the minted token's and the bootstrap token's", created)
 	}
 	if created[0].ActorName != "root" || created[0].ResourceID == "" || created[0].New["prefix"] != minted.Prefix {
 		t.Errorf("create row = %+v, want root minting the token with prefix %s", created[0], minted.Prefix)

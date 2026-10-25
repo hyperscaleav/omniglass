@@ -13,7 +13,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -82,7 +84,16 @@ func toolFor(d tooldef.Def) *sdk.Tool {
 // client the caller declared, so the audit row records how it arrived. The
 // response becomes the tool's result; a non-2xx status is a tool error whose
 // text is the route's problem+json.
-func call(ctx context.Context, api http.Handler, d tooldef.Def, req *sdk.CallToolRequest) *sdk.CallToolResult {
+func call(ctx context.Context, api http.Handler, d tooldef.Def, req *sdk.CallToolRequest) (result *sdk.CallToolResult) {
+	// A tool runs off the HTTP goroutine, where net/http's own recovery does not
+	// reach: a route that panics would take down the server (and the bus it
+	// hosts). Contain it to this call's 500, as a direct call gets.
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("mcp: a tool's route panicked", "tool", d.Name, "panic", r, "stack", string(debug.Stack()))
+			result = toolError("500 Internal Server Error")
+		}
+	}()
 	var raw json.RawMessage
 	if req.Params != nil {
 		raw = req.Params.Arguments

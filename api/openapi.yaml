@@ -10743,6 +10743,7 @@ paths:
       summary: Issue a command to a component
       x-omniglass-mcp:
         destructive: true
+        open_world: true
       x-omniglass-permission: command:issue
   /components/{name}/effective-secrets:
     get:
@@ -11773,7 +11774,8 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Create an endpoint
-      x-omniglass-mcp: {}
+      x-omniglass-mcp:
+        open_world: true
       x-omniglass-permission: endpoint:create
   /endpoints/{endpoint}:
     delete:
@@ -11863,7 +11865,8 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Update an endpoint
-      x-omniglass-mcp: {}
+      x-omniglass-mcp:
+        open_world: true
       x-omniglass-permission: endpoint:update
   /endpoints/{endpoint}:retry:
     post:
@@ -11898,7 +11901,9 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Retry an endpoint's gated connections
-      x-omniglass-mcp: {}
+      x-omniglass-mcp:
+        destructive: true
+        open_world: true
       x-omniglass-permission: endpoint:retry
   /event-rules:
     get:

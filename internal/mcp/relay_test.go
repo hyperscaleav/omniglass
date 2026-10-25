@@ -3,7 +3,6 @@ package mcp
 import (
 	"context"
 	"io"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,6 +11,8 @@ import (
 	"time"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/hyperscaleav/omniglass/internal/nettest"
 )
 
 const goodToken = "ogp_0000aaaa_relaytesttokenvalue"
@@ -194,13 +195,8 @@ func TestRelayTokenNeverLeavesTheNamedOrigin(t *testing.T) {
 // A server that cannot be reached is an error that names the server and not
 // the token.
 func TestRelayUnreachableServerDoesNotEchoTheToken(t *testing.T) {
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	addr := ln.Addr().String()
-	ln.Close()
-	err = Relay(context.Background(), strings.NewReader(""), io.Discard, "http://"+addr+"/mcp", goodToken, "test")
+	addr := nettest.RefusedAddr(t)
+	err := Relay(context.Background(), strings.NewReader(""), io.Discard, "http://"+addr+"/mcp", goodToken, "test")
 	if err == nil || strings.Contains(err.Error(), goodToken) {
 		t.Errorf("unreachable server = %v, want an error without the token", err)
 	}

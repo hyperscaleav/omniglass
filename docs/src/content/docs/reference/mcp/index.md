@@ -31,7 +31,7 @@ A tool that is not read-only and not destructive adds something (a create).
 | [`create-component`](#create-component) | Create a component | `component:create` | adds |
 | [`get-component`](#get-component) | Get a component | `component:read` | read-only, idempotent |
 | [`list-component-alarms`](#list-component-alarms) | List a component's alarms | `component:read` | read-only, idempotent |
-| [`issue-component-command`](#issue-component-command) | Issue a command to a component | `command:issue` | destructive |
+| [`issue-component-command`](#issue-component-command) | Issue a command to a component | `command:issue` | destructive, open-world |
 | [`list-component-events`](#list-component-events) | List a component's recent events | `component:read` | read-only, idempotent |
 | [`list-component-logs`](#list-component-logs) | List a component's recent log lines | `component:read` | read-only, idempotent |
 | [`list-component-metrics`](#list-component-metrics) | List a component's effective metrics | `component:read` | read-only, idempotent |
@@ -45,11 +45,11 @@ A tool that is not read-only and not destructive adds something (a create).
 | [`get-driver`](#get-driver) | Get a driver | `driver:read` | read-only, idempotent |
 | [`update-driver`](#update-driver) | Update a driver | `driver:update` | destructive |
 | [`list-endpoints`](#list-endpoints) | List endpoints in scope | `endpoint:read` | read-only, idempotent |
-| [`create-endpoint`](#create-endpoint) | Create an endpoint | `endpoint:create` | adds |
+| [`create-endpoint`](#create-endpoint) | Create an endpoint | `endpoint:create` | open-world |
 | [`get-endpoint`](#get-endpoint) | Get an endpoint | `endpoint:read` | read-only, idempotent |
-| [`update-endpoint`](#update-endpoint) | Update an endpoint | `endpoint:update` | destructive |
+| [`update-endpoint`](#update-endpoint) | Update an endpoint | `endpoint:update` | destructive, open-world |
 | [`delete-endpoint`](#delete-endpoint) | Delete an endpoint | `endpoint:delete` | destructive, idempotent |
-| [`retry-endpoint`](#retry-endpoint) | Retry an endpoint's gated connections | `endpoint:retry` | adds |
+| [`retry-endpoint`](#retry-endpoint) | Retry an endpoint's gated connections | `endpoint:retry` | destructive, open-world |
 | [`list-locations`](#list-locations) | List locations in scope | `location:read` | read-only, idempotent |
 | [`get-location`](#get-location) | Get a location | `location:read` | read-only, idempotent |
 | [`get-location-health`](#get-location-health) | Read a location's health | `location:read` | read-only, idempotent |
@@ -161,7 +161,7 @@ Records a command invocation, writes a caused event, and (for a settleable comma
 
 - Route: `POST /api/v1/components/{name}/commands:issue`
 - Gate: `command:issue`
-- Assume: destructive
+- Assume: destructive, open-world
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -367,7 +367,7 @@ Creates an endpoint owned by a component (or a server-hosted one, which needs an
 
 - Route: `POST /api/v1/endpoints`
 - Gate: `endpoint:create`
-- Assume: adds
+- Assume: open-world
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -401,7 +401,7 @@ Patches an endpoint's node placement, params, label, or (driver-attached) its co
 
 - Route: `PATCH /api/v1/endpoints/{endpoint}`
 - Gate: `endpoint:update`
-- Assume: destructive
+- Assume: destructive, open-world
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -434,7 +434,7 @@ Moves the endpoint's retry counter, which is part of its connection fingerprint:
 
 - Route: `POST /api/v1/endpoints/{endpoint}:retry`
 - Gate: `endpoint:retry`
-- Assume: adds
+- Assume: destructive, open-world
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
