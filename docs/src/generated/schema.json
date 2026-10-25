@@ -4776,22 +4776,26 @@
    "unclaimed_source": {
     "columns": [
      {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false,
+      "default": "gen_random_uuid()",
+      "pk": true
+     },
+     {
       "name": "host",
       "type": "text",
-      "nullable": false,
-      "pk": true
+      "nullable": false
      },
      {
       "name": "transport",
       "type": "text",
-      "nullable": false,
-      "pk": true
+      "nullable": false
      },
      {
       "name": "source",
       "type": "text",
-      "nullable": false,
-      "pk": true
+      "nullable": false
      },
      {
       "name": "first_heard_at",
@@ -4813,6 +4817,12 @@
       "type": "text",
       "nullable": false,
       "default": "''::text"
+     }
+    ],
+    "uniques": [
+     {
+      "name": "unclaimed_source_host_transport_source_key",
+      "definition": "CREATE UNIQUE INDEX unclaimed_source_host_transport_source_key ON public.unclaimed_source USING btree (host, transport, source)"
      }
     ]
    },

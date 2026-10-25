@@ -473,9 +473,7 @@ audit: {
 unclustered: {
   unclaimed_source: {
     shape: sql_table
-    host: text {constraint: primary_key}
-    source: text {constraint: primary_key}
-    transport: text {constraint: primary_key}
+    id: uuid {constraint: primary_key}
   }
   webhook_token: {
     shape: sql_table

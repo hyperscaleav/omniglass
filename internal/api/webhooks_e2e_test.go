@@ -148,7 +148,13 @@ func TestWebhookIngressEndToEnd(t *testing.T) {
 	engine := sim.NewEngine(store, profiles.Templates())
 	engine.SetPortMap(sim.EphemeralPorts)
 	t.Cleanup(engine.StopAll)
-	if err := engine.Sync([]sim.DeviceSnapshot{{DeviceID: "ucc", Hostname: "ucc", LoopbackIP: simtest.ClaimLoopback(t), ProfileName: "ucc-service", Version: 1}}); err != nil {
+	uccProfile := ""
+	for name, p := range store.Devices {
+		if p.Model == "UCC Platform" {
+			uccProfile = name
+		}
+	}
+	if err := engine.Sync([]sim.DeviceSnapshot{{DeviceID: "ucc", Hostname: "ucc", LoopbackIP: simtest.ClaimLoopback(t), ProfileName: uccProfile, Version: 1}}); err != nil {
 		t.Fatalf("serve the ucc service: %v", err)
 	}
 	ucc := engine.Devices()[0]

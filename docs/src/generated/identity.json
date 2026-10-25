@@ -367,6 +367,12 @@
       "labelled": true
     },
     {
+      "table": "unclaimed_source",
+      "shape": "id only",
+      "reason": "a sender no endpoint claims, one row per listener host, transport and source address; read as a list, never addressed by name",
+      "labelled": false
+    },
+    {
       "table": "variable",
       "shape": "key-bearing",
       "labelled": true
@@ -375,6 +381,12 @@
       "table": "vendor",
       "shape": "key-bearing",
       "labelled": true
+    },
+    {
+      "table": "webhook_token",
+      "shape": "id only",
+      "reason": "a webhook endpoint's token binding, keyed by the endpoint's uuid and found by the token's digest; nothing addresses it by name",
+      "labelled": false
     }
   ]
 }

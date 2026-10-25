@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS webhook_token (
 -- host: 'server' for the webhook route, a node's name from a later slice. No
 -- token a stranger tried is ever stored.
 CREATE TABLE IF NOT EXISTS unclaimed_source (
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   host           text NOT NULL,
   transport      text NOT NULL,
   source         text NOT NULL,
@@ -33,7 +34,7 @@ CREATE TABLE IF NOT EXISTS unclaimed_source (
   last_heard_at  timestamptz NOT NULL,
   heard_count    bigint NOT NULL,
   last_message   text NOT NULL DEFAULT '',
-  PRIMARY KEY (host, transport, source)
+  UNIQUE (host, transport, source)
 );
 CREATE INDEX IF NOT EXISTS unclaimed_source_heard_idx ON unclaimed_source (host, transport, last_heard_at DESC);
 
