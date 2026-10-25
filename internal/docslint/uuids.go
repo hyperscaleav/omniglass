@@ -19,7 +19,8 @@ import (
 // Every line of every page under the docs root, prose and fences alike (a
 // sentence telling a reader to run `omniglass endpoint retry <a uuid>` misleads
 // as much as a fence does), and every line of every committed demo under
-// scripts/demo, the scripted sessions a PR's demo is recorded from.
+// scripts/demo, the tapes a PR's demo is recorded from, held to the stricter
+// demo rule (scanDemoLine) that agrees with the tape linter's.
 //
 // # What is not a finding
 //
@@ -85,8 +86,26 @@ func ScanHardCodedUUIDs() ([]Finding, error) {
 	return findings, err
 }
 
-// scanDemoDir runs the gate over every file under root (a demo is a shell
-// script or a recorder tape), returning the findings and how many files it read.
+// demoUUID is the tape linter's own uuid pattern (web/e2e/tapelib.mjs, #1132):
+// any canonical uuid, either case, wherever it sits in the line.
+var demoUUID = regexp.MustCompile(`(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`)
+
+// scanDemoLine is the stricter rule a demo is held to: every uuid on the line
+// is a finding, an id field or a comment included. A demo shows what an
+// operator types, and an operator never types a uuid it had to look up, so the
+// docs' id-field excuse has nothing to excuse here. The pattern is the tape
+// linter's, so this gate refuses everything that one refuses in typed text,
+// and also reaches the comments and the shell scripts the linter does not read.
+func scanDemoLine(line string) []string {
+	var out []string
+	for _, u := range demoUUID.FindAllString(line, -1) {
+		out = append(out, "hard-coded uuid "+u+" in a demo: address it by its name, and look an id up by name, off screen, where a route still needs one")
+	}
+	return out
+}
+
+// scanDemoDir runs the gate over every file under root (a demo is a recorder
+// tape or a script), returning the findings and how many files it read.
 func scanDemoDir(root string) ([]Finding, int, error) {
 	var (
 		findings []Finding
@@ -105,16 +124,20 @@ func scanDemoDir(root string) ([]Finding, int, error) {
 		if rerr != nil {
 			rel = path
 		}
-		findings = append(findings, scanContent(rel, string(b))...)
+		findings = append(findings, scanContentWith(rel, string(b), scanDemoLine)...)
 		return nil
 	})
 	return findings, read, err
 }
 
 func scanContent(rel, content string) []Finding {
+	return scanContentWith(rel, content, scanUUIDs)
+}
+
+func scanContentWith(rel, content string, scan func(string) []string) []Finding {
 	var out []Finding
 	for i, line := range strings.Split(content, "\n") {
-		for _, text := range scanUUIDs(line) {
+		for _, text := range scan(line) {
 			out = append(out, Finding{File: rel, Line: i + 1, Text: text})
 		}
 	}

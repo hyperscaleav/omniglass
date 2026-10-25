@@ -123,6 +123,11 @@ Two disciplines matter more unattended than attended:
 - **Operator surfaces take the visual gate.** Any change under `web/src` runs
   `/assess-ui`: the state matrix captured against the real console, graded, iterated to
   clean, and the evidence committed for the PR.
+- **Every slice demos its feature.** The architect reviews an unattended PR by watching it
+  work, so the slice ships its demo (`/ship-slice` gate 10): a tape under `scripts/demo/` for
+  CLI or API behavior, a walkthrough for a console flow, proven with `make demo ID=<id>`, then
+  recorded on the PR by the `run:demo` label, its comment linked in the Demo section. `n/a`
+  carries its reason (a test-only or docs-only slice).
 - **The synthetic user's lenses are available to you too.** For an operator-surface or
   CLI slice, `make probe` and one `lens-ux`, `lens-performance` or `lens-ai-friendliness`
   agent (`.claude/agents/`) over the changed surfaces is a cheap second opinion before
@@ -144,7 +149,8 @@ Then:
 
 1. Push the branch and open the PR: title `<type>: <slice>` with a lowercase subject
    (the pr-title lint refuses a capital), body = the ship-review, the `closes #NNN`
-   reference, and the autopilot marker line last.
+   reference, and the autopilot marker line last. Apply `run:demo` unless the Demo line is
+   `n/a`, and put the demo comment's link in the body once it posts.
 2. Subscribe to the PR's activity (`subscribe_pr_activity`) and answer what arrives: CI
    red is yours until green, review comments are implemented or answered, and the
    optional-finding etiquette for bot reviews applies.

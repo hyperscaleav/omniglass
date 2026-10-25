@@ -70,11 +70,13 @@ refs: [1133]
      before any name is tried, so an id never collides with a name, and every response body still
      carries the uuid
      ([ADR-0076](#adr-0076-a-renameable-human-typed-identifier-stays-in-the-url-and-the-write-returns-the-uuid)).
-  6. **The docs and the demos type names.** `TestDocsCarryNoHardCodedUUIDs` and
-     `TestDemoScriptsCarryNoHardCodedUUIDs` (`internal/docslint`) fail a uuid in an address position on
-     any docs page or any committed demo under `scripts/demo`, excusing an id field a response returns,
+  6. **The docs and the demos type names.** `TestDocsCarryNoHardCodedUUIDs` (`internal/docslint`)
+     fails a uuid in an address position on any docs page, excusing an id field a response returns,
      the generated CLI reference, the append-only log entries, and an explicit allowlist that is
-     empty today. A path parameter's OpenAPI example renders in the generated CLI's examples, so the
+     empty today; `TestDemoScriptsCarryNoHardCodedUUIDs` fails any uuid at all in a committed demo
+     under `scripts/demo`, comments included, on the tape linter's own pattern
+     ([ADR-1132](#adr-1132-a-demo-is-one-concept-with-two-recorders-and-every-pr-demos-its-feature)), so whatever that linter
+     refuses in typed text it refuses too. A path parameter's OpenAPI example renders in the generated CLI's examples, so the
      help teaches `omniglass endpoint retry 'boi.17c.415a.$comp.display-1/https'`, not `<id>`.
 - **Stated limits, recorded rather than hidden:**
   1. **A bare name lands on whatever single row the caller can see by it.** A secret rotation by a

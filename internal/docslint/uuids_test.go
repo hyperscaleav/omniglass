@@ -67,6 +67,34 @@ func TestDemoScriptsCarryNoHardCodedUUIDs(t *testing.T) {
 	report(t, "hard-coded uuid in a demo", findings, true)
 }
 
+// TestDemoGateMatchesTheTapeLinter pins the demo half of the gate to the tape
+// linter's rule (web/e2e/tapelib.mjs, #1132): in a demo ANY uuid is a finding,
+// an id field and a comment included, since a demo never needs to show one it
+// typed, and a uuid run into other hex is one too. So whatever the tape linter
+// refuses in typed text this gate refuses as well, and the gate reaches the
+// comment lines and shell scripts the linter does not read.
+func TestDemoGateMatchesTheTapeLinter(t *testing.T) {
+	const u = "01a03c92-5cd8-757a-8b3c-82623d8ff57e"
+	for _, line := range []string{
+		`Type ` + "`" + `omniglass endpoint get ` + u + "`",
+		`# the panel is ` + u,
+		`Type ` + "`" + `jq '{"id": "` + u + `"}'` + "`",
+		`ffff` + u,
+	} {
+		if got := scanDemoLine(line); len(got) != 1 {
+			t.Errorf("scanDemoLine(%q) = %v, want one finding", line, got)
+		}
+	}
+	for _, line := range []string{
+		"Type `omniglass endpoint get \"$panel/https\" | jq -c '{component, name}'`",
+		"Type `demo_hush 'ep=$(omniglass endpoint get \"$panel/https\" | jq -r .id)'`",
+	} {
+		if got := scanDemoLine(line); len(got) != 0 {
+			t.Errorf("scanDemoLine(%q) = %v, want none", line, got)
+		}
+	}
+}
+
 // TestTheGateCatchesAUUIDInADemo is #1133's acceptance line for the guard: a
 // demo that addresses a component by uuid is a finding, named by file and line.
 func TestTheGateCatchesAUUIDInADemo(t *testing.T) {

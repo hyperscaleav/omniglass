@@ -46,30 +46,38 @@ promise: if a label runs automation it is named `run:<task>`, and if a label is 
 | Label | Applying it | Wired |
 | --- | --- | --- |
 | `run:preview` | spins up a live [PR preview environment](/guides/pr-previews/); removing it tears the preview down | yes |
-| `run:walkthrough` | records the PR's walkthroughs in CI and upserts a comment that links a scrubbable video of each and plays its animated preview, with its poster and stills below | yes |
+| `run:demo` | records the PR's [demos](/contributing/demos/) in CI (its terminal demos and its walkthroughs) and upserts one comment listing every demo, each with a scrubbable video and what plays inline | yes |
 | `run:build` | rebuilds the release binaries and container image for the PR head on demand | reserved |
 | `run:test` | runs the full test suite on demand | reserved |
 
 `run:preview` is live today (the [PR previews guide](/guides/pr-previews/) covers it, and
-`preview-comment.yml` is the workflow behind it). So is `run:walkthrough`
-(`walkthrough.yml`). Applying it records walkthroughs on the walkthrough stack: for a PR that
-changes nothing under `web/` but walkthrough scripts, just the scripts it adds or changes;
-otherwise every walkthrough, since any console change can move a flow. It then commits each
-passing walkthrough's mp4, animated preview (`preview.webp`), poster and per-step stills under
-`<id>/` to the PR's own evidence ref, `refs/walkthroughs/pr-<n>`, as a fresh tree (so a renamed or
-deleted script leaves nothing behind) on top of the ref's last commit, and keeps one comment on the
-PR reaching them by that commit's SHA: each walkthrough leads with a **Watch (scrubbable)** link to
-its mp4 through jsDelivr, which serves it as video with range requests so the browser's player
-seeks, then its preview, which plays on the PR page, then its poster and its captioned stills folded
-below. The comment also links the run's workflow artifact (which keeps a failed walkthrough's
-partial stills) and names any walkthrough that failed (a walkthrough is a test, so a failure fails
-the job; a stack that never came up is reported as that, not as every walkthrough failing). Why a
-ref rather than a branch is in [walkthroughs](/contributing/walkthroughs/#show-it-on-the-pr).
+`preview-comment.yml` is the workflow behind it). So is `run:demo` (`demo.yml`). Applying it
+records the PR's demos on the walkthrough stack, each with its own recorder: the tapes
+(`scripts/demo/<id>.tape`, terminal demos) and walkthrough scripts it adds or changes; every tape
+when it changes the terminal recorder, and every walkthrough when it changes anything else under
+`web/`, since any console change can move a flow; every demo when it names none. It then commits
+each passing demo's files under `<id>/` to the PR's own evidence ref, `refs/walkthroughs/pr-<n>`,
+as a fresh tree (so a renamed or deleted demo leaves nothing behind) on top of the ref's last
+commit, and keeps **one comment** on the PR listing every demo and reaching its files by that
+commit's SHA: each demo leads with a **Watch (scrubbable)** link to its video through jsDelivr,
+which serves it as video with range requests so the browser's player seeks, then what plays on the
+PR page (a terminal demo's GIF; a walkthrough's animated preview, then its poster and its captioned
+stills folded below). The comment also links the run's workflow artifact (which keeps a failed
+demo's partial output) and names any demo that failed (a demo is a test, so a failure fails the
+job; a recorder whose stack never came up is reported as that, not as every one of its demos
+failing). Why a ref rather than a branch is in [demos](/contributing/demos/#show-it-on-the-pr).
+
+`run:walkthrough` is `run:demo`'s earlier name, from when walkthroughs were the only demos. The
+workflow still honors it, so a PR that carries it (or a re-run of a run it started) records as
+before, and a PR's existing walkthrough comment is found and updated in place rather than joined by
+a second one. It is not a second task: apply `run:demo`. The run plays the branch's own recorders,
+so a branch cut before demos merges main first; the job says so if it has not. Retiring the old
+name is [#1136](https://github.com/hyperscaleav/omniglass/issues/1136).
 
 - **What it costs:** nothing on main. The evidence never touches the PR branch, so a squash-merge
   carries none of it, and a default clone does not fetch the ref. It does sit in the repository's
-  object store on GitHub and in any mirror of every ref (about 2 to 3.5 MB per walkthrough per run,
-  video included), until `walkthrough-prune.yml` deletes the ref 30 days after the PR closes.
+  object store on GitHub and in any mirror of every ref (a few MB per demo per run, video
+  included), until `demo-prune.yml` deletes the ref 30 days after the PR closes.
 - **The PR's checks:** untouched. The run pushes only the evidence ref, never the PR head, so there
   is nothing to pull after a run and no check left un-run on the head.
 

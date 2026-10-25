@@ -101,9 +101,10 @@ is now retired everywhere, including the last place it lived, the registries.
 `{"parent": "..."}` both take a uuid or a name; the uuid is tried first, so an id never
 collides with a name. That holds on every operator resource, not just the tree entities: a route
 that takes a uuid takes the name too, and the docs and demos type the name
-([API](/architecture/api/#every-operator-resource-answers-to-its-name)), which `TestDocsCarryNoHardCodedUUIDs`
-and `TestDemoScriptsCarryNoHardCodedUUIDs` (`internal/docslint`) enforce on every page and every
-committed demo, excusing only an id field a response returns and the generated reference.
+([API](/architecture/api/#every-operator-resource-answers-to-its-name)). `TestDocsCarryNoHardCodedUUIDs`
+(`internal/docslint`) enforces it on every page, excusing only an id field a response returns and the
+generated reference, and `TestDemoScriptsCarryNoHardCodedUUIDs` on every committed
+[demo](/contributing/demos/), where no uuid is excused at all.
 
 `TestReferencesCarryBothForms` enforces this over the generated OpenAPI in both directions, so a body
 cannot silently reintroduce a uuid-only reference (a `*_id` with no name) nor a name-only registry

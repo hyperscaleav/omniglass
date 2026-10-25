@@ -26,8 +26,10 @@ given rather than the row it resolved.
 The generated CLI shows a path parameter's OpenAPI example in its help and sends every positional as
 one path segment (a slash and a colon both encoded), so `omniglass endpoint retry
 'boi.17c.415a.$comp.display-1/https'` and `omniglass secret update demo-panel-login --fields ...` work
-as printed. The guides, the CLI guide and the http-logins demo now type names, and
-`TestDocsCarryNoHardCodedUUIDs` / `TestDemoScriptsCarryNoHardCodedUUIDs` keep it that way. The console
+as printed. The guides and the CLI guide now type names, the http-logins tape rotates its secret by
+name, and a `name-addressing` tape demos the slice end to end;
+`TestDocsCarryNoHardCodedUUIDs` and `TestDemoScriptsCarryNoHardCodedUUIDs` keep it that way, the demo
+half held to the tape linter's own rule (any uuid at all, comments included). The console
 still addresses everything by uuid (ADR-0089), so it moved only where a path parameter was renamed.
 
 An adversarial security review found the authorization sound (every name narrowed to the caller's
