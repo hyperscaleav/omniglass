@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -38,5 +39,27 @@ func TestClassRejection(t *testing.T) {
 	}
 	if _, refused := classRejection("video-input", writerclass.Collected, nil); refused {
 		t.Error("a collected key was refused")
+	}
+}
+
+// TestEndpointListing: the push route's refusal of an unknown instance lists
+// the owner's endpoints, bounded, so a component with many endpoints costs the
+// refusal a fixed size.
+func TestEndpointListing(t *testing.T) {
+	many := make([]string, 0, 15)
+	for i := 0; i < 15; i++ {
+		many = append(many, fmt.Sprintf("ep-%02d", i))
+	}
+	for _, c := range []struct {
+		names []string
+		want  string
+	}{
+		{nil, "it has no endpoints"},
+		{[]string{"tcp", "https", "webhook"}, "its endpoints: https, tcp, webhook"},
+		{many, "its endpoints: ep-00, ep-01, ep-02, ep-03, ep-04, ep-05, ep-06, ep-07, ep-08, ep-09, and 5 more"},
+	} {
+		if got := endpointListing(c.names); got != c.want {
+			t.Errorf("endpointListing(%d names) = %q, want %q", len(c.names), got, c.want)
+		}
 	}
 }

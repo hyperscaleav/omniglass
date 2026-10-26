@@ -436,7 +436,11 @@ membership route costs**: `system:update`, the same permission and the same scop
 `PUT /systems/{name}/members/{component}`, and not the `component:create` that admits the rest of the
 form ([ADR-0107](/architecture/decisions/#adr-0107-a-create-that-writes-a-membership-costs-what-the-membership-route-costs)).
 An `operator` holds no system permission, so it creates components and a `deploy` tech binds them
-into systems.
+into systems. The reverse holds as well: a membership writes onto its component (its primary, its
+label, the system band of its cascade), so every route that binds, unbinds, re-defaults or staffs a
+component needs `component:update` over it as well as `system:update` over the system, and a
+principal scoped to one system binds nothing it cannot write
+([ADR-0510](/architecture/decisions/#adr-0510-a-membership-or-a-role-assignment-costs-a-write-on-both-of-its-ends)).
 
 Membership **cascades from both ends**, and does not restrict the component the way
 `system_role_assignment` does: that restrict is load-bearing (deleting a filler would silently break
@@ -447,6 +451,24 @@ standard-declared roles are **inherited live** by every conforming system, like 
 system-declared ones are ad-hoc, how a one-off system gets roles and a conforming system adds beyond
 its standard. A role carries a **`quorum`** (two ceiling mics is one role with quorum 2), at least
 one.
+
+**A role name means one role in a system.** Staffing, health and the console all address a role by
+its name within the system, so a write that would give a system two roles of one name is refused with
+a 409 naming the role, the standard and the system: a system declaring a name its standard declares, a
+standard declaring a name a conforming system declares itself, and a system moving onto a standard
+that declares a name it declares itself. A system role never shadows an inherited one; a second slot
+takes a second name
+([ADR-0503](/architecture/decisions/#adr-0503-a-role-name-addresses-one-role-per-system)).
+
+**Changing a system's standard carries its staffing onto the roles that still exist.** In the same
+transaction as the repoint, each occupant of a role the old standard declares moves onto the new
+standard's role of the same name, when it is still a typed match for that role and the role has room
+under its capacity (lowest positions first, keeping its own position where that is free). Every other
+occupant is **released**: it loses the assignment and keeps its membership, so it can be unbound,
+restaffed or deleted at once, and nothing is ever left pointing at a role the system no longer has.
+Clearing the standard releases every inherited assignment; the system's own roles are never touched.
+Each move and release is audited, and health recomputes after the staffing settles
+([ADR-0506](/architecture/decisions/#adr-0506-changing-a-systems-standard-carries-its-staffing-onto-the-roles-that-still-exist)).
 
 **The typed-slot guard is what `AssignRole` checks (#626).** A component fills a slot only when its
 product's `component_type` falls within a type the role's `system_role_type` set names (self or a
@@ -464,8 +486,8 @@ the same.
 component "panel-1" is a display; role "table-mic" wants a video-bar
 ```
 
-A refusal on **modeled** grounds, and it runs **once**, at assignment; afterward an occupant keeps its
-slot unless its own [health](/architecture/health/) verdict goes to outage (a lesser alarm degrades
+A refusal on **modeled** grounds, and it runs at assignment (and again when a standard change would carry
+the occupant onto the new standard's role); afterward an occupant keeps its slot unless its own [health](/architecture/health/) verdict goes to outage (a lesser alarm degrades
 it but does not cost it the slot)
 ([ADR-0049](/architecture/decisions/#adr-0049-the-system-role-capability-gated-staffing-and-the-resolved-capability-set)).
 
@@ -490,6 +512,13 @@ Shipped content is two kinds, never conflated:
   its name: the seed marks what it plants (`seeded`) and a rename refuses it, since the next boot would
   plant the shipped name again
   ([ADR-0555](/architecture/decisions/#adr-0555-a-registry-row-renames-through-its-own-rename-custom-method)).
+  A shipped role lands **whole** (the role and its accepted types and pinned products in one
+  transaction), and a later boot fills a set that a role the seed wrote, and nobody has since
+  declared or revised, is entirely missing, which is what an interrupted install could leave
+  ([ADR-0508](/architecture/decisions/#adr-0508-the-boot-seed-installs-a-shipped-role-whole-and-repairs-a-set-an-unrevised-role-is-missing)).
+  A shipped role that a conforming system already declares itself is not installed, since the name
+  would then mean two roles there
+  ([ADR-0503](/architecture/decisions/#adr-0503-a-role-name-addresses-one-role-per-system)).
 - **Canonical vocabulary** (the [`metric_type` and `property_type` catalogs](/architecture/properties/),
   the `event_type`
   and `command_type` registries) is the shared namespace a driver maps onto, identical install to

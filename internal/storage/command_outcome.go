@@ -125,42 +125,64 @@ func targetKey(ct *CommandType) string {
 // anything but a match is failed); the record splits that collapsed failure
 // into what the series can distinguish: a component that reported another
 // value failed, a window that closed with nothing observed timed out, and
-// the reason says which and where the command stopped.
+// the reason says which and where the command stopped. A command still
+// queued for the endpoint that carries it never reached the device, so a
+// reading that disagrees is not the device's answer to it: its window
+// closing is a timeout where it stopped, never a failure (ADR-0456).
 func (p *PG) observationOutcome(ctx context.Context, q querier, ct *CommandType, id int64, verdict SettlementVerdict, intended, observed *CurrentValue) (settlementOutcome, error) {
-	switch {
-	case verdict == SettlementSettled:
+	if verdict == SettlementSettled {
 		return settlementOutcome{status: "settled", by: SettledByObservation, observed: observed,
 			reason: fmt.Sprintf("observed %s, the intended value", valueText(observed.Value))}, nil
-	case observed != nil:
+	}
+	stop, err := p.commandStop(ctx, q, id)
+	if err != nil {
+		return settlementOutcome{}, err
+	}
+	if observed != nil && (stop.delivered || !stop.carried) {
 		return settlementOutcome{status: "failed", by: SettledByObservation, observed: observed,
 			reason: fmt.Sprintf("observed %s, not the intended %s, when its %s settle window closed",
 				valueText(observed.Value), valueText(intended.Value), windowText(ct.SettleWindowSeconds))}, nil
 	}
-	reason, err := p.timeoutReason(ctx, q, ct, id)
+	return settlementOutcome{status: "timed-out", by: SettledByWindow, reason: stop.words(ct)}, nil
+}
+
+// commandStopFacts is how far a command got: delivered to a node, executed
+// (and with what error), and carried by an endpoint (the one it rides,
+// commandRideSQL) placed on a node.
+type commandStopFacts struct {
+	delivered, executed, carried bool
+	execErr, endpoint, node      string
+}
+
+// words is the timeout reason the facts give (timeoutWords).
+func (f commandStopFacts) words(ct *CommandType) string {
+	return timeoutWords(ct.Name, targetKey(ct), windowText(ct.SettleWindowSeconds), f.delivered, f.executed, f.carried, f.execErr, f.endpoint, f.node)
+}
+
+// commandStop reads how far a command got.
+func (p *PG) commandStop(ctx context.Context, q querier, id int64) (commandStopFacts, error) {
+	var f commandStopFacts
+	err := q.QueryRow(ctx, `select c.dispatched_at is not null, c.executed_at is not null, coalesce(c.exec_error, ''),
+			ride.id is not null, coalesce(ride.name, ''),
+			coalesce((select n.name from node n where n.principal_id = ride.node_name), '')
+		from command c join command_type ct on ct.id = c.command_type_id
+		`+commandRideSQL+`
+		where c.id = $1`, id).Scan(&f.delivered, &f.executed, &f.execErr, &f.carried, &f.endpoint, &f.node)
 	if err != nil {
-		return settlementOutcome{}, err
+		return commandStopFacts{}, fmt.Errorf("storage: where command %d stopped: %w", id, err)
 	}
-	return settlementOutcome{status: "timed-out", by: SettledByWindow, reason: reason}, nil
+	return f, nil
 }
 
 // timeoutReason says where a command stopped when its window closed on no
 // evidence: answered with nothing observed after, delivered with no report,
 // queued for a node that never took it, or carried by no endpoint at all.
 func (p *PG) timeoutReason(ctx context.Context, q querier, ct *CommandType, id int64) (string, error) {
-	var (
-		delivered, executed, carried bool
-		execErr, endpoint, node      string
-	)
-	err := q.QueryRow(ctx, `select c.dispatched_at is not null, c.executed_at is not null, coalesce(c.exec_error, ''),
-			ride.id is not null, coalesce(ride.name, ''),
-			coalesce((select n.name from node n where n.principal_id = ride.node_name), '')
-		from command c join command_type ct on ct.id = c.command_type_id
-		`+commandRideSQL+`
-		where c.id = $1`, id).Scan(&delivered, &executed, &execErr, &carried, &endpoint, &node)
+	f, err := p.commandStop(ctx, q, id)
 	if err != nil {
-		return "", fmt.Errorf("storage: where command %d stopped: %w", id, err)
+		return "", err
 	}
-	return timeoutWords(ct.Name, targetKey(ct), windowText(ct.SettleWindowSeconds), delivered, executed, carried, execErr, endpoint, node), nil
+	return f.words(ct), nil
 }
 
 // timeoutWords is timeoutReason's sentence, from the facts it read. Pure.

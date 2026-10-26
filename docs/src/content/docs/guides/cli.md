@@ -355,8 +355,9 @@ omniglass component reachability list disp-1                              # need
 ```
 
 Read a component's property reconciliation, the want/told/is pivot (the current declared
-value with the contract default coalesced in, the intended value a command set, and the
-latest observed value, all series reads) with drift computed on read:
+value with the contract default coalesced in, the newest intended value a command set, and the
+observed value read across every endpoint that reports it, naming the one it shows, all series
+reads) with drift computed on read:
 
 ```sh
 omniglass component reconciliation list disp-1                                       # needs component:read

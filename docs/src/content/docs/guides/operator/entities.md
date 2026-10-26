@@ -125,7 +125,9 @@ identity pages.
   to it, so it needs `system:update`: an **Operator** holds no system permission and gets the slot with
   the reason in it instead of a picker, while a **Deploy** tech or an administrator gets the picker.
   Nothing else about the create changes, and the component is not stuck outside: create it, and whoever
-  holds that permission adds it to a system afterwards.
+  holds that permission adds it to a system afterwards. Adding a member writes onto the component too
+  (its default system, its label, what it inherits), so that act takes `component:update` over the
+  component as well as `system:update` over the system; a **Deploy** grant over both covers it.
 
   Identity is two fields you may fill and one you never see: the **name** is the identifier the API,
   the CLI, and the URL carry (`display-1`, lowercase letters, digits, and hyphens, unique within its

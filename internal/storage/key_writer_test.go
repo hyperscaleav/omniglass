@@ -321,9 +321,17 @@ func TestWriterMismatchRefused(t *testing.T) {
 			{"a rule writing the verdict", func() error {
 				return f.gw.WritePropertyAsRule(f.ctx, rule.ID, property("endpoint-reachable", "ssh", "up"))
 			}},
+			{"a landed push batch carrying the verdict", func() error {
+				_, err := f.gw.LandBatch(f.ctx, storage.IngestBatch{BatchID: "refused-property", Writer: storage.PushWriter(), Properties: property("endpoint-reachable", "ssh", "up")})
+				return err
+			}},
 		},
-		"InsertEvents": {
+		"writeEvents": {
 			{"a push of collection-failed", func() error { return f.gw.InsertEvents(f.ctx, storage.PushWriter(), event("collection-failed", "ssh")) }},
+			{"a landed push batch carrying collection-failed", func() error {
+				_, err := f.gw.LandBatch(f.ctx, storage.IngestBatch{BatchID: "refused-event", Writer: storage.PushWriter(), Events: event("collection-failed", "ssh")})
+				return err
+			}},
 			{"a node on another endpoint", func() error {
 				return f.gw.InsertEvents(f.ctx, storage.NodeWriter(comp.ID, "ssh"), event("collection-failed", "panel"))
 			}},

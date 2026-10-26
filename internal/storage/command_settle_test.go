@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -287,5 +288,235 @@ func TestNonEvidenceLeavesACommandPending(t *testing.T) {
 		if got := r.status(t, id); got != "issued" {
 			t.Fatalf("after %s at %v: status = %q, want still issued", s.Value, s.TS, got)
 		}
+	}
+}
+
+// issueQueued issues set-input with no instance and leaves it queued: no node
+// has taken it, so it names no endpoint it was dispatched over.
+func (r *settleRig) issueQueued(t *testing.T, input string) int64 {
+	t.Helper()
+	cmd, err := r.gw.IssueCommand(r.ctx, r.actor, "component", "switcher", "set-input", "", json.RawMessage(`"`+input+`"`), nil)
+	if err != nil {
+		t.Fatalf("issue: %v", err)
+	}
+	return cmd.ID
+}
+
+// observeOn lands an observation of video-input on one instance: on the
+// rig's endpoint (tcp) through the node lane, as the consumer does for a task
+// on it; on any other instance as a push that names it.
+func (r *settleRig) observeOn(t *testing.T, instance, value string) {
+	t.Helper()
+	w := storage.PushWriter()
+	if instance == "tcp" {
+		w = storage.NodeWriter("switcher", instance)
+	}
+	if err := r.gw.InsertPropertySamples(r.ctx, w, []storage.PropertySampleWrite{{
+		OwnerKind: "component", OwnerID: "switcher", Key: "video-input", Instance: instance, Value: value, Source: "tcp",
+	}}); err != nil {
+		t.Fatalf("observe %s on %s: %v", value, instance, err)
+	}
+}
+
+// A queued un-instanced command (no node has taken it yet) is judged on the
+// endpoint queued to carry it, the one whose driver binds its type, where
+// that driver's observations of the target land (ADR-0456): another
+// instance agreeing does not settle it, and its carrier agreeing does, the
+// computed verdict agreeing with the recorded one.
+func TestAQueuedCommandIsJudgedOnTheEndpointQueuedToCarryIt(t *testing.T) {
+	r := newSettleRig(t, "")
+	id := r.issueQueued(t, "hdmi3")
+	r.observeOn(t, "aux", "hdmi3")
+	if got := r.status(t, id); got != "issued" {
+		t.Fatalf("after another instance agreed: status = %q, want issued", got)
+	}
+	r.observeOn(t, "tcp", "hdmi3")
+	if got := r.status(t, id); got != "settled" {
+		t.Fatalf("after its carrier agreed: status = %q, want settled", got)
+	}
+	verdict, err := r.gw.CommandSettlement(r.ctx, "component", "switcher", "set-input", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if verdict != storage.SettlementSettled {
+		t.Fatalf("computed verdict = %q, want settled, as recorded", verdict)
+	}
+}
+
+// A command no node took never reached the device, so a reading of its
+// target that disagrees is not the device's answer to it: past the window
+// it times out, saying it stopped in the queue, whether its carrier had
+// observed another value or nothing at all (ADR-0456, the commands page's
+// "timed-out covers a command no node picked up").
+func TestAQueuedCommandNoNodeTookTimesOut(t *testing.T) {
+	r := newSettleRig(t, "")
+	if _, err := r.conn.Exec(r.ctx, `update command_type set settle_window_seconds = 1 where name = 'set-input'`); err != nil {
+		t.Fatal(err)
+	}
+	unanswered := r.issueQueued(t, "hdmi2")
+	r.observeOn(t, "tcp", "hdmi1")
+	answered := r.issueQueued(t, "hdmi3")
+	time.Sleep(1500 * time.Millisecond)
+	if err := r.gw.SweepCommandSettlements(r.ctx); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []int64{unanswered, answered} {
+		var status, settledBy, reason string
+		if err := r.conn.QueryRow(r.ctx, `select status, coalesce(settled_by, ''), coalesce(reason, '') from command where id = $1`, id).
+			Scan(&status, &settledBy, &reason); err != nil {
+			t.Fatal(err)
+		}
+		if status != "timed-out" || settledBy != "window" || !strings.Contains(reason, "queued for node edge") {
+			t.Fatalf("command %d no node took: status %q by %q (%s), want timed-out by the window, queued for node edge", id, status, settledBy, reason)
+		}
+	}
+}
+
+// ownerLevelRig adds a display to the rig that no endpoint can command (no
+// driver binds set-input on it), so an un-instanced set-input on it is an
+// owner-level intent, judged on every observed instance of video-input.
+func (r *settleRig) ownerLevelDisplay(t *testing.T) {
+	t.Helper()
+	all := scope.Set{All: true}
+	if _, err := r.gw.CreateComponent(r.ctx, "", storage.ComponentSpec{Name: "display"}, all, all, all, all); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.conn.Exec(r.ctx, `update command_type set settle_window_seconds = 1 where name = 'set-input'`); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// pushOn lands an observation of video-input on the display, on an
+// instance its sender names.
+func (r *settleRig) pushOn(t *testing.T, instance, value string) {
+	t.Helper()
+	if err := r.gw.InsertPropertySamples(r.ctx, storage.PushWriter(), []storage.PropertySampleWrite{{
+		OwnerKind: "component", OwnerID: "display", Key: "video-input", Instance: instance, Value: value, Source: "push",
+	}}); err != nil {
+		t.Fatalf("push %s on %s: %v", value, instance, err)
+	}
+}
+
+// issueOwnerLevel issues set-input on the display with no instance.
+func (r *settleRig) issueOwnerLevel(t *testing.T, input string) int64 {
+	t.Helper()
+	cmd, err := r.gw.IssueCommand(r.ctx, r.actor, "component", "display", "set-input", "", json.RawMessage(`"`+input+`"`), nil)
+	if err != nil {
+		t.Fatalf("issue: %v", err)
+	}
+	return cmd.ID
+}
+
+// outcome reads a command's recorded status, what decided it, and the value
+// it was decided on.
+func (r *settleRig) outcome(t *testing.T, id int64) (status, settledBy, observed string) {
+	t.Helper()
+	var obs []byte
+	if err := r.conn.QueryRow(r.ctx, `select status, coalesce(settled_by, ''), observed_value from command where id = $1`, id).
+		Scan(&status, &settledBy, &obs); err != nil {
+		t.Fatal(err)
+	}
+	return status, settledBy, string(obs)
+}
+
+// An owner-level command (one no endpoint can carry) is judged on every
+// observed instance of its target (ADR-0456): an instance reporting another
+// value leaves it pending, and the first instance that agrees settles it.
+func TestAnOwnerLevelCommandSettlesWhenAnyInstanceAgrees(t *testing.T) {
+	r := newSettleRig(t, "")
+	r.ownerLevelDisplay(t)
+	id := r.issueOwnerLevel(t, "hdmi3")
+	r.pushOn(t, "rx-1", "hdmi1")
+	if got := r.status(t, id); got != "issued" {
+		t.Fatalf("after a disagreeing instance: status = %q, want issued", got)
+	}
+	r.pushOn(t, "rx-2", "hdmi3")
+	if got := r.status(t, id); got != "settled" {
+		t.Fatalf("after an agreeing instance: status = %q, want settled", got)
+	}
+	verdict, err := r.gw.CommandSettlement(r.ctx, "component", "display", "set-input", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if verdict != storage.SettlementSettled {
+		t.Fatalf("computed verdict = %q, want settled, as recorded", verdict)
+	}
+}
+
+// Past the window, an owner-level command whose target was observed on some
+// instance and agreed on none failed, decided by the observation; with
+// nothing observed on any instance it timed out.
+func TestAnOwnerLevelCommandFailsWhenNoInstanceAgrees(t *testing.T) {
+	r := newSettleRig(t, "")
+	r.ownerLevelDisplay(t)
+	unanswered := r.issueOwnerLevel(t, "hdmi2")
+	time.Sleep(1500 * time.Millisecond)
+	if err := r.gw.SweepCommandSettlements(r.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.status(t, unanswered); got != "timed-out" {
+		t.Fatalf("nothing observed: status = %q, want timed-out", got)
+	}
+	r.pushOn(t, "rx-1", "hdmi1")
+	id := r.issueOwnerLevel(t, "hdmi3")
+	time.Sleep(1500 * time.Millisecond)
+	if err := r.gw.SweepCommandSettlements(r.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if status, by, observed := r.outcome(t, id); status != "failed" || by != "observation" || observed != `"hdmi1"` {
+		t.Fatalf("observed otherwise: status %q by %q observed %s, want failed by the observation of hdmi1", status, by, observed)
+	}
+}
+
+// An endpoint deleted after it observed the target is a retired observer:
+// its last reading is frozen (nothing prunes a series' latest row), so an
+// owner-level judgment leaves it out rather than settling a command on what
+// a removed connection once saw (ADR-0456).
+func TestARetiredObserverDoesNotSettleAnOwnerLevelCommand(t *testing.T) {
+	r := newSettleRig(t, "")
+	r.ownerLevelDisplay(t)
+	all := scope.Set{All: true}
+	if _, err := r.conn.Exec(r.ctx, `insert into endpoint (name, transport, component, node_name, params) values
+		('telnet', 'telnet', (select id from component where name = 'display'), (select principal_id from node where name = 'edge'), '{"target":"10.20.4.61:23"}'::jsonb)`); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.gw.InsertPropertySamples(r.ctx, storage.NodeWriter("display", "telnet"), []storage.PropertySampleWrite{{
+		OwnerKind: "component", OwnerID: "display", Key: "video-input", Instance: "telnet", Value: "hdmi3", Source: "telnet",
+	}}); err != nil {
+		t.Fatalf("observe on telnet: %v", err)
+	}
+	if err := r.gw.DeleteEndpoint(r.ctx, r.actor, "display/telnet", all, all); err != nil {
+		t.Fatalf("delete the telnet endpoint: %v", err)
+	}
+	r.pushOn(t, "rx-1", "hdmi1")
+	id := r.issueOwnerLevel(t, "hdmi3")
+	time.Sleep(1500 * time.Millisecond)
+	if err := r.gw.SweepCommandSettlements(r.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if status, by, observed := r.outcome(t, id); status != "failed" || by != "observation" || observed != `"hdmi1"` {
+		t.Fatalf("a retired observer agreed: status %q by %q observed %s, want failed on the live instance's hdmi1", status, by, observed)
+	}
+}
+
+// A command dispatched over an endpoint is judged on that endpoint's series
+// alone (#900, kept by ADR-0456): another instance agreeing does not settle
+// it, and with nothing on its own endpoint it times out.
+func TestADispatchedCommandIsJudgedOnItsEndpointAlone(t *testing.T) {
+	r := newSettleRig(t, "")
+	if _, err := r.conn.Exec(r.ctx, `update command_type set settle_window_seconds = 1 where name = 'set-input'`); err != nil {
+		t.Fatal(err)
+	}
+	id := r.issueAndDispatch(t, "hdmi3")
+	r.observeOn(t, "aux", "hdmi3")
+	if got := r.status(t, id); got != "issued" {
+		t.Fatalf("after another instance agreed: status = %q, want issued", got)
+	}
+	time.Sleep(1500 * time.Millisecond)
+	if err := r.gw.SweepCommandSettlements(r.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.status(t, id); got != "timed-out" {
+		t.Fatalf("nothing on its own endpoint: status = %q, want timed-out", got)
 	}
 }
