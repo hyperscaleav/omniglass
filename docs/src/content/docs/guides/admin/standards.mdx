@@ -202,6 +202,14 @@ slot there: declaring one, declaring the same name on the standard after a room 
 onto a standard that declares a name the room declares itself is refused, naming both. A second slot
 takes a second name.
 
+**Moving a room to another standard keeps it staffed.** Change a system's **Standard** and each
+component filling an inherited role carries across to the new standard's role of the same name, as long
+as it is still the kind of component that role accepts and the role has room. Anything else is
+released: it stays a member of the room with no role, ready to be restaffed, unbound or deleted, and the
+room's roles panel and health read the new standard at once. Clearing the Standard (making the room a
+one-off) releases every inherited role's staffing; roles declared on the room itself keep theirs. Moving
+back later reactivates nothing, so restaff what you want back.
+
 From the CLI: `omniglass system role list <name>`, `omniglass system role update <name> <role>`,
 `omniglass system role delete <name> <role>`, `omniglass system role assignment update <name> <role> <component>`,
 and `omniglass system role assignment delete <name> <role> <component>`.

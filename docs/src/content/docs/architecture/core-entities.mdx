@@ -460,6 +460,16 @@ that declares a name it declares itself. A system role never shadows an inherite
 takes a second name
 ([ADR-0503](/architecture/decisions/#adr-0503-a-role-name-addresses-one-role-per-system)).
 
+**Changing a system's standard carries its staffing onto the roles that still exist.** In the same
+transaction as the repoint, each occupant of a role the old standard declares moves onto the new
+standard's role of the same name, when it is still a typed match for that role and the role has room
+under its capacity (lowest positions first, keeping its own position where that is free). Every other
+occupant is **released**: it loses the assignment and keeps its membership, so it can be unbound,
+restaffed or deleted at once, and nothing is ever left pointing at a role the system no longer has.
+Clearing the standard releases every inherited assignment; the system's own roles are never touched.
+Each move and release is audited, and health recomputes after the staffing settles
+([ADR-0506](/architecture/decisions/#adr-0506-changing-a-systems-standard-carries-its-staffing-onto-the-roles-that-still-exist)).
+
 **The typed-slot guard is what `AssignRole` checks (#626).** A component fills a slot only when its
 product's `component_type` falls within a type the role's `system_role_type` set names (self or a
 descendant; empty accepts any type), and, if `system_role_product` pins specific products, only when
@@ -476,8 +486,8 @@ the same.
 component "panel-1" is a display; role "table-mic" wants a video-bar
 ```
 
-A refusal on **modeled** grounds, and it runs **once**, at assignment; afterward an occupant keeps its
-slot unless its own [health](/architecture/health/) verdict goes to outage (a lesser alarm degrades
+A refusal on **modeled** grounds, and it runs at assignment (and again when a standard change would carry
+the occupant onto the new standard's role); afterward an occupant keeps its slot unless its own [health](/architecture/health/) verdict goes to outage (a lesser alarm degrades
 it but does not cost it the slot)
 ([ADR-0049](/architecture/decisions/#adr-0049-the-system-role-capability-gated-staffing-and-the-resolved-capability-set)).
 

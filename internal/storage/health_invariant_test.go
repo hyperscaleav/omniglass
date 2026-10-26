@@ -634,6 +634,16 @@ func TestHealthInvariantAcrossEveryTrigger(t *testing.T) {
 			_, err := f.gw.UpdateSystem(ctx, "", "sweep-sys", storage.SystemPatch{StandardID: &std}, f.all, f.all)
 			return err
 		}},
+		// Becoming a one-off released the inherited staffing (ADR-0506), and
+		// classifying it again reactivates none of it, so the role is staffed anew.
+		{"staff the reclassified role again", func() error {
+			for _, c := range []string{"sweep-a", "sweep-b"} {
+				if err := f.gw.AssignRole(ctx, "", "sweep-sys", "pair", c, f.all, f.all, f.all, f.all); err != nil {
+					return err
+				}
+			}
+			return nil
+		}},
 		{"create a second conforming system in the same room", func() error {
 			_, err := f.gw.CreateSystem(ctx, "", storage.SystemSpec{
 				Name: "sweep-sys-2", StandardID: &std, LocationName: &room2}, f.all, all)

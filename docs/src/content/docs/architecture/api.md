@@ -861,6 +861,11 @@ in the same form. Gating follows the owner:
   /systems/{name}` moving a system onto a standard that declares a name it declares itself. A staffing
   write that meets such a pair (written before the rule) is the same 409 rather than a silent pick
   ([ADR-0503](/architecture/decisions/#adr-0503-a-role-name-addresses-one-role-per-system)).
+- `PATCH /systems/{name}` moving a system's `standard` carries its staffing in the same transaction:
+  each occupant of an inherited role moves onto the new standard's role of the same name when it is
+  still a typed match and the role has room, and is released (a member with no role) otherwise. A
+  staffing write on that system waits for the change and resolves against the new standard
+  ([ADR-0506](/architecture/decisions/#adr-0506-changing-a-systems-standard-carries-its-staffing-onto-the-roles-that-still-exist)).
 - `GET /systems/{name}/roles` is the **resolved read**, gated `system:read`: the declaration
   (including `impact`, `capacity`, `position_labels`, `alternate`) plus `from_standard`, `assigned_to` (the
   component names filling it here, in position order), `positions` (each entry's own 1-based

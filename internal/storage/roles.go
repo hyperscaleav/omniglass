@@ -520,6 +520,9 @@ func (p *PG) assignRoleTx(ctx context.Context, tx pgx.Tx, actorID, systemName, r
 	if err != nil {
 		return err // ErrSystemNotFound out of read scope, ErrSystemForbidden out of action scope
 	}
+	if err := lockSystemForStaffing(ctx, tx, sys.ID); err != nil {
+		return err
+	}
 
 	roleID, roleDisplay, acceptedTypes, pinnedProducts, err := p.resolveRole(ctx, tx, sys.ID, roleName)
 	if err != nil {
@@ -548,43 +551,8 @@ func (p *PG) assignRoleTx(ctx context.Context, tx pgx.Tx, actorID, systemName, r
 	if err != nil {
 		return err
 	}
-	cls, err := p.classifyComponent(ctx, tx, component.ID)
-	if err != nil {
+	if err := p.slotShortfall(ctx, tx, component.ID, componentName, roleDisplay, acceptedTypes, pinnedProducts); err != nil {
 		return err
-	}
-	if len(acceptedTypes) > 0 {
-		within := false
-		for _, at := range acceptedTypes {
-			ok, err := p.TypeIsWithin(ctx, cls.TypeID, at.ID)
-			if err != nil {
-				return err
-			}
-			if ok {
-				within = true
-				break
-			}
-		}
-		if !within {
-			return &TypeShortfall{
-				Component: componentName, ComponentType: cls.TypeName,
-				Role: roleDisplay, WantTypes: roleRefNames(acceptedTypes),
-			}
-		}
-	}
-	if len(pinnedProducts) > 0 {
-		pinned := false
-		for _, pp := range pinnedProducts {
-			if pp.ID == cls.ProductID {
-				pinned = true
-				break
-			}
-		}
-		if !pinned {
-			return &ProductPinShortfall{
-				Component: componentName, ComponentProduct: cls.ProductName,
-				Role: roleDisplay, WantProducts: roleRefNames(pinnedProducts),
-			}
-		}
 	}
 
 	// A component fills at most one role per system (#626). This pre-check runs
@@ -731,6 +699,9 @@ func (p *PG) UnassignRole(ctx context.Context, actorID, systemName, roleName, co
 	if err != nil {
 		return err
 	}
+	if err := lockSystemForStaffing(ctx, tx, sys.ID); err != nil {
+		return err
+	}
 	roleID, _, _, _, err := p.resolveRole(ctx, tx, sys.ID, roleName)
 	if err != nil {
 		return err
@@ -818,6 +789,23 @@ func rolePositionLockKey(systemID, roleID string) string {
 	return "system_role_assignment/" + systemID + "/" + roleID
 }
 
+// lockSystemForStaffing takes the system's row FOR SHARE for the rest of a
+// staffing write (#506, ADR-0506), before the write resolves its role. A
+// standard change holds the same row for update while it carries the system's
+// staffing onto the new standard's roles, so a staffing write either finishes
+// before the change reads the assignments or resolves its role after the change
+// commits, against the new standard. Without it, an assign resolved against
+// the standard being left could land after the change had settled the rest,
+// stranding exactly the row the change exists to carry. Staffing writes share
+// the lock, so they never wait on each other here; and no staffing write
+// updates the system's row, so a shared lock is never upgraded under another.
+func lockSystemForStaffing(ctx context.Context, q txQuerier, systemID string) error {
+	if _, err := q.Exec(ctx, `select 1 from system where id = $1::uuid for share`, systemID); err != nil {
+		return fmt.Errorf("storage: lock system %s for staffing: %w", systemID, err)
+	}
+	return nil
+}
+
 // SwapPositions exchanges the positions of whichever components currently
 // hold positions a and b within a role. It is an ordering change only: who
 // occupies the role and the system's health are unaffected, so this does
@@ -836,6 +824,9 @@ func (p *PG) SwapPositions(ctx context.Context, actorID, systemName, roleName st
 	// split (#736) and ambiguity judged inside the read scope (ruling 2, #627).
 	sys, err := resolveScoped(ctx, tx, systemConfig, systemName, read, action)
 	if err != nil {
+		return err
+	}
+	if err := lockSystemForStaffing(ctx, tx, sys.ID); err != nil {
 		return err
 	}
 	roleID, _, _, _, err := p.resolveRole(ctx, tx, sys.ID, roleName)
@@ -955,43 +946,105 @@ func (p *PG) resolveRole(ctx context.Context, q txQuerier, systemID, roleName st
 		return "", "", nil, nil, &RoleNameCollision{Role: roleName, Standard: standardName, System: systemName}
 	}
 
+	acceptedTypes, pinnedProducts, err = roleSlot(ctx, q, id)
+	if err != nil {
+		return "", "", nil, nil, err
+	}
+	return id, label, acceptedTypes, pinnedProducts, nil
+}
+
+// roleSlot loads one role's typed-slot requirements, the two sets the guard
+// compares a component against: the component_types it accepts (empty means
+// any) and the products it pins (empty means any product of an accepted type),
+// each alphabetical so a refusal naming them reads deterministically.
+func roleSlot(ctx context.Context, q querier, roleID string) (acceptedTypes, pinnedProducts []roleRef, err error) {
 	typeRows, err := q.Query(ctx, `
 		select ct.id, ct.name
 		from system_role_type rt join component_type ct on ct.id = rt.component_type_id
 		where rt.role_id = $1
-		order by ct.name`, id)
+		order by ct.name`, roleID)
 	if err != nil {
-		return "", "", nil, nil, fmt.Errorf("storage: role accepted types %s: %w", id, err)
+		return nil, nil, fmt.Errorf("storage: role accepted types %s: %w", roleID, err)
 	}
 	defer typeRows.Close()
 	for typeRows.Next() {
 		var t roleRef
 		if err := typeRows.Scan(&t.ID, &t.Name); err != nil {
-			return "", "", nil, nil, fmt.Errorf("storage: scan accepted type: %w", err)
+			return nil, nil, fmt.Errorf("storage: scan accepted type: %w", err)
 		}
 		acceptedTypes = append(acceptedTypes, t)
 	}
 	if err := typeRows.Err(); err != nil {
-		return "", "", nil, nil, err
+		return nil, nil, err
 	}
 
 	prodRows, err := q.Query(ctx, `
 		select pr.id, pr.name
 		from system_role_product rp join product pr on pr.id = rp.product_id
 		where rp.role_id = $1
-		order by pr.name`, id)
+		order by pr.name`, roleID)
 	if err != nil {
-		return "", "", nil, nil, fmt.Errorf("storage: role pinned products %s: %w", id, err)
+		return nil, nil, fmt.Errorf("storage: role pinned products %s: %w", roleID, err)
 	}
 	defer prodRows.Close()
 	for prodRows.Next() {
 		var pr roleRef
 		if err := prodRows.Scan(&pr.ID, &pr.Name); err != nil {
-			return "", "", nil, nil, fmt.Errorf("storage: scan pinned product: %w", err)
+			return nil, nil, fmt.Errorf("storage: scan pinned product: %w", err)
 		}
 		pinnedProducts = append(pinnedProducts, pr)
 	}
-	return id, label, acceptedTypes, pinnedProducts, prodRows.Err()
+	return acceptedTypes, pinnedProducts, prodRows.Err()
+}
+
+// slotShortfall is the typed-slot guard (#626), the one judgment of whether a
+// component may fill a role: its product's component_type must fall within
+// the subtree of a type the role accepts (any type, if the role accepts none),
+// and if the role pins products, its product must be one of them. It returns
+// the refusal naming both parties (TypeShortfall, ProductPinShortfall), or nil
+// when the component fits. AssignRole runs it before staffing, and a standard
+// change runs it again before carrying an occupant onto the new standard's
+// role of the same name (ADR-0506), so no path staffs a mismatch.
+func (p *PG) slotShortfall(ctx context.Context, q querier, componentID, componentName, roleDisplay string, acceptedTypes, pinnedProducts []roleRef) error {
+	cls, err := p.classifyComponent(ctx, q, componentID)
+	if err != nil {
+		return err
+	}
+	if len(acceptedTypes) > 0 {
+		within := false
+		for _, at := range acceptedTypes {
+			ok, err := p.TypeIsWithin(ctx, cls.TypeID, at.ID)
+			if err != nil {
+				return err
+			}
+			if ok {
+				within = true
+				break
+			}
+		}
+		if !within {
+			return &TypeShortfall{
+				Component: componentName, ComponentType: cls.TypeName,
+				Role: roleDisplay, WantTypes: roleRefNames(acceptedTypes),
+			}
+		}
+	}
+	if len(pinnedProducts) > 0 {
+		pinned := false
+		for _, pp := range pinnedProducts {
+			if pp.ID == cls.ProductID {
+				pinned = true
+				break
+			}
+		}
+		if !pinned {
+			return &ProductPinShortfall{
+				Component: componentName, ComponentProduct: cls.ProductName,
+				Role: roleDisplay, WantProducts: roleRefNames(pinnedProducts),
+			}
+		}
+	}
+	return nil
 }
 
 // componentClassification is the pair the typed-slot guard compares against a

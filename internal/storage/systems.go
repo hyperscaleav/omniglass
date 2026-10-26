@@ -799,7 +799,8 @@ func (p *PG) systemIsDescendant(ctx context.Context, q querier, targetID, candid
 // in-transaction audit, recomputing health when the standard moved (it swaps
 // the whole inherited role set, so the verdict can flip in either direction).
 // A standard move is refused when the new standard declares a role name the
-// system declares itself (ADR-0503).
+// system declares itself (ADR-0503), and carries the system's staffing onto
+// the new standard's roles of the same names, releasing the rest (ADR-0506).
 //
 // Placement (a relocate or a reparent) is NOT here (#627 Task 13): it is its
 // own act, MoveSystem, gated by system:move. See that function's doc comment,
@@ -951,6 +952,16 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "update", "system", after.ID, before, after); err != nil {
 		return nil, err
+	}
+	// A standard move swaps the system's inherited roles, so its staffing is
+	// carried onto the roles that still exist and released from the rest
+	// (#506, ADR-0506), before the recompute below reads it. The update above
+	// holds the system's row, which is what keeps a staffing write out until
+	// this commits.
+	if !sameOptional(before.StandardID, after.StandardID) {
+		if err := p.carryStaffing(ctx, tx, actorID, after.ID, after.Name, after.StandardID); err != nil {
+			return nil, err
+		}
 	}
 	// Detected against the before-image the update already loaded rather than
 	// against the patch (a patch that sets a field to what it already held
