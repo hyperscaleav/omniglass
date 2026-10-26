@@ -1018,17 +1018,6 @@ type ComponentEndpoint struct {
 	HoldsSession bool
 }
 
-// ListComponentEndpoints returns a component's endpoints ordered by the label
-// an operator reads with the unlabelled last (#613), the rows the reachability
-// read composes over. It is the panel where two endpoints of one transport sit
-// beside each other, so it is the projection the label matters most on. It is not scope-injected: the caller
-// gates on the component being in read scope (GetComponent) first, then reads its
-// endpoints by the verified reference (name or uuid, ADR-0062), resolved once
-// here rather than left as a name a second row could now share (#627). An
-// unknown component folds into the same nil-no-error empty result the old
-// inline subquery's silent no-match gave: devseed's seedReachability uses
-// this as its own sentinel read, calling it BEFORE the component it names is
-// known to exist yet, on the first run.
 // ComponentEndpointNames is a component's endpoint names, sorted, read by the
 // component's id in one statement (the endpoint table's component index). The
 // caller has already resolved the component through scope, so no scope is
@@ -1050,6 +1039,17 @@ func (p *PG) ComponentEndpointNames(ctx context.Context, componentID string) ([]
 	return names, rows.Err()
 }
 
+// ListComponentEndpoints returns a component's endpoints ordered by the label
+// an operator reads with the unlabelled last (#613), the rows the reachability
+// read composes over. It is the panel where two endpoints of one transport sit
+// beside each other, so it is the projection the label matters most on. It is not scope-injected: the caller
+// gates on the component being in read scope (GetComponent) first, then reads its
+// endpoints by the verified reference (name or uuid, ADR-0062), resolved once
+// here rather than left as a name a second row could now share (#627). An
+// unknown component folds into the same nil-no-error empty result the old
+// inline subquery's silent no-match gave: devseed's seedReachability uses
+// this as its own sentinel read, calling it BEFORE the component it names is
+// known to exist yet, on the first run.
 func (p *PG) ListComponentEndpoints(ctx context.Context, componentRef string) ([]ComponentEndpoint, error) {
 	c, err := scopedByName(ctx, p.pool, componentConfig, componentRef)
 	if errors.Is(err, ErrComponentNotFound) {

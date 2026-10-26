@@ -51,21 +51,21 @@ type TelemetryPublisher interface {
 
 type pushMetric struct {
 	Name     string    `json:"name" minLength:"1" doc:"A registered metric_type name"`
-	Instance string    `json:"instance,omitempty" doc:"Discriminates many values of one name on one owner (three fan speeds, per-port counters)"`
+	Instance string    `json:"instance,omitempty" doc:"The endpoint of the owner this came through, by name (an endpoint is named by its transport); omit for the owner as a whole. An instance naming no endpoint on the owner refuses the batch with a 422"`
 	Value    float64   `json:"value" doc:"The numeric observation"`
 	TS       time.Time `json:"ts,omitempty" doc:"When this was observed; defaults to the batch timestamp, then to ingest time"`
 }
 
 type pushProperty struct {
 	Name     string    `json:"name" minLength:"1" doc:"A registered property_type name"`
-	Instance string    `json:"instance,omitempty" doc:"Discriminates many values of one name on one owner"`
+	Instance string    `json:"instance,omitempty" doc:"The endpoint of the owner this came through, by name (an endpoint is named by its transport); omit for the owner as a whole. An instance naming no endpoint on the owner refuses the batch with a 422"`
 	Value    any       `json:"value" doc:"The observed value, shaped by the type's data_type and validated against its validation schema"`
 	TS       time.Time `json:"ts,omitempty" doc:"When this was observed; defaults to the batch timestamp, then to ingest time"`
 }
 
 type pushEvent struct {
 	Name     string    `json:"name" minLength:"1" doc:"A registered event_type name"`
-	Instance string    `json:"instance,omitempty" doc:"Discriminates many occurrences of one name on one owner"`
+	Instance string    `json:"instance,omitempty" doc:"The endpoint of the owner this came through, by name (an endpoint is named by its transport); omit for the owner as a whole. An instance naming no endpoint on the owner refuses the batch with a 422"`
 	Message  string    `json:"message,omitempty" doc:"The occurrence's human-readable line"`
 	Payload  any       `json:"payload,omitempty" doc:"The occurrence's structured payload, validated against the event_type's payload schema"`
 	TS       time.Time `json:"ts,omitempty" doc:"When this occurred; defaults to the batch timestamp, then to ingest time"`
@@ -128,7 +128,8 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 			"writes only a collected key: a key a native probe writes (a reachability verdict or rung, a probe metric " +
 			"or timing, a held session's state, collection-failed) is a node's own observation and a platform key " +
 			"(health) is the platform's, each rejected by name on every lane; a key a calc rule outputs is rejected " +
-			"naming the rule. Gated by telemetry:push, whose scope must cover the declared owner (one check per batch): " +
+			"naming the rule. An observation's instance is the endpoint it came through: one naming no endpoint on the " +
+			"owner refuses the batch with a 422 naming it and listing the owner's endpoints. Gated by telemetry:push, whose scope must cover the declared owner (one check per batch): " +
 			"an owner outside the caller's component:read is a non-disclosing 404, and one the caller can read but " +
 			"may not push to is a 403.",
 	}, "telemetry", "push"), func(ctx context.Context, in *pushInput) (*pushOutput, error) {
