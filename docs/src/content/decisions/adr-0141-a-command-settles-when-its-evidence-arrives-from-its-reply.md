@@ -19,8 +19,9 @@ summary: "A command settles as soon as its evidence arrives: a matching observat
   observation's `ts` to the intent's: a polled observation carries the node's sample time, so a
   node clock behind the database's can push genuine evidence to the past-window judgment (late,
   never wrong); every other comparison keeps ADR-0108's one clock. **Amended (#456):** an
-  un-instanced command no endpoint has carried is judged on every observed instance of its target,
-  settled when any agrees
+  un-instanced command not yet dispatched is judged on the endpoint queued to carry it, one no
+  endpoint can carry on every live observed instance of its target, settled when any agrees, and a
+  command no node has taken times out rather than failing on a reading
   ([ADR-0456](#adr-0456-an-instance-names-which-value-of-one-key-on-one-owner-a-row-is-and-an-owner-level-read-reduces-across-every-instance)).
 - **Context:** ADR-0063 held a command pending for its whole window and judged it only after,
   and the check ran only at issue and on reads. Run against the simulator (#888, #900), `set-input`

@@ -571,7 +571,8 @@ out-of-scope component is a non-disclosing 404 (a deliberate early exception to
 - `GET /components/{name}/reconciliation` pivots want/told/is over the series: per declared
   property, the **want** (the current declared value, with the contract default coalesced in), the
   **told** (the newest `intended` value a command set, on any instance), and the **is** (the
-  `observed` value, resolved across every instance worst-case and named by `is_instance`), all
+  `observed` value, resolved across every live instance worst-case, a deleted endpoint's frozen
+  reading left out, and named by `is_instance`), all
   three [latest-series-row reads](/architecture/properties/#current-value-is-the-latest-series-row),
   with **drift** (any observed instance disagreeing with declared) computed on read
   ([how an instance resolves](/architecture/properties/#the-instance-dimension-many-values-of-one-name-on-one-owner)).

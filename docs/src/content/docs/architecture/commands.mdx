@@ -129,13 +129,18 @@ and no observation settles reaches `timed-out` without waiting for another comma
 **Which observation a command is judged on** follows what its
 [instance](/architecture/properties/#the-instance-dimension-many-values-of-one-name-on-one-owner)
 says ([ADR-0456](/architecture/decisions/#adr-0456-an-instance-names-which-value-of-one-key-on-one-owner-a-row-is-and-an-owner-level-read-reduces-across-every-instance)). A command that names an instance is judged on that series alone. One
-issued with no instance is judged on the series of the endpoint it was dispatched over, where that
-driver's observations of the target land. One with no instance that no endpoint has carried yet (no
-node has taken it, or no endpoint's driver binds its type) is an owner-level intent, judged on
-**every** observed instance of its target: settled when any instance agrees, failed past the window
-when instances were observed and none agrees, timed out when nothing was observed. An observation
-of a property target on any instance runs its settle check, and the computed verdict a command's
-issue answers with reads the same observation the recorded outcome did.
+issued with no instance is judged on the series of the endpoint that carries it, where that
+driver's observations of the target land: the endpoint it was dispatched over, or, before a node
+takes it, the endpoint queued to carry it (the first, by name, whose driver binds its type). One
+with no instance that no endpoint can carry (no endpoint's driver binds its type) is an owner-level
+intent, judged on **every** live observed instance of its target: settled when any instance agrees,
+failed past the window when instances were observed and none agrees, timed out when nothing was
+observed. A live instance leaves out a **retired observer**, an endpoint since deleted whose last
+reading would otherwise stand forever. A command still queued, which no node has taken, never
+reached the device, so its window closing is a timeout that says where it stopped, whatever its
+carrier last read, never a failure. An observation runs the settle check of every command judged on
+its instance and of every owner-level one, and the computed verdict a command's issue answers with
+reads the same observation the recorded outcome did.
 
 **A zero window is terminal by construction, never by arithmetic**
 ([ADR-0108](/architecture/decisions/#adr-0108-settlement-reads-one-clock-and-a-zero-window-is-a-statement-of-intent)).
