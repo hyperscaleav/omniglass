@@ -106,13 +106,14 @@ func dbNow(ctx context.Context, q querier) (time.Time, error) {
 // stored state to piggyback on a data write, so the check runs wherever the
 // verdict is evaluated (at issue, and on every CommandSettlement read): it sweeps
 // the still-issued commands of one series, judges each against its own intended
-// row (the command_id lineage) and the series' latest observed value, and stamps
-// the terminal status with settled_at in the caller's transaction. A pending
+// row (the command_id lineage) and the observation it is judged on
+// (judgedObservation, ADR-0456), and stamps the terminal status with
+// settled_at in the caller's transaction. A pending
 // command stays issued; a command that opened no intended row (a pre-#590
 // fire-and-forget) has nothing to wait on and settles.
 // ownerID is resolved once here, via ownerArcValue (uuid-or-name, ADR-0062;
 // ambiguity-safe for component/system/location, #627), and the resolved arc
-// threaded into latestTargetValue below rather than left for it to re-derive.
+// threaded into judgeCommands below rather than left for it to re-derive.
 // An unknown owner folds to "nothing to settle" (nil), matching the old inline
 // subquery's silent no-match: settleCheck runs inside IssueCommand and
 // CommandSettlement, neither of which must start hard-erroring on an owner

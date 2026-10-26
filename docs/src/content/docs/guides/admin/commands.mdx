@@ -105,7 +105,10 @@ non-disclosing 404. One transaction records three things:
 The issue response returns the computed **settlement verdict** (`none` for fire-and-forget,
 else `pending`, `settled`, or `failed`): a matching observation taken after the intent settles
 the command as soon as it arrives, within the window a difference is still pending, and past it
-the latest observed value either matches the intended one or does not. The command row also
+the latest observed value either matches the intended one or does not. A command given no
+instance is judged on the endpoint it went out over, and one no endpoint has carried yet on every
+endpoint reporting its target, settling when any of them agrees
+([which observation](/architecture/commands/#settlement-the-verdict-is-computed-the-outcome-is-recorded)). The command row also
 records a terminal **status**, `issued` until it is stamped `settled`, `failed` (the device
 reported a different value, or its reply said no), or `timed-out` (the window expired with
 nothing observed), with `settled_at` as the terminal moment. Which evidence settles a command is
