@@ -41,6 +41,8 @@ var Registry = []Var{
 		Doc: "HTTP listen address; port 0 binds a free port, reported in the ready file"},
 	{Key: "OMNIGLASS_SECURE_COOKIES", Default: "off", Scope: "server",
 		Doc: "set true behind TLS to mark the session cookie Secure (https only)"},
+	{Key: "OMNIGLASS_TRUSTED_PROXIES", Default: "loopback and private ranges", Scope: "server",
+		Doc: "comma-separated CIDRs or addresses of the proxies whose X-Forwarded-For is believed, for the client address sessions, tokens and webhook limits record; a list replaces the default whole, none believes no proxy, and a bad entry fails the boot"},
 	{Key: "OMNIGLASS_NATS_ADDR", Default: "127.0.0.1:4222", Scope: "server",
 		Doc: "listen address (host:port) of the embedded NATS server; port 0 binds a free port, reported in the ready file"},
 	{Key: "OMNIGLASS_NATS_STORE_DIR", Default: "temp dir", Scope: "server",

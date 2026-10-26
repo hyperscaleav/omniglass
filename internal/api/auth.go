@@ -12,6 +12,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/hyperscaleav/omniglass/internal/auth"
+	"github.com/hyperscaleav/omniglass/internal/clientaddr"
 	"github.com/hyperscaleav/omniglass/internal/rbac"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/storage"
@@ -36,6 +37,10 @@ const (
 	// middleware) so login and self-service token creation can stamp a new credential
 	// with the device and address that created it.
 	clientMetaCtxKey
+	// webhookSourceCtxKey carries the webhook sender's source, resolved once by
+	// the route's bound middleware under the configured trust, so the handler
+	// records the sender the limits counted.
+	webhookSourceCtxKey
 )
 
 // sessionHashFrom returns the sha256 of the request's bearer token, if one resolved.
@@ -59,27 +64,25 @@ func clientMetaFrom(ctx context.Context) (userAgent, clientIP string) {
 // handlers can stamp a new credential with the device and address that created it. Runs
 // on every API request, before Huma, so both the public login and the authn-only token
 // creation see it.
-func captureClientMeta(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		m := clientMeta{userAgent: r.UserAgent(), clientIP: clientIP(r)}
-		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), clientMetaCtxKey, m)))
-	})
+func captureClientMeta(trust clientaddr.Trust) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			m := clientMeta{userAgent: r.UserAgent(), clientIP: clientIP(r, trust)}
+			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), clientMetaCtxKey, m)))
+		})
+	}
 }
 
-// clientIP extracts the caller's address: the first hop of X-Forwarded-For when set (the
-// original client behind a proxy), else the connection RemoteAddr without its port.
-func clientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		if i := strings.IndexByte(xff, ','); i >= 0 {
-			return strings.TrimSpace(xff[:i])
-		}
-		return strings.TrimSpace(xff)
+// clientIP is the caller's address as the trusted proxies resolve it (#1185):
+// the connection's peer, or the client a trusted proxy forwarded. A forwarded
+// header from any other peer changes nothing. Empty when the peer does not
+// parse.
+func clientIP(r *http.Request, trust clientaddr.Trust) string {
+	addr, ok := trust.Client(r.RemoteAddr, clientaddr.JoinForwarded(r.Header.Values("X-Forwarded-For")))
+	if !ok {
+		return ""
 	}
-	host := r.RemoteAddr
-	if i := strings.LastIndexByte(host, ':'); i >= 0 {
-		host = host[:i]
-	}
-	return host
+	return addr.String()
 }
 
 func principalFrom(ctx context.Context) (*storage.Principal, bool) {
