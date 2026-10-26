@@ -230,7 +230,7 @@ Expr extraction and the cascading labels below remain design. A task runs in one
 held-open connection is a **stateful endpoint transport**, not a third task type, and both modes
 assemble the same telemetry payload (below).
 
-:::design[Target design: the Expr transform and cascading labels at the edge, tracked in #1187; raw on failure is #430]
+:::design[Target design: the Expr transform and cascading labels at the edge, tracked in #1253; raw on failure is #1251]
 Per task the node runs the protocol over the endpoint's connection, then **normalizes at the
 edge**: the locate + Expr extraction ([collection](/architecture/collection/)) produces samples and
 stamps labels (cascading union + override), keeping the wire bytes as `raw` only on a parse or
@@ -302,10 +302,10 @@ credential risks lockout; a subscription is session-scoped, so a reconnect **re-
 
 **Where failures land.** `session-state` and the node's logs own **connection health** (cannot connect, auth rejected,
 dropped, timeout); the **data event owns parse health**: a parse failure emits a `collection.failed`
-event carrying the cause (plus the `action` row for commands; the `raw` bytes beside it are #430), surfacing as an alertable
+event carrying the cause (plus the `action` row for commands; the `raw` bytes beside it are #1251), surfacing as an alertable
 collection-health sample. A command timeout can touch both.
 
-::::design[Target design: the session pool's knobs, tracked in #1187; the held transports beyond the line protocol, the http stream and the websocket are #1036 (mqtt), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
+::::design[Target design: the session pool's knobs, tracked in #1254; the held transports beyond the line protocol, the http stream and the websocket are #1036 (mqtt), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
 A pool holds each session open across ticks today with fixed reconnect, backoff and keepalive; its
 knobs are not yet declared.
 
@@ -325,7 +325,7 @@ says so). This reverses the design's order below, which tried an outstanding pol
 ([ADR-0151](/architecture/decisions/#adr-0151-a-held-line-session-routes-every-inbound-line-listeners-first-answers-by-reply-shape)); the precedence and its reasons are on
 [collection](/architecture/collection/#listeners-over-a-held-session).
 
-:::design[Target design: framing-driven routing and the orphan frame, tracked in #1057; raw on failure is #430]
+:::design[Target design: framing-driven routing and the orphan frame, tracked in #1057; raw on failure is #1251]
 One connection carrying heterogeneous inbound frames cannot assume an arriving frame answers the
 last command. Frames route through an **ordered matcher set**: every task
 contributes a matcher (a poller's awaited-response shape, a listener/stream's `match:` predicate),
@@ -435,7 +435,7 @@ The node ships a native `TelemetryBatch`: `{ samples, labels }` plus an envelope
 
 The publish is **held and retried** until the stream acks it ([delivery](#delivery-a-batch-lands-once)).
 
-:::design[Target design: raw on failure and the OTLP adapter, tracked in #430]
+:::design[Target design: raw on failure, tracked in #1251; the OTLP adapter and the admission consumer, #430]
 On a parse or validation failure the node also ships
 the **raw** wire bytes so the server can emit a `collection.failed` event; on success raw is omitted
 (there is no telemetry table), unless a **dev raw-mode** is on. An **OTLP adapter** at the edge

@@ -953,11 +953,12 @@ Built for every transport above: a driver's spec, not the task, declares what to
 decided by catalog membership, baked into each emit at attach, never by the value's type (an snmp
 OctetString and a numeric gauge land where the catalog puts their names); a missing path or a
 non-matching pattern yields no sample, and a non-compiling one fails the spec's validation. A regex extract
-takes one capture per emit. Rejected credentials are connection health (the session rung and
-`session-state`), not collection errors, and the line protocol is held over `tcp`, `tls`, `telnet` and
+takes one capture per emit. A held session's rejected credentials are connection health (the session rung
+and `session-state`), not collection errors (a stateless http poll's refusal also lands one
+`collection-failed` before its gate holds), and the line protocol is held over `tcp`, `tls`, `telnet` and
 `ssh` (ssh also as an `exec` channel), with udp its own transport ([#1037](#udp)).
 
-:::design[The held-connection transports still ahead: #1036 (mqtt), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip), snmp v3 (#1083), prompt-delimited answers (#1057), and the instance suffix (#456)]
+:::design[The held-connection transports still ahead: #1036 (mqtt), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip), snmp v3 (#1083), prompt-delimited answers (#1057), and the instance suffix (#1252)]
 
 snmp speaks v2c today; **v3** auth/priv, resolved from a secret, is #1083. A held session's answer
 is delimited by its declared reply shape today; a driver's declared **prompt** delimiting it
@@ -967,7 +968,7 @@ Every extract spec will share one name grammar: a trailing **`name[instance]`** 
 (`fan-speed[intake]=<oid>`) strips into the sample's reserved `instance` label so the catalog
 matches the bare name
 ([the instance dimension](/architecture/properties/#the-instance-dimension-many-values-of-one-name-on-one-owner));
-no bracket = singleton (`instance = ''`). That is #456.
+no bracket = singleton (`instance = ''`). That is #1252.
 
 :::
 
