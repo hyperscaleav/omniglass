@@ -87,6 +87,20 @@ func (p *PG) roleOwnerArg(ctx context.Context, q querier, ownerKind, ownerID str
 	return sys.ID, nil
 }
 
+// standardRef resolves a standard by name or uuid to its id and name, or
+// ErrUnknownStandard. Standard names are globally unique, so there is no
+// ambiguity to judge.
+func standardRef(ctx context.Context, q querier, ref string) (id, name string, err error) {
+	err = q.QueryRow(ctx, `select id, name from standard where `+registryRefCol(ref)+` = $1`, ref).Scan(&id, &name)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", "", ErrUnknownStandard
+	}
+	if err != nil {
+		return "", "", fmt.Errorf("storage: resolve standard %s: %w", ref, err)
+	}
+	return id, name, nil
+}
+
 func roleOwnerColumn(ownerKind string) (string, error) {
 	switch ownerKind {
 	case "standard":
@@ -155,10 +169,19 @@ func roleTypedSlot(ctx context.Context, q querier, roleID string) ([]string, []s
 // not the resolution: a system's list carries only its ad-hoc roles, never
 // the ones it inherits from its standard (EffectiveRoles is what merges the
 // two arcs).
+//
+// A standard that does not exist is ErrUnknownStandard, not an empty list
+// (#505): "declares nothing" and "is not there" are different answers, and
+// an empty list for a typo read as the first one.
 func (p *PG) ListSystemRoles(ctx context.Context, ownerKind, ownerID string) ([]SystemRole, error) {
 	col, err := roleOwnerColumn(ownerKind)
 	if err != nil {
 		return nil, err
+	}
+	if ownerKind == "standard" {
+		if _, _, err := standardRef(ctx, p.pool, ownerID); err != nil {
+			return nil, err
+		}
 	}
 	ownerArg, err := p.roleOwnerArg(ctx, p.pool, ownerKind, ownerID)
 	if err != nil {

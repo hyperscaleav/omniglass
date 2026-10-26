@@ -3669,7 +3669,7 @@ export interface paths {
         };
         /**
          * List a standard's declared roles
-         * @description Lists the roles this standard declares (every conforming system inherits them live), ordered by name, each with its quorum and the component_types (accepted_types) and, if pinned, the products a filling component must match. Gated by standard:read.
+         * @description Lists the roles this standard declares (every conforming system inherits them live), ordered by name, each with its quorum and the component_types (accepted_types) and, if pinned, the products a filling component must match. An unknown standard is a 404, never an empty list. Gated by standard:read.
          */
         get: operations["list-standard-roles"];
         put?: never;

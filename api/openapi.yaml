@@ -16895,7 +16895,7 @@ paths:
       x-omniglass-permission: standard:update
   /standards/{id}/roles:
     get:
-      description: Lists the roles this standard declares (every conforming system inherits them live), ordered by name, each with its quorum and the component_types (accepted_types) and, if pinned, the products a filling component must match. Gated by standard:read.
+      description: Lists the roles this standard declares (every conforming system inherits them live), ordered by name, each with its quorum and the component_types (accepted_types) and, if pinned, the products a filling component must match. An unknown standard is a 404, never an empty list. Gated by standard:read.
       operationId: list-standard-roles
       parameters:
         - description: The standard, by name or uuid

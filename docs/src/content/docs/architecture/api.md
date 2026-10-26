@@ -848,7 +848,10 @@ in the same form. Gating follows the owner:
 
 - `GET /standards/{id}/roles` plus `PATCH` / `DELETE /standards/{id}/roles/{role}`, gated `standard:read` /
   `:update` / `:delete`. Withdrawing a role takes every assignment conforming systems made to it (a
-  cascade); a role the standard does not declare is a 404.
+  cascade); a role the standard does not declare is a 404. A standard that does not exist is a 422 on
+  the declaration and writes nothing (`system_role_owner_arc_check` makes an ownerless role
+  unrepresentable), and a 404 on the read, never an empty list
+  ([#505](https://github.com/hyperscaleav/omniglass/issues/505)).
 - `PATCH` / `DELETE /systems/{name}/roles/{role}`, gated `system:update`, for a role declared **directly on
   one system**. A role the system does not declare **itself** is a 404 here: an inherited role is
   withdrawn on the standard.
