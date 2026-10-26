@@ -436,7 +436,11 @@ membership route costs**: `system:update`, the same permission and the same scop
 `PUT /systems/{name}/members/{component}`, and not the `component:create` that admits the rest of the
 form ([ADR-0107](/architecture/decisions/#adr-0107-a-create-that-writes-a-membership-costs-what-the-membership-route-costs)).
 An `operator` holds no system permission, so it creates components and a `deploy` tech binds them
-into systems.
+into systems. The reverse holds as well: a membership writes onto its component (its primary, its
+label, the system band of its cascade), so every route that binds, unbinds, re-defaults or staffs a
+component needs `component:update` over it as well as `system:update` over the system, and a
+principal scoped to one system binds nothing it cannot write
+([ADR-0510](/architecture/decisions/#adr-0510-a-membership-or-a-role-assignment-costs-a-write-on-both-of-its-ends)).
 
 Membership **cascades from both ends**, and does not restrict the component the way
 `system_role_assignment` does: that restrict is load-bearing (deleting a filler would silently break

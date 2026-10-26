@@ -767,15 +767,19 @@ update or delete by id) the resolved capability rides into the Gateway alongside
 404-versus-403 split stays non-disclosing.
 
 A second permission can also be **conditional on the request** rather than on a tier, and it is stamped
-the same way, as `x-omniglass-conditional-permission`. There is one today: `POST /components` accepts a
-`system`, and what it does with it is insert that component's **primary membership**, the same row `PUT
+the same way, as `x-omniglass-conditional-permission`. `POST /components` accepts a `system`, and what
+it does with it is insert that component's **primary membership**, the same row `PUT
 /systems/{name}/members/{component}` writes under `system:update`. Two routes writing one row must cost
 the same permission, or the cheaper one is the way around the other, so a create that names a system
 requires `system:update` and resolves it in that scope
 ([ADR-0107](/architecture/decisions/#adr-0107-a-create-that-writes-a-membership-costs-what-the-membership-route-costs)).
 The check is in the handler rather than the middleware because the condition is a body field and
 middleware cannot see the body; the stamp is what keeps the spec a faithful map of what the route
-enforces.
+enforces. The same row seen from its other end carries one too: the five routes that bind, unbind,
+re-default or staff a component in a system need `component:update` beside `system:update`, because
+the membership writes onto the component
+([ADR-0510](/architecture/decisions/#adr-0510-a-membership-or-a-role-assignment-costs-a-write-on-both-of-its-ends)).
+Their condition is the component the path always names, so the handler checks it on every request.
 
 ## Properties: a classifier declares, an instance sets
 
@@ -856,7 +860,10 @@ in the same form. Gating follows the owner:
   counts **served, not computed by the client**. A one-off system returns only its own roles.
 - `PUT /systems/{name}/roles/{role}/assignments/{component}` puts a component in the role (204,
   idempotent); `DELETE` takes it out (204; a component not filling the role is a 404). Both gate on
-  `system:update`.
+  `system:update` and also need `component:update`, since staffing a role makes the component a
+  member and writes onto it: the component resolves in `component:read` and must be inside
+  `component:update` (an occupant being unassigned needs only the latter, refused with a 403)
+  ([ADR-0510](/architecture/decisions/#adr-0510-a-membership-or-a-role-assignment-costs-a-write-on-both-of-its-ends)).
 - `POST /systems/{name}/roles/{role}:swapPositions` exchanges two occupants' positions, from
   `{position, with}` (204, `system:update`): the only reorder primitive the API exposes, since a
   position is an ordering attribute of an assignment, not a second address for one, and there is no

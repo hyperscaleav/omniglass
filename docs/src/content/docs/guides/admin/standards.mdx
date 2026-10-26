@@ -165,7 +165,10 @@ with where it came from.
    a [one-off system](/guides/operator/entities/) that conforms to nothing sees only roles declared
    directly on it.
 2. **Assign a component to the role.** Each role lists the components filling it and lets you add
-   another. The picker is scoped to what you can see, and assignment is idempotent.
+   another. The picker is scoped to what you can see, and assignment is idempotent. Staffing a role
+   makes the component a member of the system and writes onto it, so it takes `component:update` over
+   the component as well as `system:update` over the system: a component you can see but not edit is
+   refused with the scope named, and the same holds for unassigning one.
 3. **Read the understaffed count.** A role wanting two components with one assigned reads as short by
    one, immediately, without any monitoring running: staffing is a fact about what you have entered. The
    room's **[health](/guides/operator/entities/#health-on-a-system-or-location)** asks the second question,

@@ -377,31 +377,39 @@ func registerSystemRoleRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		return nil, nil
 	})
 
-	huma.Register(api, a.gated(huma.Operation{
+	huma.Register(api, a.conditionalGated(a.gated(huma.Operation{
 		OperationID:   "assign-system-role",
 		Method:        http.MethodPut,
 		Path:          "/systems/{name}/roles/{role}/assignments/{component}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Assign a component to a role",
-		Description:   "Puts this component in the role for this system. Refused with a 422 naming both parties when the component is not a typed match: its product's component_type outside every type the role accepts, or (if the role pins products) its product not one of them. A role with no accepted types takes any type. Idempotent. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
-	}, "system", "update"), func(ctx context.Context, in *roleAssignmentPathInput) (*struct{}, error) {
+		Description:   "Puts this component in the role for this system. Refused with a 422 naming both parties when the component is not a typed match: its product's component_type outside every type the role accepts, or (if the role pins products) its product not one of them. A role with no accepted types takes any type. Idempotent. Gated by system:update, and also needs component:update, because staffing a role makes the component a member and writes onto it: each end resolves in its own tier's read scope and must be inside its update scope, so an end outside the read scope is a non-disclosing 404 and one readable but not writable a 403.",
+	}, "system", "update"), "component", "update"), func(ctx context.Context, in *roleAssignmentPathInput) (*struct{}, error) {
+		if err := requireComponentEndPermission(ctx, a); err != nil {
+			return nil, err
+		}
 		if err := gw.AssignRole(ctx, actorID(ctx), in.Name, in.Role, in.Component,
-			a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "update")); err != nil {
+			a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "update"),
+			a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "component", "update")); err != nil {
 			return nil, mapRoleErr(err)
 		}
 		return nil, nil
 	})
 
-	huma.Register(api, a.gated(huma.Operation{
+	huma.Register(api, a.conditionalGated(a.gated(huma.Operation{
 		OperationID:   "unassign-system-role",
 		Method:        http.MethodDelete,
 		Path:          "/systems/{name}/roles/{role}/assignments/{component}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Unassign a component from a role",
-		Description:   "Takes this component out of the role, leaving the role understaffed until another fills it. A component that was not filling the role is a 404. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
-	}, "system", "update"), func(ctx context.Context, in *roleAssignmentPathInput) (*struct{}, error) {
+		Description:   "Takes this component out of the role, leaving the role understaffed until another fills it. A component that was not filling the role is a 404. Gated by system:update, and also needs component:update, as assigning does; read and update scopes drive the system's 404 versus 403 split, and an occupant outside the component:update scope is a 403 (the role's own read already names it).",
+	}, "system", "update"), "component", "update"), func(ctx context.Context, in *roleAssignmentPathInput) (*struct{}, error) {
+		if err := requireComponentEndPermission(ctx, a); err != nil {
+			return nil, err
+		}
 		if err := gw.UnassignRole(ctx, actorID(ctx), in.Name, in.Role, in.Component,
-			a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "update")); err != nil {
+			a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "update"),
+			a.scopeFor(ctx, "component", "update")); err != nil {
 			return nil, mapRoleErr(err)
 		}
 		return nil, nil
@@ -604,6 +612,10 @@ func mapRoleErr(err error) error {
 	// at the row.
 	case errors.Is(err, storage.ErrSystemForbidden):
 		return huma.Error403Forbidden("forbidden")
+	// The component end of a staffing write (#510): readable, or already an
+	// occupant, but outside the caller's component:update scope.
+	case errors.Is(err, storage.ErrComponentForbidden):
+		return huma.Error403Forbidden(ErrComponentEndOutOfScope)
 	case errors.Is(err, storage.ErrSystemNotFound):
 		return huma.Error404NotFound("system not found")
 	case errors.Is(err, storage.ErrComponentNotFound):

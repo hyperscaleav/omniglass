@@ -68,14 +68,20 @@ func scanMember(row pgx.Row) (*Member, error) {
 // component gets becomes its primary with nobody asking: a component in exactly
 // one system, which is nearly all of them, must never surface the concept. A
 // later membership does not steal that default.
-func (p *PG) AddMember(ctx context.Context, actorID, systemName, componentName string, read, action scope.Set) error {
+//
+// Both ends are scope-checked (#510): read and action are the caller's
+// system:read and system:update sets, componentRead and componentAction its
+// component:read and component:update sets. A membership writes onto its
+// component (its primary, its label, the system band of its cascade), so a
+// caller that may write the system but not the component binds nothing.
+func (p *PG) AddMember(ctx context.Context, actorID, systemName, componentName string, read, action, componentRead, componentAction scope.Set) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("storage: begin add member: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	systemID, componentID, err := p.resolveMembershipEnds(ctx, tx, systemName, componentName, read, action)
+	systemID, componentID, err := p.resolveMembershipEnds(ctx, tx, systemName, componentName, read, action, componentRead, componentAction)
 	if err != nil {
 		return err
 	}
@@ -131,14 +137,19 @@ func addMemberTx(ctx context.Context, q txQuerier, systemID, componentID string)
 // RemoveMember unbinds a component from a system. Refused while the component
 // still fills a role there: removing it would leave the system staffed by a
 // non-member, which is the contradiction this table exists to make impossible.
-func (p *PG) RemoveMember(ctx context.Context, actorID, systemName, componentName string, read, action scope.Set) error {
+//
+// componentAction is the caller's component:update set (#510): unbinding moves
+// the component's primary and restamps its label, so it is a write on the
+// component as well as on the system. See resolveMembershipEndsForRemoval for
+// why there is no component read set here.
+func (p *PG) RemoveMember(ctx context.Context, actorID, systemName, componentName string, read, action, componentAction scope.Set) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("storage: begin remove member: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	systemID, componentID, err := p.resolveMembershipEndsForRemoval(ctx, tx, systemName, componentName, read, action)
+	systemID, componentID, err := p.resolveMembershipEndsForRemoval(ctx, tx, systemName, componentName, read, action, componentAction)
 	if err != nil {
 		return err
 	}
@@ -287,14 +298,19 @@ func memberComponentIDs(ctx context.Context, q querier, systemID string) ([]stri
 // SetPrimaryMember moves the default to this membership. The move is one
 // statement per side inside one transaction, so there is never a moment with two
 // defaults (which the partial unique index would refuse) or none.
-func (p *PG) SetPrimaryMember(ctx context.Context, actorID, systemName, componentName string, read, action scope.Set) error {
+//
+// The component is resolved among this system's members, the same resolve
+// RemoveMember makes, and must be inside componentAction, the caller's
+// component:update set (#510): the default decides which system's band every
+// cascade on the component reads, which is a write on the component.
+func (p *PG) SetPrimaryMember(ctx context.Context, actorID, systemName, componentName string, read, action, componentAction scope.Set) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("storage: begin set primary member: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	systemID, componentID, err := p.resolveMembershipEnds(ctx, tx, systemName, componentName, read, action)
+	systemID, componentID, err := p.resolveMembershipEndsForRemoval(ctx, tx, systemName, componentName, read, action, componentAction)
 	if err != nil {
 		return err
 	}
@@ -375,58 +391,54 @@ func (p *PG) membersWhere(ctx context.Context, where string, arg string) ([]Memb
 	return out, rows.Err()
 }
 
-// resolveMembershipEnds checks both ends of the binding before it is written: the
-// system must be in the caller's write scope (a non-disclosing not-found when it
-// is not) and the component must exist. It returns both ids, resolved once here
-// rather than left for AddMember/SetPrimaryMember to re-derive from the
-// caller's name (ambiguous the moment two rows share it, #627); the scope
-// check already loads the system row, so its id costs nothing extra.
+// resolveMembershipEnds checks both ends of a binding about to be written, and
+// returns both ids, resolved once here rather than left for the caller to
+// re-derive from a name (ambiguous the moment two rows share it, #627).
 //
-// AddMember and SetPrimaryMember only: RemoveMember uses
-// resolveMembershipEndsForRemoval instead (#627 review round 3), because the
-// component it resolves must already BE a member, and fleet-wide is the
-// wrong set to judge that in. AddMember's own component is not yet a member
-// (that is the point of adding it), so it cannot use a members-only resolve;
-// its console callsite addresses the component by uuid now regardless (round
-// 3's assign/add fix), where this fleet-wide scopedByName's ambiguity branch
-// cannot fire. SetPrimaryMember carries the same fleet-wide-ambiguity shape
-// RemoveMember had; left alone here, out of this round's scope (#645 named
-// only unassign and remove).
-func (p *PG) resolveMembershipEnds(ctx context.Context, q txQuerier, systemName, componentName string, read, action scope.Set) (systemID, componentID string, err error) {
-	// resolveScoped, not scopedByNameInScope(write): the read-then-action split
-	// (#736), so a system this caller can see but not write is refused as
-	// forbidden rather than reported absent. Ambiguity is still judged inside a
-	// scope, the READ one now (ruling 2, #627), which is the wider of the two and
-	// therefore the honest set to judge a name in.
+// The system resolves in read and must be inside action, the caller's
+// system:read and system:update sets: out of read is the non-disclosing
+// ErrSystemNotFound, readable but out of action ErrSystemForbidden (#736).
+//
+// The component resolves the same way on its own tier (#510), in componentRead
+// and then componentAction, the caller's component:read and component:update
+// sets: out of componentRead is ErrComponentNotFound, readable but out of
+// componentAction ErrComponentForbidden. It used to resolve by existence alone,
+// which let a principal scoped to one system bind a component it could not even
+// read, make that system the component's primary, and inject its own system-band
+// variables and tags onto it through the cascade. A membership writes onto both
+// of its ends, so it costs a write on both. Ambiguity is judged inside
+// componentRead, so a refusal's candidates are rows this caller may read and need
+// no redaction.
+//
+// AddMember and assignRoleTx's component only: a write naming a component that is
+// already bound here resolves it among the members (resolveMembershipEndsForRemoval).
+func (p *PG) resolveMembershipEnds(ctx context.Context, q txQuerier, systemName, componentName string, read, action, componentRead, componentAction scope.Set) (systemID, componentID string, err error) {
 	sys, err := resolveScoped(ctx, q, systemConfig, systemName, read, action)
 	if err != nil {
 		return "", "", err // ErrSystemNotFound out of read scope, ErrSystemForbidden out of action scope
 	}
-	// scopedByName, not scopedByNameInScope: write is resolved for "system"
-	// here (the system check above), and a component's ancestor chain is
-	// unrelated to it, so checking write against componentConfig could never
-	// match (the tier-mismatch shape a review caught elsewhere).
-	// withoutCandidates closes the disclosure an ambiguous component name
-	// would otherwise carry: every matching uuid fleet-wide, including ones
-	// this system:update-only caller holds no component:read grant to see.
-	c, err := scopedByName(ctx, q, componentConfig, componentName)
+	c, err := resolvePlacementWriteRef(ctx, q, componentConfig, componentName, componentRead, componentAction)
 	if err != nil {
-		return "", "", withoutCandidates(err) // ErrComponentNotFound when absent
+		return "", "", err // ErrComponentNotFound out of componentRead, ErrComponentForbidden out of componentAction
 	}
 	return sys.ID, c.ID, nil
 }
 
-// resolveMembershipEndsForRemoval resolves the same pair resolveMembershipEnds
-// does, but judges the component's name ambiguity within THIS system's current
+// resolveMembershipEndsForRemoval resolves the same pair for a write naming a
+// component that is already bound into this system (RemoveMember,
+// SetPrimaryMember), judging the name's ambiguity within THIS system's current
 // members, not fleet-wide (#627 review round 3, closing #645 without a wire
-// change): RemoveMember is naming a component it already believes is a member
-// here, so a same-named component elsewhere in the fleet that was never a
-// member of this system was never actually a candidate. A name matching
-// nothing anywhere is ErrComponentNotFound; a name matching something real
-// that just is not a member here is ErrMemberNotFound, the same sentinel
-// RemoveMember's own delete already falls back to when its statement affects
-// zero rows, reused rather than duplicated.
-func (p *PG) resolveMembershipEndsForRemoval(ctx context.Context, q txQuerier, systemName, componentName string, read, action scope.Set) (systemID, componentID string, err error) {
+// change): a same-named component elsewhere in the fleet that was never a member
+// here was never a candidate. A name matching nothing anywhere is
+// ErrComponentNotFound; a name matching something real that just is not a member
+// here is ErrMemberNotFound.
+//
+// The member must then be inside componentAction, the caller's component:update
+// set (#510), or the write is ErrComponentForbidden. There is no component read
+// set and no non-disclosing not-found on this path, deliberately: the component
+// is a member of a system the caller already reads, and the system's member list
+// names it, so answering "not found" would deny a row the caller is looking at.
+func (p *PG) resolveMembershipEndsForRemoval(ctx context.Context, q txQuerier, systemName, componentName string, read, action, componentAction scope.Set) (systemID, componentID string, err error) {
 	sys, err := resolveScoped(ctx, q, systemConfig, systemName, read, action)
 	if err != nil {
 		return "", "", err
@@ -452,5 +464,24 @@ func (p *PG) resolveMembershipEndsForRemoval(ctx context.Context, q txQuerier, s
 		}
 		return "", "", withoutCandidates(err)
 	}
+	if err := requireComponentAction(ctx, q, c.ID, componentAction); err != nil {
+		return "", "", err
+	}
 	return sys.ID, c.ID, nil
+}
+
+// requireComponentAction refuses a write through an already-related component
+// (a member being unbound or re-defaulted, an occupant being unassigned) that
+// sits outside the caller's component action set (#510). It is the action half
+// of the read-then-action split alone: the caller reached the component through
+// a relation of a system it reads, so there is no read half left to hide behind.
+func requireComponentAction(ctx context.Context, q querier, componentID string, componentAction scope.Set) error {
+	ok, err := inScopeTree(ctx, q, componentConfig.table, componentID, componentAction)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return ErrComponentForbidden
+	}
+	return nil
 }

@@ -93,7 +93,7 @@ func TestEffectiveRolesAndAssignment(t *testing.T) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-1", ProductName: &bar}, all, all, all, all); err != nil {
 		t.Fatalf("create bar: %v", err)
 	}
-	if err := gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "bar-1", all, all); err != nil {
+	if err := gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "bar-1", all, all, all, all); err != nil {
 		t.Fatalf("assign a satisfying component: %v", err)
 	}
 	roles, _ = gw.EffectiveRoles(ctx, "hq-huddle", all)
@@ -105,7 +105,7 @@ func TestEffectiveRolesAndAssignment(t *testing.T) {
 		}
 	}
 	// Idempotent: assigning the same component again does not duplicate.
-	if err := gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "bar-1", all, all); err != nil {
+	if err := gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "bar-1", all, all, all, all); err != nil {
 		t.Fatalf("re-assign: %v", err)
 	}
 	roles, _ = gw.EffectiveRoles(ctx, "hq-huddle", all)
@@ -121,7 +121,7 @@ func TestEffectiveRolesAndAssignment(t *testing.T) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-1", ProductName: &qm}, all, all, all, all); err != nil {
 		t.Fatalf("create panel: %v", err)
 	}
-	err = gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "panel-1", all, all)
+	err = gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "panel-1", all, all, all, all)
 	var short *storage.TypeShortfall
 	if !errors.As(err, &short) {
 		t.Fatalf("assign a non-satisfying component: err = %v, want TypeShortfall", err)
@@ -134,7 +134,7 @@ func TestEffectiveRolesAndAssignment(t *testing.T) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-2", ProductName: &bar}, all, all, all, all); err != nil {
 		t.Fatalf("create second bar: %v", err)
 	}
-	if err := gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "bar-2", all, all); err != nil {
+	if err := gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "bar-2", all, all, all, all); err != nil {
 		t.Fatalf("assign a second satisfying component: %v", err)
 	}
 	roles, _ = gw.EffectiveRoles(ctx, "hq-huddle", all)
@@ -145,10 +145,10 @@ func TestEffectiveRolesAndAssignment(t *testing.T) {
 	}
 
 	// Unassign removes it; unassigning again is an explicit miss.
-	if err := gw.UnassignRole(ctx, "", "hq-huddle", "table-mic", "bar-2", all, all); err != nil {
+	if err := gw.UnassignRole(ctx, "", "hq-huddle", "table-mic", "bar-2", all, all, all); err != nil {
 		t.Fatalf("unassign: %v", err)
 	}
-	if err := gw.UnassignRole(ctx, "", "hq-huddle", "table-mic", "bar-2", all, all); !errors.Is(err, storage.ErrAssignmentMissing) {
+	if err := gw.UnassignRole(ctx, "", "hq-huddle", "table-mic", "bar-2", all, all, all); !errors.Is(err, storage.ErrAssignmentMissing) {
 		t.Fatalf("unassign twice: err = %v, want ErrAssignmentMissing", err)
 	}
 
@@ -166,7 +166,7 @@ func TestEffectiveRolesAndAssignment(t *testing.T) {
 		t.Fatalf("refusal blames children it cannot know about: %q", err)
 	}
 	// Unassigned, it deletes cleanly.
-	if err := gw.UnassignRole(ctx, "", "hq-huddle", "table-mic", "bar-1", all, all); err != nil {
+	if err := gw.UnassignRole(ctx, "", "hq-huddle", "table-mic", "bar-1", all, all, all); err != nil {
 		t.Fatalf("unassign before delete: %v", err)
 	}
 	if err := gw.DeleteComponent(ctx, "", "bar-1", all, all); err != nil {
@@ -177,12 +177,12 @@ func TestEffectiveRolesAndAssignment(t *testing.T) {
 	// absent component has no product to classify, so without an existence
 	// check the operator gets a confusing type refusal for what is really a
 	// typo.
-	if err := gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "no-such-component", all, all); !errors.Is(err, storage.ErrComponentNotFound) {
+	if err := gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "no-such-component", all, all, all, all); !errors.Is(err, storage.ErrComponentNotFound) {
 		t.Fatalf("assign an unknown component: err = %v, want ErrComponentNotFound", err)
 	}
 
 	// An unknown role on a real system is a clear not-found, not a silent no-op.
-	if err := gw.AssignRole(ctx, "", "hq-huddle", "no-such-role", "bar-1", all, all); !errors.Is(err, storage.ErrRoleNotFound) {
+	if err := gw.AssignRole(ctx, "", "hq-huddle", "no-such-role", "bar-1", all, all, all, all); !errors.Is(err, storage.ErrRoleNotFound) {
 		t.Fatalf("assign to unknown role: err = %v, want ErrRoleNotFound", err)
 	}
 
@@ -235,7 +235,7 @@ func TestAssignRefusesWrongType(t *testing.T) {
 		t.Fatalf("create component: %v", err)
 	}
 
-	err = gw.AssignRole(ctx, "", "wrong-type-sys", "display-left", "panel-1", all, all)
+	err = gw.AssignRole(ctx, "", "wrong-type-sys", "display-left", "panel-1", all, all, all, all)
 	var short *storage.TypeShortfall
 	if !errors.As(err, &short) {
 		t.Fatalf("assign a wrong-type component: err = %v, want TypeShortfall", err)
@@ -282,7 +282,7 @@ func TestAssignAcceptsSubtype(t *testing.T) {
 		t.Fatalf("create component: %v", err)
 	}
 
-	if err := gw.AssignRole(ctx, "", "subtype-sys", "display-left", "panel-2", all, all); err != nil {
+	if err := gw.AssignRole(ctx, "", "subtype-sys", "display-left", "panel-2", all, all, all, all); err != nil {
 		t.Fatalf("assign a subtype component: %v, want success (interactive-display is within display's subtree)", err)
 	}
 }
@@ -325,7 +325,7 @@ func TestAssignProductPin(t *testing.T) {
 		t.Fatalf("create component: %v", err)
 	}
 
-	err = gw.AssignRole(ctx, "", "pin-sys", "main-display", "panel-3", all, all)
+	err = gw.AssignRole(ctx, "", "pin-sys", "main-display", "panel-3", all, all, all, all)
 	var pinShort *storage.ProductPinShortfall
 	if !errors.As(err, &pinShort) {
 		t.Fatalf("assign right type, wrong product: err = %v, want ProductPinShortfall", err)
@@ -339,7 +339,7 @@ func TestAssignProductPin(t *testing.T) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "qm-2", ProductName: &qm}, all, all, all, all); err != nil {
 		t.Fatalf("create pinned-product component: %v", err)
 	}
-	if err := gw.AssignRole(ctx, "", "pin-sys", "main-display", "qm-2", all, all); err != nil {
+	if err := gw.AssignRole(ctx, "", "pin-sys", "main-display", "qm-2", all, all, all, all); err != nil {
 		t.Fatalf("assign the pinned product: %v, want success", err)
 	}
 }
@@ -379,11 +379,11 @@ func TestSecondRoleSameComponentRefused(t *testing.T) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-1", ProductName: &bar}, all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	if err := gw.AssignRole(ctx, "", "double-staff-sys", "main-display", "bar-1", all, all); err != nil {
+	if err := gw.AssignRole(ctx, "", "double-staff-sys", "main-display", "bar-1", all, all, all, all); err != nil {
 		t.Fatalf("assign to first role: %v", err)
 	}
 
-	err = gw.AssignRole(ctx, "", "double-staff-sys", "confidence-monitor", "bar-1", all, all)
+	err = gw.AssignRole(ctx, "", "double-staff-sys", "confidence-monitor", "bar-1", all, all, all, all)
 	var staffed *storage.ComponentStaffedShortfall
 	if !errors.As(err, &staffed) {
 		t.Fatalf("assign a second role to the same component: err = %v, want ComponentStaffedShortfall", err)
@@ -397,7 +397,7 @@ func TestSecondRoleSameComponentRefused(t *testing.T) {
 
 	// Re-assigning to the SAME role it already holds stays idempotent: the
 	// exclusion is role_id <> the target role, not "already staffed at all".
-	if err := gw.AssignRole(ctx, "", "double-staff-sys", "main-display", "bar-1", all, all); err != nil {
+	if err := gw.AssignRole(ctx, "", "double-staff-sys", "main-display", "bar-1", all, all, all, all); err != nil {
 		t.Fatalf("re-assign to the role it already holds: %v, want idempotent success", err)
 	}
 }
@@ -519,12 +519,12 @@ func TestLoweringCapacityBelowCountRefusedAcrossInheritingSystems(t *testing.T) 
 
 	// System A stays under any cap we will try; system B does not.
 	newBar("a-bar-1")
-	if err := gw.AssignRole(ctx, "", "cap-sys-a", "table-mic", "a-bar-1", all, all); err != nil {
+	if err := gw.AssignRole(ctx, "", "cap-sys-a", "table-mic", "a-bar-1", all, all, all, all); err != nil {
 		t.Fatalf("assign a-bar-1: %v", err)
 	}
 	for _, name := range []string{"b-bar-1", "b-bar-2", "b-bar-3"} {
 		newBar(name)
-		if err := gw.AssignRole(ctx, "", "cap-sys-b", "table-mic", name, all, all); err != nil {
+		if err := gw.AssignRole(ctx, "", "cap-sys-b", "table-mic", name, all, all, all, all); err != nil {
 			t.Fatalf("assign %s: %v", name, err)
 		}
 	}

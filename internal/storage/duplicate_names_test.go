@@ -392,7 +392,7 @@ func TestDuplicateNamesDoNotBreakGatewayReads(t *testing.T) {
 	}
 
 	// Member write, by uuid.
-	if err := gw.AddMember(ctx, "", sys.Name, compA.ID, all, all); err != nil {
+	if err := gw.AddMember(ctx, "", sys.Name, compA.ID, all, all, all, all); err != nil {
 		t.Fatalf("add member by id: %v", err)
 	}
 	memsA, err := gw.ComponentMemberships(ctx, compA.ID, all)
@@ -411,7 +411,7 @@ func TestDuplicateNamesDoNotBreakGatewayReads(t *testing.T) {
 	}
 
 	// Role assignment, by uuid.
-	if err := gw.AssignRole(ctx, "", sys.Name, "seat", compA.ID, all, all); err != nil {
+	if err := gw.AssignRole(ctx, "", sys.Name, "seat", compA.ID, all, all, all, all); err != nil {
 		t.Fatalf("assign role by id: %v", err)
 	}
 	var assignedComponent string
@@ -518,10 +518,10 @@ func TestResolveTagsSurvivesDuplicateSystemNames(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	if err := gw.AddMember(ctx, "", sysA.ID, comp.ID, all, all); err != nil {
+	if err := gw.AddMember(ctx, "", sysA.ID, comp.ID, all, all, all, all); err != nil {
 		t.Fatalf("add member sysA by id: %v", err)
 	}
-	if err := gw.AddMember(ctx, "", sysB.ID, comp.ID, all, all); err != nil {
+	if err := gw.AddMember(ctx, "", sysB.ID, comp.ID, all, all, all, all); err != nil {
 		t.Fatalf("add member sysB by id: %v", err)
 	}
 

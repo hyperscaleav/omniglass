@@ -389,13 +389,18 @@ func (p *PG) EffectiveRoles(ctx context.Context, systemName string, read scope.S
 // so the operator can act on the refusal rather than guess.
 //
 // Idempotent: assigning the same component to the same role twice is a no-op.
-func (p *PG) AssignRole(ctx context.Context, actorID, systemName, roleName, componentName string, read, action scope.Set) error {
+//
+// Both ends are scope-checked, the way AddMember checks them (#510): read and
+// action are the caller's system:read and system:update sets, componentRead and
+// componentAction its component:read and component:update sets. Staffing a role
+// is membership, so it writes onto the component as well as the system.
+func (p *PG) AssignRole(ctx context.Context, actorID, systemName, roleName, componentName string, read, action, componentRead, componentAction scope.Set) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("storage: begin assign role: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if err := p.assignRoleTx(ctx, tx, actorID, systemName, roleName, componentName, read, action); err != nil {
+	if err := p.assignRoleTx(ctx, tx, actorID, systemName, roleName, componentName, read, action, componentRead, componentAction); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -406,7 +411,7 @@ func (p *PG) AssignRole(ctx context.Context, actorID, systemName, roleName, comp
 
 // assignRoleTx is AssignRole inside a transaction the caller owns, so a composite write (adding
 // a simulated system) can create it alongside the rest and commit once.
-func (p *PG) assignRoleTx(ctx context.Context, tx pgx.Tx, actorID, systemName, roleName, componentName string, read, action scope.Set) error {
+func (p *PG) assignRoleTx(ctx context.Context, tx pgx.Tx, actorID, systemName, roleName, componentName string, read, action, componentRead, componentAction scope.Set) error {
 
 	// system and component are each resolved once here, inside this
 	// transaction, and their ids bound everywhere below: under scoped name
@@ -436,19 +441,19 @@ func (p *PG) assignRoleTx(ctx context.Context, tx pgx.Tx, actorID, systemName, r
 	if err := lockAdvisory(ctx, tx, rolePositionLockKey(sys.ID, roleID)); err != nil {
 		return err
 	}
-	// Confirm the component exists before judging what it is. An absent
-	// component has no product to classify, which would otherwise surface as a
-	// confusing type refusal for what is really a typo. scopedByName, not
-	// scopedByNameInScope: the only scope in hand here is write, resolved for
-	// "system", and a component's ancestor chain is unrelated to it, so
-	// checking write against componentConfig could never match (the same
-	// tier-mismatch shape Critical A fixed elsewhere). withoutCandidates
-	// closes the resulting disclosure: an ambiguous component name here
-	// listed every matching uuid fleet-wide, including ones a
-	// system:update-only caller holds no component:read grant to see.
-	component, err := scopedByName(ctx, tx, componentConfig, componentName)
+	// Resolve the component on its own tier before judging what it is (#510):
+	// in componentRead, then componentAction, the caller's component:read and
+	// component:update sets, the read-then-action split resolveMembershipEnds
+	// makes for AddMember. An absent or unreadable component is
+	// ErrComponentNotFound (so a typo is never a confusing type refusal), a
+	// readable one the caller may not write is ErrComponentForbidden. It used
+	// to resolve by existence alone, which let a principal scoped to one system
+	// staff a component it could not read. Ambiguity is judged inside
+	// componentRead, so the candidates a refusal lists are rows this caller may
+	// read.
+	component, err := resolvePlacementWriteRef(ctx, tx, componentConfig, componentName, componentRead, componentAction)
 	if err != nil {
-		return withoutCandidates(err) // ErrComponentNotFound when absent
+		return err
 	}
 	cls, err := p.classifyComponent(ctx, tx, component.ID)
 	if err != nil {
@@ -614,8 +619,11 @@ func (p *PG) assignRoleTx(ctx context.Context, tx pgx.Tx, actorID, systemName, r
 }
 
 // UnassignRole removes a component from a role, returning ErrAssignmentMissing
-// when it was not filling it.
-func (p *PG) UnassignRole(ctx context.Context, actorID, systemName, roleName, componentName string, read, action scope.Set) error {
+// when it was not filling it. The occupant must be inside componentAction, the
+// caller's component:update set (#510), or the write is ErrComponentForbidden;
+// like RemoveMember there is no component read half, because the role's own
+// read names its occupants to anyone who reads the system.
+func (p *PG) UnassignRole(ctx context.Context, actorID, systemName, roleName, componentName string, read, action, componentAction scope.Set) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("storage: begin unassign role: %w", err)
@@ -668,6 +676,9 @@ func (p *PG) UnassignRole(ctx context.Context, actorID, systemName, roleName, co
 			return ErrComponentNotFound
 		}
 		return withoutCandidates(err)
+	}
+	if err := requireComponentAction(ctx, tx, component.ID, componentAction); err != nil {
+		return err
 	}
 	// Same key AssignRole and SwapPositions take: an unassign vacating a
 	// position must serialize against a concurrent assign that could
