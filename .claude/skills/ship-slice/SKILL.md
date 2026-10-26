@@ -235,8 +235,10 @@ scripts/board.sh set <M> "In Review"
 ```
 
 Until the board has an "In Review" status the script lands it on In Progress with one warning;
-that is expected, not a failure. Never set Done by hand: merging closes the issue and GitHub's
-built-in workflow moves it. The script never touches Priority, which is the architect's
+that is expected, not a failure. The board's own "Pull request linked to issue" workflow makes
+the same move as the PR opens; the call is the backstop, and writing a status the item already
+has changes nothing. Never set Done by hand: with "Auto-close issue" on, Done closes the issue,
+and merging closes it anyway, which moves it to Done. The script never touches Priority, which is the architect's
 ([the board](../../../docs/src/content/docs/contributing/labels.md#the-board)). Where it cannot
 run (no `gh`, or a token without the `project` scope; it says which), say so in the ship-review.
 

@@ -19,8 +19,15 @@
 # status, set <issue> "In Review" lands on "In Progress" with one warning. An
 # archived item is restored by add, set and iteration.
 #
+# The board runs workflows of its own, and two meet this script. "Item added to
+# project" gives a new item a Status a moment after it is added, so when this
+# script adds an issue it waits for that (up to BOARD_SETTLE seconds) before
+# writing, or the workflow would overwrite the move. "Auto-close issue" closes an
+# issue whose Status becomes Done, so set <issue> Done closes the issue too.
+#
 # Env: BOARD_OWNER (hyperscaleav), BOARD_PROJECT (Omniglass), BOARD_REPO
-# (hyperscaleav/omniglass), BOARD_TODAY (YYYY-MM-DD, default today in UTC).
+# (hyperscaleav/omniglass), BOARD_TODAY (YYYY-MM-DD, default today in UTC),
+# BOARD_SETTLE (seconds to wait for a new item's workflow Status, default 6).
 # Exit: 0 done or nothing to do, 1 an error from GitHub or the board, 2 a usage
 # error. Prereqs: jq, and gh authenticated with the project scope
 # (gh auth refresh -s project).
@@ -29,6 +36,7 @@ set -euo pipefail
 OWNER=${BOARD_OWNER:-hyperscaleav}
 PROJECT=${BOARD_PROJECT:-Omniglass}
 REPO=${BOARD_REPO:-hyperscaleav/omniglass}
+SETTLE=${BOARD_SETTLE:-6}
 
 usage() {
   cat <<'EOF'
@@ -76,6 +84,7 @@ esac
 issue=${2#\#}
 [[ $issue =~ ^[1-9][0-9]*$ ]] || usage_error "not an issue number: $2"
 want_status=${*:3}
+[[ $SETTLE =~ ^[0-9]+$ ]] || bad_input "BOARD_SETTLE is not a number of seconds: $SETTLE"
 
 command -v gh >/dev/null 2>&1 || bad_input "gh is required (https://cli.github.com)"
 command -v jq >/dev/null 2>&1 || bad_input "jq is required"
@@ -198,6 +207,7 @@ ensure_item() {
     added=$(gh_run project item-add "$PROJECT_NUMBER" --owner "$OWNER" --url "$url" --format json)
     ITEM_ID=$(jq -r '.id' <<<"$added")
     say "#$issue added to $PROJECT"
+    settle
     return 0
   fi
   ITEM_ID=$(jq -r '.id' <<<"$ITEM_JSON")
@@ -205,6 +215,20 @@ ensure_item() {
     gh_run project item-archive "$PROJECT_NUMBER" --owner "$OWNER" --id "$ITEM_ID" --undo >/dev/null
     say "#$issue restored from the archive"
   fi
+}
+
+# settle: wait, up to SETTLE seconds, for the board's "Item added to project"
+# workflow to give the item just added its Status, re-reading the item each
+# second. A move written first would be overwritten when the workflow lands; a
+# board with that workflow off costs only the wait.
+settle() {
+  local waited=0
+  while [ "$waited" -lt "$SETTLE" ]; do
+    sleep 1
+    waited=$((waited + 1))
+    load_item
+    [ -z "$(value Status)" ] || return 0
+  done
 }
 
 write_status() {
@@ -218,9 +242,14 @@ cmd_add() {
   load_fields
   resolve_status Backlog
   load_item
-  local current
-  current=$(value Status)
+  local before current
+  before=$ITEM_JSON
   ensure_item
+  current=$(value Status)
+  if [ -n "$current" ] && [ -z "$before" ]; then
+    say "#$issue: $current, from the board's own workflow: unchanged"
+    return 0
+  fi
   if [ -n "$current" ]; then
     say "#$issue is already on $PROJECT ($current): unchanged"
     return 0
@@ -234,8 +263,8 @@ cmd_set() {
   resolve_status "$want_status"
   load_item
   local current
-  current=$(value Status)
   ensure_item
+  current=$(value Status)
   if [ "$current" = "$STATUS_NAME" ]; then
     say "#$issue is already $STATUS_NAME: unchanged"
     return 0
@@ -264,8 +293,8 @@ cmd_iteration() {
   id=${hit%%$'\t'*}
   title=${hit#*$'\t'}
   load_item
-  current=$(value Iteration)
   ensure_item
+  current=$(value Iteration)
   if [ "$current" = "$title" ]; then
     say "#$issue is already in $title: unchanged"
     return 0
