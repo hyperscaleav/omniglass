@@ -149,6 +149,7 @@ func (l *sampleLineage) rule() string {
 // are marked pending on each owner (#996), never the rule that produced the
 // batch.
 func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs []MetricSampleWrite) error {
+	evs = cleanMetricWrites(evs)
 	arcs := make([]string, len(evs))
 	rows := make([]keyedWrite, len(evs))
 	marks := newCalcMarks()
@@ -212,11 +213,8 @@ func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs
 // the query to re-derive an id from a name a second row might now share (#627).
 // An unknown component folds into the same nil-no-error "nothing yet" result
 // the old inline subquery gave (it resolved to no id, which matched no metric
-// row): this read backs the ingest-side transition guard
-// (bus.dedupeProperties's LatestProperty sibling), where any error leaves a
-// telemetry message unacked for redelivery, so an unrecognized owner must stay
-// silent here rather than start rejecting live ingest traffic that used to be
-// silently accepted as "no prior value". ErrAmbiguousName, which could not
+// row), as LatestProperty does: a panel asking about a component with no
+// readings shows none rather than an error. ErrAmbiguousName, which could not
 // have occurred before scoped uniqueness exists, is not folded in: it is new
 // information a caller that reaches this world needs.
 func (p *PG) LatestMetric(ctx context.Context, componentRef, key string) (*MetricSample, error) {

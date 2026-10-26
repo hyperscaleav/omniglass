@@ -373,6 +373,10 @@ telemetry: {
     shape: sql_table
     id: uuid {constraint: primary_key}
   }
+  telemetry_receipt: {
+    shape: sql_table
+    batch_id: text {constraint: primary_key}
+  }
 }
 
 collection: {

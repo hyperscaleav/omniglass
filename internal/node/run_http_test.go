@@ -251,8 +251,17 @@ func TestNodeHTTPSKestrelPollsActuatesAndPinsItsKey(t *testing.T) {
 	s.waitFor("bar-1", ep.Name, "endpoint-authenticated", is("yes"), "yes: the bar accepted the login")
 	s.waitFor("bar-1", ep.Name, "model-number", is(fmt.Sprint(bar.ReadPath("configuration.device.model"))), "the bar's model, polled over https")
 	s.waitFor("bar-1", ep.Name, "call-state", func(v string) bool { return v == "active" || v == "idle" }, "the call state, mapped")
-	if v, ok := s.metric("bar-1", ep.Name, "volume"); !ok || fmt.Sprint(v) != fmt.Sprint(bar.ReadPath("status.audio.volume")) {
-		t.Fatalf("volume = %v (%v), want the bar's %v", v, ok, bar.ReadPath("status.audio.volume"))
+	// The volume rides the audio poll, a batch of its own beside the call
+	// poll's, so it is waited on rather than read the instant call-state is.
+	for deadline := time.Now().Add(20 * time.Second); ; {
+		v, ok := s.metric("bar-1", ep.Name, "volume")
+		if ok && fmt.Sprint(v) == fmt.Sprint(bar.ReadPath("status.audio.volume")) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("volume = %v (%v), want the bar's %v", v, ok, bar.ReadPath("status.audio.volume"))
+		}
+		time.Sleep(25 * time.Millisecond)
 	}
 	if ms, ok := s.metric("bar-1", ep.Name, "tls-handshake-time"); !ok || ms <= 0 {
 		t.Fatalf("tls-handshake-time = %v (%v), want an observation", ms, ok)
