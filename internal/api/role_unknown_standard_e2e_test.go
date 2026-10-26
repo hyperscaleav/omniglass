@@ -5,31 +5,17 @@ import (
 	"testing"
 )
 
-// TestAnUnknownStandardDeclaresNoRole is #505: a role declared on a standard
-// that does not exist is a 422 and writes nothing, whatever the body carries,
-// and two different typos never collide into one ownerless row. Reading the
-// roles of a standard that does not exist is a 404, not an empty list that
-// reads as "this standard declares nothing".
-func TestAnUnknownStandardDeclaresNoRole(t *testing.T) {
+// TestAnUnknownStandardListsNoRoles is the read-side residue of #505. Declaring
+// a role on a standard that does not exist has been a 422 that writes nothing
+// since #647's owner-arc check (TestUnknownOwnerRefused pins it); reading the
+// roles of one still answered 200 with an empty list, which reads as "this
+// standard declares nothing". It is a 404, and a real standard that declares
+// nothing is still an empty 200.
+func TestAnUnknownStandardListsNoRoles(t *testing.T) {
 	f := newStaffingFixture(t)
-
-	for _, body := range []map[string]any{
-		{"label": "Ghost", "quorum": 2},
-		{"label": "Ghost", "accepted_types": []string{"display"}},
-	} {
-		if st, raw := f.c.send(f.owner, http.MethodPatch, "/standards/no-such-standard/roles/ghost", body); st != http.StatusUnprocessableEntity {
-			t.Fatalf("declare on an unknown standard %v = %d, want 422\nbody: %s", body, st, raw)
-		}
-	}
-	for _, typo := range []string{"typo-a", "typo-b"} {
-		if st, raw := f.c.send(f.owner, http.MethodPatch, "/standards/"+typo+"/roles/mic", map[string]any{"quorum": 2}); st != http.StatusUnprocessableEntity {
-			t.Fatalf("declare on %s = %d, want 422\nbody: %s", typo, st, raw)
-		}
-	}
-	if n := f.count(`select count(*) from system_role where name in ('ghost', 'mic')`); n != 0 {
-		t.Fatalf("%d role rows written for an unknown standard, want none", n)
-	}
 	if st, raw := f.c.send(f.owner, http.MethodGet, "/standards/no-such-standard/roles", nil); st != http.StatusNotFound {
 		t.Fatalf("list the roles of an unknown standard = %d, want 404\nbody: %s", st, raw)
 	}
+	f.c.do(f.owner, http.MethodPost, "/standards", map[string]any{"name": "bare-std", "label": "Bare"}, http.StatusCreated)
+	f.c.do(f.owner, http.MethodGet, "/standards/bare-std/roles", nil, http.StatusOK)
 }
