@@ -446,6 +446,12 @@ func (UnimplementedGateway) InsertLogLines(context.Context, []LogLineWrite) erro
 func (UnimplementedGateway) InsertNodeLogs(context.Context, []NodeLogWrite) error {
 	return nil
 }
+func (UnimplementedGateway) LandBatch(context.Context, IngestBatch) (bool, error) {
+	return false, nil
+}
+func (UnimplementedGateway) PruneTelemetryReceipts(context.Context, time.Time, int) (int64, error) {
+	return 0, nil
+}
 func (UnimplementedGateway) ListComponentLogSources(context.Context, string, time.Duration) ([]string, error) {
 	return nil, nil
 }

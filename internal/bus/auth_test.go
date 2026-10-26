@@ -56,23 +56,11 @@ func (f fakeStore) ListPropertyTypes(context.Context) ([]storage.PropertyType, e
 }
 func (f fakeStore) StampEndpointsSeen(context.Context, []string) error { return nil }
 
-func (f fakeStore) InsertMetricSamples(context.Context, storage.KeyWriter, []storage.MetricSampleWrite) error {
-	return nil
+func (f fakeStore) LandBatch(context.Context, storage.IngestBatch) (bool, error) {
+	return true, nil
 }
-func (f fakeStore) InsertPropertySamples(context.Context, storage.KeyWriter, []storage.PropertySampleWrite) error {
-	return nil
-}
-func (f fakeStore) LatestProperty(context.Context, string, string, string) (*storage.PropertySample, error) {
-	return nil, nil
-}
-func (f fakeStore) InsertEvents(context.Context, storage.KeyWriter, []storage.EventWrite) error {
-	return nil
-}
-func (f fakeStore) InsertLogLines(context.Context, []storage.LogLineWrite) error {
-	return nil
-}
-func (f fakeStore) InsertNodeLogs(context.Context, []storage.NodeLogWrite) error {
-	return nil
+func (f fakeStore) PruneTelemetryReceipts(context.Context, time.Time, int) (int64, error) {
+	return 0, nil
 }
 func (f fakeStore) ListEventTypes(context.Context) ([]storage.EventType, error) {
 	return nil, nil

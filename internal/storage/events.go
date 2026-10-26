@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // EventWrite is one occurrence to persist. It shares the owner-arc shape of a
@@ -74,12 +76,14 @@ func (p *PG) InsertEvents(ctx context.Context, w KeyWriter, evs []EventWrite) er
 	if len(evs) == 0 {
 		return nil
 	}
-	tx, err := p.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("storage: begin insert events: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	return p.sampleWrite(ctx, "insert events", func(tx pgx.Tx) error { return p.writeEvents(ctx, tx, w, evs) })
+}
 
+// writeEvents is the caught-occurrence write path, in the caller's
+// transaction: InsertEvents' own, or an ingest batch's (LandBatch), held to
+// each event type's writer class before anything lands.
+func (p *PG) writeEvents(ctx context.Context, tx pgx.Tx, w KeyWriter, evs []EventWrite) error {
+	evs = cleanEventWrites(evs)
 	// The arc points at the primary key, so each owner reference resolves to a
 	// uuid before it is stored, and before the writer check holds the row to
 	// it. A node still stores its name until the collection tier converts.
@@ -107,7 +111,8 @@ func (p *PG) InsertEvents(ctx context.Context, w KeyWriter, evs []EventWrite) er
 		if ts.IsZero() {
 			ts = time.Now().UTC()
 		}
-		if ts, err = clock.cap(ctx, ev.Key, ts); err != nil {
+		ts, err := clock.cap(ctx, ev.Key, ts)
+		if err != nil {
 			return err
 		}
 		// attributes is jsonb: pass the raw JSON as text (nil stays SQL NULL) so
@@ -125,9 +130,6 @@ func (p *PG) InsertEvents(ctx context.Context, w KeyWriter, evs []EventWrite) er
 		if _, err := tx.Exec(ctx, sql, ts, ev.OwnerKind, arcs[i], ev.Key, ev.Instance, origin, ev.Message, attrs, ev.Source); err != nil {
 			return fmt.Errorf("storage: insert event %s/%s: %w", ev.OwnerID, ev.Key, err)
 		}
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("storage: commit insert events: %w", err)
 	}
 	return nil
 }

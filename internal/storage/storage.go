@@ -603,10 +603,9 @@ type Gateway interface {
 
 	// The observed-property sink: the mirror of the metric sink for categorical
 	// verdicts (interface-reachable), held to the same writer check.
-	// reject-not-project and the transition-only guard are applied by the caller
-	// before the write. LatestProperty backs the ingest-side transition guard;
-	// PropertyTransitions is the ordered flip series the availability strip
-	// reads; both read the observed series only.
+	// reject-not-project is applied by the caller before the write.
+	// LatestProperty and PropertyTransitions (the ordered flip series the
+	// availability strip reads) read the observed series only.
 	InsertPropertySamples(ctx context.Context, w KeyWriter, evs []PropertySampleWrite) error
 	LatestProperty(ctx context.Context, componentName, key, instance string) (*PropertySample, error)
 	// EndpointKeyPin is the key an ssh or tls endpoint pins in force: the
@@ -615,6 +614,13 @@ type Gateway interface {
 	// alone, never as the node's observation.
 	EndpointKeyPin(ctx context.Context, componentName, endpoint, transport string) (string, error)
 	PropertyTransitions(ctx context.Context, componentName, key, instance string, window time.Duration) ([]PropertySample, error)
+	// LandBatch is the ingest's write (#311, ADR-0311): one batch's every
+	// sink in one transaction under its receipt, all or nothing, an id that
+	// already landed writing nothing, the property lane transition-only (its
+	// guard held in the insert, #455). PruneTelemetryReceipts keeps the
+	// receipts to their horizon.
+	LandBatch(ctx context.Context, b IngestBatch) (bool, error)
+	PruneTelemetryReceipts(ctx context.Context, before time.Time, batch int) (int64, error)
 	// StampEndpointsSeen records that an ingest batch delivered by each
 	// endpoint landed, by the server's clock, coalesced (#933).
 	StampEndpointsSeen(ctx context.Context, endpointIDs []string) error

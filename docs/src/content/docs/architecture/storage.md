@@ -15,9 +15,10 @@ embedded, idempotent), the per-action scope predicate and the in-transaction `au
 writer-class check on every sample and event write, with legacy rows held to it
 ([below](#every-key-has-one-writer)), and the
 shared scoped-tree and scoped-CRUD primitives. Scope arrives at the gateway as an explicit
-per-call `scope.Set` argument; seed and system callers pass an all-scope set. Today `metric` /
-`property` carry no `series` column and no uniqueness key, so redelivery can duplicate
-([#430](https://github.com/hyperscaleav/omniglass/issues/430) stage 3). Current values are derived
+per-call `scope.Set` argument; seed and system callers pass an all-scope set. An ingest batch
+lands in one transaction under its receipt (`telemetry_receipt`), so a redelivery lands each row
+once while `metric` / `property` carry no uniqueness key of their own
+([ADR-0311](/architecture/decisions/#adr-0311-a-telemetry-batch-lands-once-in-one-transaction-under-its-receipt)). Current values are derived
 from the series (latest row per series); the maintained latest-value cache retired
 ([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)),
 and the provenance-aware retention floor is built as `PruneSamples`
@@ -27,12 +28,19 @@ See [implementation status](/architecture/status/).
 
 Postgres is the **relational system of record** (entities, events, alarms, actions, audit, config, settings): the record/state/intent lane. It is **never a message bus**: the live signal travels on NATS JetStream, Postgres is the durable record. Operator mutations and the record/state/intent lane (config, ack/snooze, settings, manual commands) write synchronously through the Storage Gateway.
 
+Built today, the ingest consumer writes a batch's every sink (`metric`, `property`, `event`,
+`log_line`, `node_log`) in **one transaction** whose first statement inserts the batch's
+**receipt**, `telemetry_receipt (batch_id, landed_at)`, keyed by the subject the batch arrived on and
+its `Nats-Msg-Id`: all or nothing, and a batch id that already landed writes nothing, so a
+redelivery lands each row once, raw log lines included, though a log line has no key of its own.
+Receipts are pruned past a day by the server
+([ADR-0311](/architecture/decisions/#adr-0311-a-telemetry-batch-lands-once-in-one-transaction-under-its-receipt)).
+
 :::design[Target design, tracked in #430]
 **The sample tables are an async SINK**: the NATS **persistence consumer** batch-writes samples off
-the data lane into `metric` / `property`, idempotent on `(series, ts)`
-([#430](https://github.com/hyperscaleav/omniglass/issues/430) stage 3), so a redelivery lands the
-same row and the firehose never blocks on the database. Raw log lines ride the same path into `log_line` and `node_log`, keyed on nothing (an
-untyped arrival has no series). Every other row (the `event` and `alarm` rows an `event_rule`
+the data lane into `metric` / `property`, idempotent per batch as the built consumer is, so the
+firehose never blocks on the database. Raw log lines ride the same path into `log_line` and
+`node_log`. Every other row (the `event` and `alarm` rows an `event_rule`
 consumer commits in one transaction, and every operator mutation) is born in a Postgres transaction
 and fanned outward by the **CDC publisher**
 ([messaging](/architecture/messaging/#two-lanes-one-bus)).

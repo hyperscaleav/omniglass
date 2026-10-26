@@ -1,10 +1,13 @@
-## exactly-once-assumption (live; #430 tracks the contract)
+## exactly-once-assumption (fixed for the telemetry lane by #311 and #453; live elsewhere)
 
 - **Cue:** new bus code that publishes fire-and-forget to a JetStream subject, assumes
   redelivery cannot happen, or writes sinks in multiple transactions before a single ack.
 - **Failure:** samples silently lost on a JetStream outage; duplicates on redelivery
   into sinks with no uniqueness key (the audit's P0-1).
-- **Fix:** until #430's staged contract lands, new code must not widen the gap: publish
+- **Fix:** publish with ack under an id minted once per message and kept across retries,
+  and land each message once under that id: the telemetry lane's contract (ADR-0453, the
+  JetStream ack, the `Nats-Msg-Id`, the node's spool; ADR-0311, one transaction per batch
+  under its receipt). New bus code on any other subject must not widen the gap: publish
   with ack where the API allows, and never assume dedup exists downstream.
 - **Single-shot trust publish** (found by the #1032 review, fixed): a security-relevant fact the
   node learns once (an ssh host key trusted on first use) published once, deduped in memory, and
