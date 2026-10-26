@@ -29,10 +29,18 @@ refs: [311, 455, 457, 430]
      snapshot misses the other's uncommitted row), so the lock is what makes it hold under concurrent
      dispatch. The consumer still dispatches serially, but nothing depends on it.
   4. **Receipts are kept 24 hours** and pruned by the server hourly, in chunks. That is far past the
-     stream's redelivery and a node's retry of a batch it could not ship; a copy arriving after it
-     would land again, the one stated residual.
+     stream's redelivery, and past a node's retry of a batch it could not ship, which its spool drops
+     after 12 hours ([ADR-0453](#adr-0453-telemetry-is-published-through-jetstream-with-an-ack-a-minted-nats-msg-id-and-a-bounded-spool));
+     a copy arriving after it (a push sender's own replay a day later) would land again, the one
+     stated residual.
   5. **The shipped registries are disjoint by name** (#457): the boot seed refuses to seed a name two
      of the metric, property and event registries share, and a unit test pins the shipped YAML.
+  6. **The batch keeps the platform's lock order, and nothing it carries can fail it.** It takes every
+     lane's event rule rows FOR SHARE and then every lane's calc marks before any lane writes, so it
+     never holds a lane's series or health lock while waiting on another lane's rule row (a rule
+     edit takes the row and then health). And since one refused value fails every row, the gateway
+     replaces a NUL in every lane's text and jsonb before the insert, as the log-line lane already
+     did.
 - **Context:** The consumer wrote its sinks in separate transactions and acked once, so a failure after
   an earlier sink committed rewrote it on each of up to five redeliveries, and `log_line`, written
   first, multiplied with every one. Two fixes were on the table (#311): one transaction, or

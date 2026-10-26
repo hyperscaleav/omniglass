@@ -117,21 +117,31 @@ The node publishes **at-least-once**, and the platform lands each batch **once**
 [ADR-0311](/architecture/decisions/#adr-0311-a-telemetry-batch-lands-once-in-one-transaction-under-its-receipt)).
 Every telemetry publish (a task's samples, a collection-failed story, a session transition, the
 self-logs) goes through one **spool** (`internal/node/spool.go`): the batch is minted a `Nats-Msg-Id`
-when it is built, published through JetStream, and counted sent only once the stream acks it. A batch
-the stream has not acked stays in the spool, in order, and ships on the **next tick, before that
-tick's work**, under the same id. A retry of an attempt the stream stored but whose ack was lost is
-therefore a duplicate: inside the stream's five-minute window it is stored once, and past it the
-server's batch **receipt** keeps it from landing twice ([messaging](/architecture/messaging/#delivery-a-batch-lands-once)).
-After a failed attempt the spool holds, so a node that cannot reach the bus pays one failed publish
-per tick, not one per batch. The edge stamps `ts`, so the server is **ts-authoritative** and needs
-**no strict ordering** on the wire.
+(a UUIDv7) when it is built and queued, and counted sent only once the stream acks it. A send only
+queues: one shipper goroutine publishes through JetStream, keeping a window of up to 32 batches with
+the stream, in order, so no caller (a session's goroutine, the tick) waits on the stream and the node
+ships far faster than one batch per round trip. A batch the stream has not acked stays in the spool,
+in order, and ships on the **next tick**, under the same id. A retry of an attempt the stream stored
+but whose ack was lost is therefore a duplicate: inside the stream's five-minute window it is stored
+once, and past it the server's batch **receipt** keeps it from landing twice
+([messaging](/architecture/messaging/#delivery-a-batch-lands-once)). After a failed attempt the spool
+holds, so a node that cannot reach the bus pays one failed round per tick, not one per batch. A batch
+the bus can never take (over its payload limit) is dropped and told rather than held, since held at
+the head it would block every batch behind it.
 
-The spool is **memory**, bounded at 10,000 batches or 16 MiB: past either it drops the oldest batch
-(never the one in flight), says so once when it starts dropping and once, with the count, when it
-drains, and the run loop forgets the transitions it remembers as sent (the reachability verdict, a
-poll's faults and occurrences), so the next tick sends current state again. A one-shot run
-(`--once`) ends only once the stream has acked what it collected; a stopping node gives the spool
-five seconds to drain.
+The window stays in order because one connection delivers in the order publishes were made and the
+node **buffers nothing across a reconnect**: a publish during an outage fails at once and the spool
+holds it. That order matters to the property lane, whose transition guard compares a value with its
+series' latest. The node's connection **reconnects without limit**, so an outage of any length ends
+with the spool shipping again rather than a connection that gave up.
+
+The spool is **memory**, bounded at 10,000 batches, 16 MiB, or 12 hours: past any of them it drops
+the oldest batch (never one with the stream), says so once when it starts dropping and once, with the
+count, when it drains, and the run loop forgets the transitions it remembers as sent (the
+reachability verdict, a poll's faults and occurrences), so the next tick sends current state again.
+The age cap sits inside the receipt's 24-hour horizon, so a stored batch whose ack was lost cannot
+come back after its receipt is pruned and land twice. A one-shot run (`--once`) ends only once the
+stream has acked what it collected; a stopping node gives the spool five seconds to drain.
 
 ### On-demand runs: asked, answered once
 
@@ -151,7 +161,7 @@ covers its own run subject only, and its one reply stays permitted for the run's
 ### Buffering and retention are cascade settings
 
 When the server is unreachable the node **buffers in memory**, bounded, **not durable at the edge**:
-the spool above, its caps fixed in code and a drop told in the node's self-logs.
+the spool above, its caps (count, bytes, age) fixed in code and a drop told in the node's self-logs.
 
 :::design[Target design: the buffer knobs, tracked in #430; retention is #417]
 Both the **buffer** (size, shed policy) and **retention** are **cascade-resolved**

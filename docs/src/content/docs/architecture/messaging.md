@@ -110,15 +110,17 @@ The canonical triple is built on `OG_TELEMETRY`
   webhook route) publishes through JetStream and treats a batch as sent only once the stream acks it.
   The push route answers `202` only after the ack, `503` after three attempts; a node holds a batch the
   stream has not acked and ships it on the next tick ([nodes](/architecture/nodes/#delivery-a-batch-lands-once)).
-- **`Nats-Msg-Id` dedup.** Each batch carries an id minted once, when it is built, and kept across
-  every retry; the stream remembers an id for five minutes, so a retry inside the window (an attempt
-  it stored whose ack was lost) is answered with the first copy's ack and stored once.
+- **`Nats-Msg-Id` dedup.** Each batch carries an id (a UUIDv7) minted once, when it is built, and
+  kept across every retry; the stream remembers an id for five minutes, so a retry inside the window
+  (an attempt it stored whose ack was lost) is answered with the first copy's ack and stored once.
 - **Double ack and an idempotent sink.** The consumer lands a batch's every sink (its log lines and
   its three sample lanes) in **one transaction** whose first statement inserts the batch's **receipt**
   (`telemetry_receipt`, keyed by the subject and the id), then double-acks. A failure part way writes
   nothing; a batch id that already landed writes nothing at all. So a redelivery after a lost ack, a
   consumer that died between its commit and its ack, and a retry past the stream's window each land
-  every row once. Receipts are kept a day.
+  every row once. Receipts are kept a day. Because a batch lands all or nothing, every value the
+  database could refuse is cleaned first (a NUL in any lane's text or jsonb becomes U+FFFD), so one
+  stray byte cannot lose the rows that rode with it after a `202`.
 
 The property lane's transition guard is the insert's own condition, held per series by a lock, so the
 consumer's serial dispatch is no longer something its correctness depends on
