@@ -94,7 +94,7 @@ func TestABootClearsAStaleReadyFileFirst(t *testing.T) {
 	}
 	t.Setenv("OMNIGLASS_READY_FILE", path)
 	t.Setenv("OMNIGLASS_DSN", "postgres://og:og@127.0.0.1:1/og?sslmode=disable")
-	if err := runServer(context.Background(), ""); err == nil {
+	if err := runServer(context.Background(), "", false); err == nil {
 		t.Fatal("a server with an unreachable database booted")
 	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {

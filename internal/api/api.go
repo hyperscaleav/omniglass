@@ -60,10 +60,17 @@ type options struct {
 	// waiting on their outcome at once, in all and per caller; zero takes the
 	// defaults.
 	commandWaiters, commandWaitersPerPrincipal int
+	// lab marks a server `omniglass lab` started (#1195); /auth/status
+	// reports it so the console shows the lab banner.
+	lab bool
 }
 
 // Option configures NewHandler.
 type Option func(*options)
+
+// WithLab marks the handler as a lab's (#1195): /auth/status reports lab, so
+// the console says so on every screen.
+func WithLab(b bool) Option { return func(o *options) { o.lab = b } }
 
 // WithSecureCookies marks the session cookie Secure (set behind TLS).
 func WithSecureCookies(b bool) Option { return func(o *options) { o.secureCookies = b } }
@@ -145,7 +152,7 @@ func NewHandler(gw storage.Gateway, opts ...Option) http.Handler {
 // (the live server) and OpenAPIJSON (the server-less spec dump), so the routed
 // surface and the generated spec can never drift.
 func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o options) {
-	a := &authenticator{gw: gw, api: api, secureCookies: o.secureCookies, perms: map[string]struct{}{}}
+	a := &authenticator{gw: gw, api: api, secureCookies: o.secureCookies, lab: o.lab, perms: map[string]struct{}{}}
 
 	huma.Register(api, huma.Operation{
 		OperationID: "get-healthz",
@@ -169,8 +176,8 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 		OperationID: "get-auth-status",
 		Method:      http.MethodGet,
 		Path:        "/auth/status",
-		Summary:     "Whether the system has an owner yet",
-		Description: "Public: reports whether any owner has been bootstrapped, so the login screen can hide the bootstrap hint.",
+		Summary:     "Whether the system has an owner yet, and whether it is a lab",
+		Description: "Public: reports whether any owner has been bootstrapped, so the login screen can hide the bootstrap hint, and whether this server is a lab (`omniglass lab run`), so the console can say so before anyone signs in.",
 	}, a.statusHandler)
 
 	huma.Register(api, huma.Operation{

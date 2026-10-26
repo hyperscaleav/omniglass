@@ -25,7 +25,8 @@ import (
 )
 
 func newServerCmd(version string) *cobra.Command {
-	return &cobra.Command{
+	var lab bool
+	cmd := &cobra.Command{
 		Use:   "server",
 		Short: "Run the control-plane server (HTTP API)",
 		Long: "Runs the control plane: applies pending migrations and the boot seed, then serves the HTTP " +
@@ -37,14 +38,35 @@ func newServerCmd(version string) *cobra.Command {
 			"graceful shutdown (SIGINT or SIGTERM). A supervisor or a test reads the ports from that file rather " +
 			"than picking one and hoping it stays free. Configured by environment; see the deployment guides.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runServer(cmd.Context(), version)
+			return runServer(cmd.Context(), version, lab)
 		},
 	}
+	// Lab mode is a setting only `omniglass lab run` passes (#1195), so it is
+	// hidden: it takes the lab's marked database, refuses one that holds data
+	// with no mark, and reports lab on /auth/status for the console's banner.
+	cmd.Flags().BoolVar(&lab, "lab", false, "run as an omniglass lab (set by omniglass lab run)")
+	_ = cmd.Flags().MarkHidden("lab")
+	return cmd
+}
+
+// labStater reads the lab mark; *storage.PG is one.
+type labStater interface {
+	LabState(context.Context) (storage.LabState, error)
+}
+
+// labBootGate is the boot check against the lab mark (#1195): a lab and a
+// real server refuse each other's database, each saying why.
+func labBootGate(ctx context.Context, gw labStater, lab bool) error {
+	st, err := gw.LabState(ctx)
+	if err != nil {
+		return err
+	}
+	return storage.CheckLabMark(lab, st.Marked, st.HoldsData)
 }
 
 // runServer boots the control plane: apply migrations, open the Storage
 // Gateway, serve the HTTP API, and shut down gracefully on SIGINT/SIGTERM.
-func runServer(ctx context.Context, version string) error {
+func runServer(ctx context.Context, version string, lab bool) error {
 	c := cfg()
 	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
@@ -81,6 +103,13 @@ func runServer(ctx context.Context, version string) error {
 	}
 	defer gw.Close()
 
+	if err := labBootGate(ctx, gw, lab); err != nil {
+		return err
+	}
+	if lab {
+		log.Info("running as an omniglass lab: disposable data, well-known login")
+	}
+
 	if err := seed.Run(ctx, gw); err != nil {
 		return err
 	}
@@ -110,7 +139,7 @@ func runServer(ctx context.Context, version string) error {
 		return err
 	}
 	srv := &http.Server{
-		Handler:           api.NewHandler(gw, api.WithVersion(version), api.WithSecureCookies(c.SecureCookies), api.WithNatsURL(natsURL), api.WithSettingsService(gw.Settings()), api.WithTelemetryPublisher(busSrv), api.WithSimHub(busSrv), api.WithNodeRunner(busSrv)),
+		Handler:           api.NewHandler(gw, api.WithVersion(version), api.WithSecureCookies(c.SecureCookies), api.WithNatsURL(natsURL), api.WithSettingsService(gw.Settings()), api.WithTelemetryPublisher(busSrv), api.WithSimHub(busSrv), api.WithNodeRunner(busSrv), api.WithLab(lab)),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	log.Info("http api listening", "addr", ln.Addr().String())
