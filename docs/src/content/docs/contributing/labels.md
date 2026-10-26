@@ -90,11 +90,12 @@ name is [#1136](https://github.com/hyperscaleav/omniglass/issues/1136).
   the label does nothing until they are resolved.
 - **Forks:** fork PRs are skipped (their token cannot push).
 
-There is no `run:test` and no `run:build`. The full test suite is the merge gate, so it runs on
-every PR rather than on demand (ruled on #214: a test outside the CI gate is a gate defect), and
-the release build runs on every PR that touches its config. A `run:<task>` label is added in the
-same PR that wires its workflow, never reserved ahead of it, since a label that silently does
-nothing breaks the promise above.
+`run:test` and `run:build` are retired, not reserved: the full test suite is the merge gate, so it
+runs on every PR rather than on demand (ruled on #214: a test outside the CI gate is a gate
+defect), and the release build runs on every PR that touches its config, so neither has a task to
+run, and a leftover label of either name does nothing. A `run:<task>` label is added in the same
+PR that wires its workflow, never reserved ahead of it, since a label that silently does nothing
+breaks the promise above.
 
 ## The fixed set
 

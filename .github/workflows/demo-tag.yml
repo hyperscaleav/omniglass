@@ -19,6 +19,11 @@ permissions:
 
 jobs:
   lint:
+    # Dependabot's version bumps (#66) carry a body it writes itself, which never
+    # tags a demo, and a bump has none to tag. Skipped by author at the job, so
+    # the check reads as passed for them while every human PR is still held to
+    # the tag.
+    if: github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

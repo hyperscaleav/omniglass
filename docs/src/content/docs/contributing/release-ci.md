@@ -5,8 +5,8 @@ description: "The CI gates on every PR and the manual semantic-release versionin
 
 `make test` is the local gate (the [test-driven](/contributing/test-driven/) doctrine says
 validate locally, do not lean on CI). CI is the backstop and, on `main`, the release driver.
-Nine workflows carry it: `test`, `pr-title`, `image`, `docs-shots`, `gen-drift`,
-`docs-build`, `preview-comment`, `release`, and `goreleaser`.
+Twelve workflows carry it: `test`, `pr-title`, `image`, `docs-shots`, `gen-drift`,
+`docs-build`, `preview-comment`, `demo`, `demo-tag`, `demo-prune`, `release`, and `goreleaser`.
 
 ## On every pull request
 
@@ -57,9 +57,10 @@ with the workflow's token, and the release path's token can publish. A SHA canno
 workflows' actions, the Go module, the console's npm tree, and the docs site's pnpm tree) that
 bumps each SHA and rewrites its version comment together, minor and patch grouped and a major
 alone. Its titles are conventional commits the PR-title gate accepts (`ci:` for actions,
-`chore(deps):` otherwise), so a bump never cuts a release by itself, and it applies no labels,
-since the [label set](/contributing/labels/) is fixed. A new workflow pins its actions the same
-way from its first commit.
+`chore(deps):` or `chore(deps-dev):` otherwise), so a bump never cuts a release by itself, and it
+applies no labels, since the [label set](/contributing/labels/) is fixed. Its PRs carry no demo,
+so the demo-tag lint skips them by author. A new workflow pins its actions the same way from its
+first commit.
 
 ## Cutting a release (manual)
 

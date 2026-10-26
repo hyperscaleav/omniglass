@@ -4,12 +4,13 @@
 # tag moved upstream cannot change what runs here.
 #
 # Each PR title is a conventional commit the pr-title gate accepts: `ci` for the
-# workflows, `chore(deps)` for the Go module and the two npm trees, so a bump
-# never cuts a release on its own. Labels are left empty on purpose: the repo's
-# label set is fixed (docs/contributing/labels.md) and Dependabot's defaults
-# (`dependencies`, `go`, `javascript`) are not in it. Minor and patch bumps group
-# into one PR per ecosystem; a major bump arrives alone, since it is the one that
-# needs reading.
+# workflows, `chore(deps)` (or `chore(deps-dev)` for a development dependency)
+# for the Go module and the two npm trees, so a bump never cuts a release on its
+# own. Its PRs carry no demo, so demo-tag.yml skips them by author. Labels are
+# left empty on purpose: the repo's label set is fixed
+# (docs/contributing/labels.md) and Dependabot's defaults (`dependencies`, `go`,
+# `javascript`) are not in it. Minor and patch bumps group into one PR per
+# ecosystem; a major bump arrives alone, since it is the one that needs reading.
 version: 2
 updates:
   - package-ecosystem: github-actions
