@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/rules"
@@ -146,21 +147,22 @@ func (p *PG) lockInOrder(ctx context.Context, tx pgx.Tx, b IngestBatch) error {
 
 // IsRefusedWrite reports whether a write failed for a reason no retry
 // changes: its owner is gone or ambiguous, its key's writer class refuses the
-// writer, or Postgres refused its data (a data exception, an integrity
-// violation). The ingest drops such a batch on its first delivery instead of
-// redelivering it, since a series' batches land in order and every batch
-// behind it would wait out redeliveries that cannot succeed.
+// writer, or Postgres refused its data (a data exception, a CHECK). The
+// ingest drops such a batch on its first delivery instead of redelivering it,
+// since a series' batches land in order and every batch behind it would wait
+// out redeliveries that cannot succeed. Any other integrity violation is not
+// a refusal: a foreign key, a not-null type lookup or a unique key can fail
+// because a row the batch references was deleted under it (a metric type, a
+// calc rule), and the redelivery re-derives against the registry as it is
+// then and lands the rest.
 func IsRefusedWrite(err error) bool {
 	var ambiguous *ErrAmbiguousName
 	if isOwnerNotFound(err) || errors.Is(err, ErrKeyWriterRefused) || errors.As(err, &ambiguous) {
 		return true
 	}
 	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && len(pgErr.Code) >= 2 {
-		switch pgErr.Code[:2] {
-		case "22", "23":
-			return true
-		}
+	if errors.As(err, &pgErr) {
+		return strings.HasPrefix(pgErr.Code, "22") || pgErr.Code == "23514"
 	}
 	return false
 }

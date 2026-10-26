@@ -382,7 +382,7 @@ func (s *Server) land(ctx context.Context, id string, ev *ogv1.TelemetryBatch, b
 
 // failed answers a batch whose landing failed. A write the gateway refuses
 // outright (storage.IsRefusedWrite: its owner gone, its key's writer class
-// refusing the writer, data Postgres will never store) is Term'd at once,
+// refusing the writer, a value Postgres refuses as data or by a CHECK) is Term'd at once,
 // since one batch in flight means every batch behind it waits on it; any
 // other failure is redelivered, bounded (nakOrTerm).
 func (s *Server) failed(msg jetstream.Msg, err error) {

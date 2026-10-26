@@ -33,7 +33,11 @@ refs: [311, 455, 457, 430]
      device had left), so the consumer keeps one batch in flight (`MaxAckPending` 1): a batch whose
      landing fails transiently is redelivered, after a growing delay, before anything behind it,
      and one the gateway refuses outright (its owner gone, its key's writer class refusing the
-     writer, data Postgres will not store) is dropped at once rather than holding the rest. A
+     writer, a value Postgres refuses as data or by a CHECK) is dropped at once rather than holding
+     the rest; a foreign key or not-null failure is redelivered, since a row the batch referenced
+     may have been deleted under it and the redelivery lands what remains. The cost is stated: a
+     batch failing transiently pauses the lane for its backoff, at most five seconds across its
+     redeliveries before it is dropped. A
      concurrency pool would need sequencing per publishing subject to keep the same order.
   4. **Receipts are kept 24 hours** and pruned by the server hourly, in chunks. That is far past the
      stream's redelivery, and past a node's retry of a batch it could not ship, which its spool drops
