@@ -279,7 +279,7 @@ func registerStandardRoleRoutes(api huma.API, a *authenticator, gw storage.Gatew
 		Method:      http.MethodPatch,
 		Path:        "/standards/{id}/roles/{role}",
 		Summary:     "Declare a role on a standard",
-		Description: "Declares a role every conforming system needs filled, or revises it in place (the role is addressed by name, so the write is idempotent and declaring is this same route). Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and [\"*\"] replaces the whole declaration. An unknown standard, type, or product is a 422, as is a mask naming a field this resource does not patch. A name a conforming system already declares itself is a 409 naming that system, since a role name must mean one role in a system. Gated by standard:update.",
+		Description: "Declares a role every conforming system needs filled, or revises it in place (the role is addressed by name, so the write is idempotent and declaring is this same route). Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and [\"*\"] replaces the whole declaration. An unknown standard, type, or product is a 422, as is a mask naming a field this resource does not patch. A name a conforming system already declares itself is a 409, since a role name must mean one role in a system, and so is a capacity below what a conforming system already holds; either names the conflicting system only if the caller may read it. Gated by standard:update.",
 	}, "standard", "update"), func(ctx context.Context, in *setStandardRoleInput) (*systemRoleOutput, error) {
 		altID, err := resolveAlternateBody(ctx, gw, "standard", in.ID, in.Body)
 		if err != nil {
@@ -291,7 +291,7 @@ func registerStandardRoleRoutes(api huma.API, a *authenticator, gw storage.Gatew
 		}
 		r, err := gw.SetSystemRole(ctx, actorID(ctx), "standard", in.ID, spec)
 		if err != nil {
-			return nil, mapRoleErr(redactCollisionSystem(ctx, a, gw, err))
+			return nil, mapRoleErr(redactRefusalSystem(ctx, a, gw, err))
 		}
 		return &systemRoleOutput{Body: toSystemRoleBody(r)}, nil
 	})
@@ -536,7 +536,7 @@ func requireComponentInScope(ctx context.Context, a *authenticator, gw storage.G
 // 409 every path that meets one answers, whichever write it was: it names the
 // role and both owners, and the recovery, so the same sentence serves a
 // declaration, a standard change and a staffing write alike. A collision whose
-// system the caller may not read (redactCollisionSystem) says so instead of
+// system the caller may not read (redactRefusalSystem) says so instead of
 // naming it.
 func roleCollisionMessage(err error) (string, bool) {
 	var c *storage.RoleNameCollision
@@ -551,19 +551,40 @@ func roleCollisionMessage(err error) (string, bool) {
 		c.Role, c.System, c.Standard), true
 }
 
-// redactCollisionSystem drops the system's name from a role-name collision the
-// caller may not read. A standard-arc declaration finds the colliding system
+// redactRefusalSystem drops from a standard-arc refusal every system the
+// caller may not read. A standard-arc declaration checks conforming systems
 // across the fleet, and standard:update can be held beside a grant that reads
 // no system at all, so the refusal must not tell that caller which system
-// exists or what it declares (#503 review). Any other error passes through.
-func redactCollisionSystem(ctx context.Context, a *authenticator, gw storage.Gateway, err error) error {
+// exists, what it declares, or how it is staffed (#503 review, #1216). A
+// role-name collision keeps its one system only if readable; a capacity
+// shortfall names the worst-exceeding system the caller can read, or none.
+// Any other error passes through.
+func redactRefusalSystem(ctx context.Context, a *authenticator, gw storage.Gateway, err error) error {
 	var c *storage.RoleNameCollision
-	if !errors.As(err, &c) || c.SystemID == "" {
+	if errors.As(err, &c) && c.SystemID != "" {
+		if _, gerr := gw.GetSystem(ctx, c.SystemID, a.scopeFor(ctx, "system", "read")); gerr != nil {
+			redacted := *c
+			redacted.System = ""
+			return &redacted
+		}
 		return err
 	}
-	if _, gerr := gw.GetSystem(ctx, c.SystemID, a.scopeFor(ctx, "system", "read")); gerr != nil {
-		redacted := *c
-		redacted.System = ""
+	var short *storage.CapacityShortfall
+	if errors.As(err, &short) && len(short.Exceeding) > 0 {
+		ids := make([]string, len(short.Exceeding))
+		for i, e := range short.Exceeding {
+			ids[i] = e.SystemID
+		}
+		// A failed scope check redacts everything rather than naming anything.
+		readable, _ := gw.InScopeIDs(ctx, "system", ids, a.scopeFor(ctx, "system", "read"))
+		redacted := *short
+		redacted.System, redacted.Have = "", 0
+		for _, e := range short.Exceeding {
+			if readable[e.SystemID] {
+				redacted.System, redacted.Have = e.System, e.Have
+				break
+			}
+		}
 		return &redacted
 	}
 	return err
@@ -617,6 +638,11 @@ func mapRoleErr(err error) error {
 	}
 	var capShort *storage.CapacityShortfall
 	if errors.As(err, &capShort) {
+		if capShort.System == "" {
+			return huma.Error409Conflict(fmt.Sprintf(
+				"role %q is filled beyond %d components in %d conforming system(s) you cannot read; capacity cannot be lowered to %d until someone who can read them unassigns the excess",
+				capShort.Role, capShort.Want, len(capShort.Exceeding), capShort.Want))
+		}
 		return huma.Error409Conflict(fmt.Sprintf(
 			"role %q in system %q is filled by %d components; capacity cannot be lowered to %d",
 			capShort.Role, capShort.System, capShort.Have, capShort.Want))

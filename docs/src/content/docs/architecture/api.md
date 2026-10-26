@@ -932,7 +932,9 @@ component "bar-1" already fills "main-display" in "boardroom-a"; a component fil
 ```
 
 the request is fine in isolation, it conflicts with other rows (a component fills at most one role
-per system; lowering a capacity below the count already assigned is refused the same way). Both are
+per system; lowering a capacity below the count already assigned is refused the same way, naming
+the worst-exceeding conforming system the caller can read, or only a count when it can read none).
+Both are
 the **semantic**-refusal case in the [status table](#errors-one-problemjson-envelope), not an
 authorization one: the message tells the operator the next move. Around it: an unknown role is a
 **404**, and an unknown (or out-of-scope) system or component the same non-disclosing **404**. The
