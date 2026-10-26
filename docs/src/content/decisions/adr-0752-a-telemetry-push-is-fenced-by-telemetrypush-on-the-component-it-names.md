@@ -31,7 +31,7 @@ refs: [752, 427, 1200]
      ([ADR-0037](#adr-0037-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer)). A batch
      that confinement orphans is now recorded (#1200): a warning per node per window naming the node,
      the task and the samples dropped, the rest of the window counted rather than logged, and a
-     running count on the server's metrics, so the fence cannot be told apart from a broken pipeline
+     running count on the node itself (`orphaned_batches` and `last_orphaned_at` on `GET /nodes/{name}`), so the fence cannot be told apart from a broken pipeline
      only by its silence.
 - **Context:** The 2026-08-27 ruling recorded the route as capability-shaped: `telemetry:push` as a
   grant-class check, no per-target scope walk, and an unrelated owner landing as a recorded anomaly on

@@ -1,9 +1,12 @@
 package bus
 
 import (
+	"context"
 	"maps"
 	"testing"
 	"time"
+
+	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
 // TestOrphanTallyWarnsOncePerNodePerWindow holds #1200's no-flood half: the
@@ -86,5 +89,38 @@ func TestOrphanTallyForgetsAQuietNode(t *testing.T) {
 	}
 	if warn, _ := tally.observe("node-a", t0.Add(3*time.Minute)); !warn {
 		t.Fatal("a forgotten node's next orphan was not warned about")
+	}
+}
+
+// goneNodeStore answers every orphan count as a node that no longer exists,
+// the way RecordOrphanedBatches does after the node is deleted.
+type goneNodeStore struct {
+	fakeStore
+	calls *int
+}
+
+func (g goneNodeStore) RecordOrphanedBatches(context.Context, string, int64, time.Time) error {
+	*g.calls++
+	return storage.ErrNodeNotFound
+}
+
+// TestADeletedNodesOrphanCountIsDropped holds the tally bounded across a node
+// deletion: a count the store refuses because the node is gone is permanent,
+// not transient, so it is dropped rather than kept for a flush that can never
+// take it, and the node is then forgotten instead of retried every period.
+func TestADeletedNodesOrphanCountIsDropped(t *testing.T) {
+	calls := 0
+	s := &Server{store: goneNodeStore{calls: &calls}, orphans: newOrphanTally(time.Millisecond)}
+	s.orphans.observe("node-gone", time.Now().Add(-time.Second))
+	s.flushOrphans(context.Background())
+	if calls != 1 {
+		t.Fatalf("store called %d times, want 1", calls)
+	}
+	if s.orphans.size() != 0 {
+		t.Fatalf("a deleted node's count was kept: size %d, want 0", s.orphans.size())
+	}
+	s.flushOrphans(context.Background())
+	if calls != 1 {
+		t.Fatalf("a deleted node's count was retried: %d store calls, want 1", calls)
 	}
 }

@@ -2,9 +2,12 @@ package bus
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"sync"
 	"time"
+
+	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
 // orphanWindow is how often one node's orphaned batches are warned about: the
@@ -140,12 +143,21 @@ func (s *Server) recordOrphan(node, task string, samples, taskLogs int) {
 }
 
 // flushOrphans writes the drained counts to the store, one statement per node
-// with anything to count, and puts back any it could not write.
+// with anything to count, puts back any it could not write, and drops a
+// deleted node's.
 func (s *Server) flushOrphans(ctx context.Context) {
 	counts := s.orphans.drain()
 	failed := map[string]orphanCount{}
 	for name, c := range counts {
 		if err := s.store.RecordOrphanedBatches(ctx, name, c.Batches, c.Last); err != nil {
+			// A node deleted since its batches arrived has no row to count
+			// on, and never will: drop the count rather than retry it every
+			// period, so the node is forgotten like any quiet one.
+			if errors.Is(err, storage.ErrNodeNotFound) {
+				slog.Info("orphaned batch count dropped: the node no longer exists",
+					"facility", "ingest", "node", name, "batches", c.Batches)
+				continue
+			}
 			failed[name] = c
 			if ctx.Err() == nil {
 				slog.Warn("orphaned batch count not recorded, kept for the next flush",
