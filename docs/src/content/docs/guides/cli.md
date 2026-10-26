@@ -117,11 +117,18 @@ A bare word that is not valid JSON falls back to itself, so the common case need
 (`--value HDMI1`); a string that would parse as JSON is quoted to force a string (`--value '"30"'`).
 
 A name is renameable, and a rename is its own command rather than a flag on `update`: `component`,
-`system`, `location`, and `principal-group` each carry one, gated by `<resource>:rename`, which is
-granted separately because moving a name breaks the references stored outside Omniglass (bookmarks,
-runbooks, integration config). Inside it nothing breaks, since every reference holds the entity's
-`id`, which every write returns ([ADR-0076](/architecture/decisions/)). A taken name is a 409, an
-illegal or uuid-shaped one a 422.
+`system`, `location`, and `principal-group` each carry one, and so do the registries `vendor`,
+`driver`, `product`, `standard`, and `location-type`
+([ADR-0555](/architecture/decisions/#adr-0555-a-registry-row-renames-through-its-own-rename-custom-method)),
+each gated by `<resource>:rename`, which is granted separately because moving a name breaks the
+references stored outside Omniglass (bookmarks, runbooks, integration config). Inside it nothing
+breaks, since every reference holds the entity's `id`, which every write returns
+([ADR-0076](/architecture/decisions/)). A taken name is a 409, an illegal or uuid-shaped one a 422,
+and an official registry row keeps the name it ships with (422):
+
+```sh
+omniglass vendor rename acme --name acme-av        # needs vendor:rename (admin)
+```
 
 ### Every command takes a name, never only a uuid
 

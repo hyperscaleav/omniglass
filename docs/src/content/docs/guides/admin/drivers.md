@@ -437,8 +437,9 @@ driver this way. It is a leaf catalog beside the vendor registry. See
   **name** (unique tenant-wide, e.g. `snmp-generic`), a **label**, and,
   optionally, a **version**.
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with `driver:update`) edits
-  the label and version; the **name** is fixed, since a catalog row carries no rename
-  (`:rename` is a component, system, location, and principal group affordance). **Delete**
+  the label and version. The blade does not edit the **name**: rename a custom driver with
+  `omniglass driver rename <name> --name <new>` (`driver:rename`), which keeps every product and
+  endpoint that uses it. **Delete**
   (with `driver:delete`) removes the row, behind a confirm. A verb you lack greys just that
   button, its hover reason naming the permission (`Requires driver:update`, `Requires driver:delete`);
   the pair never disappears.

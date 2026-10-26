@@ -39,7 +39,9 @@ classifier is its own registry rather than a use of a standard's own parent-vari
   **name** (unique tenant-wide, e.g. `lecture-hall`) and a **label**, and
   optionally pick a **parent standard**. An unknown parent is refused (422).
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with `standard:update`) edits the
-  label and parent; the **name** is fixed, since a catalog row carries no rename. **Delete** (with
+  label and parent. The blade does not edit the **name**: rename a standard with
+  `omniglass standard rename <name> --name <new>` (`standard:rename`), which keeps every system that
+  conforms to it. **Delete** (with
   `standard:delete`) removes the row, behind
   a confirm.
 - **Delete is refused (409) while a system still conforms to it.** Repoint or remove those systems
