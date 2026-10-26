@@ -160,8 +160,8 @@ func runTasks(ctx context.Context, out *telemetrySpool, node string, wl collecti
 		// component, so a node routinely probes two components' endpoints that
 		// share a friendly name (the default is the protocol), and a name-keyed map
 		// would suppress the second one's verdict. The task id is node-unique (a
-		// content hash over the endpoint). The ingest-side latest-value guard is
-		// the net for a node restart.
+		// content hash over the endpoint). The property lane's transition guard,
+		// held in the ingest's insert, is the net for a node restart.
 		dps = appendVerdict(dps, task.ID, verdicts)
 		dps = append(dps, pings...)
 		if err := publishBatch(out, node, task.ID, dps); err != nil {

@@ -107,11 +107,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	if err != nil {
 		return collection.WorklistReply{}, err
 	}
-	nc, err := nats.Connect(creds.NatsURL,
-		nats.UserInfo(creds.Username, creds.Password),
-		nats.CustomInboxPrefix(collection.InboxPrefix(cfg.Name)),
-		nats.Name("omniglass-node-"+cfg.Name),
-	)
+	nc, err := connectBus(creds.NatsURL, creds.Username, creds.Password, cfg.Name)
 	if err != nil {
 		return collection.WorklistReply{}, fmt.Errorf("node: connect bus at %s: %w", creds.NatsURL, err)
 	}
@@ -120,7 +116,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	// Every telemetry publish goes through the spool (#453, #454): a JetStream
 	// publish that waits for the stream's ack, a batch it has not acked held
 	// and shipped on the next tick under the id it was minted with.
-	js, err := jetstream.New(nc)
+	js, err := newNodeJetStream(nc)
 	if err != nil {
 		return collection.WorklistReply{}, fmt.Errorf("node: jetstream: %w", err)
 	}
@@ -376,7 +372,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 			_ = publishHeartbeat(nc, cfg.Name)
 			// Ship what the spool held since the last tick before this tick's
 			// work, so batches land in the order they were collected (#454).
-			_ = spool.retry()
+			spool.retry()
 			// A batch the spool dropped at its cap may have carried a
 			// transition the node remembers as sent: forget what was sent, so
 			// this tick sends current state again (the property lane's
@@ -404,6 +400,47 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 			publishSelfLogs(spool, cfg.Name, sink)
 		}
 	}
+}
+
+// reconnectWait and reconnectJitter space the node's reconnect attempts
+// (nats.go's own defaults); vars so a test can shorten an outage.
+var (
+	reconnectWait      = 2 * time.Second
+	reconnectJitter    = 100 * time.Millisecond
+	reconnectJitterTLS = time.Second
+)
+
+// connectBus opens the node's outbound connection to the bus under its own
+// credential and inbox, reconnecting without limit.
+func connectBus(url, user, password, name string) (*nats.Conn, error) {
+	return nats.Connect(url,
+		nats.UserInfo(user, password),
+		nats.CustomInboxPrefix(collection.InboxPrefix(name)),
+		nats.Name("omniglass-node-"+name),
+		nats.ReconnectWait(reconnectWait),
+		nats.ReconnectJitter(reconnectJitter, reconnectJitterTLS),
+		// A node behind a WAN outage keeps trying for as long as it runs:
+		// a connection that gave up would leave the node running and its
+		// spool never shipping again until a restart lost it (#454).
+		nats.MaxReconnects(-1),
+		// Nothing published during an outage is buffered to send after it:
+		// such a publish fails at once and the spool holds it. One
+		// connection delivers in the order publishes were made, so with no
+		// buffer across a reconnect a batch never lands ahead of an earlier
+		// one that failed, and the spool's window stays in order (a
+		// transition-only property series depends on it). The heartbeat
+		// and a command's report are loss-tolerant by design.
+		nats.ReconnectBufSize(-1),
+	)
+}
+
+// newNodeJetStream is the node's JetStream context, the spool's publisher:
+// each batch's ack is waited on for spoolPublishTimeout, and the window the
+// spool keeps with the stream fits under its pending cap.
+func newNodeJetStream(nc *nats.Conn) (jetstream.JetStream, error) {
+	return jetstream.New(nc,
+		jetstream.WithPublishAsyncTimeout(spoolPublishTimeout),
+		jetstream.WithPublishAsyncMaxPending(2*spoolWindow))
 }
 
 // pullWorklist runs the worklist request-reply and decodes the reply.
