@@ -16,7 +16,7 @@ import (
 // unchanged, an explicit "" CLEARS the column back to SQL NULL, and a value
 // sets it. Before, vendor_id, driver_id, parent_product_id and icon were written
 // with coalesce($n, col), so nothing could clear them: the console's "None"
-// reverted on refetch, and an empty icon was stored as '' rather than NULL.
+// reverted on refetch, and an empty icon was stored as ” rather than NULL.
 func TestProductPatchClearsANullableField(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
