@@ -21,8 +21,12 @@ Built today: the Huma-over-chi API with the OpenAPI 3.1 document generated from 
 ([ADR-0068](/architecture/decisions/#adr-0068-the-api-error-model-is-the-stock-rfc-9457-shape)), proven
 on `/auth`, `/roles`, `/locations`, `/systems`, `/components`, `/nodes`, `/endpoints`, `/tasks`, the
 first-party ingest write `POST /telemetry:push` (gated `telemetry:push`, owner declared in the body and
-fenced by the caller's scope, every native probe key refused by name, every key held to its writer
-class), the per-component reachability read, the type registries, the
+fenced once per batch by the `telemetry:push` scope with the caller's `component:read` deciding the
+refusal, a 404 or a truthful 403,
+[ADR-0752](/architecture/decisions/#adr-0752-a-telemetry-push-is-fenced-by-telemetrypush-on-the-component-it-names),
+an instance naming no endpoint of the owner refused with a 422, every native probe key refused by
+name, every key held to its writer class, answering `202` only once the stream has acked the batch and `503` when it will not,
+[ADR-0453](/architecture/decisions/#adr-0453-telemetry-is-published-through-jetstream-with-an-ack-a-minted-nats-msg-id-and-a-bounded-spool)), the per-component reachability read, the type registries, the
 `/products` and `/standards` catalogs, the classifier-contract and instance-value property routes, the
 role declaration, resolution, and staffing routes, and the component alarm plus system and location
 [health](#health-the-verdict-and-why) reads, and the [MCP surface](#also-an-mcp-surface) generated from
@@ -354,7 +358,8 @@ is a **401** (a claim must not disclose which nodes exist). A node is fleet-wide
 **The webhook receiver is the other public write** (#1024,
 [ADR-1024](/architecture/decisions/#adr-1024-omniglass-receives-webhooks-on-the-server-and-a-webhook-token-is-a-sealed-secret)).
 `POST /webhooks/{token}` takes a sender's post for the webhook endpoint the token names, the scheme
-its driver declares authenticating it, and answers `202` once published, `401` refused, one identical
+its driver declares authenticating it, and answers `202` once the stream has acked the batch (`503`
+when it will not), `401` refused, one identical
 `404` for an unknown, rotated or malformed token, `413` past 1 MiB, and `429` with `Retry-After`;
 `GET` and `HEAD` on the same path answer a sender verifying its URL. `POST
 /endpoints/{endpoint}:rotateToken` (gated `endpoint:update`) mints the endpoint's token anew, and a
@@ -574,10 +579,12 @@ out-of-scope component is a non-disclosing 404 (a deliberate early exception to
   non-disclosing 404).
 - `GET /components/{name}/reconciliation` pivots want/told/is over the series: per declared
   property, the **want** (the current declared value, with the contract default coalesced in), the
-  **told** (the `intended` value a command
-  set), and the **is** (the latest `observed` value), all three
-  [latest-series-row reads](/architecture/properties/#current-value-is-the-latest-series-row),
-  with **drift** (observed present and disagreeing with declared) computed on read.
+  **told** (the newest `intended` value a command set, on any instance), and the **is** (the
+  `observed` value, resolved across every live instance worst-case, a deleted endpoint's frozen
+  reading left out, and named by `is_instance`), all
+  three [latest-series-row reads](/architecture/properties/#current-value-is-the-latest-series-row),
+  with **drift** (any observed instance disagreeing with declared) computed on read
+  ([how an instance resolves](/architecture/properties/#the-instance-dimension-many-values-of-one-name-on-one-owner)).
 
 **Three registries ride the `/property-types` shape** (fleet-wide reference data, no scope injection;
 official types are read-only, a 409). The **metric_type catalog is the numeric keyspace**:
@@ -791,15 +798,19 @@ update or delete by id) the resolved capability rides into the Gateway alongside
 404-versus-403 split stays non-disclosing.
 
 A second permission can also be **conditional on the request** rather than on a tier, and it is stamped
-the same way, as `x-omniglass-conditional-permission`. There is one today: `POST /components` accepts a
-`system`, and what it does with it is insert that component's **primary membership**, the same row `PUT
+the same way, as `x-omniglass-conditional-permission`. `POST /components` accepts a `system`, and what
+it does with it is insert that component's **primary membership**, the same row `PUT
 /systems/{name}/members/{component}` writes under `system:update`. Two routes writing one row must cost
 the same permission, or the cheaper one is the way around the other, so a create that names a system
 requires `system:update` and resolves it in that scope
 ([ADR-0107](/architecture/decisions/#adr-0107-a-create-that-writes-a-membership-costs-what-the-membership-route-costs)).
 The check is in the handler rather than the middleware because the condition is a body field and
 middleware cannot see the body; the stamp is what keeps the spec a faithful map of what the route
-enforces.
+enforces. The same row seen from its other end carries one too: the five routes that bind, unbind,
+re-default or staff a component in a system need `component:update` beside `system:update`, because
+the membership writes onto the component
+([ADR-0510](/architecture/decisions/#adr-0510-a-membership-or-a-role-assignment-costs-a-write-on-both-of-its-ends)).
+Their condition is the component the path always names, so the handler checks it on every request.
 
 ## Properties: a classifier declares, an instance sets
 
@@ -868,10 +879,24 @@ in the same form. Gating follows the owner:
 
 - `GET /standards/{id}/roles` plus `PATCH` / `DELETE /standards/{id}/roles/{role}`, gated `standard:read` /
   `:update` / `:delete`. Withdrawing a role takes every assignment conforming systems made to it (a
-  cascade); a role the standard does not declare is a 404.
+  cascade); a role the standard does not declare is a 404. A standard that does not exist is a 422 on
+  the declaration and writes nothing (`system_role_owner_arc_check` makes an ownerless role
+  unrepresentable), and a 404 on the read, never an empty list
+  ([#505](https://github.com/hyperscaleav/omniglass/issues/505)).
 - `PATCH` / `DELETE /systems/{name}/roles/{role}`, gated `system:update`, for a role declared **directly on
   one system**. A role the system does not declare **itself** is a 404 here: an inherited role is
   withdrawn on the standard.
+- A role name means **one role in a system**, so every write that would give a system two of one name
+  is a 409 naming the role, the standard and the system: a system declaring a name its standard
+  declares, a standard declaring a name a conforming system declares itself, and `PATCH
+  /systems/{name}` moving a system onto a standard that declares a name it declares itself. A staffing
+  write that meets such a pair (written before the rule) is the same 409 rather than a silent pick
+  ([ADR-0503](/architecture/decisions/#adr-0503-a-role-name-addresses-one-role-per-system)).
+- `PATCH /systems/{name}` moving a system's `standard` carries its staffing in the same transaction:
+  each occupant of an inherited role moves onto the new standard's role of the same name when it is
+  still a typed match and the role has room, and is released (a member with no role) otherwise. A
+  staffing write on that system waits for the change and resolves against the new standard
+  ([ADR-0506](/architecture/decisions/#adr-0506-changing-a-systems-standard-carries-its-staffing-onto-the-roles-that-still-exist)).
 - `GET /systems/{name}/roles` is the **resolved read**, gated `system:read`: the declaration
   (including `impact`, `capacity`, `position_labels`, `alternate`) plus `from_standard`, `assigned_to` (the
   component names filling it here, in position order), `positions` (each entry's own 1-based
@@ -880,7 +905,10 @@ in the same form. Gating follows the owner:
   counts **served, not computed by the client**. A one-off system returns only its own roles.
 - `PUT /systems/{name}/roles/{role}/assignments/{component}` puts a component in the role (204,
   idempotent); `DELETE` takes it out (204; a component not filling the role is a 404). Both gate on
-  `system:update`.
+  `system:update` and also need `component:update`, since staffing a role makes the component a
+  member and writes onto it: the component resolves in `component:read` and must be inside
+  `component:update` (an occupant being unassigned needs only the latter, refused with a 403)
+  ([ADR-0510](/architecture/decisions/#adr-0510-a-membership-or-a-role-assignment-costs-a-write-on-both-of-its-ends)).
 - `POST /systems/{name}/roles/{role}:swapPositions` exchanges two occupants' positions, from
   `{position, with}` (204, `system:update`): the only reorder primitive the API exposes, since a
   position is an ordering attribute of an assignment, not a second address for one, and there is no

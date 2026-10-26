@@ -50,7 +50,9 @@ roles:
       - "alarm:acknowledge"
       # telemetry:push is a WRITE of observations, so it sits with the other
       # operator writes and deliberately outside the viewer read floor. An
-      # integration that only reports data can be granted this alone.
+      # integration that only reports data needs nothing else: the push scope
+      # is enough to see the component it names, and every component outside
+      # it is a non-disclosing 404 (ADR-0752).
       - "telemetry:push"
       # files are shared knowledge (not in the sensitive-resource set), so the
       # viewer floor reads ordinary ones; operators upload and delete them. A

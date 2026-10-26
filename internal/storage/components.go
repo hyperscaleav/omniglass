@@ -1018,6 +1018,27 @@ type ComponentEndpoint struct {
 	HoldsSession bool
 }
 
+// ComponentEndpointNames is a component's endpoint names, sorted, read by the
+// component's id in one statement (the endpoint table's component index). The
+// caller has already resolved the component through scope, so no scope is
+// injected here.
+func (p *PG) ComponentEndpointNames(ctx context.Context, componentID string) ([]string, error) {
+	rows, err := p.pool.Query(ctx, `select name from endpoint where component = $1::uuid order by name`, componentID)
+	if err != nil {
+		return nil, fmt.Errorf("storage: endpoint names of %s: %w", componentID, err)
+	}
+	defer rows.Close()
+	var names []string
+	for rows.Next() {
+		var n string
+		if err := rows.Scan(&n); err != nil {
+			return nil, fmt.Errorf("storage: endpoint names of %s: %w", componentID, err)
+		}
+		names = append(names, n)
+	}
+	return names, rows.Err()
+}
+
 // ListComponentEndpoints returns a component's endpoints ordered by the label
 // an operator reads with the unlabelled last (#613), the rows the reachability
 // read composes over. It is the panel where two endpoints of one transport sit

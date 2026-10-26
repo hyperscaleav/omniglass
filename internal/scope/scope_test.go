@@ -39,19 +39,32 @@ func TestResolveSecretArcKinds(t *testing.T) {
 	}
 }
 
-// Pushed telemetry is owned on the same exclusive arc, so an arc-tier grant can
-// contain its owner. This is the fence on POST /telemetry:push, and it is resolved
-// from telemetry:push rather than component:read on purpose: a principal routinely
-// holds a wide read and a narrow write (viewer over the fleet plus operator on one
-// component), so resolving the read scope would let it push anywhere it can see.
-func TestResolveTelemetryArcKinds(t *testing.T) {
+// Pushed telemetry resolves on the component tier alone (ADR-0752, the
+// ADR-0117 precedent): the push route's owner is a component, and a location- or
+// system-tier root could never match a component's own ancestor chain, so it
+// would sit in the set reaching nothing while telling Covers a telemetry scope
+// may be checked against those tables. This is the fence on POST
+// /telemetry:push, and it is resolved from telemetry:push rather than
+// component:read on purpose: a principal routinely holds a wide read and a
+// narrow write (viewer over the fleet plus operator on one component), so
+// resolving the read scope would let it push anywhere it can see.
+func TestResolveTelemetryComponentTier(t *testing.T) {
 	idx := index()
-	for _, kind := range []string{"location", "system", "component"} {
+	g := []scope.Grant{{Role: "operator", ScopeKind: "component", ScopeID: "ROOT"}}
+	if set := scope.Resolve(g, idx, "telemetry", "push"); len(set.IDs) != 1 || set.IDs[0] != "ROOT" {
+		t.Fatalf("operator@component telemetry:push scope = %+v, want ROOT", set)
+	}
+	for _, kind := range []string{"location", "system"} {
 		g := []scope.Grant{{Role: "operator", ScopeKind: kind, ScopeID: "ROOT"}}
-		set := scope.Resolve(g, idx, "telemetry", "push")
-		if len(set.IDs) != 1 || set.IDs[0] != "ROOT" {
-			t.Fatalf("operator@%s telemetry:push scope = %+v, want ROOT", kind, set)
+		if set := scope.Resolve(g, idx, "telemetry", "push"); !set.Empty() {
+			t.Fatalf("operator@%s telemetry:push scope = %+v, want empty: a %s root reaches no component's chain", kind, set, kind)
 		}
+		if scope.Covers("telemetry", kind) {
+			t.Fatalf("Covers(telemetry, %s) = true, want false: telemetry is pushed to components only", kind)
+		}
+	}
+	if !scope.Covers("telemetry", "component") {
+		t.Fatal("Covers(telemetry, component) = false, want true")
 	}
 	// The read floor confers no push scope: a viewer can see telemetry, not write it.
 	vr := scope.Resolve([]scope.Grant{{Role: "viewer", ScopeKind: "component", ScopeID: "C"}}, idx, "telemetry", "push")
