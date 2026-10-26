@@ -5,8 +5,8 @@ description: "The CI gates on every PR and the manual semantic-release versionin
 
 `make test` is the local gate (the [test-driven](/contributing/test-driven/) doctrine says
 validate locally, do not lean on CI). CI is the backstop and, on `main`, the release driver.
-Twelve workflows carry it: `test`, `pr-title`, `image`, `docs-shots`, `gen-drift`,
-`docs-build`, `preview-comment`, `demo`, `demo-tag`, `demo-prune`, `release`, and `goreleaser`.
+Thirteen workflows carry it: `test`, `pr-title`, `image`, `docs-shots`, `gen-drift`,
+`docs-build`, `migrations`, `preview-comment`, `demo`, `demo-tag`, `demo-prune`, `release`, and `goreleaser`.
 
 ## On every pull request
 
@@ -30,6 +30,11 @@ Twelve workflows carry it: `test`, `pr-title`, `image`, `docs-shots`, `gen-drift
   the protobuf wire), the drift gate [API first](/contributing/api-first/) promises.
 - **`docs-build.yml`** (path-filtered to `docs/**`) builds the Astro docs site, so a broken
   page fails the PR that introduces it instead of the next deploy.
+- **`migrations.yml`** (path-filtered to `db/**`) fails a PR that adds a migration whose
+  version is not newer than the newest on the base branch's tip, fetched fresh, or is stamped
+  later than the clock (`make migration-check` is the same check, locally). It also runs on
+  each push to `main` against the commit before the push, the backstop for two PRs that both
+  went green before either merged. Uniqueness needs no base, so `make test` holds it.
 - **`docs-shots.yml`** (path-filtered to `docs/**` and `web/**`) gates the generated docs
   screenshots: every declared shot has a committed PNG, and a recapture against the real
   console fails on any unmasked pixel difference (nondeterministic regions are masked in
