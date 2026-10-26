@@ -2,7 +2,7 @@
 title: "An instance names which value of one key on one owner a row is, and an owner-level read reduces across every instance"
 date: 2026-10-26
 status: Accepted
-summary: "`instance` has one meaning on every lane: which one of several values of one key on one owner a row is. Each provenance has one stamper: the observer for observed (the node lane's task endpoint or a driver's own instance, the endpoint a webhook arrives at, the instance a push names), the operator for declared (owner-level on every shipped route), the command for intended, and the empty instance for calculated and, deliberately, for health. A read asking about the owner reduces across every live instance of the key (a deleted endpoint's frozen reading left out); one naming an instance reads that series and never reduces. Reconciliation's is is worst-case and names its instance, told the newest intended; an un-instanced command is judged on the endpoint that carries it (dispatched or queued), else on any live instance agreeing, and one no node took times out rather than failing; a current-value display shows the newest across instances and names it (#1020)"
+summary: "`instance` has one meaning on every lane: which one of several values of one key on one owner a row is. Each provenance has one stamper: the observer for observed (the node lane's task endpoint, the endpoint a webhook arrives at, the instance a push names), the operator for declared (owner-level on every shipped route), the command for intended, and the empty instance for calculated and, deliberately, for health. A read asking about the owner reduces across every live instance of the key (a deleted endpoint's frozen reading left out); one naming an instance reads that series and never reduces. Reconciliation's is is worst-case and names its instance, told the newest intended; an un-instanced command is judged on the endpoint that carries it (dispatched or queued), else on any live instance agreeing, and one no node took times out rather than failing; a current-value display shows the newest across instances and names it (#1020)"
 refs: [456, 430, 1020]
 ---
 
@@ -12,9 +12,11 @@ refs: [456, 430, 1020]
      is. Series identity stays `(owner, type, instance, provenance)`, and the empty instance is the
      owner-level series.
   2. **One stamper per provenance.** *Observed*: the observer. On the node lane, the endpoint whose
-     task collected it (the ingest stamps the endpoint's name where a sample names none) or a
-     driver's own instance (one series per port); on the webhook lane, the endpoint the post
-     arrived at; on the push lane, the instance the sender names, else empty; a command's reply read
+     task collected it (the ingest stamps the endpoint's name where a sample names none; a driver
+     naming its own instance, one series per port, is the authored form still design under #430);
+     on the webhook lane, the endpoint the post arrived at; on the push lane, the instance the
+     sender names, else empty, and since a transport's name is an endpoint's instance, a push
+     naming one speaks for that endpoint; a command's reply read
      as an observation lands on the endpoint it was dispatched over. *Declared*: the operator. Every
      shipped route (a component's, a system's and a location's properties) declares owner-level,
      the empty instance, and a per-instance declaration waits for a surface that addresses
@@ -34,7 +36,11 @@ refs: [456, 430, 1020]
      so it names an endpoint since deleted (a changed transport is a delete and a new endpoint), and
      its last reading is frozen, since nothing prunes a series' latest row. An owner-level read
      leaves it out; its rows stay readable on their own series. Age cannot be the test, because a
-     property is transition-only and a live, unchanged value carries an old `ts`.
+     property is transition-only and a live, unchanged value carries an old `ts`. Two residuals are
+     stated: a push naming a transport the owner has no endpoint of reads as a retired observer's,
+     and an endpoint that still exists but no longer emits the key keeps its last reading live
+     (#1217). When driver-named instances land (#430), the liveness rule must cover them too, since
+     an instance naming no transport would then no longer mean a push sender's.
   4. **Reconciliation** (want, told, is): `is` resolves across every observed instance,
      worst-case. Drift is any observed instance disagreeing with want; `is` is then the newest
      disagreeing value, else the newest agreeing one, and the read names the instance it came from

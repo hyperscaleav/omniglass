@@ -20,4 +20,5 @@
   once saw. Fix: reduce over live observers only, an instance that names a transport the owner
   has no endpoint of being a retired one (`latestObservedPerInstanceSQL`,
   internal/storage/instance_values.go). Age is no test on a transition-only property, where a
-  live, unchanged value carries an old ts.
+  live, unchanged value carries an old ts. Residual, open as #1217: an endpoint that still exists
+  but whose driver no longer emits the key keeps its last reading live.
