@@ -128,16 +128,19 @@ roles:
       - "rule:*"
       - "command_type:*"
       - "command:*"
-      - "location_type:create,update,delete"
+      # rename moves a registry row's handle (#555): its own action, as on the
+      # fleet tiers, because it breaks a script or a bookmark that typed the old
+      # name even though every reference inside the platform holds the uuid.
+      - "location_type:create,update,delete,rename"
       - "component_type:create,update,delete"
       - "system_type:create,update,delete"
-      - "vendor:create,update,delete"
-      - "driver:create,update,delete"
-      - "product:create,update,delete"
+      - "vendor:create,update,delete,rename"
+      - "driver:create,update,delete,rename"
+      - "product:create,update,delete,rename"
       # standard is the system-side counterpart of product (a Catalog entity with
       # its own property contract), so it carries its own permission rather than
       # the type-registry one.
-      - "standard:create,update,delete"
+      - "standard:create,update,delete,rename"
       - "tag:*"
   - id: owner
     label: Owner

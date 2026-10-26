@@ -286,11 +286,16 @@ func mapStandardWriteErr(err error) error {
 // then belongs to the fleet, so re-seeding must never reassert over an edit the
 // operator made. This is deliberately not UpsertStandard, whose ON CONFLICT DO
 // UPDATE is the authoritative behavior the canonical catalogs want.
+//
+// It marks the row seeded, on the insert and on every later boot (a row an
+// older binary seeded included), touching nothing else: the mark is what makes
+// RenameRegistry refuse it, since a renamed example would be planted again
+// here under its shipped name.
 func (p *PG) SeedStandard(ctx context.Context, st Standard) error {
 	_, err := p.pool.Exec(ctx, `
-		insert into standard (name, official, label, parent_standard_id, label_rule)
-		values ($1, $2, $3, (select id from standard where name = nullif($4, '')), $5)
-		on conflict (name) do nothing`,
+		insert into standard (name, official, label, parent_standard_id, label_rule, seeded)
+		values ($1, $2, $3, (select id from standard where name = nullif($4, '')), $5, true)
+		on conflict (name) do update set seeded = true where not standard.seeded`,
 		st.Name, st.Official, labelOrNull(st.Label), st.ParentStandardID, nilIfEmpty(st.LabelRule))
 	if err != nil {
 		return fmt.Errorf("storage: seed standard %q: %w", st.Name, err)

@@ -81,6 +81,8 @@ export type UpdateProduct = {
   // Reclassifies the product; required by the API once named, so this only
   // reclassifies, it never clears.
   component_type?: string;
+  // The three-state string (#260): omitted is unchanged, "" clears, a handle
+  // or uuid sets.
   vendor_id?: string;
   driver_id?: string;
   parent_product_id?: string;

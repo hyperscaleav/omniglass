@@ -119,19 +119,39 @@ func TestProductsAPI(t *testing.T) {
 		t.Fatalf("patched kind = %q, want app", reread.Kind)
 	}
 
-	// A patch that carries an optional reference as "" reads as "not provided"
-	// (consistent with create's empty-string handling), not an attempt to set the
-	// empty string against a foreign key: 200, and the current vendor is kept.
+	// The three-state string (#260): an omitted reference is unchanged, so the
+	// kind edit above kept the vendor and the driver...
+	if reread.Vendor != "kestrel" || reread.Driver != "kestrel-api" {
+		t.Fatalf("refs after an unrelated patch = %q/%q, want kestrel/kestrel-api kept", reread.Vendor, reread.Driver)
+	}
+	// ...and an explicit "" CLEARS it. It used to read as "not provided", so a
+	// nullable reference could be set but never unset: the console's "None"
+	// reverted on refetch.
+	// Each decode is into a fresh value: a cleared reference is an omitted wire
+	// field, which Unmarshal would leave holding whatever a reused struct had.
+	var cleared productBodyWire
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/products/acme-bar",
+		map[string]any{"vendor_id": "", "driver_id": ""}, http.StatusOK), &cleared); err != nil {
+		t.Fatalf("decode clear: %v", err)
+	}
+	if cleared.Vendor != "" || cleared.VendorID != "" || cleared.Driver != "" || cleared.DriverID != "" {
+		t.Fatalf("refs after an explicit clear = %+v, want vendor and driver gone", cleared)
+	}
+	var clearedReread productBodyWire
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/products/acme-bar", nil, http.StatusOK), &clearedReread); err != nil {
+		t.Fatalf("decode get after clear: %v", err)
+	}
+	if clearedReread.Vendor != "" || clearedReread.Driver != "" {
+		t.Fatalf("refs on reread after clear = %q/%q, want none (the clear persisted)", clearedReread.Vendor, clearedReread.Driver)
+	}
+	// A value sets it again, and an unknown one is still the 422 it was.
 	c.do(ownerTok, http.MethodPatch, "/products/acme-bar",
-		map[string]any{"vendor_id": ""}, http.StatusOK)
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/products/acme-bar", nil, http.StatusOK), &reread); err != nil {
-		t.Fatalf("decode get after empty vendor patch: %v", err)
-	}
-	// Asserted on the handle: vendor_id is the uuid now, and the point of the
-	// assertion is that the vendor was KEPT, which the handle says legibly.
-	if reread.Vendor != "kestrel" {
-		t.Fatalf("vendor after empty-string patch = %q, want cisco (kept)", reread.Vendor)
-	}
+		map[string]any{"vendor_id": "kestrel"}, http.StatusOK)
+	c.do(ownerTok, http.MethodPatch, "/products/acme-bar",
+		map[string]any{"vendor_id": "no-such-vendor"}, http.StatusUnprocessableEntity)
+	// component_type is required, so "" is still refused rather than a clear.
+	c.do(ownerTok, http.MethodPatch, "/products/acme-bar",
+		map[string]any{"component_type": ""}, http.StatusUnprocessableEntity)
 
 	// The seeded official row (generic-device) is read-only: 422 on patch and delete.
 	c.do(ownerTok, http.MethodPatch, "/products/generic-device",

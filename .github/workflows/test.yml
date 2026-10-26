@@ -1,8 +1,10 @@
 name: test
 
 # The CI test gate. `make test` is the local gate (validate-locally doctrine);
-# this is the backstop on every PR and on main. The integration and e2e tiers
-# use testcontainers-go, which needs a Docker daemon; ubuntu-latest ships one.
+# this is the backstop on every PR and on main, and it runs that same target so
+# the two cannot drift (#214): the SPA typecheck and vitest suite, every Go tier,
+# then the NET_ADMIN tier. The integration and e2e tiers use testcontainers-go,
+# which needs a Docker daemon; ubuntu-latest ships one.
 
 on:
   pull_request:
@@ -20,9 +22,9 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           # Track the toolchain pinned in go.mod so CI never drifts from local.
           go-version-file: go.mod
@@ -40,14 +42,22 @@ jobs:
       - name: Allow unprivileged ICMP (for the icmp capability gate)
         run: sudo sysctl -w net.ipv4.ping_group_range="0 2147483647"
 
-      - name: Test
-        run: go test ./...
+      # test-web (inside make test) installs the SPA's dependencies and runs its
+      # typecheck and vitest suite, so the job needs node.
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
 
-      # The NET_ADMIN tier (impairments rewrite the firewall and tc of the network
-      # they run in): run in a container with its own network namespace, never on
-      # the runner's own network.
-      - name: Test the NET_ADMIN tier (in a container)
-        run: make test-netadmin
+      # The local gate itself: test-web, go test over every package, then the
+      # NET_ADMIN tier (impairments rewrite the firewall and tc of the network
+      # they run in), which make runs in a container with its own network
+      # namespace, never on the runner's own network. TEST_PARALLEL defaults to
+      # 1 for small workstations; a runner has the memory for one package per
+      # core, which is what a bare `go test ./...` ran here before.
+      - name: Test (make test)
+        run: make test TEST_PARALLEL="$(nproc)"
 
   # The browser e2e tier (#761): the console driven as an operator would, against
   # the real binary, fully containerized (web/e2e/run.sh: Postgres, the server,
@@ -59,16 +69,16 @@ jobs:
   e2e:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
           cache: true
 
       # The SPA build (make build-web) runs on the host; Playwright itself runs
       # in the pinned container the runner pulls, matching local runs exactly.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
 

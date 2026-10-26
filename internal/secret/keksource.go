@@ -19,33 +19,79 @@ const (
 )
 
 const (
-	envKey     = "OMNIGLASS_SECRET_KEY"
-	envKeyFile = "OMNIGLASS_SECRET_KEY_FILE"
+	envKey     = "OMNIGLASS_ENCRYPTION_KEY"
+	envKeyFile = "OMNIGLASS_ENCRYPTION_KEY_FILE"
 	kekLen     = 32
 	fallback   = "secret.key"
 )
 
+// The names the two variables carried before #558. "Secret key" already meant a
+// secret's own identifier, so an operator could not tell the master key that
+// encrypts every secret from the name of one; the variables are the encryption
+// key's now. These are still read, for one deprecation window, because the
+// variable is how every deployment supplies the key and a rename that ignored
+// them would lock an operator out of their own encrypted data on upgrade.
+// Removing them is a breaking change for a later release.
+const (
+	legacyEnvKey     = "OMNIGLASS_SECRET_KEY"
+	legacyEnvKeyFile = "OMNIGLASS_SECRET_KEY_FILE"
+)
+
+// kekVars is one generation of the pair: the base64 key itself, and the path to
+// a file holding it.
+type kekVars struct{ env, file string }
+
+var (
+	currentVars = kekVars{env: envKey, file: envKeyFile}
+	legacyVars  = kekVars{env: legacyEnvKey, file: legacyEnvKeyFile}
+)
+
 // LoadKEK resolves the 32-byte key-encryption key from, in order: the
-// OMNIGLASS_SECRET_KEY env var (base64), the OMNIGLASS_SECRET_KEY_FILE path, or
-// a generated fallback persisted under dataDir. The fallback calls warn: an
-// auto-generated key sitting on the same volume as the data is convenience, not
-// security (disk theft gets both), and is not the intended deployment model.
+// OMNIGLASS_ENCRYPTION_KEY env var (base64), the OMNIGLASS_ENCRYPTION_KEY_FILE
+// path, or a generated fallback persisted under dataDir. The fallback calls
+// warn: an auto-generated key sitting on the same volume as the data is
+// convenience, not security (disk theft gets both), and is not the intended
+// deployment model.
+//
+// The pre-#558 names are read when neither new name is set, and warn on every
+// call, so every boot, naming the replacement: a deprecation an operator can
+// miss once is one they will miss. When a new name is set the old generation
+// is ignored as a whole, whichever source each uses (an operator who has
+// started the move meant the new value), and a leftover old name warns that it
+// is ignored. Booting with only the new names warns about nothing.
 func LoadKEK(getenv func(string) string, dataDir string, warn func(string)) ([]byte, string, error) {
-	if v := getenv(envKey); v != "" {
+	vars := currentVars
+	if getenv(envKey) == "" && getenv(envKeyFile) == "" {
+		vars = legacyVars
+	}
+	for _, rename := range [][2]string{{legacyEnvKey, envKey}, {legacyEnvKeyFile, envKeyFile}} {
+		old, replacement := rename[0], rename[1]
+		if getenv(old) == "" {
+			continue
+		}
+		if vars == legacyVars {
+			warn(fmt.Sprintf("%s is deprecated and will be removed in a later release: "+
+				"rename it to %s (the value is unchanged). It is read for now.", old, replacement))
+		} else {
+			warn(fmt.Sprintf("%s is set but ignored, because %s or %s is set: remove %s.",
+				old, envKey, envKeyFile, old))
+		}
+	}
+	if v := getenv(vars.env); v != "" {
 		kek, err := decodeKey(v)
 		if err != nil {
-			return nil, "", fmt.Errorf("secret: %s: %w", envKey, err)
+			return nil, "", fmt.Errorf("secret: %s: %w", vars.env, err)
 		}
 		return kek, SourceEnv, nil
 	}
-	if path := getenv(envKeyFile); path != "" {
+	if path := getenv(vars.file); path != "" {
 		raw, err := os.ReadFile(path)
 		if err != nil {
-			return nil, "", fmt.Errorf("secret: read %s: %w", envKeyFile, err)
+			return nil, "", fmt.Errorf("secret: read %s: %w", vars.file, err)
 		}
 		kek, err := decodeKey(strings.TrimSpace(string(raw)))
 		if err != nil {
-			return nil, "", fmt.Errorf("secret: %s %q: %w", envKeyFile, path, err)
+			return nil, "", fmt.Errorf("secret: %s %q: %w", vars.file, path, err)
 		}
 		return kek, SourceFile, nil
 	}
@@ -72,7 +118,7 @@ func loadOrCreateFallback(dataDir string, warn func(string)) ([]byte, string, er
 	if err := os.WriteFile(path, []byte(enc), 0o600); err != nil {
 		return nil, "", fmt.Errorf("secret: persist fallback key: %w", err)
 	}
-	warn(fmt.Sprintf("no %s or %s set: generated a random secret key at %s. "+
+	warn(fmt.Sprintf("no %s or %s set: generated a random encryption key at %s. "+
 		"This is convenience, not security (a key on the data volume falls with the volume). "+
 		"Set %s (a mounted file) for any real deployment.", envKey, envKeyFile, path, envKeyFile))
 	return kek, SourceFallback, nil

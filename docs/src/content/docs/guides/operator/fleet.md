@@ -45,7 +45,7 @@ screenshots:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
   - id: fleet-map
     path: /web/systems/huddle
-    alt: "The map inside Overview: the standard's declared layout rendered top-down, one marker per role position, solid where staffed and hollow where not."
+    alt: "The map inside Overview: the standard's declared layout rendered top-down, one marker per role position, each the type icon of the component holding it, in its health colour, with its label under it."
     # The header's since-line ages with the capture.
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
@@ -302,9 +302,10 @@ Cause before arithmetic:
 A standard may declare the system's physical layout (a room, a stage, a vehicle, whatever
 the system occupies): where each role position sits, top-down. Every
 system built to that standard draws the **map** inside Overview, under the components:
-one marker per declared position, solid in the occupant's state (click it to open its
-panel), hollow where nobody is staffed. The label is the role, its position number when
-the role wants several, and the component holding it.
+one marker per declared position. A staffed position shows the component's type icon in
+its health colour (green, amber, red, as in the Health column) with the component's label
+under it; hover or focus a marker for its role, product, health and any alarm, and click it to
+open its panel. A dashed ring is a position nobody staffs, labelled with its role.
 
 ::screenshot{#fleet-map}
 

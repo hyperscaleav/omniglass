@@ -29,9 +29,9 @@ const (
 	// the API is on.
 	DefaultNatsAddr = "127.0.0.1:4222"
 	// DefaultDataDir holds local server state that is not in Postgres, notably
-	// the fallback secret key when no KEK is provided. Override with
-	// OMNIGLASS_DATA_DIR; a real deployment sets OMNIGLASS_SECRET_KEY_FILE and
-	// never touches this.
+	// the fallback encryption key when no KEK is provided. Override with
+	// OMNIGLASS_DATA_DIR; a real deployment sets OMNIGLASS_ENCRYPTION_KEY_FILE
+	// and never touches this.
 	DefaultDataDir = ".omniglass"
 	// DefaultSettingsFile is empty: most deployments have no operator settings
 	// file, so the settings engine's base layer is just the embedded code
@@ -59,7 +59,7 @@ type Config struct {
 	// Set OMNIGLASS_NATS_URL when the node reaches the bus at another address.
 	NatsURL string
 	// DataDir is the directory for local, non-Postgres server state (the fallback
-	// secret key). Override with OMNIGLASS_DATA_DIR.
+	// encryption key). Override with OMNIGLASS_DATA_DIR.
 	DataDir string
 	// SettingsFile is the path to an optional operator settings file, the middle
 	// layer of the settings engine (between embedded code defaults and the DB
