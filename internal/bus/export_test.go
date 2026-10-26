@@ -74,3 +74,11 @@ func (s *Server) TelemetryDuplicateWindow(ctx context.Context) (time.Duration, e
 	}
 	return info.Config.Duplicates, nil
 }
+
+// SetTelemetryNakDelay sets the base of the backoff a transiently failed
+// batch is redelivered after; the returned func restores it.
+func SetTelemetryNakDelay(d time.Duration) (restore func()) {
+	prior := telemetryNakDelay
+	telemetryNakDelay = d
+	return func() { telemetryNakDelay = prior }
+}

@@ -2,11 +2,13 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/rules"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // IngestBatch is everything one ingest batch writes, landed as one unit
@@ -140,6 +142,27 @@ func (p *PG) lockInOrder(ctx context.Context, tx pgx.Tx, b IngestBatch) error {
 		}
 	}
 	return p.markCalcPending(ctx, tx, marks, b.Writer.rule())
+}
+
+// IsRefusedWrite reports whether a write failed for a reason no retry
+// changes: its owner is gone or ambiguous, its key's writer class refuses the
+// writer, or Postgres refused its data (a data exception, an integrity
+// violation). The ingest drops such a batch on its first delivery instead of
+// redelivering it, since a series' batches land in order and every batch
+// behind it would wait out redeliveries that cannot succeed.
+func IsRefusedWrite(err error) bool {
+	var ambiguous *ErrAmbiguousName
+	if isOwnerNotFound(err) || errors.Is(err, ErrKeyWriterRefused) || errors.As(err, &ambiguous) {
+		return true
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && len(pgErr.Code) >= 2 {
+		switch pgErr.Code[:2] {
+		case "22", "23":
+			return true
+		}
+	}
+	return false
 }
 
 // pruneReceiptsBatch is how many receipts one prune statement deletes, so a

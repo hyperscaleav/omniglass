@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -455,4 +456,136 @@ func TestAPushedNULLandsTheBatch(t *testing.T) {
 	f.waitLanded(t, "nul")
 	f.waitDrained(t, srv)
 	f.assertOnce(t, "nul", 1)
+}
+
+// failOnceOnValue lands batches for real, except that the first batch
+// carrying a property of value fails, held until released, as a database
+// blink would fail it.
+type failOnceOnValue struct {
+	*storage.PG
+	value   string
+	once    sync.Once
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (s *failOnceOnValue) LandBatch(ctx context.Context, b storage.IngestBatch) (bool, error) {
+	for _, p := range b.Properties {
+		if p.Value != s.value {
+			continue
+		}
+		first := false
+		s.once.Do(func() { first = true })
+		if first {
+			close(s.entered)
+			<-s.release
+			return false, errors.New("the database blinked")
+		}
+	}
+	return s.PG.LandBatch(ctx, b)
+}
+
+// TestATransientFailureKeepsASeriesInOrder: a batch whose landing fails for a
+// transient reason is redelivered before anything behind it lands. The
+// property lane is transition-only (a value equal to its series' latest is
+// not written), which is right only if a series lands in order: a successor
+// landing first would be judged against the wrong latest and dropped, and the
+// redelivered batch would then leave the series reading a value the device
+// had already left.
+func TestATransientFailureKeepsASeriesInOrder(t *testing.T) {
+	restore := bus.SetTelemetryNakDelay(100 * time.Millisecond)
+	defer restore()
+	f := newDeliveryFixture(t)
+	store := &failOnceOnValue{PG: f.gw, value: "2.0", entered: make(chan struct{}), release: make(chan struct{})}
+	srv, err := bus.New(bus.Config{Host: "127.0.0.1", Port: -1}, store)
+	if err != nil {
+		t.Fatalf("start bus: %v", err)
+	}
+	defer srv.Shutdown()
+	t0 := time.Now().UTC().Add(-10 * time.Minute)
+	firmware := func(v string, at time.Time) *ogv1.TelemetryBatch {
+		return &ogv1.TelemetryBatch{Owner: &ogv1.Owner{Kind: "component", Ref: "bar-1"}, Source: "order-test",
+			Properties: []*ogv1.PropertySample{{Name: "firmware-version", ValueJson: `"` + v + `"`, Ts: timestamppb.New(at)}}}
+	}
+	if err := srv.PublishTelemetry(f.ctx, firmware("1.0", t0)); err != nil {
+		t.Fatalf("publish 1.0: %v", err)
+	}
+	if err := srv.PublishTelemetry(f.ctx, firmware("2.0", t0.Add(time.Minute))); err != nil {
+		t.Fatalf("publish 2.0: %v", err)
+	}
+	<-store.entered
+	// Published while 2.0 is inside its failing landing: back to 1.0.
+	if err := srv.PublishTelemetry(f.ctx, firmware("1.0", t0.Add(2*time.Minute))); err != nil {
+		t.Fatalf("publish 1.0 again: %v", err)
+	}
+	time.Sleep(200 * time.Millisecond)
+	close(store.release)
+	f.waitDrained(t, srv)
+	var series []string
+	rows, err := f.conn.Query(f.ctx, `select value #>> '{}' from property where provenance = 'observed' and source = 'order-test' order by ts, id`)
+	if err != nil {
+		t.Fatalf("read the series: %v", err)
+	}
+	for rows.Next() {
+		var v string
+		if err := rows.Scan(&v); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		series = append(series, v)
+	}
+	rows.Close()
+	if fmt.Sprint(series) != "[1.0 2.0 1.0]" {
+		t.Fatalf("firmware-version series %v, want [1.0 2.0 1.0]: every transition, in the order the device reported them", series)
+	}
+}
+
+// refuseOnValue refuses, as the gateway refuses a write it will never take,
+// every batch carrying a property of value, and counts the attempts.
+type refuseOnValue struct {
+	*storage.PG
+	value    string
+	attempts atomic.Int32
+}
+
+func (s *refuseOnValue) LandBatch(ctx context.Context, b storage.IngestBatch) (bool, error) {
+	for _, p := range b.Properties {
+		if p.Value == s.value {
+			s.attempts.Add(1)
+			return false, fmt.Errorf("storage: property sample bar-1/firmware-version: %w", storage.ErrKeyWriterRefused)
+		}
+	}
+	return s.PG.LandBatch(ctx, b)
+}
+
+// TestARefusedBatchIsDroppedAtOnce: a batch the gateway refuses outright (a
+// write no retry can change) is dropped on its first delivery, so the batches
+// behind it, which a series' order holds until it is settled, are not kept
+// waiting through redeliveries that cannot succeed.
+func TestARefusedBatchIsDroppedAtOnce(t *testing.T) {
+	restore := bus.SetTelemetryNakDelay(2 * time.Second)
+	defer restore()
+	f := newDeliveryFixture(t)
+	store := &refuseOnValue{PG: f.gw, value: "refused"}
+	srv, err := bus.New(bus.Config{Host: "127.0.0.1", Port: -1}, store)
+	if err != nil {
+		t.Fatalf("start bus: %v", err)
+	}
+	defer srv.Shutdown()
+	refused := pushBatch("refused-tag")
+	refused.Properties = []*ogv1.PropertySample{{Name: "firmware-version", ValueJson: `"refused"`}}
+	if err := srv.PublishTelemetry(f.ctx, refused); err != nil {
+		t.Fatalf("publish the refused batch: %v", err)
+	}
+	if err := srv.PublishTelemetry(f.ctx, pushBatch("behind")); err != nil {
+		t.Fatalf("publish the batch behind it: %v", err)
+	}
+	start := time.Now()
+	f.waitLanded(t, "behind")
+	if waited := time.Since(start); waited > 1500*time.Millisecond {
+		t.Fatalf("the batch behind a refused one waited %v: the refused batch was redelivered rather than dropped", waited)
+	}
+	f.waitDrained(t, srv)
+	if n := store.attempts.Load(); n != 1 {
+		t.Fatalf("the refused batch was landed %d times, want once", n)
+	}
 }

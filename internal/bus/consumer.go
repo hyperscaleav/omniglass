@@ -52,6 +52,11 @@ const (
 // to the next one after this. A var so a test can shorten it.
 var telemetryAckWait = 30 * time.Second
 
+// telemetryNakDelay is the base of the backoff a transiently failed batch is
+// redelivered after (the delay grows with each delivery). A var so a test can
+// shorten it.
+var telemetryNakDelay = 500 * time.Millisecond
+
 // startTelemetryConsumer creates (idempotently) the telemetry stream + durable
 // consumer over the full-permission internal client and begins consuming. The
 // stream persists a TelemetryBatch the instant a node publishes it, and (WorkQueuePolicy)
@@ -86,6 +91,12 @@ func (s *Server) startTelemetryConsumer() error {
 		AckPolicy:  jetstream.AckExplicitPolicy,
 		AckWait:    telemetryAckWait,
 		MaxDeliver: maxTelemetryDeliveries,
+		// One batch in flight: nothing is delivered past a batch the
+		// consumer has not acked or dropped, a redelivery included, so each
+		// publisher's batches land in the order the stream stored them. The
+		// property lane's transition guard (a value equal to its series'
+		// latest is not written) is right only in that order (ADR-0311).
+		MaxAckPending: 1,
 	})
 	if err != nil {
 		return err
@@ -163,7 +174,7 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 			return
 		}
 		if err := s.land(ctx, id, &ev, bind); err != nil {
-			s.nakOrTerm(msg)
+			s.failed(msg, err)
 			return
 		}
 		ack(msg)
@@ -214,7 +225,7 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 	}
 
 	if err := s.land(ctx, id, &ev, bind); err != nil {
-		s.nakOrTerm(msg) // transient registry read or DB write failure: redeliver (bounded)
+		s.failed(msg, err) // a refused write is dropped; a transient failure redelivered (bounded)
 		return
 	}
 	ack(msg)
@@ -369,13 +380,30 @@ func (s *Server) land(ctx context.Context, id string, ev *ogv1.TelemetryBatch, b
 	return nil
 }
 
+// failed answers a batch whose landing failed. A write the gateway refuses
+// outright (storage.IsRefusedWrite: its owner gone, its key's writer class
+// refusing the writer, data Postgres will never store) is Term'd at once,
+// since one batch in flight means every batch behind it waits on it; any
+// other failure is redelivered, bounded (nakOrTerm).
+func (s *Server) failed(msg jetstream.Msg, err error) {
+	if storage.IsRefusedWrite(err) {
+		_ = msg.Term()
+		slog.Warn("telemetry batch refused, dropped", "subject", msg.Subject(), "error", err.Error())
+		return
+	}
+	s.nakOrTerm(msg)
+}
+
 // nakOrTerm redelivers a telemetry message that failed for a transient reason
-// (Nak), unless it has already been delivered maxTelemetryDeliveries times (or
-// its delivery count can't be read), in which case it is Term'd: deleted from
-// the OG_TELEMETRY work queue rather than left to redeliver forever. A message
-// that only ever Nak's never leaves a work-queue-retention stream on its own, so
-// this is what actually bounds the redelivery loop; ConsumerConfig.MaxDeliver is
-// the JetStream-side backstop for the same bound.
+// (a Nak with a delay that grows with each delivery, so a database that is
+// briefly away is waited out rather than raced), unless it has already been
+// delivered maxTelemetryDeliveries times (or its delivery count can't be
+// read), in which case it is Term'd: deleted from the OG_TELEMETRY work queue
+// rather than left to redeliver forever. A message that only ever Nak's never
+// leaves a work-queue-retention stream on its own, so this is what actually
+// bounds the redelivery loop; ConsumerConfig.MaxDeliver is the JetStream-side
+// backstop for the same bound. With one batch in flight, the redelivery comes
+// before anything behind it.
 func (s *Server) nakOrTerm(msg jetstream.Msg) {
 	meta, err := msg.Metadata()
 	if err != nil {
@@ -388,7 +416,7 @@ func (s *Server) nakOrTerm(msg jetstream.Msg) {
 		slog.Warn("telemetry message dropped after repeated failures", "subject", msg.Subject(), "delivered", meta.NumDelivered)
 		return
 	}
-	_ = msg.Nak()
+	_ = msg.NakWithDelay(time.Duration(meta.NumDelivered) * telemetryNakDelay)
 }
 
 // logLineWrites turns a push batch's raw log lines into component-owned
