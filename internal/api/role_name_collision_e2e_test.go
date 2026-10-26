@@ -142,7 +142,8 @@ func TestACapacityRefusalNamesOnlyAReadableSystem(t *testing.T) {
 		t.Fatalf("the refusal names a system the caller cannot read: %s", raw)
 	}
 
-	// Only the unreadable system exceeds a cap of 2: no name, and not its count.
+	// Only the unreadable system exceeds a cap of 2: no name, no staffing
+	// count, and no tally of how many such systems there are.
 	st, raw = c.send(narrow, http.MethodPatch, "/standards/cap-std/roles/table-mic", map[string]any{"capacity": 2})
 	if st != http.StatusConflict {
 		t.Fatalf("a capacity below an unreadable system's staffing = %d %s, want 409", st, raw)
@@ -151,8 +152,8 @@ func TestACapacityRefusalNamesOnlyAReadableSystem(t *testing.T) {
 		strings.Contains(string(raw), "by 3") {
 		t.Fatalf("the refusal discloses a system the caller cannot read: %s", raw)
 	}
-	if !strings.Contains(string(raw), "1 conforming system") {
-		t.Fatalf("the redacted refusal should count the systems in the way: %s", raw)
+	if !strings.Contains(string(raw), "a conforming system you cannot read") {
+		t.Fatalf("the redacted refusal should say a system it cannot read is in the way: %s", raw)
 	}
 
 	// The same refusal to a caller who reads the system names it.

@@ -557,7 +557,8 @@ func roleCollisionMessage(err error) (string, bool) {
 // no system at all, so the refusal must not tell that caller which system
 // exists, what it declares, or how it is staffed (#503 review, #1216). A
 // role-name collision keeps its one system only if readable; a capacity
-// shortfall names the worst-exceeding system the caller can read, or none.
+// shortfall names the worst-exceeding system the caller can read, or none
+// and no count, so repeated probes cannot tally another scope's staffing.
 // Any other error passes through.
 func redactRefusalSystem(ctx context.Context, a *authenticator, gw storage.Gateway, err error) error {
 	var c *storage.RoleNameCollision
@@ -575,8 +576,13 @@ func redactRefusalSystem(ctx context.Context, a *authenticator, gw storage.Gatew
 		for i, e := range short.Exceeding {
 			ids[i] = e.SystemID
 		}
-		// A failed scope check redacts everything rather than naming anything.
-		readable, _ := gw.InScopeIDs(ctx, "system", ids, a.scopeFor(ctx, "system", "read"))
+		// A failed scope check fails closed: a 500 names nothing, where a
+		// guessed redaction would tell a caller who reads every system that
+		// it reads none of them.
+		readable, serr := gw.InScopeIDs(ctx, "system", ids, a.scopeFor(ctx, "system", "read"))
+		if serr != nil {
+			return serr
+		}
 		redacted := *short
 		redacted.System, redacted.Have = "", 0
 		for _, e := range short.Exceeding {
@@ -640,8 +646,8 @@ func mapRoleErr(err error) error {
 	if errors.As(err, &capShort) {
 		if capShort.System == "" {
 			return huma.Error409Conflict(fmt.Sprintf(
-				"role %q is filled beyond %d components in %d conforming system(s) you cannot read; capacity cannot be lowered to %d until someone who can read them unassigns the excess",
-				capShort.Role, capShort.Want, len(capShort.Exceeding), capShort.Want))
+				"role %q is filled beyond %d components in a conforming system you cannot read; capacity cannot be lowered to %d until someone who can read it unassigns the excess",
+				capShort.Role, capShort.Want, capShort.Want))
 		}
 		return huma.Error409Conflict(fmt.Sprintf(
 			"role %q in system %q is filled by %d components; capacity cannot be lowered to %d",
