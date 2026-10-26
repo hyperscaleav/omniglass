@@ -480,6 +480,9 @@ func (UnimplementedGateway) AuthenticateNode(context.Context, string, string) (b
 	return false, nil
 }
 func (UnimplementedGateway) RecordHeartbeat(context.Context, string) error { return nil }
+func (UnimplementedGateway) RecordOrphanedBatches(context.Context, string, int64, time.Time) error {
+	return nil
+}
 func (UnimplementedGateway) NodeWorklist(context.Context, string) (Worklist, error) {
 	return Worklist{}, nil
 }
@@ -1009,5 +1012,8 @@ func (UnimplementedGateway) PlanDriverPreview(context.Context, string, PreviewIn
 	return nil, nil
 }
 func (UnimplementedGateway) PlanEndpointRun(context.Context, string, string, string, scope.Set, scope.Set) (*EndpointPoll, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ComponentEndpointNames(context.Context, string) ([]string, error) {
 	return nil, nil
 }

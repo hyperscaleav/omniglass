@@ -225,9 +225,11 @@ func TestCommandWireActuates(t *testing.T) {
 	}
 
 	// The device now reports the input it was told: the observed value lands
-	// (the poll path's write, hand-driven here) and the command settles.
-	if err := gw.InsertPropertySamples(ctx, storage.PushWriter(), []storage.PropertySampleWrite{{
-		OwnerKind: "component", OwnerID: "switcher-1", Key: "video-input",
+	// (the poll path's write, hand-driven here, so on the endpoint the command
+	// was dispatched over, the series an un-instanced dispatched command is
+	// judged on, ADR-0456) and the command settles.
+	if err := gw.InsertPropertySamples(ctx, storage.NodeWriter("switcher-1", "tcp"), []storage.PropertySampleWrite{{
+		OwnerKind: "component", OwnerID: "switcher-1", Key: "video-input", Instance: "tcp",
 		Value: "hdmi-2", Source: "tcp", TS: time.Now().UTC(),
 	}}); err != nil {
 		t.Fatalf("observed sample: %v", err)
@@ -246,6 +248,14 @@ func TestCommandWireActuates(t *testing.T) {
 			t.Fatalf("verdict = %q, want settled", verdict)
 		}
 		time.Sleep(200 * time.Millisecond)
+	}
+	// The recorded outcome read the same observation the verdict did.
+	var status string
+	if err := conn.QueryRow(ctx, `select status from command where id = $1`, cmd.ID).Scan(&status); err != nil {
+		t.Fatalf("read status: %v", err)
+	}
+	if status != "settled" {
+		t.Fatalf("recorded status = %q, want settled, as the verdict says", status)
 	}
 
 	// Isolation: node B cannot pull node A's queue; the request dies inside

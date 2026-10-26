@@ -261,9 +261,10 @@ func TestTelemetryPushAPI(t *testing.T) {
 		"logs":  big,
 	}, http.StatusRequestEntityTooLarge)
 
-	// SCOPE IS THE FENCE that makes a caller-declared owner trustworthy. A viewer
-	// scoped to another component cannot push to bar-1, and learns nothing about
-	// whether it exists (404, not 403).
+	// SCOPE IS THE FENCE that makes a caller-declared owner trustworthy
+	// (ADR-0752). A pusher scoped to another component, which cannot read bar-1
+	// either, cannot push to it and learns nothing about whether it exists (404,
+	// not 403).
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "other-1"}, all, all, all, all); err != nil {
 		t.Fatalf("create other component: %v", err)
 	}
@@ -293,6 +294,8 @@ func TestTelemetryPushAPI(t *testing.T) {
 	// is an ordinary shape. If the route fenced the write with the component:read
 	// scope, this caller could push telemetry to any component it can see, which is
 	// everything. The fence must be the scope that actually confers telemetry:push.
+	// It can READ bar-1, so it is owed the truthful 403 rather than a 404 that
+	// would deny a row it can see (ADR-0752, ADR-0116).
 	wideReadNarrowPush := setupScopedPrincipal(t, ctx, dsn, "wide-read-narrow-push",
 		grantSpec{role: "viewer", scopeKind: "all"},
 		grantSpec{role: "operator", scopeKind: "component", scopeID: otherID},
@@ -300,7 +303,7 @@ func TestTelemetryPushAPI(t *testing.T) {
 	c.do(wideReadNarrowPush, http.MethodPost, "/telemetry:push", map[string]any{
 		"owner":      map[string]any{"kind": "component", "ref": "bar-1"},
 		"properties": []map[string]any{{"name": "video-input", "value": "hdmi2"}},
-	}, http.StatusNotFound)
+	}, http.StatusForbidden)
 	// Its own push scope still works, so the fence is narrow, not broken.
 	c.do(wideReadNarrowPush, http.MethodPost, "/telemetry:push", map[string]any{
 		"owner":      map[string]any{"kind": "component", "ref": "other-1"},
