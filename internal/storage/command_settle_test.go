@@ -289,3 +289,110 @@ func TestNonEvidenceLeavesACommandPending(t *testing.T) {
 		}
 	}
 }
+
+// issueQueued issues set-input with no instance and leaves it queued: no node
+// has taken it, so it names no endpoint it was dispatched over.
+func (r *settleRig) issueQueued(t *testing.T, input string) int64 {
+	t.Helper()
+	cmd, err := r.gw.IssueCommand(r.ctx, r.actor, "component", "switcher", "set-input", "", json.RawMessage(`"`+input+`"`), nil)
+	if err != nil {
+		t.Fatalf("issue: %v", err)
+	}
+	return cmd.ID
+}
+
+// observeOn lands an observation of video-input on one instance: on the
+// rig's endpoint (tcp) through the node lane, as the consumer does for a task
+// on it; on any other instance as a push that names it.
+func (r *settleRig) observeOn(t *testing.T, instance, value string) {
+	t.Helper()
+	w := storage.PushWriter()
+	if instance == "tcp" {
+		w = storage.NodeWriter("switcher", instance)
+	}
+	if err := r.gw.InsertPropertySamples(r.ctx, w, []storage.PropertySampleWrite{{
+		OwnerKind: "component", OwnerID: "switcher", Key: "video-input", Instance: instance, Value: value, Source: "tcp",
+	}}); err != nil {
+		t.Fatalf("observe %s on %s: %v", value, instance, err)
+	}
+}
+
+// An un-instanced command no endpoint has carried yet is an owner-level
+// intent, judged on every instance of its target (ADR-0456): an endpoint
+// reporting another value leaves it pending, and the first instance that
+// agrees settles it, the computed verdict agreeing with the recorded one.
+func TestAnUndispatchedCommandSettlesWhenAnyInstanceAgrees(t *testing.T) {
+	r := newSettleRig(t, "")
+	id := r.issueQueued(t, "hdmi3")
+	r.observeOn(t, "aux", "hdmi1")
+	if got := r.status(t, id); got != "issued" {
+		t.Fatalf("after a disagreeing instance: status = %q, want issued", got)
+	}
+	r.observeOn(t, "tcp", "hdmi3")
+	if got := r.status(t, id); got != "settled" {
+		t.Fatalf("after an agreeing instance: status = %q, want settled", got)
+	}
+	verdict, err := r.gw.CommandSettlement(r.ctx, "component", "switcher", "set-input", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if verdict != storage.SettlementSettled {
+		t.Fatalf("computed verdict = %q, want settled, as recorded", verdict)
+	}
+}
+
+// Past the window, an un-instanced undispatched command whose target was
+// observed on some instance and agreed on none failed (the device answered
+// otherwise); with nothing observed on any instance it timed out.
+func TestAnUndispatchedCommandFailsWhenNoInstanceAgrees(t *testing.T) {
+	r := newSettleRig(t, "")
+	if _, err := r.conn.Exec(r.ctx, `update command_type set settle_window_seconds = 1 where name = 'set-input'`); err != nil {
+		t.Fatal(err)
+	}
+	unanswered := r.issueQueued(t, "hdmi2")
+	time.Sleep(1500 * time.Millisecond)
+	if err := r.gw.SweepCommandSettlements(r.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.status(t, unanswered); got != "timed-out" {
+		t.Fatalf("nothing observed: status = %q, want timed-out", got)
+	}
+
+	id := r.issueQueued(t, "hdmi3")
+	r.observeOn(t, "tcp", "hdmi1")
+	time.Sleep(1500 * time.Millisecond)
+	if err := r.gw.SweepCommandSettlements(r.ctx); err != nil {
+		t.Fatal(err)
+	}
+	var status, settledBy string
+	var observed []byte
+	if err := r.conn.QueryRow(r.ctx, `select status, coalesce(settled_by, ''), observed_value from command where id = $1`, id).
+		Scan(&status, &settledBy, &observed); err != nil {
+		t.Fatal(err)
+	}
+	if status != "failed" || settledBy != "observation" || string(observed) != `"hdmi1"` {
+		t.Fatalf("observed otherwise: status %q by %q observed %s, want failed by the observation of hdmi1", status, settledBy, observed)
+	}
+}
+
+// A command dispatched over an endpoint is judged on that endpoint's series
+// alone (#900, kept by ADR-0456): another instance agreeing does not settle
+// it, and with nothing on its own endpoint it times out.
+func TestADispatchedCommandIsJudgedOnItsEndpointAlone(t *testing.T) {
+	r := newSettleRig(t, "")
+	if _, err := r.conn.Exec(r.ctx, `update command_type set settle_window_seconds = 1 where name = 'set-input'`); err != nil {
+		t.Fatal(err)
+	}
+	id := r.issueAndDispatch(t, "hdmi3")
+	r.observeOn(t, "aux", "hdmi3")
+	if got := r.status(t, id); got != "issued" {
+		t.Fatalf("after another instance agreed: status = %q, want issued", got)
+	}
+	time.Sleep(1500 * time.Millisecond)
+	if err := r.gw.SweepCommandSettlements(r.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.status(t, id); got != "timed-out" {
+		t.Fatalf("nothing on its own endpoint: status = %q, want timed-out", got)
+	}
+}

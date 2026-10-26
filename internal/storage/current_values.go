@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -15,31 +14,40 @@ import (
 // CurrentValue is the current value of one series: its latest row per (type,
 // owner arc, instance, provenance), read from the series itself (#591 retired
 // the maintained cache). Value is the row's jsonb form, TS the value's own
-// time (the sample time for observed, the effect time for intended).
+// time (the sample time for observed, the effect time for intended), and
+// Instance the series it was read from (ADR-0456: for an observed row, the
+// endpoint or sender that observed it).
 type CurrentValue struct {
 	Value      json.RawMessage
 	TS         time.Time
 	Provenance string
+	Instance   string
 }
 
 // PropertyReconciliation is one property's want/told/is pivot for an owner: the
 // declared value (want, resolved live from the cascade), the intended value (told,
 // nil until a command writes one), and the observed value (is). All three are
-// series reads. Drift is config-drift: is present and differs from want. The
-// windowed command-settlement verdict (is vs told within a settle window) is a
-// later slice.
+// series reads, and an owner-level question (ADR-0456): want is the owner's
+// declaration, told the newest intended value on any instance, and is resolved
+// across every observed instance worst-case, IsInstance naming the instance it
+// came from. Drift is config-drift: some observed instance differs from want.
+// The windowed form (is vs told within a settle window) is command settlement.
 type PropertyReconciliation struct {
 	PropertyTypeName string
 	Want             json.RawMessage
 	Told             json.RawMessage
 	Is               json.RawMessage
+	IsInstance       string
 	Drift            bool
 }
 
 // Reconciliation pivots want/told/is for every declared property of an owner. The
 // want side is the cascade's effective declared value (EffectiveProperties, which
 // also scope-guards the owner, so an out-of-scope owner is its non-disclosing
-// not-found); the told and is sides are latest-row series reads per provenance.
+// not-found); the told and is sides are series reads per provenance across every
+// instance of the key (ADR-0456): the question is the owner's, and an observed
+// row's instance is the endpoint that observed it, so reading the empty instance alone
+// would never see a value collected through an endpoint.
 func (p *PG) Reconciliation(ctx context.Context, ownerKind, ownerID string, read scope.Set) ([]PropertyReconciliation, error) {
 	effs, err := p.EffectiveProperties(ctx, ownerKind, ownerID, read)
 	if err != nil {
@@ -47,32 +55,33 @@ func (p *PG) Reconciliation(ctx context.Context, ownerKind, ownerID string, read
 	}
 	out := make([]PropertyReconciliation, 0, len(effs))
 	for _, e := range effs {
-		is, err := p.latestValue(ctx, p.pool, ownerKind, ownerID, e.PropertyTypeName, "", "observed", read)
-		if err != nil {
-			return nil, err
-		}
-		told, err := p.latestValue(ctx, p.pool, ownerKind, ownerID, e.PropertyTypeName, "", "intended", read)
-		if err != nil {
-			return nil, err
-		}
 		// Want is the declared cascade alone (the set value, else the
 		// contract default), never a calc rule's value: a calculated
 		// property is not what anyone asked for.
 		if e.SourceRuleID != "" && !e.FromContract {
 			continue
 		}
+		observed, err := p.latestValues(ctx, p.pool, ownerKind, ownerID, e.PropertyTypeName, "observed", read)
+		if err != nil {
+			return nil, err
+		}
+		intended, err := p.latestValues(ctx, p.pool, ownerKind, ownerID, e.PropertyTypeName, "intended", read)
+		if err != nil {
+			return nil, err
+		}
 		want := e.SetValue
 		if want == nil {
 			want = e.DefaultValue
 		}
 		rec := PropertyReconciliation{PropertyTypeName: e.PropertyTypeName, Want: want}
+		is, drift := worstCaseValue(want, observed)
 		if is != nil {
-			rec.Is = is.Value
+			rec.Is, rec.IsInstance = is.Value, is.Instance
 		}
-		if told != nil {
-			rec.Told = told.Value
+		if len(intended) > 0 {
+			rec.Told = intended[0].Value
 		}
-		rec.Drift = rec.Want != nil && rec.Is != nil && !bytes.Equal(rec.Want, rec.Is)
+		rec.Drift = drift
 		out = append(out, rec)
 	}
 	return out, nil
@@ -158,5 +167,6 @@ func (p *PG) latestValue(ctx context.Context, q querier, ownerKind, ownerID, key
 		return nil, nil
 	}
 	cv.Value = copyRaw(value)
+	cv.Instance = instance
 	return &cv, nil
 }

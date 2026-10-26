@@ -9107,18 +9107,22 @@
         "additionalProperties": false,
         "properties": {
           "drift": {
-            "description": "True when the observed value is present and differs from the declared one",
+            "description": "True when any observed instance differs from the declared value",
             "type": "boolean"
           },
           "is": {
-            "description": "The observed value from the latest-value cache (null if none)"
+            "description": "The observed value, resolved across every instance of the property: an instance that disagrees with the declared value if any does (the newest such), else the newest observed (null if none)"
+          },
+          "is_instance": {
+            "description": "The instance the observed value came from: the endpoint that observed it or the instance its sender named, empty for the owner-level series (and when is is null)",
+            "type": "string"
           },
           "property": {
             "description": "The property_type key",
             "type": "string"
           },
           "told": {
-            "description": "The intended value from a command (null until commanded)"
+            "description": "The newest intended value a command set, on any instance (null until commanded)"
           },
           "want": {
             "description": "The declared value, resolved live from the cascade (null if none)"
@@ -9129,6 +9133,7 @@
           "want",
           "told",
           "is",
+          "is_instance",
           "drift"
         ],
         "type": "object"
@@ -16465,7 +16470,7 @@
     },
     "/components/{name}/reconciliation": {
       "get": {
-        "description": "Pivots, per declared property, the declared value (want, resolved live from the cascade), the intended value (told), and the observed value (is), with config-drift computed on read. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
+        "description": "Pivots, per declared property, the declared value (want, resolved live from the cascade), the intended value (told), and the observed value (is, resolved across every instance of the property and naming the instance it came from), with config-drift computed on read: drift when any observed instance differs from want. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
         "operationId": "get-component-reconciliation",
         "parameters": [
           {

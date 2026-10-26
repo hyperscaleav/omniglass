@@ -32,3 +32,13 @@ func ExportPreviewSQL(lane, part string) string {
 	}
 	return previewWindowSQL(rules.Lane(lane))
 }
+
+// ExportLatestPerInstanceSQL is the multi-instance current-value read
+// (ADR-0456) on the component arc, for its plan test.
+func ExportLatestPerInstanceSQL(lane string) string {
+	value := "value"
+	if lane == "property" {
+		value = declaredCurrentExpr
+	}
+	return latestPerInstanceSQL(lane, value, "component_id")
+}

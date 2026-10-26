@@ -128,12 +128,10 @@ func (p *PG) settleCheck(ctx context.Context, q txQuerier, ct *CommandType, owne
 	} else if err != nil {
 		return err
 	}
-	// A command issued with no instance of its own is judged against the
-	// series of the endpoint it was dispatched over, where the driver's
-	// observations of the target land (#900; the general meaning of instance
-	// is #456).
-	sql := fmt.Sprintf(`select c.id,
-			coalesce(nullif(c.instance, ''), (select e.name from endpoint e where e.id = c.dispatched_endpoint_id), '')
+	// Each command is judged on its series (commandSeriesSQL): its own
+	// instance, else the endpoint it was dispatched over, else none, an
+	// owner-level intent judged on every instance (ADR-0456).
+	sql := fmt.Sprintf(`select c.id, `+commandSeriesSQL+`
 		from command c
 		where c.status = 'issued' and c.owner_kind = $1 and c.%s = $2
 		  and c.command_type_id = $3 and c.instance = $4
@@ -145,8 +143,15 @@ func (p *PG) settleCheck(ctx context.Context, q txQuerier, ct *CommandType, owne
 	return p.judgeCommands(ctx, q, ct, ownerKind, arc, pending, now)
 }
 
+// commandSeriesSQL is the series a command (aliased c) is judged on
+// (ADR-0456): its own instance when it names one; else the endpoint it was
+// dispatched over, where that driver's observations of the target land
+// (#900); else the empty string, an owner-level intent no endpoint has
+// carried, judged on every observed instance of its target (agreeingValue).
+const commandSeriesSQL = `coalesce(nullif(c.instance, ''), (select e.name from endpoint e where e.id = c.dispatched_endpoint_id), '')`
+
 // pendingCommand is an issued command and the series instance its target is
-// observed on.
+// observed on (empty for every instance, commandSeriesSQL).
 type pendingCommand struct {
 	id       int64
 	instance string
@@ -170,21 +175,17 @@ func (p *PG) pendingCommands(ctx context.Context, q querier, sql string, args ..
 }
 
 // judgeCommands settles each pending command against its own intended row
-// and the latest observation of its target on its series, stamping a
-// terminal verdict with settled_at; a pending verdict leaves it issued.
+// and the observation of its target it is judged on (judgedObservation),
+// stamping a terminal verdict with settled_at; a pending verdict leaves it
+// issued.
 func (p *PG) judgeCommands(ctx context.Context, q txQuerier, ct *CommandType, ownerKind, arc string, pending []pendingCommand, now time.Time) error {
-	observedOn := map[string]*CurrentValue{}
+	reads := &observationReads{on: map[string]*CurrentValue{}}
 	for _, pc := range pending {
-		observed, seen := observedOn[pc.instance]
-		if !seen {
-			var err error
-			observed, err = p.latestTargetValue(ctx, q, ct, ownerKind, arc, pc.instance, "observed")
-			if err != nil {
-				return err
-			}
-			observedOn[pc.instance] = observed
-		}
 		intended, err := p.commandIntendedValue(ctx, q, ct, pc.id)
+		if err != nil {
+			return err
+		}
+		observed, err := p.judgedObservation(ctx, q, ct, ownerKind, arc, pc.instance, intended, reads)
 		if err != nil {
 			return err
 		}
@@ -203,10 +204,79 @@ func (p *PG) judgeCommands(ctx context.Context, q txQuerier, ct *CommandType, ow
 	return nil
 }
 
+// observationReads holds what one settle-check has read of a target's
+// observed series, so commands sharing a series read it once: the latest per
+// named series, and every instance's latest for the owner-level ones.
+type observationReads struct {
+	on        map[string]*CurrentValue
+	every     []CurrentValue
+	readEvery bool
+}
+
+// judgedObservation is the observation a command is judged against
+// (ADR-0456). A command with a series (commandSeriesSQL: its own instance,
+// or the endpoint it was dispatched over) reads that series alone and never
+// another. One with none is an owner-level intent: it reads every observed
+// instance of its target and is judged on the one that agrees, else the
+// newest (agreeingValue).
+func (p *PG) judgedObservation(ctx context.Context, q querier, ct *CommandType, ownerKind, arc, series string, intended *CurrentValue, reads *observationReads) (*CurrentValue, error) {
+	if series != "" {
+		if observed, seen := reads.on[series]; seen {
+			return observed, nil
+		}
+		observed, err := p.latestTargetValue(ctx, q, ct, ownerKind, arc, series, "observed")
+		if err != nil {
+			return nil, err
+		}
+		reads.on[series] = observed
+		return observed, nil
+	}
+	if !reads.readEvery {
+		every, err := p.latestTargetValues(ctx, q, ct, ownerKind, arc, "observed")
+		if err != nil {
+			return nil, err
+		}
+		reads.every, reads.readEvery = every, true
+	}
+	return agreeingValue(intended, reads.every), nil
+}
+
+// intendedSeries is the series the command behind an owner's latest intended
+// row of a target on instance is judged on (commandSeriesSQL), so the
+// computed verdict reads the observation the recorded one did: empty for no
+// row, a row no command opened, or an owner-level intent no endpoint carried.
+func (p *PG) intendedSeries(ctx context.Context, q querier, ct *CommandType, ownerKind, arc, instance string) (string, error) {
+	col, err := ownerColumn(ownerKind)
+	if err != nil {
+		return "", err
+	}
+	lane, catalog, key := "property", "property_type", ct.TargetPropertyType
+	if ct.TargetMetricType != "" {
+		lane, catalog, key = "metric", "metric_type", ct.TargetMetricType
+	}
+	sql := fmt.Sprintf(`select coalesce((select `+commandSeriesSQL+` from command c where c.id = s.command_id), '')
+		from %[1]s s
+		where s.owner_kind = $1 and s.%[3]s = $2
+		  and s.%[1]s_type_id = (select id from %[2]s where name = $3)
+		  and s.instance = $4 and s.provenance = 'intended'
+		order by s.ts desc, s.id desc
+		limit 1`, lane, catalog, col)
+	var series string
+	err = q.QueryRow(ctx, sql, ownerKind, arc, key, instance).Scan(&series)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("storage: series of the latest intended %s: %w", key, err)
+	}
+	return series, nil
+}
+
 // settleOnObservation runs when an observation of a property lands: every
-// issued command whose type targets that property, on that owner and series
-// (its own instance, or the endpoint it was dispatched over when it has
-// none), is judged against it. The second way a command settles (ADR-0141).
+// issued command whose type targets that property, on that owner, and whose
+// series is the observation's instance or none at all (an owner-level intent
+// judged on every instance, ADR-0456), is judged. The second way a command
+// settles (ADR-0141).
 func (p *PG) settleOnObservation(ctx context.Context, q txQuerier, ownerKind, arc, propertyKey, instance string, now time.Time) error {
 	col, err := ownerColumn(ownerKind)
 	if err != nil {
@@ -233,11 +303,12 @@ func (p *PG) settleOnObservation(ctx context.Context, q txQuerier, ownerKind, ar
 		if err != nil {
 			return fmt.Errorf("storage: command type %s: %w", name, err)
 		}
-		// The same series settleCheck judges a command on: its own instance,
-		// or the endpoint it was dispatched over when it has none.
-		sql := fmt.Sprintf(`select c.id, $4::text from command c
+		// The series settleCheck judges a command on: the observation's
+		// instance reaches a command on that series and every owner-level
+		// one, and never a command on another series.
+		sql := fmt.Sprintf(`select c.id, `+commandSeriesSQL+` from command c
 			where c.status = 'issued' and c.owner_kind = $1 and c.%s = $2 and c.command_type_id = $3
-			  and coalesce(nullif(c.instance, ''), (select e.name from endpoint e where e.id = c.dispatched_endpoint_id), '') = $4
+			  and `+commandSeriesSQL+` in ($4::text, '')
 			order by c.id`, col)
 		pending, err := p.pendingCommands(ctx, q, sql, ownerKind, arc, ct.ID, instance)
 		if err != nil {
@@ -414,5 +485,6 @@ func (p *PG) latestMetricValue(ctx context.Context, q querier, ownerKind, ownerI
 		return nil, fmt.Errorf("storage: latest metric value %s/%s[%s]: %w", ownerID, key, instance, err)
 	}
 	cv.Value = json.RawMessage(strconv.FormatFloat(v, 'g', -1, 64))
+	cv.Instance = instance
 	return &cv, nil
 }

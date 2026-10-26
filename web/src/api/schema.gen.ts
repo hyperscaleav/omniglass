@@ -993,7 +993,7 @@ export interface paths {
         };
         /**
          * Read a component's property reconciliation (want/told/is)
-         * @description Pivots, per declared property, the declared value (want, resolved live from the cascade), the intended value (told), and the observed value (is), with config-drift computed on read. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+         * @description Pivots, per declared property, the declared value (want, resolved live from the cascade), the intended value (told), and the observed value (is, resolved across every instance of the property and naming the instance it came from), with config-drift computed on read: drift when any observed instance differs from want. Gated by component:read; an out-of-scope component is a non-disclosing 404.
          */
         get: operations["get-component-reconciliation"];
         put?: never;
@@ -8539,13 +8539,15 @@ export interface components {
             endpoints: components["schemas"]["ReachEndpointBody"][] | null;
         };
         ReconPropertyBody: {
-            /** @description True when the observed value is present and differs from the declared one */
+            /** @description True when any observed instance differs from the declared value */
             drift: boolean;
-            /** @description The observed value from the latest-value cache (null if none) */
+            /** @description The observed value, resolved across every instance of the property: an instance that disagrees with the declared value if any does (the newest such), else the newest observed (null if none) */
             is: unknown;
+            /** @description The instance the observed value came from: the endpoint that observed it or the instance its sender named, empty for the owner-level series (and when is is null) */
+            is_instance: string;
             /** @description The property_type key */
             property: string;
-            /** @description The intended value from a command (null until commanded) */
+            /** @description The newest intended value a command set, on any instance (null until commanded) */
             told: unknown;
             /** @description The declared value, resolved live from the cascade (null if none) */
             want: unknown;
