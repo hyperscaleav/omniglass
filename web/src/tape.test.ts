@@ -5,6 +5,10 @@ import {
   HOUSE,
   MAX_GIF_BYTES,
   MAX_SECONDS,
+  PACE,
+  captionHoldMs,
+  holdTable,
+  outputHoldMs,
   parseTape,
   tapeLimits,
   tapeManifest,
@@ -71,7 +75,6 @@ describe("the house rules a tape is held to", () => {
         "Type 'omniglass node list | jq -c .'",
         "Enter",
         "Wait",
-        "Sleep 2s",
         "Type \"x\"",
         "Backspace",
         "Ctrl+C",
@@ -82,7 +85,7 @@ describe("the house rules a tape is held to", () => {
         "",
       ].join("\n"),
     );
-    expect(t.body.filter((l) => l.trim() && !l.startsWith("#"))).toHaveLength(16);
+    expect(t.body.filter((l) => l.trim() && !l.startsWith("#"))).toHaveLength(15);
   });
 
   it("refuses a setting, an output, a require, a source, an env, a screenshot or the clipboard: the recorder owns those", () => {
@@ -109,7 +112,7 @@ describe("the house rules a tape is held to", () => {
   it("refuses an Enter not followed by a Wait before the next command is typed, so every command finishes, and fails, on screen", () => {
     expect(bad('Type "a"\nEnter\nType "b"\nEnter\nWait\n')).toBe(`${F}:6: the command entered here is not waited on (a Wait) before the next Type`);
     expect(bad('Type "a"\nEnter\n')).toBe(`${F}:6: the command entered here is not waited on (a Wait) before the tape ends`);
-    expect(bad('Type "a"\nEnter\nSleep 5s\n')).toContain("before the tape ends");
+    expect(bad('Type "a"\nEnter\nBackspace\n')).toContain("before the tape ends");
   });
 
   it("waits on an Enter only with a prompt Wait: a Wait+Screen or Wait+Line pattern can match the command's own typed text", () => {
@@ -135,9 +138,8 @@ describe("the house rules a tape is held to", () => {
     expect(bad(`Hide\n${CMD}Show\n`)).toBe(`${F}: the tape types nothing on screen`);
   });
 
-  it("refuses a malformed Wait or Sleep", () => {
+  it("refuses a malformed Wait", () => {
     expect(bad(`Wait soon\n${CMD}`)).toContain(`${F}:5: malformed Wait`);
-    expect(bad(`Sleep forever\n${CMD}`)).toContain(`${F}:5: malformed Sleep`);
   });
 
   it("refuses a Type whose text is not one quoted string", () => {
@@ -178,10 +180,13 @@ describe("the tape the recorder plays", () => {
     expect(w).toContain("Require jq");
   });
 
-  it("sources the prelude unseen and clears the screen before the tape's first frame", () => {
+  it("hands the prelude the pacing rule's tables, sources it unseen, and clears the screen before the tape's first frame", () => {
     const w = wrapped(CMD);
     const hide = w.indexOf("Hide");
-    expect(w[hide + 1]).toBe('Type "source /demo/prelude.sh && clear"');
+    expect(w[hide + 1]).toBe(
+      `Type "export DEMO_OUTPUT_HOLDS='${holdTable(outputHoldMs).join(" ")}' DEMO_CAPTION_HOLDS='${holdTable(captionHoldMs).join(" ")}' && source /demo/prelude.sh"`,
+    );
+    expect(w.slice(hide + 2, hide + 7)).toEqual(["Enter", "Wait", 'Type "clear"', "Enter", "Wait"]);
     expect(w.slice(hide, w.indexOf('Type "omniglass component list"'))).toContain("Show");
   });
 
@@ -194,6 +199,86 @@ describe("the tape the recorder plays", () => {
 
   it("holds the last frame before the GIF loops", () => {
     expect(wrapped(CMD).at(-1)).toBe(`Sleep ${HOUSE.hold}`);
+  });
+});
+
+// The pacing rule (#1247): the GIF that plays inline on a PR cannot be paused,
+// so after each command the shell holds before its prompt returns, for a read
+// time scaled by the rows its output filled (a caption: by its words), capped.
+// The prelude applies it (web/e2e/tape/pace.sh, held to these tables in
+// tape-pace.test.ts); a tape cannot add, skip or override a hold.
+describe("the pacing rule", () => {
+  it("holds a command's output for a base read time, more per row, up to a cap", () => {
+    expect(outputHoldMs(0)).toBe(PACE.output.baseMs);
+    expect(outputHoldMs(1)).toBe(PACE.output.baseMs + PACE.output.perMs);
+    expect(outputHoldMs(4)).toBe(PACE.output.baseMs + 4 * PACE.output.perMs);
+    expect(outputHoldMs(1000)).toBe(PACE.output.maxMs);
+  });
+
+  it("holds a caption for a base read time, more per word, up to a cap", () => {
+    expect(captionHoldMs(0)).toBe(PACE.caption.baseMs);
+    expect(captionHoldMs(3)).toBe(PACE.caption.baseMs + 3 * PACE.caption.perMs);
+    expect(captionHoldMs(1000)).toBe(PACE.caption.maxMs);
+  });
+
+  it("holds every answer a few seconds at least, and never past its cap", () => {
+    expect(PACE.output.baseMs).toBeGreaterThanOrEqual(2000);
+    expect(PACE.caption.baseMs).toBeGreaterThanOrEqual(1000);
+    for (let n = 0; n < 200; n++) {
+      expect(outputHoldMs(n)).toBeLessThanOrEqual(PACE.output.maxMs);
+      expect(outputHoldMs(n + 1)).toBeGreaterThanOrEqual(outputHoldMs(n));
+      expect(captionHoldMs(n)).toBeLessThanOrEqual(PACE.caption.maxMs);
+      expect(captionHoldMs(n + 1)).toBeGreaterThanOrEqual(captionHoldMs(n));
+    }
+  });
+
+  it("refuses a negative or fractional count, which no output has", () => {
+    expect(() => outputHoldMs(-1)).toThrow("a count of rows or words");
+    expect(() => captionHoldMs(1.5)).toThrow("a count of rows or words");
+  });
+
+  it("tables a hold by count, from none to the first count at the cap, which the shell reads past its end as the cap", () => {
+    const t = holdTable(outputHoldMs);
+    expect(t[0]).toBe(outputHoldMs(0));
+    expect(t.at(-1)).toBe(PACE.output.maxMs);
+    expect(t.at(-2)).toBeLessThan(PACE.output.maxMs);
+    t.forEach((ms, n) => expect(ms).toBe(outputHoldMs(n)));
+    expect(holdTable(captionHoldMs).at(-1)).toBe(PACE.caption.maxMs);
+  });
+});
+
+describe("a tape cannot bypass the pacing rule", () => {
+  it("refuses a hand-added Sleep: the prelude holds every answer, and a Sleep would stack on it or stand in for it", () => {
+    expect(bad(`${CMD}Sleep 2s\n`)).toBe(
+      `${F}:8: Sleep is the pacing rule's: the prelude holds each command's output and each caption on screen (web/e2e/tape/pace.sh), so a tape adds no hold of its own`,
+    );
+    expect(bad(`Hide\nSleep 30s\n${CMD}Show\n${CMD}`)).toContain(`${F}:6: Sleep is the pacing rule's`);
+  });
+
+  it("refuses typed text that would unhook the rule: the prompt hooks, its tables, the prelude's internals, a replaced shell or a trap", () => {
+    for (const typed of [
+      "PROMPT_COMMAND=",
+      "unset PS0",
+      "PS1='$ '",
+      "DEMO_OUTPUT_HOLDS='0'",
+      "export DEMO_CAPTION_HOLDS=0",
+      "unset DEMO_TTY_LOG",
+      "demo__pace() { :; }",
+      "exec bash",
+      "trap - ERR",
+      "bash --norc",
+      "sh -i",
+    ]) {
+      expect(bad(`Type "${typed}"\nEnter\nWait\n`)).toBe(
+        `${F}:5: types into the pacing rule's hooks (the prompt, its hold tables, the prelude's own names, a new shell or a trap); a tape's commands are paced, never the pacing`,
+      );
+    }
+  });
+
+  it("still types what only looks like a hook: a word containing one, or bash running a script", () => {
+    ok(`Type "omniglass component list | jq -c '.components[] | {name, trap_count: 0}'"\nEnter\nWait\n`);
+    ok(`Type "echo exec-summary PS10"\nEnter\nWait\n`);
+    ok(`Type "bash -c 'echo hi'"\nEnter\nWait\n`);
   });
 });
 

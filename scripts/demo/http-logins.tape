@@ -17,7 +17,6 @@ Wait
 Type `omniglass component simulation get "$display" | jq -c '{address, http: [.surface[] | select(.protocol == "http") | {port, tls, auth_type}]}'`
 Enter
 Wait
-Sleep 2s
 
 Type "# A login secret each, and the shipped http driver that logs in with it"
 Enter
@@ -34,7 +33,6 @@ Wait
 Type `omniglass endpoint create --component "$display" --driver boreal-edge-web --node edge-hq --label 'Display web admin' --inputs '{"host":"127.60.0.20","port":"80","login":"demo-display-login"}' | jq -c '{name, driver}'`
 Enter
 Wait
-Sleep 1s
 
 Hide
 Type `demo_hush 'panel_ep=$(omniglass endpoint get "$panel/https" | jq -r .id)'`
@@ -63,7 +61,6 @@ Wait
 Type `grep 'msg="http login"' /stack/logs/node.log | grep "$panel_ep" | grep -o 'why=.*'`
 Enter
 Wait
-Sleep 2s
 
 Hide
 Type "clear"
@@ -87,7 +84,6 @@ Wait
 Type `reach "$panel" https`
 Enter
 Wait
-Sleep 2s
 
 Hide
 Type "clear"
@@ -119,7 +115,6 @@ Wait
 Type `grep 'msg="http login"' /stack/logs/node.log | grep "$panel_ep" | grep -o 'why=.*'`
 Enter
 Wait
-Sleep 2s
 
 Hide
 Type "clear"

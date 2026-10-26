@@ -12,7 +12,6 @@ Wait
 Type `test -n "$OMNIGLASS_TOKEN" && echo "OMNIGLASS_TOKEN holds a ${#OMNIGLASS_TOKEN}-character token"`
 Enter
 Wait
-Sleep 1s
 
 Type "# Help names where the token comes from, never the value"
 Enter
@@ -20,7 +19,6 @@ Wait
 Type `omniglass component list --help | grep -A1 -- --server`
 Enter
 Wait
-Sleep 2s
 
 Type "# Five pages of help: the root, a generated command, a secret's, a public one, a hand-written one"
 Enter
@@ -37,7 +35,6 @@ Wait
 Type `test "$(pages | grep -cF "$OMNIGLASS_TOKEN" || true)" = 0 && echo "the token appears on none of them"`
 Enter
 Wait
-Sleep 2s
 
 Type "# Shell completion describes the flag the same way"
 Enter
@@ -45,7 +42,6 @@ Wait
 Type `omniglass __complete component list -- 2>/dev/null | grep -- --token`
 Enter
 Wait
-Sleep 1s
 
 Type "# And the token still authenticates, read when the command runs"
 Enter
@@ -53,4 +49,3 @@ Wait
 Type `omniglass auth me | jq -c '{username: .human.username}'`
 Enter
 Wait
-Sleep 3s

@@ -18,7 +18,6 @@ Wait
 Type `omniglass product create --name acme-bar --label 'Acme Bar' --kind device --component-type video-bar --vendor-id acme --driver-id acme-ctl | jq -c '{name, vendor, driver}'`
 Enter
 Wait
-Sleep 1s
 
 Type "# Clear the driver: an empty string clears, an omitted field is left alone"
 Enter
@@ -29,7 +28,6 @@ Wait
 Type `omniglass product get acme-bar | jq -c '{name, vendor, driver}'`
 Enter
 Wait
-Sleep 2s
 
 Hide
 Type "clear"
@@ -60,4 +58,3 @@ Wait
 Type `omniglass vendor rename kestrel --name kestrel-av 2>/dev/null | jq -r .detail || true`
 Enter
 Wait
-Sleep 3s

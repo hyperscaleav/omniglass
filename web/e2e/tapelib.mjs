@@ -28,7 +28,7 @@
 //
 // The house rules, each a refusal naming the line:
 // - only the commands a demo types and waits on: Type, Enter, Wait (Wait@<t>,
-//   Wait+Screen /re/, Wait+Line /re/), Sleep, Hide, Show and the editing keys;
+//   Wait+Screen /re/, Wait+Line /re/), Hide, Show and the editing keys;
 //   a Set, Output, Require, Source, Env, Screenshot, Copy or Paste is the
 //   recorder's, since the house settings below fix the size, font, theme,
 //   typing speed and outputs (a Type@<speed> is refused for the same reason);
@@ -39,7 +39,19 @@
 //   such fails the demo); nothing rides after a Hide, Show or Wait on its line;
 // - no uuid in typed text: a demo addresses a resource by name or dotted
 //   address, and looks an id up by name inside the tape;
-// - Hide and Show alternate, ending shown, and something is typed on screen.
+// - Hide and Show alternate, ending shown, and something is typed on screen;
+// - the pacing rule (PACE, below) is the prelude's alone: no Sleep (a hand-added
+//   hold would stack on the rule's or stand in for it), and no typed text that
+//   reaches its hooks (the prompt variables, its DEMO_ tables, the prelude's
+//   demo__ names, an exec, a trap, or a new interactive shell, which would run
+//   without the prelude).
+//
+// The pacing rule (#1247): the GIF plays inline on the PR, where a viewer
+// cannot pause it, so after every command typed on screen the shell holds
+// before its prompt returns (and so before the tape's Wait lets the next
+// command type): a base read time, more per row its output filled, capped;
+// a typed `# caption` holds by its words the same way. A tape writes no
+// Sleep; it reads at the rule's pace.
 //
 // Inside the terminal (web/e2e/tape/prelude.sh, sourced unseen first): the
 // stack's server and an owner token are in the CLI's env; the stack's container
@@ -68,6 +80,41 @@ export const HOUSE = Object.freeze({
   hold: '3s',
 });
 
+// The pacing rule (#1247), in milliseconds: an answer holds baseMs plus perMs a
+// row its output filled, a caption baseMs plus perMs a word, each up to maxMs.
+// wrapTape hands the prelude these as tables (holdTable), which
+// web/e2e/tape/pace.sh reads; it never restates the numbers.
+export const PACE = Object.freeze({
+  output: Object.freeze({ baseMs: 2500, perMs: 500, maxMs: 7000 }),
+  caption: Object.freeze({ baseMs: 1500, perMs: 200, maxMs: 4500 }),
+});
+
+/** @param {{ baseMs: number, perMs: number, maxMs: number }} rule @param {number} n @returns {number} */
+function hold(rule, n) {
+  if (!Number.isInteger(n) || n < 0) throw new Error(`a hold is by a count of rows or words, not ${n}`);
+  return Math.min(rule.maxMs, rule.baseMs + n * rule.perMs);
+}
+
+// The hold after a command whose output filled `rows` terminal rows.
+/** @param {number} rows @returns {number} */
+export const outputHoldMs = (rows) => hold(PACE.output, rows);
+
+// The hold after a typed caption of `words` words.
+/** @param {number} words @returns {number} */
+export const captionHoldMs = (words) => hold(PACE.caption, words);
+
+// A hold as the table the prelude reads: entry n is the hold for a count of n,
+// from 0 to the first count at the cap, which the shell uses past the end.
+/** @param {(n: number) => number} holdMs @returns {number[]} */
+export function holdTable(holdMs) {
+  const t = [holdMs(0)];
+  while (holdMs(t.length) > t[t.length - 1]) {
+    if (t.length > 10_000) throw new Error('a hold that never reaches its cap');
+    t.push(holdMs(t.length));
+  }
+  return t;
+}
+
 // The budget: the GIF plays inline on the PR page, so it is held to the
 // walkthrough preview's ceiling; the length keeps a demo watchable (its waits
 // are hidden, so what plays is typing and answers).
@@ -79,6 +126,17 @@ const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 const DURATION = /^\d+(?:\.\d+)?(?:ms|s|m)$/;
 // The recorder's commands: a tape that names one is refused.
 const RECORDERS = new Set(['Set', 'Output', 'Require', 'Source', 'Env', 'Screenshot', 'Copy', 'Paste']);
+// Typed text that reaches the pacing rule's hooks: the prompt variables, the
+// DEMO_ variables the recorder and the prelude set, the prelude's demo__ names,
+// and, in a command's place, an exec or a trap (either replaces what the
+// prelude installed) or an interactive shell (it would run without the
+// prelude); a shell given -c only runs its command, and is paced as one.
+const CMD_AT = String.raw`(?:^|[;&|(){}!]|\b(?:then|do|else|time))\s*`;
+const HOOKS = new RegExp(
+  String.raw`\b(?:PROMPT_COMMAND|PS0|PS1|PS2)\b|\bDEMO_\w|\bdemo__\w|` +
+    `${CMD_AT}(?:exec|trap)(?=\\s|$)|` +
+    `${CMD_AT}(?:bash|sh|zsh)(?!\\s+-c\\b)(?=\\s|$)`,
+);
 const KEYS = new Set(['Enter', 'Backspace', 'Delete', 'Tab', 'Space', 'Up', 'Down', 'Left', 'Right', 'Escape']);
 
 /** @typedef {{ id: string, title: string, description: string, body: string[] }} Tape */
@@ -145,6 +203,9 @@ export function parseTape(id, text, file) {
       const s = quoted(rest);
       if (s === null) fail(n, 'Type takes one quoted string ("...", \'...\' or `...`)');
       if (UUID.test(/** @type {string} */ (s))) fail(n, 'types a uuid; address it by name or dotted address, or look its id up by name inside the tape');
+      if (HOOKS.test(/** @type {string} */ (s))) {
+        fail(n, "types into the pacing rule's hooks (the prompt, its hold tables, the prelude's own names, a new shell or a trap); a tape's commands are paced, never the pacing");
+      }
       if (pendingEnter) fail(pendingEnter, 'the command entered here is not waited on (a Wait) before the next Type');
       if (!hidden) typedOnScreen = true;
     } else if (name === 'Enter') {
@@ -158,7 +219,7 @@ export function parseTape(id, text, file) {
       // command's own typed text, and let the next step run before it ends.
       if (name === 'Wait' && rest === '') pendingEnter = 0;
     } else if (name === 'Sleep') {
-      if (!DURATION.test(rest) || speed !== undefined) fail(n, `malformed Sleep (Sleep <duration>, e.g. Sleep 2s): ${line}`);
+      fail(n, "Sleep is the pacing rule's: the prelude holds each command's output and each caption on screen (web/e2e/tape/pace.sh), so a tape adds no hold of its own");
     } else if (name === 'Hide' || name === 'Show') {
       // VHS reads several commands to a line: nothing may ride after these.
       if (rest !== '' || speed !== undefined) fail(n, `${name} takes nothing after it`);
@@ -179,7 +240,7 @@ export function parseTape(id, text, file) {
 }
 
 // The tape the recorder plays: the outputs, the house settings, the prelude
-// sourced unseen (folding the tape's own opening Hide into it, so no frame
+// sourced unseen with the pacing rule's tables (folding the tape's own opening Hide into it, so no frame
 // shows before its setup), the tape, and a held last frame. VHS reads settings
 // only before the first command, so they lead.
 /** @param {Tape} tape @returns {string} */
@@ -210,7 +271,10 @@ export function wrapTape(tape) {
     // never an output line that happens to end in ">".
     'Set WaitPattern /^>$/',
     'Hide',
-    'Type "source /demo/prelude.sh && clear"',
+    `Type "export DEMO_OUTPUT_HOLDS='${holdTable(outputHoldMs).join(' ')}' DEMO_CAPTION_HOLDS='${holdTable(captionHoldMs).join(' ')}' && source /demo/prelude.sh"`,
+    'Enter',
+    'Wait',
+    'Type "clear"',
     'Enter',
     'Wait',
     ...(opensHidden ? [] : ['Show']),

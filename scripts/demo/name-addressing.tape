@@ -16,7 +16,6 @@ Wait
 Type `omniglass component get "$panel" | jq -c '{name, label, product, path}'`
 Enter
 Wait
-Sleep 1s
 
 Type "# Its endpoints are <component>/<endpoint name>"
 Enter
@@ -33,7 +32,6 @@ Wait
 Type `omniglass endpoint get panel-1/telnet | jq -c '{component, name, label}'`
 Enter
 Wait
-Sleep 2s
 
 Hide
 Type "clear"
@@ -49,7 +47,6 @@ Wait
 Type `omniglass audit-log list --resource endpoint --limit 1 | jq -c '.events[0] | {verb, keyed_on_a_uuid: (.resource_id | test("^[0-9a-f-]{36}$"))}'`
 Enter
 Wait
-Sleep 1s
 
 Type "# A login secret, rotated by name"
 Enter
@@ -75,7 +72,6 @@ Wait
 Type `omniglass secret reveal hq.west.level-2.huddle/huddle-panel-login | jq -c .fields`
 Enter
 Wait
-Sleep 2s
 
 Hide
 Type "clear"
@@ -97,7 +93,6 @@ Wait
 Type `omniglass principal-group grant create night-shift --role viewer --scope-kind location --scope-id hq.west.level-2.huddle | jq -c '{role, scope_kind}'`
 Enter
 Wait
-Sleep 1s
 
 Type "# The uuid every answer carries still addresses the same endpoint"
 Enter
@@ -110,4 +105,3 @@ Show
 Type `omniglass endpoint get "$ep" | jq -c '{component, name, label}'`
 Enter
 Wait
-Sleep 3s

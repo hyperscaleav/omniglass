@@ -16,10 +16,31 @@
 #   block leaves the screen as it found it (an assignment in it sticks);
 # - demo_until <seconds> '<code>' retries code each second until it succeeds,
 #   the same unseen way, and fails (so the demo fails) when it never does;
-#   that is how a tape waits on the fleet without filming the wait.
+#   that is how a tape waits on the fleet without filming the wait;
+# - the pacing rule (#1247): after each line the tape types, the prompt
+#   returns only once the line's output has held on screen for its read time
+#   (pace.sh decides it from the rows the output filled, or a caption's words,
+#   on the tables tapelib.mjs hands over in DEMO_OUTPUT_HOLDS and
+#   DEMO_CAPTION_HOLDS), so the tape's Wait for the prompt waits through the
+#   hold, and a viewer of the GIF, which cannot be paused, can read it. To
+#   count the rows, the shell runs under script(1), which keeps a copy of
+#   everything the terminal is sent ($DEMO_TTY_LOG); a command still writes to
+#   a real terminal, so it looks as it would to an operator. Each hold is
+#   listed in $DEMO_PACE_LOG as "<ms> <caption|output> <words|rows> <line>".
 #
-# The recorder sets DEMO_FAILED, DEMO_LOG, OMNIGLASS_SERVER and
+# The recorder sets DEMO_FAILED, DEMO_LOG, DEMO_PACE_LOG, OMNIGLASS_SERVER and
 # OMNIGLASS_TOKEN; the stack's container logs are under /stack/logs/.
+
+# First sourced by VHS's own shell: replace it with one under script(1), which
+# sources this file again as its startup file.
+if [ -z "${DEMO_TTY_LOG:-}" ]; then
+  DEMO_TTY_LOG=$(mktemp)
+  export DEMO_TTY_LOG
+  exec script -qf -c "bash --noprofile --rcfile '${BASH_SOURCE[0]}' -i" "$DEMO_TTY_LOG"
+fi
+
+# shellcheck source=pace.sh
+. "$(dirname "${BASH_SOURCE[0]}")/pace.sh"
 
 set -o pipefail
 # In-memory history, read back as "the line typed"; no ! expansion, so a
@@ -54,7 +75,46 @@ demo__prompt() {
   if [ "$n" != "$demo__seen" ]; then
     demo__seen=$n
     if [ "$rc" -ne 0 ]; then demo__failed "$rc"; fi
+    demo__pace
   fi
+}
+
+# The pacing rule's I/O half: marks where a command's output starts (PS0, sent
+# as the command runs) and ends (sent here, numbered), waits for script(1) to
+# have logged the end mark, reads the output between the two marks, and sleeps
+# the hold pace.sh decides for it. The marks are OSC sequences no terminal
+# shows. If the log never catches up, the line goes unheld rather than held
+# wrongly, and the pace log says so.
+DEMO__RUN=$'\e]7701;og-run\a'
+PS0=$DEMO__RUN
+demo__k=0
+demo__off=0
+demo__pace() {
+  local LC_ALL=C line chunk end pre out verdict i
+  line=$(demo__line)
+  demo__k=$((demo__k + 1))
+  end=$'\e]7701;og-end-'"$demo__k"$'\a'
+  printf '%s' "$end"
+  for ((i = 0; i < 300; i++)); do
+    chunk=$(tail -c +"$((demo__off + 1))" "$DEMO_TTY_LOG"; printf x)
+    chunk=${chunk%x}
+    if [[ $chunk == *"$end"* ]]; then break; fi
+    sleep 0.01
+  done
+  if [[ $chunk != *"$end"* ]]; then
+    printf '0 unheld 0 %s\n' "$line" >>"${DEMO_PACE_LOG:-/dev/null}"
+    return 0
+  fi
+  pre=${chunk%%"$end"*}
+  demo__off=$((demo__off + ${#pre} + ${#end}))
+  out=""
+  if [[ $pre == *"$DEMO__RUN"* ]]; then out=${pre##*"$DEMO__RUN"}; fi
+  verdict=$(printf '%s' "$out" | demo__hold "$line" "${COLUMNS:-80}")
+  if [ -n "$verdict" ]; then
+    printf '%s %s\n' "$verdict" "$line" >>"${DEMO_PACE_LOG:-/dev/null}"
+    sleep "$(demo__seconds "${verdict%% *}")"
+  fi
+  return 0
 }
 set -o errtrace
 trap 'demo__failed $?' ERR
@@ -89,3 +149,7 @@ demo_until() {
   demo__erase
   return 1
 }
+
+# The startup above is not the tape's: the first prompt starts a clean history,
+# so neither the failure check nor the pacing reads a line the tape never typed.
+history -c
