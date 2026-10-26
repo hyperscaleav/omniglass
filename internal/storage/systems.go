@@ -470,14 +470,25 @@ func (p *PG) UpdateStandard(ctx context.Context, actorID, id string, patch Stand
 // still referenced by a system. Child standards are not a refusal: the parent FK
 // is ON DELETE SET NULL, so a variant survives its base as a standalone.
 //
-// It takes the role-name lock first (#506): the in-use count and the delete are
-// compare-then-act, and a standard change onto this standard landing between
-// them would be nulled by the foreign key, a standard change that skips the
-// carry, its audit and its health recompute. Standard changes take the same
-// lock, so the delete either sees the system that moved on and refuses, or
-// runs first and the change finds no standard to move onto.
+// The in-use count and the delete are compare-then-act, and a system moved or
+// created onto this standard between them would be nulled by the foreign key: a
+// standard change that skips the carry, its audit and its health recompute
+// (#506). So the delete takes the role-name lock first, as every write that
+// changes which roles a system has does, and then the standard's own row for
+// update before it counts: a standard change waits on the first, and a create's
+// foreign-key check on the second, so the delete either sees the system that
+// landed and refuses, or runs first and the write onto it fails cleanly.
 func (p *PG) DeleteStandard(ctx context.Context, actorID, id string) error {
-	return deleteTypeRowLocked(ctx, p, lockRoleNames, "standard", "standard", actorID, id, typeRef{table: "system", col: "standard_id"})
+	lock := func(ctx context.Context, q txQuerier) error {
+		if err := lockRoleNames(ctx, q); err != nil {
+			return err
+		}
+		if _, err := q.Exec(ctx, `select 1 from standard where `+registryRefCol(id)+` = $1 for update`, id); err != nil {
+			return fmt.Errorf("storage: lock standard %s: %w", id, err)
+		}
+		return nil
+	}
+	return deleteTypeRowLocked(ctx, p, lock, "standard", "standard", actorID, id, typeRef{table: "system", col: "standard_id"})
 }
 
 // --- system CRUD -------------------------------------------------------------
@@ -840,6 +851,14 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 	if patch.StandardID != nil && sameOptional(before.StandardID, standardPatchID) {
 		patch.StandardID, standardPatchID = nil, nil
 	}
+	// standardMoves is the decision every standard-change step keys on below
+	// (the collision check, the carry, the calc mark and the recompute), never
+	// a comparison of the unlocked before-image with the row the update
+	// returns: a save that resent the standard it read, racing a change that
+	// committed in between, sees the change in its returned row but took none
+	// of the locks a change needs, and the change it raced has already carried
+	// and recomputed.
+	standardMoves := false
 	if patch.StandardID != nil {
 		if err := lockRoleNames(ctx, tx); err != nil {
 			return nil, err
@@ -856,6 +875,7 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 		if sameOptional(before.StandardID, standardPatchID) {
 			patch.StandardID, standardPatchID = nil, nil
 		}
+		standardMoves = patch.StandardID != nil
 	}
 	// Moving onto a standard that declares a name the system declares itself
 	// would make the name mean two roles here (#503, ADR-0503). Judged only on
@@ -983,7 +1003,7 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 	// (#506, ADR-0506), before the recompute below reads it. The update above
 	// holds the system's row, which is what keeps a staffing write out until
 	// this commits.
-	if !sameOptional(before.StandardID, after.StandardID) {
+	if standardMoves {
 		if err := p.carryStaffing(ctx, tx, actorID, after.ID, after.Name, after.StandardID); err != nil {
 			return nil, err
 		}
@@ -993,12 +1013,12 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 	// changes nothing).
 	// A retype moves the system in or out of rules' selectors, a new standard
 	// moves its roles and members: either way its calc rules recompute.
-	if !sameOptional(before.SystemTypeID, after.SystemTypeID) || !sameOptional(before.StandardID, after.StandardID) {
+	if !sameOptional(before.SystemTypeID, after.SystemTypeID) || standardMoves {
 		if err := markSystemCalcRules(ctx, tx, after.ID); err != nil {
 			return nil, err
 		}
 	}
-	if !sameOptional(before.StandardID, after.StandardID) {
+	if standardMoves {
 		// after.ID, not after.Name: see CreateSystem's comment on the same
 		// shape. A rename in the same patch (not possible today, but the
 		// principle holds) would make this doubly wrong if it read the name.

@@ -41,9 +41,14 @@ refs: [506, 504, 503]
      with every cascade (the adversarial review measured it deadlocking two rounds in three). A role
      withdrawal and a standard's delete take the role-name lock a standard change takes
      ([ADR-0503](#adr-0503-a-role-name-addresses-one-role-per-system)), so neither interleaves with
-     a carry: a withdrawal waits for it, and a delete either sees the system that moved onto the
-     standard and refuses, or runs first and leaves the change no standard to move onto (the foreign
-     key would otherwise null the system's standard, a standard change that skipped the carry).
+     a carry, and the delete also holds the standard's own row across its in-use count, which a
+     system created onto the standard waits on through its foreign key. A withdrawal waits for the
+     carry; a delete either sees the system that moved or was created onto the standard and
+     refuses, or runs first and the write onto it fails as an unknown standard. The foreign key
+     would otherwise null that system's standard, a standard change that skipped the carry. Every
+     step of a standard change keys on the change's own locked decision, never on comparing an
+     unlocked read with the row it wrote, so a save that resent the standard it read while a change
+     committed carries and recomputes nothing of its own.
   6. **The strands already made are released once.** A data backfill deletes every assignment whose
      role is neither the system's own nor its current standard's. Those rows have been invisible to
      the roles read and to health since their standard moved, so releasing them changes no verdict

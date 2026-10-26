@@ -278,3 +278,82 @@ func TestAnUnchangedStandardTakesNoFleetWideLock(t *testing.T) {
 		t.Fatalf("a label save resending the current standard = %v, want it served without the role-name lock", err)
 	}
 }
+
+// TestDeletingAStandardCannotNullANewSystem: a system created onto a standard
+// takes no role-name lock, so the delete must hold the standard's own row
+// across its in-use count and its delete. A create landing between the two
+// would otherwise be nulled by the foreign key, and a simulated system's
+// assignments with it, unaudited. The delete is held between the two by a raw
+// share lock on the row.
+func TestDeletingAStandardCannotNullANewSystem(t *testing.T) {
+	ctx := context.Background()
+	f := newHealthFixture(t)
+	f.declareRole(t, ctx, "huddle-next", storage.SystemRoleSpec{Name: "table-mic", Label: "Table microphone", Quorum: 1, Impact: "degraded"})
+	z, err := f.conn.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = z.Rollback(ctx) }()
+	if _, err := z.Exec(ctx, `select 1 from standard where name = 'huddle-next' for share`); err != nil {
+		t.Fatal(err)
+	}
+	deleted := make(chan error, 1)
+	go func() { deleted <- f.gw.DeleteStandard(ctx, "", "huddle-next") }()
+	waitForWaiters(t, ctx, z, 1, nil)
+	std, room := "huddle-next", "hq-r1"
+	_, createErr := f.gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "fresh-room", StandardID: &std, LocationName: &room}, f.all, all)
+	_ = z.Rollback(ctx)
+	deleteErr := <-deleted
+	if createErr == nil && deleteErr == nil {
+		var sid *string
+		if err := f.conn.QueryRow(ctx, `select standard_id::text from system where name = 'fresh-room'`).Scan(&sid); err != nil {
+			t.Fatal(err)
+		}
+		t.Fatalf("the standard was deleted and a system created onto it both landed (fresh-room standard now %v)", sid)
+	}
+}
+
+// TestASaveThatRacesAStandardChangeCarriesNothing: a save that resends the
+// standard it read, while a change of that standard commits, is not a
+// standard change: it records no move of its own, and the change it raced has
+// already carried and recomputed.
+func TestASaveThatRacesAStandardChangeCarriesNothing(t *testing.T) {
+	ctx := context.Background()
+	f := newHealthFixture(t)
+	f.declareRole(t, ctx, "huddle-next", storage.SystemRoleSpec{
+		Name: "table-mic", Label: "Table microphone", Quorum: 1, AcceptedTypes: []string{"video-bar"}, Impact: "degraded",
+	})
+	// The change holds the system's row, its standard already moved.
+	change, err := f.conn.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = change.Rollback(ctx) }()
+	if _, err := change.Exec(ctx, `update system set standard_id = (select id from standard where name = 'huddle-next') where name = 'hq-huddle'`); err != nil {
+		t.Fatal(err)
+	}
+	saved := make(chan error, 1)
+	go func() {
+		std, label := "health-huddle", "Huddle"
+		_, err := f.gw.UpdateSystem(ctx, "", "hq-huddle", storage.SystemPatch{Label: &label, StandardID: &std}, f.all, f.all)
+		saved <- err
+	}()
+	waitForWaiters(t, ctx, change, 1, nil)
+	if err := change.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-saved; err != nil {
+		t.Fatalf("the save: %v", err)
+	}
+	// The raw change carried nothing, so bar-1 is still on health-huddle's
+	// table-mic: a save that ran the carry itself would have moved it.
+	var standard string
+	if err := f.conn.QueryRow(ctx, `select st.name from system_role_assignment ra
+		join system_role r on r.id = ra.role_id join standard st on st.id = r.standard_id
+		where ra.component_id = (select id from component where name = 'bar-1')`).Scan(&standard); err != nil {
+		t.Fatalf("read bar-1's assignment: %v", err)
+	}
+	if standard != "health-huddle" {
+		t.Fatalf("bar-1 is on %q's table-mic after the save: a save that moved no standard ran the carry", standard)
+	}
+}
