@@ -83,6 +83,7 @@ func (p *PG) InsertEvents(ctx context.Context, w KeyWriter, evs []EventWrite) er
 // transaction: InsertEvents' own, or an ingest batch's (LandBatch), held to
 // each event type's writer class before anything lands.
 func (p *PG) writeEvents(ctx context.Context, tx pgx.Tx, w KeyWriter, evs []EventWrite) error {
+	evs = cleanEventWrites(evs)
 	// The arc points at the primary key, so each owner reference resolves to a
 	// uuid before it is stored, and before the writer check holds the row to
 	// it. A node still stores its name until the collection tier converts.

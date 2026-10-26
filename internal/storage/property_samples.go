@@ -69,6 +69,7 @@ func (p *PG) InsertPropertySamples(ctx context.Context, w KeyWriter, evs []Prope
 // the committed one: two batches carrying one unchanged value, landed at
 // once, write it once, however the consumer dispatches.
 func (p *PG) writePropertySamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs []PropertySampleWrite, transitionOnly bool) error {
+	evs = cleanPropertyWrites(evs)
 	arcs := make([]string, len(evs))
 	rows := make([]keyedWrite, len(evs))
 	marks := newCalcMarks()
@@ -175,8 +176,9 @@ func (p *PG) writePropertySamples(ctx context.Context, tx pgx.Tx, w KeyWriter, e
 
 // lockPropertySeries takes the transition lock of every property series the
 // batch writes, for the rest of the caller's transaction, in sorted order (so
-// two batches over overlapping series never deadlock on each other) and
-// before the batch takes any mark or rule lock. It is what makes the
+// two batches over overlapping series never deadlock on each other), after
+// the batch's rule rows and marks (LandBatch takes them first) and before any
+// series or health lock its judging takes. It is what makes the
 // guard's compare-then-insert atomic per series (lockAdvisory): a second
 // batch writing the series waits here, and its conditional insert then reads
 // the first one's committed row rather than a snapshot that predates it.
@@ -208,26 +210,21 @@ func propertySeriesLockKey(ownerKind, ownerID, key, instance string) string {
 }
 
 // LatestProperty returns the most recent observed property row for a component
-// series (key + instance), or nil if none. It backs the ingest-side transition
-// guard (skip a write whose value equals the latest stored value) and the
-// reachability panel and session pill. Observed only (ADR-0161): the series a
-// guard compares against is the observed one, and the panel reads each value as
-// the node's own observation, so a declared, intended or calculated row beside
-// it never stands in for the node's.
+// series (key + instance), or nil if none. It backs the reachability panel and
+// session pill, and tests. Observed only (ADR-0161): the panel reads each
+// value as the node's own observation, so a declared, intended or calculated
+// row beside it never stands in for the node's. (The ingest's transition guard
+// is the insert's own condition, writePropertySamples, and reads no row here.)
 //
 // ts orders it, because an observed series carries the OBSERVATION time and a
 // late arrival must not displace a newer reading. id breaks the tie: a poll cycle
 // stamping several rows in the same instant would otherwise resolve to an
-// arbitrary one, and the transition guard would compare against a row that is not
-// the current value.
+// arbitrary one, a row that is not the current value (the guard's own order).
 // componentRef is resolved once (name or uuid, ADR-0062). An unknown
 // component folds into the same nil-no-error "nothing yet" result the old
-// inline subquery gave, because this read backs the ingest-side transition
-// guard (bus.dedupeProperties): any error there leaves a telemetry message
-// unacked for redelivery, so an unrecognized owner must stay silent rather
-// than start rejecting live traffic the old code silently accepted.
-// ErrAmbiguousName, which could not have occurred before scoped uniqueness
-// exists (#627), is not folded in.
+// inline subquery gave: a panel asking about a component with no readings
+// shows none rather than an error. ErrAmbiguousName, which could not have
+// occurred before scoped uniqueness exists (#627), is not folded in.
 func (p *PG) LatestProperty(ctx context.Context, componentRef, key, instance string) (*PropertySample, error) {
 	c, err := scopedByName(ctx, p.pool, componentConfig, componentRef)
 	if errors.Is(err, ErrComponentNotFound) {

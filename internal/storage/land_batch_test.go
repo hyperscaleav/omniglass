@@ -316,3 +316,125 @@ func TestPruneTelemetryReceipts(t *testing.T) {
 		t.Fatalf("a batch inside the horizon: landed=%v err=%v, want it held", landed, err)
 	}
 }
+
+// TestLandBatchCleansNUL: a batch lands all or nothing, so a NUL that
+// Postgres refuses in any text or jsonb value (a device's line, a pushed
+// value) would lose every row that rode with it, after the push route had
+// answered 202. The gateway replaces NUL with U+FFFD on every lane's text and
+// jsonb before the insert, as it does for log lines, so the batch lands.
+func TestLandBatchCleansNUL(t *testing.T) {
+	f := newLandFixture(t)
+	ctx := context.Background()
+	ts := time.Now().UTC().Add(-time.Minute)
+	b := fullBatch("og.v1.api.telemetry nul-1", "on", ts)
+	b.Properties = append(b.Properties, storage.PropertySampleWrite{
+		OwnerKind: "component", OwnerID: "disp-1", Key: "firmware-version", Value: "1.2\x00\x00", Source: "push\x00", TS: ts,
+	})
+	b.Events[0].Message = "hdmi\x002"
+	b.Events[0].Attributes = []byte(`{"input":"hdmi\u00002"}`)
+	b.Metrics[0].Instance = "rx\x001"
+	b.NodeLogs[0].Message = "arm reply\x00"
+	b.LogLines[0].Message = "line\x00"
+	landed, err := f.gw.LandBatch(ctx, b)
+	if err != nil || !landed {
+		t.Fatalf("a batch carrying NUL: landed=%v err=%v, want it landed with NUL replaced", landed, err)
+	}
+	var firmware, message, input, instance, nodeLog string
+	if err := f.conn.QueryRow(ctx, `select
+		(select value #>> '{}' from property where property_type_id = (select id from property_type where name = 'firmware-version')),
+		(select message from event where origin = 'caught'),
+		(select attributes->>'input' from event where origin = 'caught'),
+		(select instance from metric),
+		(select message from node_log)`).Scan(&firmware, &message, &input, &instance, &nodeLog); err != nil {
+		t.Fatalf("read the landed rows: %v", err)
+	}
+	for _, c := range []struct{ got, want string }{
+		{firmware, "1.2��"}, {message, "hdmi�2"}, {input, "hdmi�2"}, {instance, "rx�1"}, {nodeLog, "arm reply�"},
+	} {
+		if c.got != c.want {
+			t.Fatalf("landed %q, want %q", c.got, c.want)
+		}
+	}
+}
+
+// TestLandBatchTakesItsRuleRowsBeforeAnyHealthLock pins the platform's lock
+// order for a whole batch (rule_eval.go, calc_eval.go): the event rule rows
+// reading any of its keys, then its calc marks, then the series and health
+// locks judging takes. A batch that judged its property lane (raising an
+// alarm, taking the owner's health lock) before taking the rule rows its
+// metric lane reads would hold that health lock while waiting on a rule an
+// edit holds FOR UPDATE, and the edit, wanting the health lock next, would
+// deadlock with it.
+func TestLandBatchTakesItsRuleRowsBeforeAnyHealthLock(t *testing.T) {
+	f := newLandFixture(t)
+	ctx := context.Background()
+	all := scope.Set{All: true}
+	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: "power-off",
+		SampleKey: "power-state", Fire: criteria("eq", "off"), Severity: "high",
+		Selector: storage.EventRuleSelector{Components: []string{"disp-1"}}}, all); err != nil {
+		t.Fatalf("create the property rule: %v", err)
+	}
+	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: "room-hot",
+		SampleKey: "room-temperature", Fire: criteria("gt", 90), Severity: "warning"}, all); err != nil {
+		t.Fatalf("create the metric rule: %v", err)
+	}
+	var compID string
+	if err := f.conn.QueryRow(ctx, `select id::text from component where name = 'disp-1'`).Scan(&compID); err != nil {
+		t.Fatalf("resolve the component: %v", err)
+	}
+
+	// The edit's side: the metric rule's row FOR UPDATE, as a rule write takes it.
+	edit, err := f.conn.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin the edit: %v", err)
+	}
+	defer func() { _ = edit.Rollback(ctx) }()
+	if _, err := edit.Exec(ctx, `select id from event_rule where name = 'room-hot' for update`); err != nil {
+		t.Fatalf("lock the metric rule: %v", err)
+	}
+
+	ts := time.Now().UTC().Add(-time.Minute)
+	done := make(chan error, 1)
+	go func() {
+		_, err := f.gw.LandBatch(ctx, storage.IngestBatch{BatchID: "lock-order-1", Writer: storage.PushWriter(),
+			Properties: []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "disp-1", Key: "power-state", Value: "off", Source: "push", TS: ts}},
+			Metrics:    []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: "disp-1", Key: "room-temperature", Value: 21.5, Source: "push", TS: ts}},
+		})
+		done <- err
+	}()
+
+	// Wait for the batch to block on the rule row the edit holds.
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		var waiting int
+		if err := edit.QueryRow(ctx, `select count(*) from pg_stat_activity where wait_event_type = 'Lock' and pid <> pg_backend_pid()`).Scan(&waiting); err != nil {
+			t.Fatalf("read the waits: %v", err)
+		}
+		if waiting > 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the batch never waited on the rule row the edit holds")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	// Blocked there, the batch must hold no health lock the edit would want next.
+	var free bool
+	if err := edit.QueryRow(ctx, `select pg_try_advisory_xact_lock(hashtextextended($1, 0))`, storage.ExportHealthLockKey("component", compID)).Scan(&free); err != nil {
+		t.Fatalf("probe the health lock: %v", err)
+	}
+	if !free {
+		t.Fatal("the batch held disp-1's health lock while it waited on a rule row: an edit wanting that lock next would deadlock with it")
+	}
+	if err := edit.Rollback(ctx); err != nil {
+		t.Fatalf("release the edit: %v", err)
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("land the batch: %v", err)
+		}
+	case <-time.After(15 * time.Second):
+		t.Fatal("the batch never landed once the edit let go")
+	}
+}

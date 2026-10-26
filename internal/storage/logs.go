@@ -174,7 +174,7 @@ func (p *PG) InsertNodeLogs(ctx context.Context, lines []NodeLogWrite) error {
 // writeNodeLogs is the node self-log write path, in the caller's
 // transaction: InsertNodeLogs' own, or an ingest batch's (LandBatch).
 func (p *PG) writeNodeLogs(ctx context.Context, tx pgx.Tx, lines []NodeLogWrite) error {
-	for _, l := range lines {
+	for _, l := range cleanNodeLogWrites(lines) {
 		ts := l.TS
 		if ts.IsZero() {
 			ts = time.Now().UTC()

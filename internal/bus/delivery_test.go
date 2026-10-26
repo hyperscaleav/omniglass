@@ -436,3 +436,23 @@ func TestServerPrunesReceiptsPastTheHorizon(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 	}
 }
+
+// TestAPushedNULLandsTheBatch: a push carrying NUL in a property's value
+// lands, every lane of it, rather than answering 202 and then failing the
+// whole batch at the database until the consumer gives up on it.
+func TestAPushedNULLandsTheBatch(t *testing.T) {
+	f := newDeliveryFixture(t)
+	srv, err := bus.New(bus.Config{Host: "127.0.0.1", Port: -1}, f.gw)
+	if err != nil {
+		t.Fatalf("start bus: %v", err)
+	}
+	defer srv.Shutdown()
+	b := pushBatch("nul")
+	b.Properties = append(b.Properties, &ogv1.PropertySample{Name: "serial-number", ValueJson: `"SN\u00001"`})
+	if err := srv.PublishTelemetry(f.ctx, b); err != nil {
+		t.Fatalf("publish: %v", err)
+	}
+	f.waitLanded(t, "nul")
+	f.waitDrained(t, srv)
+	f.assertOnce(t, "nul", 1)
+}
