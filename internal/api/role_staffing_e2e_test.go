@@ -159,14 +159,26 @@ func TestStaffingWritesNeedTheComponentInScope(t *testing.T) {
 	})
 
 	refusals := []struct {
-		name, method, path string
-		racked, floored    int
+		op, name, method, path string
+		racked, floored        int
 	}{
-		{"add-member", http.MethodPut, "/systems/probe-room/members/victim-dsp", http.StatusNotFound, http.StatusForbidden},
-		{"assign-role", http.MethodPut, "/systems/probe-room/roles/spare/assignments/victim-dsp", http.StatusNotFound, http.StatusForbidden},
-		{"set-primary", http.MethodPost, "/systems/probe-room/members/victim-member:setPrimary", http.StatusForbidden, http.StatusForbidden},
-		{"remove-member", http.MethodDelete, "/systems/probe-room/members/victim-member", http.StatusForbidden, http.StatusForbidden},
-		{"unassign-role", http.MethodDelete, "/systems/probe-room/roles/second/assignments/victim-staffed", http.StatusForbidden, http.StatusForbidden},
+		{"PUT /systems/{name}/members/{component}", "add-member", http.MethodPut, "/systems/probe-room/members/victim-dsp", http.StatusNotFound, http.StatusForbidden},
+		{"PUT /systems/{name}/roles/{role}/assignments/{component}", "assign-role", http.MethodPut, "/systems/probe-room/roles/spare/assignments/victim-dsp", http.StatusNotFound, http.StatusForbidden},
+		{"POST /systems/{name}/members/{component}:setPrimary", "set-primary", http.MethodPost, "/systems/probe-room/members/victim-member:setPrimary", http.StatusForbidden, http.StatusForbidden},
+		{"DELETE /systems/{name}/members/{component}", "remove-member", http.MethodDelete, "/systems/probe-room/members/victim-member", http.StatusForbidden, http.StatusForbidden},
+		{"DELETE /systems/{name}/roles/{role}/assignments/{component}", "unassign-role", http.MethodDelete, "/systems/probe-room/roles/second/assignments/victim-staffed", http.StatusForbidden, http.StatusForbidden},
+	}
+	// Every cross-tier write the spec carries is driven here: a new one fails
+	// this until it gets a row (TestEveryCrossTierPathWriteGuardsBothEnds finds
+	// them).
+	driven := map[string]bool{}
+	for _, r := range refusals {
+		driven[r.op] = true
+	}
+	for op := range crossTierPathWrites(t) {
+		if !driven[op] {
+			t.Errorf("%s names a component from another tier but is not driven by this test; add a refusal row for it", op)
+		}
 	}
 	for _, r := range refusals {
 		st, raw := c.send(blind, r.method, r.path, nil)
@@ -210,4 +222,50 @@ func TestStaffingWritesNeedTheComponentInScope(t *testing.T) {
 	c.do(racked, http.MethodPut, "/systems/probe-room/roles/spare/assignments/own-dsp", nil, http.StatusNoContent)
 	c.do(racked, http.MethodDelete, "/systems/probe-room/roles/spare/assignments/own-dsp", nil, http.StatusNoContent)
 	c.do(racked, http.MethodDelete, "/systems/probe-room/members/own-dsp", nil, http.StatusNoContent)
+}
+
+// crossTierPathWrites finds every write operation whose path names an entity of
+// a scoped tier other than the one the route is gated on (today, a component
+// named under a system), keyed "METHOD /path" with the tier it names. Such a
+// write lands on both ends, so each end must be checked in its own tier's
+// scope (#510).
+func crossTierPathWrites(t *testing.T) map[string]string {
+	t.Helper()
+	tierOf := map[string]string{"component": "component", "system": "system", "location": "location"}
+	out := map[string]string{}
+	for _, op := range operations(t, storage.UnimplementedGateway{}) {
+		if op.method == http.MethodGet || op.perm == "" {
+			continue
+		}
+		gate := strings.SplitN(op.perm, ":", 2)[0]
+		for _, param := range op.pathParams {
+			if tier, ok := tierOf[param]; ok && tier != gate {
+				out[op.method+" "+op.path] = tier
+			}
+		}
+	}
+	return out
+}
+
+// TestEveryCrossTierPathWriteGuardsBothEnds is the structural half of #510's
+// proof: every write that names an entity of another scoped tier in its path
+// publishes that tier's update permission as its conditional permission, so the
+// spec says the route costs a write on both ends, and
+// TestStaffingWritesNeedTheComponentInScope drives each one with a principal
+// scoped to the gated end alone and proves it is refused. A new cross-tier
+// route fails here until it is stamped, and fails there until it is driven.
+func TestEveryCrossTierPathWriteGuardsBothEnds(t *testing.T) {
+	writes := crossTierPathWrites(t)
+	if len(writes) == 0 {
+		t.Fatal("found no cross-tier path writes; the membership and assignment routes should be among them")
+	}
+	conds := map[string]string{}
+	for _, op := range operations(t, storage.UnimplementedGateway{}) {
+		conds[op.method+" "+op.path] = op.condPerm
+	}
+	for op, tier := range writes {
+		if want := tier + ":update"; conds[op] != want {
+			t.Errorf("%s names a %s in its path but publishes conditional permission %q, want %q: the write lands on both ends", op, tier, conds[op], want)
+		}
+	}
 }
