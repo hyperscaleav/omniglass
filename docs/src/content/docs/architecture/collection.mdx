@@ -1060,6 +1060,13 @@ flight, a 1 MiB body whose read stops at the cap, a read deadline), **authentica
 **route** (listeners first), **extract**, **land**. The server hosts it for webhooks; a node hosts it
 for the push transports of #1148, #1149 and #1150.
 
+A webhook sender's **source**, the key its bucket, its refusals and the inbox count it by, is the
+client address the server resolves for every request: the connection's peer, or, only when that
+peer is in `OMNIGLASS_TRUSTED_PROXIES` (default the loopback and private ranges, where the chart's
+ingress sits), the rightmost `X-Forwarded-For` hop outside it. An IPv6 sender is its /64. The
+address a session or token is stamped with is the same answer, so the two never disagree about who
+posted ([ADR-1185](/architecture/decisions/#adr-1185-the-client-address-believes-a-forwarded-header-only-from-a-configured-proxy)).
+
 **The URL and its token.** Creating a webhook endpoint mints its token (128 random bits) as the
 `webhook-token` secret on the endpoint's component: sealed, revealed and copied only under
 `secret:reveal`, audited, deleted with the endpoint, and rotated by
