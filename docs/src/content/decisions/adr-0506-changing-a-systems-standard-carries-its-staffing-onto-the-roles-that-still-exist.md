@@ -2,7 +2,7 @@
 title: "Changing a system's standard carries its staffing onto the roles that still exist"
 date: 2026-10-26
 status: Accepted
-summary: "When a system's standard changes, each assignment to a role of the outgoing standard moves onto the role of the same name the new standard declares, keeping its position where it is free, when the component is still a typed match for that role and the role has room under its capacity; every other one is released. A released component stays a member (giving up a role never ends membership), so it is never wedged: it can be unbound, restaffed and deleted. Clearing the standard releases every inherited assignment; the system's own roles keep theirs. Each move and release is audited in the change's transaction and the system's health recomputes after it. Staffing writes take the system's row for share, so they serialize against a standard change, and a one-time backfill releases the assignments a change already stranded"
+summary: "When a system's standard changes, each assignment to a role of the outgoing standard moves onto the role of the same name the new standard declares, keeping its position where it is free, when the component is still a typed match for that role and the role has room under its capacity; every other one is released. A released component stays a member (giving up a role never ends membership), so it is never wedged: it can be unbound, restaffed and deleted. Clearing the standard releases every inherited assignment; the system's own roles keep theirs. Each move and release is audited in the change's transaction and the system's health recomputes after it. Staffing writes take a per-system advisory lock shared and a standard change takes it exclusive, so they serialize, and a one-time backfill releases the assignments a change already stranded"
 refs: [506, 504, 503]
 ---
 
@@ -30,12 +30,20 @@ refs: [506, 504, 503]
      standards, the role, the component and the position), written in the change's transaction, and
      the system's health recomputes after the staffing has settled, so the recorded verdict already
      counts the carried occupants.
-  5. **Serialized against staffing.** Every staffing write (assign, unassign, swap) takes the
-     system's row `FOR SHARE` before it resolves the role, so it either finishes before the change
-     reads the assignments or starts after the change commits and resolves against the new standard;
-     neither can leave an assignment on the outgoing standard behind. The change takes the stranded
-     assignments for update and the new standard's role for key share, so a role withdrawal racing it
-     waits rather than leaving the carry pointing at a row that is gone.
+  5. **Serialized against staffing.** Every staffing write (assign, unassign, swap) takes a
+     per-system staffing lock (an advisory lock keyed on the system's id) shared before it resolves
+     the role, and a standard change takes it exclusive, after the role-name lock and before it
+     touches the system's row. A staffing write either finishes before the change reads the
+     assignments or starts after the change commits and resolves against the new standard; neither
+     can leave an assignment on the outgoing standard behind. It is an advisory lock and not the
+     system's row `FOR SHARE`: every label cascade takes the label lock and then system rows for
+     update, and a staffing write takes the label lock after this one, so a row lock closed a cycle
+     with every cascade (the adversarial review measured it deadlocking two rounds in three). A role
+     withdrawal and a standard's delete take the role-name lock a standard change takes
+     ([ADR-0503](#adr-0503-a-role-name-addresses-one-role-per-system)), so neither interleaves with
+     a carry: a withdrawal waits for it, and a delete either sees the system that moved onto the
+     standard and refuses, or runs first and leaves the change no standard to move onto (the foreign
+     key would otherwise null the system's standard, a standard change that skipped the carry).
   6. **The strands already made are released once.** A data backfill deletes every assignment whose
      role is neither the system's own nor its current standard's. Those rows have been invisible to
      the roles read and to health since their standard moved, so releasing them changes no verdict

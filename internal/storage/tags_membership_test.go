@@ -80,7 +80,7 @@ func TestContextFreeResolutionFollowsThePrimary(t *testing.T) {
 	if got := f.effective(t, ctx, "roamer", "")["environment"]; got != "prod" {
 		t.Fatalf("context-free = %q, want prod (the primary)", got)
 	}
-	if err := f.gw.SetPrimaryMember(ctx, "", "room-b", "roamer", f.all, f.all, f.all); err != nil {
+	if err := f.gw.SetPrimaryMember(ctx, "", "room-b", "roamer", f.all, f.all, f.all, f.all); err != nil {
 		t.Fatalf("set primary: %v", err)
 	}
 	if got := f.effective(t, ctx, "roamer", "")["environment"]; got != "lab" {

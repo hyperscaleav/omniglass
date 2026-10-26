@@ -165,7 +165,7 @@ func registerMemberRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		}
 		if err := gw.RemoveMember(ctx, actorID(ctx), in.Name, in.Component,
 			a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "update"),
-			a.scopeFor(ctx, "component", "update")); err != nil {
+			a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "component", "update")); err != nil {
 			return nil, mapMemberErr(err)
 		}
 		return nil, nil
@@ -184,7 +184,7 @@ func registerMemberRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		}
 		if err := gw.SetPrimaryMember(ctx, actorID(ctx), in.Name, in.Component,
 			a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "update"),
-			a.scopeFor(ctx, "component", "update")); err != nil {
+			a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "component", "update")); err != nil {
 			return nil, mapMemberErr(err)
 		}
 		return nil, nil

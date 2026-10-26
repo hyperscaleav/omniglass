@@ -113,7 +113,7 @@ func TestCalcSystemRule(t *testing.T) {
 		t.Fatalf("%d calculated rows on components, want none", n)
 	}
 	// A member leaving the role drops out on the next tick.
-	if err := r.gw.UnassignRole(r.ctx, "", "sys-1", "right", "m2", r.all, r.all, r.all); err != nil {
+	if err := r.gw.UnassignRole(r.ctx, "", "sys-1", "right", "m2", r.all, r.all, r.all, r.all); err != nil {
 		t.Fatal(err)
 	}
 	if n := count(t, r.conn, `select count(*) from calc_pending where system_id = '`+r.ids["sys-1"]+`'`); n != 1 {
@@ -307,7 +307,7 @@ func TestCalcSystemNoMembers(t *testing.T) {
 	if got := r.systemOutput("sys-1"); got != "20 kind-mean 1 system" {
 		t.Fatalf("sys-1 output %q, want 20", got)
 	}
-	if err := r.gw.UnassignRole(r.ctx, "", "sys-1", "left", "m1", r.all, r.all, r.all); err != nil {
+	if err := r.gw.UnassignRole(r.ctx, "", "sys-1", "left", "m1", r.all, r.all, r.all, r.all); err != nil {
 		t.Fatal(err)
 	}
 	r.drain()

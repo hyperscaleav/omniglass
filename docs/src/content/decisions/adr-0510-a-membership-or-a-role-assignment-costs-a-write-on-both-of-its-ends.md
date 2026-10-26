@@ -26,10 +26,17 @@ refs: [510, 504]
      already related to the system (remove, re-default, unassign) resolves it among the members or
      occupants and requires `component:update` alone, a 403 either way, because the system's own
      member list and role read already name it and a 404 would deny a row the caller is looking at.
-  3. **A system-wide act that releases bindings without naming a component** (deleting the system,
-     withdrawing a role it declares, changing its standard) stays gated on the system alone. It can
-     only dissolve the system's own bindings, never create or move one onto a component the caller
-     cannot write, so it reaches no component the system did not already hold.
+     A name that is not a member or an occupant here is told apart from one that names nothing only
+     within `component:read`: a component outside it answers the same 404 a missing name does, so
+     no removal route is an oracle for which components exist.
+  3. **A system-wide act that settles bindings without naming a component** (deleting the system,
+     withdrawing a role it declares, changing its standard) stays gated on the system alone. It acts
+     only on components the system already holds: deleting the system can move a member's primary
+     onto another system that already holds it, and a standard change carries an occupant onto the
+     new standard's role of the same name
+     ([ADR-0506](#adr-0506-changing-a-systems-standard-carries-its-staffing-onto-the-roles-that-still-exist)),
+     but neither binds a component the system was not already bound to, so no system-scoped act
+     reaches a component it did not already hold.
 - **Context:** The component end resolved by existence alone (`scopedByName`), because the only
   scope in hand was resolved for `system` and a component's ancestor chain is unrelated to it.
   Reproduced live: a principal holding `system:create,update,delete` scoped to one system, with no

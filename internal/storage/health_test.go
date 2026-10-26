@@ -386,7 +386,7 @@ func TestHealthMovesOnUnassign(t *testing.T) {
 	if _, v := f.recorded(t, ctx, "system", "hq-huddle"); v != "healthy" {
 		t.Fatalf("baseline system = %q, want healthy", v)
 	}
-	if err := f.gw.UnassignRole(ctx, "", "hq-huddle", "table-mic", "bar-1", f.all, f.all, f.all); err != nil {
+	if err := f.gw.UnassignRole(ctx, "", "hq-huddle", "table-mic", "bar-1", f.all, f.all, f.all, f.all); err != nil {
 		t.Fatalf("unassign: %v", err)
 	}
 	if _, v := f.recorded(t, ctx, "system", "hq-huddle"); v != "incomplete" {

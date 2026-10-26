@@ -255,7 +255,7 @@ func TestUnassignLeavesGapThenRefills(t *testing.T) {
 
 	// two held position 2; unassigning it leaves a gap rather than shifting
 	// three down to fill it.
-	if err := gw.UnassignRole(ctx, "", "gap-sys", "table-mic", "two", all, all, all); err != nil {
+	if err := gw.UnassignRole(ctx, "", "gap-sys", "table-mic", "two", all, all, all, all); err != nil {
 		t.Fatalf("unassign two: %v", err)
 	}
 	roles, err = gw.EffectiveRoles(ctx, "gap-sys", all)
@@ -321,7 +321,7 @@ func TestEffectiveRolesReportsRealPositionsAcrossAGap(t *testing.T) {
 		t.Fatalf("positions before unassign = %v, want [1 2 3]", got)
 	}
 
-	if err := gw.UnassignRole(ctx, "", "gap-positions-sys", "table-mic", "two", all, all, all); err != nil {
+	if err := gw.UnassignRole(ctx, "", "gap-positions-sys", "table-mic", "two", all, all, all, all); err != nil {
 		t.Fatalf("unassign two: %v", err)
 	}
 	roles, err = gw.EffectiveRoles(ctx, "gap-positions-sys", all)
@@ -454,7 +454,7 @@ func TestLoweringCapacityThenAssigningIsRefused(t *testing.T) {
 	}
 	// two held position 2; vacate it, leaving a gap below where the new cap
 	// will sit.
-	if err := gw.UnassignRole(ctx, "", "capacity-bypass-sys", "table-mic", "two", all, all, all); err != nil {
+	if err := gw.UnassignRole(ctx, "", "capacity-bypass-sys", "table-mic", "two", all, all, all, all); err != nil {
 		t.Fatalf("unassign two: %v", err)
 	}
 

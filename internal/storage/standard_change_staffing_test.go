@@ -163,7 +163,7 @@ func TestStandardChangeKeepsPositionsWithinTheNewCapacity(t *testing.T) {
 			t.Fatalf("assign %s: %v", c, err)
 		}
 	}
-	if err := f.gw.UnassignRole(ctx, "", "cap-room", "pair", "cap-1", f.all, f.all, f.all); err != nil {
+	if err := f.gw.UnassignRole(ctx, "", "cap-room", "pair", "cap-1", f.all, f.all, f.all, f.all); err != nil {
 		t.Fatalf("vacate position 1: %v", err)
 	}
 
@@ -186,7 +186,7 @@ func TestStandardChangeKeepsPositionsWithinTheNewCapacity(t *testing.T) {
 		t.Fatalf("%d delete audit rows for cap-3's released assignment, want 1", n)
 	}
 	// A released member is free: it leaves the system and the estate.
-	if err := f.gw.RemoveMember(ctx, "", "cap-room", "cap-3", f.all, f.all, f.all); err != nil {
+	if err := f.gw.RemoveMember(ctx, "", "cap-room", "cap-3", f.all, f.all, f.all, f.all); err != nil {
 		t.Fatalf("unbind the released member: %v", err)
 	}
 	if err := f.gw.DeleteComponent(ctx, "", "cap-3", f.all, f.all); err != nil {
@@ -198,14 +198,15 @@ func TestStandardChangeKeepsPositionsWithinTheNewCapacity(t *testing.T) {
 // standard change is open resolves its role after the change commits, never
 // against the standard being left, so it cannot strand an assignment the
 // change has already settled. The change is held open on a raw connection at
-// the point the gateway's own change holds the system's row.
+// the point the gateway's own change holds: the system's staffing lock taken
+// exclusive and its standard repointed, the carry not yet committed.
 func TestStaffingWaitsOutAStandardChange(t *testing.T) {
 	ctx := context.Background()
 	f := newHealthFixture(t)
 	f.declareRole(t, ctx, "huddle-next", storage.SystemRoleSpec{
 		Name: "table-mic", Label: "Table microphone", Quorum: 1, AcceptedTypes: []string{"video-bar"}, Impact: "degraded",
 	})
-	if err := f.gw.UnassignRole(ctx, "", "hq-huddle", "table-mic", "bar-1", f.all, f.all, f.all); err != nil {
+	if err := f.gw.UnassignRole(ctx, "", "hq-huddle", "table-mic", "bar-1", f.all, f.all, f.all, f.all); err != nil {
 		t.Fatalf("vacate table-mic: %v", err)
 	}
 
@@ -214,6 +215,9 @@ func TestStaffingWaitsOutAStandardChange(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = change.Rollback(ctx) }()
+	if _, err := change.Exec(ctx, `select pg_advisory_xact_lock(hashtextextended('system/staffing/' || (select id from system where name = 'hq-huddle'), 0))`); err != nil {
+		t.Fatalf("take the staffing lock: %v", err)
+	}
 	if _, err := change.Exec(ctx, `update system set standard_id = (select id from standard where name = 'huddle-next')
 		where name = 'hq-huddle'`); err != nil {
 		t.Fatalf("open the change: %v", err)
@@ -308,7 +312,7 @@ func TestStrandedAssignmentBackfillReleasesOnlyTheStrands(t *testing.T) {
 	if _, err := f.conn.Exec(ctx, `update system set standard_id = (select id from standard where name = 'huddle-bare') where name = 'hq-huddle'`); err != nil {
 		t.Fatalf("strand: %v", err)
 	}
-	if err := f.gw.RemoveMember(ctx, "", "hq-huddle", "bar-1", f.all, f.all, f.all); !errors.Is(err, storage.ErrMemberOccupied) {
+	if err := f.gw.RemoveMember(ctx, "", "hq-huddle", "bar-1", f.all, f.all, f.all, f.all); !errors.Is(err, storage.ErrMemberOccupied) {
 		t.Fatalf("unbinding the stranded member before the backfill = %v, want ErrMemberOccupied (the wedge)", err)
 	}
 
@@ -326,7 +330,7 @@ func TestStrandedAssignmentBackfillReleasesOnlyTheStrands(t *testing.T) {
 	if _, err := f.conn.Exec(ctx, down); err != nil {
 		t.Fatalf("the backfill's down: %v", err)
 	}
-	if err := f.gw.RemoveMember(ctx, "", "hq-huddle", "bar-1", f.all, f.all, f.all); err != nil {
+	if err := f.gw.RemoveMember(ctx, "", "hq-huddle", "bar-1", f.all, f.all, f.all, f.all); err != nil {
 		t.Fatalf("unbind the released member: %v", err)
 	}
 	if err := f.gw.DeleteComponent(ctx, "", "bar-1", f.all, f.all); err != nil {

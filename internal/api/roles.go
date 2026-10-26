@@ -291,7 +291,7 @@ func registerStandardRoleRoutes(api huma.API, a *authenticator, gw storage.Gatew
 		}
 		r, err := gw.SetSystemRole(ctx, actorID(ctx), "standard", in.ID, spec)
 		if err != nil {
-			return nil, mapRoleErr(err)
+			return nil, mapRoleErr(redactCollisionSystem(ctx, a, gw, err))
 		}
 		return &systemRoleOutput{Body: toSystemRoleBody(r)}, nil
 	})
@@ -412,7 +412,7 @@ func registerSystemRoleRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		}
 		if err := gw.UnassignRole(ctx, actorID(ctx), in.Name, in.Role, in.Component,
 			a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "update"),
-			a.scopeFor(ctx, "component", "update")); err != nil {
+			a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "component", "update")); err != nil {
 			return nil, mapRoleErr(err)
 		}
 		return nil, nil
@@ -535,14 +535,38 @@ func requireComponentInScope(ctx context.Context, a *authenticator, gw storage.G
 // roleCollisionMessage renders a role-name collision (#503, ADR-0503) as the
 // 409 every path that meets one answers, whichever write it was: it names the
 // role and both owners, and the recovery, so the same sentence serves a
-// declaration, a standard change and a staffing write alike.
+// declaration, a standard change and a staffing write alike. A collision whose
+// system the caller may not read (redactCollisionSystem) says so instead of
+// naming it.
 func roleCollisionMessage(err error) (string, bool) {
 	var c *storage.RoleNameCollision
 	if !errors.As(err, &c) {
 		return "", false
 	}
+	if c.System == "" {
+		return fmt.Sprintf("role %q would mean two roles in a conforming system you cannot read: its standard %q declares it, and so does that system itself. A role is addressed by its name within a system, so the name must mean one role there; ask someone who can read the system to withdraw or rename its role, or rename this one",
+			c.Role, c.Standard), true
+	}
 	return fmt.Sprintf("role %q would mean two roles in system %q: its standard %q declares it, and so does the system itself. A role is addressed by its name within a system, so the name must mean one role there; withdraw or rename one of the two first",
 		c.Role, c.System, c.Standard), true
+}
+
+// redactCollisionSystem drops the system's name from a role-name collision the
+// caller may not read. A standard-arc declaration finds the colliding system
+// across the fleet, and standard:update can be held beside a grant that reads
+// no system at all, so the refusal must not tell that caller which system
+// exists or what it declares (#503 review). Any other error passes through.
+func redactCollisionSystem(ctx context.Context, a *authenticator, gw storage.Gateway, err error) error {
+	var c *storage.RoleNameCollision
+	if !errors.As(err, &c) || c.SystemID == "" {
+		return err
+	}
+	if _, gerr := gw.GetSystem(ctx, c.SystemID, a.scopeFor(ctx, "system", "read")); gerr != nil {
+		redacted := *c
+		redacted.System = ""
+		return &redacted
+	}
+	return err
 }
 
 // mapRoleErr translates the role sentinels into HTTP status. The one that

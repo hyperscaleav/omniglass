@@ -69,3 +69,33 @@ func TestARoleNameAddressesOneRolePerSystem(t *testing.T) {
 		t.Fatalf("lone-sys standard after the refused move = %q, want none", sys.Standard)
 	}
 }
+
+// TestARoleCollisionNamesOnlyAReadableSystem: the 409 for a standard role a
+// conforming system already declares names that system to a caller who may
+// read it, and only to one. standard:update can be held beside a narrow grant
+// that reads no system at all, and the refusal must not tell that caller which
+// system exists or what roles it declares.
+func TestARoleCollisionNamesOnlyAReadableSystem(t *testing.T) {
+	f := newStaffingFixture(t)
+	c, owner := f.c, f.owner
+	c.do(owner, http.MethodPost, "/standards", map[string]any{"name": "redact-std", "label": "Redact"}, http.StatusCreated)
+	c.do(owner, http.MethodPost, "/systems", map[string]any{"name": "secret-boardroom", "standard_id": "redact-std"}, http.StatusCreated)
+	c.do(owner, http.MethodPatch, "/systems/secret-boardroom/roles/lectern-mic", map[string]any{"label": "Lectern mic"}, http.StatusOK)
+	c.do(owner, http.MethodPost, "/locations", map[string]any{"name": "redact-site", "location_type": "campus"}, http.StatusCreated)
+	narrow := principalWithGrants(t, f.ctx, f.dsn, "catalog-admin", []grant{
+		{role: "admin", scopeKind: "location", scopeID: entityID(t, c, owner, "/locations", "redact-site")},
+	})
+	c.do(narrow, http.MethodGet, "/systems/secret-boardroom", nil, http.StatusNotFound)
+
+	st, raw := c.send(narrow, http.MethodPatch, "/standards/redact-std/roles/lectern-mic", map[string]any{"label": "Lectern mic"})
+	if st != http.StatusConflict {
+		t.Fatalf("a colliding standard role by a caller who reads no system = %d %s, want 409", st, raw)
+	}
+	if strings.Contains(string(raw), "secret-boardroom") {
+		t.Fatalf("the refusal names a system the caller cannot read: %s", raw)
+	}
+	st, raw = c.send(owner, http.MethodPatch, "/standards/redact-std/roles/lectern-mic", map[string]any{"label": "Lectern mic"})
+	if st != http.StatusConflict || !strings.Contains(string(raw), "secret-boardroom") {
+		t.Fatalf("the same refusal to a caller who reads the system = %d %s, want 409 naming it", st, raw)
+	}
+}

@@ -601,7 +601,9 @@ func TestHealthInvariantAcrossEveryTrigger(t *testing.T) {
 			return err
 		}},
 		{"restore it", func() error { return f.gw.ClearAlarm(ctx, "", "sweep-b", spareAlarm.ID) }},
-		{"unstaff the role", func() error { return f.gw.UnassignRole(ctx, "", "sweep-sys", "pair", "sweep-b", f.all, f.all, f.all) }},
+		{"unstaff the role", func() error {
+			return f.gw.UnassignRole(ctx, "", "sweep-sys", "pair", "sweep-b", f.all, f.all, f.all, f.all)
+		}},
 		{"staff it again", func() error {
 			return f.gw.AssignRole(ctx, "", "sweep-sys", "pair", "sweep-b", f.all, f.all, f.all, f.all)
 		}},

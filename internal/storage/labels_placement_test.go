@@ -347,7 +347,7 @@ func TestMembershipChangesRestampTheComponent(t *testing.T) {
 	}
 
 	// re-defaulting moves it
-	if err := gw.SetPrimaryMember(ctx, "", huddle.Name, c.ID, all, all, all); err != nil {
+	if err := gw.SetPrimaryMember(ctx, "", huddle.Name, c.ID, all, all, all, all); err != nil {
 		t.Fatalf("set primary: %v", err)
 	}
 	if got := labelOf(t, gw, ctx, c.ID); got != "[Huddle Room]" {
@@ -355,7 +355,7 @@ func TestMembershipChangesRestampTheComponent(t *testing.T) {
 	}
 
 	// unbinding the default promotes the sole survivor, which moves it again
-	if err := gw.RemoveMember(ctx, "", huddle.Name, c.ID, all, all, all); err != nil {
+	if err := gw.RemoveMember(ctx, "", huddle.Name, c.ID, all, all, all, all); err != nil {
 		t.Fatalf("remove member: %v", err)
 	}
 	if got := labelOf(t, gw, ctx, c.ID); got != "[Boardroom]" {
@@ -363,7 +363,7 @@ func TestMembershipChangesRestampTheComponent(t *testing.T) {
 	}
 
 	// and unbinding the last one leaves no system at all
-	if err := gw.RemoveMember(ctx, "", board.Name, c.ID, all, all, all); err != nil {
+	if err := gw.RemoveMember(ctx, "", board.Name, c.ID, all, all, all, all); err != nil {
 		t.Fatalf("remove last member: %v", err)
 	}
 	if got := labelOf(t, gw, ctx, c.ID); got != "[]" {
@@ -875,10 +875,10 @@ func TestNoActLeavesALabelStaleAnywhere(t *testing.T) {
 			if err := gw.AddMember(ctx, "", board.Name, comps[2], all, all, all, all); err != nil {
 				return err
 			}
-			return gw.SetPrimaryMember(ctx, "", board.Name, comps[2], all, all, all)
+			return gw.SetPrimaryMember(ctx, "", board.Name, comps[2], all, all, all, all)
 		}},
 		{"unbind the default", func() error {
-			return gw.RemoveMember(ctx, "", board.Name, comps[2], all, all, all)
+			return gw.RemoveMember(ctx, "", board.Name, comps[2], all, all, all, all)
 		}},
 		{"reclassify a system", func() error {
 			_, err := gw.UpdateSystem(ctx, "", huddle.ID, storage.SystemPatch{SystemTypeID: strptr("training")}, all, all)

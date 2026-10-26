@@ -469,8 +469,15 @@ func (p *PG) UpdateStandard(ctx context.Context, actorID, id string, patch Stand
 // DeleteStandard removes a custom standard, refusing an official row and a row
 // still referenced by a system. Child standards are not a refusal: the parent FK
 // is ON DELETE SET NULL, so a variant survives its base as a standalone.
+//
+// It takes the role-name lock first (#506): the in-use count and the delete are
+// compare-then-act, and a standard change onto this standard landing between
+// them would be nulled by the foreign key, a standard change that skips the
+// carry, its audit and its health recompute. Standard changes take the same
+// lock, so the delete either sees the system that moved on and refuses, or
+// runs first and the change finds no standard to move onto.
 func (p *PG) DeleteStandard(ctx context.Context, actorID, id string) error {
-	return deleteTypeRow(ctx, p, "standard", "standard", actorID, id, typeRef{table: "system", col: "standard_id"})
+	return deleteTypeRowLocked(ctx, p, lockRoleNames, "standard", "standard", actorID, id, typeRef{table: "system", col: "standard_id"})
 }
 
 // --- system CRUD -------------------------------------------------------------
@@ -811,32 +818,50 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 		return nil, fmt.Errorf("storage: begin update system: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	// A standard change swaps the system's inherited roles, so it is one of
-	// the writes a role-name collision can come from (#503): it takes the
-	// same lock the declarations take, first, before any other.
-	if patch.StandardID != nil {
-		if err := lockRoleNames(ctx, tx); err != nil {
-			return nil, err
-		}
-	}
 
 	before, err := p.resolveSystemForAction(ctx, tx, name, read, action)
 	if err != nil {
 		return nil, err
 	}
-	var standardPatchID *string
-	if patch.StandardID != nil && *patch.StandardID != "" {
-		var sid string
-		if err := tx.QueryRow(ctx, `select id from standard where `+registryRefCol(*patch.StandardID)+` = $1`, *patch.StandardID).Scan(&sid); err != nil {
-			return nil, ErrUnknownStandard
+	standardPatchID, err := resolveStandardPatch(ctx, tx, patch.StandardID)
+	if err != nil {
+		return nil, err
+	}
+	// The console resends the standard on every save, so a standard the patch
+	// names but does not move is treated as omitted: the edit takes no lock
+	// for it, carries nothing, and never reverts a change a concurrent write
+	// made in the meantime. Only an actual move takes the locks a standard
+	// change needs, first (the reads above take none): the role-name lock
+	// (#503: it swaps the system's inherited roles, so it is a write a
+	// collision can come from) and the system's staffing lock exclusive
+	// (#506: no staffing write is mid-flight while its staffing is carried).
+	// Under them nothing else can move the standard, so the before-image and
+	// the target are read again and judged on what is really there.
+	if patch.StandardID != nil && sameOptional(before.StandardID, standardPatchID) {
+		patch.StandardID, standardPatchID = nil, nil
+	}
+	if patch.StandardID != nil {
+		if err := lockRoleNames(ctx, tx); err != nil {
+			return nil, err
 		}
-		standardPatchID = &sid
+		if err := lockSystemStandardChange(ctx, tx, before.ID); err != nil {
+			return nil, err
+		}
+		if before, err = p.resolveSystemForAction(ctx, tx, before.ID, read, action); err != nil {
+			return nil, err
+		}
+		if standardPatchID, err = resolveStandardPatch(ctx, tx, patch.StandardID); err != nil {
+			return nil, err
+		}
+		if sameOptional(before.StandardID, standardPatchID) {
+			patch.StandardID, standardPatchID = nil, nil
+		}
 	}
 	// Moving onto a standard that declares a name the system declares itself
 	// would make the name mean two roles here (#503, ADR-0503). Judged only on
 	// an actual move, so an unrelated edit that resends the current standard
 	// is never refused over a collision written before the rule.
-	if standardPatchID != nil && !sameOptional(before.StandardID, standardPatchID) {
+	if standardPatchID != nil {
 		if err := standardMoveCollision(ctx, tx, before.ID, before.Name, *standardPatchID); err != nil {
 			return nil, err
 		}
@@ -985,6 +1010,23 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 		return nil, fmt.Errorf("storage: commit update system: %w", err)
 	}
 	return after, nil
+}
+
+// resolveStandardPatch resolves a patch's standard reference to the standard's
+// id: nil for an omitted field and for an explicit clear (the empty string, a
+// one-off system), ErrUnknownStandard for a reference nothing matches.
+func resolveStandardPatch(ctx context.Context, q querier, ref *string) (*string, error) {
+	if ref == nil || *ref == "" {
+		return nil, nil
+	}
+	var id string
+	if err := q.QueryRow(ctx, `select id from standard where `+registryRefCol(*ref)+` = $1`, *ref).Scan(&id); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrUnknownStandard
+		}
+		return nil, fmt.Errorf("storage: resolve standard %s: %w", *ref, err)
+	}
+	return &id, nil
 }
 
 // RenameSystem moves a system's name, scoped exactly as UpdateSystem is (the same

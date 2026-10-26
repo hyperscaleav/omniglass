@@ -154,10 +154,10 @@ func TestAuditResourceIDOnAMembershipJoinRow(t *testing.T) {
 	if err := f.gw.AddMember(ctx, "", "room-a", "dsp", f.all, f.all, f.all, f.all); err != nil {
 		t.Fatalf("add member: %v", err)
 	}
-	if err := f.gw.SetPrimaryMember(ctx, "", "room-a", "dsp", f.all, f.all, f.all); err != nil {
+	if err := f.gw.SetPrimaryMember(ctx, "", "room-a", "dsp", f.all, f.all, f.all, f.all); err != nil {
 		t.Fatalf("set primary member: %v", err)
 	}
-	if err := f.gw.RemoveMember(ctx, "", "room-a", "dsp", f.all, f.all, f.all); err != nil {
+	if err := f.gw.RemoveMember(ctx, "", "room-a", "dsp", f.all, f.all, f.all, f.all); err != nil {
 		t.Fatalf("remove member: %v", err)
 	}
 	sys, err := f.gw.GetSystem(ctx, "room-a", f.all)

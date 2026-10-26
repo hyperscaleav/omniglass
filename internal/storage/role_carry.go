@@ -55,8 +55,8 @@ type carryTarget struct {
 // restaff onto the wrong role. standardID is the new standard, nil for a
 // one-off system, which releases every inherited assignment.
 //
-// The system's row is already held for update by the caller, which is what
-// keeps a staffing write out (lockSystemForStaffing); the stranded rows are
+// The caller already holds the system's staffing lock exclusive, which is what
+// keeps a staffing write out (lockSystemStandardChange); the stranded rows are
 // taken for update and the target role for key share, so a concurrent
 // withdrawal of either waits rather than leaving the carry pointing at a row
 // that is gone.

@@ -218,7 +218,7 @@ func TestSetPrimaryMemberMovesTheDefault(t *testing.T) {
 			t.Fatalf("add: %v", err)
 		}
 	}
-	if err := f.gw.SetPrimaryMember(ctx, "", "room-b", "dsp", f.all, f.all, f.all); err != nil {
+	if err := f.gw.SetPrimaryMember(ctx, "", "room-b", "dsp", f.all, f.all, f.all, f.all); err != nil {
 		t.Fatalf("set primary: %v", err)
 	}
 	got, _ := f.gw.ComponentMemberships(ctx, "dsp", f.all)
@@ -270,16 +270,16 @@ func TestRemoveMemberRefusedWhileStaffingARole(t *testing.T) {
 	if err := f.gw.AssignRole(ctx, "", "room-a", "mic", "mic-a", f.all, f.all, f.all, f.all); err != nil {
 		t.Fatalf("assign: %v", err)
 	}
-	err := f.gw.RemoveMember(ctx, "", "room-a", "mic-a", f.all, f.all, f.all)
+	err := f.gw.RemoveMember(ctx, "", "room-a", "mic-a", f.all, f.all, f.all, f.all)
 	if !errors.Is(err, storage.ErrMemberOccupied) {
 		t.Fatalf("remove a member still staffing a role = %v, want ErrMemberOccupied", err)
 	}
 
 	// Given up the role, it leaves cleanly.
-	if err := f.gw.UnassignRole(ctx, "", "room-a", "mic", "mic-a", f.all, f.all, f.all); err != nil {
+	if err := f.gw.UnassignRole(ctx, "", "room-a", "mic", "mic-a", f.all, f.all, f.all, f.all); err != nil {
 		t.Fatalf("unassign: %v", err)
 	}
-	if err := f.gw.RemoveMember(ctx, "", "room-a", "mic-a", f.all, f.all, f.all); err != nil {
+	if err := f.gw.RemoveMember(ctx, "", "room-a", "mic-a", f.all, f.all, f.all, f.all); err != nil {
 		t.Fatalf("remove after unassign: %v", err)
 	}
 }
@@ -363,13 +363,13 @@ func TestMembershipIsScoped(t *testing.T) {
 	if err := f.gw.AddMember(ctx, "", "room-a", "mic-a", all, all, all, all); err != nil {
 		t.Fatalf("add with both ends in scope: %v", err)
 	}
-	if err := f.gw.SetPrimaryMember(ctx, "", "room-a", "mic-a", all, all, none); !errors.Is(err, storage.ErrComponentForbidden) {
+	if err := f.gw.SetPrimaryMember(ctx, "", "room-a", "mic-a", all, all, all, none); !errors.Is(err, storage.ErrComponentForbidden) {
 		t.Fatalf("re-default a member out of the component action scope = %v, want ErrComponentForbidden", err)
 	}
-	if err := f.gw.RemoveMember(ctx, "", "room-a", "mic-a", all, all, none); !errors.Is(err, storage.ErrComponentForbidden) {
+	if err := f.gw.RemoveMember(ctx, "", "room-a", "mic-a", all, all, all, none); !errors.Is(err, storage.ErrComponentForbidden) {
 		t.Fatalf("unbind a member out of the component action scope = %v, want ErrComponentForbidden", err)
 	}
-	if err := f.gw.RemoveMember(ctx, "", "room-a", "mic-a", all, all, all); err != nil {
+	if err := f.gw.RemoveMember(ctx, "", "room-a", "mic-a", all, all, all, all); err != nil {
 		t.Fatalf("unbind with both ends in scope: %v", err)
 	}
 }

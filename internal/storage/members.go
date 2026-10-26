@@ -138,18 +138,18 @@ func addMemberTx(ctx context.Context, q txQuerier, systemID, componentID string)
 // still fills a role there: removing it would leave the system staffed by a
 // non-member, which is the contradiction this table exists to make impossible.
 //
-// componentAction is the caller's component:update set (#510): unbinding moves
-// the component's primary and restamps its label, so it is a write on the
-// component as well as on the system. See resolveMembershipEndsForRemoval for
-// why there is no component read set here.
-func (p *PG) RemoveMember(ctx context.Context, actorID, systemName, componentName string, read, action, componentAction scope.Set) error {
+// componentRead and componentAction are the caller's component:read and
+// component:update sets (#510): unbinding moves the component's primary and
+// restamps its label, so it is a write on the component as well as on the
+// system. See resolveMembershipEndsForRemoval for how each is used.
+func (p *PG) RemoveMember(ctx context.Context, actorID, systemName, componentName string, read, action, componentRead, componentAction scope.Set) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("storage: begin remove member: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	systemID, componentID, err := p.resolveMembershipEndsForRemoval(ctx, tx, systemName, componentName, read, action, componentAction)
+	systemID, componentID, err := p.resolveMembershipEndsForRemoval(ctx, tx, systemName, componentName, read, action, componentRead, componentAction)
 	if err != nil {
 		return err
 	}
@@ -303,14 +303,14 @@ func memberComponentIDs(ctx context.Context, q querier, systemID string) ([]stri
 // RemoveMember makes, and must be inside componentAction, the caller's
 // component:update set (#510): the default decides which system's band every
 // cascade on the component reads, which is a write on the component.
-func (p *PG) SetPrimaryMember(ctx context.Context, actorID, systemName, componentName string, read, action, componentAction scope.Set) error {
+func (p *PG) SetPrimaryMember(ctx context.Context, actorID, systemName, componentName string, read, action, componentRead, componentAction scope.Set) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("storage: begin set primary member: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	systemID, componentID, err := p.resolveMembershipEndsForRemoval(ctx, tx, systemName, componentName, read, action, componentAction)
+	systemID, componentID, err := p.resolveMembershipEndsForRemoval(ctx, tx, systemName, componentName, read, action, componentRead, componentAction)
 	if err != nil {
 		return err
 	}
@@ -434,11 +434,16 @@ func (p *PG) resolveMembershipEnds(ctx context.Context, q txQuerier, systemName,
 // here is ErrMemberNotFound.
 //
 // The member must then be inside componentAction, the caller's component:update
-// set (#510), or the write is ErrComponentForbidden. There is no component read
-// set and no non-disclosing not-found on this path, deliberately: the component
-// is a member of a system the caller already reads, and the system's member list
-// names it, so answering "not found" would deny a row the caller is looking at.
-func (p *PG) resolveMembershipEndsForRemoval(ctx context.Context, q txQuerier, systemName, componentName string, read, action, componentAction scope.Set) (systemID, componentID string, err error) {
+// set (#510), or the write is ErrComponentForbidden. A member gets no
+// non-disclosing not-found, deliberately: it is a member of a system the caller
+// already reads, and the system's member list names it, so answering "not
+// found" would deny a row the caller is looking at.
+//
+// A name that is not a member here is told apart from one that names nothing
+// only within componentRead, the caller's component:read set: a match outside
+// it answers the same ErrComponentNotFound a missing name does, so the route is
+// never an oracle for which components exist beyond what the caller may read.
+func (p *PG) resolveMembershipEndsForRemoval(ctx context.Context, q txQuerier, systemName, componentName string, read, action, componentRead, componentAction scope.Set) (systemID, componentID string, err error) {
 	sys, err := resolveScoped(ctx, q, systemConfig, systemName, read, action)
 	if err != nil {
 		return "", "", err
@@ -457,7 +462,11 @@ func (p *PG) resolveMembershipEndsForRemoval(ctx context.Context, q txQuerier, s
 	c, err := resolveMatches(componentConfig, componentName, members)
 	if err != nil {
 		if errors.Is(err, ErrComponentNotFound) {
-			if len(all) > 0 {
+			readable, err := anyComponentInScope(ctx, q, all, componentRead)
+			if err != nil {
+				return "", "", err
+			}
+			if readable {
 				return "", "", ErrMemberNotFound
 			}
 			return "", "", ErrComponentNotFound
@@ -468,6 +477,22 @@ func (p *PG) resolveMembershipEndsForRemoval(ctx context.Context, q txQuerier, s
 		return "", "", err
 	}
 	return sys.ID, c.ID, nil
+}
+
+// anyComponentInScope reports whether any of the matched components sits inside
+// set: the test a removal makes before it says a name exists but is not bound
+// here, so it says so only of a component the caller may read (#510).
+func anyComponentInScope(ctx context.Context, q querier, matches []*Component, set scope.Set) (bool, error) {
+	for _, m := range matches {
+		ok, err := inScopeTree(ctx, q, componentConfig.table, m.ID, set)
+		if err != nil {
+			return false, err
+		}
+		if ok {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // requireComponentAction refuses a write through an already-related component

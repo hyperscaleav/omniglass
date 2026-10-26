@@ -510,7 +510,8 @@ Shipped content is two kinds, never conflated:
   installed **only if absent** (`ON CONFLICT DO NOTHING`) so re-seeding never reverts an edit; a
   shipped standard's **roles** ride the same lane. A shipped role lands **whole** (the role and its
   accepted types and pinned products in one transaction), and a later boot fills a set that a role
-  nobody has revised is entirely missing, which is what an interrupted install could leave
+  the seed wrote, and nobody has since declared or revised, is entirely missing, which is what an
+  interrupted install could leave
   ([ADR-0508](/architecture/decisions/#adr-0508-the-boot-seed-installs-a-shipped-role-whole-and-repairs-a-set-an-unrevised-role-is-missing)).
   A shipped role that a conforming system already declares itself is not installed, since the name
   would then mean two roles there

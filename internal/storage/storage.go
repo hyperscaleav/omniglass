@@ -824,12 +824,13 @@ type Gateway interface {
 	// so a system the caller can see but not write is refused as forbidden rather
 	// than reported absent. The component END is scoped too (#510), in sets
 	// resolved for "component": a bind resolves it in componentRead and requires
-	// componentAction (component:update), and an unbind or a re-default, whose
+	// componentAction (component:update); an unbind or a re-default, whose
 	// component is already a member the system's own read names, requires
-	// componentAction alone.
+	// componentAction alone, and tells a non-member apart from a missing name
+	// only within componentRead.
 	AddMember(ctx context.Context, actorID, systemName, componentName string, read, action, componentRead, componentAction scope.Set) error
-	RemoveMember(ctx context.Context, actorID, systemName, componentName string, read, action, componentAction scope.Set) error
-	SetPrimaryMember(ctx context.Context, actorID, systemName, componentName string, read, action, componentAction scope.Set) error
+	RemoveMember(ctx context.Context, actorID, systemName, componentName string, read, action, componentRead, componentAction scope.Set) error
+	SetPrimaryMember(ctx context.Context, actorID, systemName, componentName string, read, action, componentRead, componentAction scope.Set) error
 
 	// The role tier: a system's roles resolve from its standard (inherited) and its
 	// own ad-hoc declarations; assignment refuses a component whose product's
@@ -838,7 +839,7 @@ type Gateway interface {
 	// Staffing takes the read/action pair for the same reason membership does
 	// (#736), and the component end the same way membership does (#510).
 	AssignRole(ctx context.Context, actorID, systemName, roleName, componentName string, read, action, componentRead, componentAction scope.Set) error
-	UnassignRole(ctx context.Context, actorID, systemName, roleName, componentName string, read, action, componentAction scope.Set) error
+	UnassignRole(ctx context.Context, actorID, systemName, roleName, componentName string, read, action, componentRead, componentAction scope.Set) error
 	// SwapPositions exchanges two occupants' positions within a role: an
 	// ordering change only, so it takes no read counterpart of its own
 	// (EffectiveRoles already reports the ordered result).

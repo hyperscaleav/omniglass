@@ -229,6 +229,10 @@ type RoleNameCollision struct {
 	Role     string
 	Standard string
 	System   string
+	// SystemID is the system's id, so a caller can check it may read the
+	// system before a refusal names it: a standard-arc declaration finds the
+	// colliding system fleet-wide, beyond any scope the declarer holds.
+	SystemID string
 }
 
 func (e *RoleNameCollision) Error() string {
@@ -236,14 +240,17 @@ func (e *RoleNameCollision) Error() string {
 		e.Role, e.System, e.Standard)
 }
 
-// roleNameLockKey serializes every write that can give a system two roles of
-// one name (#503): a declaration on either arc, a standard change, and the
-// role seed. The check reads one arc and the write lands on the other (or on
-// the system's standard pointer), so it is compare-then-act across tables and
-// needs one lock all of them take. It is taken FIRST in each of those
-// transactions, before any other lock, so it adds no edge to any lock order.
-// Role declarations and standard changes are rare acts; serializing them
-// fleet-wide costs nothing anyone waits on.
+// roleNameLockKey serializes every write that changes which roles a system
+// has: a declaration or a withdrawal on either arc, a standard change, the role
+// seed, and a standard's delete (#503, #506). A collision check reads one arc
+// and the write lands on the other (or on the system's standard pointer), so it
+// is compare-then-act across tables and needs one lock all of them take; and a
+// standard change carrying staffing must not interleave with a withdrawal or a
+// delete of the roles it carries between. It is taken FIRST in each of those
+// transactions, before any other lock (plain reads before it take none), so it
+// adds no edge to any lock order. These are rare acts, and an edit that leaves
+// a system's standard where it is takes no part (UpdateSystem), so serializing
+// them install-wide costs nothing anyone waits on.
 const roleNameLockKey = "system_role/name"
 
 func lockRoleNames(ctx context.Context, q txQuerier) error {
@@ -270,26 +277,26 @@ func systemArcCollision(ctx context.Context, q querier, systemArg, name string) 
 	if err != nil {
 		return fmt.Errorf("storage: role name check %s/%s: %w", systemArg, name, err)
 	}
-	return &RoleNameCollision{Role: name, Standard: standardName, System: systemName}
+	return &RoleNameCollision{Role: name, Standard: standardName, System: systemName, SystemID: systemArg}
 }
 
 // standardArcCollision is the refusal for declaring name on a standard one of
 // whose conforming systems already declares it itself, naming the first such
 // system by name.
 func standardArcCollision(ctx context.Context, q querier, standardID, standardName, name string) error {
-	var systemName string
+	var systemID, systemName string
 	err := q.QueryRow(ctx, `
-		select s.name from system s
+		select s.id, s.name from system s
 		join system_role r on r.owner_kind = 'system' and r.system_id = s.id and r.name = $2
 		where s.standard_id = $1::uuid
-		order by s.name limit 1`, standardID, name).Scan(&systemName)
+		order by s.name, s.id limit 1`, standardID, name).Scan(&systemID, &systemName)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}
 	if err != nil {
 		return fmt.Errorf("storage: role name check %s/%s: %w", standardName, name, err)
 	}
-	return &RoleNameCollision{Role: name, Standard: standardName, System: systemName}
+	return &RoleNameCollision{Role: name, Standard: standardName, System: systemName, SystemID: systemID}
 }
 
 // standardMoveCollision is the refusal for moving a system onto a standard
@@ -309,7 +316,7 @@ func standardMoveCollision(ctx context.Context, q querier, systemID, systemName,
 	if err != nil {
 		return fmt.Errorf("storage: role name check on move %s: %w", systemID, err)
 	}
-	return &RoleNameCollision{Role: role, Standard: standardName, System: systemName}
+	return &RoleNameCollision{Role: role, Standard: standardName, System: systemName, SystemID: systemID}
 }
 
 // roleImpacts is the impact domain, mirroring the table's CHECK. Validating here
@@ -682,9 +689,11 @@ func (p *PG) assignRoleTx(ctx context.Context, tx pgx.Tx, actorID, systemName, r
 // UnassignRole removes a component from a role, returning ErrAssignmentMissing
 // when it was not filling it. The occupant must be inside componentAction, the
 // caller's component:update set (#510), or the write is ErrComponentForbidden;
-// like RemoveMember there is no component read half, because the role's own
-// read names its occupants to anyone who reads the system.
-func (p *PG) UnassignRole(ctx context.Context, actorID, systemName, roleName, componentName string, read, action, componentAction scope.Set) error {
+// like RemoveMember an occupant gets no non-disclosing not-found, because the
+// role's own read names its occupants to anyone who reads the system, and a
+// name that occupies nothing here is told apart from a missing one only within
+// componentRead (see resolveMembershipEndsForRemoval).
+func (p *PG) UnassignRole(ctx context.Context, actorID, systemName, roleName, componentName string, read, action, componentRead, componentAction scope.Set) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("storage: begin unassign role: %w", err)
@@ -734,7 +743,11 @@ func (p *PG) UnassignRole(ctx context.Context, actorID, systemName, roleName, co
 	component, err := resolveMatches(componentConfig, componentName, occupying)
 	if err != nil {
 		if errors.Is(err, ErrComponentNotFound) {
-			if len(all) > 0 {
+			readable, err := anyComponentInScope(ctx, tx, all, componentRead)
+			if err != nil {
+				return err
+			}
+			if readable {
 				return ErrAssignmentMissing
 			}
 			return ErrComponentNotFound
@@ -789,21 +802,42 @@ func rolePositionLockKey(systemID, roleID string) string {
 	return "system_role_assignment/" + systemID + "/" + roleID
 }
 
-// lockSystemForStaffing takes the system's row FOR SHARE for the rest of a
-// staffing write (#506, ADR-0506), before the write resolves its role. A
-// standard change holds the same row for update while it carries the system's
+// systemStaffingLockKey is the advisory-lock key that serializes a system's
+// staffing writes against a change of its standard (#506, ADR-0506): staffing
+// writes take it shared (lockSystemForStaffing), a standard change exclusive
+// (lockSystemStandardChange). An id, never a name.
+func systemStaffingLockKey(systemID string) string {
+	return "system/staffing/" + systemID
+}
+
+// lockSystemForStaffing takes the system's staffing lock SHARED for the rest of
+// a staffing write (#506, ADR-0506), before the write resolves its role. A
+// standard change holds the same lock exclusive while it carries the system's
 // staffing onto the new standard's roles, so a staffing write either finishes
 // before the change reads the assignments or resolves its role after the change
-// commits, against the new standard. Without it, an assign resolved against
-// the standard being left could land after the change had settled the rest,
+// commits, against the new standard. Without it, an assign resolved against the
+// standard being left could land after the change had settled the rest,
 // stranding exactly the row the change exists to carry. Staffing writes share
-// the lock, so they never wait on each other here; and no staffing write
-// updates the system's row, so a shared lock is never upgraded under another.
+// the lock, so they never wait on each other here.
+//
+// It is an advisory lock and not the system's row FOR SHARE on purpose: every
+// label cascade takes the label lock and then system rows FOR UPDATE, and a
+// staffing write takes the label lock after this one (it re-stamps the
+// component's label), so a row lock here would close a cycle with every
+// cascade. The label path never takes this key, so no cycle forms.
 func lockSystemForStaffing(ctx context.Context, q txQuerier, systemID string) error {
-	if _, err := q.Exec(ctx, `select 1 from system where id = $1::uuid for share`, systemID); err != nil {
+	if _, err := q.Exec(ctx, `select pg_advisory_xact_lock_shared(hashtextextended($1, 0))`, systemStaffingLockKey(systemID)); err != nil {
 		return fmt.Errorf("storage: lock system %s for staffing: %w", systemID, err)
 	}
 	return nil
+}
+
+// lockSystemStandardChange takes the system's staffing lock EXCLUSIVE for the
+// rest of a standard change, after the role-name lock and before the change
+// touches the system's row, so no staffing write on the system is mid-flight
+// while the change carries its staffing (see lockSystemForStaffing).
+func lockSystemStandardChange(ctx context.Context, q txQuerier, systemID string) error {
+	return lockAdvisory(ctx, q, systemStaffingLockKey(systemID))
 }
 
 // SwapPositions exchanges the positions of whichever components currently
@@ -943,7 +977,7 @@ func (p *PG) resolveRole(ctx context.Context, q txQuerier, systemID, roleName st
 	case matches == 0:
 		return "", "", nil, nil, ErrRoleNotFound
 	case matches > 1:
-		return "", "", nil, nil, &RoleNameCollision{Role: roleName, Standard: standardName, System: systemName}
+		return "", "", nil, nil, &RoleNameCollision{Role: roleName, Standard: standardName, System: systemName, SystemID: systemID}
 	}
 
 	acceptedTypes, pinnedProducts, err = roleSlot(ctx, q, id)

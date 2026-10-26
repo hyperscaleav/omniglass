@@ -760,7 +760,7 @@ func TestAssignRoleComponentAmbiguityNeverLeaksCandidates(t *testing.T) {
 	// assignment exists), so this is the honest, more specific
 	// ErrAssignmentMissing, not the ambiguity 409 it used to raise over a
 	// component that was never actually a candidate for this call.
-	err = gw.UnassignRole(ctx, "", sys.Name, "seat", "dup-seat", sysScope, sysScope, all)
+	err = gw.UnassignRole(ctx, "", sys.Name, "seat", "dup-seat", sysScope, sysScope, all, all)
 	if !errors.Is(err, storage.ErrAssignmentMissing) {
 		t.Fatalf("unassign role with an unassigned, fleet-wide-ambiguous component = %v, want ErrAssignmentMissing", err)
 	}
@@ -850,7 +850,7 @@ func TestUnassignRoleResolvesFleetWideDuplicateWithinOccupancy(t *testing.T) {
 	// Unassigned by the bare, fleet-wide-ambiguous name: the wire has no
 	// uuid to give here (AssignedTo is names only), so this is the case the
 	// fix exists for.
-	if err := gw.UnassignRole(ctx, "", sys.Name, "seat", "dup-seat", sysScope, sysScope, all); err != nil {
+	if err := gw.UnassignRole(ctx, "", sys.Name, "seat", "dup-seat", sysScope, sysScope, all, all); err != nil {
 		t.Fatalf("unassign fleet-wide-ambiguous but uniquely-occupying component = %v, want ok", err)
 	}
 	roles, err = gw.EffectiveRoles(ctx, sys.Name, sysScope)
@@ -918,7 +918,7 @@ func TestUnassignRoleStillRefusesWhenBothDuplicatesOccupyTheSameRole(t *testing.
 	}
 
 	var ambig *storage.ErrAmbiguousName
-	err = gw.UnassignRole(ctx, "", sys.Name, "seat", "dup-seat", sysScope, sysScope, all)
+	err = gw.UnassignRole(ctx, "", sys.Name, "seat", "dup-seat", sysScope, sysScope, all, all)
 	if !errors.As(err, &ambig) {
 		t.Fatalf("unassign with both duplicates occupying the role = %v, want *ErrAmbiguousName", err)
 	}
@@ -980,7 +980,7 @@ func TestRemoveMemberResolvesFleetWideDuplicateWithinMembership(t *testing.T) {
 	// Removed by the bare, fleet-wide-ambiguous name: the wire has no uuid
 	// to give here (SystemMemberBody.component is a name), so this is the
 	// case the fix exists for.
-	if err := gw.RemoveMember(ctx, "", sys.Name, "dup-member", sysScope, sysScope, all); err != nil {
+	if err := gw.RemoveMember(ctx, "", sys.Name, "dup-member", sysScope, sysScope, all, all); err != nil {
 		t.Fatalf("remove fleet-wide-ambiguous but uniquely-member component = %v, want ok", err)
 	}
 	members, err = gw.ListMembers(ctx, sys.Name, sysScope)

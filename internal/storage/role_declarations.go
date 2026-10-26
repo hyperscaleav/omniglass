@@ -509,6 +509,11 @@ func (p *PG) DeleteSystemRole(ctx context.Context, actorID, ownerKind, ownerID, 
 		return fmt.Errorf("storage: begin delete role: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	// First, before any other lock: see roleNameLockKey. A withdrawal cascades
+	// to the role's assignments, which a standard change may be carrying.
+	if err := lockRoleNames(ctx, tx); err != nil {
+		return err
+	}
 
 	// Resolved once (see SetSystemRole / roleOwnerArg).
 	ownerArg, err := p.roleOwnerArg(ctx, tx, ownerKind, ownerID)
@@ -689,13 +694,20 @@ func insertSeededSlot(ctx context.Context, tx pgx.Tx, roleID string, types, prod
 // commit (the role insert landed, a set insert after it did not), and that no
 // later boot would otherwise ever look at (#508).
 //
-// Two conditions keep it from touching anything an operator owns. The role
-// must be unrevised: updated_at still equal to created_at, which holds exactly
-// until the first SetSystemRole, whose upsert bumps updated_at on every write
-// and is the only statement that updates the row. And the set must be empty:
-// a set holding any rows is whatever an install or an operator left there, and
-// is never merged into. Each set is judged on its own, so a role whose types
-// landed and whose products did not gets the products alone.
+// Three conditions keep it from touching anything an operator owns. The set
+// must be empty: a set holding any rows is whatever an install or an operator
+// left there, and is never merged into; each set is judged on its own, so a
+// role whose types landed and whose products did not gets the products alone.
+// The role must be unrevised: updated_at still equal to created_at, which holds
+// until the first SetSystemRole update bumps it. And the seed must have written
+// it: no audit row names it. A timestamp alone cannot tell, because a role an
+// operator declared through SetSystemRole's insert and never revised carries
+// equal timestamps too (and an empty set, if it accepts any type), and filling
+// it would make it refuse components it was declared to take. Every operator
+// write of a role is audited in its own transaction and the seed never is, so
+// a role with no audit row is the seed's. The audit read runs only for a role
+// the first two conditions already make a candidate, which an intact install
+// never has, so a boot pays for it only when there is something to repair.
 func repairSeededSlot(ctx context.Context, tx pgx.Tx, ownerKind, col, ownerArg string, spec SystemRoleSpec) error {
 	var (
 		id                  string
@@ -721,6 +733,17 @@ func repairSeededSlot(ctx context.Context, tx pgx.Tx, ownerKind, col, ownerArg s
 	}
 	if !hasProdts {
 		products = spec.PinnedProducts
+	}
+	if len(types) == 0 && len(products) == 0 {
+		return nil
+	}
+	var operatorWritten bool
+	if err := tx.QueryRow(ctx, `select exists (select 1 from audit_log
+		where resource = 'system_role' and resource_id = $1)`, id).Scan(&operatorWritten); err != nil {
+		return fmt.Errorf("storage: seeded role provenance %s: %w", spec.Name, err)
+	}
+	if operatorWritten {
+		return nil
 	}
 	return insertSeededSlot(ctx, tx, id, types, products)
 }

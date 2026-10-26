@@ -145,10 +145,10 @@ func TestEffectiveRolesAndAssignment(t *testing.T) {
 	}
 
 	// Unassign removes it; unassigning again is an explicit miss.
-	if err := gw.UnassignRole(ctx, "", "hq-huddle", "table-mic", "bar-2", all, all, all); err != nil {
+	if err := gw.UnassignRole(ctx, "", "hq-huddle", "table-mic", "bar-2", all, all, all, all); err != nil {
 		t.Fatalf("unassign: %v", err)
 	}
-	if err := gw.UnassignRole(ctx, "", "hq-huddle", "table-mic", "bar-2", all, all, all); !errors.Is(err, storage.ErrAssignmentMissing) {
+	if err := gw.UnassignRole(ctx, "", "hq-huddle", "table-mic", "bar-2", all, all, all, all); !errors.Is(err, storage.ErrAssignmentMissing) {
 		t.Fatalf("unassign twice: err = %v, want ErrAssignmentMissing", err)
 	}
 
@@ -166,7 +166,7 @@ func TestEffectiveRolesAndAssignment(t *testing.T) {
 		t.Fatalf("refusal blames children it cannot know about: %q", err)
 	}
 	// Unassigned, it deletes cleanly.
-	if err := gw.UnassignRole(ctx, "", "hq-huddle", "table-mic", "bar-1", all, all, all); err != nil {
+	if err := gw.UnassignRole(ctx, "", "hq-huddle", "table-mic", "bar-1", all, all, all, all); err != nil {
 		t.Fatalf("unassign before delete: %v", err)
 	}
 	if err := gw.DeleteComponent(ctx, "", "bar-1", all, all); err != nil {

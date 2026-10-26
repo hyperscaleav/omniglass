@@ -30,9 +30,12 @@ refs: [503, 504, 443]
      every staffing write takes reads every role of the name and refuses a second match naming both,
      instead of binding whichever row the database returned first; withdrawing the system's role
      (which is arc-scoped and always worked) resolves it.
-  5. **Serialized.** The check reads one table and writes another, so every write that can create a
-     collision (both arcs' declarations, a standard change, the role seed) takes one advisory lock
-     first, before any other lock its transaction takes.
+  5. **Serialized.** The check reads one table and writes another, so every write that changes which
+     roles a system has (both arcs' declarations and withdrawals, a standard change, the role seed,
+     a standard's delete) takes one advisory lock first, before any other lock its transaction
+     takes. An edit that resends a system's current standard, as the console does on every save, is
+     not a standard change and takes no part in it, so the lock serializes only the rare acts it is
+     for.
 - **Context:** `system_role_name_key` is unique per arc, so `('standard', std, NULL, 'table-mic')`
   and `('system', NULL, sys, 'table-mic')` were distinct rows, and `resolveRole` matched both arcs on
   name with no ordering and read one row. Reproduced live: a system role declared over an inherited
