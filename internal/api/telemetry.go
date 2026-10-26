@@ -3,7 +3,11 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"maps"
 	"net/http"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -330,6 +334,13 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 		if accepted == 0 {
 			return out, nil
 		}
+		// An observation's instance is its observer (ADR-0456): on this lane, an
+		// endpoint of the owner, named, or none (the owner-level series). One
+		// naming no endpoint refuses the batch, checked once per batch over
+		// what would be published.
+		if err := checkInstances(ctx, gw, compID, batch); err != nil {
+			return nil, err
+		}
 		if err := pub.PublishTelemetry(ctx, batch); err != nil {
 			return nil, huma.Error503ServiceUnavailable("publish telemetry")
 		}
@@ -377,4 +388,66 @@ func itemTS(t time.Time) *timestamppb.Timestamp {
 		return nil
 	}
 	return timestamppb.New(t.UTC())
+}
+
+// maxListedEndpoints bounds the endpoints an unknown-instance refusal lists, so
+// a component with many endpoints costs the refusal a fixed size.
+const maxListedEndpoints = 10
+
+// checkInstances refuses a batch any of whose observations names an instance
+// that is no endpoint on its owner (ADR-0456: an observed row's instance is
+// its observer, and on the push lane that is one of the owner's endpoints).
+// It reads the owner's endpoint names once, and only when an instance is
+// named at all, so its cost is per batch, never per sample. The refusal
+// names the first unknown instance and lists the owner's endpoints, bounded:
+// the caller already resolved the owner within its own component:read.
+func checkInstances(ctx context.Context, gw storage.Gateway, compID string, b *ogv1.TelemetryBatch) error {
+	named := map[string]bool{}
+	for _, m := range b.Metrics {
+		named[m.GetInstance()] = true
+	}
+	for _, p := range b.Properties {
+		named[p.GetInstance()] = true
+	}
+	for _, e := range b.Events {
+		named[e.GetInstance()] = true
+	}
+	delete(named, "")
+	if len(named) == 0 {
+		return nil
+	}
+	names, err := gw.ComponentEndpointNames(ctx, compID)
+	if err != nil {
+		return huma.Error500InternalServerError("read the owner's endpoints")
+	}
+	known := make(map[string]bool, len(names))
+	for _, n := range names {
+		known[n] = true
+	}
+	for _, inst := range slices.Sorted(maps.Keys(named)) {
+		if !known[inst] {
+			return huma.Error422UnprocessableEntity(fmt.Sprintf(
+				"instance %q names no endpoint on this component: an observation's instance is the endpoint it came through, or none for the component as a whole; %s",
+				inst, endpointListing(names)))
+		}
+	}
+	return nil
+}
+
+// endpointListing is the refusal's list of an owner's endpoint names, sorted
+// and bounded at maxListedEndpoints.
+func endpointListing(names []string) string {
+	if len(names) == 0 {
+		return "it has no endpoints"
+	}
+	sorted := slices.Sorted(slices.Values(names))
+	shown := sorted
+	if len(shown) > maxListedEndpoints {
+		shown = shown[:maxListedEndpoints]
+	}
+	out := "its endpoints: " + strings.Join(shown, ", ")
+	if rest := len(sorted) - len(shown); rest > 0 {
+		out += fmt.Sprintf(", and %d more", rest)
+	}
+	return out
 }

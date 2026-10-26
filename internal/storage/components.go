@@ -1029,6 +1029,27 @@ type ComponentEndpoint struct {
 // inline subquery's silent no-match gave: devseed's seedReachability uses
 // this as its own sentinel read, calling it BEFORE the component it names is
 // known to exist yet, on the first run.
+// ComponentEndpointNames is a component's endpoint names, sorted, read by the
+// component's id in one statement (the endpoint table's component index). The
+// caller has already resolved the component through scope, so no scope is
+// injected here.
+func (p *PG) ComponentEndpointNames(ctx context.Context, componentID string) ([]string, error) {
+	rows, err := p.pool.Query(ctx, `select name from endpoint where component = $1::uuid order by name`, componentID)
+	if err != nil {
+		return nil, fmt.Errorf("storage: endpoint names of %s: %w", componentID, err)
+	}
+	defer rows.Close()
+	var names []string
+	for rows.Next() {
+		var n string
+		if err := rows.Scan(&n); err != nil {
+			return nil, fmt.Errorf("storage: endpoint names of %s: %w", componentID, err)
+		}
+		names = append(names, n)
+	}
+	return names, rows.Err()
+}
+
 func (p *PG) ListComponentEndpoints(ctx context.Context, componentRef string) ([]ComponentEndpoint, error) {
 	c, err := scopedByName(ctx, p.pool, componentConfig, componentRef)
 	if errors.Is(err, ErrComponentNotFound) {

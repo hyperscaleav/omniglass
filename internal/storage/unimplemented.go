@@ -1005,3 +1005,6 @@ func (UnimplementedGateway) PlanDriverPreview(context.Context, string, PreviewIn
 func (UnimplementedGateway) PlanEndpointRun(context.Context, string, string, string, scope.Set, scope.Set) (*EndpointPoll, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) ComponentEndpointNames(context.Context, string) ([]string, error) {
+	return nil, nil
+}

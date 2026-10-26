@@ -314,6 +314,11 @@ type Gateway interface {
 	// panel's rows). Not scope-injected: the caller gates on the component being
 	// in read scope first, then reads its interfaces by the verified name.
 	ListComponentEndpoints(ctx context.Context, componentName string) ([]ComponentEndpoint, error)
+	// ComponentEndpointNames is a component's endpoint names, sorted, by the
+	// component's id: one indexed read, for the push route's check that an
+	// observation's instance names an endpoint on its owner (ADR-0456). Not
+	// scope-injected: the caller has resolved the component through scope.
+	ComponentEndpointNames(ctx context.Context, componentID string) ([]string, error)
 	// CreateComponent takes the caller's placement scopes alongside its create
 	// scope. They are cross-tier and deliberately not the same action: the label
 	// it stamps reads the location's label, so naming a location is a read of it
