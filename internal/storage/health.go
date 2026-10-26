@@ -58,7 +58,9 @@ import (
 
 // healthKey is the property sample key carrying a rolled-up verdict. There is
 // one series per owner and no instance dimension: an entity has exactly one
-// health.
+// health. Deliberately so (ADR-0456): every other provenance's instance names
+// which of several values a row is, and health has only ever one, so no
+// writer or reader should give it an instance.
 const healthKey = rules.HealthKey
 
 // healthRule names the producer in the recorded row's lineage. provenance

@@ -56,7 +56,7 @@ func verdictFleet(t *testing.T, gw storage.Gateway, systems int) {
 		if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: comp, ProductName: &bar}, sc, sc, sc, sc); err != nil {
 			t.Fatalf("create component %d: %v", i, err)
 		}
-		if err := gw.AssignRole(ctx, "", sys, "table-mic", comp, sc, sc); err != nil {
+		if err := gw.AssignRole(ctx, "", sys, "table-mic", comp, sc, sc, sc, sc); err != nil {
 			t.Fatalf("assign role %d: %v", i, err)
 		}
 		// Every third system's member is in trouble, so the answer is a mix.

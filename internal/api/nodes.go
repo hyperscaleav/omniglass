@@ -21,6 +21,8 @@ type nodeBody struct {
 	Enrolled        bool              `json:"enrolled"`
 	LastHeartbeatAt *time.Time        `json:"last_heartbeat_at,omitempty"`
 	EnrolledAt      *time.Time        `json:"enrolled_at,omitempty"`
+	OrphanedBatches int64             `json:"orphaned_batches" doc:"How many of this node's telemetry batches the server dropped because their task is not placed on this node (moved to another node, or unknown): the confinement fence, counted rather than silent. A rising count means the node is collecting for a task it no longer holds"`
+	LastOrphanedAt  *time.Time        `json:"last_orphaned_at,omitempty" doc:"When the newest orphaned batch arrived"`
 	EffectiveTags   map[string]string `json:"effective_tags,omitempty" doc:"The resolved effective tags (key -> winning value) on this node: its direct bindings plus propagating platform tags. For the Tags column and the blade pills."`
 }
 
@@ -28,6 +30,7 @@ func toNodeBody(n *storage.Node) nodeBody {
 	return nodeBody{
 		Name: n.Name, Label: n.Label, Description: n.Description, Location: n.LocationName, LocationID: n.LocationID,
 		Enrolled: n.Enrolled, LastHeartbeatAt: n.LastHeartbeatAt, EnrolledAt: n.EnrolledAt,
+		OrphanedBatches: n.OrphanedBatches, LastOrphanedAt: n.LastOrphanedAt,
 	}
 }
 

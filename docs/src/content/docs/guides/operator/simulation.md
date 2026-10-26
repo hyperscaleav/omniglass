@@ -119,8 +119,9 @@ omniglass simulation add-system edge-hq --standard meeting-room --system-type me
 ```
 
 The system and its components land together or not at all (with `simulation:update`, plus
-`system:create`, `system:update`, `system:read`, `component:create`, `endpoint:create` and `node:read`; `component:create` must
-reach the whole fleet, since the components are created at the top level), named as any new system and
+`system:create`, `system:update`, `system:read`, `component:create`, `component:update`, `endpoint:create`
+and `node:read`; `component:create` and `component:update` must reach the whole fleet, since the
+components are created at the top level and each is then assigned its role), named as any new system and
 component are named, and the simulator serves them from its next pull.
 
 ## Break it on purpose
