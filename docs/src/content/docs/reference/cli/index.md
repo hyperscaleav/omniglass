@@ -1588,6 +1588,26 @@ Example:
 omniglass driver preview --node node
 ```
 
+### `omniglass driver rename`
+
+Rename a driver
+
+```
+omniglass driver rename <id> [flags]
+```
+
+Moves a custom driver's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official driver keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. Audited as rename. Gated by driver:rename.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--name` | string | (none) | The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid) |
+
+Example:
+
+```sh
+omniglass driver rename <id> --name name
+```
+
 ### `omniglass driver update`
 
 Update a driver
@@ -2763,6 +2783,26 @@ Example:
 
 ```sh
 omniglass location-type property update room <property>
+```
+
+### `omniglass location-type rename`
+
+Rename a location type
+
+```
+omniglass location-type rename <id> [flags]
+```
+
+Moves a custom location type's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official location type keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. Audited as rename. Gated by location_type:rename.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--name` | string | (none) | The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid) |
+
+Example:
+
+```sh
+omniglass location-type rename <id> --name name
 ```
 
 ### `omniglass location-type restore`
@@ -3983,6 +4023,26 @@ Example:
 omniglass product property update boreal-edge-55 <property>
 ```
 
+### `omniglass product rename`
+
+Rename a product
+
+```
+omniglass product rename <id> [flags]
+```
+
+Moves a custom product's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official product keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. Audited as rename. Gated by product:rename.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--name` | string | (none) | The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid) |
+
+Example:
+
+```sh
+omniglass product rename <id> --name name
+```
+
 ### `omniglass product update`
 
 Update a product
@@ -3991,18 +4051,18 @@ Update a product
 omniglass product update <id> [flags]
 ```
 
-Patches a custom product's label, vendor, driver, kind, component_type, icon, or parent. component_type is required, so an empty string on it is a 422 (a reclassify names a real type; it never clears). Official products are read-only (422). Gated by product:update.
+Patches a custom product's label, vendor, driver, kind, component_type, icon, label rule, or parent. Each optional field follows the three-state string: omitted is unchanged, an empty string clears it, a value sets it, so a vendor, driver, parent, icon or label rule can be unset as well as changed. component_type is required, so an empty string on it is a 422 (a reclassify names a real type; it never clears). Official products are read-only (422). Gated by product:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--component-type` | string | (none) | Reclassifies the product to this component_type, by name or uuid; component_type is required, so this only reclassifies, it never clears |
-| `--driver-id` | string | (none) | A new driver, by handle or uuid |
-| `--icon` | string | (none) | A new icon override |
+| `--driver-id` | string | (none) | A new driver, by handle or uuid; an empty string clears it |
+| `--icon` | string | (none) | A new icon override; an empty string clears it, so the product inherits its component_type's icon |
 | `--kind` | string | (none) | A new product class |
 | `--label` | string | (none) | A new operator-facing label |
 | `--label-rule` | string | (none) | A new label template; an empty string clears it, so components fall back to the component_type chain and then the global component rule. Refused with 422 if it does not parse. |
-| `--parent-product-id` | string | (none) | A new parent product, by handle or uuid |
-| `--vendor-id` | string | (none) | A new vendor, by handle or uuid |
+| `--parent-product-id` | string | (none) | A new parent product, by handle or uuid; an empty string clears it |
+| `--vendor-id` | string | (none) | A new vendor, by handle or uuid; an empty string clears it |
 
 Example:
 
@@ -4857,6 +4917,26 @@ Example:
 
 ```sh
 omniglass standard property update meeting-room <property>
+```
+
+### `omniglass standard rename`
+
+Rename a standard
+
+```
+omniglass standard rename <id> [flags]
+```
+
+Moves a custom standard's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official standard keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. Audited as rename. Gated by standard:rename.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--name` | string | (none) | The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid) |
+
+Example:
+
+```sh
+omniglass standard rename <id> --name name
 ```
 
 ### `omniglass standard role`
@@ -6148,6 +6228,26 @@ Example:
 
 ```sh
 omniglass vendor list
+```
+
+### `omniglass vendor rename`
+
+Rename a vendor
+
+```
+omniglass vendor rename <id> [flags]
+```
+
+Moves a custom vendor's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official vendor keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. Audited as rename. Gated by vendor:rename.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--name` | string | (none) | The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid) |
+
+Example:
+
+```sh
+omniglass vendor rename <id> --name name
 ```
 
 ### `omniglass vendor update`

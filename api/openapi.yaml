@@ -6892,6 +6892,25 @@ components:
       required:
         - name
       type: object
+    RenameRegistryInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/RenameRegistryInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        name:
+          description: The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid)
+          maxLength: 100
+          minLength: 1
+          pattern: ^[a-z0-9][a-z0-9-]*$
+          type: string
+      required:
+        - name
+      type: object
     RenameSystemInputBody:
       additionalProperties: false
       properties:
@@ -9641,10 +9660,10 @@ components:
           description: Reclassifies the product to this component_type, by name or uuid; component_type is required, so this only reclassifies, it never clears
           type: string
         driver_id:
-          description: A new driver, by handle or uuid
+          description: A new driver, by handle or uuid; an empty string clears it
           type: string
         icon:
-          description: A new icon override
+          description: A new icon override; an empty string clears it, so the product inherits its component_type's icon
           type: string
         kind:
           description: A new product class
@@ -9660,10 +9679,10 @@ components:
           description: A new label template; an empty string clears it, so components fall back to the component_type chain and then the global component rule. Refused with 422 if it does not parse.
           type: string
         parent_product_id:
-          description: A new parent product, by handle or uuid
+          description: A new parent product, by handle or uuid; an empty string clears it
           type: string
         vendor_id:
-          description: A new vendor, by handle or uuid
+          description: A new vendor, by handle or uuid; an empty string clears it
           type: string
       type: object
     UpdatePropertyInputBody:
@@ -12427,6 +12446,39 @@ paths:
       summary: Update a driver
       x-omniglass-mcp: {}
       x-omniglass-permission: driver:update
+  /drivers/{id}:rename:
+    post:
+      description: Moves a custom driver's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official driver keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. Audited as rename. Gated by driver:rename.
+      operationId: rename-driver
+      parameters:
+        - description: The row, by its current name or its uuid
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The row, by its current name or its uuid
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenameRegistryInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DriverBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Rename a driver
+      x-omniglass-permission: driver:rename
   /drivers:preview:
     post:
       description: "Runs a driver spec's polls once through the node named, against the target its inputs name, and answers with what each poll read: the samples its emits extracted, each emit that did not locate, and an excerpt of the raw answer, masked of every secret the preview used. Nothing is stored. The spec is a stored driver (driver) or an unsaved one (spec); an invalid spec is a 422 listing its findings, as validate-driver-spec gives them. A preview runs a poll that is its own request (http, https, an snmp get, a tcp line); a poll that rides a held session or a bound socket needs an attached endpoint (run-endpoint-poll). A secret input must be one the caller may reveal (secret:reveal), since the preview hands it to the target named. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight is a 429. Audited on the node and on each secret used. Gated by driver:preview."
@@ -13543,6 +13595,39 @@ paths:
           description: Error
       summary: Declare a property on a location type
       x-omniglass-permission: location_type:update
+  /location-types/{id}:rename:
+    post:
+      description: Moves a custom location type's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official location type keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. Audited as rename. Gated by location_type:rename.
+      operationId: rename-location-type
+      parameters:
+        - description: The row, by its current name or its uuid
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The row, by its current name or its uuid
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenameRegistryInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationTypeBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Rename a location type
+      x-omniglass-permission: location_type:rename
   /location-types/{id}:restore:
     post:
       description: "Discards your fork of a shipped location_type, so reads return the values this release ships, including a rule a later release WITHDREW. 409 when the row carries no fork of yours. Gated by location_type:update, the same permission that took the fork: restoring is undoing your own edit, not deleting a row."
@@ -15693,7 +15778,7 @@ paths:
       x-omniglass-mcp: {}
       x-omniglass-permission: product:read
     patch:
-      description: Patches a custom product's label, vendor, driver, kind, component_type, icon, or parent. component_type is required, so an empty string on it is a 422 (a reclassify names a real type; it never clears). Official products are read-only (422). Gated by product:update.
+      description: "Patches a custom product's label, vendor, driver, kind, component_type, icon, label rule, or parent. Each optional field follows the three-state string: omitted is unchanged, an empty string clears it, a value sets it, so a vendor, driver, parent, icon or label rule can be unset as well as changed. component_type is required, so an empty string on it is a 422 (a reclassify names a real type; it never clears). Official products are read-only (422). Gated by product:update."
       operationId: update-product
       parameters:
         - description: The product, by name or uuid
@@ -15930,6 +16015,39 @@ paths:
           description: Error
       summary: Declare a property on a product
       x-omniglass-permission: product:update
+  /products/{id}:rename:
+    post:
+      description: Moves a custom product's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official product keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. Audited as rename. Gated by product:rename.
+      operationId: rename-product
+      parameters:
+        - description: The row, by its current name or its uuid
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The row, by its current name or its uuid
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenameRegistryInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Rename a product
+      x-omniglass-permission: product:rename
   /property-types:
     get:
       description: Lists every registered property (official and custom). The catalog is fleet-wide reference data. Gated by property_type:read.
@@ -16995,6 +17113,39 @@ paths:
           description: Error
       summary: Declare a role on a standard
       x-omniglass-permission: standard:update
+  /standards/{id}:rename:
+    post:
+      description: Moves a custom standard's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official standard keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. Audited as rename. Gated by standard:rename.
+      operationId: rename-standard
+      parameters:
+        - description: The row, by its current name or its uuid
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The row, by its current name or its uuid
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenameRegistryInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StandardBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Rename a standard
+      x-omniglass-permission: standard:rename
   /system-types:
     get:
       description: "Lists the system_type registry (the coarse taxonomy of what kind of space a system is: a boardroom, a classroom, a video wall), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Distinct from standard, which is the blueprint a system conforms to. Gated by system_type:read."
@@ -18730,6 +18881,39 @@ paths:
           description: Error
       summary: Update a vendor
       x-omniglass-permission: vendor:update
+  /vendors/{id}:rename:
+    post:
+      description: Moves a custom vendor's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official vendor keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. Audited as rename. Gated by vendor:rename.
+      operationId: rename-vendor
+      parameters:
+        - description: The row, by its current name or its uuid
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The row, by its current name or its uuid
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenameRegistryInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VendorBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Rename a vendor
+      x-omniglass-permission: vendor:rename
   /views/fleet:
     get:
       description: "Returns every in-scope location (flat, with parent and verdict), every in-scope system (with location and verdict), and one dot per component in each system. A dot carries the component id, its verdict, and the primary/shared flags, not a full component row. Each tier is scoped on its own read permission: a caller who can read locations but not components gets locations with empty systems, and a caller with no scope gets an empty result, not an error. Gated by location:read."
