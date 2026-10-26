@@ -4599,7 +4599,7 @@ export interface paths {
         put?: never;
         /**
          * Push telemetry for an owner
-         * @description Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is rejected and reported in the response rather than silently dropped, and a property or event payload violating its type's schema refuses the batch with a 422. Every key has one writer class, and a push writes only a collected key: a key a native probe writes (a reachability verdict or rung, a probe metric or timing, a held session's state, collection-failed) is a node's own observation and a platform key (health) is the platform's, each rejected by name on every lane; a key a calc rule outputs is rejected naming the rule. Gated by telemetry:push, and the caller's scope must cover the declared owner; an out-of-scope owner is a non-disclosing 404.
+         * @description Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is rejected and reported in the response rather than silently dropped, and a property or event payload violating its type's schema refuses the batch with a 422. Every key has one writer class, and a push writes only a collected key: a key a native probe writes (a reachability verdict or rung, a probe metric or timing, a held session's state, collection-failed) is a node's own observation and a platform key (health) is the platform's, each rejected by name on every lane; a key a calc rule outputs is rejected naming the rule. An observation's instance is the endpoint it came through: one naming no endpoint on the owner refuses the batch with a 422 naming it and listing the owner's endpoints. Gated by telemetry:push, whose scope must cover the declared owner (one check per batch): an owner outside the caller's component:read is a non-disclosing 404, and one the caller can read but may not push to is a 403.
          */
         post: operations["push-telemetry"];
         delete?: never;
@@ -8054,11 +8054,21 @@ export interface components {
             label?: string;
             /** Format: date-time */
             last_heartbeat_at?: string;
+            /**
+             * Format: date-time
+             * @description When the newest orphaned batch arrived
+             */
+            last_orphaned_at?: string;
             /** @description The location the node sits in (descriptive placement, not scope) */
             location?: string;
             /** @description The location's id; the stable form of location */
             location_id?: string;
             name: string;
+            /**
+             * Format: int64
+             * @description How many of this node's telemetry batches the server dropped because their task is not placed on this node (moved to another node, or unknown): the confinement fence, counted rather than silent. A rising count means the node is collecting for a task it no longer holds
+             */
+            orphaned_batches: number;
         };
         NodeLogsOutputBody: {
             /**
@@ -8390,7 +8400,7 @@ export interface components {
             samples: components["schemas"]["PropertySampleBody"][] | null;
         };
         PushEvent: {
-            /** @description Discriminates many occurrences of one name on one owner */
+            /** @description The endpoint of the owner this came through, by name (an endpoint is named by its transport); omit for the owner as a whole. An instance naming no endpoint on the owner refuses the batch with a 422 */
             instance?: string;
             /** @description The occurrence's human-readable line */
             message?: string;
@@ -8447,7 +8457,7 @@ export interface components {
             ts?: string;
         };
         PushMetric: {
-            /** @description Discriminates many values of one name on one owner (three fan speeds, per-port counters) */
+            /** @description The endpoint of the owner this came through, by name (an endpoint is named by its transport); omit for the owner as a whole. An instance naming no endpoint on the owner refuses the batch with a 422 */
             instance?: string;
             /** @description A registered metric_type name */
             name: string;
@@ -8474,7 +8484,7 @@ export interface components {
             rejected?: components["schemas"]["PushRejection"][] | null;
         };
         PushProperty: {
-            /** @description Discriminates many values of one name on one owner */
+            /** @description The endpoint of the owner this came through, by name (an endpoint is named by its transport); omit for the owner as a whole. An instance naming no endpoint on the owner refuses the batch with a 422 */
             instance?: string;
             /** @description A registered property_type name */
             name: string;
