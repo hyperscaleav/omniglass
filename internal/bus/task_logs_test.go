@@ -101,7 +101,7 @@ func TestLandFilesTaskLogsAndSelfLogsApart(t *testing.T) {
 		Logs:     []*ogv1.LogLine{{Message: "worklist pulled", Source: "node"}},
 		TaskLogs: []*ogv1.LogLine{{Message: "backlight driver reset", Severity: "warn", Facility: "panel", Ts: timestamppb.New(at)}},
 	}
-	if err := s.land(ctx, ev, ingestBinding{LogNode: "node-a", SampleOwner: &owner, Writer: storage.NodeWriter(owner.ComponentID, owner.EndpointName)}); err != nil {
+	if err := s.land(ctx, "", ev, ingestBinding{LogNode: "node-a", SampleOwner: &owner, Writer: storage.NodeWriter(owner.ComponentID, owner.EndpointName)}); err != nil {
 		t.Fatalf("land: %v", err)
 	}
 	lines, err := gw.ListComponentLogs(ctx, comp.ID, time.Hour, 10, storage.LogFilter{})
@@ -123,7 +123,7 @@ func TestLandFilesTaskLogsAndSelfLogsApart(t *testing.T) {
 	}
 
 	// An orphan batch (its task not this node's) lands its task logs nowhere.
-	if err := s.land(ctx, &ogv1.TelemetryBatch{TaskId: "t-other", TaskLogs: []*ogv1.LogLine{{Message: "stranger"}}}, ingestBinding{LogNode: "node-a"}); err != nil {
+	if err := s.land(ctx, "", &ogv1.TelemetryBatch{TaskId: "t-other", TaskLogs: []*ogv1.LogLine{{Message: "stranger"}}}, ingestBinding{LogNode: "node-a"}); err != nil {
 		t.Fatalf("land orphan: %v", err)
 	}
 	var n int

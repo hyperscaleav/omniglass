@@ -3,6 +3,9 @@ package node
 import (
 	"testing"
 	"time"
+
+	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/driver"
 )
 
 // #822: the node honors a driver poll's declared schedule. A 60s poll on a
@@ -144,5 +147,21 @@ func TestPollScheduleRunsAtOnceWhenTheFingerprintMoves(t *testing.T) {
 	s.rebook("p1", "fp-fixed-port")
 	if !s.due("p1", every, now) {
 		t.Fatal("a moved fingerprint did not run the poll at the next tick")
+	}
+}
+
+// TestForgetOccurrencesLandsThemAgain: after a spool overflow the run loop
+// forgets what each poll landed, so an unchanged event or log line lands
+// again rather than staying lost with the batch the spool dropped.
+func TestForgetOccurrencesLandsThemAgain(t *testing.T) {
+	s := newPollSchedule(time.Second)
+	ev := []collection.Sample{{Lane: driver.LaneEvent, Name: "input-changed", Text: "hdmi-2", Emit: 0}}
+	s.commitChanged("t-1", ev)
+	if got := s.changed("t-1", ev); len(got) != 0 {
+		t.Fatalf("an unchanged event passed the change memory: %+v", got)
+	}
+	s.forgetOccurrences()
+	if got := s.changed("t-1", ev); len(got) != 1 {
+		t.Fatalf("after forgetting, the event did not land again: %+v", got)
 	}
 }

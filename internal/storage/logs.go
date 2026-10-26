@@ -123,12 +123,12 @@ func (p *PG) InsertLogLines(ctx context.Context, lines []LogLineWrite) error {
 	if len(lines) == 0 {
 		return nil
 	}
-	tx, err := p.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("storage: begin insert log lines: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	return p.sampleWrite(ctx, "insert log lines", func(tx pgx.Tx) error { return p.writeLogLines(ctx, tx, lines) })
+}
 
+// writeLogLines is the component log-line write path, in the caller's
+// transaction: InsertLogLines' own, or an ingest batch's (LandBatch).
+func (p *PG) writeLogLines(ctx context.Context, tx pgx.Tx, lines []LogLineWrite) error {
 	for _, l := range lines {
 		if l.OwnerKind != "component" {
 			return fmt.Errorf("storage: log line %s: log_line is component-owned (#589), refusing owner_kind %q (a node's self-logs land in node_log)", l.OwnerID, l.OwnerKind)
@@ -157,7 +157,7 @@ func (p *PG) InsertLogLines(ctx context.Context, lines []LogLineWrite) error {
 			return fmt.Errorf("storage: insert log line %s: %w", l.OwnerID, err)
 		}
 	}
-	return tx.Commit(ctx)
+	return nil
 }
 
 // InsertNodeLogs writes a node's own log rows in one transaction: the self-log
@@ -168,13 +168,13 @@ func (p *PG) InsertNodeLogs(ctx context.Context, lines []NodeLogWrite) error {
 	if len(lines) == 0 {
 		return nil
 	}
-	tx, err := p.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("storage: begin insert node logs: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	return p.sampleWrite(ctx, "insert node logs", func(tx pgx.Tx) error { return p.writeNodeLogs(ctx, tx, lines) })
+}
 
-	for _, l := range lines {
+// writeNodeLogs is the node self-log write path, in the caller's
+// transaction: InsertNodeLogs' own, or an ingest batch's (LandBatch).
+func (p *PG) writeNodeLogs(ctx context.Context, tx pgx.Tx, lines []NodeLogWrite) error {
+	for _, l := range cleanNodeLogWrites(lines) {
 		ts := l.TS
 		if ts.IsZero() {
 			ts = time.Now().UTC()
@@ -190,7 +190,7 @@ func (p *PG) InsertNodeLogs(ctx context.Context, lines []NodeLogWrite) error {
 			return fmt.Errorf("storage: insert node log %s: %w", l.Node, err)
 		}
 	}
-	return tx.Commit(ctx)
+	return nil
 }
 
 // nullableLogFields maps the empty-means-absent log columns to their stored

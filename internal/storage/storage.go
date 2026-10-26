@@ -603,10 +603,9 @@ type Gateway interface {
 
 	// The observed-property sink: the mirror of the metric sink for categorical
 	// verdicts (interface-reachable), held to the same writer check.
-	// reject-not-project and the transition-only guard are applied by the caller
-	// before the write. LatestProperty backs the ingest-side transition guard;
-	// PropertyTransitions is the ordered flip series the availability strip
-	// reads; both read the observed series only.
+	// reject-not-project is applied by the caller before the write.
+	// LatestProperty and PropertyTransitions (the ordered flip series the
+	// availability strip reads) read the observed series only.
 	InsertPropertySamples(ctx context.Context, w KeyWriter, evs []PropertySampleWrite) error
 	LatestProperty(ctx context.Context, componentName, key, instance string) (*PropertySample, error)
 	// EndpointKeyPin is the key an ssh or tls endpoint pins in force: the
@@ -615,6 +614,13 @@ type Gateway interface {
 	// alone, never as the node's observation.
 	EndpointKeyPin(ctx context.Context, componentName, endpoint, transport string) (string, error)
 	PropertyTransitions(ctx context.Context, componentName, key, instance string, window time.Duration) ([]PropertySample, error)
+	// LandBatch is the ingest's write (#311, ADR-0311): one batch's every
+	// sink in one transaction under its receipt, all or nothing, an id that
+	// already landed writing nothing, the property lane transition-only (its
+	// guard held in the insert, #455). PruneTelemetryReceipts keeps the
+	// receipts to their horizon.
+	LandBatch(ctx context.Context, b IngestBatch) (bool, error)
+	PruneTelemetryReceipts(ctx context.Context, before time.Time, batch int) (int64, error)
 	// StampEndpointsSeen records that an ingest batch delivered by each
 	// endpoint landed, by the server's clock, coalesced (#933).
 	StampEndpointsSeen(ctx context.Context, endpointIDs []string) error
@@ -828,21 +834,24 @@ type Gateway interface {
 	// The three writes take the read/action pair, not one write set (#736): the
 	// system is resolved in the read scope and then required in the action scope,
 	// so a system the caller can see but not write is refused as forbidden rather
-	// than reported absent. The component END stays scope-blind, as it always was:
-	// the only set in hand is resolved for "system", and a component's ancestor
-	// chain is unrelated to it.
-	AddMember(ctx context.Context, actorID, systemName, componentName string, read, action scope.Set) error
-	RemoveMember(ctx context.Context, actorID, systemName, componentName string, read, action scope.Set) error
-	SetPrimaryMember(ctx context.Context, actorID, systemName, componentName string, read, action scope.Set) error
+	// than reported absent. The component END is scoped too (#510), in sets
+	// resolved for "component": a bind resolves it in componentRead and requires
+	// componentAction (component:update); an unbind or a re-default, whose
+	// component is already a member the system's own read names, requires
+	// componentAction alone, and tells a non-member apart from a missing name
+	// only within componentRead.
+	AddMember(ctx context.Context, actorID, systemName, componentName string, read, action, componentRead, componentAction scope.Set) error
+	RemoveMember(ctx context.Context, actorID, systemName, componentName string, read, action, componentRead, componentAction scope.Set) error
+	SetPrimaryMember(ctx context.Context, actorID, systemName, componentName string, read, action, componentRead, componentAction scope.Set) error
 
 	// The role tier: a system's roles resolve from its standard (inherited) and its
 	// own ad-hoc declarations; assignment refuses a component whose product's
 	// component_type is not one the role's typed-slot guard accepts (#626).
 	EffectiveRoles(ctx context.Context, systemName string, read scope.Set) ([]EffectiveRole, error)
 	// Staffing takes the read/action pair for the same reason membership does
-	// (#736).
-	AssignRole(ctx context.Context, actorID, systemName, roleName, componentName string, read, action scope.Set) error
-	UnassignRole(ctx context.Context, actorID, systemName, roleName, componentName string, read, action scope.Set) error
+	// (#736), and the component end the same way membership does (#510).
+	AssignRole(ctx context.Context, actorID, systemName, roleName, componentName string, read, action, componentRead, componentAction scope.Set) error
+	UnassignRole(ctx context.Context, actorID, systemName, roleName, componentName string, read, action, componentRead, componentAction scope.Set) error
 	// SwapPositions exchanges two occupants' positions within a role: an
 	// ordering change only, so it takes no read counterpart of its own
 	// (EffectiveRoles already reports the ordered result).

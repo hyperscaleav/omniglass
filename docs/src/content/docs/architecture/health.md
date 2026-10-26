@@ -190,7 +190,7 @@ the cause and the verdict commit together or not at all:
 | **declare** or **withdraw** a role | a system gains or loses a slot it can be short of |
 | change a role's **quorum** or **impact** | the same staffing crosses a different line |
 | **create** a system | its opening verdict gives its history a beginning |
-| change the **standard** a system conforms to | the whole inherited role set is swapped |
+| change the **standard** a system conforms to | the whole inherited role set is swapped, and its staffing is carried onto the new roles or released first ([ADR-0506](/architecture/decisions/#adr-0506-changing-a-systems-standard-carries-its-staffing-onto-the-roles-that-still-exist)) |
 | change a system's **location** | the contribution moves between rollups, so **both** are recomputed |
 | change a **location's parent** | its whole subtree's contribution moves, so **both** ancestor chains are recomputed |
 | **delete** a system | the location it sat in loses a contributor and may have just improved |

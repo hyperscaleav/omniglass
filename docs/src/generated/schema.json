@@ -4884,6 +4884,22 @@
       "definition": "CREATE UNIQUE INDEX severity_level_rank_key ON public.severity_level USING btree (rank)"
      }
     ]
+   },
+   "telemetry_receipt": {
+    "columns": [
+     {
+      "name": "batch_id",
+      "type": "text",
+      "nullable": false,
+      "pk": true
+     },
+     {
+      "name": "landed_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     }
+    ]
    }
   }
  }

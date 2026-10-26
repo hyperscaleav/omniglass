@@ -146,7 +146,7 @@ func TestSystemEventsAndLogsOnTheWire(t *testing.T) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "wired-bar"}, all, all, all, all); err != nil {
 		t.Fatalf("create member: %v", err)
 	}
-	if err := gw.AddMember(ctx, "", "wired-room", "wired-bar", all, all); err != nil {
+	if err := gw.AddMember(ctx, "", "wired-room", "wired-bar", all, all, all, all); err != nil {
 		t.Fatalf("add member: %v", err)
 	}
 	now := time.Now().UTC()
