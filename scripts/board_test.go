@@ -4,9 +4,9 @@
 //
 // The fake answers from fixtures recorded off org project #1
 // (testdata/board/field-list.json from gh project field-list, project-list.json
-// from gh project list, issue-item.json from the script's own issue query) and
-// keeps the board's state in a file between runs, so a second run reads what the
-// first wrote. It refuses what GitHub would refuse (an id the project does not
+// from gh project list with the org's other project redacted, issue-item.json
+// from the script's own issue query) and keeps the board's state in a file
+// between runs, so a second run reads what the first wrote. It refuses what GitHub would refuse (an id the project does not
 // have, an issue the repo does not have, a call it does not know), so a script
 // that resolved a name to the wrong id fails here rather than on the live board.
 // The fake is this test binary, re-entered through a gh shim on PATH (TestMain).
@@ -612,7 +612,7 @@ func TestBoardNamesAMissingScope(t *testing.T) {
 func TestBoardNamesAMissingProject(t *testing.T) {
 	r := newBoard(t, boardState{}).run([]string{"BOARD_PROJECT=Nowhere"}, "show", "1145")
 	r.wantCode(t, 1)
-	wantContains(t, "stderr", r.stderr, `no project named "Nowhere" under hyperscaleav (it has: Applied Monitoring 2026, Omniglass)`)
+	wantContains(t, "stderr", r.stderr, `no project named "Nowhere" under hyperscaleav (it has: Another project, Omniglass)`)
 }
 
 // ---- the board's own workflows ---------------------------------------------
