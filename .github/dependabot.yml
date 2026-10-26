@@ -1,0 +1,62 @@
+# Version updates arrive as reviewable PRs (#66). Every workflow pins its actions
+# to a full commit SHA with the version in a trailing comment; Dependabot bumps the
+# SHA and rewrites the comment together, so a pin never goes stale silently and a
+# tag moved upstream cannot change what runs here.
+#
+# Each PR title is a conventional commit the pr-title gate accepts: `ci` for the
+# workflows, `chore(deps)` for the Go module and the two npm trees, so a bump
+# never cuts a release on its own. Labels are left empty on purpose: the repo's
+# label set is fixed (docs/contributing/labels.md) and Dependabot's defaults
+# (`dependencies`, `go`, `javascript`) are not in it. Minor and patch bumps group
+# into one PR per ecosystem; a major bump arrives alone, since it is the one that
+# needs reading.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    labels: []
+    commit-message:
+      prefix: ci
+    groups:
+      actions:
+        update-types: [minor, patch]
+
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    labels: []
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      go:
+        update-types: [minor, patch]
+
+  # The operator console (npm, web/package-lock.json).
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: weekly
+    labels: []
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      web:
+        update-types: [minor, patch]
+
+  # The docs site (pnpm, docs/pnpm-lock.yaml; Dependabot's npm ecosystem reads it).
+  - package-ecosystem: npm
+    directory: /docs
+    schedule:
+      interval: weekly
+    labels: []
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      docs:
+        update-types: [minor, patch]

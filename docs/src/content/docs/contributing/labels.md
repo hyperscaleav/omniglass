@@ -47,8 +47,6 @@ promise: if a label runs automation it is named `run:<task>`, and if a label is 
 | --- | --- | --- |
 | `run:preview` | spins up a live [PR preview environment](/guides/pr-previews/); removing it tears the preview down | yes |
 | `run:demo` | records the [demos](/contributing/demos/) the PR body tags (`demo: <id>`) in CI, upserts one comment listing every demo, and writes each demo's clip into the PR body's Demo section | yes |
-| `run:build` | rebuilds the release binaries and container image for the PR head on demand | reserved |
-| `run:test` | runs the full test suite on demand | reserved |
 
 `run:preview` is live today (the [PR previews guide](/guides/pr-previews/) covers it, and
 `preview-comment.yml` is the workflow behind it). So is `run:demo` (`demo.yml`). Applying it
@@ -92,11 +90,11 @@ name is [#1136](https://github.com/hyperscaleav/omniglass/issues/1136).
   the label does nothing until they are resolved.
 - **Forks:** fork PRs are skipped (their token cannot push).
 
-`run:build` and `run:test` are reserved:
-the expensive build and test tiers run on every PR today, and
-[issue #78](https://github.com/hyperscaleav/omniglass/issues/78) tracks moving them behind
-these labels so they run only on demand. Wire the workflow in the same PR that first relies
-on a reserved label, rather than leaving a label that silently does nothing.
+There is no `run:test` and no `run:build`. The full test suite is the merge gate, so it runs on
+every PR rather than on demand (ruled on #214: a test outside the CI gate is a gate defect), and
+the release build runs on every PR that touches its config. A `run:<task>` label is added in the
+same PR that wires its workflow, never reserved ahead of it, since a label that silently does
+nothing breaks the promise above.
 
 ## The fixed set
 

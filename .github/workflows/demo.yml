@@ -127,7 +127,7 @@ jobs:
 
       # A PR's branch tip at run time (not the event's SHA), so a re-run
       # records the current head; main's commit for the freshness run.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ github.event.pull_request.head.ref || github.sha }}
           fetch-depth: 0
@@ -143,7 +143,7 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
 
@@ -199,7 +199,7 @@ jobs:
     env:
       ID: ${{ matrix.id }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ needs.select.outputs.head }}
           persist-credentials: false
@@ -220,7 +220,7 @@ jobs:
       # The walkthrough recorder runs in the pinned Playwright container
       # against the repo mounted from the runner, so it needs the web deps
       # installed here; the terminal recorder needs none.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         if: ${{ matrix.kind == 'walkthrough' }}
         with:
           node-version: "22"
@@ -247,7 +247,7 @@ jobs:
       # the artifact keeps a failed demo's partial output.
       - name: Upload the recording
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: demo-leg-${{ matrix.id }}
           path: ${{ matrix.kind == 'tape' && 'scripts/demo/out/' || 'web/e2e/walkthroughs/out/' }}
@@ -284,16 +284,16 @@ jobs:
       HEAD_SHA: ${{ needs.select.outputs.head }}
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ needs.select.outputs.head }}
           persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           pattern: demo-leg-*
           path: ${{ runner.temp }}/legs
@@ -316,7 +316,7 @@ jobs:
 
       - name: Upload the evidence
         if: ${{ steps.stage.outcome == 'success' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: demo-evidence-pr${{ github.event.pull_request.number }}
           path: ${{ runner.temp }}/evidence/
@@ -334,7 +334,7 @@ jobs:
 
       - name: Upload the report
         if: ${{ steps.report.outcome == 'success' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: demo-fresh-report
           path: ${{ runner.temp }}/report/
@@ -356,7 +356,7 @@ jobs:
       PR: ${{ github.event.pull_request.number }}
       REPO: ${{ github.repository }}
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: demo-evidence-pr${{ github.event.pull_request.number }}
           path: ${{ runner.temp }}/evidence
@@ -548,7 +548,7 @@ jobs:
     env:
       REPO: ${{ github.repository }}
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: demo-fresh-report
           path: ${{ runner.temp }}/report

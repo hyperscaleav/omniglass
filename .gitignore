@@ -18,6 +18,9 @@
 /openapigen
 /seedgen
 /writerclassgen
+# The repo root has no package.json, so an npm run there by mistake writes an
+# empty lockfile named for whatever directory it ran in (one shipped with #824).
+/package-lock.json
 *.exe
 *.test
 *.out
