@@ -104,9 +104,10 @@ type apiOp struct {
 	// install-wide cascade level). Empty for a route that never writes there.
 	platformPerm string
 	// condPerm is the x-omniglass-conditional-permission stamp: the SECOND
-	// permission a route enforces only when the request carries the reference it
-	// is about (today, a component create naming a system, which writes that
-	// system's membership). Empty for a route with no such condition.
+	// permission a route enforces because of a reference the request carries (a
+	// component create naming a system, which writes that system's membership; a
+	// membership or role-assignment route naming a component, which writes onto
+	// it). Empty for a route with no such condition.
 	condPerm string
 }
 

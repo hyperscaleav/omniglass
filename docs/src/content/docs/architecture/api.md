@@ -791,15 +791,19 @@ update or delete by id) the resolved capability rides into the Gateway alongside
 404-versus-403 split stays non-disclosing.
 
 A second permission can also be **conditional on the request** rather than on a tier, and it is stamped
-the same way, as `x-omniglass-conditional-permission`. There is one today: `POST /components` accepts a
-`system`, and what it does with it is insert that component's **primary membership**, the same row `PUT
+the same way, as `x-omniglass-conditional-permission`. `POST /components` accepts a `system`, and what
+it does with it is insert that component's **primary membership**, the same row `PUT
 /systems/{name}/members/{component}` writes under `system:update`. Two routes writing one row must cost
 the same permission, or the cheaper one is the way around the other, so a create that names a system
 requires `system:update` and resolves it in that scope
 ([ADR-0107](/architecture/decisions/#adr-0107-a-create-that-writes-a-membership-costs-what-the-membership-route-costs)).
 The check is in the handler rather than the middleware because the condition is a body field and
 middleware cannot see the body; the stamp is what keeps the spec a faithful map of what the route
-enforces.
+enforces. The same row seen from its other end carries one too: the five routes that bind, unbind,
+re-default or staff a component in a system need `component:update` beside `system:update`, because
+the membership writes onto the component
+([ADR-0510](/architecture/decisions/#adr-0510-a-membership-or-a-role-assignment-costs-a-write-on-both-of-its-ends)).
+Their condition is the component the path always names, so the handler checks it on every request.
 
 ## Properties: a classifier declares, an instance sets
 
@@ -868,10 +872,24 @@ in the same form. Gating follows the owner:
 
 - `GET /standards/{id}/roles` plus `PATCH` / `DELETE /standards/{id}/roles/{role}`, gated `standard:read` /
   `:update` / `:delete`. Withdrawing a role takes every assignment conforming systems made to it (a
-  cascade); a role the standard does not declare is a 404.
+  cascade); a role the standard does not declare is a 404. A standard that does not exist is a 422 on
+  the declaration and writes nothing (`system_role_owner_arc_check` makes an ownerless role
+  unrepresentable), and a 404 on the read, never an empty list
+  ([#505](https://github.com/hyperscaleav/omniglass/issues/505)).
 - `PATCH` / `DELETE /systems/{name}/roles/{role}`, gated `system:update`, for a role declared **directly on
   one system**. A role the system does not declare **itself** is a 404 here: an inherited role is
   withdrawn on the standard.
+- A role name means **one role in a system**, so every write that would give a system two of one name
+  is a 409 naming the role, the standard and the system: a system declaring a name its standard
+  declares, a standard declaring a name a conforming system declares itself, and `PATCH
+  /systems/{name}` moving a system onto a standard that declares a name it declares itself. A staffing
+  write that meets such a pair (written before the rule) is the same 409 rather than a silent pick
+  ([ADR-0503](/architecture/decisions/#adr-0503-a-role-name-addresses-one-role-per-system)).
+- `PATCH /systems/{name}` moving a system's `standard` carries its staffing in the same transaction:
+  each occupant of an inherited role moves onto the new standard's role of the same name when it is
+  still a typed match and the role has room, and is released (a member with no role) otherwise. A
+  staffing write on that system waits for the change and resolves against the new standard
+  ([ADR-0506](/architecture/decisions/#adr-0506-changing-a-systems-standard-carries-its-staffing-onto-the-roles-that-still-exist)).
 - `GET /systems/{name}/roles` is the **resolved read**, gated `system:read`: the declaration
   (including `impact`, `capacity`, `position_labels`, `alternate`) plus `from_standard`, `assigned_to` (the
   component names filling it here, in position order), `positions` (each entry's own 1-based
@@ -880,7 +898,10 @@ in the same form. Gating follows the owner:
   counts **served, not computed by the client**. A one-off system returns only its own roles.
 - `PUT /systems/{name}/roles/{role}/assignments/{component}` puts a component in the role (204,
   idempotent); `DELETE` takes it out (204; a component not filling the role is a 404). Both gate on
-  `system:update`.
+  `system:update` and also need `component:update`, since staffing a role makes the component a
+  member and writes onto it: the component resolves in `component:read` and must be inside
+  `component:update` (an occupant being unassigned needs only the latter, refused with a 403)
+  ([ADR-0510](/architecture/decisions/#adr-0510-a-membership-or-a-role-assignment-costs-a-write-on-both-of-its-ends)).
 - `POST /systems/{name}/roles/{role}:swapPositions` exchanges two occupants' positions, from
   `{position, with}` (204, `system:update`): the only reorder primitive the API exposes, since a
   position is an ordering attribute of an assignment, not a second address for one, and there is no

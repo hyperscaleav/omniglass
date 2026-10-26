@@ -86,12 +86,12 @@ func newFleetFixture(t *testing.T) *fleetFixture {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-1", ProductName: &bar}, f.all, f.all, f.all, f.all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	if err := gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "bar-1", f.all, f.all); err != nil {
+	if err := gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "bar-1", f.all, f.all, f.all, f.all); err != nil {
 		t.Fatalf("assign: %v", err)
 	}
 	// The same physical box also serves the depot room. This is the case the dot
 	// grid exists to show honestly: one component, two systems depending on it.
-	if err := gw.AddMember(ctx, "", "depot-huddle", "bar-1", f.all, f.all); err != nil {
+	if err := gw.AddMember(ctx, "", "depot-huddle", "bar-1", f.all, f.all, f.all, f.all); err != nil {
 		t.Fatalf("add member: %v", err)
 	}
 	return f

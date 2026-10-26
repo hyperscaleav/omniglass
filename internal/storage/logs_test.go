@@ -176,7 +176,7 @@ func TestListSystemLogs(t *testing.T) {
 			t.Fatalf("create %s: %v", n, err)
 		}
 	}
-	if err := gw.AddMember(ctx, "", "room-b", "disp-9", all, all); err != nil {
+	if err := gw.AddMember(ctx, "", "room-b", "disp-9", all, all, all, all); err != nil {
 		t.Fatalf("add member: %v", err)
 	}
 	now := time.Now().UTC()
