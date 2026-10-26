@@ -12,11 +12,19 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/nats-io/nats.go"
-	"google.golang.org/protobuf/proto"
+	"github.com/nats-io/nats.go/jetstream"
 )
 
 // worklistTimeout bounds a single worklist request-reply.
 const worklistTimeout = 5 * time.Second
+
+// onceDrainTimeout bounds how long a one-shot run waits for the stream to ack
+// what it collected; shutdownDrainTimeout bounds the same wait when a running
+// node is stopped.
+const (
+	onceDrainTimeout     = 15 * time.Second
+	shutdownDrainTimeout = 5 * time.Second
+)
 
 // Config is the node run-mode configuration.
 type Config struct {
@@ -109,6 +117,14 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	}
 	defer nc.Close()
 	logger.Info("connected to bus", "facility", "enrollment", "url", creds.NatsURL)
+	// Every telemetry publish goes through the spool (#453, #454): a JetStream
+	// publish that waits for the stream's ack, a batch it has not acked held
+	// and shipped on the next tick under the id it was minted with.
+	js, err := jetstream.New(nc)
+	if err != nil {
+		return collection.WorklistReply{}, fmt.Errorf("node: jetstream: %w", err)
+	}
+	spool := newTelemetrySpool(collection.TelemetrySubject(cfg.Name), jetStreamPublish(js))
 
 	dialer := cfg.Dialer
 	if dialer == nil {
@@ -197,7 +213,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 				level = slog.LevelWarn
 			}
 			logger.Log(ctx, level, "session "+string(tr.State), "facility", "session", "task", taskID, "endpoint", endpoint, "reason", tr.Reason)
-			if err := publishBatch(nc, cfg.Name, taskID, sessionSamples(tr)); err != nil {
+			if err := publishBatch(spool, cfg.Name, taskID, sessionSamples(tr)); err != nil {
 				logger.Warn("session state not published", "facility", "session", "task", taskID, "error", err.Error())
 			}
 		},
@@ -205,7 +221,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 			// The auth step's verdict is the endpoint-authenticated rung, the
 			// ladder's own vocabulary, published when it changes.
 			logger.Info("session authenticated", "facility", "session", "task", taskID, "endpoint", endpoint, "authenticated", v.Authenticated, "reason", v.Reason)
-			if err := publishBatch(nc, cfg.Name, taskID, []collection.Sample{authSample(v)}); err != nil {
+			if err := publishBatch(spool, cfg.Name, taskID, []collection.Sample{authSample(v)}); err != nil {
 				logger.Warn("auth verdict not published", "facility", "session", "task", taskID, "error", err.Error())
 			}
 		},
@@ -213,7 +229,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 			// The endpoint's gate, published when it changes so the server
 			// carries it back to a restarted node (ADR-0158). The value holds
 			// the connection fingerprint, a digest only.
-			if err := publishBatch(nc, cfg.Name, taskID, rejectionSamples(value, reason, time.Now().UTC())); err != nil {
+			if err := publishBatch(spool, cfg.Name, taskID, rejectionSamples(value, reason, time.Now().UTC())); err != nil {
 				logger.Warn("endpoint rejection not published", "facility", "session", "task", taskID, "error", err.Error())
 			}
 		},
@@ -228,7 +244,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 			if fresh {
 				logger.Info("session host key trusted", "facility", "session", "task", taskID, "endpoint", endpoint, "fingerprint", fp)
 			}
-			if err := publishBatch(nc, cfg.Name, taskID, []collection.Sample{{
+			if err := publishBatch(spool, cfg.Name, taskID, []collection.Sample{{
 				Name: collection.SignalSSHHostKey, Text: fp, IsText: true, TS: time.Now().UTC(),
 			}}); err != nil {
 				logger.Warn("host key not published", "facility", "session", "task", taskID, "error", err.Error())
@@ -245,20 +261,20 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 			if fresh {
 				logger.Info("tls certificate key trusted", "facility", "session", "task", taskID, "endpoint", endpoint, "fingerprint", fp)
 			}
-			if err := publishBatch(nc, cfg.Name, taskID, []collection.Sample{{
+			if err := publishBatch(spool, cfg.Name, taskID, []collection.Sample{{
 				Name: collection.SignalTLSCertificate, Text: fp, IsText: true, TS: time.Now().UTC(),
 			}}); err != nil {
 				logger.Warn("certificate key not published", "facility", "session", "task", taskID, "error", err.Error())
 			}
 		},
 		samples: func(taskID string, dps []collection.Sample) {
-			if err := publishBatch(nc, cfg.Name, taskID, dps); err != nil {
+			if err := publishBatch(spool, cfg.Name, taskID, dps); err != nil {
 				logger.Warn("pushed samples not published", "facility", "session", "task", taskID, "error", err.Error())
 			}
 		},
 		fault: func(taskID string, cause error) {
 			logger.Warn("listener fault", "facility", "collection", "task", taskID, "error", cause.Error())
-			_ = publishCollectionFailed(nc, cfg.Name, taskID, cause)
+			_ = publishCollectionFailed(spool, cfg.Name, taskID, cause)
 		},
 		arm: func(taskID, endpoint, line, reply string, err error) {
 			if errors.Is(err, collection.ErrUnacknowledged) {
@@ -302,16 +318,23 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	// lives here (the report repeats, the device is not touched twice). It is
 	// pruned past the redelivery window so it does not grow for the life of the run.
 	executedCommands := map[int64]commandOutcome{}
-	if err := runTasks(ctx, nc, cfg.Name, wl, runner, sessions, sched, verdicts, faultseen); err != nil {
+	if err := runTasks(ctx, spool, cfg.Name, wl, runner, sessions, sched, verdicts, faultseen); err != nil {
 		return wl, err
 	}
 	runCommands(ctx, nc, cfg.Name, runner, sessions, executedCommands)
 	if err := publishHeartbeat(nc, cfg.Name); err != nil {
 		return wl, err
 	}
-	publishSelfLogs(nc, cfg.Name, sink)
+	publishSelfLogs(spool, cfg.Name, sink)
 
 	if cfg.Once {
+		// A one-shot run ends only once the stream has acked what it
+		// collected: a batch still held is an error, never a quiet exit.
+		dctx, cancel := context.WithTimeout(ctx, onceDrainTimeout)
+		defer cancel()
+		if err := spool.drain(dctx); err != nil {
+			return wl, err
+		}
 		_ = nc.Flush()
 		return wl, nil
 	}
@@ -334,15 +357,35 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	for {
 		select {
 		case <-ctx.Done():
+			// Ship what the spool still holds before the connection closes,
+			// within a bound: the spool is memory, so a batch left in it at
+			// exit is gone.
+			dctx, cancel := context.WithTimeout(context.Background(), shutdownDrainTimeout)
+			if err := spool.drain(dctx); err != nil {
+				logger.Warn("telemetry left unshipped at shutdown", "facility", "delivery", "error", err.Error())
+			}
+			cancel()
 			_ = nc.Flush()
 			return wl, nil
 		case job := <-runJobs:
 			if time.Now().Before(job.deadline) {
-				job.respond(runNowTask(ctx, nc, cfg.Name, runner, sessions, sched, job.task, job.deadline))
+				job.respond(runNowTask(ctx, spool, cfg.Name, runner, sessions, sched, job.task, job.deadline))
 			}
-			publishSelfLogs(nc, cfg.Name, sink)
+			publishSelfLogs(spool, cfg.Name, sink)
 		case <-ticker.C:
 			_ = publishHeartbeat(nc, cfg.Name)
+			// Ship what the spool held since the last tick before this tick's
+			// work, so batches land in the order they were collected (#454).
+			_ = spool.retry()
+			// A batch the spool dropped at its cap may have carried a
+			// transition the node remembers as sent: forget what was sent, so
+			// this tick sends current state again (the property lane's
+			// transition guard keeps an unchanged value from landing twice).
+			if spool.takeOverflow() {
+				clear(verdicts)
+				clear(faultseen)
+				sched.forgetOccurrences()
+			}
 			// Re-pull each tick; a changed config generation drives a refresh in
 			// later checkpoints. A pull failure is non-fatal (retry next tick).
 			if next, err := pullWorklist(nc, cfg.Name); err == nil {
@@ -352,13 +395,13 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 			sessions.reconcile(wl.Tasks)
 			// Run the worklist's tcp tasks and publish their telemetry. A publish
 			// failure is non-fatal (retry next tick).
-			_ = runTasks(ctx, nc, cfg.Name, wl, runner, sessions, sched, verdicts, faultseen)
+			_ = runTasks(ctx, spool, cfg.Name, wl, runner, sessions, sched, verdicts, faultseen)
 			// Pull and actuate the pending command queue (#815).
 			runCommands(ctx, nc, cfg.Name, runner, sessions, executedCommands)
 			// Report the inbound lines no listener claimed this tick.
 			sessions.flushUnclaimed()
 			// Ship whatever the node logged this tick as self-logs.
-			publishSelfLogs(nc, cfg.Name, sink)
+			publishSelfLogs(spool, cfg.Name, sink)
 		}
 	}
 }
@@ -376,22 +419,19 @@ func pullWorklist(nc *nats.Conn, name string) (collection.WorklistReply, error) 
 	return reply, nil
 }
 
-// publishSelfLogs drains the node's captured log records and publishes them as a
-// logs-only telemetry Event on the node's own subject, where the ingest consumer
-// lands them in node_log (ADR-0066, #589). Non-fatal: a marshal or publish
-// failure drops this batch and the loop continues. It deliberately does not log its
-// own failure, since emitting from the drain path would feed the buffer it just
-// emptied; a publish outage is visible as a gap on the lane and in the heartbeat.
-func publishSelfLogs(nc *nats.Conn, name string, sink *logSink) {
+// publishSelfLogs drains the node's captured log records and hands them to the
+// spool as a logs-only telemetry batch on the node's own subject, where the
+// ingest consumer lands them in node_log (ADR-0066, #589). The spool holds a
+// batch the stream has not acked, so a drained line survives a publish
+// outage up to the spool's cap (#454). It deliberately does not log its own
+// failure, since emitting from the drain path would feed the buffer it just
+// emptied.
+func publishSelfLogs(out *telemetrySpool, name string, sink *logSink) {
 	ev := selfLogBatch(name, sink.drain())
 	if ev == nil {
 		return
 	}
-	b, err := proto.Marshal(ev)
-	if err != nil {
-		return
-	}
-	_ = nc.Publish(collection.TelemetrySubject(name), b)
+	_ = out.send(ev)
 }
 
 // publishHeartbeat sends one liveness heartbeat on the node's own subject.

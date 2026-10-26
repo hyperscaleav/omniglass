@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/hyperscaleav/omniglass/internal/rules"
+	"slices"
 	"time"
+
+	"github.com/hyperscaleav/omniglass/internal/rules"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -50,7 +52,7 @@ func (p *PG) InsertPropertySamples(ctx context.Context, w KeyWriter, evs []Prope
 	if len(evs) == 0 {
 		return nil
 	}
-	return p.sampleWrite(ctx, "insert property samples", func(tx pgx.Tx) error { return p.writePropertySamples(ctx, tx, w, evs) })
+	return p.sampleWrite(ctx, "insert property samples", func(tx pgx.Tx) error { return p.writePropertySamples(ctx, tx, w, evs, false) })
 }
 
 // writePropertySamples is the property lane's sample-write path, in the
@@ -58,7 +60,15 @@ func (p *PG) InsertPropertySamples(ctx context.Context, w KeyWriter, evs []Prope
 // calculated output (a calc rule's writer), as writeMetricSamples is for
 // metrics, held to each key's writer class first. An observation may also
 // settle a pending command.
-func (p *PG) writePropertySamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs []PropertySampleWrite) error {
+//
+// transitionOnly is the ingest's transition guard (#455, ADR-0311), held in
+// the insert itself: a row whose value equals its series' latest is not
+// written, and a row not written settles nothing and is judged by no rule.
+// The comparison is a conditional insert, and each series it touches is
+// locked first (lockPropertySeries), so the latest it compares against is
+// the committed one: two batches carrying one unchanged value, landed at
+// once, write it once, however the consumer dispatches.
+func (p *PG) writePropertySamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs []PropertySampleWrite, transitionOnly bool) error {
 	arcs := make([]string, len(evs))
 	rows := make([]keyedWrite, len(evs))
 	marks := newCalcMarks()
@@ -86,6 +96,11 @@ func (p *PG) writePropertySamples(ctx context.Context, tx pgx.Tx, w KeyWriter, e
 	// land on, before anything lands.
 	if err := admitWrites(ctx, tx, writeProperty, w, rows); err != nil {
 		return err
+	}
+	if transitionOnly {
+		if err := lockPropertySeries(ctx, tx, evs, arcs); err != nil {
+			return err
+		}
 	}
 	// Settlement only cares about properties a command type targets; learn
 	// which once per batch, and read the transaction's clock once.
@@ -118,9 +133,31 @@ func (p *PG) writePropertySamples(ctx context.Context, tx pgx.Tx, w KeyWriter, e
 		if ts, err = clock.cap(ctx, ev.Key, ts); err != nil {
 			return err
 		}
+		// The transition guard is the insert's own condition: the series'
+		// latest row (ts, then id, the latest-value read's order) holding this
+		// value means nothing is written.
+		guard := ""
+		if transitionOnly {
+			guard = fmt.Sprintf(`
+			where not exists (
+				select 1 from (
+					select value from property
+					where owner_kind = $2 and %s = $3
+					  and property_type_id = (select id from property_type where name = $4)
+					  and instance = $5 and provenance = $7
+					order by ts desc, id desc
+					limit 1) latest
+				where latest.value = to_jsonb($6::text))`, col)
+		}
 		sql := fmt.Sprintf(`insert into property (ts, owner_kind, %s, property_type_id, instance, value, provenance, source, source_rule, source_rule_version, source_rule_id)
-			values ($1, $2, $3, (select id from property_type where name = $4), $5, to_jsonb($6::text), $7, $8, $9, $10, $11::uuid)`, col)
-		if _, err := tx.Exec(ctx, sql, ts, ev.OwnerKind, arcs[i], ev.Key, ev.Instance, ev.Value, provenance, ev.Source, sourceRule, sourceVersion, sourceRuleID); err != nil {
+			select $1::timestamptz, $2::text, $3::uuid, (select id from property_type where name = $4::text), $5::text, to_jsonb($6::text),
+				$7::text, $8::text, $9::text, $10::bigint, $11::uuid%s
+			returning id`, col, guard)
+		var id int64
+		err := tx.QueryRow(ctx, sql, ts, ev.OwnerKind, arcs[i], ev.Key, ev.Instance, ev.Value, provenance, ev.Source, sourceRule, sourceVersion, sourceRuleID).Scan(&id)
+		if errors.Is(err, pgx.ErrNoRows) {
+			continue // an unchanged value: the series is transition-only
+		} else if err != nil {
 			return fmt.Errorf("storage: insert property sample %s/%s: %w", ev.OwnerID, ev.Key, err)
 		}
 		// An observation may be what a pending command was waiting on.
@@ -134,6 +171,40 @@ func (p *PG) writePropertySamples(ctx context.Context, tx pgx.Tx, w KeyWriter, e
 		}
 	}
 	return eval.stampJudged(ctx, tx)
+}
+
+// lockPropertySeries takes the transition lock of every property series the
+// batch writes, for the rest of the caller's transaction, in sorted order (so
+// two batches over overlapping series never deadlock on each other) and
+// before the batch takes any mark or rule lock. It is what makes the
+// guard's compare-then-insert atomic per series (lockAdvisory): a second
+// batch writing the series waits here, and its conditional insert then reads
+// the first one's committed row rather than a snapshot that predates it.
+// Only the ingest's guarded write takes it.
+func lockPropertySeries(ctx context.Context, tx pgx.Tx, evs []PropertySampleWrite, arcs []string) error {
+	keys := make([]string, 0, len(evs))
+	seen := make(map[string]bool, len(evs))
+	for i, ev := range evs {
+		k := propertySeriesLockKey(ev.OwnerKind, arcs[i], ev.Key, ev.Instance)
+		if !seen[k] {
+			seen[k] = true
+			keys = append(keys, k)
+		}
+	}
+	slices.Sort(keys)
+	for _, k := range keys {
+		if err := lockAdvisory(ctx, tx, k); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// propertySeriesLockKey is the string one property series' transition lock
+// hashes: `property/<kind>/<owner id>/<type>/<instance>`. The owner is its id,
+// never its name, so two owners sharing a name never share a lock (#627).
+func propertySeriesLockKey(ownerKind, ownerID, key, instance string) string {
+	return "property/" + ownerKind + "/" + ownerID + "/" + key + "/" + instance
 }
 
 // LatestProperty returns the most recent observed property row for a component

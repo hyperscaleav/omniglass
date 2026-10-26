@@ -3,7 +3,10 @@ package bus
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -27,11 +30,27 @@ import (
 // permanently-failing message (a row the handler will never manage to write)
 // would redeliver forever, the mirror problem to the stream's own retention
 // (see startTelemetryConsumer).
+//
+// telemetryDuplicateWindow is how long the stream remembers a batch's
+// Nats-Msg-Id (#453): a publisher retrying inside it (a node's next tick, the
+// push route's bounded retry) is answered with the first copy's ack and
+// nothing is stored twice. A retry past it is stored again, and the receipt
+// (#311, LandBatch) keeps it from landing twice, so the window saves work and
+// the receipt is the guarantee. receiptHorizon is how long a receipt is kept:
+// far past the stream's redelivery (maxTelemetryDeliveries acks) and a
+// node's retry of a batch it could not ship, ADR-0311.
 const (
-	telemetryStream        = "OG_TELEMETRY"
-	telemetryConsumer      = "og-telemetry-worker"
-	maxTelemetryDeliveries = 5
+	telemetryStream          = "OG_TELEMETRY"
+	telemetryConsumer        = "og-telemetry-worker"
+	maxTelemetryDeliveries   = 5
+	telemetryDuplicateWindow = 5 * time.Minute
+	receiptHorizon           = 24 * time.Hour
 )
+
+// telemetryAckWait is how long the stream waits for the consumer's ack
+// before it redelivers: a consumer that died with a batch unacked hands it
+// to the next one after this. A var so a test can shorten it.
+var telemetryAckWait = 30 * time.Second
 
 // startTelemetryConsumer creates (idempotently) the telemetry stream + durable
 // consumer over the full-permission internal client and begins consuming. The
@@ -40,24 +59,32 @@ const (
 // backlog rather than growing forever; the consumer redelivers a transient
 // failure up to maxTelemetryDeliveries (nakOrTerm), so a DB hiccup never loses a
 // sample but a permanently-failing one still leaves the queue.
+//
+// The stream keeps a duplicate window over each batch's Nats-Msg-Id (#453),
+// and the stream's creation time is recorded as the epoch a batch with no id
+// is keyed under (batchID).
 func (s *Server) startTelemetryConsumer() error {
 	js, err := jetstream.New(s.nc)
 	if err != nil {
 		return err
 	}
+	s.js = js
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	stream, err := js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
-		Name:      telemetryStream,
-		Subjects:  []string{collection.TelemetryWildcard, collection.APITelemetrySubject},
-		Retention: jetstream.WorkQueuePolicy,
+		Name:       telemetryStream,
+		Subjects:   []string{collection.TelemetryWildcard, collection.APITelemetrySubject},
+		Retention:  jetstream.WorkQueuePolicy,
+		Duplicates: telemetryDuplicateWindow,
 	})
 	if err != nil {
 		return err
 	}
+	s.streamEpoch = stream.CachedInfo().Created.UTC().Format(time.RFC3339Nano)
 	cons, err := stream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
 		Durable:    telemetryConsumer,
 		AckPolicy:  jetstream.AckExplicitPolicy,
+		AckWait:    telemetryAckWait,
 		MaxDeliver: maxTelemetryDeliveries,
 	})
 	if err != nil {
@@ -69,6 +96,44 @@ func (s *Server) startTelemetryConsumer() error {
 	}
 	s.consumeCtx = cc
 	return nil
+}
+
+// maxBatchIDLen bounds a Nats-Msg-Id the receipt keys verbatim; a longer one
+// is keyed by its digest, so a publisher cannot make a receipt key the index
+// refuses.
+const maxBatchIDLen = 128
+
+// batchID is a batch's idempotency key (#311): the subject it arrived on and
+// its Nats-Msg-Id. The subject is the publisher's (a node's grant reaches only
+// its own), so no publisher can claim another's id and suppress its batch. A
+// batch with no id (a publisher from before #453) is keyed by its stream
+// sequence under the stream's creation epoch, which holds across its own
+// redeliveries though not across a publisher's retry; "" only when neither
+// can be read, and the batch then lands with no receipt.
+func (s *Server) batchID(msg jetstream.Msg) string {
+	if id := msg.Headers().Get(jetstream.MsgIDHeader); id != "" {
+		if len(id) > maxBatchIDLen {
+			sum := sha256.Sum256([]byte(id))
+			id = "sha256:" + hex.EncodeToString(sum[:])
+		}
+		return msg.Subject() + " " + id
+	}
+	meta, err := msg.Metadata()
+	if err != nil {
+		return ""
+	}
+	return fmt.Sprintf("%s seq:%s/%d", msg.Subject(), s.streamEpoch, meta.Sequence.Stream)
+}
+
+// ack confirms a batch to the stream and waits for the stream to take it
+// (the double ack): a batch whose ack is lost anyway is redelivered after
+// telemetryAckWait, and its receipt makes the second landing a no-op.
+func ack(msg jetstream.Msg) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := msg.DoubleAck(ctx); err != nil {
+		slog.Warn("telemetry ack not confirmed, the batch will be redelivered and held by its receipt", "subject", msg.Subject(), "error", err)
+	}
 }
 
 // handleTelemetry is the ingest handler for one telemetry Event: decode, bind +
@@ -86,6 +151,7 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 		_ = msg.Term() // undecodable: it will never succeed, stop redelivery
 		return
 	}
+	id := s.batchID(msg)
 
 	// TRUST DECIDED BY SUBJECT, never by which fields are populated. The API lane
 	// carries an owner the route already authorized; the node lane's owner is the
@@ -96,11 +162,11 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 			_ = msg.Term() // malformed owner: it will never resolve, stop redelivery
 			return
 		}
-		if err := s.land(ctx, &ev, bind); err != nil {
+		if err := s.land(ctx, id, &ev, bind); err != nil {
 			s.nakOrTerm(msg)
 			return
 		}
-		_ = msg.Ack()
+		ack(msg)
 		return
 	}
 
@@ -147,11 +213,11 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 		}
 	}
 
-	if err := s.land(ctx, &ev, bind); err != nil {
+	if err := s.land(ctx, id, &ev, bind); err != nil {
 		s.nakOrTerm(msg) // transient registry read or DB write failure: redeliver (bounded)
 		return
 	}
-	_ = msg.Ack()
+	ack(msg)
 }
 
 // apiBinding builds the binding for a batch that arrived on the API push lane. The
@@ -220,11 +286,11 @@ func taskBound(ev *ogv1.TelemetryBatch) int {
 	return sampleCount(ev) + len(ev.GetTaskLogs())
 }
 
-// land writes one batch to its sinks: the raw log lines, then the three typed
-// lanes (#594: the lane is the array, so each validates against its own catalog).
-// It is the ONE write path, and both ingest lanes call it, so a new lane cannot
-// drift from the node lane's semantics (reject-not-project, per-lane validation,
-// the transition-only state guard).
+// land writes one batch to its sinks: the raw log lines and the three typed
+// lanes (#594: the lane is the array, so each validates against its own
+// catalog). It is the ONE write path, and both ingest lanes call it, so a new
+// lane cannot drift from the node lane's semantics (reject-not-project,
+// per-lane validation, the transition-only state guard).
 //
 // It deliberately knows nothing about JetStream: no message, no ack, no nak. The
 // caller owns delivery semantics and decides what a returned error means, which is
@@ -232,110 +298,72 @@ func taskBound(ev *ogv1.TelemetryBatch) int {
 // (a registry read or a sink write); anything permanent is dropped in place, since
 // re-delivering it would not help.
 //
-// NOTE(#311): the sinks each write in their own transaction and the caller acks
-// once afterward. Under at-least-once redelivery, a failure in a later write after
-// an earlier one committed re-runs the committed write on redelivery; metric and
-// event have no uniqueness key, so that double-inserts. This is a pre-existing
-// multi-tx-then-ack characteristic; atomic-or-idempotent ingest is tracked
-// separately.
-func (s *Server) land(ctx context.Context, ev *ogv1.TelemetryBatch, bind ingestBinding) error {
+// The batch lands as ONE unit under id, its receipt (#311, ADR-0311): every sink
+// in one transaction, so a failure part way writes nothing a redelivery would
+// write again, and an id that already landed writes nothing at all, so a
+// redelivery after a lost ack, a consumer that died after its commit, or a
+// publisher's retry past the stream's duplicate window lands each row once.
+func (s *Server) land(ctx context.Context, id string, ev *ogv1.TelemetryBatch, bind ingestBinding) error {
+	batch := storage.IngestBatch{BatchID: id, Writer: bind.Writer}
 	// The raw log sink, routed by lane: a node's self-logs to node_log, a push's
 	// component-owned lines to log_line (#589). The storage layer refuses any
 	// other binding, so a future lane cannot quietly widen the log owner.
 	if bind.LogNode != "" {
-		if logs := nodeLogWrites(ev, bind.LogNode); len(logs) > 0 {
-			if err := s.store.InsertNodeLogs(ctx, logs); err != nil {
-				return err
-			}
-		}
-	} else if logs := logLineWrites(ev, bind.LogComponent); len(logs) > 0 {
-		if err := s.store.InsertLogLines(ctx, logs); err != nil {
-			return err
-		}
+		batch.NodeLogs = nodeLogWrites(ev, bind.LogNode)
+	} else {
+		batch.LogLines = logLineWrites(ev, bind.LogComponent)
 	}
 	// A task's collected log lines (#1145), on the node lane alone: they land
 	// on the task's component, owner-bound server-side from the task as every
 	// sample is, so a node can land a line only for a component its own task
 	// collects for. An orphan batch (no resolved owner) lands none.
 	if bind.LogNode != "" && bind.SampleOwner != nil {
-		if logs := taskLogWrites(ev, *bind.SampleOwner); len(logs) > 0 {
-			if err := s.store.InsertLogLines(ctx, logs); err != nil {
-				return err
-			}
-		}
+		batch.LogLines = append(batch.LogLines, taskLogWrites(ev, *bind.SampleOwner)...)
 	}
-	if bind.SampleOwner == nil || sampleCount(ev) == 0 {
-		if bind.SampleOwner != nil && len(ev.GetTaskLogs()) > 0 {
-			// The endpoint delivered this batch: its freshness is the
-			// server's receipt (#933), whichever lane carried it.
-			if id := bind.SampleOwner.EndpointID; id != "" {
-				return s.store.StampEndpointsSeen(ctx, []string{id})
-			}
-		}
-		return nil
-	}
-
-	metricTypes, err := s.store.ListMetricTypes(ctx)
-	if err != nil {
-		return err
-	}
-	properties, err := s.store.ListPropertyTypes(ctx)
-	if err != nil {
-		return err
-	}
-	eventTypes, err := s.store.ListEventTypes(ctx)
-	if err != nil {
-		return err
-	}
-	reg := collection.NewRegistry(metricTypes, properties, eventTypes)
-	// A name in both registries resolves to nothing, so every sample carrying it is
-	// refused. The fence at the create routes stops new ones, but an install that
-	// already has a collision would otherwise just lose data quietly. Say so.
-	if clashes := reg.Collisions(); len(clashes) > 0 {
-		slog.Warn("registry name collision: samples using these names are refused until one side is renamed",
-			"names", clashes)
-	}
-
-	// Each lane derives against its own catalog (#594): the array the sample rode
-	// says which table it lands in, and the catalog row says what a valid value
-	// looks like. All three survive the SAME owner binding and reject-not-project;
-	// the split is only the sink, not a second trust decision. The
-	// multi-transaction-then-ack redelivery characteristic is NOTE(#311) on land
-	// above.
-	metrics := deriveMetrics(ev, *bind.SampleOwner, reg, bind.Writer)
-	states := deriveProperties(ev, *bind.SampleOwner, reg, bind.Writer)
-	events := deriveEvents(ev, *bind.SampleOwner, reg, bind.Writer)
-	if len(metrics) > 0 {
-		if err := s.store.InsertMetricSamples(ctx, bind.Writer, metrics); err != nil {
+	if bind.SampleOwner != nil && sampleCount(ev) > 0 {
+		metricTypes, err := s.store.ListMetricTypes(ctx)
+		if err != nil {
 			return err
 		}
-	}
-	if len(events) > 0 {
-		if err := s.store.InsertEvents(ctx, bind.Writer, events); err != nil {
+		properties, err := s.store.ListPropertyTypes(ctx)
+		if err != nil {
 			return err
 		}
+		eventTypes, err := s.store.ListEventTypes(ctx)
+		if err != nil {
+			return err
+		}
+		reg := collection.NewRegistry(metricTypes, properties, eventTypes)
+		// A name in both registries resolves to nothing, so every sample carrying it is
+		// refused. The fence at the create routes stops new ones, but an install that
+		// already has a collision would otherwise just lose data quietly. Say so.
+		if clashes := reg.Collisions(); len(clashes) > 0 {
+			slog.Warn("registry name collision: samples using these names are refused until one side is renamed",
+				"names", clashes)
+		}
+		// Each lane derives against its own catalog (#594): the array the sample rode
+		// says which table it lands in, and the catalog row says what a valid value
+		// looks like. All three survive the SAME owner binding and reject-not-project;
+		// the split is only the sink, not a second trust decision. The property lane
+		// is transition-only: a value equal to its series' latest is not written, the
+		// guard held in the insert itself (LandBatch), so a restart that re-emits an
+		// unchanged verdict adds no row, under any dispatch (#455).
+		batch.Metrics = deriveMetrics(ev, *bind.SampleOwner, reg, bind.Writer)
+		batch.Properties = deriveProperties(ev, *bind.SampleOwner, reg, bind.Writer)
+		batch.Events = deriveEvents(ev, *bind.SampleOwner, reg, bind.Writer)
 	}
-	// The transition guard: a property series is transition-only, so skip a write whose
-	// value equals the latest stored value for that series. A producer's own change
-	// detection is the primary defense; this is the robustness net for a restart that
-	// re-emits an unchanged verdict. Nothing derives after the write: a sample's
-	// current value IS its latest series row, both lanes (#591 retired the cache).
-	fresh, err := s.dedupeProperties(ctx, states)
-	if err != nil {
+	if _, err := s.store.LandBatch(ctx, batch); err != nil {
 		return err
-	}
-	if len(fresh) > 0 {
-		if err := s.store.InsertPropertySamples(ctx, bind.Writer, fresh); err != nil {
-			return err
-		}
 	}
 	// The endpoint delivered this batch, whatever the sinks kept of it: an
 	// instanced series, an unchanged property the guard skipped, a sample a
-	// node's clock dated ahead. Its freshness is the server's receipt (#933).
-	// The push lane has no endpoint, so nothing is stamped there.
-	if id := bind.SampleOwner.EndpointID; id != "" {
-		if err := s.store.StampEndpointsSeen(ctx, []string{id}); err != nil {
-			return err
+	// node's clock dated ahead, or a copy of a batch that already landed. Its
+	// freshness is the server's receipt (#933), stamped after the batch's
+	// transaction so it adds no lock to it. The push lane has no endpoint, so
+	// nothing is stamped there.
+	if bind.SampleOwner != nil && taskBound(ev) > 0 {
+		if id := bind.SampleOwner.EndpointID; id != "" {
+			return s.store.StampEndpointsSeen(ctx, []string{id})
 		}
 	}
 	return nil
@@ -361,39 +389,6 @@ func (s *Server) nakOrTerm(msg jetstream.Msg) {
 		return
 	}
 	_ = msg.Nak()
-}
-
-// dedupeProperties drops any property sample whose value equals the latest
-// stored value for its series (owner component + key + instance), so a repeated
-// identical verdict does not add a consecutive-duplicate row. A LatestProperty
-// read error is returned so the caller can leave the message unacked for
-// redelivery.
-//
-// Correctness of this read-then-insert guard depends on the telemetry consumer
-// dispatching messages serially (one fully processed before the next is read),
-// which the current ConsumerConfig gives us (AckExplicit, no MaxAckPending, no
-// per-message goroutine); MaxDeliver bounds how many times a failed message is
-// redelivered but does not affect this serial-dispatch property. Adding
-// concurrent handlers or batched in-flight acks would make this racy: two
-// identical in-flight duplicates could both read an older latest and both
-// insert. Keep dispatch serial, or move the transition check into the insert (a
-// conditional write) before parallelizing.
-func (s *Server) dedupeProperties(ctx context.Context, states []storage.PropertySampleWrite) ([]storage.PropertySampleWrite, error) {
-	if len(states) == 0 {
-		return nil, nil
-	}
-	fresh := make([]storage.PropertySampleWrite, 0, len(states))
-	for _, ev := range states {
-		latest, err := s.store.LatestProperty(ctx, ev.OwnerID, ev.Key, ev.Instance)
-		if err != nil {
-			return nil, err
-		}
-		if latest != nil && latest.Value == ev.Value {
-			continue // unchanged verdict: transition-only, skip
-		}
-		fresh = append(fresh, ev)
-	}
-	return fresh, nil
 }
 
 // logLineWrites turns a push batch's raw log lines into component-owned

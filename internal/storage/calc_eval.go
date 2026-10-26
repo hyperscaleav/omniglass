@@ -833,7 +833,7 @@ func (p *PG) writeCalcOutput(ctx context.Context, tx pgx.Tx, r CalcRule, owner c
 			Value: f, Source: calcSource, TS: ts}})
 	}
 	return p.writePropertySamples(ctx, tx, w, []PropertySampleWrite{{OwnerKind: owner.kind, OwnerID: owner.id, Key: r.OutputKey,
-		Value: rules.FormatCalcValue(v), Source: calcSource, TS: ts}})
+		Value: rules.FormatCalcValue(v), Source: calcSource, TS: ts}}, false)
 }
 
 // calcSource is the source a calculated sample records; its producer is in
