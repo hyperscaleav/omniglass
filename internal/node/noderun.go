@@ -178,7 +178,7 @@ func landableRun(sched *pollSchedule, taskID string, dps []collection.Sample) []
 // poll is refused with the gate's refusal and nothing is sent), a terminal
 // refusal it meets gating the endpoint, and what it reads published (its
 // faults as collection-failed, its samples as a batch), so it lands.
-func runNowTask(ctx context.Context, nc *nats.Conn, node string, runner *collection.Runner, sessions *sessionManager, sched *pollSchedule, task collection.TaskSpec, deadline time.Time) collection.RunReply {
+func runNowTask(ctx context.Context, out *telemetrySpool, node string, runner *collection.Runner, sessions *sessionManager, sched *pollSchedule, task collection.TaskSpec, deadline time.Time) collection.RunReply {
 	if task.Mode != "poll" || !driver.IsBaked(task.Spec) {
 		return collection.RunReply{Error: "a run now runs a driver poll, and this task is not one"}
 	}
@@ -211,12 +211,12 @@ func runNowTask(ctx context.Context, nc *nats.Conn, node string, runner *collect
 	}
 	for _, f := range faults {
 		res.Faults = append(res.Faults, f.Error())
-		if err := publishCollectionFailed(nc, node, task.ID, f); err != nil {
+		if err := publishCollectionFailed(out, node, task.ID, f); err != nil {
 			return collection.RunReply{Error: "the node could not publish the run's faults: " + err.Error()}
 		}
 	}
 	if landed := landableRun(sched, task.ID, dps); len(landed) > 0 {
-		if err := publishBatch(nc, node, task.ID, landed); err != nil {
+		if err := publishBatch(out, node, task.ID, landed); err != nil {
 			return collection.RunReply{Error: "the node could not publish the run's samples: " + err.Error()}
 		}
 		sched.commitChanged(task.ID, landed)

@@ -59,7 +59,8 @@ func TestCreateSimSystem(t *testing.T) {
 			Endpoints: []storage.EndpointSpec{{Transport: "tcp", Params: []byte(`{"target":"` + target + `"}`)}}}
 	}
 	sc := storage.SimSystemScopes{SystemCreate: all, LocationRead: all, ComponentCreate: all,
-		SystemRead: all, SystemUpdate: all, EndpointCreate: all, SecretRead: all, CanAdmin: true}
+		SystemRead: all, SystemUpdate: all, EndpointCreate: all, SecretRead: all, CanAdmin: true,
+		ComponentRead: all, ComponentUpdate: all}
 	spec := storage.SimSystemSpec{
 		System: storage.SystemSpec{SystemTypeID: &sysType, StandardID: &standard, LocationName: &loc},
 		Node:   "edge",

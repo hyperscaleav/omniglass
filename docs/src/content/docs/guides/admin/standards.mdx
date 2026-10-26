@@ -39,7 +39,9 @@ classifier is its own registry rather than a use of a standard's own parent-vari
   **name** (unique tenant-wide, e.g. `lecture-hall`) and a **label**, and
   optionally pick a **parent standard**. An unknown parent is refused (422).
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with `standard:update`) edits the
-  label and parent; the **name** is fixed, since a catalog row carries no rename. **Delete** (with
+  label and parent. The blade does not edit the **name**: rename a standard you created with
+  `omniglass standard rename <name> --name <new>` (`standard:rename`), which keeps every system that
+  conforms to it; a shipped one keeps its name (below). **Delete** (with
   `standard:delete`) removes the row, behind
   a confirm.
 - **Delete is refused (409) while a system still conforms to it.** Repoint or remove those systems
@@ -52,8 +54,8 @@ The same operations are `omniglass standard list/get/create/update/delete` from 
 
 Omniglass ships a starter set, and unlike a seeded [vendor](/guides/admin/vendors/) or
 [product](/guides/admin/products/) those rows are **not official and not read-only**. They arrive as
-ordinary **operator-owned** rows: rename them, re-parent them, add to their contract, delete the ones
-you do not run. The shipped set, rendered from the seed itself:
+ordinary **operator-owned** rows: edit them, re-parent them, add to their contract. The shipped set,
+rendered from the seed itself:
 
 <SeededSet kind="standards" />
 
@@ -62,6 +64,13 @@ inheritance**: nothing in your fleet points back at that template afterwards. So
 its templates in any release without ever touching your rows, and your edits are never reverted by a
 restart, because the boot seed installs a standard **only if it is absent**. The thing the vendor
 updates and the thing you own are two different objects, which is the whole point.
+
+One consequence of installing by **name**: a shipped standard keeps its name. Renaming one is refused
+(409), because the next boot would find the shipped name absent and plant it again beside your renamed
+row, roles and all; for the same reason a shipped standard you delete returns on the next boot. Until
+standards are forked from templates on request
+([#827](https://github.com/hyperscaleav/omniglass/issues/827)), create a standard of your own under the
+name you want and point your systems at it.
 
 The exception is the **canonical vocabulary**: the [property catalog](/guides/admin/properties/) (and
 later commands and event types) is the shared namespace a driver maps onto, so it must read the same on
@@ -165,7 +174,10 @@ with where it came from.
    a [one-off system](/guides/operator/entities/) that conforms to nothing sees only roles declared
    directly on it.
 2. **Assign a component to the role.** Each role lists the components filling it and lets you add
-   another. The picker is scoped to what you can see, and assignment is idempotent.
+   another. The picker is scoped to what you can see, and assignment is idempotent. Staffing a role
+   makes the component a member of the system and writes onto it, so it takes `component:update` over
+   the component as well as `system:update` over the system: a component you can see but not edit is
+   refused with the scope named, and the same holds for unassigning one.
 3. **Read the understaffed count.** A role wanting two components with one assigned reads as short by
    one, immediately, without any monitoring running: staffing is a fact about what you have entered. The
    room's **[health](/guides/operator/entities/#health-on-a-system-or-location)** asks the second question,
@@ -193,7 +205,19 @@ picked the wrong component, or the role's accepted types (or pinned products) ne
 
 Roles declared **directly on a system** work identically and are edited from the same panel; use them for
 what one room needs and the blueprint does not. A role inherited from the standard is withdrawn on the
-**standard**, not on the system that inherits it.
+**standard**, not on the system that inherits it. A system role **cannot reuse a name** its standard
+already declares, since a role is addressed by its name within the system and the name has to mean one
+slot there: declaring one, declaring the same name on the standard after a room took it, or moving a room
+onto a standard that declares a name the room declares itself is refused, naming both. A second slot
+takes a second name.
+
+**Moving a room to another standard keeps it staffed.** Change a system's **Standard** and each
+component filling an inherited role carries across to the new standard's role of the same name, as long
+as it is still the kind of component that role accepts and the role has room. Anything else is
+released: it stays a member of the room with no role, ready to be restaffed, unbound or deleted, and the
+room's roles panel and health read the new standard at once. Clearing the Standard (making the room a
+one-off) releases every inherited role's staffing; roles declared on the room itself keep theirs. Moving
+back later reactivates nothing, so restaff what you want back.
 
 From the CLI: `omniglass system role list <name>`, `omniglass system role update <name> <role>`,
 `omniglass system role delete <name> <role>`, `omniglass system role assignment update <name> <role> <component>`,

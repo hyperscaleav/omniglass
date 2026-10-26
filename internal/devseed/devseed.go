@@ -586,7 +586,7 @@ func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, op
 		if err != nil {
 			return err
 		}
-		if err := gw.AddMember(ctx, actorID, sysID, compID, all, all); err != nil {
+		if err := gw.AddMember(ctx, actorID, sysID, compID, all, all, all, all); err != nil {
 			return fmt.Errorf("devseed: add member %s/%s: %w", m.System, m.Component, err)
 		}
 	}
@@ -598,7 +598,7 @@ func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, op
 		if err != nil {
 			return err
 		}
-		if err := gw.AssignRole(ctx, actorID, sysID, ra.Role, compID, all, all); err != nil {
+		if err := gw.AssignRole(ctx, actorID, sysID, ra.Role, compID, all, all, all, all); err != nil {
 			return fmt.Errorf("devseed: assign %s to %s/%s: %w", ra.Component, ra.System, ra.Role, err)
 		}
 	}

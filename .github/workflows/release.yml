@@ -31,7 +31,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0          # full history + tags for version analysis
           persist-credentials: false
@@ -54,7 +54,7 @@ jobs:
       # not cascade to the tag-triggered goreleaser workflow, so the binaries
       # are built inline here. Gated on an actual new release (dry-runs skip
       # it). Shares .goreleaser.yaml with goreleaser.yml.
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         if: steps.semantic.outputs.new_release_published == 'true'
         with:
           go-version-file: go.mod
@@ -62,7 +62,7 @@ jobs:
 
       - name: Set up Node (for the embedded console build)
         if: steps.semantic.outputs.new_release_published == 'true'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
 

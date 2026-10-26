@@ -3,7 +3,7 @@ import { Dynamic } from "solid-js/web";
 import { Popover } from "@kobalte/core/popover";
 import { ChevronRight, CircleCheck, CircleDashed, LayoutDashboard, OctagonX, Plus, TriangleAlert, resolveIcon } from "./icons";
 import type { ComponentGroup, ComponentRow, Lights, PlaceNode } from "../lib/outline";
-import type { Verdict } from "../lib/health";
+import { VERDICT_HUE, type Verdict } from "../lib/health";
 
 // The outline (#867): every place in the fleet as one tree, drawn as aligned
 // columns. A place wears its system (standard and health on its own row) and
@@ -45,12 +45,7 @@ type Row =
 const VERDICTS: Verdict[] = ["healthy", "incomplete", "degraded", "outage"];
 const WORDS: Record<Verdict, string> = { healthy: "healthy", incomplete: "incomplete", degraded: "degraded", outage: "outage" };
 // Healthy wears the muted green (#1067), so the one troubled branch still pops.
-const HUE: Record<Verdict, string> = {
-  healthy: "text-healthy",
-  incomplete: "text-incomplete",
-  degraded: "text-warning",
-  outage: "text-error",
-};
+const HUE = VERDICT_HUE;
 const GLYPH: Record<Verdict, typeof CircleCheck> = { healthy: CircleCheck, incomplete: CircleDashed, degraded: TriangleAlert, outage: OctagonX };
 
 // One verdict as its glyph alone, in the slot vocabulary's hue (healthy

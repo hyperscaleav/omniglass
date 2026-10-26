@@ -30,8 +30,9 @@ model, and [Drivers](/guides/admin/drivers/) for the other leaf catalog beside i
   choose its **kind** (defaults to manufacturer); **icon** (a glyph key), **support phone**, and
   **website** are optional.
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with `vendor:update`) edits
-  the label, kind, icon, support phone, and website; the **name** is fixed, since a catalog
-  row carries no rename. **Delete** (with `vendor:delete`) removes the row, behind a confirm. A
+  the label, kind, icon, support phone, and website. The blade does not edit the **name**: rename a
+  custom vendor with `omniglass vendor rename <name> --name <new>` (`vendor:rename`), which keeps
+  every product that names it. **Delete** (with `vendor:delete`) removes the row, behind a confirm. A
   verb you lack greys just that button, its hover reason naming the permission
   (`Requires vendor:update`, `Requires vendor:delete`); the pair never disappears.
 - An **official** row is always read-only: the blade keeps the Edit and Delete pair in place,

@@ -570,6 +570,12 @@
       "name": "map",
       "type": "jsonb",
       "nullable": true
+     },
+     {
+      "name": "seeded",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
      }
     ],
     "uniques": [
@@ -896,12 +902,6 @@
       "nullable": true,
       "fk": true,
       "fk_target": "location.id"
-     }
-    ],
-    "checks": [
-     {
-      "name": "node_name_subject_safe_check",
-      "expr": "CHECK ((name ~ '^[^.*\u003e \\t\\n\\r]+$'::text))"
      }
     ],
     "uniques": [
@@ -4882,6 +4882,22 @@
      {
       "name": "severity_level_rank_key",
       "definition": "CREATE UNIQUE INDEX severity_level_rank_key ON public.severity_level USING btree (rank)"
+     }
+    ]
+   },
+   "telemetry_receipt": {
+    "columns": [
+     {
+      "name": "batch_id",
+      "type": "text",
+      "nullable": false,
+      "pk": true
+     },
+     {
+      "name": "landed_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
      }
     ]
    }

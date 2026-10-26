@@ -367,6 +367,13 @@
       "labelled": true
     },
     {
+      "table": "telemetry_receipt",
+      "shape": "human identifier, not a name",
+      "reason": "a publisher-minted batch id (the subject a batch arrived on and its Nats-Msg-Id, ADR-0311), not a name: it identifies one landed ingest batch for as long as its horizon keeps it",
+      "labelled": false,
+      "no_label": "no operator surface of its own: only the ingest's conflict check reads a receipt, and nothing renders a receipt row for a label to appear on"
+    },
+    {
       "table": "unclaimed_source",
       "shape": "id only",
       "reason": "a sender no endpoint claims, one row per listener host, transport and source address; read as a list, never addressed by name",

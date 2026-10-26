@@ -82,7 +82,7 @@ demo:
 - [ ] Tests failed before, pass after; `make test` green run fresh, **output pasted above**
 - [ ] **Screenshots** of any operator-facing change, driven live (or "n/a")
 - [ ] **Demo** tagged (`demo: <id>`) and its clip in the body from `run:demo`: a terminal demo for CLI or API behavior, a walkthrough for a console flow (or `demo: none (<reason>)`)
-- [ ] Docs ship in this PR (or `no-docs` label with justification); status build-progress noted
+- [ ] Docs ship in this PR (or a one-line justification on the Docs line); status build-progress noted
 - [ ] Operator-facing surface teaches its concept (learning-tool), if applicable
 - [ ] `make gen` clean; no em dashes; no AI attribution
 - [ ] Linked to a feature issue under an epic

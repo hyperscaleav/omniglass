@@ -1,0 +1,45 @@
+{
+  "projects": [
+    {
+      "closed": false,
+      "fields": {
+        "totalCount": 0
+      },
+      "id": "PVT_kwDOredacted0000",
+      "items": {
+        "totalCount": 0
+      },
+      "number": 2,
+      "owner": {
+        "login": "hyperscaleav",
+        "type": "Organization"
+      },
+      "public": false,
+      "readme": "",
+      "shortDescription": "",
+      "title": "Another project",
+      "url": "https://github.com/orgs/hyperscaleav/projects/2"
+    },
+    {
+      "closed": false,
+      "fields": {
+        "totalCount": 15
+      },
+      "id": "PVT_kwDOC43oI84BOqlh",
+      "items": {
+        "totalCount": 14
+      },
+      "number": 1,
+      "owner": {
+        "login": "hyperscaleav",
+        "type": "Organization"
+      },
+      "public": false,
+      "readme": "",
+      "shortDescription": "",
+      "title": "Omniglass",
+      "url": "https://github.com/orgs/hyperscaleav/projects/1"
+    }
+  ],
+  "totalCount": 2
+}

@@ -258,7 +258,7 @@ stack_image() {
 }
 
 # The omniglass CLI as a one-shot on the stack network, with the stack's DSN
-# and secret key (the direct-DB commands: migrate, bootstrap, seed-dev, token).
+# and encryption key (the direct-DB commands: migrate, bootstrap, seed-dev, token).
 stack_cli() {
   stack_run "${STACK_ENV[@]}" "$STACK_IMG" "$@"
 }
@@ -272,12 +272,12 @@ stack_cli() {
 stack_walkthrough_up() {
   STACK_USER=dev
   STACK_PASSWORD=dev
-  # One secret key for every container: the seed encrypts a secret (the
+  # One encryption key for every container: the seed encrypts a secret (the
   # simulated fleet's SNMP community) the server must decrypt. Fixed, since
   # it guards nothing.
   local key
   key=$(printf 'omniglass-walkthrough-fixed-key!' | base64)
-  STACK_ENV=(-e OMNIGLASS_DSN="$STACK_DSN" -e OMNIGLASS_SECRET_KEY="$key" -e OMNIGLASS_DATA_DIR=/tmp)
+  STACK_ENV=(-e OMNIGLASS_DSN="$STACK_DSN" -e OMNIGLASS_ENCRYPTION_KEY="$key" -e OMNIGLASS_DATA_DIR=/tmp)
 
   stack_image
   stack_up

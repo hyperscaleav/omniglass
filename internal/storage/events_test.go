@@ -105,7 +105,7 @@ func TestListSystemEvents(t *testing.T) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "stray-1"}, all, all, all, all); err != nil {
 		t.Fatalf("create stray: %v", err)
 	}
-	if err := gw.AddMember(ctx, "", "room-a", "bar-1", all, all); err != nil {
+	if err := gw.AddMember(ctx, "", "room-a", "bar-1", all, all, all, all); err != nil {
 		t.Fatalf("add member: %v", err)
 	}
 

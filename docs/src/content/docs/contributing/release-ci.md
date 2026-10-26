@@ -5,15 +5,18 @@ description: "The CI gates on every PR and the manual semantic-release versionin
 
 `make test` is the local gate (the [test-driven](/contributing/test-driven/) doctrine says
 validate locally, do not lean on CI). CI is the backstop and, on `main`, the release driver.
-Nine workflows carry it: `test`, `pr-title`, `image`, `docs-shots`, `gen-drift`,
-`docs-build`, `preview-comment`, `release`, and `goreleaser`.
+Twelve workflows carry it: `test`, `pr-title`, `image`, `docs-shots`, `gen-drift`,
+`docs-build`, `preview-comment`, `demo`, `demo-tag`, `demo-prune`, `release`, and `goreleaser`.
 
 ## On every pull request
 
-- **`test.yml`** (the test gate) runs `go build ./...` and `go test ./...` on a runner with a
-  Docker daemon, so the testcontainers-backed integration and e2e tiers actually execute
-  (after widening `net.ipv4.ping_group_range` so the collection tier's unprivileged ICMP
-  probe can open its socket). A second job in the same workflow runs the browser e2e tier
+- **`test.yml`** (the test gate) runs `go build ./...` and then `make test`, the same target
+  contributors run locally, so the CI gate cannot drift from the local one (#214): the SPA
+  typecheck and vitest suite (`test-web`), every Go package, then the NET_ADMIN tier in its
+  container. It runs on a runner with a Docker daemon, so the testcontainers-backed integration
+  and e2e tiers actually execute (after widening `net.ipv4.ping_group_range` so the collection
+  tier's unprivileged ICMP probe can open its socket), and with `TEST_PARALLEL` raised to the
+  runner's core count. A second job in the same workflow runs the browser e2e tier
   (`make test-e2e`): the console driven as an operator would against the real binary, fully
   containerized, covering the CRUD round-trips plus one smoke per console route from the
   route manifest, so a PR cannot merge with a route that errors in a real browser. Both jobs
@@ -42,6 +45,22 @@ writing each demo's clip into the PR body (see [Labels](/contributing/labels/));
 workflow re-records every demo on main and opens an issue when one fails. **`demo-tag.yml`** lints
 the PR body's demo tag on every PR. **`demo-prune.yml`** deletes an evidence ref 30 days after its
 PR closes.
+
+## Pinned actions and Dependabot
+
+Every action a workflow uses, first-party `actions/*` included, is pinned to a full commit SHA
+with its version in a trailing comment (`uses: actions/checkout@<sha> # v4.4.0`), never to a tag
+(#66). A tag is mutable: one force-pushed or compromised upstream would run someone else's code
+with the workflow's token, and the release path's token can publish. A SHA cannot move.
+
+`.github/dependabot.yml` keeps the pins current. Weekly, it opens a PR per ecosystem (the
+workflows' actions, the Go module, the console's npm tree, and the docs site's pnpm tree) that
+bumps each SHA and rewrites its version comment together, minor and patch grouped and a major
+alone. Its titles are conventional commits the PR-title gate accepts (`ci:` for actions,
+`chore(deps):` or `chore(deps-dev):` otherwise), so a bump never cuts a release by itself, and it
+applies no labels, since the [label set](/contributing/labels/) is fixed. Its PRs carry no demo,
+so the demo-tag lint skips them by author. A new workflow pins its actions the same way from its
+first commit.
 
 ## Cutting a release (manual)
 

@@ -59,4 +59,33 @@ func TestNodeSchema(t *testing.T) {
 	if pkCol != "principal_id" {
 		t.Errorf("node primary key = %q, want principal_id", pkCol)
 	}
+
+	// No name rule lives in the schema (#570). The node table used to carry its
+	// own CHECK (node_name_subject_safe_check, forbidding only a dot, a star, a
+	// '>' and whitespace), a fifth name rule disagreeing with the one the
+	// gateway enforces: it admitted uppercase and underscores the entity name
+	// rule refuses. The gateway's rule is the one rule (TestNodeNameSubjectSafety
+	// proves it still refuses every character the CHECK caught).
+	var checks []string
+	rows, err := conn.Query(ctx, `
+		select conname from pg_constraint
+		where conrelid = 'node'::regclass and contype = 'c'
+		order by conname`)
+	if err != nil {
+		t.Fatalf("probe node check constraints: %v", err)
+	}
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			t.Fatalf("scan node check constraint: %v", err)
+		}
+		checks = append(checks, name)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		t.Fatalf("node check constraints: %v", err)
+	}
+	if len(checks) != 0 {
+		t.Errorf("node carries CHECK constraints %v, want none: the name rule lives in the gateway", checks)
+	}
 }

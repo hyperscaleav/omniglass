@@ -143,9 +143,14 @@ platform-integration type (`oauth2-client`) admin-sensitive; those are the ship-
 `official` marking shipped-canonical versus org-local as in the sample and role registries.
 
 **Envelope-encrypted at rest.** Crypto is **envelope AES-256-GCM** behind a pluggable **KEK
-provider**: the key comes from the env (`OMNIGLASS_SECRET_KEY`), a file
-(`OMNIGLASS_SECRET_KEY_FILE`), or a warned fallback under `OMNIGLASS_DATA_DIR`, a KMS or Vault able
-to drop in behind the same seam. Each secret field is sealed under a **per-value DEK wrapped by the
+provider**: the **encryption key** comes from the env (`OMNIGLASS_ENCRYPTION_KEY`), a file
+(`OMNIGLASS_ENCRYPTION_KEY_FILE`), or a warned fallback under `OMNIGLASS_DATA_DIR`, a KMS or Vault
+able to drop in behind the same seam. It is the encryption key and never the "secret key", which
+would read as a secret's own key (its identifier, `og_session`); the variables carried that name
+until #558, and the old pair (`OMNIGLASS_SECRET_KEY`, `OMNIGLASS_SECRET_KEY_FILE`) is still read
+for one deprecation window when neither new name is set, warning on every boot with the
+replacement it should be renamed to
+([ADR-0558](/architecture/decisions/#adr-0558-the-key-that-seals-every-secret-is-the-encryption-key-and-its-old-names-are-read-for-one-release)). Each secret field is sealed under a **per-value DEK wrapped by the
 KEK**, `(owner, name, field)` bound as **AAD** so a ciphertext cannot be lifted from one row into
 another, and stored as its `{ciphertext, nonce, wrapped_dek, key_id}` envelope (a non-secret field
 plaintext).
