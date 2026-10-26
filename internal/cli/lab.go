@@ -85,9 +85,9 @@ func newLabRunCmd(version string) *cobra.Command {
 }
 
 type labFlags struct {
-	port                              int
+	port                             int
 	listen, scenario, image, project string
-	fresh                             bool
+	fresh                            bool
 }
 
 func runLab(ctx context.Context, out io.Writer, version string, f labFlags) error {

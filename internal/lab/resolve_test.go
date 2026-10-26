@@ -35,9 +35,9 @@ func contextMeta(cfgDir, name string) string {
 func TestResolveDaemonOrder(t *testing.T) {
 	cfg := "/home/u/.docker"
 	store := map[string]string{
-		filepath.Join(cfg, "config.json"):  `{"currentContext":"desktop-linux"}`,
-		contextMeta(cfg, "desktop-linux"):  `{"Name":"desktop-linux","Endpoints":{"docker":{"Host":"unix:///home/u/.docker/run/docker.sock"}}}`,
-		contextMeta(cfg, "rootless"):       `{"Name":"rootless","Endpoints":{"docker":{"Host":"unix:///run/user/1000/docker.sock"}}}`,
+		filepath.Join(cfg, "config.json"):   `{"currentContext":"desktop-linux"}`,
+		contextMeta(cfg, "desktop-linux"):   `{"Name":"desktop-linux","Endpoints":{"docker":{"Host":"unix:///home/u/.docker/run/docker.sock"}}}`,
+		contextMeta(cfg, "rootless"):        `{"Name":"rootless","Endpoints":{"docker":{"Host":"unix:///run/user/1000/docker.sock"}}}`,
 		contextMeta("/etc/dc", "elsewhere"): `{"Name":"elsewhere","Endpoints":{"docker":{"Host":"ssh://ops@build"}}}`,
 	}
 	for _, tc := range []struct {

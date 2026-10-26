@@ -62,7 +62,7 @@ type Lab struct {
 	Pending string
 	// Took is how long the lab took to come up.
 	Took time.Duration
-	ids         map[string]string
+	ids  map[string]string
 }
 
 // ID is the container id of a service.
