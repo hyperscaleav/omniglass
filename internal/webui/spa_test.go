@@ -1,6 +1,7 @@
 package webui
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -327,22 +328,98 @@ func TestUnbuiltConsoleStill404sAFile(t *testing.T) {
 
 func TestNoConsoleRouteCarriesADot(t *testing.T) {
 	// The premise the extension half rests on, checked against the router rather
-	// than assumed: no console route pattern or smoke address carries a dot, so a
-	// dotted last segment can only be a file. A route's parameters are a uuid or
-	// a name, and the name rule (internal/storage/name_rule.go) admits no dot.
-	// A router change that adds a dotted route fails here instead of silently
-	// turning its deep links into 404s.
+	// than assumed: no console route pattern or smoke address carries a dot, and
+	// every route parameter is :id (a uuid or a name, and the name rule,
+	// internal/storage/name_rule.go, admits no dot), so a dotted last segment can
+	// only be a file. A router change that adds a dotted route, or a parameter
+	// whose values may carry one, fails here instead of silently turning its deep
+	// links into 404s.
 	src, err := os.ReadFile(filepath.Join("..", "..", "web", "src", "lib", "routemanifest.ts"))
 	if err != nil {
 		t.Fatalf("read the route manifest: %v", err)
 	}
-	entries := regexp.MustCompile(`\b(path|smoke): "([^"]*)"`).FindAllStringSubmatch(string(src), -1)
-	if len(entries) < 20 {
-		t.Fatalf("found %d path/smoke literals in the route manifest; its shape moved, so this guard no longer reads it", len(entries))
+	read, problems := routeManifestDots(string(src))
+	if read < 40 {
+		t.Fatalf("read %d path/smoke literals in the route manifest; its shape moved, so this guard no longer reads it", read)
 	}
-	for _, m := range entries {
-		if strings.Contains(m[2], ".") {
-			t.Errorf("route manifest %s %q carries a dot: the console server reads a dotted last segment as a file request (namesAFile)", m[1], m[2])
+	for _, p := range problems {
+		t.Error(p)
+	}
+}
+
+func TestRouteManifestDotsReadsEveryLiteral(t *testing.T) {
+	// The guard above is only as good as what it reads: a smoke address written
+	// as a template literal, or a parameter other than :id, must not slip past.
+	src := `export const UNKNOWN_UUID = "00000000-0000-4000-8000-000000000000";
+const ADDR = "boi.17c.$sys.av";
+  { path: "/ok", smoke: "/ok" },
+  { path: "/ok/:id", smoke: ` + "`/ok/${UNKNOWN_UUID}`" + ` },
+  { path: "/a/:address", smoke: ` + "`/a/${ADDR}`" + ` },
+  { path: "/b/:id", smoke: ` + "`/b/${MISSING}`" + ` },
+  { path: "/c.txt", smoke: "/c" },`
+	read, problems := routeManifestDots(src)
+	if read != 10 {
+		t.Errorf("read %d literals, want all 10 (quoted and template)", read)
+	}
+	want := []string{`"/a/:address"`, `"/a/boi.17c.$sys.av"`, "MISSING", `"/c.txt"`}
+	for _, w := range want {
+		found := false
+		for _, p := range problems {
+			if strings.Contains(p, w) {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("no problem names %s; got %q", w, problems)
 		}
 	}
+	if len(problems) != len(want) {
+		t.Errorf("%d problems, want %d: %q", len(problems), len(want), problems)
+	}
+}
+
+var (
+	manifestConst   = regexp.MustCompile(`\bconst ([A-Z_][A-Z0-9_]*) = "([^"]*)"`)
+	manifestLiteral = regexp.MustCompile("\\b(path|smoke): (?:\"([^\"]*)\"|`([^`]*)`)")
+	manifestInterp  = regexp.MustCompile(`\$\{([^}]*)\}`)
+	manifestParam   = regexp.MustCompile(`:([A-Za-z_][A-Za-z0-9_]*)`)
+)
+
+// routeManifestDots reads every path and smoke literal in the route manifest,
+// double-quoted or a template literal (its ${NAME} resolved from the file's own
+// string constants), and reports each one that carries a dot, each parameter
+// other than :id, and each template naming a constant it cannot resolve. It
+// returns how many literals it read, so a caller can tell a guard that stopped
+// reading from one with nothing to report.
+func routeManifestDots(src string) (int, []string) {
+	consts := map[string]string{}
+	for _, m := range manifestConst.FindAllStringSubmatch(src, -1) {
+		consts[m[1]] = m[2]
+	}
+	var problems []string
+	matches := manifestLiteral.FindAllStringSubmatch(src, -1)
+	for _, m := range matches {
+		kind, value := m[1], m[2]
+		if m[3] != "" {
+			value = manifestInterp.ReplaceAllStringFunc(m[3], func(ref string) string {
+				name := manifestInterp.FindStringSubmatch(ref)[1]
+				v, ok := consts[name]
+				if !ok {
+					problems = append(problems, fmt.Sprintf("route manifest %s %q interpolates %s, which is not a string constant this guard can resolve", kind, m[3], name))
+				}
+				return v
+			})
+		}
+		if strings.Contains(value, ".") {
+			problems = append(problems, fmt.Sprintf("route manifest %s %q carries a dot: the console server reads a dotted last segment as a file request (namesAFile)", kind, value))
+		}
+		if kind == "path" {
+			for _, p := range manifestParam.FindAllStringSubmatch(value, -1) {
+				if p[1] != "id" {
+					problems = append(problems, fmt.Sprintf("route manifest path %q has parameter :%s; only :id (a uuid or a dot-free name) is known to be safe from namesAFile", value, p[1]))
+				}
+			}
+		}
+	}
+	return len(matches), problems
 }
