@@ -75,10 +75,10 @@ func (p *PG) RenameRegistry(ctx context.Context, actorID, table, ref, newName st
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	var id, oldName string
+	var rowID, oldName string
 	var official bool
 	err = tx.QueryRow(ctx, `select id, name, official from `+table+` where `+registryRefCol(ref)+` = $1 for update`, ref).
-		Scan(&id, &oldName, &official)
+		Scan(&rowID, &oldName, &official)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", ErrTypeNotFound
 	}
@@ -89,17 +89,17 @@ func (p *PG) RenameRegistry(ctx context.Context, actorID, table, ref, newName st
 		return "", ErrTypeOfficial
 	}
 	if oldName == newName {
-		return id, nil
+		return rowID, nil
 	}
-	before, err := registryAuditImage(ctx, tx, table, id)
+	before, err := registryAuditImage(ctx, tx, table, rowID)
 	if err != nil {
-		return "", fmt.Errorf("storage: audit image %s %q: %w", table, id, err)
+		return "", fmt.Errorf("storage: audit image %s %q: %w", table, rowID, err)
 	}
 	set := `name = $2`
 	if reg.stamped {
 		set += `, updated_at = now()`
 	}
-	if _, err := tx.Exec(ctx, `update `+table+` set `+set+` where id = $1`, id, newName); err != nil {
+	if _, err := tx.Exec(ctx, `update `+table+` set `+set+` where id = $1`, rowID, newName); err != nil {
 		if isUniqueViolation(err) {
 			return "", ErrTypeExists
 		}
@@ -110,17 +110,17 @@ func (p *PG) RenameRegistry(ctx context.Context, actorID, table, ref, newName st
 			return "", err
 		}
 	}
-	after, err := registryAuditImage(ctx, tx, table, id)
+	after, err := registryAuditImage(ctx, tx, table, rowID)
 	if err != nil {
-		return "", fmt.Errorf("storage: audit image %s %q: %w", table, id, err)
+		return "", fmt.Errorf("storage: audit image %s %q: %w", table, rowID, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "rename", table, id, before, after); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "rename", table, rowID, before, after); err != nil {
 		return "", err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return "", fmt.Errorf("storage: commit rename %s: %w", table, err)
 	}
-	return id, nil
+	return rowID, nil
 }
 
 // carryLocationTypeName rewrites the one by-value reference a location_type has:
