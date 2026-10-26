@@ -37,7 +37,7 @@ Show
 Type "# An instance is the endpoint an observation came through: one naming no endpoint is refused"
 Enter
 Wait
-Type `omniglass telemetry push --owner "{\"kind\":\"component\",\"ref\":\"$d\"}" --properties '[{"name":"video-input","value":"hdmi3","instance":"rx-2"}]'`
+Type `omniglass telemetry push --owner "{\"kind\":\"component\",\"ref\":\"$d\"}" --properties '[{"name":"video-input","value":"hdmi3","instance":"rx-2"}]' 2>/dev/null | jq -r .detail || true`
 Enter
 Wait
 Sleep 3s
