@@ -117,6 +117,16 @@ describe("the demo tag lint", () => {
     expect(lint.permissions).toEqual({ contents: "read" });
     for (const job of Object.values(lint.jobs)) expect(writes(job)).toBe(false);
   });
+
+  // Dependabot opens version-bump PRs (#66) whose bodies it writes itself and
+  // never tags: a bump has no demo. Without this the lint would fail every one
+  // of them. The skip is by author at the job, so a skipped lint reads as passed
+  // and every human PR is still held to the tag.
+  it("skips Dependabot's version bumps, and only those", () => {
+    for (const job of Object.values(lint.jobs) as { if?: string }[]) {
+      expect(job.if).toBe("github.event.pull_request.user.login != 'dependabot[bot]'");
+    }
+  });
 });
 
 // The splice the publish job runs (node -e "$SPLICE", inline in the workflow
