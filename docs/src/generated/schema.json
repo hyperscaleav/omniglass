@@ -898,12 +898,6 @@
       "fk_target": "location.id"
      }
     ],
-    "checks": [
-     {
-      "name": "node_name_subject_safe_check",
-      "expr": "CHECK ((name ~ '^[^.*\u003e \\t\\n\\r]+$'::text))"
-     }
-    ],
     "uniques": [
      {
       "name": "node_name_key",
