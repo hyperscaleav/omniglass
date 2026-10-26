@@ -17,7 +17,9 @@ request-reply (its enabled tasks plus a `config_generation`), and heartbeats on 
 (the server stamps `last_heartbeat_at`). **Per-node subject isolation is enforced**: each node's NATS
 credential is permitted only its own `<node>` subjects. Also built: running tasks (the probes,
 `internal/node/probe.go`), shipping telemetry (the JetStream `TelemetryBatch` ingested by
-`internal/bus/consumer.go`), and the raw self-log lane (ADR-0066: `internal/node/logs.go`,
+`internal/bus/consumer.go`, each publish waiting for the stream's ack under a minted `Nats-Msg-Id`, a
+batch the stream has not acked held in a bounded spool and shipped on the next tick,
+[below](#delivery-a-batch-lands-once)), and the raw self-log lane (ADR-0066: `internal/node/logs.go`,
 `GET /nodes/{name}/logs`, the console Self-logs panel), the command wire (a per-node pull, actuated
 over the driver's binding, [ADR-0136](/architecture/decisions/#adr-0136-actuation-is-a-per-node-pull-rendered-at-dispatch)),
 driver polls on their declared schedule (#822), and, for the line protocol over `tcp`, `tls` (#1035), `telnet` (#1033) and `ssh` (#1032), held sessions
@@ -38,9 +40,8 @@ frames routed as a line is, a poll's or a command's answer matched by the id the
 kept alive by ping and pong ([websocket and wss](/architecture/collection/#websocket-and-wss)). Still `Design`: the
 durable JetStream command queue, the session pool knobs and the held transports beyond these
 (#1036 (mqtt), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip), [ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)),
-config-generation-driven cache invalidation, node self-telemetry, the node-down sweep, the JetStream
-publish-ack delivery contract (telemetry publish is fire-and-forget today, #430), tick
-scheduling and concurrency knobs, and config apply (the `:apply` flow). The credential is a shared
+config-generation-driven cache invalidation, node self-telemetry, the node-down sweep, the
+cascade-resolved buffer knobs, tick scheduling and concurrency knobs, and config apply (the `:apply` flow). The credential is a shared
 secret (the enrollment token doubles as the NATS password); the decentralized nkey/JWT model is
 deferred. See [implementation status](/architecture/status/) and
 [decision log](/architecture/decisions/) (ADR-0036).
@@ -84,11 +85,14 @@ advance it, so nodes are never woken for nothing.
 
 The edge is **outbound-only**: a node sits behind NAT, so the server never dials it. A node is a **NATS client over the WAN**, one authenticated outbound connection (an nkey/JWT credential bound to `node.name`); everything server-to-node arrives on subjects the node is permitted to consume. Three flows share the connection:
 
-:::design[The full node NATS contract, per ADR-0036; delivery guarantees are #430]
+Telemetry up is built as a JetStream publish the stream acks, under a `Nats-Msg-Id` it
+deduplicates ([below](#delivery-a-batch-lands-once)); the subject it lands on is the node's own
+`og.v1.telemetry.<node>`, the stream the ingest consumer reads.
+
+:::design[The full node NATS contract, per ADR-0036; the admission split is #430]
 - **Telemetry up**: the node **publishes** `TelemetryBatch` batches (`{samples, labels}` plus the
-  `(task, ts)` envelope, [below](#shipping-samples)) to a **JetStream raw ingress subject**;
-  JetStream acks each publish (at-least-once), a `Nats-Msg-Id` deduping replays (the admission
-  consumer preserves it when republishing to the trusted stream).
+  `(task, ts)` envelope, [below](#shipping-samples)) to a **JetStream raw ingress subject**; the
+  admission consumer preserves each batch's `Nats-Msg-Id` when republishing to the trusted stream.
 - **Control down**: a **durable JetStream consumer** on the node's **command queue**, plus
   **worklist-change signals** (the config-generation bump); subjects scoped by placement.
 - **Control up**: heartbeat (feeding the node-down sweep), command-execution results (the
@@ -103,18 +107,31 @@ JetStream command queue**. The **edge holds nothing durable**: the node pulls fr
 consumer (resuming from its last ack on reconnect), runs, and reports the result, updating the
 `action` row. A restart loses no command; the held consumer delivers with no poll latency.
 
-### Delivery: at-least-once, idempotent by nature
-
-The node publishes **at-least-once**, resuming unacked publishes on reconnect (JetStream ack plus
-`Nats-Msg-Id` dedup); replay is safe **without a separate idempotency layer** because everything
-the edge ships is idempotent by its own key: **samples** dedup on **`(series, ts)`** (an idempotent
-upsert; the edge stamps `ts`, so the server is **ts-authoritative**, reorders out-of-order arrivals,
-and needs **no strict ordering** on the wire), and **command results** are an idempotent status
-update on a known `action` row by id. **Events are not shipped from the edge**: an event is
-**derived server-side** (an `event_rule` over samples, or from a `log_line`,
-[events](/architecture/events/)), so nothing needs dedup; not re-raising the same event
-next poll is the **alarm** model's job (one stateful open alarm, fire and clear).
+**Command results** are an idempotent status update on a known `action` row by id.
 :::
+
+### Delivery: a batch lands once
+
+The node publishes **at-least-once**, and the platform lands each batch **once**
+([ADR-0453](/architecture/decisions/#adr-0453-telemetry-is-published-through-jetstream-with-an-ack-a-minted-nats-msg-id-and-a-bounded-spool),
+[ADR-0311](/architecture/decisions/#adr-0311-a-telemetry-batch-lands-once-in-one-transaction-under-its-receipt)).
+Every telemetry publish (a task's samples, a collection-failed story, a session transition, the
+self-logs) goes through one **spool** (`internal/node/spool.go`): the batch is minted a `Nats-Msg-Id`
+when it is built, published through JetStream, and counted sent only once the stream acks it. A batch
+the stream has not acked stays in the spool, in order, and ships on the **next tick, before that
+tick's work**, under the same id. A retry of an attempt the stream stored but whose ack was lost is
+therefore a duplicate: inside the stream's five-minute window it is stored once, and past it the
+server's batch **receipt** keeps it from landing twice ([messaging](/architecture/messaging/#delivery-a-batch-lands-once)).
+After a failed attempt the spool holds, so a node that cannot reach the bus pays one failed publish
+per tick, not one per batch. The edge stamps `ts`, so the server is **ts-authoritative** and needs
+**no strict ordering** on the wire.
+
+The spool is **memory**, bounded at 10,000 batches or 16 MiB: past either it drops the oldest batch
+(never the one in flight), says so once when it starts dropping and once, with the count, when it
+drains, and the run loop forgets the transitions it remembers as sent (the reachability verdict, a
+poll's faults and occurrences), so the next tick sends current state again. A one-shot run
+(`--once`) ends only once the stream has acked what it collected; a stopping node gives the spool
+five seconds to drain.
 
 ### On-demand runs: asked, answered once
 
@@ -133,9 +150,11 @@ covers its own run subject only, and its one reply stays permitted for the run's
 
 ### Buffering and retention are cascade settings
 
-:::design[Target design: the edge buffer, tracked in #430; retention is #417]
-When the server is unreachable the node **buffers in memory**, bounded, **not durable
-at the edge**. Both the **buffer** (size, shed policy) and **retention** are **cascade-resolved**
+When the server is unreachable the node **buffers in memory**, bounded, **not durable at the edge**:
+the spool above, its caps fixed in code and a drop told in the node's self-logs.
+
+:::design[Target design: the buffer knobs, tracked in #430; retention is #417]
+Both the **buffer** (size, shed policy) and **retention** are **cascade-resolved**
 ([cascade](/architecture/cascade/)) with an install-wide `platform` binding, overridable down the
 tree. A full buffer **sheds oldest metrics first and surfaces it** as a
 `node.buffer` sample (depth, drops): visible, never silent.
@@ -325,7 +344,7 @@ protocol.
 The node-side queue is **not** durable: durability lives **server-side** (the JetStream command
 queue, the cascade-configurable telemetry buffer). On reconnect the node re-pulls its worklist,
 resumes its durable consumer on the command queue, and replays unacked telemetry publishes
-(idempotent on `(series, ts)`).
+(each landed once by its batch receipt).
 ::::
 
 ## Implicit reachability
@@ -387,8 +406,10 @@ extend the stack as rungs a driver's ladder declares, not as toggles.
 
 The node ships a native `TelemetryBatch`: `{ samples, labels }` plus an envelope (`task`, batch `ts`), **published to the JetStream raw ingress subject** (protobuf-encoded, the proto surviving as the NATS message schema).
 
-:::design[Target design: the edge retry buffer, raw on failure, and the OTLP adapter, tracked in #430]
-The publish is **buffered with retry/backoff**. On a parse or validation failure the node also ships
+The publish is **held and retried** until the stream acks it ([delivery](#delivery-a-batch-lands-once)).
+
+:::design[Target design: raw on failure and the OTLP adapter, tracked in #430]
+On a parse or validation failure the node also ships
 the **raw** wire bytes so the server can emit a `collection.failed` event; on success raw is omitted
 (there is no telemetry table), unless a **dev raw-mode** is on. An **OTLP adapter** at the edge
 accepts OTLP from third-party tools and translates to the native shape.

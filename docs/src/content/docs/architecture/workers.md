@@ -9,15 +9,17 @@ sidebar:
 
 :::note[Implementation status]
 Built today: one durable JetStream work-queue consumer, `og-telemetry-worker`
-(`internal/bus/consumer.go`: explicit ack, MaxDeliver 5, bounded nak backoff, serial dispatch),
-which does owner confinement and persistence inline.
+(`internal/bus/consumer.go`: explicit double ack, MaxDeliver 5, bounded nak backoff, serial dispatch),
+which does owner confinement and persistence inline, each batch landing once, in one transaction under
+its receipt
+([ADR-0311](/architecture/decisions/#adr-0311-a-telemetry-batch-lands-once-in-one-transaction-under-its-receipt)).
 :::
 
 Workers are how Omniglass means to do the steady background work (deriving samples, sending actions, firing timers, reconciling drift) on one machinery, with crash recovery and exactly-once outcomes for free everywhere. Not all of it rides a consumer today: the event rule sweep closes sustains and reconciles streaks on a server tick ([ADR-0144](/architecture/decisions/#adr-0144-alarms-are-raised-by-event-rules-at-a-severity-level-from-a-ranked-registry) point 6), and calc rules drain a durable pending set on a tick of their own ([ADR-0148](/architecture/decisions/#adr-0148-calc-rules-run-on-a-durable-pending-set-and-a-server-tick-not-a-jetstream-consumer)). Both are replica-safe and lose nothing on restart; [time](/architecture/time/) as a primitive (#419) is where those loops converge.
 
 ## One machinery, several consumers
 
-The one machinery is a **JetStream work-queue consumer** over a configurable concurrency pool: pull, work, ack, at-least-once plus `Nats-Msg-Id` dedup and an idempotent sink (crash recovery, exactly-once outcomes, event-time semantics for free). That triple is the target contract, not the current one: today there is no `Nats-Msg-Id` dedup and the sink is not idempotent (#311, #430), and the built consumer dispatches serially on purpose, the state transition guard depending on it (`internal/bus/consumer.go:246-253`). It instantiates over several consumers rather than separate loops:
+The one machinery is a **JetStream work-queue consumer** over a configurable concurrency pool: pull, work, ack, at-least-once plus `Nats-Msg-Id` dedup and an idempotent sink (crash recovery, exactly-once outcomes, event-time semantics for free). The telemetry consumer carries that triple today: each batch arrives under a `Nats-Msg-Id` the stream deduplicates, the consumer double-acks, and the sink is idempotent per batch, its receipt written in the batch's own transaction ([messaging](/architecture/messaging/#delivery-a-batch-lands-once)). It still dispatches serially, but the state transition guard no longer depends on that: it is a conditional insert held per series by a transaction lock (ADR-0311), so the guard is not what stands between this consumer and a concurrency pool. It instantiates over several consumers rather than separate loops:
 
 :::design[Target design, tracked in #430; the clock is #419]
 - **the admission consumer**: the owner-confinement gate at the head of the data lane, running in

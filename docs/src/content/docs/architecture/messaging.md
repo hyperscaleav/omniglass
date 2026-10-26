@@ -16,6 +16,9 @@ request-reply lanes. The two-lane split below is target design; today there is *
 serial consumer doing admission (owner confinement) and persistence inline**. Calc rules run off the
 stream too: the sample write marks them pending and a server tick computes them
 ([ADR-0148](/architecture/decisions/#adr-0148-calc-rules-run-on-a-durable-pending-set-and-a-server-tick-not-a-jetstream-consumer)).
+The delivery contract on that stream is built: every publish waits for the stream's ack under a
+`Nats-Msg-Id` the stream deduplicates, and the consumer lands each batch once, in one transaction
+under its receipt ([below](#delivery-a-batch-lands-once)).
 :::
 
 This page is the **one home of the two-lane data plane**: the admission / trusted / persistence split, the CDC publisher, and the ingest-path enumeration live here, only named (with a link) everywhere else.
@@ -39,8 +42,9 @@ Internal traffic splits by what is moving:
   pass: calc output (owner from the validated `calc_rule` scope) and the action layer's intended
   write (owner from the command target). The rule engine consumes the trusted stream directly; a
   **persistence consumer** batch-writes it to the Postgres `metric`, `property`, `event`, and
-  `log_line` tables as an async sink, idempotent on `(series, ts)`, and the sink never gates the
-  rule engine: a slow persistence consumer holds up only the durable record, never the live signal.
+  `log_line` tables as an async sink, idempotent per batch (its receipt, as the built consumer is,
+  [ADR-0311](/architecture/decisions/#adr-0311-a-telemetry-batch-lands-once-in-one-transaction-under-its-receipt)),
+  and the sink never gates the rule engine: a slow persistence consumer holds up only the durable record, never the live signal.
   Confinement is at **consume time, ahead of evaluation**: a forged owner must be dropped before it
   can open an alarm, not just before it is persisted. The admission consumer runs in **system mode**
   (a dropped sample is logged as a discovery candidate,
@@ -88,13 +92,37 @@ As built today there is **one stream**, `OG_TELEMETRY`, bound to the node subjec
   ([nodes](/architecture/nodes/)).
 
 Durable consumers track their own position; delivery is at-least-once with `Nats-Msg-Id` dedup plus
-double ack, which with the idempotent sinks (a sample on `(series, ts)`, an action transition on
+double ack, which with the idempotent sinks (a sample batch on its receipt, an action transition on
 `(alarm, action, transition)`, the CDC idempotency key) gives exactly-once **outcomes**. This triple
 (`Nats-Msg-Id` dedup, double ack, idempotent sink) is the canonical exactly-once mechanism the other
-pages refer to.
+pages refer to; the samples stream carries it today (below).
 :::
 
-The edge stamps `ts`, so the system is ts-authoritative and needs no strict ordering on the wire. Today's delivery contract is weaker than the target: node publishes are fire-and-forget core NATS (no publish ack, no `Nats-Msg-Id`) and the consumer acks once after multi-transaction writes, so delivery is at-least-once with a known duplicate risk until #430 lands (see #430 and #311).
+The edge stamps `ts`, so the system is ts-authoritative and needs no strict ordering on the wire.
+
+### Delivery: a batch lands once
+
+The canonical triple is built on `OG_TELEMETRY`
+([ADR-0453](/architecture/decisions/#adr-0453-telemetry-is-published-through-jetstream-with-an-ack-a-minted-nats-msg-id-and-a-bounded-spool),
+[ADR-0311](/architecture/decisions/#adr-0311-a-telemetry-batch-lands-once-in-one-transaction-under-its-receipt)):
+
+- **The publish waits for the stream's ack.** Every telemetry publisher (a node, the push route, the
+  webhook route) publishes through JetStream and treats a batch as sent only once the stream acks it.
+  The push route answers `202` only after the ack, `503` after three attempts; a node holds a batch the
+  stream has not acked and ships it on the next tick ([nodes](/architecture/nodes/#delivery-a-batch-lands-once)).
+- **`Nats-Msg-Id` dedup.** Each batch carries an id minted once, when it is built, and kept across
+  every retry; the stream remembers an id for five minutes, so a retry inside the window (an attempt
+  it stored whose ack was lost) is answered with the first copy's ack and stored once.
+- **Double ack and an idempotent sink.** The consumer lands a batch's every sink (its log lines and
+  its three sample lanes) in **one transaction** whose first statement inserts the batch's **receipt**
+  (`telemetry_receipt`, keyed by the subject and the id), then double-acks. A failure part way writes
+  nothing; a batch id that already landed writes nothing at all. So a redelivery after a lost ack, a
+  consumer that died between its commit and its ack, and a retry past the stream's window each land
+  every row once. Receipts are kept a day.
+
+The property lane's transition guard is the insert's own condition, held per series by a lock, so the
+consumer's serial dispatch is no longer something its correctness depends on
+([workers](/architecture/workers/)).
 
 :::design[Target design, tracked in #430]
 

@@ -22,7 +22,8 @@ Built today: the Huma-over-chi API with the OpenAPI 3.1 document generated from 
 on `/auth`, `/roles`, `/locations`, `/systems`, `/components`, `/nodes`, `/endpoints`, `/tasks`, the
 first-party ingest write `POST /telemetry:push` (gated `telemetry:push`, owner declared in the body and
 fenced by the caller's scope, every native probe key refused by name, every key held to its writer
-class), the per-component reachability read, the type registries, the
+class, answering `202` only once the stream has acked the batch and `503` when it will not,
+[ADR-0453](/architecture/decisions/#adr-0453-telemetry-is-published-through-jetstream-with-an-ack-a-minted-nats-msg-id-and-a-bounded-spool)), the per-component reachability read, the type registries, the
 `/products` and `/standards` catalogs, the classifier-contract and instance-value property routes, the
 role declaration, resolution, and staffing routes, and the component alarm plus system and location
 [health](#health-the-verdict-and-why) reads, and the [MCP surface](#also-an-mcp-surface) generated from
@@ -350,7 +351,8 @@ is a **401** (a claim must not disclose which nodes exist). A node is fleet-wide
 **The webhook receiver is the other public write** (#1024,
 [ADR-1024](/architecture/decisions/#adr-1024-omniglass-receives-webhooks-on-the-server-and-a-webhook-token-is-a-sealed-secret)).
 `POST /webhooks/{token}` takes a sender's post for the webhook endpoint the token names, the scheme
-its driver declares authenticating it, and answers `202` once published, `401` refused, one identical
+its driver declares authenticating it, and answers `202` once the stream has acked the batch (`503`
+when it will not), `401` refused, one identical
 `404` for an unknown, rotated or malformed token, `413` past 1 MiB, and `429` with `Retry-After`;
 `GET` and `HEAD` on the same path answer a sender verifying its URL. `POST
 /endpoints/{endpoint}:rotateToken` (gated `endpoint:update`) mints the endpoint's token anew, and a
