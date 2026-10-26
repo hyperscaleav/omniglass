@@ -1,0 +1,45 @@
+{
+  "projects": [
+    {
+      "closed": false,
+      "fields": {
+        "totalCount": 18
+      },
+      "id": "PVT_kwDOC43oI84BaGfu",
+      "items": {
+        "totalCount": 17
+      },
+      "number": 2,
+      "owner": {
+        "login": "hyperscaleav",
+        "type": "Organization"
+      },
+      "public": false,
+      "readme": "",
+      "shortDescription": "",
+      "title": "Applied Monitoring 2026",
+      "url": "https://github.com/orgs/hyperscaleav/projects/2"
+    },
+    {
+      "closed": false,
+      "fields": {
+        "totalCount": 15
+      },
+      "id": "PVT_kwDOC43oI84BOqlh",
+      "items": {
+        "totalCount": 14
+      },
+      "number": 1,
+      "owner": {
+        "login": "hyperscaleav",
+        "type": "Organization"
+      },
+      "public": false,
+      "readme": "",
+      "shortDescription": "",
+      "title": "Omniglass",
+      "url": "https://github.com/orgs/hyperscaleav/projects/1"
+    }
+  ],
+  "totalCount": 2
+}

@@ -1,0 +1,22 @@
+{
+  "data": {
+    "node": {
+      "configuration": {
+        "iterations": [
+          {
+            "id": "4c1d2e3f",
+            "title": "Iteration 4",
+            "startDate": "2026-10-18",
+            "duration": 14
+          },
+          {
+            "id": "5d2e3f40",
+            "title": "Iteration 5",
+            "startDate": "2026-11-01",
+            "duration": 14
+          }
+        ]
+      }
+    }
+  }
+}
