@@ -2105,6 +2105,7 @@ sim_endpoints:
     driver: newtron-nvp-telnet
     label: Panel console
     inputs: { login: sim-panel-login }
+    planted_fault: the panel's console password was rotated, and the endpoint still logs in with the old one
   # The same panel answers NVP over TLS on 51326 (its nvp-tls face, #1035),
   # its certificate self-signed with a key the simulator derives from the
   # panel's id, so it is the same on every run. The driver pins that key on
@@ -2136,6 +2137,7 @@ sim_endpoints:
     label: Panel SSH
     inputs: { login: sim-panel-login-rotated }
     host_key: SHA256:twSJOxqCcLND44UmG2UgaA2xfebMGW5hCWNq2eHE16M
+    planted_fault: the panel was reimaged, so its host key no longer matches the pin
   # A refusal on an endpoint holding no session worth showing (#1110). The
   # auditorium's touch panel answers SNMP, and this endpoint reads its
   # community from the secret holding the one the panel's agent refuses: a
@@ -2147,6 +2149,7 @@ sim_endpoints:
     driver: snmp-generic
     label: Panel SNMP
     inputs: { community: sim-snmp-revoked }
+    planted_fault: the endpoint names a community the panel's agent refuses
 
 # Components that exist only beside the simulator (#1024), so the docs'
 # screenshots, seeded without it, carry none of them: the meeting platform's

@@ -32,6 +32,7 @@ func newRoot(version string) *cobra.Command {
 		newSetPasswordCmd(),
 		newSeedDevCmd(),
 		newSimCmd(),
+		newLabCmd(version),
 		newMCPCmd(version),
 	)
 	// Generated commands: one per API operation, sharing the connection flags.

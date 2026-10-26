@@ -73,6 +73,36 @@ type SimEndpoint struct {
 	// declared the way an operator declares one (endpoint retry with a host
 	// key), so the simulated face's own key is refused until it is trusted.
 	HostKey string `yaml:"host_key"`
+	// PlantedFault, when set, says this endpoint is broken on purpose and
+	// why: a fault for a learner to find and fix (#1193). The lab's readiness
+	// does not wait for it to read up.
+	PlantedFault string `yaml:"planted_fault"`
+}
+
+// PlantedFault is a simulated endpoint the seed breaks on purpose.
+type PlantedFault struct {
+	Component string
+	Driver    string
+	// Label is the endpoint's label, which the API reports beside its
+	// reachability: how the lab tells a planted fault from a real one.
+	Label string
+	Why   string
+}
+
+// PlantedFaults lists the simulated endpoints a scenario breaks on purpose,
+// read from its fixture.
+func PlantedFaults(sc Scenario) ([]PlantedFault, error) {
+	doc, err := sc.Doc()
+	if err != nil {
+		return nil, err
+	}
+	var out []PlantedFault
+	for _, e := range doc.SimEndpoints {
+		if e.PlantedFault != "" {
+			out = append(out, PlantedFault{Component: e.Component, Driver: e.Driver, Label: e.Label, Why: e.PlantedFault})
+		}
+	}
+	return out, nil
 }
 
 // System is one example system: a thing in a room that either works or does not.
