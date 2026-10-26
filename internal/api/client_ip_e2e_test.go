@@ -11,7 +11,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/auth"
-	"github.com/hyperscaleav/omniglass/internal/clientaddr"
+	"github.com/hyperscaleav/omniglass/internal/ingress"
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
@@ -101,7 +101,7 @@ func TestASessionRecordsTheClientTheTrustedProxiesResolve(t *testing.T) {
 		}
 	})
 	t.Run("none believes no forwarded header", func(t *testing.T) {
-		if got := recorded(t, api.WithTrustedProxies(clientaddr.Trust{})); got != "127.0.0.1" {
+		if got := recorded(t, api.WithTrustedProxies(ingress.TrustedProxies{})); got != "127.0.0.1" {
 			t.Fatalf("client_ip = %q, want the loopback peer 127.0.0.1", got)
 		}
 	})
@@ -163,7 +163,7 @@ func TestAWebhookSenderIsTheClientTheTrustedProxiesResolve(t *testing.T) {
 		inboxHas(t, nil, "198.51.100.7")
 	})
 	t.Run("none records the loopback peer", func(t *testing.T) {
-		inboxHas(t, []api.Option{api.WithTrustedProxies(clientaddr.Trust{})}, "127.0.0.1")
+		inboxHas(t, []api.Option{api.WithTrustedProxies(ingress.TrustedProxies{})}, "127.0.0.1")
 	})
 }
 

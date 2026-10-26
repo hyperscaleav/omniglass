@@ -15,8 +15,8 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/bus"
-	"github.com/hyperscaleav/omniglass/internal/clientaddr"
 	"github.com/hyperscaleav/omniglass/internal/config"
+	"github.com/hyperscaleav/omniglass/internal/ingress"
 	"github.com/hyperscaleav/omniglass/internal/migrate"
 	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/seed"
@@ -104,7 +104,7 @@ func runServer(ctx context.Context, version string) error {
 		natsURL = busSrv.LocalURL()
 	}
 
-	trust, err := clientaddr.Parse(c.TrustedProxies)
+	trust, err := ingress.ParseTrustedProxies(c.TrustedProxies)
 	if err != nil {
 		return fmt.Errorf("server: %w", err)
 	}

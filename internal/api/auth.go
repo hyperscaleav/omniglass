@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/netip"
 	"sort"
 	"strings"
 	"sync"
@@ -12,7 +13,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/hyperscaleav/omniglass/internal/auth"
-	"github.com/hyperscaleav/omniglass/internal/clientaddr"
+	"github.com/hyperscaleav/omniglass/internal/ingress"
 	"github.com/hyperscaleav/omniglass/internal/rbac"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/storage"
@@ -33,14 +34,11 @@ const (
 	// request, so the change-password handler can keep the caller's own session when it
 	// signs out their other sessions.
 	sessionHashCtxKey
-	// clientMetaCtxKey carries the request's User-Agent and client IP (captured by a chi
-	// middleware) so login and self-service token creation can stamp a new credential
-	// with the device and address that created it.
+	// clientMetaCtxKey carries the request's User-Agent and client address (captured by
+	// a chi middleware) so login and self-service token creation can stamp a new
+	// credential with the device and address that created it, and the webhook receiver
+	// limits and records its sender by the same address.
 	clientMetaCtxKey
-	// webhookSourceCtxKey carries the webhook sender's source, resolved once by
-	// the route's bound middleware under the configured trust, so the handler
-	// records the sender the limits counted.
-	webhookSourceCtxKey
 )
 
 // sessionHashFrom returns the sha256 of the request's bearer token, if one resolved.
@@ -49,40 +47,42 @@ func sessionHashFrom(ctx context.Context) ([]byte, bool) {
 	return h, ok && len(h) > 0
 }
 
-// clientMeta is the request's User-Agent and client IP, for stamping a new credential.
-type clientMeta struct{ userAgent, clientIP string }
-
-// clientMetaFrom returns the captured User-Agent and client IP, empty when none.
-func clientMetaFrom(ctx context.Context) (userAgent, clientIP string) {
-	if m, ok := ctx.Value(clientMetaCtxKey).(clientMeta); ok {
-		return m.userAgent, m.clientIP
-	}
-	return "", ""
+// clientMeta is the request's User-Agent and client address, for stamping a new
+// credential and keying a webhook sender.
+type clientMeta struct {
+	userAgent string
+	client    netip.Addr
 }
 
-// captureClientMeta stashes the request's User-Agent and client IP in the context so
-// handlers can stamp a new credential with the device and address that created it. Runs
-// on every API request, before Huma, so both the public login and the authn-only token
-// creation see it.
-func captureClientMeta(trust clientaddr.Trust) func(http.Handler) http.Handler {
+// clientMetaFrom returns the captured User-Agent and client address, empty when none
+// (or when the peer did not parse).
+func clientMetaFrom(ctx context.Context) (userAgent, clientIP string) {
+	m, _ := ctx.Value(clientMetaCtxKey).(clientMeta)
+	if !m.client.IsValid() {
+		return m.userAgent, ""
+	}
+	return m.userAgent, m.client.String()
+}
+
+// clientAddrFrom is the request's client address, the zero Addr when none resolved.
+func clientAddrFrom(ctx context.Context) netip.Addr {
+	m, _ := ctx.Value(clientMetaCtxKey).(clientMeta)
+	return m.client
+}
+
+// captureClientMeta resolves the request's client once, through the trusted proxies
+// (#1185), and stashes it with the User-Agent in the context. Runs on every API request,
+// before Huma, so the public login, the authn-only token creation and the webhook
+// receiver all read the one answer: the connection's peer, or the client a trusted
+// proxy forwarded. A forwarded header from any other peer changes nothing.
+func captureClientMeta(trust ingress.TrustedProxies) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			m := clientMeta{userAgent: r.UserAgent(), clientIP: clientIP(r, trust)}
+			client, _ := trust.Client(r.RemoteAddr, r.Header.Values("X-Forwarded-For"))
+			m := clientMeta{userAgent: r.UserAgent(), client: client}
 			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), clientMetaCtxKey, m)))
 		})
 	}
-}
-
-// clientIP is the caller's address as the trusted proxies resolve it (#1185):
-// the connection's peer, or the client a trusted proxy forwarded. A forwarded
-// header from any other peer changes nothing. Empty when the peer does not
-// parse.
-func clientIP(r *http.Request, trust clientaddr.Trust) string {
-	addr, ok := trust.Client(r.RemoteAddr, clientaddr.JoinForwarded(r.Header.Values("X-Forwarded-For")))
-	if !ok {
-		return ""
-	}
-	return addr.String()
 }
 
 func principalFrom(ctx context.Context) (*storage.Principal, bool) {

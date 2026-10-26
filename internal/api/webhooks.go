@@ -8,13 +8,11 @@ import (
 	"net/textproto"
 	"net/url"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
-	"github.com/hyperscaleav/omniglass/internal/clientaddr"
 	"github.com/hyperscaleav/omniglass/internal/driver"
 	"github.com/hyperscaleav/omniglass/internal/ingress"
 	"github.com/hyperscaleav/omniglass/internal/storage"
@@ -80,10 +78,6 @@ type webhookReceiver struct {
 	now        func() time.Time
 	flushEvery time.Duration
 
-	// trust is the peers a forwarded header is believed from, so a sender
-	// behind the ingress is limited by its own address (#1185).
-	trust clientaddr.Trust
-
 	sources, endpoints, listener *ingress.Buckets
 	dedup                        *ingress.Deduper
 	tally                        *ingress.Tally
@@ -102,7 +96,7 @@ type webhookReceiver struct {
 
 func newWebhookReceiver(gw storage.Gateway, pub TelemetryPublisher) *webhookReceiver {
 	return &webhookReceiver{
-		gw: gw, pub: pub, now: time.Now, flushEvery: webhookFlushEvery, trust: clientaddr.Default,
+		gw: gw, pub: pub, now: time.Now, flushEvery: webhookFlushEvery,
 		sources:   ingress.NewBuckets(webhookSourceRate, webhookSourceBurst, webhookBucketKeys),
 		endpoints: ingress.NewBuckets(webhookEndpointRate, webhookEndpointBurst, webhookBucketKeys),
 		listener:  ingress.NewBuckets(webhookListenerRate, webhookListenerBurst, 1),
@@ -122,28 +116,20 @@ type webhookInput struct {
 }
 
 // Resolve keeps the post's headers (a scheme reads its declared header, a
-// listener may match one) and the sender's source the bound middleware
-// resolved.
+// listener may match one) and the sender's source.
 func (in *webhookInput) Resolve(ctx huma.Context) []error {
 	in.header = http.Header{}
 	ctx.EachHeader(func(name, value string) { in.header.Add(name, value) })
-	in.source, _ = ctx.Context().Value(webhookSourceCtxKey).(string)
-	if in.source == "" {
-		in.source = "unknown"
-	}
+	in.source = webhookSource(ctx)
 	return nil
 }
 
-// forwardedFor is every X-Forwarded-For line of the request, joined in
-// order.
-func forwardedFor(ctx huma.Context) string {
-	var lines []string
-	ctx.EachHeader(func(name, value string) {
-		if strings.EqualFold(name, "X-Forwarded-For") {
-			lines = append(lines, value)
-		}
-	})
-	return clientaddr.JoinForwarded(lines)
+// webhookSource is the sender a post is limited, counted and recorded by:
+// the client address captureClientMeta resolved for the request through the
+// trusted proxies (#1185), the same address a credential is stamped with,
+// grouped as ingress.Source groups it.
+func webhookSource(ctx huma.Context) string {
+	return ingress.Source(clientAddrFrom(ctx.Context()))
 }
 
 type webhookOutput struct {
@@ -171,11 +157,8 @@ type webhookVerifyOutput struct {
 
 // registerWebhookRoutes wires the webhook receiver and its verification
 // challenge, both ungated by necessity.
-func registerWebhookRoutes(api huma.API, gw storage.Gateway, pub TelemetryPublisher, trust clientaddr.Trust) *webhookReceiver {
+func registerWebhookRoutes(api huma.API, gw storage.Gateway, pub TelemetryPublisher) *webhookReceiver {
 	rc := newWebhookReceiver(gw, pub)
-	if trust != nil {
-		rc.trust = trust
-	}
 	bound := huma.Middlewares{rc.bound(api)}
 	huma.Register(api, huma.Operation{
 		OperationID:   "receive-webhook",
@@ -211,7 +194,7 @@ func registerWebhookRoutes(api huma.API, gw storage.Gateway, pub TelemetryPublis
 // the read deadline.
 func (rc *webhookReceiver) bound(api huma.API) func(huma.Context, func(huma.Context)) {
 	return func(ctx huma.Context, next func(huma.Context)) {
-		src := ingress.Source(rc.trust, ctx.RemoteAddr(), forwardedFor(ctx))
+		src := webhookSource(ctx)
 		ok, wait := rc.admit(src, rc.now())
 		if !ok {
 			tooMany(api, ctx, wait)
@@ -227,7 +210,7 @@ func (rc *webhookReceiver) bound(api huma.API) func(huma.Context, func(huma.Cont
 		if _, w := humachi.Unwrap(ctx); w != nil {
 			_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(readDeadline(size)))
 		}
-		next(huma.WithValue(ctx, webhookSourceCtxKey, src))
+		next(ctx)
 	}
 }
 

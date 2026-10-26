@@ -16,7 +16,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
-	"github.com/hyperscaleav/omniglass/internal/clientaddr"
+	"github.com/hyperscaleav/omniglass/internal/ingress"
 	mcpserver "github.com/hyperscaleav/omniglass/internal/mcp"
 	"github.com/hyperscaleav/omniglass/internal/settings"
 	"github.com/hyperscaleav/omniglass/internal/storage"
@@ -63,8 +63,8 @@ type options struct {
 	commandWaiters, commandWaitersPerPrincipal int
 	// trustedProxies are the peers a forwarded header is believed from, for
 	// the client address a credential is stamped with and a webhook sender is
-	// limited by (#1185). Unset takes clientaddr.Default.
-	trustedProxies clientaddr.Trust
+	// limited by (#1185). Unset takes ingress.DefaultTrustedProxies.
+	trustedProxies ingress.TrustedProxies
 }
 
 // Option configures NewHandler.
@@ -74,8 +74,10 @@ type Option func(*options)
 func WithSecureCookies(b bool) Option { return func(o *options) { o.secureCookies = b } }
 
 // WithTrustedProxies sets the peers whose X-Forwarded-For is believed
-// (OMNIGLASS_TRUSTED_PROXIES); an empty, non-nil Trust believes none.
-func WithTrustedProxies(t clientaddr.Trust) Option { return func(o *options) { o.trustedProxies = t } }
+// (OMNIGLASS_TRUSTED_PROXIES); an empty, non-nil set believes none.
+func WithTrustedProxies(t ingress.TrustedProxies) Option {
+	return func(o *options) { o.trustedProxies = t }
+}
 
 // WithVersion sets the build version the MCP server reports to its clients.
 func WithVersion(v string) Option { return func(o *options) { o.version = v } }
@@ -117,12 +119,13 @@ func NewHandler(gw storage.Gateway, opts ...Option) http.Handler {
 		o.settingsSvc = defaultSettingsService(gw)
 	}
 	if o.trustedProxies == nil {
-		o.trustedProxies = clientaddr.Default
+		o.trustedProxies = ingress.DefaultTrustedProxies()
 	}
 	r := chi.NewRouter()
 	r.Route("/api/v1", func(sub chi.Router) {
-		// Capture the User-Agent and client IP before Huma, so login and self-service
-		// token creation can stamp a credential with the device and address behind it.
+		// Resolve the client and capture the User-Agent before Huma, so login and
+		// self-service token creation stamp a credential with the device and address
+		// behind it, and the webhook receiver keys its sender by the same address.
 		sub.Use(captureClientMeta(o.trustedProxies))
 		api := humachi.New(sub, apiConfig())
 		registerRoutes(api, gw, o.settingsSvc, o)
@@ -329,7 +332,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 	registerSystemLogRoutes(api, a, gw)
 	registerSeriesRoutes(api, a, gw)
 	registerTelemetryRoutes(api, a, gw, o.telemetryPub)
-	registerWebhookRoutes(api, gw, o.telemetryPub, o.trustedProxies)
+	registerWebhookRoutes(api, gw, o.telemetryPub)
 	registerUnclaimedRoutes(api, a, gw)
 	registerSimulationRoutes(api, a, gw, o.simStatus)
 	registerSimFleetRoutes(api, a, gw, o.simHub)

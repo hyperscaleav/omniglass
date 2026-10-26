@@ -51,7 +51,7 @@ type Config struct {
 	SecureCookies bool
 	// TrustedProxies is the raw OMNIGLASS_TRUSTED_PROXIES list: the peers a
 	// forwarded header is believed from (#1185). The server parses it at boot
-	// (clientaddr.Parse), so a bad entry fails the boot, not this Load.
+	// (ingress.ParseTrustedProxies), so a bad entry fails the boot, not this Load.
 	TrustedProxies string
 	// NatsAddr is the host:port the embedded NATS server binds.
 	NatsAddr string
