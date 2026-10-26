@@ -2227,6 +2227,30 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var fName string
+				cmd := &cobra.Command{
+					Use:     "rename <id>",
+					Short:   "Rename a driver",
+					Long:    "Moves a custom driver's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official driver keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. Audited as rename. Gated by driver:rename.",
+					Example: "  omniglass driver rename <id> --name name",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/drivers/%s:rename", pathSegment(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fName, "name", "", "The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid)")
+				_ = cmd.MarkFlagRequired("name")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
 				var fLabel string
 				var fSpec string
 				var fVersion string
@@ -3876,6 +3900,30 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var fName string
+				cmd := &cobra.Command{
+					Use:     "rename <id>",
+					Short:   "Rename a location type",
+					Long:    "Moves a custom location type's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official location type keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. Audited as rename. Gated by location_type:rename.",
+					Example: "  omniglass location-type rename <id> --name name",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/location-types/%s:rename", pathSegment(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fName, "name", "", "The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid)")
+				_ = cmd.MarkFlagRequired("name")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "restore <id>",
 					Short:   "Restore a location type's shipped values",
@@ -5388,6 +5436,30 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var fName string
+				cmd := &cobra.Command{
+					Use:     "rename <id>",
+					Short:   "Rename a product",
+					Long:    "Moves a custom product's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official product keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. Audited as rename. Gated by product:rename.",
+					Example: "  omniglass product rename <id> --name name",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/products/%s:rename", pathSegment(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fName, "name", "", "The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid)")
+				_ = cmd.MarkFlagRequired("name")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
 				var fComponentType string
 				var fDriverId string
 				var fIcon string
@@ -5399,7 +5471,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "update <id>",
 					Short:   "Update a product",
-					Long:    "Patches a custom product's label, vendor, driver, kind, component_type, icon, or parent. component_type is required, so an empty string on it is a 422 (a reclassify names a real type; it never clears). Official products are read-only (422). Gated by product:update.",
+					Long:    "Patches a custom product's label, vendor, driver, kind, component_type, icon, label rule, or parent. Each optional field follows the three-state string: omitted is unchanged, an empty string clears it, a value sets it, so a vendor, driver, parent, icon or label rule can be unset as well as changed. component_type is required, so an empty string on it is a 422 (a reclassify names a real type; it never clears). Official products are read-only (422). Gated by product:update.",
 					Example: "  omniglass product update boreal-edge-55",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -5433,13 +5505,13 @@ func generatedCommands() []*cobra.Command {
 					},
 				}
 				cmd.Flags().StringVar(&fComponentType, "component-type", "", "Reclassifies the product to this component_type, by name or uuid; component_type is required, so this only reclassifies, it never clears")
-				cmd.Flags().StringVar(&fDriverId, "driver-id", "", "A new driver, by handle or uuid")
-				cmd.Flags().StringVar(&fIcon, "icon", "", "A new icon override")
+				cmd.Flags().StringVar(&fDriverId, "driver-id", "", "A new driver, by handle or uuid; an empty string clears it")
+				cmd.Flags().StringVar(&fIcon, "icon", "", "A new icon override; an empty string clears it, so the product inherits its component_type's icon")
 				cmd.Flags().StringVar(&fKind, "kind", "", "A new product class")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A new operator-facing label")
 				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A new label template; an empty string clears it, so components fall back to the component_type chain and then the global component rule. Refused with 422 if it does not parse.")
-				cmd.Flags().StringVar(&fParentProductId, "parent-product-id", "", "A new parent product, by handle or uuid")
-				cmd.Flags().StringVar(&fVendorId, "vendor-id", "", "A new vendor, by handle or uuid")
+				cmd.Flags().StringVar(&fParentProductId, "parent-product-id", "", "A new parent product, by handle or uuid; an empty string clears it")
+				cmd.Flags().StringVar(&fVendorId, "vendor-id", "", "A new vendor, by handle or uuid; an empty string clears it")
 				return cmd
 			}()
 			return cmd
@@ -6452,6 +6524,30 @@ func generatedCommands() []*cobra.Command {
 				return cmd
 			}())
 			return parent
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fName string
+				cmd := &cobra.Command{
+					Use:     "rename <id>",
+					Short:   "Rename a standard",
+					Long:    "Moves a custom standard's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official standard keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. A shipped example standard keeps its name too (409): the boot seed plants it by name whenever it is absent, so a renamed one would come back on the next boot; forking a template into a standard of your own is #827. Audited as rename. Gated by standard:rename.",
+					Example: "  omniglass standard rename <id> --name name",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/standards/%s:rename", pathSegment(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fName, "name", "", "The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid)")
+				_ = cmd.MarkFlagRequired("name")
+				return cmd
+			}()
+			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			parent := &cobra.Command{
@@ -8215,6 +8311,30 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fName string
+				cmd := &cobra.Command{
+					Use:     "rename <id>",
+					Short:   "Rename a vendor",
+					Long:    "Moves a custom vendor's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official vendor keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. Audited as rename. Gated by vendor:rename.",
+					Example: "  omniglass vendor rename <id> --name name",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/vendors/%s:rename", pathSegment(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fName, "name", "", "The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid)")
+				_ = cmd.MarkFlagRequired("name")
 				return cmd
 			}()
 			return cmd

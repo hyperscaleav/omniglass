@@ -32,7 +32,7 @@ func TestCLIEndToEnd(t *testing.T) {
 	}
 
 	dsn := storagetest.NewDSN(t)
-	// OMNIGLASS_DATA_DIR keeps the server's fallback secret key in a temp dir
+	// OMNIGLASS_DATA_DIR keeps the server's fallback encryption key in a temp dir
 	// rather than this package's working directory under `go test`.
 	dbEnv := append(os.Environ(), "OMNIGLASS_DSN="+dsn, "OMNIGLASS_DATA_DIR="+t.TempDir())
 

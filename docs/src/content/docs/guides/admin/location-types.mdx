@@ -33,8 +33,10 @@ uuid minted by the database, the internal address the handle resolves to
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with
   `location_type:update`) edits the label, the icon, the allowed parents, and the naming
   rule; the
-  **name** is fixed, since a catalog row carries no rename (`:rename` is a component, system,
-  location, and principal group affordance). **Delete** (with `location_type:delete`) removes
+  blade does not edit the **name**: rename a custom type with
+  `omniglass location-type rename <name> --name <new>` (`location_type:rename`), which keeps every
+  location of that type and rewrites the type's name wherever another type allows it as a parent.
+  **Delete** (with `location_type:delete`) removes
   the row, behind a confirm. A verb you lack greys just that button, its hover reason naming
   the permission (`Requires location_type:update`, `Requires location_type:delete`); the pair
   never disappears.

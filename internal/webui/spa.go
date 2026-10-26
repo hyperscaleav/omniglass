@@ -1,9 +1,10 @@
 // Package webui serves the embedded single-page operator console. The routing
-// logic (serve a real file, else fall back to index.html for the SPA router)
-// lives here against an injected fs.FS so it is unit-testable with a fake
-// filesystem; the real embedded bytes are wired in spa_embed.go under the `web`
-// build tag, and a placeholder is wired in spa_noembed.go without it. So a bare
-// `go build` / `go test ./...` never needs the Vite build to exist.
+// logic (serve a real file, 404 a miss that names one, else fall back to
+// index.html for the SPA router) lives here against an injected fs.FS so it is
+// unit-testable with a fake filesystem; the real embedded bytes are wired in
+// spa_embed.go under the `web` build tag, and a placeholder is wired in
+// spa_noembed.go without it. So a bare `go build` / `go test ./...` never needs
+// the Vite build to exist.
 package webui
 
 import (
@@ -14,20 +15,35 @@ import (
 )
 
 // SPAHandler serves the console from fsys with client-side-routing support: an
-// existing file (index.html, assets/*, favicon) is served as-is; any other path
-// falls back to index.html so the Solid router resolves it. If fsys has no
-// index.html (a binary built without `-tags web`), it serves a build-the-console
-// placeholder.
+// existing file (index.html, assets/*, favicon) is served as-is; a miss that
+// names a file (namesAFile) and a request for one of the build's own
+// directories are a 404; any other path falls back to index.html so the Solid
+// router resolves it. If fsys has no index.html (a binary built without
+// `-tags web`), routes get a build-the-console placeholder and a request naming
+// a file still gets a 404.
 func SPAHandler(fsys fs.FS) http.Handler {
+	prefixes := assetPrefixes(fsys)
 	if _, err := fs.Stat(fsys, "index.html"); err != nil {
-		return http.HandlerFunc(placeholder)
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if namesAFile(requestPath(r), prefixes) {
+				http.NotFound(w, r)
+				return
+			}
+			placeholder(w, r)
+		})
 	}
 	fileServer := http.FileServer(http.FS(fsys))
-	prefixes := assetPrefixes(fsys)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		p := strings.TrimPrefix(path.Clean(r.URL.Path), "/")
+		p := requestPath(r)
 		if p != "" {
-			if _, err := fs.Stat(fsys, p); err == nil {
+			if fi, err := fs.Stat(fsys, p); err == nil {
+				// A directory the build emitted is neither a page nor a file: left
+				// to the file server it answered with a listing of every file in
+				// it (#808), and the shell would claim a route that is not one.
+				if fi.IsDir() {
+					http.NotFound(w, r)
+					return
+				}
 				// Vite emits content-hashed asset names, safe to cache forever;
 				// index.html (served below) is not.
 				if strings.HasPrefix(p, "assets/") {
@@ -39,13 +55,19 @@ func SPAHandler(fsys fs.FS) http.Handler {
 				fileServer.ServeHTTP(w, r)
 				return
 			}
-			if underAssetPrefix(prefixes, p) {
+			if namesAFile(p, prefixes) {
 				http.NotFound(w, r)
 				return
 			}
 		}
 		serveIndex(w, r, fsys)
 	})
+}
+
+// requestPath is the FS-relative path a request addresses: cleaned, so a
+// traversal resolves inside the embedded FS, and root-relative.
+func requestPath(r *http.Request) string {
+	return strings.TrimPrefix(path.Clean(r.URL.Path), "/")
 }
 
 // assetPrefixes returns the directories the console build owns, read off the
@@ -84,12 +106,36 @@ func assetPrefixes(fsys fs.FS) []string {
 	return out
 }
 
-// underAssetPrefix reports whether p addresses a file inside one of the build's
-// directories. Pure and separate from the handler so the rule is testable
-// without a filesystem: it matches a whole first segment, so `assets/app.js` is
-// an asset request while the bare directory `assets` and the look-alike
-// `assetsomething/x` are not.
-func underAssetPrefix(prefixes []string, p string) bool {
+// namesAFile reports whether a miss names a FILE the console build was supposed
+// to contain, rather than one of the SPA's own client routes. A miss on a file
+// is a genuine 404; a miss on a client route is the deep link the catch-all
+// exists for. Pure and separate from the handler so the rule is testable
+// without a filesystem.
+//
+// Two derived halves, neither a list anybody keeps:
+//
+//   - The path sits under a DIRECTORY THE BUILD EMITTED (assetPrefixes, #778).
+//     It matches a whole first segment, so `assets/app.js` and the
+//     extensionless `assets/app` name files while the look-alike
+//     `assetsomething/x` does not.
+//   - The last segment carries an EXTENSION (#808). This is the half that
+//     reaches the root, where public/ copies a contributor's new file (a
+//     manifest, a touch icon, robots.txt) and where the directory half cannot
+//     see. It rests on one premise: no console route carries a dot. A route's
+//     parameters are a uuid or a name, and the entity name rule
+//     (`^[a-z0-9][a-z0-9-]*$`, internal/storage/name_rule.go) admits none; the
+//     route patterns themselves are pinned dot-free by
+//     TestNoConsoleRouteCarriesADot, so a router change that adds one fails
+//     there instead of silently turning its deep links into 404s. A query
+//     string never reaches this (it is not part of the path), so
+//     `/explore?node=hq.west` stays a route.
+func namesAFile(p string, prefixes []string) bool {
+	if p == "" {
+		return false
+	}
+	if strings.Contains(path.Base(p), ".") {
+		return true
+	}
 	first, rest, ok := strings.Cut(p, "/")
 	if !ok || rest == "" {
 		return false

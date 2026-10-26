@@ -486,7 +486,10 @@ Shipped content is two kinds, never conflated:
   The fork is **one-time, no inheritance**: nothing points back at the template, so it can improve
   per release without touching a tenant. What lands is an **operator-owned** row (`official: false`),
   installed **only if absent** (`ON CONFLICT DO NOTHING`) so re-seeding never reverts an edit; a
-  shipped standard's **roles** ride the same lane.
+  shipped standard's **roles** ride the same lane. Installing by name is why a shipped standard keeps
+  its name: the seed marks what it plants (`seeded`) and a rename refuses it, since the next boot would
+  plant the shipped name again
+  ([ADR-0555](/architecture/decisions/#adr-0555-a-registry-row-renames-through-its-own-rename-custom-method)).
 - **Canonical vocabulary** (the [`metric_type` and `property_type` catalogs](/architecture/properties/),
   the `event_type`
   and `command_type` registries) is the shared namespace a driver maps onto, identical install to

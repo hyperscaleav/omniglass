@@ -152,3 +152,24 @@ func TestEmbeddedConsole404sAMissingAsset(t *testing.T) {
 		t.Errorf("GET /locations/hq = %d, want 200 with the console shell", rec.Code)
 	}
 }
+
+func TestEmbeddedConsole404sAMissingRootFile(t *testing.T) {
+	// #808 against the real build: the root is where public/ lands a file (the
+	// favicon today), and a typo of it, or of any root-level file the build may
+	// emit later, is a miss rather than the shell. A build directory is a 404
+	// too, never a listing of the hashed asset names, and the real favicon
+	// still serves.
+	h := SPA()
+	for _, p := range []string{"/favicn.svg", "/robots.txt", "/assets/", "/fonts"} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, p, nil))
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("GET %s = %d, want 404", p, rec.Code)
+		}
+	}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/favicon.svg", nil))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "<svg") {
+		t.Errorf("GET /favicon.svg = %d, want 200 and the svg", rec.Code)
+	}
+}

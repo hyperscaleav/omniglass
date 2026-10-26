@@ -177,12 +177,13 @@ func TestNodeGateway(t *testing.T) {
 }
 
 // TestNodeNameSubjectSafety proves the node-name invariant is enforced at the
-// Storage Gateway, not only by validNodeName at the API layer: a node name
-// becomes a NATS subject token (og.v1.telemetry.<name>, ...) and its per-node
-// subject grant, so a name containing a dot, a subject wildcard ('*', '>'), or
-// whitespace must be rejected by the node table's CHECK constraint, with
-// CreateNode surfacing a clean ErrInvalidNodeName rather than a raw pg error.
-// Skipped under -short.
+// Storage Gateway: a node name becomes a NATS subject token
+// (og.v1.telemetry.<name>, ...) and its per-node subject grant, so a name
+// containing a dot, a subject wildcard ('*', '>'), or whitespace must be refused
+// with ErrInvalidEntityName before any row is written. The entity name rule
+// (storage.ValidateName) is the only fence since #570 dropped the node table's
+// own CHECK, which forbade exactly these characters and no others; this is the
+// test that keeps the guarantee the CHECK used to state. Skipped under -short.
 func TestNodeNameSubjectSafety(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -199,15 +200,12 @@ func TestNodeNameSubjectSafety(t *testing.T) {
 	}
 	all := scope.Set{All: true}
 
-	// Either sentinel satisfies the invariant. The entity-key rule is strictly
-	// stricter than subject safety (it also bars uppercase and the uuid shape), so
-	// it now runs first and every name below trips it before reaching the CHECK
-	// constraint that produces ErrInvalidNodeName. What must hold is that the
-	// gateway refuses cleanly and writes no row; which of the two refusals fires is
-	// an implementation detail, and both map to 422.
-	for _, bad := range []string{"bad.name", "*", ">", "has space", "tab\tname"} {
-		if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: bad, Description: "subject-unsafe"}, all, all); !errors.Is(err, storage.ErrInvalidNodeName) && !errors.Is(err, storage.ErrInvalidEntityName) {
-			t.Fatalf("create node %q: want ErrInvalidNodeName or ErrInvalidEntityName, got %v", bad, err)
+	// Every character the dropped CHECK caught (a dot, '*', '>', a space, a tab,
+	// a newline, a carriage return), plus two it admitted that the entity rule
+	// refuses (uppercase, an underscore): one rule, refusing all of them.
+	for _, bad := range []string{"bad.name", "edge*", "edge>", "has space", "tab\tname", "new\nline", "carriage\rreturn", "Edge-1", "edge_1"} {
+		if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: bad, Description: "subject-unsafe"}, all, all); !errors.Is(err, storage.ErrInvalidEntityName) {
+			t.Fatalf("create node %q: want ErrInvalidEntityName, got %v", bad, err)
 		}
 		// "bad.name" is dot-joined, so #627 Task 12's RejectAddressForm now
 		// catches it before the lookup even runs and reports the more specific

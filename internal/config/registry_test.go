@@ -29,9 +29,51 @@ func TestRegistryShape(t *testing.T) {
 			t.Errorf("registry entry %s: unexpected key shape", v.Key)
 		}
 	}
-	for _, want := range []string{"OMNIGLASS_SECRET_KEY", "OMNIGLASS_SECRET_KEY_FILE", "OMNIGLASS_DSN", "DATABASE_URL", "OMNIGLASS_SERVER", "OMNIGLASS_NODE_TOKEN"} {
+	for _, want := range []string{"OMNIGLASS_ENCRYPTION_KEY", "OMNIGLASS_ENCRYPTION_KEY_FILE", "OMNIGLASS_DSN", "DATABASE_URL", "OMNIGLASS_SERVER", "OMNIGLASS_NODE_TOKEN"} {
 		if !seen[want] {
 			t.Errorf("registry missing %s", want)
+		}
+	}
+}
+
+// TestDeprecatedNamesPointAtTheirReplacement holds the deprecation window to
+// its declaration: an old name the binary still reads names a registered,
+// current replacement in the same scope, and the encryption key's two old names
+// (#558) are declared that way rather than silently dropped, since a release
+// that stopped reading them would lock a deployment out of its own secrets.
+func TestDeprecatedNamesPointAtTheirReplacement(t *testing.T) {
+	byKey := map[string]Var{}
+	for _, v := range Registry {
+		byKey[v.Key] = v
+	}
+	for _, v := range Registry {
+		if v.Deprecated == "" {
+			continue
+		}
+		r, ok := byKey[v.Deprecated]
+		if !ok {
+			t.Errorf("%s is deprecated in favor of %s, which the registry does not declare", v.Key, v.Deprecated)
+			continue
+		}
+		if r.Deprecated != "" {
+			t.Errorf("%s points at %s, which is itself deprecated", v.Key, v.Deprecated)
+		}
+		if r.Scope != v.Scope {
+			t.Errorf("%s (%s) points at %s (%s): a rename keeps its scope", v.Key, v.Scope, r.Key, r.Scope)
+		}
+	}
+	for old, replacement := range map[string]string{
+		"OMNIGLASS_SECRET_KEY":      "OMNIGLASS_ENCRYPTION_KEY",
+		"OMNIGLASS_SECRET_KEY_FILE": "OMNIGLASS_ENCRYPTION_KEY_FILE",
+	} {
+		if got := byKey[old].Deprecated; got != replacement {
+			t.Errorf("%s.Deprecated = %q, want %q", old, got, replacement)
+		}
+	}
+	// A current variable's doc never calls the encryption key a secret key.
+	for _, v := range Registry {
+		if v.Deprecated == "" && strings.Contains(strings.ToLower(v.Doc), "secret key") {
+			t.Errorf("%s doc %q says secret key: it is the encryption key (#558)", v.Key, v.Doc)
 		}
 	}
 }
