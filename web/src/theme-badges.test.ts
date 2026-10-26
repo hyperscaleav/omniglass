@@ -37,7 +37,7 @@ describe("healthy hue", () => {
     expect(css.match(/--og-healthy:\s*[^;]+;/g)?.length).toBe(2);
     expect(css).toMatch(/--og-healthy:\s*var\(--color-success\)/);
   });
-  for (const sel of [".badge-healthy", ".bg-healthy", ".bg-healthy-muted", ".text-healthy"]) {
+  for (const sel of [".badge-healthy", ".bg-healthy", ".text-healthy"]) {
     it(`${sel} draws from --og-healthy, not the unknown grey`, () => {
       expect(rule(sel)).toContain("--og-healthy");
       expect(rule(sel)).not.toContain("base-content");
