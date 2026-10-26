@@ -2,7 +2,7 @@
 title: "A telemetry push is fenced by telemetry:push on the component it names"
 date: 2026-10-26
 status: Accepted
-summary: "`POST /telemetry:push` keeps its scope fence and refuses synchronously: the owner it names in the body is a component target, resolved through ADR-0116's split with `visible_set(P, telemetry, push)` as the action half and the caller's own `component:read` as the read half, so a component outside the read is a non-disclosing 404 and one readable but not pushable a truthful 403. One check per batch, never per sample. `telemetry` resolves on the component tier alone (the ADR-0117 precedent). This supersedes the 2026-08-27 ruling on #752 that the route was capability-shaped with no per-target walk: the shipped route had always walked scope, and removing the walk would have let a component-scoped integration push to every component"
+summary: "`POST /telemetry:push` keeps its scope fence and refuses synchronously: the owner it names in the body is a component target, resolved through ADR-0116's split with `visible_set(P, telemetry, push)` as the action half and, because push is the stronger grant, the push scope itself as enough to see the target: a component inside the push scope is pushed to with no `component:read` needed, one outside both the push scope and the caller's read is a non-disclosing 404, and one readable but not pushable a truthful 403. One check per batch, never per sample. `telemetry` resolves on the component tier alone (the ADR-0117 precedent). This supersedes the 2026-08-27 ruling on #752 that the route was capability-shaped with no per-target walk: the shipped route had always walked scope, and removing the walk would have let a component-scoped integration push to every component"
 refs: [752, 427, 1200]
 ---
 
@@ -11,18 +11,21 @@ refs: [752, 427, 1200]
   1. **A fence, not a capability.** `owner.ref` names an estate target, the same shape as the routes
      [ADR-0116](#adr-0116-a-refusal-picks-its-status-from-the-difference-between-two-scopes) covers,
      so the route resolves it through `ResolveActionTarget`: the action half is
-     `visible_set(P, telemetry, push)`, the read half the caller's own `component:read`. Outside the
-     read is the non-disclosing 404; readable but outside the push scope is a truthful 403, safe
-     because only a caller who could read that row anyway can meet it. A push-only integration
-     holds no component read and only ever sees the 404.
+     `visible_set(P, telemetry, push)`. Push is the stronger grant, so the push scope is also
+     enough to see the target: the route first resolves with the push scope as both halves, and a
+     push-only integration (no `component:read`) pushes to exactly the components it is granted and
+     learns nothing about any other. Only a miss resolves again with the caller's own
+     `component:read` as the read half, to choose its refusal: outside both is the non-disclosing
+     404; readable but outside the push scope is a truthful 403, safe because only a caller who
+     could read that row anyway can meet it.
   2. **Component tier alone.** `telemetry` leaves the exclusive-arc family in
      `scope.applicableKinds` and resolves on the component tier, for
      [ADR-0117](#adr-0117-an-actuation-is-fenced-by-the-permission-that-authorizes-it)'s reason: the
      route's only owner kind is a component, and a location- or system-tier root can never match a
      component's ancestor chain, so it reached nothing while telling `scope.Covers` otherwise. The
      day a push may name a system or a location owner (#422), that tier joins, with a test.
-  3. **Once per batch.** A batch has one owner, so the fence is one resolve per request, never per
-     sample, and the instance check ([ADR-0456](#adr-0456-an-instance-names-which-value-of-one-key-on-one-owner-a-row-is-and-an-owner-level-read-reduces-across-every-instance))
+  3. **Once per batch.** A batch has one owner, so the fence is one resolve per accepted request (a
+     refusal costs a second, to pick its status), never per sample, and the instance check ([ADR-0456](#adr-0456-an-instance-names-which-value-of-one-key-on-one-owner-a-row-is-and-an-owner-level-read-reduces-across-every-instance))
      is one read of the owner's endpoint names, made only when a sample names an instance. A
      query-count test pins both: a batch of forty-five observations issues exactly the statements a
      batch of three does.

@@ -8,8 +8,10 @@ refs: [752, 456]
 was a 404, and a ruling recorded on #752 would have removed that fence altogether.
 [ADR-0752](/architecture/decisions/#adr-0752-a-telemetry-push-is-fenced-by-telemetrypush-on-the-component-it-names)
 keeps the fence and moves the route onto `ResolveActionTarget`, the split every other route acting
-on a component target takes: outside the caller's `component:read` a non-disclosing 404, readable
-but not pushable a truthful 403. `telemetry` resolves on the component tier alone, the
+on a component target takes, with one difference: push is the stronger grant, so its own scope is
+enough to see the target, and a push-only integration with no `component:read` pushes to exactly
+the components it is granted (`TestAPushOnlyIntegrationPushesWhereItIsGranted`). A miss outside
+both scopes is a non-disclosing 404; readable but not pushable is a truthful 403. `telemetry` resolves on the component tier alone, the
 `command:issue` precedent, since a location- or system-tier grant could never reach a component's
 chain. The matrix in `authz_matrix_test.go` drives the split through the route as `push-telemetry`.
 

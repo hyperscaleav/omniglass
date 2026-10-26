@@ -448,8 +448,9 @@ is not either, and neither is reporting what was observed on it. The command one
 because what a wide read used to widen there was not what a caller could learn but what it could
 physically actuate. The push is the one with no fence downstream: it publishes to the bus, and the
 consumer that writes runs as a trusted server process with no scope of its own, so this check is the
-only one the write gets. It runs once per batch (a batch has one owner), never per sample, and a
-push-only integration, holding no component read, only ever meets the 404.
+only one the write gets. It runs once per batch (a batch has one owner), never per sample. Push is the stronger grant, so
+its own scope is enough to see the target: a push-only integration, holding no component read,
+pushes to exactly the components it is granted, and every other component is the non-disclosing 404.
 
 The same split resolves a **read** that hangs off a component on its own permission: a command's
 reads (`GET /components/{name}/commands` and `GET /components/{name}/commands/{id}`, #1155) resolve the component through

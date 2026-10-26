@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"net/http"
@@ -130,8 +131,9 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 			"(health) is the platform's, each rejected by name on every lane; a key a calc rule outputs is rejected " +
 			"naming the rule. An observation's instance is the endpoint it came through: one naming no endpoint on the " +
 			"owner refuses the batch with a 422 naming it and listing the owner's endpoints. Gated by telemetry:push, whose scope must cover the declared owner (one check per batch): " +
-			"an owner outside the caller's component:read is a non-disclosing 404, and one the caller can read but " +
-			"may not push to is a 403.",
+			"the push scope alone is enough to see the owner (no component:read is needed), an owner outside both " +
+			"the push scope and the caller's component:read is a non-disclosing 404, and one the caller can read " +
+			"but may not push to is a 403.",
 	}, "telemetry", "push"), func(ctx context.Context, in *pushInput) (*pushOutput, error) {
 		if pub == nil {
 			return nil, huma.Error503ServiceUnavailable("telemetry ingest is unavailable (no bus)")
@@ -154,19 +156,28 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 		// telemetry:push, never component:read: a principal routinely holds a
 		// wide read and a narrow write (viewer over the fleet plus operator on
 		// one component), so fencing with the read scope would let it push to
-		// anything it can see. The caller's own component:read decides only
-		// which refusal it is owed: a component outside it is the non-disclosing
-		// 404, and one inside it the push scope does not reach is the truthful
-		// 403, safe because only a caller who could read that row anyway can
-		// meet it. A push-only integration holds no component read and only
-		// ever sees 404.
+		// anything it can see. Push is the stronger grant, so its own scope is
+		// also enough to see the component: a push-only integration (no
+		// component:read) pushes where it is granted and learns nothing else.
+		// The caller's component:read decides only which refusal a miss is
+		// owed: a component outside both scopes is the non-disclosing 404, and
+		// one it can read but not push is the truthful 403, safe because only a
+		// caller who could read that row anyway can meet it.
 		//
 		// This is the ONLY fence on the write: the route publishes to the bus, and the
 		// consumer that finally writes runs as a trusted server process with no scope of
 		// its own. Nothing downstream will catch a mistake made here. It runs once per
-		// batch (a batch has one owner), never per sample.
-		compID, err := gw.ResolveActionTarget(ctx, "component", in.Body.Owner.Ref,
-			a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "telemetry", "push"))
+		// batch (a batch has one owner), never per sample; the second resolve runs
+		// only on a refusal, to choose its status.
+		pushScope := a.scopeFor(ctx, "telemetry", "push")
+		compID, err := gw.ResolveActionTarget(ctx, "component", in.Body.Owner.Ref, pushScope, pushScope)
+		if errors.Is(err, storage.ErrComponentNotFound) {
+			_, err = gw.ResolveActionTarget(ctx, "component", in.Body.Owner.Ref,
+				a.scopeFor(ctx, "component", "read"), pushScope)
+			if err == nil {
+				err = storage.ErrComponentNotFound
+			}
+		}
 		if err != nil {
 			return nil, mapComponentErr(err)
 		}
