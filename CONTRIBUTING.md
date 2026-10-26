@@ -47,19 +47,16 @@ git push -u origin <type>/<short-name>
 
 ## The per-PR gate (what CI will check)
 
-These gates are the target contract; they activate as the toolchain lands. Today the
-only automated PR check is the docs-site deploy.
+The workflows behind these gates, and which of them are automated today, are in
+[Release and CI](docs/src/content/docs/contributing/release-ci.md).
 
 | Gate | What it means |
 |---|---|
-| **Tests** | Unit tests + lint + format run on every PR. Full `make test` is label-gated (`run:test`). |
-| **Docs touched** | A feature PR changes `docs/`, or carries the `no-docs` label with a one-line justification. |
+| **Tests** | The full `make test` gate (the SPA typecheck and vitest suite, every Go tier, the NET_ADMIN tier) plus the browser e2e tier run on every PR and on `main`. |
+| **Docs touched** | A feature PR changes `docs/` (docs-with-everything); held in review by the ship-review's Docs line, not by a workflow. |
 | **Conventions** | gofmt, lint, naming, no em-dashes in written artifacts, API-drift + route coverage (once the API exists). |
 | **PR title** | Conventional-commit format. |
-| **Review** | Not required during solo bootstrap (the `main` ruleset enforces zero approvals); the target is at least one approving review as the project grows. Heavy jobs (image build, CVE scan, preview env) are label-gated. |
-
-A label-gated trigger can also invoke **Claude Code** on a PR for review or assist
-(apply the `claude` label).
+| **Review** | Not required during solo bootstrap (the `main` ruleset enforces zero approvals); the target is at least one approving review as the project grows. The image build runs on every PR; only the preview environment (`run:preview`) and the demo recordings (`run:demo`) are label-gated. |
 
 ## House style
 

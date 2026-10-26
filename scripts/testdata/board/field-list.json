@@ -1,0 +1,112 @@
+{
+  "fields": [
+    {
+      "id": "PVTF_lADOC43oI84BOqlhzg9TL6E",
+      "name": "Title",
+      "type": "ProjectV2Field"
+    },
+    {
+      "id": "PVTF_lADOC43oI84BOqlhzg9TL6I",
+      "name": "Assignees",
+      "type": "ProjectV2Field"
+    },
+    {
+      "id": "PVTSSF_lADOC43oI84BOqlhzg9TL6M",
+      "name": "Status",
+      "options": [
+        {
+          "id": "b0771673",
+          "name": "Backlog"
+        },
+        {
+          "id": "f75ad846",
+          "name": "Todo"
+        },
+        {
+          "id": "47fc9ee4",
+          "name": "In Progress"
+        },
+        {
+          "id": "98236657",
+          "name": "Done"
+        }
+      ],
+      "type": "ProjectV2SingleSelectField"
+    },
+    {
+      "id": "PVTF_lADOC43oI84BOqlhzg9TL6Q",
+      "name": "Labels",
+      "type": "ProjectV2Field"
+    },
+    {
+      "id": "PVTF_lADOC43oI84BOqlhzg9TL6U",
+      "name": "Linked pull requests",
+      "type": "ProjectV2Field"
+    },
+    {
+      "id": "PVTF_lADOC43oI84BOqlhzg9TL6Y",
+      "name": "Milestone",
+      "type": "ProjectV2Field"
+    },
+    {
+      "id": "PVTF_lADOC43oI84BOqlhzg9TL6c",
+      "name": "Repository",
+      "type": "ProjectV2Field"
+    },
+    {
+      "id": "PVTF_lADOC43oI84BOqlhzg9TL6k",
+      "name": "Reviewers",
+      "type": "ProjectV2Field"
+    },
+    {
+      "id": "PVTF_lADOC43oI84BOqlhzg9TL6o",
+      "name": "Parent issue",
+      "type": "ProjectV2Field"
+    },
+    {
+      "id": "PVTF_lADOC43oI84BOqlhzg9TL6s",
+      "name": "Sub-issues progress",
+      "type": "ProjectV2Field"
+    },
+    {
+      "id": "PVTIF_lADOC43oI84BOqlhzg9TR20",
+      "name": "Iteration",
+      "type": "ProjectV2IterationField"
+    },
+    {
+      "id": "PVTF_lADOC43oI84BOqlhzhPkD0o",
+      "name": "Created",
+      "type": "ProjectV2Field"
+    },
+    {
+      "id": "PVTF_lADOC43oI84BOqlhzhPkD04",
+      "name": "Updated",
+      "type": "ProjectV2Field"
+    },
+    {
+      "id": "PVTF_lADOC43oI84BOqlhzhPkD1I",
+      "name": "Closed",
+      "type": "ProjectV2Field"
+    },
+    {
+      "id": "PVTSSF_lADOC43oI84BOqlhzhW2YIc",
+      "name": "Priority",
+      "options": [
+        {
+          "id": "609a01cf",
+          "name": "High"
+        },
+        {
+          "id": "df9e37e4",
+          "name": "Medium"
+        },
+        {
+          "id": "cf3ba7eb",
+          "name": "Low"
+        }
+      ],
+      "type": "ProjectV2SingleSelectField"
+    }
+  ],
+  "totalCount": 15
+}

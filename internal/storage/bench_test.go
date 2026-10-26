@@ -212,7 +212,7 @@ func buildBenchFleet(b *testing.B, size benchSize) *benchFleet {
 	// Staff every system's first member into the role, so a system verdict has
 	// a real occupant to resolve and the recompute chain a real system to climb.
 	for i, sys := range sysNames {
-		if err := gw.AssignRole(ctx, "", sys, "bench-role", compNames[i], all, all); err != nil {
+		if err := gw.AssignRole(ctx, "", sys, "bench-role", compNames[i], all, all, all, all); err != nil {
 			b.Fatalf("assign role on %s: %v", sys, err)
 		}
 	}

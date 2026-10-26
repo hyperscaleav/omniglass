@@ -1,0 +1,41 @@
+{
+  "data": {
+    "repository": {
+      "issue": {
+        "number": 58,
+        "title": "ci: codesign + notarize macOS release binaries",
+        "url": "https://github.com/hyperscaleav/omniglass/issues/58",
+        "projectItems": {
+          "nodes": [
+            {
+              "id": "PVTI_lADOC43oI84BOqlhzgxaTuI",
+              "isArchived": false,
+              "project": {
+                "id": "PVT_kwDOC43oI84BOqlh"
+              },
+              "fieldValues": {
+                "nodes": [
+                  {},
+                  {},
+                  {},
+                  {
+                    "name": "Medium",
+                    "field": {
+                      "name": "Priority"
+                    }
+                  },
+                  {
+                    "name": "Todo",
+                    "field": {
+                      "name": "Status"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

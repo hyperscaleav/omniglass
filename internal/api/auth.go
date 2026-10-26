@@ -334,9 +334,11 @@ func (a *authenticator) requirePlatform(ctx context.Context, action string) erro
 	return nil
 }
 
-// conditionalGated declares a SECOND permission a route enforces only when the
-// request carries a particular reference, the way platformGated declares the one
-// a platform-tier write enforces. The route keeps its own gate (gated(...) is
+// conditionalGated declares a SECOND permission a route enforces because of a
+// reference the request carries, the way platformGated declares the one a
+// platform-tier write enforces: a component create naming a system (ADR-0107),
+// or a membership or role-assignment route naming a component in its path, which
+// always carries one (ADR-0510). The route keeps its own gate (gated(...) is
 // what admits the request at all); this adds the conditional permission to the
 // registry so the roles view can report it, and publishes it on the operation as
 // "x-omniglass-conditional-permission" so the spec stays a faithful map of what

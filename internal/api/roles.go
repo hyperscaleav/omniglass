@@ -257,9 +257,12 @@ func registerStandardRoleRoutes(api huma.API, a *authenticator, gw storage.Gatew
 		Method:      http.MethodGet,
 		Path:        "/standards/{id}/roles",
 		Summary:     "List a standard's declared roles",
-		Description: "Lists the roles this standard declares (every conforming system inherits them live), ordered by name, each with its quorum and the component_types (accepted_types) and, if pinned, the products a filling component must match. Gated by standard:read.",
+		Description: "Lists the roles this standard declares (every conforming system inherits them live), ordered by name, each with its quorum and the component_types (accepted_types) and, if pinned, the products a filling component must match. An unknown standard is a 404, never an empty list. Gated by standard:read.",
 	}, "standard", "read"), func(ctx context.Context, in *standardPathInput) (*listStandardRolesOutput, error) {
 		roles, err := gw.ListSystemRoles(ctx, "standard", in.ID)
+		if errors.Is(err, storage.ErrUnknownStandard) {
+			return nil, huma.Error404NotFound("standard not found")
+		}
 		if err != nil {
 			return nil, mapRoleErr(err)
 		}
@@ -276,7 +279,7 @@ func registerStandardRoleRoutes(api huma.API, a *authenticator, gw storage.Gatew
 		Method:      http.MethodPatch,
 		Path:        "/standards/{id}/roles/{role}",
 		Summary:     "Declare a role on a standard",
-		Description: "Declares a role every conforming system needs filled, or revises it in place (the role is addressed by name, so the write is idempotent and declaring is this same route). Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and [\"*\"] replaces the whole declaration. An unknown standard, type, or product is a 422, as is a mask naming a field this resource does not patch. Gated by standard:update.",
+		Description: "Declares a role every conforming system needs filled, or revises it in place (the role is addressed by name, so the write is idempotent and declaring is this same route). Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and [\"*\"] replaces the whole declaration. An unknown standard, type, or product is a 422, as is a mask naming a field this resource does not patch. A name a conforming system already declares itself is a 409 naming that system, since a role name must mean one role in a system. Gated by standard:update.",
 	}, "standard", "update"), func(ctx context.Context, in *setStandardRoleInput) (*systemRoleOutput, error) {
 		altID, err := resolveAlternateBody(ctx, gw, "standard", in.ID, in.Body)
 		if err != nil {
@@ -288,7 +291,7 @@ func registerStandardRoleRoutes(api huma.API, a *authenticator, gw storage.Gatew
 		}
 		r, err := gw.SetSystemRole(ctx, actorID(ctx), "standard", in.ID, spec)
 		if err != nil {
-			return nil, mapRoleErr(err)
+			return nil, mapRoleErr(redactCollisionSystem(ctx, a, gw, err))
 		}
 		return &systemRoleOutput{Body: toSystemRoleBody(r)}, nil
 	})
@@ -338,7 +341,7 @@ func registerSystemRoleRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		Method:      http.MethodPatch,
 		Path:        "/systems/{name}/roles/{role}",
 		Summary:     "Declare a role on a system",
-		Description: "Declares a role directly on this system (how a one-off system gets roles at all, and how a conforming one adds what its standard does not cover), or revises it in place. Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and [\"*\"] replaces the whole declaration. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
+		Description: "Declares a role directly on this system (how a one-off system gets roles at all, and how a conforming one adds what its standard does not cover), or revises it in place. Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and [\"*\"] replaces the whole declaration. A name the system's standard already declares is a 409: a system role never shadows an inherited one, since a role name must mean one role in a system. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
 	}, "system", "update"), func(ctx context.Context, in *setSystemRoleInput) (*systemRoleOutput, error) {
 		sysID, err := requireSystemInScope(ctx, a, gw, in.Name)
 		if err != nil {
@@ -377,31 +380,39 @@ func registerSystemRoleRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		return nil, nil
 	})
 
-	huma.Register(api, a.gated(huma.Operation{
+	huma.Register(api, a.conditionalGated(a.gated(huma.Operation{
 		OperationID:   "assign-system-role",
 		Method:        http.MethodPut,
 		Path:          "/systems/{name}/roles/{role}/assignments/{component}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Assign a component to a role",
-		Description:   "Puts this component in the role for this system. Refused with a 422 naming both parties when the component is not a typed match: its product's component_type outside every type the role accepts, or (if the role pins products) its product not one of them. A role with no accepted types takes any type. Idempotent. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
-	}, "system", "update"), func(ctx context.Context, in *roleAssignmentPathInput) (*struct{}, error) {
+		Description:   "Puts this component in the role for this system. Refused with a 422 naming both parties when the component is not a typed match: its product's component_type outside every type the role accepts, or (if the role pins products) its product not one of them. A role with no accepted types takes any type. Idempotent. Gated by system:update, and also needs component:update, because staffing a role makes the component a member and writes onto it: each end resolves in its own tier's read scope and must be inside its update scope, so an end outside the read scope is a non-disclosing 404 and one readable but not writable a 403.",
+	}, "system", "update"), "component", "update"), func(ctx context.Context, in *roleAssignmentPathInput) (*struct{}, error) {
+		if err := requireComponentEndPermission(ctx, a); err != nil {
+			return nil, err
+		}
 		if err := gw.AssignRole(ctx, actorID(ctx), in.Name, in.Role, in.Component,
-			a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "update")); err != nil {
+			a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "update"),
+			a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "component", "update")); err != nil {
 			return nil, mapRoleErr(err)
 		}
 		return nil, nil
 	})
 
-	huma.Register(api, a.gated(huma.Operation{
+	huma.Register(api, a.conditionalGated(a.gated(huma.Operation{
 		OperationID:   "unassign-system-role",
 		Method:        http.MethodDelete,
 		Path:          "/systems/{name}/roles/{role}/assignments/{component}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Unassign a component from a role",
-		Description:   "Takes this component out of the role, leaving the role understaffed until another fills it. A component that was not filling the role is a 404. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
-	}, "system", "update"), func(ctx context.Context, in *roleAssignmentPathInput) (*struct{}, error) {
+		Description:   "Takes this component out of the role, leaving the role understaffed until another fills it. A component that was not filling the role is a 404. Gated by system:update, and also needs component:update, as assigning does; read and update scopes drive the system's 404 versus 403 split, and an occupant outside the component:update scope is a 403 (the role's own read already names it).",
+	}, "system", "update"), "component", "update"), func(ctx context.Context, in *roleAssignmentPathInput) (*struct{}, error) {
+		if err := requireComponentEndPermission(ctx, a); err != nil {
+			return nil, err
+		}
 		if err := gw.UnassignRole(ctx, actorID(ctx), in.Name, in.Role, in.Component,
-			a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "update")); err != nil {
+			a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "update"),
+			a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "component", "update")); err != nil {
 			return nil, mapRoleErr(err)
 		}
 		return nil, nil
@@ -521,6 +532,43 @@ func requireComponentInScope(ctx context.Context, a *authenticator, gw storage.G
 	return id, nil
 }
 
+// roleCollisionMessage renders a role-name collision (#503, ADR-0503) as the
+// 409 every path that meets one answers, whichever write it was: it names the
+// role and both owners, and the recovery, so the same sentence serves a
+// declaration, a standard change and a staffing write alike. A collision whose
+// system the caller may not read (redactCollisionSystem) says so instead of
+// naming it.
+func roleCollisionMessage(err error) (string, bool) {
+	var c *storage.RoleNameCollision
+	if !errors.As(err, &c) {
+		return "", false
+	}
+	if c.System == "" {
+		return fmt.Sprintf("role %q would mean two roles in a conforming system you cannot read: its standard %q declares it, and so does that system itself. A role is addressed by its name within a system, so the name must mean one role there; ask someone who can read the system to withdraw or rename its role, or rename this one",
+			c.Role, c.Standard), true
+	}
+	return fmt.Sprintf("role %q would mean two roles in system %q: its standard %q declares it, and so does the system itself. A role is addressed by its name within a system, so the name must mean one role there; withdraw or rename one of the two first",
+		c.Role, c.System, c.Standard), true
+}
+
+// redactCollisionSystem drops the system's name from a role-name collision the
+// caller may not read. A standard-arc declaration finds the colliding system
+// across the fleet, and standard:update can be held beside a grant that reads
+// no system at all, so the refusal must not tell that caller which system
+// exists or what it declares (#503 review). Any other error passes through.
+func redactCollisionSystem(ctx context.Context, a *authenticator, gw storage.Gateway, err error) error {
+	var c *storage.RoleNameCollision
+	if !errors.As(err, &c) || c.SystemID == "" {
+		return err
+	}
+	if _, gerr := gw.GetSystem(ctx, c.SystemID, a.scopeFor(ctx, "system", "read")); gerr != nil {
+		redacted := *c
+		redacted.System = ""
+		return &redacted
+	}
+	return err
+}
+
 // mapRoleErr translates the role sentinels into HTTP status. The one that
 // matters is the shortfall: a component that cannot fill a role is a 422 that
 // names both parties in operator vocabulary, what the component actually is
@@ -537,6 +585,9 @@ func mapRoleErr(err error) error {
 	var maskErr *updatemask.Error
 	if errors.As(err, &maskErr) {
 		return huma.Error422UnprocessableEntity(maskErr.Error())
+	}
+	if msg, ok := roleCollisionMessage(err); ok {
+		return huma.Error409Conflict(msg)
 	}
 	var typeShort *storage.TypeShortfall
 	if errors.As(err, &typeShort) {
@@ -604,6 +655,10 @@ func mapRoleErr(err error) error {
 	// at the row.
 	case errors.Is(err, storage.ErrSystemForbidden):
 		return huma.Error403Forbidden("forbidden")
+	// The component end of a staffing write (#510): readable, or already an
+	// occupant, but outside the caller's component:update scope.
+	case errors.Is(err, storage.ErrComponentForbidden):
+		return huma.Error403Forbidden(ErrComponentEndOutOfScope)
 	case errors.Is(err, storage.ErrSystemNotFound):
 		return huma.Error404NotFound("system not found")
 	case errors.Is(err, storage.ErrComponentNotFound):

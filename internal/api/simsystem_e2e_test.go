@@ -102,8 +102,8 @@ func TestSimulatedSystemAPI(t *testing.T) {
 	// the component tier, not a 500.
 	if _, err := conn.Exec(ctx, `insert into role (name, permissions) values
 		('sim-sys-all', '{"system:create","system:update","system:read","location:read","node:read","simulation:read"}'),
-		('sim-sys-loc', '{"component:create","endpoint:create","simulation:update"}'),
-		('sim-sys-noread', '{"simulation:update","system:create","system:update","component:create","endpoint:create","node:read"}')`); err != nil {
+		('sim-sys-loc', '{"component:create","component:update","endpoint:create","simulation:update"}'),
+		('sim-sys-noread', '{"simulation:update","system:create","system:update","component:create","component:update","endpoint:create","node:read"}')`); err != nil {
 		t.Fatal(err)
 	}
 	locTok, lhash, lprefix, err := auth.NewBearerToken()

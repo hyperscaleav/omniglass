@@ -163,6 +163,13 @@ func (s *pollSchedule) retain(ids map[string]bool) {
 	}
 }
 
+// forgetOccurrences drops what every poll last landed, so each one's next
+// run lands its events and log lines again: the run loop's answer to a spool
+// overflow that may have dropped the batch that carried them.
+func (s *pollSchedule) forgetOccurrences() {
+	clear(s.occurred)
+}
+
 // changed holds a poll run's events and log lines to what that task last
 // landed (#1145): one whose content (its message, attributes, severity) is
 // unchanged since is dropped, so a status page's last error lands when it

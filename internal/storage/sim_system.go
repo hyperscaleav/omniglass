@@ -28,9 +28,11 @@ type SimSystemComponent struct {
 
 // SimSystemScopes are the caller's scopes for each write a simulated system
 // makes: the system, its components, their endpoints, and the role
-// assignments (which make each component a member).
+// assignments (which make each component a member, and so need both ends in
+// scope, #510: ComponentRead and ComponentUpdate are the component end).
 type SimSystemScopes struct {
 	SystemCreate, LocationRead, ComponentCreate, SystemRead, SystemUpdate, EndpointCreate, SecretRead scope.Set
+	ComponentRead, ComponentUpdate                                                                    scope.Set
 	CanAdmin                                                                                          bool
 }
 
@@ -89,7 +91,7 @@ func (p *PG) CreateSimSystem(ctx context.Context, actorID string, spec SimSystem
 				return nil, &SimSystemError{Stage: "endpoint", Role: slot.Role, Err: err}
 			}
 		}
-		if err := p.assignRoleTx(ctx, tx, actorID, sys.ID, slot.Role, c.ID, sc.SystemRead, sc.SystemUpdate); err != nil {
+		if err := p.assignRoleTx(ctx, tx, actorID, sys.ID, slot.Role, c.ID, sc.SystemRead, sc.SystemUpdate, sc.ComponentRead, sc.ComponentUpdate); err != nil {
 			return nil, &SimSystemError{Stage: "role", Role: slot.Role, Err: err}
 		}
 		out.Components = append(out.Components, c)

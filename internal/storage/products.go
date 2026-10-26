@@ -83,10 +83,13 @@ type Product struct {
 	UpdatedAt time.Time
 }
 
-// ProductPatch carries the mutable fields of a product update; a nil field is
-// left unchanged. ComponentType, like Kind, has no clear state: it is a
-// required classification, so a patch either leaves it (nil) or
-// reclassifies it (set), never empties it.
+// ProductPatch carries the mutable fields of a product update. Every nullable
+// field (VendorID, DriverID, ParentProductID, Icon, LabelRule) follows the house
+// three-state string convention (#260): nil is unchanged, a pointer to "" CLEARS
+// the column back to NULL, and any other value sets it (a reference by handle or
+// uuid). ComponentType, like Kind, has no clear state: it is a required
+// classification, so a patch either leaves it (nil) or reclassifies it (set),
+// never empties it.
 type ProductPatch struct {
 	Label           *string
 	VendorID        *string
@@ -394,7 +397,9 @@ func (p *PG) UpdateProduct(ctx context.Context, actorID, id string, patch Produc
 		return nil, err
 	}
 	// A patch's references arrive as handles or uuids; the columns store uuids, so
-	// resolve each before the update (an unset one stays nil and is left unchanged).
+	// resolve each before the update. An unset one stays nil and is left
+	// unchanged; an explicit "" stays "" (productRefs resolves only a value) and
+	// clears below.
 	resolved := Product{VendorID: patch.VendorID, DriverID: patch.DriverID, ParentProductID: patch.ParentProductID}
 	if err := productRefs(ctx, tx, &resolved); err != nil {
 		return nil, err
@@ -416,12 +421,15 @@ func (p *PG) UpdateProduct(ctx context.Context, actorID, id string, patch Produc
 	m, err := scanProduct(tx.QueryRow(ctx, `
 		update product set
 			label      = case when $10::boolean then $2 else label end,
-			vendor_id         = coalesce($3, vendor_id),
-			driver_id         = coalesce($4, driver_id),
+			-- The three-state string (#260, the shape #716 gave the type
+			-- registries): NULL leaves the column, '' clears it to NULL, a value
+			-- sets it. A coalesce could set but never clear.
+			vendor_id         = case when $3::text is null then vendor_id else nullif($3::text, '')::uuid end,
+			driver_id         = case when $4::text is null then driver_id else nullif($4::text, '')::uuid end,
 			kind              = coalesce($5, kind),
-			parent_product_id = coalesce($6, parent_product_id),
+			parent_product_id = case when $6::text is null then parent_product_id else nullif($6::text, '')::uuid end,
 			component_type_id = coalesce($7, component_type_id),
-			icon              = coalesce($8, icon),
+			icon              = case when $8::text is null then icon else nullif($8::text, '') end,
 			-- An explicit empty string CLEARS the rule; see UpdateComponentType's
 			-- own label_rule CASE for why this is not a coalesce.
 			label_rule        = case

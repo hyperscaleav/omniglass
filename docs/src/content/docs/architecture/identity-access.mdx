@@ -487,9 +487,11 @@ their input is ambiguous and hands them nothing to disambiguate with
 ([#697](https://github.com/hyperscaleav/omniglass/issues/697)). The exception is a resolve with no
 caller scope to filter by at all, where the list stays empty by design: the three `*NameTaken`
 availability advisories (deliberately scope-blind, so availability answers about the placement bucket
-asked about rather than the caller's own grant), the component end of a membership or role write and of
-`ResolveTags`' `for_system` (whose only scope in hand is resolved for the other tier, which can never
-narrow it). A dotted address skips this step entirely on its own: the placement-scoped unique
+asked about rather than the caller's own grant) and `ResolveTags`' `for_system` (whose only scope in
+hand is resolved for the other tier, which can never narrow it). The component end of a membership or
+role write used to be one of these; it now resolves in the caller's own `component:read` scope
+([ADR-0510](/architecture/decisions/#adr-0510-a-membership-or-a-role-assignment-costs-a-write-on-both-of-its-ends)),
+so its refusals list their candidates like any other bind. A dotted address skips this step entirely on its own: the placement-scoped unique
 indexes it walks admit at most one row per hop, so there is no ambiguity to decide, only the same scope
 check every other reference gets once it resolves to a uuid.
 
@@ -567,6 +569,28 @@ promise:
   draft that resolved the system in `system:read` alone served a rendered label, assembled from that
   system's own type, for a create the platform then refused. The draft carries the create's
   conditional permission as well as its scope, so both halves of the gate rehearse.
+
+- **The component end of a membership or a role assignment** is the same bind seen from the other
+  end, and it costs a write on that end too
+  ([ADR-0510](/architecture/decisions/#adr-0510-a-membership-or-a-role-assignment-costs-a-write-on-both-of-its-ends),
+  [#510](https://github.com/hyperscaleav/omniglass/issues/510)). Binding a component into a system
+  makes that system its primary when it is the first, restamps its label, and seeds the system band of
+  every cascade the component reads, so a membership writes onto the component as well as the system.
+  The five routes that name a component (add, remove and re-default a member; assign and unassign a
+  role) therefore need `component:update` beside their `system:update` gate: the handler refuses a
+  caller holding none with a 403 naming it, and the route publishes it as its conditional permission.
+  The gateway scopes the end in sets resolved for the component tier. A **bind** resolves the
+  component in `component:read` and requires `component:update`, the same read-then-action split one
+  tier over (out of read the non-disclosing 404, readable but not writable a 403); a write naming a
+  component **already** a member or an occupant requires `component:update` alone and refuses with a
+  403, because the system's own member list and role read already name it, while a name that is not
+  bound here answers the same 404 whether it names a component outside the caller's read scope or
+  nothing at all. Before this, a principal
+  scoped to one system bound a component it could not read and wrote its own variables onto it through
+  the cascade. A system-wide act that settles its bindings without naming a component (deleting the
+  system, withdrawing one of its roles, changing its standard) stays gated on the system alone: it acts
+  only on components the system already holds (a primary moved to another system that holds the
+  member, an occupant carried onto the new standard's role) and binds none it did not.
 
 A guard inside the same primitive panics if the caller's scope was resolved for a resource that does
 not cover the config being checked against, catching a tier mismatch (a component-tier scope compared

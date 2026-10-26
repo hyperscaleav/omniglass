@@ -446,6 +446,12 @@ func (UnimplementedGateway) InsertLogLines(context.Context, []LogLineWrite) erro
 func (UnimplementedGateway) InsertNodeLogs(context.Context, []NodeLogWrite) error {
 	return nil
 }
+func (UnimplementedGateway) LandBatch(context.Context, IngestBatch) (bool, error) {
+	return false, nil
+}
+func (UnimplementedGateway) PruneTelemetryReceipts(context.Context, time.Time, int) (int64, error) {
+	return 0, nil
+}
 func (UnimplementedGateway) ListComponentLogSources(context.Context, string, time.Duration) ([]string, error) {
 	return nil, nil
 }
@@ -594,7 +600,10 @@ func (UnimplementedGateway) UpdateProduct(context.Context, string, string, Produ
 	return nil, nil
 }
 func (UnimplementedGateway) DeleteProduct(context.Context, string, string) error { return nil }
-func (UnimplementedGateway) UpsertSecretType(context.Context, SecretType) error  { return nil }
+func (UnimplementedGateway) RenameRegistry(context.Context, string, string, string, string) (string, error) {
+	return "", nil
+}
+func (UnimplementedGateway) UpsertSecretType(context.Context, SecretType) error { return nil }
 func (UnimplementedGateway) ListSecretTypes(context.Context) ([]SecretType, error) {
 	return nil, nil
 }
@@ -798,19 +807,19 @@ func (UnimplementedGateway) ListMembers(context.Context, string, scope.Set) ([]M
 func (UnimplementedGateway) ComponentMemberships(context.Context, string, scope.Set) ([]Member, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) AddMember(context.Context, string, string, string, scope.Set, scope.Set) error {
+func (UnimplementedGateway) AddMember(context.Context, string, string, string, scope.Set, scope.Set, scope.Set, scope.Set) error {
 	return nil
 }
-func (UnimplementedGateway) RemoveMember(context.Context, string, string, string, scope.Set, scope.Set) error {
+func (UnimplementedGateway) RemoveMember(context.Context, string, string, string, scope.Set, scope.Set, scope.Set, scope.Set) error {
 	return nil
 }
-func (UnimplementedGateway) SetPrimaryMember(context.Context, string, string, string, scope.Set, scope.Set) error {
+func (UnimplementedGateway) SetPrimaryMember(context.Context, string, string, string, scope.Set, scope.Set, scope.Set, scope.Set) error {
 	return nil
 }
-func (UnimplementedGateway) AssignRole(context.Context, string, string, string, string, scope.Set, scope.Set) error {
+func (UnimplementedGateway) AssignRole(context.Context, string, string, string, string, scope.Set, scope.Set, scope.Set, scope.Set) error {
 	return nil
 }
-func (UnimplementedGateway) UnassignRole(context.Context, string, string, string, string, scope.Set, scope.Set) error {
+func (UnimplementedGateway) UnassignRole(context.Context, string, string, string, string, scope.Set, scope.Set, scope.Set, scope.Set) error {
 	return nil
 }
 func (UnimplementedGateway) SwapPositions(context.Context, string, string, string, int, int, scope.Set, scope.Set) error {

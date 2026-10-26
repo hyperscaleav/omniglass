@@ -2227,6 +2227,30 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var fName string
+				cmd := &cobra.Command{
+					Use:     "rename <id>",
+					Short:   "Rename a driver",
+					Long:    "Moves a custom driver's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official driver keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. Audited as rename. Gated by driver:rename.",
+					Example: "  omniglass driver rename <id> --name name",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/drivers/%s:rename", pathSegment(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fName, "name", "", "The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid)")
+				_ = cmd.MarkFlagRequired("name")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
 				var fLabel string
 				var fSpec string
 				var fVersion string
@@ -3876,6 +3900,30 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var fName string
+				cmd := &cobra.Command{
+					Use:     "rename <id>",
+					Short:   "Rename a location type",
+					Long:    "Moves a custom location type's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official location type keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. Audited as rename. Gated by location_type:rename.",
+					Example: "  omniglass location-type rename <id> --name name",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/location-types/%s:rename", pathSegment(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fName, "name", "", "The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid)")
+				_ = cmd.MarkFlagRequired("name")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "restore <id>",
 					Short:   "Restore a location type's shipped values",
@@ -5388,6 +5436,30 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var fName string
+				cmd := &cobra.Command{
+					Use:     "rename <id>",
+					Short:   "Rename a product",
+					Long:    "Moves a custom product's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official product keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. Audited as rename. Gated by product:rename.",
+					Example: "  omniglass product rename <id> --name name",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/products/%s:rename", pathSegment(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fName, "name", "", "The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid)")
+				_ = cmd.MarkFlagRequired("name")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
 				var fComponentType string
 				var fDriverId string
 				var fIcon string
@@ -5399,7 +5471,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "update <id>",
 					Short:   "Update a product",
-					Long:    "Patches a custom product's label, vendor, driver, kind, component_type, icon, or parent. component_type is required, so an empty string on it is a 422 (a reclassify names a real type; it never clears). Official products are read-only (422). Gated by product:update.",
+					Long:    "Patches a custom product's label, vendor, driver, kind, component_type, icon, label rule, or parent. Each optional field follows the three-state string: omitted is unchanged, an empty string clears it, a value sets it, so a vendor, driver, parent, icon or label rule can be unset as well as changed. component_type is required, so an empty string on it is a 422 (a reclassify names a real type; it never clears). Official products are read-only (422). Gated by product:update.",
 					Example: "  omniglass product update boreal-edge-55",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -5433,13 +5505,13 @@ func generatedCommands() []*cobra.Command {
 					},
 				}
 				cmd.Flags().StringVar(&fComponentType, "component-type", "", "Reclassifies the product to this component_type, by name or uuid; component_type is required, so this only reclassifies, it never clears")
-				cmd.Flags().StringVar(&fDriverId, "driver-id", "", "A new driver, by handle or uuid")
-				cmd.Flags().StringVar(&fIcon, "icon", "", "A new icon override")
+				cmd.Flags().StringVar(&fDriverId, "driver-id", "", "A new driver, by handle or uuid; an empty string clears it")
+				cmd.Flags().StringVar(&fIcon, "icon", "", "A new icon override; an empty string clears it, so the product inherits its component_type's icon")
 				cmd.Flags().StringVar(&fKind, "kind", "", "A new product class")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A new operator-facing label")
 				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A new label template; an empty string clears it, so components fall back to the component_type chain and then the global component rule. Refused with 422 if it does not parse.")
-				cmd.Flags().StringVar(&fParentProductId, "parent-product-id", "", "A new parent product, by handle or uuid")
-				cmd.Flags().StringVar(&fVendorId, "vendor-id", "", "A new vendor, by handle or uuid")
+				cmd.Flags().StringVar(&fParentProductId, "parent-product-id", "", "A new parent product, by handle or uuid; an empty string clears it")
+				cmd.Flags().StringVar(&fVendorId, "vendor-id", "", "A new vendor, by handle or uuid; an empty string clears it")
 				return cmd
 			}()
 			return cmd
@@ -6140,7 +6212,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "add-system <name>",
 					Short:   "Add a simulated system",
-					Long:    "Creates a system built to a standard, with a simulated component for each staffed role in the standard's plan (see plan-simulation-system), each at its own free address in the simulated block with its endpoint placed on the node, and assigned its role, all in one transaction: it lands whole or not at all. Component names are minted as an unnamed create mints them; roles nothing simulated fits are left short and listed. The simulator serves the components from its next pull. Gated by simulation:update, and also needs system:create, system:update, system:read, component:create, endpoint:create and node:read (and location:read when it names a place), each in the caller's own scope; the components are created without a parent, so component:create must be all-scope. A refused piece is mapped as its own route maps it (a component refused is a 403). A node with no simulator connected is a 409, and a standard nothing simulated can staff a 422.",
+					Long:    "Creates a system built to a standard, with a simulated component for each staffed role in the standard's plan (see plan-simulation-system), each at its own free address in the simulated block with its endpoint placed on the node, and assigned its role, all in one transaction: it lands whole or not at all. Component names are minted as an unnamed create mints them; roles nothing simulated fits are left short and listed. The simulator serves the components from its next pull. Gated by simulation:update, and also needs system:create, system:update, system:read, component:create, component:update, endpoint:create and node:read (and location:read when it names a place), each in the caller's own scope; the components are created without a parent, so component:create must be all-scope, and so must component:update, since assigning each its role writes onto it as an assignment route does. A refused piece is mapped as its own route maps it (a component refused is a 403). A node with no simulator connected is a 409, and a standard nothing simulated can staff a 422.",
 					Example: "  omniglass simulation add-system <name> --standard standard --system-type system_type",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -6454,6 +6526,30 @@ func generatedCommands() []*cobra.Command {
 			return parent
 		}())
 		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fName string
+				cmd := &cobra.Command{
+					Use:     "rename <id>",
+					Short:   "Rename a standard",
+					Long:    "Moves a custom standard's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official standard keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. A shipped example standard keeps its name too (409): the boot seed plants it by name whenever it is absent, so a renamed one would come back on the next boot; forking a template into a standard of your own is #827. Audited as rename. Gated by standard:rename.",
+					Example: "  omniglass standard rename <id> --name name",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/standards/%s:rename", pathSegment(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fName, "name", "", "The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid)")
+				_ = cmd.MarkFlagRequired("name")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
 			parent := &cobra.Command{
 				Use:   "role",
 				Short: "Commands for the role resource",
@@ -6480,7 +6576,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <id>",
 						Short:   "List a standard's declared roles",
-						Long:    "Lists the roles this standard declares (every conforming system inherits them live), ordered by name, each with its quorum and the component_types (accepted_types) and, if pinned, the products a filling component must match. Gated by standard:read.",
+						Long:    "Lists the roles this standard declares (every conforming system inherits them live), ordered by name, each with its quorum and the component_types (accepted_types) and, if pinned, the products a filling component must match. An unknown standard is a 404, never an empty list. Gated by standard:read.",
 						Example: "  omniglass standard role list meeting-room",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -6506,7 +6602,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "update <id> <role>",
 						Short:   "Declare a role on a standard",
-						Long:    "Declares a role every conforming system needs filled, or revises it in place (the role is addressed by name, so the write is idempotent and declaring is this same route). Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and [\"*\"] replaces the whole declaration. An unknown standard, type, or product is a 422, as is a mask naming a field this resource does not patch. Gated by standard:update.",
+						Long:    "Declares a role every conforming system needs filled, or revises it in place (the role is addressed by name, so the write is idempotent and declaring is this same route). Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and [\"*\"] replaces the whole declaration. An unknown standard, type, or product is a 422, as is a mask naming a field this resource does not patch. A name a conforming system already declares itself is a 409 naming that system, since a role name must mean one role in a system. Gated by standard:update.",
 						Example: "  omniglass standard role update meeting-room <role>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -6882,7 +6978,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "delete <name> <component>",
 						Short:   "Take a component out of a system",
-						Long:    "Unbinds this component from the system. Refused with a 409 while it still fills a role here, since removing it would leave the system staffed by a non-member: unassign the role first. A component that was not a member is a 404. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
+						Long:    "Unbinds this component from the system. Refused with a 409 while it still fills a role here, since removing it would leave the system staffed by a non-member: unassign the role first. A component that was not a member is a 404. Gated by system:update, and also needs component:update, because unbinding moves the component's primary and restamps its label; read and update scopes drive the system's 404 versus 403 split, and a member outside the component:update scope is a 403 (the system's member list already names it).",
 						Example: "  omniglass system member delete <name> <component>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -6916,7 +7012,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "setPrimary <name> <component>",
 						Short:   "Make this the component's default system",
-						Long:    "Moves the component's default to this membership. The default answers questions asked without a system in hand; it does not decide anything that names a system explicitly. A component that was not a member here is a 404. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
+						Long:    "Moves the component's default to this membership. The default answers questions asked without a system in hand; it does not decide anything that names a system explicitly. A component that was not a member here is a 404. Gated by system:update, and also needs component:update, because the default decides which system's band every cascade on the component reads; read and update scopes drive the system's 404 versus 403 split, and a member outside the component:update scope is a 403 (the system's member list already names it).",
 						Example: "  omniglass system member setPrimary <name> <component>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -6933,7 +7029,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "update <name> <component>",
 						Short:   "Put a component in a system",
-						Long:    "Binds this component into the system. Idempotent. A component's first membership becomes its primary with nobody asking, so a component in exactly one system never has to think about the concept; a later membership does not take that default away. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
+						Long:    "Binds this component into the system. Idempotent. A component's first membership becomes its primary with nobody asking, so a component in exactly one system never has to think about the concept; a later membership does not take that default away. Gated by system:update, and also needs component:update, because the binding writes onto the component (its primary, its label, the system band of its cascade): each end resolves in its own tier's read scope and must be inside its update scope, so an end outside the read scope is a non-disclosing 404 and one readable but not writable a 403.",
 						Example: "  omniglass system member update <name> <component>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -7297,7 +7393,7 @@ func generatedCommands() []*cobra.Command {
 						cmd := &cobra.Command{
 							Use:     "delete <name> <role> <component>",
 							Short:   "Unassign a component from a role",
-							Long:    "Takes this component out of the role, leaving the role understaffed until another fills it. A component that was not filling the role is a 404. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
+							Long:    "Takes this component out of the role, leaving the role understaffed until another fills it. A component that was not filling the role is a 404. Gated by system:update, and also needs component:update, as assigning does; read and update scopes drive the system's 404 versus 403 split, and an occupant outside the component:update scope is a 403 (the role's own read already names it).",
 							Example: "  omniglass system role assignment delete <name> <role> <component>",
 							Args:    pathArgs(3),
 							RunE: func(cmd *cobra.Command, args []string) error {
@@ -7314,7 +7410,7 @@ func generatedCommands() []*cobra.Command {
 						cmd := &cobra.Command{
 							Use:     "update <name> <role> <component>",
 							Short:   "Assign a component to a role",
-							Long:    "Puts this component in the role for this system. Refused with a 422 naming both parties when the component is not a typed match: its product's component_type outside every type the role accepts, or (if the role pins products) its product not one of them. A role with no accepted types takes any type. Idempotent. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
+							Long:    "Puts this component in the role for this system. Refused with a 422 naming both parties when the component is not a typed match: its product's component_type outside every type the role accepts, or (if the role pins products) its product not one of them. A role with no accepted types takes any type. Idempotent. Gated by system:update, and also needs component:update, because staffing a role makes the component a member and writes onto it: each end resolves in its own tier's read scope and must be inside its update scope, so an end outside the read scope is a non-disclosing 404 and one readable but not writable a 403.",
 							Example: "  omniglass system role assignment update <name> <role> <component>",
 							Args:    pathArgs(3),
 							RunE: func(cmd *cobra.Command, args []string) error {
@@ -7406,7 +7502,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "update <name> <role>",
 						Short:   "Declare a role on a system",
-						Long:    "Declares a role directly on this system (how a one-off system gets roles at all, and how a conforming one adds what its standard does not cover), or revises it in place. Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and [\"*\"] replaces the whole declaration. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
+						Long:    "Declares a role directly on this system (how a one-off system gets roles at all, and how a conforming one adds what its standard does not cover), or revises it in place. Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and [\"*\"] replaces the whole declaration. A name the system's standard already declares is a 409: a system role never shadows an inherited one, since a role name must mean one role in a system. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
 						Example: "  omniglass system role update <name> <role>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -7495,7 +7591,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "update <name>",
 					Short:   "Update a system",
-					Long:    "Patches a system's label, standard, or system_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard and system_type fields both follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system, an unclassified system), a name sets. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
+					Long:    "Patches a system's label, standard, or system_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard and system_type fields both follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system, an unclassified system), a name sets. A new standard declaring a role name the system declares itself is a 409 naming the role, since a role name must mean one role in a system. A standard change carries the system's staffing in the same transaction: each occupant of an inherited role moves onto the new standard's role of the same name when it is still a typed match and the role has room, and is released, staying a member, otherwise; clearing the standard releases every inherited assignment. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
 					Example: "  omniglass system update <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -8215,6 +8311,30 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fName string
+				cmd := &cobra.Command{
+					Use:     "rename <id>",
+					Short:   "Rename a vendor",
+					Long:    "Moves a custom vendor's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official vendor keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. Audited as rename. Gated by vendor:rename.",
+					Example: "  omniglass vendor rename <id> --name name",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/vendors/%s:rename", pathSegment(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fName, "name", "", "The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid)")
+				_ = cmd.MarkFlagRequired("name")
 				return cmd
 			}()
 			return cmd

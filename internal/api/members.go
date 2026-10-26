@@ -63,6 +63,36 @@ type listComponentMembershipsOutput struct {
 	}
 }
 
+// ErrComponentEndNeedsUpdate is the 403 a membership or role-assignment write
+// returns when the caller holds no component:update at all (#510). Binding a
+// component into a system, unbinding it, re-defaulting it and staffing it all
+// write onto the component (its primary membership, its label, the system band
+// of every cascade it reads), so the write costs a write on both ends: the
+// system's system:update and the component's component:update. It names the
+// permission, as ErrSystemBindNeedsUpdate does for the create that writes the
+// same row from the other end, because a refusal an operator cannot act on sends
+// them to an administrator with no ask.
+const ErrComponentEndNeedsUpdate = "a membership or a role assignment writes onto its component as well as its system (the component's primary membership, its label, the system band of its cascade), so it requires component:update as well as system:update. Ask for component:update over the component."
+
+// ErrComponentEndOutOfScope is the 403 for the scope half of the same gate: the
+// caller holds component:update, but not over this component. It is reached
+// only for a component the caller may read, or one already bound into a system
+// it reads (whose member list names it), so naming the scope discloses nothing
+// a GET would not.
+const ErrComponentEndOutOfScope = "this component is outside the component:update scope your grants resolve to; a membership or a role assignment writes onto its component as well as its system, so both must be in scope. Ask for a component:update grant covering it."
+
+// requireComponentEndPermission is the permission half of the component end
+// (#510): every route that names a component in a membership or an assignment
+// enforces component:update beside its system:update gate, and publishes it as
+// the route's conditional permission (the condition being the component the
+// path always names). The scope half is the gateway's.
+func requireComponentEndPermission(ctx context.Context, a *authenticator) error {
+	if !a.allows(ctx, "component", "update") {
+		return huma.Error403Forbidden(ErrComponentEndNeedsUpdate)
+	}
+	return nil
+}
+
 // registerMemberRoutes wires membership: which components are in a system, which
 // systems a component is in, and the writes that bind and unbind. The two reads
 // are the same relation from either end, and the component-side one is the answer
@@ -103,46 +133,58 @@ func registerMemberRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		return out, nil
 	})
 
-	huma.Register(api, a.gated(huma.Operation{
+	huma.Register(api, a.conditionalGated(a.gated(huma.Operation{
 		OperationID:   "add-system-member",
 		Method:        http.MethodPut,
 		Path:          "/systems/{name}/members/{component}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Put a component in a system",
-		Description:   "Binds this component into the system. Idempotent. A component's first membership becomes its primary with nobody asking, so a component in exactly one system never has to think about the concept; a later membership does not take that default away. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
-	}, "system", "update"), func(ctx context.Context, in *systemMemberPathInput) (*struct{}, error) {
+		Description:   "Binds this component into the system. Idempotent. A component's first membership becomes its primary with nobody asking, so a component in exactly one system never has to think about the concept; a later membership does not take that default away. Gated by system:update, and also needs component:update, because the binding writes onto the component (its primary, its label, the system band of its cascade): each end resolves in its own tier's read scope and must be inside its update scope, so an end outside the read scope is a non-disclosing 404 and one readable but not writable a 403.",
+	}, "system", "update"), "component", "update"), func(ctx context.Context, in *systemMemberPathInput) (*struct{}, error) {
+		if err := requireComponentEndPermission(ctx, a); err != nil {
+			return nil, err
+		}
 		if err := gw.AddMember(ctx, actorID(ctx), in.Name, in.Component,
-			a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "update")); err != nil {
+			a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "update"),
+			a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "component", "update")); err != nil {
 			return nil, mapMemberErr(err)
 		}
 		return nil, nil
 	})
 
-	huma.Register(api, a.gated(huma.Operation{
+	huma.Register(api, a.conditionalGated(a.gated(huma.Operation{
 		OperationID:   "remove-system-member",
 		Method:        http.MethodDelete,
 		Path:          "/systems/{name}/members/{component}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Take a component out of a system",
-		Description:   "Unbinds this component from the system. Refused with a 409 while it still fills a role here, since removing it would leave the system staffed by a non-member: unassign the role first. A component that was not a member is a 404. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
-	}, "system", "update"), func(ctx context.Context, in *systemMemberPathInput) (*struct{}, error) {
+		Description:   "Unbinds this component from the system. Refused with a 409 while it still fills a role here, since removing it would leave the system staffed by a non-member: unassign the role first. A component that was not a member is a 404. Gated by system:update, and also needs component:update, because unbinding moves the component's primary and restamps its label; read and update scopes drive the system's 404 versus 403 split, and a member outside the component:update scope is a 403 (the system's member list already names it).",
+	}, "system", "update"), "component", "update"), func(ctx context.Context, in *systemMemberPathInput) (*struct{}, error) {
+		if err := requireComponentEndPermission(ctx, a); err != nil {
+			return nil, err
+		}
 		if err := gw.RemoveMember(ctx, actorID(ctx), in.Name, in.Component,
-			a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "update")); err != nil {
+			a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "update"),
+			a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "component", "update")); err != nil {
 			return nil, mapMemberErr(err)
 		}
 		return nil, nil
 	})
 
-	huma.Register(api, a.gated(huma.Operation{
+	huma.Register(api, a.conditionalGated(a.gated(huma.Operation{
 		OperationID:   "set-primary-member",
 		Method:        http.MethodPost,
 		Path:          "/systems/{name}/members/{component}:setPrimary",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Make this the component's default system",
-		Description:   "Moves the component's default to this membership. The default answers questions asked without a system in hand; it does not decide anything that names a system explicitly. A component that was not a member here is a 404. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
-	}, "system", "update"), func(ctx context.Context, in *systemMemberPathInput) (*struct{}, error) {
+		Description:   "Moves the component's default to this membership. The default answers questions asked without a system in hand; it does not decide anything that names a system explicitly. A component that was not a member here is a 404. Gated by system:update, and also needs component:update, because the default decides which system's band every cascade on the component reads; read and update scopes drive the system's 404 versus 403 split, and a member outside the component:update scope is a 403 (the system's member list already names it).",
+	}, "system", "update"), "component", "update"), func(ctx context.Context, in *systemMemberPathInput) (*struct{}, error) {
+		if err := requireComponentEndPermission(ctx, a); err != nil {
+			return nil, err
+		}
 		if err := gw.SetPrimaryMember(ctx, actorID(ctx), in.Name, in.Component,
-			a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "update")); err != nil {
+			a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "update"),
+			a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "component", "update")); err != nil {
 			return nil, mapMemberErr(err)
 		}
 		return nil, nil
@@ -162,7 +204,11 @@ func mapMemberErr(err error) error {
 		return huma.Error404NotFound("system not found")
 	case errors.Is(err, storage.ErrComponentNotFound):
 		return huma.Error404NotFound("component not found")
-	case errors.Is(err, storage.ErrSystemForbidden), errors.Is(err, storage.ErrComponentForbidden):
+	// The component end's scope half (#510), before the system's own forbidden:
+	// both are 403s, but only this one can say which grant to ask for.
+	case errors.Is(err, storage.ErrComponentForbidden):
+		return huma.Error403Forbidden(ErrComponentEndOutOfScope)
+	case errors.Is(err, storage.ErrSystemForbidden):
 		return huma.Error403Forbidden("forbidden")
 	default:
 		return err

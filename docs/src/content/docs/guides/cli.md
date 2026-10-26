@@ -117,11 +117,18 @@ A bare word that is not valid JSON falls back to itself, so the common case need
 (`--value HDMI1`); a string that would parse as JSON is quoted to force a string (`--value '"30"'`).
 
 A name is renameable, and a rename is its own command rather than a flag on `update`: `component`,
-`system`, `location`, and `principal-group` each carry one, gated by `<resource>:rename`, which is
-granted separately because moving a name breaks the references stored outside Omniglass (bookmarks,
-runbooks, integration config). Inside it nothing breaks, since every reference holds the entity's
-`id`, which every write returns ([ADR-0076](/architecture/decisions/)). A taken name is a 409, an
-illegal or uuid-shaped one a 422.
+`system`, `location`, and `principal-group` each carry one, and so do the registries `vendor`,
+`driver`, `product`, `standard`, and `location-type`
+([ADR-0555](/architecture/decisions/#adr-0555-a-registry-row-renames-through-its-own-rename-custom-method)),
+each gated by `<resource>:rename`, which is granted separately because moving a name breaks the
+references stored outside Omniglass (bookmarks, runbooks, integration config). Inside it nothing
+breaks, since every reference holds the entity's `id`, which every write returns
+([ADR-0076](/architecture/decisions/)). A taken name is a 409, an illegal or uuid-shaped one a 422,
+and an official registry row keeps the name it ships with (422):
+
+```sh
+omniglass vendor rename acme --name acme-av        # needs vendor:rename (admin)
+```
 
 ### Every command takes a name, never only a uuid
 
@@ -463,8 +470,8 @@ most-specific-wins down the cascade.
 
 The [component-classification catalog](/architecture/core-entities/#catalog-reference-data-vendor-driver-component_type)
 commands cover the `vendor` and `driver` registries: flat, official-vs-custom catalogs on
-the same pattern as the `type` registries. Each resource's `:read` sits on the viewer floor; the three
-writes (`:create`, `:update`, `:delete`) are admin-gated.
+the same pattern as the `type` registries. Each resource's `:read` sits on the viewer floor; the four
+writes (`:create`, `:update`, `:delete`, `:rename`) are admin-gated.
 
 A **vendor** names an organization, carrying a `--kind` of `manufacturer`, `integrator`, or `developer`
 (default `manufacturer`):
@@ -475,6 +482,7 @@ omniglass vendor create --name barco --label Barco --kind manufacturer \
   --icon monitor --support-phone "+1-555-0100" --website https://www.barco.com
 omniglass vendor get barco
 omniglass vendor update barco --support-phone "+1-555-0199"
+omniglass vendor rename barco --name barco-av                       # every product that names it follows
 omniglass vendor delete barco                                       # refused (422) if official
 ```
 
@@ -487,11 +495,12 @@ omniglass driver get snmp-generic                                   # includes t
 omniglass driver create --name barco-snmp --label "Barco SNMP" --version 1.0.0 \
   --spec '{"version":1,"transport":"snmp", ...}'                    # validated at write: a broken spec is a 422 naming the fault
 omniglass driver update barco-snmp --version 1.1.0
+omniglass driver rename barco-snmp --name barco-projector-snmp      # re-derives the tasks of every endpoint attached through it
 omniglass driver delete barco-snmp                                  # refused (422) if official, or while an endpoint is attached through it
 ```
 
-An **official** row, for example the `crestron` vendor, is read-only: `update` and `delete` both
-422. A vendor's `website` is validated to an `http`/`https` scheme on write; any other scheme (for
+An **official** row, for example the `crestron` vendor, is read-only: `update`, `delete` and `rename`
+all 422. A vendor's `website` is validated to an `http`/`https` scheme on write; any other scheme (for
 example `javascript:`) is a 422.
 
 ## Products
@@ -499,7 +508,7 @@ example `javascript:`) is a 422.
 The [product](/architecture/core-entities/#catalog-reference-data-product) commands cover the product
 registry: the concrete **SKU** that ties the vendor and driver catalogs together, classified under a
 **component_type**, and the thing a `component` points at. `product:read` sits on the viewer floor; the
-three writes (`product:create`, `product:update`, `product:delete`) are admin-gated.
+four writes (`product:create`, `product:update`, `product:delete`, `product:rename`) are admin-gated.
 
 A product names its **kind** (`device`, `app`, `service`, or `vm`, default `device`), the
 **component_type** it is classified under, and optionally its **vendor**, **driver**, and a
@@ -514,15 +523,16 @@ omniglass product update barco-ub12 --label "Barco UB12 Pro"
 omniglass product delete barco-ub12                                 # 422 if official, 409 if a component points at it
 ```
 
-An **official** product, for example `cisco-room-bar`, is read-only: `update` and `delete`
-both 422. A product still referenced by a **component** (`component.product_id`) cannot be deleted (409);
+An **official** product, for example `cisco-room-bar`, is read-only: `update`, `delete` and
+`rename` all 422. A product still referenced by a **component** (`component.product_id`) cannot be deleted (409);
 an unknown vendor, driver, parent, or component_type id is a 422.
 
 ## Standards
 
 The [standard](/architecture/core-entities/#catalog-reference-data-standard) commands cover the
 system-side counterpart of a product: the **blueprint a system conforms to**. `standard:read` sits on the
-viewer floor; `standard:create`, `standard:update`, and `standard:delete` are admin-gated.
+viewer floor; `standard:create`, `standard:update`, `standard:delete`, and `standard:rename` are
+admin-gated.
 
 ```sh
 omniglass standard list                                             # the standard catalog
@@ -533,9 +543,13 @@ omniglass standard delete lecture-hall                              # 409 if a s
 ```
 
 Unlike a seeded product, the **shipped standards are `official: false`**: they are forked from an in-code
-template once, with no inheritance, so they are yours to rename, re-parent, or delete, and the boot seed
-installs one **only if absent** rather than reasserting over your edit. The same holds for the shipped
-location types. See [the seed model](/architecture/core-entities/#the-seed-model-forked-templates-versus-canonical-catalogs).
+template once, with no inheritance, so they are yours to edit, re-parent, and extend, and the boot seed
+installs one **only if absent** rather than reasserting over your edit. Because it installs by **name**,
+a shipped standard keeps its name: `rename` refuses it (409), since a renamed one would be planted again
+on the next boot beside yours, and for the same reason a deleted one returns on the next boot. Forking a
+template into a standard of your own is
+[#827](https://github.com/hyperscaleav/omniglass/issues/827); until then, create a standard under the
+name you want. See [the seed model](/architecture/core-entities/#the-seed-model-forked-templates-versus-canonical-catalogs).
 
 ## Event types
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  verdictDot,
+  verdictHue,
   activeRoles,
   impactPhrase,
   inactiveRoles,
@@ -105,19 +105,19 @@ describe("quorumLabel and impactPhrase", () => {
   });
 });
 
-// One verdict as a dot's fill (#1071): the map's markers, and any dot that
-// stands for one component's verdict. A known verdict always wins, so the dot
-// agrees with the row beside it; an unknown one falls back to down or grey.
-describe("verdictDot", () => {
-  it("fills each verdict with its own hue, healthy in the muted tier", () => {
-    expect(verdictDot("healthy")).toBe("bg-healthy-muted");
-    expect(verdictDot("incomplete")).toBe("bg-incomplete");
-    expect(verdictDot("degraded")).toBe("bg-warning");
-    expect(verdictDot("outage")).toBe("bg-error");
+// One verdict as a glyph's hue (#1071, #1074): the outline's slots and the
+// map's icons. A known verdict always wins, so a glyph agrees with the row
+// beside it; an unknown one falls back to down (red) or the no-data grey.
+describe("verdictHue", () => {
+  it("tones each verdict with its own hue, healthy in the muted tier", () => {
+    expect(verdictHue("healthy")).toBe("text-healthy");
+    expect(verdictHue("incomplete")).toBe("text-incomplete");
+    expect(verdictHue("degraded")).toBe("text-warning");
+    expect(verdictHue("outage")).toBe("text-error");
   });
   it("lets a known verdict win over down, and falls back to down or grey when unknown", () => {
-    expect(verdictDot("healthy", true)).toBe("bg-healthy-muted");
-    expect(verdictDot(null, true)).toBe("bg-error");
-    expect(verdictDot(null)).toBe("bg-base-content/35");
+    expect(verdictHue("healthy", true)).toBe("text-healthy");
+    expect(verdictHue(null, true)).toBe("text-error");
+    expect(verdictHue(null)).toBe("text-base-content/35");
   });
 });
