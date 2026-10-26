@@ -197,7 +197,9 @@ func TestReconciliationLeavesOutARetiredObserver(t *testing.T) {
 // told reads the intended series of the instances commands named, one probe
 // each, and never walks the observed instances of the key: the series index
 // carries no provenance, so walking them for an intended row filters every
-// observed row they hold (the firehose, on a busy key).
+// observed row they hold (the firehose, on a busy key). Its probe rides the
+// intended rows' own index, so a command that named an endpoint's instance,
+// whose series also holds every observation of it, costs no filtering either.
 func TestToldReadsOnlyTheInstancesCommandsNamed(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -228,6 +230,9 @@ func TestToldReadsOnlyTheInstancesCommandsNamed(t *testing.T) {
 	if _, err := gw.IssueCommand(ctx, actor, "component", comp.ID, "set-input", "", json.RawMessage(`"dp1"`), nil); err != nil {
 		t.Fatalf("issue set-input: %v", err)
 	}
+	if _, err := gw.IssueCommand(ctx, actor, "component", comp.ID, "set-input", "ip-control", json.RawMessage(`"hdmi3"`), nil); err != nil {
+		t.Fatalf("issue set-input on ip-control: %v", err)
+	}
 	// Two busy observed instances, written after the intent, as a polled
 	// switcher's endpoints would.
 	mustExec(t, conn, `insert into property (ts, owner_kind, component_id, property_type_id, instance, value, provenance, source)
@@ -252,7 +257,7 @@ func TestToldReadsOnlyTheInstancesCommandsNamed(t *testing.T) {
 	}
 	rows.Close()
 	if removed := rowsRemovedByFilter(t, plan); removed > 0 {
-		t.Fatalf("the told read filtered %d rows to find the intended one: it walked the observed instances:\n%s", removed, plan)
+		t.Fatalf("the told read filtered %d observed rows to find the intended ones:\n%s", removed, plan)
 	}
 
 	recs, err := gw.Reconciliation(ctx, "component", "panel-1", all)
@@ -260,8 +265,8 @@ func TestToldReadsOnlyTheInstancesCommandsNamed(t *testing.T) {
 		t.Fatalf("reconciliation: %v", err)
 	}
 	for _, r := range recs {
-		if r.PropertyTypeName == "video-input" && string(r.Told) != `"dp1"` {
-			t.Fatalf("told = %s, want dp1", r.Told)
+		if r.PropertyTypeName == "video-input" && string(r.Told) != `"hdmi3"` {
+			t.Fatalf("told = %s, want hdmi3, the newest intended on any instance", r.Told)
 		}
 	}
 }
