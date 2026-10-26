@@ -86,7 +86,13 @@ instead, to avoid concurrent migrators.
 Anything the chart's values do not cover reaches the server as plain environment (via
 `extraEnv`-style values or a Secret). The full server surface renders from the declared
 environment registry (`make gen`); behind edge TLS, set `OMNIGLASS_SECURE_COOKIES=true` and point
-`OMNIGLASS_SECRET_KEY_FILE` at a mounted key:
+`OMNIGLASS_ENCRYPTION_KEY_FILE` at a mounted key, the encryption key every secret is sealed under.
+
+Upgrading a deployment that sets the old names (`OMNIGLASS_SECRET_KEY` or
+`OMNIGLASS_SECRET_KEY_FILE`): it keeps working, because the server still reads them while neither
+new name is set, and it logs a deprecation warning naming the replacement on every boot. Rename the
+variable in your values or Secret (the value is unchanged) before the release that stops reading
+it; once a new name is set the old one is ignored, and a leftover is called out in the log.
 
 <ConfigVars scope="server" />
 

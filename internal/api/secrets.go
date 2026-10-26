@@ -361,7 +361,7 @@ func mapSecretErr(err error) error {
 	case errors.Is(err, storage.ErrSecretFieldInvalid):
 		return huma.Error422UnprocessableEntity(err.Error())
 	case errors.Is(err, storage.ErrNoSecretProvider):
-		return huma.Error500InternalServerError("no secret key provider configured")
+		return huma.Error500InternalServerError("no encryption key provider configured")
 	default:
 		return huma.Error500InternalServerError("secret operation failed")
 	}

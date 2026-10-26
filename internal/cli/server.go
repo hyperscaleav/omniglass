@@ -60,7 +60,7 @@ func runServer(ctx context.Context, version string) error {
 	if err != nil {
 		return err
 	}
-	log.Info("secret key loaded", "source", source)
+	log.Info("encryption key loaded", "source", source)
 
 	// Settings engine: the operator file layer is captured once at boot, the
 	// declared defaults are reflected from the type, and the platform DB override
