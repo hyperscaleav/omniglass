@@ -17,7 +17,9 @@ consumer that died between its commit and its ack, and a publisher's retry past 
 duplicate window all land each row once, log lines included
 ([ADR-0311](/architecture/decisions/#adr-0311-a-telemetry-batch-lands-once-in-one-transaction-under-its-receipt)).
 The property lane's transition guard moved into the insert as a conditional write, held per series
-by a transaction lock, so it no longer rests on the consumer dispatching serially (#455). The batch
+by a transaction lock, so concurrent batches never write a value twice (#455); since the guard is right
+only if a series lands in order, the consumer keeps one batch in flight, redelivering a transient
+failure before anything behind it and dropping a refused write at once. The batch
 takes every lane's rule rows and calc marks before any lane writes, the platform's lock order held
 for the whole transaction, and the gateway replaces a NUL in any lane's text before the insert, so a
 batch landing all or nothing can neither deadlock a rule edit nor be lost to one stray byte. Receipts
@@ -44,6 +46,7 @@ on the next ticks under its id and lands once, a self-log line and a task's samp
 behind an outage longer than any reconnect budget ships what it held once the bus is back; and a
 batch over the bus's payload limit is dropped and told while the batch behind it lands. At the
 gateway: a batch id lands once (eight concurrent deliveries land it once), a refused row leaves
-nothing behind, concurrent batches carrying one verdict write each transition once, a batch carrying
+nothing behind, concurrent batches carrying one verdict write each transition once, a transient
+failure redelivered keeps a flip pair in order and a refused batch is dropped on its first delivery, a batch carrying
 NUL on every lane lands, and a batch waiting on a rule row an edit holds holds no health lock. In the
 spool: a send never waits on a stream 50 ms away, and 120 batches ship in order in a few round trips.

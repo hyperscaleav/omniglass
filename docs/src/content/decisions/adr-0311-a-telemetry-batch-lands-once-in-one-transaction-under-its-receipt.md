@@ -2,7 +2,7 @@
 title: "A telemetry batch lands once, in one transaction under its receipt"
 date: 2026-10-26
 status: "Accepted"
-summary: "The ingest consumer lands each batch (its log lines and its three sample lanes) in ONE transaction that first inserts the batch's receipt, keyed by its subject and Nats-Msg-Id (`telemetry_receipt`): all or nothing, and an id that already landed writes nothing, so a redelivery after a lost ack, a consumer that died after its commit, or a publisher's retry past the stream's duplicate window lands each row once, log lines included. The property lane's transition guard moves into the insert as a conditional write held per series by a transaction lock (the #455 ruling, ratified with the lock it needs under READ COMMITTED), so serial dispatch is no longer a correctness dependency. Receipts are kept 24 hours. The `(series, ts)` natural key is not the mechanism"
+summary: "The ingest consumer lands each batch (its log lines and its three sample lanes) in ONE transaction that first inserts the batch's receipt, keyed by its subject and Nats-Msg-Id (`telemetry_receipt`): all or nothing, and an id that already landed writes nothing, so a redelivery after a lost ack, a consumer that died after its commit, or a publisher's retry past the stream's duplicate window lands each row once, log lines included. The property lane's transition guard moves into the insert as a conditional write held per series by a transaction lock (the #455 ruling, ratified with the lock it needs under READ COMMITTED), so concurrent batches never write a consecutive duplicate; the guard still needs each publisher's batches to land in order, which the consumer holds with one batch in flight (a refused batch dropped at once, a transient failure redelivered before anything behind it). Receipts are kept 24 hours. The `(series, ts)` natural key is not the mechanism"
 refs: [311, 455, 457, 430]
 ---
 
@@ -27,7 +27,14 @@ refs: [311, 455, 457, 430]
      mark or rule lock, so the condition reads the committed latest. #455 ruled the conditional write;
      a conditional insert alone still races under READ COMMITTED (each transaction's statement
      snapshot misses the other's uncommitted row), so the lock is what makes it hold under concurrent
-     dispatch. The consumer still dispatches serially, but nothing depends on it.
+     dispatch. The lock stops duplicate rows; it does not order them. Dropping a value equal to the
+     latest is right only if a series lands in the order it was observed (a successor landing first
+     is judged against the wrong latest, and the late batch then leaves the series on a value the
+     device had left), so the consumer keeps one batch in flight (`MaxAckPending` 1): a batch whose
+     landing fails transiently is redelivered, after a growing delay, before anything behind it,
+     and one the gateway refuses outright (its owner gone, its key's writer class refusing the
+     writer, data Postgres will not store) is dropped at once rather than holding the rest. A
+     concurrency pool would need sequencing per publishing subject to keep the same order.
   4. **Receipts are kept 24 hours** and pruned by the server hourly, in chunks. That is far past the
      stream's redelivery, and past a node's retry of a batch it could not ship, which its spool drops
      after 12 hours ([ADR-0453](#adr-0453-telemetry-is-published-through-jetstream-with-an-ack-a-minted-nats-msg-id-and-a-bounded-spool));

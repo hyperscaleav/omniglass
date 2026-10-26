@@ -98,7 +98,9 @@ double ack, which with the idempotent sinks (a sample batch on its receipt, an a
 pages refer to; the samples stream carries it today (below).
 :::
 
-The edge stamps `ts`, so the system is ts-authoritative and needs no strict ordering on the wire.
+The edge stamps `ts`, so the system is ts-authoritative: a metric or an event lands by its own `ts`
+in any order. A property series is the exception, since its transition guard compares a value with
+the series' latest, so the telemetry lane keeps each publisher's batches in order end to end (below).
 
 ### Delivery: a batch lands once
 
@@ -122,9 +124,12 @@ The canonical triple is built on `OG_TELEMETRY`
   database could refuse is cleaned first (a NUL in any lane's text or jsonb becomes U+FFFD), so one
   stray byte cannot lose the rows that rode with it after a `202`.
 
-The property lane's transition guard is the insert's own condition, held per series by a lock, so the
-consumer's serial dispatch is no longer something its correctness depends on
-([workers](/architecture/workers/)).
+The property lane's transition guard is the insert's own condition, held per series by a lock, so two
+batches landing at once never write one value twice. The guard is right only if a series lands in
+order, so the lane keeps order end to end: a node's window stays in publish order
+([nodes](/architecture/nodes/#delivery-a-batch-lands-once)), and the consumer keeps one batch in
+flight, redelivering a transient failure before anything behind it and dropping at once a batch the
+gateway refuses outright ([workers](/architecture/workers/)).
 
 :::design[Target design, tracked in #430]
 

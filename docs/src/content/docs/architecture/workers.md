@@ -9,7 +9,7 @@ sidebar:
 
 :::note[Implementation status]
 Built today: one durable JetStream work-queue consumer, `og-telemetry-worker`
-(`internal/bus/consumer.go`: explicit double ack, MaxDeliver 5, bounded nak backoff, serial dispatch),
+(`internal/bus/consumer.go`: explicit double ack, MaxDeliver 5, a growing nak delay, one batch in flight),
 which does owner confinement and persistence inline, each batch landing once, in one transaction under
 its receipt
 ([ADR-0311](/architecture/decisions/#adr-0311-a-telemetry-batch-lands-once-in-one-transaction-under-its-receipt)).
@@ -19,7 +19,7 @@ Workers are how Omniglass means to do the steady background work (deriving sampl
 
 ## One machinery, several consumers
 
-The one machinery is a **JetStream work-queue consumer** over a configurable concurrency pool: pull, work, ack, at-least-once plus `Nats-Msg-Id` dedup and an idempotent sink (crash recovery, exactly-once outcomes, event-time semantics for free). The telemetry consumer carries that triple today: each batch arrives under a `Nats-Msg-Id` the stream deduplicates, the consumer double-acks, and the sink is idempotent per batch, its receipt written in the batch's own transaction ([messaging](/architecture/messaging/#delivery-a-batch-lands-once)). It still dispatches serially, but the state transition guard no longer depends on that: it is a conditional insert held per series by a transaction lock (ADR-0311), so the guard is not what stands between this consumer and a concurrency pool. It instantiates over several consumers rather than separate loops:
+The one machinery is a **JetStream work-queue consumer** over a configurable concurrency pool: pull, work, ack, at-least-once plus `Nats-Msg-Id` dedup and an idempotent sink (crash recovery, exactly-once outcomes, event-time semantics for free). The telemetry consumer carries that triple today: each batch arrives under a `Nats-Msg-Id` the stream deduplicates, the consumer double-acks, and the sink is idempotent per batch, its receipt written in the batch's own transaction ([messaging](/architecture/messaging/#delivery-a-batch-lands-once)). It keeps one batch in flight, and the property lane's transition guard depends on that order: the guard is a conditional insert held per series by a transaction lock (ADR-0311), which stops two concurrent batches writing one value twice but cannot reorder them, so a concurrency pool would need sequencing per publishing subject before it could replace the one batch in flight. It instantiates over several consumers rather than separate loops:
 
 :::design[Target design, tracked in #430; the clock is #419]
 - **the admission consumer**: the owner-confinement gate at the head of the data lane, running in

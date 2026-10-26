@@ -46,7 +46,12 @@ refs: [453, 454, 430, 426]
      the order publishes were made, and the node buffers nothing across a reconnect
      (`ReconnectBufSize` -1): a publish during an outage fails at once and the spool holds it, so a
      later batch never lands ahead of an earlier one that failed. That order is what the property
-     lane's transition guard, which compares a value with its series' latest, relies on. The
+     lane's transition guard, which compares a value with its series' latest, relies on, with the
+     consumer keeping one batch in flight on the other side
+     ([ADR-0311](#adr-0311-a-telemetry-batch-lands-once-in-one-transaction-under-its-receipt) point
+     3). One residual is stated: a stream that refuses one batch and takes the next (at the server's
+     JetStream storage limit, should the consumer free space inside a window) could store them out
+     of order; `OG_TELEMETRY` sets no limits of its own. The
      connection reconnects without limit, so an outage longer than the client's default budget (60
      attempts) ends with the spool shipping again rather than a node that runs and never ships.
 - **Context:** Both publishers used core NATS (#453): a node's publish returned before anything was
