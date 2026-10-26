@@ -21,9 +21,9 @@ type reconPropertyBody struct {
 	Property   string          `json:"property" doc:"The property_type key"`
 	Want       json.RawMessage `json:"want" doc:"The declared value, resolved live from the cascade (null if none)"`
 	Told       json.RawMessage `json:"told" doc:"The newest intended value a command set, on any instance (null until commanded)"`
-	Is         json.RawMessage `json:"is" doc:"The observed value, resolved across every instance of the property: an instance that disagrees with the declared value if any does (the newest such), else the newest observed (null if none)"`
+	Is         json.RawMessage `json:"is" doc:"The observed value, resolved across every live instance of the property (a deleted endpoint's frozen reading left out): an instance that disagrees with the declared value if any does (the newest such), else the newest observed (null if none)"`
 	IsInstance string          `json:"is_instance" doc:"The instance the observed value came from: the endpoint that observed it or the instance its sender named, empty for the owner-level series (and when is is null)"`
-	Drift      bool            `json:"drift" doc:"True when any observed instance differs from the declared value"`
+	Drift      bool            `json:"drift" doc:"True when any live observed instance differs from the declared value"`
 }
 
 type reconciliationOutput struct {
@@ -42,7 +42,7 @@ func registerReconciliationRoutes(api huma.API, a *authenticator, gw storage.Gat
 		Method:      http.MethodGet,
 		Path:        "/components/{name}/reconciliation",
 		Summary:     "Read a component's property reconciliation (want/told/is)",
-		Description: "Pivots, per declared property, the declared value (want, resolved live from the cascade), the intended value (told), and the observed value (is, resolved across every instance of the property and naming the instance it came from), with config-drift computed on read: drift when any observed instance differs from want. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
+		Description: "Pivots, per declared property, the declared value (want, resolved live from the cascade), the intended value (told), and the observed value (is, resolved across every live instance of the property and naming the instance it came from; a deleted endpoint's frozen reading is left out), with config-drift computed on read: drift when any live observed instance differs from want. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
 	}, "component", "read"), func(ctx context.Context, in *componentPathInput) (*reconciliationOutput, error) {
 		comp, err := gw.GetComponent(ctx, in.Name, a.scopeFor(ctx, "component", "read"))
 		if err != nil {

@@ -145,11 +145,21 @@ func (p *PG) settleCheck(ctx context.Context, q txQuerier, ct *CommandType, owne
 }
 
 // commandSeriesSQL is the series a command (aliased c) is judged on
-// (ADR-0456): its own instance when it names one; else the endpoint it was
-// dispatched over, where that driver's observations of the target land
-// (#900); else the empty string, an owner-level intent no endpoint has
-// carried, judged on every observed instance of its target (agreeingValue).
-const commandSeriesSQL = `coalesce(nullif(c.instance, ''), (select e.name from endpoint e where e.id = c.dispatched_endpoint_id), '')`
+// (ADR-0456): its own instance when it names one; else the endpoint that
+// carries it, where that driver's observations of the target land: the one
+// it was dispatched over (#900), or, before a node takes it, the one queued
+// to carry it (the endpoint commandRideSQL and PendingNodeCommands pick: the
+// first by name whose driver binds the type); else the empty string, an
+// owner-level intent no endpoint can carry, judged on every observed instance
+// of its target (agreeingValue).
+const commandSeriesSQL = `coalesce(nullif(c.instance, ''),
+	(select e.name from endpoint e where e.id = c.dispatched_endpoint_id),
+	(select e.name from endpoint e join driver dr on dr.id = e.driver_id
+		where c.dispatched_endpoint_id is null and c.owner_kind = 'component' and e.component = c.component_id
+		  and jsonb_path_exists(dr.spec, '$.commands[*] ? (@.command_type == $ct)',
+			jsonb_build_object('ct', (select ct.name from command_type ct where ct.id = c.command_type_id)))
+		order by e.name limit 1),
+	'')`
 
 // pendingCommand is an issued command and the series instance its target is
 // observed on (empty for every instance, commandSeriesSQL).
@@ -233,7 +243,7 @@ func (p *PG) judgedObservation(ctx context.Context, q querier, ct *CommandType, 
 		return observed, nil
 	}
 	if !reads.readEvery {
-		every, err := p.latestTargetValues(ctx, q, ct, ownerKind, arc, "observed")
+		every, err := p.latestObservedTargetValues(ctx, q, ct, ownerKind, arc)
 		if err != nil {
 			return nil, err
 		}
@@ -245,7 +255,7 @@ func (p *PG) judgedObservation(ctx context.Context, q querier, ct *CommandType, 
 // intendedSeries is the series the command behind an owner's latest intended
 // row of a target on instance is judged on (commandSeriesSQL), so the
 // computed verdict reads the observation the recorded one did: empty for no
-// row, a row no command opened, or an owner-level intent no endpoint carried.
+// row, a row no command opened, or an owner-level intent no endpoint can carry.
 func (p *PG) intendedSeries(ctx context.Context, q querier, ct *CommandType, ownerKind, arc, instance string) (string, error) {
 	col, err := ownerColumn(ownerKind)
 	if err != nil {

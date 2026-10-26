@@ -118,6 +118,182 @@ func TestReconciliationResolvesEveryObservedInstance(t *testing.T) {
 	}
 }
 
+// An endpoint deleted after it observed a property is a retired observer:
+// its last reading is frozen (nothing prunes a series' latest row, and an
+// endpoint's name is its transport, so a changed transport is a delete and a
+// new endpoint), and reconciliation leaves it out rather than holding the
+// owner in drift on what a removed connection once saw. An instance a push
+// sender names is the sender's own and keeps counting (ADR-0456).
+func TestReconciliationLeavesOutARetiredObserver(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	all := scope.Set{All: true}
+	comp, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-1"}, all, all, all, all)
+	if err != nil {
+		t.Fatalf("create component: %v", err)
+	}
+	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge"}, all, all); err != nil {
+		t.Fatalf("create node: %v", err)
+	}
+	conn := connectDSN(t, dsn)
+	mustExec(t, conn, `insert into endpoint (name, transport, component, node_name, params) values
+		('telnet', 'telnet', $1::uuid, (select principal_id from node where name = 'edge'), '{"target":"10.0.0.1:23"}'::jsonb),
+		('ssh', 'ssh', $1::uuid, (select principal_id from node where name = 'edge'), '{"target":"10.0.0.1:22"}'::jsonb)`, comp.ID)
+	if _, err := gw.SetProperty(ctx, "", "component", "panel-1", "video-input", "", json.RawMessage(`"hdmi1"`), all, all); err != nil {
+		t.Fatalf("declare video-input: %v", err)
+	}
+	base := time.Now().UTC().Truncate(time.Microsecond).Add(-10 * time.Minute)
+	land := func(w storage.KeyWriter, instance, value string, at time.Duration) {
+		t.Helper()
+		if err := gw.InsertPropertySamples(ctx, w, []storage.PropertySampleWrite{{
+			OwnerKind: "component", OwnerID: comp.ID, Key: "video-input", Instance: instance, Value: value, Source: "test", TS: base.Add(at),
+		}}); err != nil {
+			t.Fatalf("land %s on %s: %v", value, instance, err)
+		}
+	}
+	pivot := func() storage.PropertyReconciliation {
+		t.Helper()
+		recs, err := gw.Reconciliation(ctx, "component", "panel-1", all)
+		if err != nil {
+			t.Fatalf("reconciliation: %v", err)
+		}
+		for _, r := range recs {
+			if r.PropertyTypeName == "video-input" {
+				return r
+			}
+		}
+		t.Fatalf("video-input not in the reconciliation: %+v", recs)
+		return storage.PropertyReconciliation{}
+	}
+
+	land(storage.NodeWriter(comp.ID, "telnet"), "telnet", "hdmi4", time.Second)
+	if r := pivot(); string(r.Is) != `"hdmi4"` || r.IsInstance != "telnet" || !r.Drift {
+		t.Fatalf("a live endpoint disagreeing: want is=hdmi4 from telnet, drift; got is=%s from %q drift=%v", r.Is, r.IsInstance, r.Drift)
+	}
+	if err := gw.DeleteEndpoint(ctx, "", comp.ID+"/telnet", all, all); err != nil {
+		t.Fatalf("delete the telnet endpoint: %v", err)
+	}
+	land(storage.NodeWriter(comp.ID, "ssh"), "ssh", "hdmi1", 2*time.Second)
+	if r := pivot(); string(r.Is) != `"hdmi1"` || r.IsInstance != "ssh" || r.Drift {
+		t.Fatalf("the disagreeing endpoint retired: want is=hdmi1 from ssh, no drift; got is=%s from %q drift=%v", r.Is, r.IsInstance, r.Drift)
+	}
+	land(storage.PushWriter(), "rx-2", "hdmi3", 3*time.Second)
+	if r := pivot(); string(r.Is) != `"hdmi3"` || r.IsInstance != "rx-2" || !r.Drift {
+		t.Fatalf("a pushed instance disagreeing: want is=hdmi3 from rx-2, drift; got is=%s from %q drift=%v", r.Is, r.IsInstance, r.Drift)
+	}
+}
+
+// told reads the intended series of the instances commands named, one probe
+// each, and never walks the observed instances of the key: the series index
+// carries no provenance, so walking them for an intended row filters every
+// observed row they hold (the firehose, on a busy key).
+func TestToldReadsOnlyTheInstancesCommandsNamed(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	all := scope.Set{All: true}
+	comp, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-1"}, all, all, all, all)
+	if err != nil {
+		t.Fatalf("create component: %v", err)
+	}
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: make([]byte, 32), Prefix: "root0000"}); err != nil {
+		t.Fatalf("bootstrap owner: %v", err)
+	}
+	conn := connectDSN(t, dsn)
+	var actor string
+	if err := conn.QueryRow(ctx, `select principal_id from human where username = 'root'`).Scan(&actor); err != nil {
+		t.Fatalf("resolve actor: %v", err)
+	}
+	if _, err := gw.IssueCommand(ctx, actor, "component", comp.ID, "set-input", "", json.RawMessage(`"dp1"`), nil); err != nil {
+		t.Fatalf("issue set-input: %v", err)
+	}
+	// Two busy observed instances, written after the intent, as a polled
+	// switcher's endpoints would.
+	mustExec(t, conn, `insert into property (ts, owner_kind, component_id, property_type_id, instance, value, provenance, source)
+		select now() + make_interval(secs => g), 'component', $1::uuid, (select id from property_type where name = 'video-input'),
+			i, to_jsonb('hdmi1'::text), 'observed', 'tcp'
+		from generate_series(1, 2000) g, unnest(array['ip-control', 'serial']) i`, comp.ID)
+	// Seqscan is off because the fixture is small enough for one to win, as
+	// TestLatestPerInstanceIsAnIndexWalk does.
+	mustExec(t, conn, "set enable_seqscan = off")
+
+	rows, err := conn.Query(ctx, "explain (analyze, format json) "+storage.ExportToldSQL(), "component", comp.ID, "video-input")
+	if err != nil {
+		t.Fatalf("explain the told read: %v", err)
+	}
+	var plan string
+	for rows.Next() {
+		var line string
+		if err := rows.Scan(&line); err != nil {
+			t.Fatal(err)
+		}
+		plan += line
+	}
+	rows.Close()
+	if removed := rowsRemovedByFilter(t, plan); removed > 0 {
+		t.Fatalf("the told read filtered %d rows to find the intended one: it walked the observed instances:\n%s", removed, plan)
+	}
+
+	recs, err := gw.Reconciliation(ctx, "component", "panel-1", all)
+	if err != nil {
+		t.Fatalf("reconciliation: %v", err)
+	}
+	for _, r := range recs {
+		if r.PropertyTypeName == "video-input" && string(r.Told) != `"dp1"` {
+			t.Fatalf("told = %s, want dp1", r.Told)
+		}
+	}
+}
+
+// rowsRemovedByFilter sums every "Rows Removed by Filter" in a JSON plan.
+func rowsRemovedByFilter(t *testing.T, plan string) int {
+	t.Helper()
+	var doc any
+	if err := json.Unmarshal([]byte(plan), &doc); err != nil {
+		t.Fatalf("read the plan: %v", err)
+	}
+	total := 0
+	var walk func(v any)
+	walk = func(v any) {
+		switch x := v.(type) {
+		case map[string]any:
+			if n, ok := x["Rows Removed by Filter"].(float64); ok {
+				total += int(n)
+			}
+			for _, c := range x {
+				walk(c)
+			}
+		case []any:
+			for _, c := range x {
+				walk(c)
+			}
+		}
+	}
+	walk(doc)
+	return total
+}
+
 // The multi-instance read walks a key's instances and reads each one's newest
 // row by probes on the series index (the walk readCalcInput makes), never the
 // key's whole history, which on the metric lane is the firehose. Seqscan is
@@ -140,7 +316,7 @@ func TestLatestPerInstanceIsAnIndexWalk(t *testing.T) {
 		{"property", "property_series_idx"},
 		{"metric", "metric_owner_idx"},
 	} {
-		rows, err := conn.Query(ctx, "explain "+storage.ExportLatestPerInstanceSQL(tc.lane), "component", uuid.NewString(), "video-input", "observed")
+		rows, err := conn.Query(ctx, "explain "+storage.ExportLatestPerInstanceSQL(tc.lane), "component", uuid.NewString(), "video-input", []string{"tcp", "ssh"})
 		if err != nil {
 			t.Fatalf("explain %s: %v", tc.lane, err)
 		}

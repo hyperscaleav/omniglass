@@ -40,5 +40,9 @@ func ExportLatestPerInstanceSQL(lane string) string {
 	if lane == "property" {
 		value = declaredCurrentExpr
 	}
-	return latestPerInstanceSQL(lane, value, "component_id")
+	return latestObservedPerInstanceSQL(lane, value, "component_id")
 }
+
+// ExportToldSQL is reconciliation's told read on the component arc ($1 owner
+// kind, $2 arc, $3 key), for its plan test.
+func ExportToldSQL() string { return latestIntendedSQL("component_id") }

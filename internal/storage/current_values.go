@@ -61,11 +61,11 @@ func (p *PG) Reconciliation(ctx context.Context, ownerKind, ownerID string, read
 		if e.SourceRuleID != "" && !e.FromContract {
 			continue
 		}
-		observed, err := p.latestValues(ctx, p.pool, ownerKind, ownerID, e.PropertyTypeName, "observed", read)
+		observed, err := p.latestObservedValues(ctx, p.pool, ownerKind, ownerID, e.PropertyTypeName, read)
 		if err != nil {
 			return nil, err
 		}
-		intended, err := p.latestValues(ctx, p.pool, ownerKind, ownerID, e.PropertyTypeName, "intended", read)
+		intended, err := p.latestIntendedValues(ctx, p.pool, ownerKind, ownerID, e.PropertyTypeName, read)
 		if err != nil {
 			return nil, err
 		}

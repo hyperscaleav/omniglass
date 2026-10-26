@@ -1209,7 +1209,7 @@ Read a component's property reconciliation (want/told/is)
 omniglass component reconciliation list <name>
 ```
 
-Pivots, per declared property, the declared value (want, resolved live from the cascade), the intended value (told), and the observed value (is, resolved across every instance of the property and naming the instance it came from), with config-drift computed on read: drift when any observed instance differs from want. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+Pivots, per declared property, the declared value (want, resolved live from the cascade), the intended value (told), and the observed value (is, resolved across every live instance of the property and naming the instance it came from; a deleted endpoint's frozen reading is left out), with config-drift computed on read: drift when any live observed instance differs from want. Gated by component:read; an out-of-scope component is a non-disclosing 404.
 
 Example:
 

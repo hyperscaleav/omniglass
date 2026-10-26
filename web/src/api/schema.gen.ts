@@ -993,7 +993,7 @@ export interface paths {
         };
         /**
          * Read a component's property reconciliation (want/told/is)
-         * @description Pivots, per declared property, the declared value (want, resolved live from the cascade), the intended value (told), and the observed value (is, resolved across every instance of the property and naming the instance it came from), with config-drift computed on read: drift when any observed instance differs from want. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+         * @description Pivots, per declared property, the declared value (want, resolved live from the cascade), the intended value (told), and the observed value (is, resolved across every live instance of the property and naming the instance it came from; a deleted endpoint's frozen reading is left out), with config-drift computed on read: drift when any live observed instance differs from want. Gated by component:read; an out-of-scope component is a non-disclosing 404.
          */
         get: operations["get-component-reconciliation"];
         put?: never;
@@ -8539,9 +8539,9 @@ export interface components {
             endpoints: components["schemas"]["ReachEndpointBody"][] | null;
         };
         ReconPropertyBody: {
-            /** @description True when any observed instance differs from the declared value */
+            /** @description True when any live observed instance differs from the declared value */
             drift: boolean;
-            /** @description The observed value, resolved across every instance of the property: an instance that disagrees with the declared value if any does (the newest such), else the newest observed (null if none) */
+            /** @description The observed value, resolved across every live instance of the property (a deleted endpoint's frozen reading left out): an instance that disagrees with the declared value if any does (the newest such), else the newest observed (null if none) */
             is: unknown;
             /** @description The instance the observed value came from: the endpoint that observed it or the instance its sender named, empty for the owner-level series (and when is is null) */
             is_instance: string;

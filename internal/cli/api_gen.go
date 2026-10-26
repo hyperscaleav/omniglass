@@ -1658,7 +1658,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "Read a component's property reconciliation (want/told/is)",
-						Long:    "Pivots, per declared property, the declared value (want, resolved live from the cascade), the intended value (told), and the observed value (is, resolved across every instance of the property and naming the instance it came from), with config-drift computed on read: drift when any observed instance differs from want. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
+						Long:    "Pivots, per declared property, the declared value (want, resolved live from the cascade), the intended value (told), and the observed value (is, resolved across every live instance of the property and naming the instance it came from; a deleted endpoint's frozen reading is left out), with config-drift computed on read: drift when any live observed instance differs from want. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
 						Example: "  omniglass component reconciliation list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
