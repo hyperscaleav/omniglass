@@ -1,4 +1,4 @@
-## nul-into-postgres-text (fixed; found building #1145)
+## nul-into-postgres-text (fixed; found building #1145, regressed and fixed in the #311 review)
 
 - **Cue:** text that came off a wire (a component's line, a telnet stream, a pushed body) is
   inserted into a Postgres `text` column, or into `jsonb`, with nothing replacing byte `0x00`.
@@ -11,3 +11,9 @@
   field and every string in the jsonb (`logline.Clean` and `logline.CleanAttributes`,
   internal/logline/logline.go, applied in `InsertLogLines`), and where text is read off the wire
   for a record whose insert path does not hold it.
+- **Regressed by one-transaction landing (#311):** once an ingest batch lands all or nothing, a
+  NUL in any lane's value (a pushed property, an event's message or attributes, a node's self-log
+  of a device reply) fails every row that rode with it, after the push route answered 202. Fix:
+  the gateway cleans every sample, event and node-log write the same way (`cleanPropertyWrites`
+  and its siblings, internal/storage/nul_clean.go), and any value the database can refuse must be
+  cleaned or refused before a composed transaction, never left to fail it.

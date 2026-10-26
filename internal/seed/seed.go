@@ -263,6 +263,14 @@ func Run(ctx context.Context, gw storage.Gateway) error {
 	if err := seedStandards(ctx, gw); err != nil {
 		return err
 	}
+	// The three registries are disjoint by name, or a shared name would be
+	// unwritable on every lane (#457): refuse to seed a collision rather than
+	// ship it.
+	if shared, err := sharedRegistryNames(metricTypesYAML, propertyTypesYAML, eventTypesYAML); err != nil {
+		return err
+	} else if len(shared) > 0 {
+		return fmt.Errorf("seed: the ship-with metric, property and event registries share names %v", shared)
+	}
 	if err := seedPropertyTypes(ctx, gw); err != nil {
 		return err
 	}

@@ -993,7 +993,7 @@ export interface paths {
         };
         /**
          * Read a component's property reconciliation (want/told/is)
-         * @description Pivots, per declared property, the declared value (want, resolved live from the cascade), the intended value (told), and the observed value (is), with config-drift computed on read. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+         * @description Pivots, per declared property, the declared value (want, resolved live from the cascade), the intended value (told), and the observed value (is, resolved across every live instance of the property and naming the instance it came from; a deleted endpoint's frozen reading is left out), with config-drift computed on read: drift when any live observed instance differs from want. Gated by component:read; an out-of-scope component is a non-disclosing 404.
          */
         get: operations["get-component-reconciliation"];
         put?: never;
@@ -2427,7 +2427,7 @@ export interface paths {
         put?: never;
         /**
          * Add a simulated system
-         * @description Creates a system built to a standard, with a simulated component for each staffed role in the standard's plan (see plan-simulation-system), each at its own free address in the simulated block with its endpoint placed on the node, and assigned its role, all in one transaction: it lands whole or not at all. Component names are minted as an unnamed create mints them; roles nothing simulated fits are left short and listed. The simulator serves the components from its next pull. Gated by simulation:update, and also needs system:create, system:update, system:read, component:create, endpoint:create and node:read (and location:read when it names a place), each in the caller's own scope; the components are created without a parent, so component:create must be all-scope. A refused piece is mapped as its own route maps it (a component refused is a 403). A node with no simulator connected is a 409, and a standard nothing simulated can staff a 422.
+         * @description Creates a system built to a standard, with a simulated component for each staffed role in the standard's plan (see plan-simulation-system), each at its own free address in the simulated block with its endpoint placed on the node, and assigned its role, all in one transaction: it lands whole or not at all. Component names are minted as an unnamed create mints them; roles nothing simulated fits are left short and listed. The simulator serves the components from its next pull. Gated by simulation:update, and also needs system:create, system:update, system:read, component:create, component:update, endpoint:create and node:read (and location:read when it names a place), each in the caller's own scope; the components are created without a parent, so component:create must be all-scope, and so must component:update, since assigning each its role writes onto it as an assignment route does. A refused piece is mapped as its own route maps it (a component refused is a 403). A node with no simulator connected is a 409, and a standard nothing simulated can staff a 422.
          */
         post: operations["add-node-simulation-system"];
         delete?: never;
@@ -3729,7 +3729,7 @@ export interface paths {
         };
         /**
          * List a standard's declared roles
-         * @description Lists the roles this standard declares (every conforming system inherits them live), ordered by name, each with its quorum and the component_types (accepted_types) and, if pinned, the products a filling component must match. Gated by standard:read.
+         * @description Lists the roles this standard declares (every conforming system inherits them live), ordered by name, each with its quorum and the component_types (accepted_types) and, if pinned, the products a filling component must match. An unknown standard is a 404, never an empty list. Gated by standard:read.
          */
         get: operations["list-standard-roles"];
         put?: never;
@@ -3759,7 +3759,7 @@ export interface paths {
         head?: never;
         /**
          * Declare a role on a standard
-         * @description Declares a role every conforming system needs filled, or revises it in place (the role is addressed by name, so the write is idempotent and declaring is this same route). Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and ["*"] replaces the whole declaration. An unknown standard, type, or product is a 422, as is a mask naming a field this resource does not patch. Gated by standard:update.
+         * @description Declares a role every conforming system needs filled, or revises it in place (the role is addressed by name, so the write is idempotent and declaring is this same route). Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and ["*"] replaces the whole declaration. An unknown standard, type, or product is a 422, as is a mask naming a field this resource does not patch. A name a conforming system already declares itself is a 409 naming that system, since a role name must mean one role in a system. Gated by standard:update.
          */
         patch: operations["set-standard-role"];
         trace?: never;
@@ -3879,7 +3879,7 @@ export interface paths {
         head?: never;
         /**
          * Update a system
-         * @description Patches a system's label, standard, or system_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard and system_type fields both follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system, an unclassified system), a name sets. Gated by system:update; read and update scopes drive the 404 versus 403 split.
+         * @description Patches a system's label, standard, or system_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard and system_type fields both follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system, an unclassified system), a name sets. A new standard declaring a role name the system declares itself is a 409 naming the role, since a role name must mean one role in a system. A standard change carries the system's staffing in the same transaction: each occupant of an inherited role moves onto the new standard's role of the same name when it is still a typed match and the role has room, and is released, staying a member, otherwise; clearing the standard releases every inherited assignment. Gated by system:update; read and update scopes drive the 404 versus 403 split.
          */
         patch: operations["update-system"];
         trace?: never;
@@ -3994,13 +3994,13 @@ export interface paths {
         get?: never;
         /**
          * Put a component in a system
-         * @description Binds this component into the system. Idempotent. A component's first membership becomes its primary with nobody asking, so a component in exactly one system never has to think about the concept; a later membership does not take that default away. Gated by system:update; read and update scopes drive the 404 versus 403 split.
+         * @description Binds this component into the system. Idempotent. A component's first membership becomes its primary with nobody asking, so a component in exactly one system never has to think about the concept; a later membership does not take that default away. Gated by system:update, and also needs component:update, because the binding writes onto the component (its primary, its label, the system band of its cascade): each end resolves in its own tier's read scope and must be inside its update scope, so an end outside the read scope is a non-disclosing 404 and one readable but not writable a 403.
          */
         put: operations["add-system-member"];
         post?: never;
         /**
          * Take a component out of a system
-         * @description Unbinds this component from the system. Refused with a 409 while it still fills a role here, since removing it would leave the system staffed by a non-member: unassign the role first. A component that was not a member is a 404. Gated by system:update; read and update scopes drive the 404 versus 403 split.
+         * @description Unbinds this component from the system. Refused with a 409 while it still fills a role here, since removing it would leave the system staffed by a non-member: unassign the role first. A component that was not a member is a 404. Gated by system:update, and also needs component:update, because unbinding moves the component's primary and restamps its label; read and update scopes drive the system's 404 versus 403 split, and a member outside the component:update scope is a 403 (the system's member list already names it).
          */
         delete: operations["remove-system-member"];
         options?: never;
@@ -4019,7 +4019,7 @@ export interface paths {
         put?: never;
         /**
          * Make this the component's default system
-         * @description Moves the component's default to this membership. The default answers questions asked without a system in hand; it does not decide anything that names a system explicitly. A component that was not a member here is a 404. Gated by system:update; read and update scopes drive the 404 versus 403 split.
+         * @description Moves the component's default to this membership. The default answers questions asked without a system in hand; it does not decide anything that names a system explicitly. A component that was not a member here is a 404. Gated by system:update, and also needs component:update, because the default decides which system's band every cascade on the component reads; read and update scopes drive the system's 404 versus 403 split, and a member outside the component:update scope is a 403 (the system's member list already names it).
          */
         post: operations["set-primary-member"];
         delete?: never;
@@ -4171,7 +4171,7 @@ export interface paths {
         head?: never;
         /**
          * Declare a role on a system
-         * @description Declares a role directly on this system (how a one-off system gets roles at all, and how a conforming one adds what its standard does not cover), or revises it in place. Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and ["*"] replaces the whole declaration. Gated by system:update; read and update scopes drive the 404 versus 403 split.
+         * @description Declares a role directly on this system (how a one-off system gets roles at all, and how a conforming one adds what its standard does not cover), or revises it in place. Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and ["*"] replaces the whole declaration. A name the system's standard already declares is a 409: a system role never shadows an inherited one, since a role name must mean one role in a system. Gated by system:update; read and update scopes drive the 404 versus 403 split.
          */
         patch: operations["set-system-role"];
         trace?: never;
@@ -4186,13 +4186,13 @@ export interface paths {
         get?: never;
         /**
          * Assign a component to a role
-         * @description Puts this component in the role for this system. Refused with a 422 naming both parties when the component is not a typed match: its product's component_type outside every type the role accepts, or (if the role pins products) its product not one of them. A role with no accepted types takes any type. Idempotent. Gated by system:update; read and update scopes drive the 404 versus 403 split.
+         * @description Puts this component in the role for this system. Refused with a 422 naming both parties when the component is not a typed match: its product's component_type outside every type the role accepts, or (if the role pins products) its product not one of them. A role with no accepted types takes any type. Idempotent. Gated by system:update, and also needs component:update, because staffing a role makes the component a member and writes onto it: each end resolves in its own tier's read scope and must be inside its update scope, so an end outside the read scope is a non-disclosing 404 and one readable but not writable a 403.
          */
         put: operations["assign-system-role"];
         post?: never;
         /**
          * Unassign a component from a role
-         * @description Takes this component out of the role, leaving the role understaffed until another fills it. A component that was not filling the role is a 404. Gated by system:update; read and update scopes drive the 404 versus 403 split.
+         * @description Takes this component out of the role, leaving the role understaffed until another fills it. A component that was not filling the role is a 404. Gated by system:update, and also needs component:update, as assigning does; read and update scopes drive the system's 404 versus 403 split, and an occupant outside the component:update scope is a 403 (the role's own read already names it).
          */
         delete: operations["unassign-system-role"];
         options?: never;
@@ -4599,7 +4599,7 @@ export interface paths {
         put?: never;
         /**
          * Push telemetry for an owner
-         * @description Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is rejected and reported in the response rather than silently dropped, and a property or event payload violating its type's schema refuses the batch with a 422. Every key has one writer class, and a push writes only a collected key: a key a native probe writes (a reachability verdict or rung, a probe metric or timing, a held session's state, collection-failed) is a node's own observation and a platform key (health) is the platform's, each rejected by name on every lane; a key a calc rule outputs is rejected naming the rule. Gated by telemetry:push, and the caller's scope must cover the declared owner; an out-of-scope owner is a non-disclosing 404.
+         * @description Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is rejected and reported in the response rather than silently dropped, and a property or event payload violating its type's schema refuses the batch with a 422. Every key has one writer class, and a push writes only a collected key: a key a native probe writes (a reachability verdict or rung, a probe metric or timing, a held session's state, collection-failed) is a node's own observation and a platform key (health) is the platform's, each rejected by name on every lane; a key a calc rule outputs is rejected naming the rule. An observation's instance is the endpoint it came through: one naming no endpoint on the owner refuses the batch with a 422 naming it and listing the owner's endpoints. Gated by telemetry:push, whose scope must cover the declared owner (one check per batch): the push scope alone is enough to see the owner (no component:read is needed), an owner outside both the push scope and the caller's component:read is a non-disclosing 404, and one the caller can read but may not push to is a 403.
          */
         post: operations["push-telemetry"];
         delete?: never;
@@ -8054,11 +8054,21 @@ export interface components {
             label?: string;
             /** Format: date-time */
             last_heartbeat_at?: string;
+            /**
+             * Format: date-time
+             * @description When the newest orphaned batch arrived
+             */
+            last_orphaned_at?: string;
             /** @description The location the node sits in (descriptive placement, not scope) */
             location?: string;
             /** @description The location's id; the stable form of location */
             location_id?: string;
             name: string;
+            /**
+             * Format: int64
+             * @description How many of this node's telemetry batches the server dropped because their task is not placed on this node (moved to another node, or unknown): the confinement fence, counted rather than silent. A rising count means the node is collecting for a task it no longer holds
+             */
+            orphaned_batches: number;
         };
         NodeLogsOutputBody: {
             /**
@@ -8390,7 +8400,7 @@ export interface components {
             samples: components["schemas"]["PropertySampleBody"][] | null;
         };
         PushEvent: {
-            /** @description Discriminates many occurrences of one name on one owner */
+            /** @description The endpoint of the owner this came through, by name (an endpoint is named by its transport); omit for the owner as a whole. An instance naming no endpoint on the owner refuses the batch with a 422 */
             instance?: string;
             /** @description The occurrence's human-readable line */
             message?: string;
@@ -8447,7 +8457,7 @@ export interface components {
             ts?: string;
         };
         PushMetric: {
-            /** @description Discriminates many values of one name on one owner (three fan speeds, per-port counters) */
+            /** @description The endpoint of the owner this came through, by name (an endpoint is named by its transport); omit for the owner as a whole. An instance naming no endpoint on the owner refuses the batch with a 422 */
             instance?: string;
             /** @description A registered metric_type name */
             name: string;
@@ -8474,7 +8484,7 @@ export interface components {
             rejected?: components["schemas"]["PushRejection"][] | null;
         };
         PushProperty: {
-            /** @description Discriminates many values of one name on one owner */
+            /** @description The endpoint of the owner this came through, by name (an endpoint is named by its transport); omit for the owner as a whole. An instance naming no endpoint on the owner refuses the batch with a 422 */
             instance?: string;
             /** @description A registered property_type name */
             name: string;
@@ -8639,13 +8649,15 @@ export interface components {
             endpoints: components["schemas"]["ReachEndpointBody"][] | null;
         };
         ReconPropertyBody: {
-            /** @description True when the observed value is present and differs from the declared one */
+            /** @description True when any live observed instance differs from the declared value */
             drift: boolean;
-            /** @description The observed value from the latest-value cache (null if none) */
+            /** @description The observed value, resolved across every live instance of the property (a deleted endpoint's frozen reading left out): an instance that disagrees with the declared value if any does (the newest such), else the newest observed (null if none) */
             is: unknown;
+            /** @description The instance the observed value came from: the endpoint that observed it or the instance its sender named, empty for the owner-level series (and when is is null) */
+            is_instance: string;
             /** @description The property_type key */
             property: string;
-            /** @description The intended value from a command (null until commanded) */
+            /** @description The newest intended value a command set, on any instance (null until commanded) */
             told: unknown;
             /** @description The declared value, resolved live from the cascade (null if none) */
             want: unknown;

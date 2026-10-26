@@ -902,6 +902,17 @@
       "nullable": true,
       "fk": true,
       "fk_target": "location.id"
+     },
+     {
+      "name": "orphaned_batches",
+      "type": "bigint",
+      "nullable": false,
+      "default": "0"
+     },
+     {
+      "name": "last_orphaned_at",
+      "type": "timestamp with time zone",
+      "nullable": true
      }
     ],
     "uniques": [
@@ -4882,6 +4893,22 @@
      {
       "name": "severity_level_rank_key",
       "definition": "CREATE UNIQUE INDEX severity_level_rank_key ON public.severity_level USING btree (rank)"
+     }
+    ]
+   },
+   "telemetry_receipt": {
+    "columns": [
+     {
+      "name": "batch_id",
+      "type": "text",
+      "nullable": false,
+      "pk": true
+     },
+     {
+      "name": "landed_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
      }
     ]
    }
