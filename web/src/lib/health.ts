@@ -97,21 +97,23 @@ export function worstVerdict(list: (string | null | undefined)[]): Verdict | nul
   return worst;
 }
 
-// verdictDot is one verdict as a dot's fill (#1071): a marker that stands for
-// one component. Healthy wears the muted tier (a room of green dots reads calm,
-// the one amber dot does not). The verdict wins whenever it is known, so a dot
-// never disagrees with the row showing the same verdict; only an unknown
-// verdict falls back to the staffing read's down (red) or the grey no-data fill.
-const DOT: Record<Verdict, string> = {
-  healthy: "bg-healthy-muted",
-  incomplete: "bg-incomplete",
-  degraded: "bg-warning",
-  outage: "bg-error",
+// One verdict as a glyph's hue (#1071, #1074): the outline's slots and the
+// map's icons. Healthy wears the muted tier, so a room or a fleet of healthy
+// glyphs reads calm and the one amber glyph does not.
+export const VERDICT_HUE: Record<Verdict, string> = {
+  healthy: "text-healthy",
+  incomplete: "text-incomplete",
+  degraded: "text-warning",
+  outage: "text-error",
 };
 
-export function verdictDot(v: Verdict | null, down = false): string {
-  if (v) return DOT[v];
-  return down ? DOT.outage : "bg-base-content/35";
+// verdictHue is a glyph that stands for one component. The verdict wins
+// whenever it is known, so the glyph never disagrees with the row showing the
+// same verdict; only an unknown verdict falls back to the staffing read's down
+// (red) or the grey no-data tone.
+export function verdictHue(v: Verdict | null, down = false): string {
+  if (v) return VERDICT_HUE[v];
+  return down ? VERDICT_HUE.outage : "text-base-content/35";
 }
 
 const roles = (h: FleetHealth | undefined): HealthRole[] => h?.roles ?? [];

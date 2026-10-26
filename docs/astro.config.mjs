@@ -170,7 +170,7 @@ export default defineConfig({
             { label: 'Autopilot', slug: 'contributing/autopilot' },
             { label: 'Synthetic user', slug: 'contributing/synthetic-user' },
             { label: 'Release and CI', slug: 'contributing/release-ci' },
-            { label: 'Labels', slug: 'contributing/labels' },
+            { label: 'Labels and the board', slug: 'contributing/labels' },
           ],
         },
         {

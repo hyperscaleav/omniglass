@@ -52,5 +52,16 @@ slice with no sub-structure, skip this skill and file a normal feature issue per
 
 ## After posting
 
-State plainly that the issue awaits the architect's approval comment, and stop. When the
+Put the definition on the project board in Backlog, Priority left for the architect:
+
+```bash
+scripts/board.sh add <n>
+```
+
+Then state plainly that the issue awaits the architect's approval comment, and stop. When the
 approval lands, `/run-feature-loop` takes over.
+
+The board moves only through `scripts/board.sh`, never through a hand-typed field or option
+id ([the board](../../../docs/src/content/docs/contributing/labels.md#the-board)). Where the
+script cannot run (no `gh`, or a token without the `project` scope; it says which), name the
+missed move in your report rather than dropping it.

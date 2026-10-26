@@ -39,7 +39,9 @@ classifier is its own registry rather than a use of a standard's own parent-vari
   **name** (unique tenant-wide, e.g. `lecture-hall`) and a **label**, and
   optionally pick a **parent standard**. An unknown parent is refused (422).
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with `standard:update`) edits the
-  label and parent; the **name** is fixed, since a catalog row carries no rename. **Delete** (with
+  label and parent. The blade does not edit the **name**: rename a standard you created with
+  `omniglass standard rename <name> --name <new>` (`standard:rename`), which keeps every system that
+  conforms to it; a shipped one keeps its name (below). **Delete** (with
   `standard:delete`) removes the row, behind
   a confirm.
 - **Delete is refused (409) while a system still conforms to it.** Repoint or remove those systems
@@ -52,8 +54,8 @@ The same operations are `omniglass standard list/get/create/update/delete` from 
 
 Omniglass ships a starter set, and unlike a seeded [vendor](/guides/admin/vendors/) or
 [product](/guides/admin/products/) those rows are **not official and not read-only**. They arrive as
-ordinary **operator-owned** rows: rename them, re-parent them, add to their contract, delete the ones
-you do not run. The shipped set, rendered from the seed itself:
+ordinary **operator-owned** rows: edit them, re-parent them, add to their contract. The shipped set,
+rendered from the seed itself:
 
 <SeededSet kind="standards" />
 
@@ -62,6 +64,13 @@ inheritance**: nothing in your fleet points back at that template afterwards. So
 its templates in any release without ever touching your rows, and your edits are never reverted by a
 restart, because the boot seed installs a standard **only if it is absent**. The thing the vendor
 updates and the thing you own are two different objects, which is the whole point.
+
+One consequence of installing by **name**: a shipped standard keeps its name. Renaming one is refused
+(409), because the next boot would find the shipped name absent and plant it again beside your renamed
+row, roles and all; for the same reason a shipped standard you delete returns on the next boot. Until
+standards are forked from templates on request
+([#827](https://github.com/hyperscaleav/omniglass/issues/827)), create a standard of your own under the
+name you want and point your systems at it.
 
 The exception is the **canonical vocabulary**: the [property catalog](/guides/admin/properties/) (and
 later commands and event types) is the shared namespace a driver maps onto, so it must read the same on

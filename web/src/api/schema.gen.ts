@@ -1296,6 +1296,26 @@ export interface paths {
         patch: operations["update-driver"];
         trace?: never;
     };
+    "/drivers/{id}:rename": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rename a driver
+         * @description Moves a custom driver's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official driver keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. Audited as rename. Gated by driver:rename.
+         */
+        post: operations["rename-driver"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/drivers:preview": {
         parameters: {
             query?: never;
@@ -1851,6 +1871,26 @@ export interface paths {
          * @description Removes one line from a location type's contract, a shipped (official) type's included, since nothing seeds a contract line; locations of the type keep any value they set for it, now off-contract. A property the type does not declare is a 404, and so is an unknown type. Gated by location_type:delete.
          */
         delete: operations["delete-location-type-property"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/location-types/{id}:rename": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rename a location type
+         * @description Moves a custom location type's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official location type keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. Audited as rename. Gated by location_type:rename.
+         */
+        post: operations["rename-location-type"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -3051,7 +3091,7 @@ export interface paths {
         head?: never;
         /**
          * Update a product
-         * @description Patches a custom product's label, vendor, driver, kind, component_type, icon, or parent. component_type is required, so an empty string on it is a 422 (a reclassify names a real type; it never clears). Official products are read-only (422). Gated by product:update.
+         * @description Patches a custom product's label, vendor, driver, kind, component_type, icon, label rule, or parent. Each optional field follows the three-state string: omitted is unchanged, an empty string clears it, a value sets it, so a vendor, driver, parent, icon or label rule can be unset as well as changed. component_type is required, so an empty string on it is a 422 (a reclassify names a real type; it never clears). Official products are read-only (422). Gated by product:update.
          */
         patch: operations["update-product"];
         trace?: never;
@@ -3139,6 +3179,26 @@ export interface paths {
          * @description Removes one line from a custom product's contract; instances keep any value they set for it, now off-contract. A property the product does not declare is a 404, and an official product is read-only (422). Gated by product:delete.
          */
         delete: operations["delete-product-property"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/{id}:rename": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rename a product
+         * @description Moves a custom product's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official product keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. Audited as rename. Gated by product:rename.
+         */
+        post: operations["rename-product"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -3702,6 +3762,26 @@ export interface paths {
          * @description Declares a role every conforming system needs filled, or revises it in place (the role is addressed by name, so the write is idempotent and declaring is this same route). Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and ["*"] replaces the whole declaration. An unknown standard, type, or product is a 422, as is a mask naming a field this resource does not patch. A name a conforming system already declares itself is a 409 naming that system, since a role name must mean one role in a system. Gated by standard:update.
          */
         patch: operations["set-standard-role"];
+        trace?: never;
+    };
+    "/standards/{id}:rename": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rename a standard
+         * @description Moves a custom standard's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official standard keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. A shipped example standard keeps its name too (409): the boot seed plants it by name whenever it is absent, so a renamed one would come back on the next boot; forking a template into a standard of your own is #827. Audited as rename. Gated by standard:rename.
+         */
+        post: operations["rename-standard"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/system-types": {
@@ -4666,6 +4746,26 @@ export interface paths {
          * @description Patches a custom vendor's label, kind, icon, support_phone, or website. Official vendors are read-only (422). Gated by vendor:update.
          */
         patch: operations["update-vendor"];
+        trace?: never;
+    };
+    "/vendors/{id}:rename": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rename a vendor
+         * @description Moves a custom vendor's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official vendor keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. Audited as rename. Gated by vendor:rename.
+         */
+        post: operations["rename-vendor"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/views/fleet": {
@@ -8610,6 +8710,16 @@ export interface components {
             /** @description The new name, unique within its placement (lowercase letters, digits, hyphens) */
             name: string;
         };
+        RenameRegistryInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/RenameRegistryInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid) */
+            name: string;
+        };
         RenameSystemInputBody: {
             /**
              * Format: uri
@@ -10174,9 +10284,9 @@ export interface components {
             readonly $schema?: string;
             /** @description Reclassifies the product to this component_type, by name or uuid; component_type is required, so this only reclassifies, it never clears */
             component_type?: string;
-            /** @description A new driver, by handle or uuid */
+            /** @description A new driver, by handle or uuid; an empty string clears it */
             driver_id?: string;
-            /** @description A new icon override */
+            /** @description A new icon override; an empty string clears it, so the product inherits its component_type's icon */
             icon?: string;
             /**
              * @description A new product class
@@ -10187,9 +10297,9 @@ export interface components {
             label?: string;
             /** @description A new label template; an empty string clears it, so components fall back to the component_type chain and then the global component rule. Refused with 422 if it does not parse. */
             label_rule?: string;
-            /** @description A new parent product, by handle or uuid */
+            /** @description A new parent product, by handle or uuid; an empty string clears it */
             parent_product_id?: string;
-            /** @description A new vendor, by handle or uuid */
+            /** @description A new vendor, by handle or uuid; an empty string clears it */
             vendor_id?: string;
         };
         UpdatePropertyInputBody: {
@@ -13119,6 +13229,42 @@ export interface operations {
             };
         };
     };
+    "rename-driver": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The row, by its current name or its uuid */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameRegistryInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DriverBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "preview-driver": {
         parameters: {
             query?: never;
@@ -14409,6 +14555,42 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "rename-location-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The row, by its current name or its uuid */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameRegistryInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationTypeBody"];
+                };
             };
             /** @description Error */
             default: {
@@ -17234,6 +17416,42 @@ export interface operations {
             };
         };
     };
+    "rename-product": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The row, by its current name or its uuid */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameRegistryInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "list-property-type": {
         parameters: {
             query?: never;
@@ -18500,6 +18718,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SystemRoleBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "rename-standard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The row, by its current name or its uuid */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameRegistryInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StandardBody"];
                 };
             };
             /** @description Error */
@@ -20482,6 +20736,42 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["UpdateVendorInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VendorBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "rename-vendor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The row, by its current name or its uuid */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameRegistryInputBody"];
             };
         };
         responses: {

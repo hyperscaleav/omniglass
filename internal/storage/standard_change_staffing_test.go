@@ -272,7 +272,7 @@ func TestStaffingWaitsOutAStandardChange(t *testing.T) {
 
 // strandedBackfill is the one-time release of the assignments a standard
 // change stranded before #506, driven from the embedded migration text.
-const strandedBackfill = "migrations/20261026120000_stranded_role_assignment_backfill.sql"
+const strandedBackfill = "migrations/20261026180000_stranded_role_assignment_backfill.sql"
 
 func TestStrandedAssignmentBackfillReleasesOnlyTheStrands(t *testing.T) {
 	ctx := context.Background()

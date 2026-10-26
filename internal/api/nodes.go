@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -152,9 +151,6 @@ func registerNodeRoutes(api huma.API, a *authenticator, gw storage.Gateway, nats
 		Summary:       "Create a node",
 		Description:   "Registers an edge node server-side (day-one enrollment: create, then :enroll to mint its token). Gated by node:create.",
 	}, "node", "create"), func(ctx context.Context, in *createNodeInput) (*nodeOutput, error) {
-		if !validNodeName(in.Body.Name) {
-			return nil, huma.Error422UnprocessableEntity("node name must be a single subject token (no dots, whitespace, or wildcards)")
-		}
 		n, err := gw.CreateNode(ctx, actorID(ctx), storage.NodeSpec{
 			Name: in.Body.Name, Label: in.Body.Label, Description: in.Body.Description, LocationName: in.Body.Location,
 		}, a.scopeFor(ctx, "node", "create"), a.scopeFor(ctx, "location", "read"))
@@ -234,15 +230,6 @@ func registerNodeRoutes(api huma.API, a *authenticator, gw storage.Gateway, nats
 	})
 }
 
-// validNodeName rejects names that would break the subject model (a node name is
-// the last token of its NATS subjects, matched by a single-token wildcard).
-func validNodeName(name string) bool {
-	if name == "" {
-		return false
-	}
-	return !strings.ContainsAny(name, ". \t\n\r*>")
-}
-
 func mapNodeErr(err error) error {
 	if refErr, ok := mapRefErr(err); ok {
 		return refErr
@@ -256,8 +243,6 @@ func mapNodeErr(err error) error {
 		return huma.Error403Forbidden("forbidden")
 	case errors.Is(err, storage.ErrEnrollmentInvalid):
 		return huma.Error401Unauthorized("invalid enrollment token")
-	case errors.Is(err, storage.ErrInvalidNodeName):
-		return huma.Error422UnprocessableEntity("node name must be a single subject token (no dots, whitespace, or wildcards)")
 	case errors.Is(err, storage.ErrEntityNameIsUUID):
 		return huma.Error422UnprocessableEntity("node name may not be a uuid")
 	case errors.Is(err, storage.ErrInvalidEntityName):

@@ -18,6 +18,9 @@
 /openapigen
 /seedgen
 /writerclassgen
+# The repo root has no package.json, so an npm run there by mistake writes an
+# empty lockfile named for whatever directory it ran in (one shipped with #824).
+/package-lock.json
 *.exe
 *.test
 *.out
@@ -72,7 +75,7 @@ coverage.txt
 /.dev/
 
 # Local server state: the fallback secret key when no KEK is provided
-# (OMNIGLASS_DATA_DIR). A real deploy sets OMNIGLASS_SECRET_KEY_FILE.
+# (OMNIGLASS_DATA_DIR). A real deploy sets OMNIGLASS_ENCRYPTION_KEY_FILE.
 .omniglass/
 
 # docs screenshot freshness-gate scratch

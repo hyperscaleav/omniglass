@@ -25,7 +25,7 @@ var (
 	ErrUnknownSecretType   = errors.New("storage: unknown secret_type")
 	ErrSecretOwnerNotFound = errors.New("storage: secret owner not found")
 	ErrSecretFieldInvalid  = errors.New("storage: secret field invalid for its type")
-	ErrNoSecretProvider    = errors.New("storage: no secret key provider configured")
+	ErrNoSecretProvider    = errors.New("storage: no encryption key provider configured")
 )
 
 // SecretType is a registry row: the named, per-field-typed shape a secret takes

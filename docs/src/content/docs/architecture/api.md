@@ -184,9 +184,13 @@ force the split, Huma models a body as a typed struct, and a body field generate
 the typed client and a CLI flag. It is top-level field names only, spelled as the body spells them.
 
 The **three-state string** convention (an omitted field unchanged, an explicit `""` clears, a value
-sets: `moveComponentInput`, a system's `standard`) is untouched and stays the idiomatic way to clear a
-string. The mask is what generalizes clearing to everything that is not a string; retiring the
-sentinel in its favor is a separate ripple, not folded in here.
+sets: `moveComponentInput`, a system's `standard`, a product's `vendor_id`, `driver_id`,
+`parent_product_id` and `icon`) is untouched and stays the idiomatic way to clear a string. A nullable
+reference is a string on the wire, so its clear is the same `""`, and the storage write is the same
+`CASE` the inherited registry facts below use rather than a `coalesce`, which can set a column but never
+clear it ([#260](https://github.com/hyperscaleav/omniglass/issues/260)). The mask is what
+generalizes clearing to everything that is not a string; retiring the sentinel in its favor is a
+separate ripple, not folded in here.
 
 The **inherited registry facts** are where that pays off. A `component_type` or `system_type` stores
 `stem`, `abbrev`, `icon` and `label_rule` as nullable strings where NULL means "inherit from the
@@ -723,6 +727,26 @@ A registry body carries **both handles** like every other name-bearing resource
 [ADR-0062](/architecture/decisions/#adr-0062-a-registry-takes-a-uuid-primary-key-and-a-renameable-handle)):
 a create takes the `name`, the response carries the minted uuid, and a reference to one (`vendor`,
 `driver`, a parent) resolves whichever form it is given.
+
+The handle is what ADR-0062 made renameable, and five registries rename it: `POST
+/vendors/{id}:rename`, `/drivers/{id}:rename`, `/products/{id}:rename`, `/standards/{id}:rename`, and
+`/location-types/{id}:rename`, each with a body of `{"name": "<new>"}`, the row addressed by its
+current name or its uuid
+([ADR-0555](/architecture/decisions/#adr-0555-a-registry-row-renames-through-its-own-rename-custom-method)).
+It is the fleet tiers' custom method, not a `PATCH` field, and it is gated by its own
+`<resource>:rename` (admin), because it breaks what was typed outside the platform while nothing
+inside it moves: the uuid stays, so every foreign key still resolves and reads the new name. A
+location type's name is also stored by value in `allowed_parent_types`, on every type row and in an
+operator's fork, and the rename rewrites those in the same transaction. A driver's name is baked
+into every task it derives, so a driver rename re-derives its attached endpoints' tasks in the same
+transaction, as a version change does. An official row keeps its shipped name (422), since the boot
+seed owns it by name, and so does a shipped example standard (409): the seed plants one by name
+whenever it is absent, so a renamed one would return on the next boot
+([#827](https://github.com/hyperscaleav/omniglass/issues/827) forks templates instead). A taken name is
+a 409, an illegal or uuid-shaped one a 422, `root` is reserved for a location type (422), and the rename is audited as
+`rename` keyed on the uuid. The answer is the row as its `GET` reads it. The catalogs keyed by a
+telemetry name and the remaining type registries do not rename yet
+([#1188](https://github.com/hyperscaleav/omniglass/issues/1188)).
 
 What each catalog adds over the shared shape (bodies in the [reference](/reference/api/)):
 

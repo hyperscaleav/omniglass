@@ -105,13 +105,13 @@ type updateProductInput struct {
 	ID   string `path:"id" doc:"The product, by name or uuid" example:"boreal-edge-55"`
 	Body struct {
 		Label           *string `json:"label,omitempty" doc:"A new operator-facing label"`
-		VendorID        *string `json:"vendor_id,omitempty" doc:"A new vendor, by handle or uuid"`
-		DriverID        *string `json:"driver_id,omitempty" doc:"A new driver, by handle or uuid"`
+		VendorID        *string `json:"vendor_id,omitempty" doc:"A new vendor, by handle or uuid; an empty string clears it"`
+		DriverID        *string `json:"driver_id,omitempty" doc:"A new driver, by handle or uuid; an empty string clears it"`
 		Kind            *string `json:"kind,omitempty" enum:"device,app,service" doc:"A new product class"`
 		ComponentType   *string `json:"component_type,omitempty" doc:"Reclassifies the product to this component_type, by name or uuid; component_type is required, so this only reclassifies, it never clears"`
-		Icon            *string `json:"icon,omitempty" doc:"A new icon override"`
+		Icon            *string `json:"icon,omitempty" doc:"A new icon override; an empty string clears it, so the product inherits its component_type's icon"`
 		LabelRule       *string `json:"label_rule,omitempty" doc:"A new label template; an empty string clears it, so components fall back to the component_type chain and then the global component rule. Refused with 422 if it does not parse."`
-		ParentProductID *string `json:"parent_product_id,omitempty" doc:"A new parent product, by handle or uuid"`
+		ParentProductID *string `json:"parent_product_id,omitempty" doc:"A new parent product, by handle or uuid; an empty string clears it"`
 	}
 }
 
@@ -214,17 +214,20 @@ func registerProductRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodPatch,
 		Path:        "/products/{id}",
 		Summary:     "Update a product",
-		Description: "Patches a custom product's label, vendor, driver, kind, component_type, icon, or parent. component_type is required, so an empty string on it is a 422 (a reclassify names a real type; it never clears). Official products are read-only (422). Gated by product:update.",
+		Description: "Patches a custom product's label, vendor, driver, kind, component_type, icon, label rule, or parent. Each optional field follows the three-state string: omitted is unchanged, an empty string clears it, a value sets it, so a vendor, driver, parent, icon or label rule can be unset as well as changed. component_type is required, so an empty string on it is a 422 (a reclassify names a real type; it never clears). Official products are read-only (422). Gated by product:update.",
 	}, "product", "update"), func(ctx context.Context, in *updateProductInput) (*productOutput, error) {
 		if in.Body.Kind != nil && !validProductKind(*in.Body.Kind) {
 			return nil, huma.Error422UnprocessableEntity("kind must be one of device, app, service")
 		}
+		// The optional references pass straight through, never emptyPtrToNil:
+		// an explicit "" is the clear (#260), which collapsing it to nil would
+		// turn back into "unchanged".
 		m, err := gw.UpdateProduct(ctx, actorID(ctx), in.ID, storage.ProductPatch{
 			Label:    in.Body.Label,
-			VendorID: emptyPtrToNil(in.Body.VendorID), DriverID: emptyPtrToNil(in.Body.DriverID),
+			VendorID: in.Body.VendorID, DriverID: in.Body.DriverID,
 			Kind: in.Body.Kind, ComponentType: in.Body.ComponentType, Icon: in.Body.Icon,
 			LabelRule:       in.Body.LabelRule,
-			ParentProductID: emptyPtrToNil(in.Body.ParentProductID),
+			ParentProductID: in.Body.ParentProductID,
 		})
 		if err != nil {
 			return nil, mapProductErr(err)

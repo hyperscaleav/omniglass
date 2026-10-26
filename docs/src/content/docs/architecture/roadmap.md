@@ -72,7 +72,7 @@ authoritative.
 
 | Epic | Outcome | Lands in |
 |---|---|---|
-| [Release 0.1.0 (#825)](https://github.com/hyperscaleav/omniglass/issues/825) | Ahead: the first public tag. The expression engine (#524) and the event rule tier (#819) are done, as is the stateless arc of [drivers, listeners, and the command wire (#603)](https://github.com/hyperscaleav/omniglass/issues/603). **#603's stateful arc closes the epic**: [sessions (#816)](https://github.com/hyperscaleav/omniglass/issues/816) that hold a connection and recover it, [listeners (#817)](https://github.com/hyperscaleav/omniglass/issues/817) that take device-pushed payloads over a held session, scheduled polls (#822), re-derived driver tasks (#823), and [the collection decision set (#818)](https://github.com/hyperscaleav/omniglass/issues/818). Beside it ride the delivery half of [telemetry integrity (#430)](https://github.com/hyperscaleav/omniglass/issues/430) and the [role staffing bugs (#504)](https://github.com/hyperscaleav/omniglass/issues/504); the epic lists the pre-tag hygiene. | [collection](/architecture/collection/), [nodes](/architecture/nodes/) |
+| [Pre-release hardening for 0.1.0 (#825)](https://github.com/hyperscaleav/omniglass/issues/825) | Ahead: the first public tag. The expression engine (#524), the event rule tier (#819), and [drivers, listeners, and the command wire (#603)](https://github.com/hyperscaleav/omniglass/issues/603) are done: #603 closed with both its arcs (the stateless one, then held sessions, listeners, scheduled polls and re-derived tasks) and two protocol waves, and its open follow-ups (more protocols, server ingress, files, connection metrics) moved to the [collection tracker after 0.1.0 (#1187)](https://github.com/hyperscaleav/omniglass/issues/1187). What the tag still waits on is the delivery half of [telemetry integrity (#430)](https://github.com/hyperscaleav/omniglass/issues/430), the [role staffing bugs (#504)](https://github.com/hyperscaleav/omniglass/issues/504), and the pre-tag hygiene the epic lists. | [collection](/architecture/collection/), [nodes](/architecture/nodes/) |
 | [Groups as scope and the cross-tier cascade (#10)](https://github.com/hyperscaleav/omniglass/issues/10) | Ahead: entity-groups as scope anchors and dynamic-membership scope, plus the cross-tier cascade (a location scope reaching its systems and components). Principal groups as grant subjects shipped; group-as-scope has not. | [identity and access](/architecture/identity-access/), [groups](/architecture/groups/), [cascade](/architecture/cascade/) |
 | [Public releases (#57)](https://github.com/hyperscaleav/omniglass/issues/57) | Ahead: signed and notarized binaries for every major OS/arch and one-line installs (Homebrew / Scoop / winget), so a first-time user runs with no security warning. | [scaling and deployment](/architecture/scaling/) |
 | [Embedded Postgres run mode (#19)](https://github.com/hyperscaleav/omniglass/issues/19) | Ahead: an opt-in single-binary mode with a managed embedded Postgres, for edge, demo, and learning installs with zero external database. | [scaling and deployment](/architecture/scaling/) |
@@ -80,8 +80,9 @@ authoritative.
 The 2026-07-30 drift-correction program ([#428](https://github.com/hyperscaleav/omniglass/issues/428) through
 [#434](https://github.com/hyperscaleav/omniglass/issues/434)) has closed except for the telemetry-integrity half of
 [#430](https://github.com/hyperscaleav/omniglass/issues/430), which rides the release. The current workstream is
-[release 0.1.0 (#825)](https://github.com/hyperscaleav/omniglass/issues/825). The template layer that follows the
-collection epic is tracked on [#827](https://github.com/hyperscaleav/omniglass/issues/827).
+[pre-release hardening for 0.1.0 (#825)](https://github.com/hyperscaleav/omniglass/issues/825). The template layer that follows the
+collection epic is tracked on [#827](https://github.com/hyperscaleav/omniglass/issues/827), and the
+collection work after the tag on [#1187](https://github.com/hyperscaleav/omniglass/issues/1187).
 
 ## The architectural arc ahead
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mapMarkers, parseStandardMap } from "./system_map";
+import { mapMarkers, parseStandardMap, markerAnchor } from "./system_map";
 import type { SystemZoomVM } from "./system_zoom";
 
 // The map join (#791): the standard declares where each role position sits;
@@ -55,5 +55,17 @@ describe("the system map", () => {
   it("ignores a declared position for a role the build in use does not carry", () => {
     const declGhost = JSON.stringify({ aspect: 1, positions: [{ role: "ghost-role", position: 1, x: 0.5, y: 0.5 }] });
     expect(mapMarkers(parseStandardMap(declGhost)!, vm)).toHaveLength(0);
+  });
+});
+
+// Where a marker hangs off its point (#1074, toward #1072): a marker near a
+// side or the bottom edge anchors inward, so its icon and the label under it
+// stay inside the map box instead of spilling out of it.
+describe("markerAnchor", () => {
+  it("centres a marker in the open and anchors one near an edge inward", () => {
+    expect(markerAnchor(0.5, 0.5)).toEqual({ x: "center", y: "below" });
+    expect(markerAnchor(0.02, 0.5).x).toBe("start");
+    expect(markerAnchor(0.97, 0.5).x).toBe("end");
+    expect(markerAnchor(0.5, 0.95).y).toBe("above");
   });
 });
