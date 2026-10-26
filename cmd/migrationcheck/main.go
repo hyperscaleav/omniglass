@@ -32,13 +32,18 @@ type options struct {
 	Base string    // the revision whose migrations the tree is judged against
 	Dir  string    // the migrations directory, slash-separated
 	Now  time.Time // the clock the not-in-the-future rule reads
+	// Merged is set when the tree is already on the branch it merged into (CI's
+	// push-to-main backstop): the migration is applied somewhere, so the
+	// stamp-a-fresh-one remedy no longer holds and a different one is printed.
+	Merged bool
 }
 
 func main() {
 	base := flag.String("base", "origin/main", "the revision to judge the tree's added migrations against")
 	dir := flag.String("dir", "db/migrations", "the migrations directory, relative to the repository root")
+	merged := flag.Bool("merged", false, "the tree is already merged (the push-to-main backstop): print the merged remedy, never a rename")
 	flag.Parse()
-	os.Exit(run(options{Repo: ".", Base: *base, Dir: *dir, Now: time.Now()}, os.Stdout, os.Stderr))
+	os.Exit(run(options{Repo: ".", Base: *base, Dir: *dir, Now: time.Now(), Merged: *merged}, os.Stdout, os.Stderr))
 }
 
 func run(o options, stdout, stderr io.Writer) int {
@@ -57,7 +62,13 @@ func run(o options, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "migrationcheck: %v\n", err)
 	}
 	if len(errs) > 0 {
+		if o.Merged {
+			fmt.Fprintln(stderr, "migrationcheck: these migrations are already merged, so the remedy above does not apply: a merged migration may be applied somewhere and is never renamed. File an issue; the out-of-order apply is harmless only when the DDL does not depend on the order.")
+		}
 		return 1
+	}
+	if top := newest(base); top != "none" && top > o.Now.UTC().Add(db.ClockSkew).Format(db.VersionLayout) {
+		fmt.Fprintf(stdout, "migrationcheck: warning: the base's newest migration, %s, is stamped ahead of the clock; no fresh make migration stamp clears the newer-than-base rule until it passes\n", top)
 	}
 	fmt.Fprintf(stdout, "migrationcheck: %d migrations, %d added over %s (newest there: %s): ok\n",
 		len(head), added(base, head), o.Base, newest(base))

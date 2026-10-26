@@ -96,6 +96,35 @@ func TestRun(t *testing.T) {
 	}
 }
 
+// TestRunMergedNeverAdvisesARename is the push-to-main backstop: two PRs both
+// went green and the older stamp merged second. Its remedy must not be a
+// rename, since the migration may already be applied somewhere.
+func TestRunMergedNeverAdvisesARename(t *testing.T) {
+	root, dir := fixtureRepo(t)
+	touch(t, dir, "20260101120000_gadget.sql")
+	var stdout, stderr bytes.Buffer
+	if code := run(options{Repo: root, Base: "main", Dir: "db/migrations", Now: clock, Merged: true}, &stdout, &stderr); code != 1 {
+		t.Fatalf("exit %d, want 1\nstderr: %s", code, &stderr)
+	}
+	if !strings.Contains(stderr.String(), "is never renamed") {
+		t.Errorf("the merged remedy is missing:\n%s", &stderr)
+	}
+}
+
+// TestRunWarnsOfAForwardDatedBase: a hand-picked stamp ahead of the clock on
+// the base blocks every fresh stamp until it passes, so a clean run says so.
+func TestRunWarnsOfAForwardDatedBase(t *testing.T) {
+	root, _ := fixtureRepo(t)
+	var stdout, stderr bytes.Buffer
+	early := time.Date(2026, 1, 2, 8, 0, 0, 0, time.UTC)
+	if code := run(options{Repo: root, Base: "main", Dir: "db/migrations", Now: early}, &stdout, &stderr); code != 0 {
+		t.Fatalf("exit %d, want 0\nstderr: %s", code, &stderr)
+	}
+	if !strings.Contains(stdout.String(), "warning: the base's newest migration, 20260102090000, is stamped ahead of the clock") {
+		t.Errorf("no forward-dated warning:\n%s", &stdout)
+	}
+}
+
 // TestRunJudgesTheBaseTipNotTheForkPoint is the case the check exists for: the
 // branch was cut, then another migration landed on main. Judged against the
 // fork point the branch's migration is newer; against main's tip it is not.

@@ -34,7 +34,7 @@ Thirteen workflows carry it: `test`, `pr-title`, `image`, `docs-shots`, `gen-dri
   version is not newer than the newest on the base branch's tip, fetched fresh, or is stamped
   later than the clock (`make migration-check` is the same check, locally). It also runs on
   each push to `main` against the commit before the push, the backstop for two PRs that both
-  went green before either merged. Uniqueness needs no base, so `make test` holds it.
+  went green before either merged; there the remedy is an issue, never a rename, since a merged migration may already be applied. Uniqueness needs no base, so `make test` holds it.
 - **`docs-shots.yml`** (path-filtered to `docs/**` and `web/**`) gates the generated docs
   screenshots: every declared shot has a committed PNG, and a recapture against the real
   console fails on any unmasked pixel difference (nondeterministic regions are masked in

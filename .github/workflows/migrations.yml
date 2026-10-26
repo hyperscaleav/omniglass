@@ -63,9 +63,12 @@ jobs:
           else
             git fetch --no-tags --depth=1 origin "$BEFORE"
             echo "BASE=${BEFORE}" >> "$GITHUB_ENV"
+            echo "MERGED=-merged" >> "$GITHUB_ENV"
           fi
 
       # make migration-check runs this same command; calling it directly keeps
       # the ref a shell word rather than text make expands into a recipe.
       - name: Added migrations are newer than the base
-        run: go run ./cmd/migrationcheck -base "$BASE"
+        # On main the migration is already merged, so -merged swaps the
+        # stamp-a-fresh-one remedy for one that never renames it.
+        run: go run ./cmd/migrationcheck -base "$BASE" ${MERGED:-}
