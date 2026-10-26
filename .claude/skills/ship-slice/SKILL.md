@@ -226,6 +226,20 @@ reason, or `none` for a diff that changes CLI, API or console behavior, ships as
 The two lines the architect reads first are **Decisions I need from you** and **Risk**.
 Approval means squash-merge; a redirect adjusts the slice.
 
+## When the PR opens
+
+Move each issue the PR closes to In Review on the project board:
+
+```bash
+scripts/board.sh set <M> "In Review"
+```
+
+Until the board has an "In Review" status the script lands it on In Progress with one warning;
+that is expected, not a failure. Never set Done by hand: merging closes the issue and GitHub's
+built-in workflow moves it. The script never touches Priority, which is the architect's
+([the board](../../../docs/src/content/docs/contributing/labels.md#the-board)). Where it cannot
+run (no `gh`, or a token without the `project` scope; it says which), say so in the ship-review.
+
 ## After approval
 
 Squash-merge (the conventional-commit PR title drives the release), remove the worktree, then

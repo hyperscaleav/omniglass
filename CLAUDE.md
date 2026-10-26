@@ -118,6 +118,12 @@ field on the Project board, neither one a label. Labels are a fixed set: `area:<
 automation is `run:<task>`. The full taxonomy is
 [docs/contributing/labels.md](docs/src/content/docs/contributing/labels.md).
 
+The Project board (org project #1, "Omniglass") is the live status of the work. Agents move
+its Status only through `scripts/board.sh`, at the skills' fixed points (`add` to Backlog on
+filing, `set` In Progress on starting, `set` In Review when the PR opens; Done is GitHub's,
+on close), and never set Priority or the iteration: those are the architect's alone. See
+[the board](docs/src/content/docs/contributing/labels.md#the-board).
+
 ## House style
 
 - No AI/assistant attribution in commits, PRs, code comments, or any visible artifact.
