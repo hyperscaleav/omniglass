@@ -37,7 +37,9 @@ itself, ADR-0138 moves this approval to the PR.
 through the normal lifecycle, and merged **inward** to the integration branch only when
 its gates are green. Progress is readable from the sub-issue list itself: a sub-issue is
 closed when its slice merges inward, with the commit named in the closing comment. The
-sub-issue list is the status; there is no parallel checklist to drift.
+sub-issue list is the status; there is no parallel checklist to drift. [The board](/contributing/labels/#the-board)
+follows it rather than competing with it: a slice goes In Progress when it starts, and its
+sub-issue's closing moves it to Done.
 
 **Roll up.** One PR from the integration branch to `main`, carrying the full
 [`/ship-slice`](/contributing/slice-workflow/#the-ship-review-the-approval-artifact)

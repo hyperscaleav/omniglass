@@ -30,7 +30,9 @@ skill is the run-book. The loop never merges to `main`; merge is the architect's
    prefix in the title (`feat:`/`fix:`/`docs:`/`chore:`/...), the matching native Issue
    Type (`Task`/`Bug`/`Feature`), the `area:*` labels, a short body with scope and
    acceptance, linked as GitHub sub-issues of the parent. The breakdown must add up to the
-   approved definition and no more.
+   approved definition and no more. Each goes on the project board in Backlog
+   (`scripts/board.sh add <n>`), and the definition moves to In Progress
+   (`scripts/board.sh set <definition> "In Progress"`).
 2. **Open the integration branch** from `origin/main`, named `<type>/<short-name>` for the
    eventual rollup PR title, in a worktree under `.claude/worktrees/` when working locally.
 3. Order the queue by dependency, then by risk (the slice most likely to invalidate the
@@ -38,7 +40,8 @@ skill is the run-book. The loop never merges to `main`; merge is the architect's
 
 ## Per slice
 
-1. Branch a cascade branch `<type>/<short-name>--<slice>` off the integration branch, or
+1. Start the slice on the board: `scripts/board.sh set <sub-issue> "In Progress"`. Then
+   branch a cascade branch `<type>/<short-name>--<slice>` off the integration branch, or
    work serial commits directly on the integration branch when slices run one at a time
    (either way every commit references its sub-issue, `(#NNN)`).
 2. Build test-first: the failing test, then the code, committing each green increment.
@@ -62,7 +65,13 @@ skill is the run-book. The loop never merges to `main`; merge is the architect's
    - an `/adversarial-review` pass over the slice diff, findings fixed or refuted with
      evidence.
 5. Merge inward and **close the sub-issue** with the commit named in the closing comment.
-   The sub-issue list is the status; update nothing else.
+   The sub-issue list is the status; closing it moves its board item to Done (GitHub's
+   built-in workflow), so update nothing else.
+
+The board moves only through `scripts/board.sh` and never touches Priority
+([the board](../../../docs/src/content/docs/contributing/labels.md#the-board)). Where the
+script cannot run (no `gh`, or a token without the `project` scope; it says which), the
+missed moves go in the ship-review rather than being dropped.
 
 ## Stopping
 
