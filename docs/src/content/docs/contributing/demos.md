@@ -57,7 +57,7 @@ template's own instructions are) is not the PR's.
 ## Write a terminal demo
 
 A terminal demo is `scripts/demo/<id>.tape`, in VHS's own format: one command per line (`Type` a
-command, `Enter`, `Wait` for the prompt to come back, `Sleep`, `Hide` and `Show`). It opens with a
+command, `Enter`, `Wait` for the prompt to come back, `Hide` and `Show`). It opens with a
 comment block: the first line is the title, the rest the description, and both head the demo in the
 PR comment. The house rules (which commands a tape may use, that every `Enter` is waited on, no uuid
 in typed text, `Hide` and `Show` in pairs) and an annotated example are defined once, in the header
@@ -68,6 +68,21 @@ A tape sets nothing about how it looks. The recorder wraps it in the **house set
 terminal size, font, theme and typing speed, `HOUSE` in the same module) and its outputs, so every
 demo reads alike and a re-recording differs only where the product did; a `Set`, `Output` or a
 per-command typing speed in a tape is refused.
+
+**A tape is paced, not slept.** Its GIF plays inline on the PR, where a reader cannot pause it, so
+after every line a tape shows, the shell holds the screen before its prompt comes back (and so
+before the tape's `Wait` lets the next command type): a base read time of a few seconds, more for
+each row the command's output filled, up to a cap; a typed `# caption` holds the same way by its
+words. One rule paces every tape. Its numbers are `PACE` in
+[`web/e2e/tapelib.mjs`](https://github.com/hyperscaleav/omniglass/blob/main/web/e2e/tapelib.mjs),
+and the prelude applies them
+([`web/e2e/tape/pace.sh`](https://github.com/hyperscaleav/omniglass/blob/main/web/e2e/tape/pace.sh)),
+counting the rows from what the terminal was actually sent. So a tape writes no `Sleep` (the rules
+refuse one, since it would stack on the rule's hold or stand in for it), and it types nothing that
+reaches the rule's hooks: the prompt variables, the prelude's own names, an `exec`, a `trap` or a
+new interactive shell. An unseen `demo_until` or `demo_hush` and a `clear` are not held. Each hold
+the rule gave is listed in the recording's `pace.txt`, one line each: the milliseconds, `output` and
+the rows or `caption` and the words, and the line typed.
 
 Inside the terminal, the CLI is already pointed at the stack's server with an owner token, and a
 prelude, sourced unseen before the first frame
@@ -145,7 +160,7 @@ With nothing but Docker:
 
 ```bash
 make demo ID=http-logins   # one demo of either kind (ID="a b" for several, no ID for every demo)
-make test-demos            # the terminal recorder's own test: a failing command, a wait that runs out, a stuck Wait, the budget
+make test-demos            # the terminal recorder's own test: the pacing, a failing command, a wait that runs out, a stuck Wait, the budget
 make test-walkthroughs     # the walkthrough recorder's own test: the failure and budget paths
 ```
 
@@ -163,8 +178,8 @@ recorder pulls those base images while the stack builds, so the VHS image (about
 costs a fresh CI runner no time of its own, and a machine that has pulled it once pulls nothing. It writes
 `scripts/demo/out/<id>/`: `<id>.gif`, `<id>.mp4`, and `demo.json`, the manifest with the title, the
 description and the budget mark; beside them, the tape as it was played (wrapped in the house
-settings), the shell's unseen output (`shell.log`), and any command that failed
-(`failed-commands.txt`). The stack's container logs are kept under the output directory too.
+settings), the shell's unseen output (`shell.log`), the hold the pacing rule gave each line
+(`pace.txt`), and any command that failed (`failed-commands.txt`). The stack's container logs are kept under the output directory too.
 
 **A walkthrough** is played in a Playwright container with a visible cursor, a highlight on each
 target and a caption bar, and written to `web/e2e/walkthroughs/out/<id>/`: `<id>.mp4`;
@@ -269,7 +284,9 @@ promises, that the cursor and highlight sit on what the caption names, that the 
 nothing the step is about, and that the poster is the moment the flow builds to. The full rubric is
 the walkthrough section of the
 [`/assess-ui` skill](https://github.com/hyperscaleav/omniglass/tree/main/.claude/skills/assess-ui).
-An agent reviewing a terminal demo reads the tape beside frames ffmpeg pulls from its MP4. A failing
+An agent reviewing a terminal demo reads the tape beside frames ffmpeg pulls from its MP4, one a
+second, and checks that every answer stays on screen, whole and unscrolled, for the frames its
+`pace.txt` line promises, before the next command starts typing. A failing
 line is a fix to the feature or the demo, then a re-record and a second look.
 
 ## Embed a walkthrough in the docs
