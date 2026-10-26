@@ -60,3 +60,17 @@ func (s *Server) TelemetryBacklog(ctx context.Context) (uint64, error) {
 	}
 	return info.State.Msgs, nil
 }
+
+// TelemetryDuplicateWindow is how long OG_TELEMETRY, as the server created
+// it, remembers a batch's Nats-Msg-Id.
+func (s *Server) TelemetryDuplicateWindow(ctx context.Context) (time.Duration, error) {
+	stream, err := s.js.Stream(ctx, telemetryStream)
+	if err != nil {
+		return 0, err
+	}
+	info, err := stream.Info(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return info.Config.Duplicates, nil
+}

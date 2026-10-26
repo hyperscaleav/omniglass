@@ -242,39 +242,48 @@ func TestLandBatchTransitionGuardInTheInsert(t *testing.T) {
 }
 
 // TestLandBatchTransitionGuardHoldsUnderConcurrentDispatch is what removes
-// the serial-dispatch dependency the guard used to rest on (#455): sixteen
-// distinct batches carrying one unchanged verdict for one series, landed at
-// once as concurrent consumers would, write it once, never a consecutive
-// duplicate.
+// the serial-dispatch dependency the guard used to rest on (#455): in each
+// round, sixteen distinct batches carrying one new verdict for one series,
+// released at once as concurrent consumers would land them, write it once,
+// never a consecutive duplicate. The rounds alternate the verdict, so every
+// round is a transition the guard must let through exactly once.
 func TestLandBatchTransitionGuardHoldsUnderConcurrentDispatch(t *testing.T) {
 	f := newLandFixture(t)
 	ctx := context.Background()
-	ts := time.Now().UTC().Add(-time.Minute)
-	var wg sync.WaitGroup
-	errs := make(chan error, 16)
-	for i := 0; i < 16; i++ {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-			_, err := f.gw.LandBatch(ctx, storage.IngestBatch{
-				BatchID: fmt.Sprintf("c-%d", i),
-				Writer:  storage.PushWriter(),
-				Properties: []storage.PropertySampleWrite{{
-					OwnerKind: "component", OwnerID: "disp-1", Key: "power-state", Value: "standby", Source: "push", TS: ts.Add(time.Duration(i) * time.Millisecond),
-				}},
-			})
-			if err != nil {
-				errs <- err
-			}
-		}(i)
-	}
-	wg.Wait()
-	close(errs)
-	for err := range errs {
-		t.Fatalf("concurrent landing: %v", err)
-	}
-	if got := f.rows(t).property; got != 1 {
-		t.Fatalf("sixteen concurrent batches of one unchanged verdict: %d rows, want exactly 1", got)
+	ts := time.Now().UTC().Add(-time.Hour)
+	const rounds, racers = 6, 16
+	for r := 0; r < rounds; r++ {
+		value := []string{"standby", "on"}[r%2]
+		var wg sync.WaitGroup
+		release := make(chan struct{})
+		errs := make(chan error, racers)
+		for i := 0; i < racers; i++ {
+			wg.Add(1)
+			go func(i int) {
+				defer wg.Done()
+				<-release
+				_, err := f.gw.LandBatch(ctx, storage.IngestBatch{
+					BatchID: fmt.Sprintf("c-%d-%d", r, i),
+					Writer:  storage.PushWriter(),
+					Properties: []storage.PropertySampleWrite{{
+						OwnerKind: "component", OwnerID: "disp-1", Key: "power-state", Value: value,
+						Source: "push", TS: ts.Add(time.Duration(r)*time.Minute + time.Duration(i)*time.Millisecond),
+					}},
+				})
+				if err != nil {
+					errs <- err
+				}
+			}(i)
+		}
+		close(release)
+		wg.Wait()
+		close(errs)
+		for err := range errs {
+			t.Fatalf("round %d: concurrent landing: %v", r, err)
+		}
+		if got := f.rows(t).property; got != r+1 {
+			t.Fatalf("round %d: %d concurrent batches of the verdict %q left %d property rows, want %d (one per transition)", r, racers, value, got, r+1)
+		}
 	}
 }
 

@@ -264,6 +264,26 @@ func TestCrashedConsumerReplaysCleanly(t *testing.T) {
 	}
 }
 
+// TestTelemetryStreamKeepsItsDuplicateWindow pins the window ADR-0453 states:
+// OG_TELEMETRY remembers a batch's Nats-Msg-Id for five minutes, not
+// JetStream's two-minute default, so a node's retry a few ticks later is
+// still collapsed by the stream before the receipt has to hold it.
+func TestTelemetryStreamKeepsItsDuplicateWindow(t *testing.T) {
+	f := newDeliveryFixture(t)
+	srv, err := bus.New(bus.Config{Host: "127.0.0.1", Port: -1}, f.gw)
+	if err != nil {
+		t.Fatalf("start bus: %v", err)
+	}
+	defer srv.Shutdown()
+	got, err := srv.TelemetryDuplicateWindow(f.ctx)
+	if err != nil {
+		t.Fatalf("read the stream's config: %v", err)
+	}
+	if got != 5*time.Minute {
+		t.Fatalf("OG_TELEMETRY duplicate window = %v, want 5m (ADR-0453)", got)
+	}
+}
+
 // TestReplayedBatchInsideTheWindowCollapses: a batch published twice under
 // one Nats-Msg-Id (a publisher retrying after an ack it never saw) is
 // stored once by the stream's duplicate window, and lands once (#453).
