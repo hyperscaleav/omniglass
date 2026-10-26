@@ -28,7 +28,9 @@ by name, since only the node observes one:
 Every write, on either lane and every other path, is held to the key's **writer class** at the
 Storage Gateway ([below](#who-writes-a-key-the-writer-class)). A push publishes onto the data
 lane, not Postgres, so pushed samples reach the stream consumers; both lanes call one `land()` and
-share its semantics (reject-not-project per lane, the transition-only property guard). The wire is
+share its semantics (reject-not-project per lane, the transition-only property guard, held in the
+insert itself, and one transaction per batch under its receipt, so a redelivered batch lands once:
+[ADR-0311](/architecture/decisions/#adr-0311-a-telemetry-batch-lands-once-in-one-transaction-under-its-receipt)). The wire is
 the protobuf `TelemetryBatch` with **per-lane arrays** (`metrics`, `properties`, `events`, `logs`).
 Declared values are series rows and current values are derived from the series
 ([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)).

@@ -94,7 +94,7 @@ func TestCalcRuleStateAndPreviewAPI(t *testing.T) {
 	}
 	// sys-e staffed by e1 and by w1 (a member placed in the other place).
 	for _, a := range [][3]string{{"sys-e", "left", "e1"}, {"sys-e", "right", "w1"}, {"sys-w", "left", "w2"}} {
-		if err := gw.AssignRole(ctx, "", a[0], a[1], a[2], all, all); err != nil {
+		if err := gw.AssignRole(ctx, "", a[0], a[1], a[2], all, all, all, all); err != nil {
 			t.Fatal(err)
 		}
 	}

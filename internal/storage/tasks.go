@@ -186,7 +186,7 @@ func (p *PG) GetTask(ctx context.Context, id string, read scope.Set) (*Task, err
 // ComponentID is the component's uuid, never its name: it is what
 // ResolveTaskOwner reads directly off the endpoint's own FK column
 // (i.component), and every downstream write (deriveMetrics, deriveProperties,
-// deriveEvents, dedupeProperties) stamps it as OwnerID verbatim. #627 scopes
+// deriveEvents, and the batch's landing) stamps it as OwnerID verbatim. #627 scopes
 // component name uniqueness to placement, so a name here would be resolved a
 // second time, ambiguously, by ownerArcValue on the write side; the id needs no
 // second resolution and can never collide.

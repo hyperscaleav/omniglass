@@ -19,7 +19,7 @@ import (
 var SampleWritePaths = map[string][]writerclass.Writer{
 	"writeMetricSamples":    {writerclass.Node, writerclass.Push, writerclass.CalcRule},
 	"writePropertySamples":  {writerclass.Node, writerclass.Push, writerclass.CalcRule},
-	"InsertEvents":          {writerclass.Node, writerclass.Push},
+	"writeEvents":           {writerclass.Node, writerclass.Push},
 	"recordHealth":          {writerclass.Process},
 	"IssueCommand":          {writerclass.Command},
 	"writeReplyObservation": {writerclass.CommandReply},
@@ -41,7 +41,7 @@ func (p *PG) WriteMetricAsRule(ctx context.Context, ruleID string, evs []MetricS
 // WritePropertyAsRule is WriteMetricAsRule on the property lane.
 func (p *PG) WritePropertyAsRule(ctx context.Context, ruleID string, evs []PropertySampleWrite) error {
 	return p.sampleWrite(ctx, "write as rule", func(tx pgx.Tx) error {
-		return p.writePropertySamples(ctx, tx, calcWriter(&sampleLineage{ruleID: ruleID, ruleName: "test", version: 1}), evs)
+		return p.writePropertySamples(ctx, tx, calcWriter(&sampleLineage{ruleID: ruleID, ruleName: "test", version: 1}), evs, false)
 	})
 }
 

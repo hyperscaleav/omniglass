@@ -174,7 +174,10 @@ with where it came from.
    a [one-off system](/guides/operator/entities/) that conforms to nothing sees only roles declared
    directly on it.
 2. **Assign a component to the role.** Each role lists the components filling it and lets you add
-   another. The picker is scoped to what you can see, and assignment is idempotent.
+   another. The picker is scoped to what you can see, and assignment is idempotent. Staffing a role
+   makes the component a member of the system and writes onto it, so it takes `component:update` over
+   the component as well as `system:update` over the system: a component you can see but not edit is
+   refused with the scope named, and the same holds for unassigning one.
 3. **Read the understaffed count.** A role wanting two components with one assigned reads as short by
    one, immediately, without any monitoring running: staffing is a fact about what you have entered. The
    room's **[health](/guides/operator/entities/#health-on-a-system-or-location)** asks the second question,
@@ -202,7 +205,19 @@ picked the wrong component, or the role's accepted types (or pinned products) ne
 
 Roles declared **directly on a system** work identically and are edited from the same panel; use them for
 what one room needs and the blueprint does not. A role inherited from the standard is withdrawn on the
-**standard**, not on the system that inherits it.
+**standard**, not on the system that inherits it. A system role **cannot reuse a name** its standard
+already declares, since a role is addressed by its name within the system and the name has to mean one
+slot there: declaring one, declaring the same name on the standard after a room took it, or moving a room
+onto a standard that declares a name the room declares itself is refused, naming both. A second slot
+takes a second name.
+
+**Moving a room to another standard keeps it staffed.** Change a system's **Standard** and each
+component filling an inherited role carries across to the new standard's role of the same name, as long
+as it is still the kind of component that role accepts and the role has room. Anything else is
+released: it stays a member of the room with no role, ready to be restaffed, unbound or deleted, and the
+room's roles panel and health read the new standard at once. Clearing the Standard (making the room a
+one-off) releases every inherited role's staffing; roles declared on the room itself keep theirs. Moving
+back later reactivates nothing, so restaff what you want back.
 
 From the CLI: `omniglass system role list <name>`, `omniglass system role update <name> <role>`,
 `omniglass system role delete <name> <role>`, `omniglass system role assignment update <name> <role> <component>`,

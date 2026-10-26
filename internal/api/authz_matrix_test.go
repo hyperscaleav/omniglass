@@ -77,7 +77,18 @@ type actionRoute struct {
 	request func(target, made string) (method, path string, body map[string]any)
 	// ok is the status a permitted call answers.
 	ok int
+	// componentEnd marks a route that also names a COMPONENT it writes onto (a
+	// membership or a role assignment, #510): the component end has to be inside
+	// the caller's component:update scope as well. The matrix gives its two
+	// narrow principals that authority over the rack these routes' components are
+	// made under, so the split this matrix drives stays the system's own; the
+	// component end's split is TestStaffingWritesNeedTheComponentInScope's.
+	componentEnd bool
 }
+
+// matrixRack is the component the component-end routes' components are made
+// under, and the root of the component grant the matrix's principals carry.
+const matrixRack = "az-rack"
 
 // matrixProperty is the catalog property the property routes write. Any seeded
 // string property does; nothing in the split depends on which.
@@ -244,7 +255,7 @@ func systemActions() []actionRoute {
 	// the target so the component tree stays collision-free across the whole run.
 	makeComponent := func(c *apiClient, ownerTok, name string) string {
 		c.do(ownerTok, http.MethodPost, "/components",
-			map[string]any{"name": name, "product": "generic-device"}, http.StatusCreated)
+			map[string]any{"name": name, "product": "generic-device", "parent": matrixRack}, http.StatusCreated)
 		return name
 	}
 	declareRole := func(c *apiClient, ownerTok, target, role string) {
@@ -253,7 +264,8 @@ func systemActions() []actionRoute {
 	}
 	return []actionRoute{
 		{
-			name: "add-member",
+			name:         "add-member",
+			componentEnd: true,
 			prepare: func(c *apiClient, ownerTok, target string) string {
 				return makeComponent(c, ownerTok, target+"-add-member")
 			},
@@ -263,7 +275,8 @@ func systemActions() []actionRoute {
 			ok: http.StatusNoContent,
 		},
 		{
-			name: "remove-member",
+			name:         "remove-member",
+			componentEnd: true,
 			prepare: func(c *apiClient, ownerTok, target string) string {
 				comp := makeComponent(c, ownerTok, target+"-remove-member")
 				c.do(ownerTok, http.MethodPut, members(target, comp), nil, http.StatusNoContent)
@@ -275,7 +288,8 @@ func systemActions() []actionRoute {
 			ok: http.StatusNoContent,
 		},
 		{
-			name: "set-primary-member",
+			name:         "set-primary-member",
+			componentEnd: true,
 			prepare: func(c *apiClient, ownerTok, target string) string {
 				comp := makeComponent(c, ownerTok, target+"-set-primary")
 				c.do(ownerTok, http.MethodPut, members(target, comp), nil, http.StatusNoContent)
@@ -306,7 +320,8 @@ func systemActions() []actionRoute {
 			ok: http.StatusNoContent,
 		},
 		{
-			name: "assign-system-role",
+			name:         "assign-system-role",
+			componentEnd: true,
 			prepare: func(c *apiClient, ownerTok, target string) string {
 				declareRole(c, ownerTok, target, "matrix-assign")
 				return makeComponent(c, ownerTok, target+"-assign")
@@ -317,7 +332,8 @@ func systemActions() []actionRoute {
 			ok: http.StatusNoContent,
 		},
 		{
-			name: "unassign-system-role",
+			name:         "unassign-system-role",
+			componentEnd: true,
 			prepare: func(c *apiClient, ownerTok, target string) string {
 				declareRole(c, ownerTok, target, "matrix-unassign")
 				comp := makeComponent(c, ownerTok, target+"-unassign")
@@ -436,6 +452,20 @@ func runAuthzMatrix(t *testing.T, e scopedEntity) {
 	c.do(ownerTok, http.MethodPost, e.base, e.createBody("az-other", ""), http.StatusCreated)
 	rootID := entityID(t, c, ownerTok, e.base, "az-root")
 
+	// The component end (#510): a route that writes onto a component needs it in
+	// the caller's component:update scope, so both narrow principals hold that
+	// over the rack the routes' components are made under. A component-kind grant
+	// reaches no system, so the system-tier split below is untouched by it.
+	var componentEnd []grant
+	for _, r := range e.actions {
+		if r.componentEnd {
+			c.do(ownerTok, http.MethodPost, "/components",
+				map[string]any{"name": matrixRack, "product": "generic-device"}, http.StatusCreated)
+			componentEnd = []grant{{role: "deploy", scopeKind: "component", scopeID: entityID(t, c, ownerTok, "/components", matrixRack)}}
+			break
+		}
+	}
+
 	patch := map[string]any{"label": "x"}
 	path := func(name string) string { return e.base + "/" + name }
 
@@ -446,17 +476,17 @@ func runAuthzMatrix(t *testing.T, e scopedEntity) {
 
 	// Principal 2: write-only, scoped to root only (no @all). Read scope = root
 	// subtree (via floor); az-other is outside it.
-	narrow := principalWithGrants(t, ctx, dsn, "narrow", []grant{{role: writerRole, scopeKind: e.resource, scopeID: rootID}})
+	narrow := principalWithGrants(t, ctx, dsn, "narrow", append([]grant{{role: writerRole, scopeKind: e.resource, scopeID: rootID}}, componentEnd...))
 	c.do(narrow, http.MethodPatch, path("az-child"), patch, http.StatusOK)       // write in scope
 	c.do(narrow, http.MethodGet, path("az-other"), nil, http.StatusNotFound)     // out of read scope -> non-disclosing 404
 	c.do(narrow, http.MethodPatch, path("az-other"), patch, http.StatusNotFound) // 404, not 403
 
 	// Principal 3: viewer@all + writer@root (the over-permit case): reads
 	// everywhere, writes only under root.
-	mixed := principalWithGrants(t, ctx, dsn, "mixed", []grant{
+	mixed := principalWithGrants(t, ctx, dsn, "mixed", append([]grant{
 		{role: "viewer", scopeKind: "all"},
 		{role: writerRole, scopeKind: e.resource, scopeID: rootID},
-	})
+	}, componentEnd...))
 	c.do(mixed, http.MethodGet, path("az-other"), nil, http.StatusOK)     // readable (viewer@all)
 	c.do(mixed, http.MethodPatch, path("az-child"), patch, http.StatusOK) // write in scope
 	// The crown jewel: az-other is READABLE (viewer@all) but OUTSIDE the write

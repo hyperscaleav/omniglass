@@ -45,11 +45,14 @@ type Server struct {
 	store         Store
 	subs          []*nats.Subscription
 	consumeCtx    jetstream.ConsumeContext // the telemetry durable consumer's pull loop
+	js            jetstream.JetStream      // the internal client's JetStream, the push lane's publisher
+	streamEpoch   string                   // OG_TELEMETRY's creation time, keying a batch with no id (batchID)
 	internalToken string
 	sims          *simhub.Registry   // the simulators beside this server's nodes
 	stopSweep     chan struct{}      // ends the settlement sweep
 	stopReconcile context.CancelFunc // ends the rule reconcile loop
 	stopCalc      context.CancelFunc // ends the calc tick
+	stopPrune     context.CancelFunc // ends the receipt retention pass
 	sweepStop     sync.Once
 	sweepDone     sync.WaitGroup
 	ownStoreDir   string // non-empty when the Server created (and must clean) it
@@ -212,6 +215,7 @@ func (s *Server) subscribe() error {
 	if err := s.startTelemetryConsumer(); err != nil {
 		return fmt.Errorf("bus: start telemetry consumer: %w", err)
 	}
+	s.startReceiptPrune()
 	return nil
 }
 
@@ -264,6 +268,9 @@ func (s *Server) Shutdown() {
 	if s.stopCalc != nil {
 		s.stopCalc()
 	}
+	if s.stopPrune != nil {
+		s.stopPrune()
+	}
 	if s.stopSweep != nil {
 		s.sweepStop.Do(func() { close(s.stopSweep) })
 		s.sweepDone.Wait()
@@ -293,34 +300,94 @@ func (s *Server) cleanupStoreDir() {
 	}
 }
 
-// publishFlushTimeout bounds the post-publish flush (see PublishTelemetry).
-const publishFlushTimeout = 5 * time.Second
+// The push lane's publish (#453): publishAckTimeout bounds one attempt's wait
+// for the stream's ack, and publishAttempts is how many attempts one batch
+// gets, publishRetryWait apart (doubling), before the route answers 503. Every
+// attempt carries the batch's one Nats-Msg-Id, so an attempt the stream stored
+// but whose ack was lost makes the next attempt a duplicate the stream answers
+// with the first copy's ack, never a second copy.
+const (
+	publishAckTimeout = 5 * time.Second
+	publishAttempts   = 3
+	publishRetryWait  = 100 * time.Millisecond
+)
 
 // PublishTelemetry puts an already-authorized batch on the API telemetry lane. It
 // satisfies the API's TelemetryPublisher seam, so the HTTP handler never holds a
 // NATS connection of its own. Publishing uses the server's internal credential, the
 // only one whose grant reaches this subject, which is what makes the consumer's
 // "believe the owner on this subject" rule safe.
+//
+// It returns only once the stream has acked the batch (#453): a nil error is the
+// stream's word that OG_TELEMETRY persisted it, which is what lets the route
+// answer 202. A store the stream refuses, or never answers, is an error after a
+// bounded retry, and the route answers 503.
 func (s *Server) PublishTelemetry(ctx context.Context, b *ogv1.TelemetryBatch) error {
+	_, err := s.publishTelemetry(ctx, b, collection.NewBatchID())
+	return err
+}
+
+// publishTelemetry publishes one batch under id, retrying a failed attempt up to
+// publishAttempts, and reports whether the stream held it as a duplicate of a
+// copy it had already stored.
+func (s *Server) publishTelemetry(ctx context.Context, b *ogv1.TelemetryBatch, id string) (bool, error) {
 	raw, err := proto.Marshal(b)
 	if err != nil {
-		return fmt.Errorf("bus: marshal telemetry batch: %w", err)
+		return false, fmt.Errorf("bus: marshal telemetry batch: %w", err)
 	}
-	if err := s.nc.Publish(collection.APITelemetrySubject, raw); err != nil {
-		return fmt.Errorf("bus: publish telemetry: %w", err)
+	wait := publishRetryWait
+	for attempt := 1; ; attempt++ {
+		ack, err := collection.PublishBatch(ctx, s.js, collection.APITelemetrySubject, raw, id, publishAckTimeout)
+		if err == nil {
+			return ack.Duplicate, nil
+		}
+		if attempt == publishAttempts || ctx.Err() != nil {
+			return false, fmt.Errorf("bus: publish telemetry: %w", err)
+		}
+		select {
+		case <-ctx.Done():
+			return false, fmt.Errorf("bus: publish telemetry: %w", ctx.Err())
+		case <-time.After(wait):
+		}
+		wait *= 2
 	}
-	// Flush so a 202 means the broker actually has the batch, not merely that we
-	// queued it locally (an unflushed publish is lost silently if the connection
-	// drops). The flush gets its own bound rather than inheriting the caller's
-	// context: FlushWithContext REQUIRES a deadline, and an HTTP request context has
-	// none, so passing it straight through fails every publish. WithTimeout also
-	// keeps a shorter caller deadline if there is one.
-	ctx, cancel := context.WithTimeout(ctx, publishFlushTimeout)
-	defer cancel()
-	if err := s.nc.FlushWithContext(ctx); err != nil {
-		return fmt.Errorf("bus: flush telemetry publish: %w", err)
-	}
-	return nil
+}
+
+// receiptPruneEvery is how often the server deletes telemetry receipts past
+// receiptHorizon; receiptPruneTimeout bounds one pass.
+const (
+	receiptPruneEvery   = time.Hour
+	receiptPruneTimeout = 5 * time.Minute
+)
+
+// startReceiptPrune keeps the telemetry receipt table to its horizon (#311):
+// once at start and every receiptPruneEvery after, on a goroutine of its own.
+// A failed pass is logged and retried at the next; a receipt kept a little
+// longer only holds a batch that will not come again.
+func (s *Server) startReceiptPrune() {
+	ctx, cancel := context.WithCancel(context.Background())
+	s.stopPrune = cancel
+	s.sweepDone.Add(1)
+	go func() {
+		defer s.sweepDone.Done()
+		t := time.NewTicker(receiptPruneEvery)
+		defer t.Stop()
+		for {
+			pass, done := context.WithTimeout(ctx, receiptPruneTimeout)
+			n, err := s.store.PruneTelemetryReceipts(pass, time.Now().Add(-receiptHorizon), 0)
+			done()
+			if err != nil && ctx.Err() == nil {
+				slog.Warn("telemetry receipt prune failed", "facility", "ingest", "error", err.Error())
+			} else if n > 0 {
+				slog.Debug("telemetry receipts pruned", "facility", "ingest", "deleted", n)
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+			}
+		}
+	}()
 }
 
 // SimStatus is the server's view of one node's simulator.
