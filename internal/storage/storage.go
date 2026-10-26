@@ -428,6 +428,12 @@ type Gateway interface {
 	UpdateProduct(ctx context.Context, actorID, id string, patch ProductPatch) (*Product, error)
 	DeleteProduct(ctx context.Context, actorID, id string) error
 
+	// RenameRegistry moves a registry row's name (vendor, driver, product,
+	// standard, location_type; #555, ADR-0555), addressed by name or uuid, and
+	// returns its uuid. Official rows keep their names; the rename is audited
+	// in its transaction and carries any by-value reference along.
+	RenameRegistry(ctx context.Context, actorID, table, ref, newName string) (string, error)
+
 	// The interface tier: operator CRUD over placement-bound connections. An
 	// interface is not a scope-tree entity of its own; it hangs off a component
 	// (endpoint.component), so every method's scope cascades THROUGH that component

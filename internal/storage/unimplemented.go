@@ -594,6 +594,9 @@ func (UnimplementedGateway) UpdateProduct(context.Context, string, string, Produ
 	return nil, nil
 }
 func (UnimplementedGateway) DeleteProduct(context.Context, string, string) error { return nil }
+func (UnimplementedGateway) RenameRegistry(context.Context, string, string, string, string) (string, error) {
+	return "", nil
+}
 func (UnimplementedGateway) UpsertSecretType(context.Context, SecretType) error  { return nil }
 func (UnimplementedGateway) ListSecretTypes(context.Context) ([]SecretType, error) {
 	return nil, nil
