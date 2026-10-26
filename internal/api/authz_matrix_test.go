@@ -12,7 +12,6 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
-	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -236,13 +235,6 @@ func componentActions() []actionRoute {
 		},
 	}
 }
-
-// discardPublisher stands in for the bus behind the push route: the matrix
-// asserts the route's authorization, which is decided before anything is
-// published, so what it would publish is not the matrix's question.
-type discardPublisher struct{}
-
-func (discardPublisher) PublishTelemetry(context.Context, *ogv1.TelemetryBatch) error { return nil }
 
 // systemActions are the membership and role writes, the routes that hang off a
 // system. Each one that needs a component makes its own, named after the route
