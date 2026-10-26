@@ -48,14 +48,17 @@ it deadlocks. ADR-0138 resolves it without weakening the boundary:
    [`/assess-ui`](https://github.com/hyperscaleav/omniglass/tree/main/.claude/skills/assess-ui)
    visual gate (the state matrix captured against the real console and graded, not
    glanced at). Anything found out of scope becomes an issue via `/file-bug`, never a
-   TODO or a drive-by fix.
+   TODO or a drive-by fix. The slice goes In Progress on [the board](/contributing/labels/#the-board)
+   as its worktree is cut.
 4. **Ship.** The full `/ship-slice` pass, then the PR: conventional title, the
    ship-review as the body, `closes #NNN`, and the marker line last. The session
    subscribes to the PR's activity, arms an hourly check-in until merge or close, and
    attempts to enable auto-merge (squash) so that where the repo requires an approving
-   review, the architect's approval is the last click.
+   review, the architect's approval is the last click. The slice's issue goes In Review on
+   the board as the PR opens.
 5. **Report.** A closing comment on the slice issue and a day report: what shipped,
-   what needs a decision, every issue filed, what tomorrow will likely pick.
+   what needs a decision, every issue filed, the day's board moves, what tomorrow will
+   likely pick.
 
 ## What it may not decide alone
 

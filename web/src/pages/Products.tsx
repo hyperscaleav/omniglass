@@ -170,13 +170,16 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
     if (!r) return;
     setErr(null);
     try {
+      // An emptied picker ("None") and an emptied icon ride as "", the
+      // three-state string's clear (#260), never as an omitted field, which the
+      // patch reads as "unchanged" and the refetch would revert.
       await updateProduct(r.name, {
         label: label(),
         kind: kind(),
         component_type: componentType(),
         icon: icon(),
-        vendor_id: vendorId() || undefined,
-        driver_id: driverId() || undefined,
+        vendor_id: vendorId(),
+        driver_id: driverId(),
       });
       await qc.invalidateQueries({ queryKey: PRODUCTS_KEY });
     } catch (e) {

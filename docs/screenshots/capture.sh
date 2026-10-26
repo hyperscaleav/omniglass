@@ -52,11 +52,11 @@ make build-web
 
 stack_up
 
-# One secret key for every container: seed-dev seeds a secret (the simulated
+# One encryption key for every container: seed-dev seeds a secret (the simulated
 # fleet's SNMP community) that the server must decrypt, and each throwaway
 # container would otherwise mint its own key. Fixed, since it guards nothing.
 KEY=$(printf 'omniglass-docs-shots-fixed-key!!' | base64)
-app() { stack_run -v "$ROOT/bin/omniglass:/omniglass:ro" -e OMNIGLASS_DSN="$STACK_DSN" -e OMNIGLASS_SECRET_KEY="$KEY" "$APPIMG" /omniglass "$@"; }
+app() { stack_run -v "$ROOT/bin/omniglass:/omniglass:ro" -e OMNIGLASS_DSN="$STACK_DSN" -e OMNIGLASS_ENCRYPTION_KEY="$KEY" "$APPIMG" /omniglass "$@"; }
 
 app migrate
 # Idempotent by intent, but a swallowed TRANSIENT failure here drops audited
@@ -67,7 +67,7 @@ app set-password dev dev >/dev/null
 app seed-dev --sim-fleet=false
 
 stack_server -v "$ROOT/bin/omniglass:/omniglass:ro" \
-  -e OMNIGLASS_DSN="$STACK_DSN" -e OMNIGLASS_SECRET_KEY="$KEY" "$APPIMG" /omniglass server
+  -e OMNIGLASS_DSN="$STACK_DSN" -e OMNIGLASS_ENCRYPTION_KEY="$KEY" "$APPIMG" /omniglass server
 
 TOK=$(app token dev --description "docs capture" 2>/dev/null | grep -o 'ogp_[A-Za-z0-9_-]*')
 # A couple of secrets so the Secrets surface renders real rows. LOUD on

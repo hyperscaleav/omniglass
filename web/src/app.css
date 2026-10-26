@@ -135,14 +135,13 @@
 .badge-disaster { color: var(--og-disaster); background: color-mix(in oklch, var(--og-disaster) 22%, transparent); border-color: color-mix(in oklch, var(--og-disaster) 60%, transparent); }
 /* Healthy is green (#1067, reversing #872's grey, which read as unknown). One
    token, three tiers: the pill and the strip segment wear it at the weight of
-   the trouble hues; text-healthy and bg-healthy-muted are the muted tier for
-   dense views (the outline's slots, the uptime figure, the map's dots), so a
-   healthy fleet still reads calm and the one amber branch still pops. Unknown
-   keeps the grey badge-ghost. */
+   the trouble hues; text-healthy is the muted tier for dense views (the
+   outline's slots, the map's icons, the uptime figure), so a healthy fleet
+   still reads calm and the one amber branch still pops. Unknown keeps the grey
+   badge-ghost. */
 .badge-healthy { color: var(--og-healthy); background: color-mix(in oklch, var(--og-healthy) 15%, transparent); border-color: color-mix(in oklch, var(--og-healthy) 45%, transparent); }
 .bg-healthy    { background-color: var(--og-healthy); }
 .text-healthy  { color: color-mix(in oklch, var(--og-healthy) 70%, transparent); }
-.bg-healthy-muted { background-color: color-mix(in oklch, var(--og-healthy) 70%, transparent); }
 /* solid fill for a timeline segment, the StateStrip counterpart to bg-success /
    bg-warning / bg-error. daisyUI ships no semantic for this hue, so the strip
    needs its own utility or an incomplete stretch falls back to the no-data grey. */

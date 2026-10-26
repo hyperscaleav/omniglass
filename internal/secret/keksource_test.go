@@ -13,7 +13,7 @@ func env(m map[string]string) func(string) string {
 
 func TestLoadKEKFromEnv(t *testing.T) {
 	key := testKey(0x07)
-	e := env(map[string]string{"OMNIGLASS_SECRET_KEY": base64.StdEncoding.EncodeToString(key)})
+	e := env(map[string]string{"OMNIGLASS_ENCRYPTION_KEY": base64.StdEncoding.EncodeToString(key)})
 	kek, src, err := LoadKEK(e, t.TempDir(), func(string) {})
 	if err != nil {
 		t.Fatalf("load: %v", err)
@@ -27,7 +27,7 @@ func TestLoadKEKFromEnv(t *testing.T) {
 }
 
 func TestLoadKEKEnvWrongLength(t *testing.T) {
-	e := env(map[string]string{"OMNIGLASS_SECRET_KEY": base64.StdEncoding.EncodeToString([]byte("too-short"))})
+	e := env(map[string]string{"OMNIGLASS_ENCRYPTION_KEY": base64.StdEncoding.EncodeToString([]byte("too-short"))})
 	if _, _, err := LoadKEK(e, t.TempDir(), func(string) {}); err == nil {
 		t.Fatalf("expected error for short key")
 	}
@@ -40,7 +40,7 @@ func TestLoadKEKFromFile(t *testing.T) {
 	if err := os.WriteFile(path, []byte(base64.StdEncoding.EncodeToString(key)), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	e := env(map[string]string{"OMNIGLASS_SECRET_KEY_FILE": path})
+	e := env(map[string]string{"OMNIGLASS_ENCRYPTION_KEY_FILE": path})
 	kek, src, err := LoadKEK(e, t.TempDir(), func(string) {})
 	if err != nil {
 		t.Fatalf("load: %v", err)

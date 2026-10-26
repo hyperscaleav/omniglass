@@ -32,6 +32,12 @@ honest while nobody is watching.
   (`mcp__github__*`) in a cloud sandbox, an authenticated `gh` on the bridge worker
   (the Routine's home; see the autopilot page). Neither present is an environment
   failure for step 1, not a reason to skip the PR.
+- **The board moves only through `scripts/board.sh`,** at the fixed points below (add on
+  filing, In Progress on starting, In Review on the PR), and never touches Priority or the
+  iteration, which are the architect's
+  ([the board](../../../docs/src/content/docs/contributing/labels.md#the-board)). It needs
+  `gh` with the `project` scope, so a cloud sandbox with only the MCP tools cannot run it;
+  the day report names every move that could not be made.
 
 ## 1. Wake and verify the environment
 
@@ -94,8 +100,9 @@ Take the first that applies, and note in the report which rung fired:
    The fix starts with the failing regression test.
 4. **A self-scoped cut.** Read the roadmap, the epics, and the architecture spine; a page
    whose badge is `Partial` names its own gaps. Pick the next thin cut, draft the
-   definition in the `/define-work` shape, file it with the autopilot marker line, and
-   proceed immediately; the PR is where it gets approved.
+   definition in the `/define-work` shape, file it with the autopilot marker line, put it
+   on the board (`scripts/board.sh add <n>`), and proceed immediately; the PR is where it
+   gets approved.
 
 **Out of bounds for self-scoping** (rungs 1 to 3 are unaffected): anything touching an
 invariant (the two authorization layers, the migration rules, the audit contract), a
@@ -113,7 +120,9 @@ The [slice workflow](../../../docs/src/content/docs/contributing/slice-workflow.
 unchanged: a worktree off `origin/main` under `.claude/worktrees/`, the failing test
 first, green commits each referencing the issue `(#NNN)`, every entry point the slice
 touches (API, generated CLI, UI live or honest stub), primitive-first, docs with
-everything as you go. Schema work goes through `/storage-schema-change`.
+everything as you go. Schema work goes through `/storage-schema-change`. The slice starts
+on the board as the worktree is cut: `scripts/board.sh set <n> "In Progress"` (a loop's
+slices make that move through `/run-feature-loop`).
 
 Two disciplines matter more unattended than attended:
 
@@ -153,6 +162,8 @@ Then:
    reference, and the autopilot marker line last. The Demo section carries the tag on a line
    of its own (`demo: <id>`, or `demo: none (<reason>)`). Apply `run:demo` unless the tag is
    `none`; the run writes the clip into the body under the tag, so leave its marked block alone.
+   Then move the issue to In Review, as `/ship-slice` does:
+   `scripts/board.sh set <n> "In Review"`.
 2. Subscribe to the PR's activity (`subscribe_pr_activity`) and answer what arrives: CI
    red is yours until green, review comments are implemented or answered, and the
    optional-finding etiquette for bot reviews applies.
@@ -167,9 +178,10 @@ Then:
 - Comment on the slice issue: what landed, the PR link, what was deferred where.
 - The day report (the session's final message): what shipped and its PR, the two
   ship-review lines the architect reads first (Decisions I need from you; Risk), every
-  issue filed today with one-line reasons, the standing-PR status, and what tomorrow's
-  run will likely pick. Plain statements; if a gate was red, say which and what state the
-  branch was left in.
+  issue filed today with one-line reasons, the standing-PR status, **the day's board
+  moves** (each line `scripts/board.sh` printed, `#N: <from> -> <to>`, plus any move it
+  could not make and its reason), and what tomorrow's run will likely pick. Plain
+  statements; if a gate was red, say which and what state the branch was left in.
 
 ## Stop rules
 

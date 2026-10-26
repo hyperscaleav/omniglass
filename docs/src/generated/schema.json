@@ -570,6 +570,12 @@
       "name": "map",
       "type": "jsonb",
       "nullable": true
+     },
+     {
+      "name": "seeded",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
      }
     ],
     "uniques": [
@@ -896,12 +902,6 @@
       "nullable": true,
       "fk": true,
       "fk_target": "location.id"
-     }
-    ],
-    "checks": [
-     {
-      "name": "node_name_subject_safe_check",
-      "expr": "CHECK ((name ~ '^[^.*\u003e \\t\\n\\r]+$'::text))"
      }
     ],
     "uniques": [

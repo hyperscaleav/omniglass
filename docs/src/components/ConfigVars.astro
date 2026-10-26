@@ -4,6 +4,9 @@
 // Complete by construction: config.Get refuses a variable the registry does
 // not declare, so a variable cannot exist without appearing here.
 //
+// A variable kept for a deprecation window carries the name that replaces it
+// (`deprecated`), and its row says so ahead of its doc.
+//
 // Usage: <ConfigVars scope="server" />, or scopes={['server','node']}.
 import config from '../generated/config.json';
 
@@ -30,7 +33,14 @@ if (!rows.length) {
         <tr>
           <td><code>{v.key}</code></td>
           <td>{v.default ?? '(none)'}</td>
-          <td>{v.doc}</td>
+          <td>
+            {v.deprecated && (
+              <>
+                <strong>Deprecated</strong>, renamed <code>{v.deprecated}</code>:{' '}
+              </>
+            )}
+            {v.doc}
+          </td>
         </tr>
       ))
     }

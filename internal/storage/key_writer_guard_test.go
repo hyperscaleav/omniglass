@@ -50,6 +50,7 @@ func writesSample(sql string) bool {
 var dynamicTableWriters = map[string]string{
 	"writeLabelChanges": "the label column of location, system and component (a scopeTable)",
 	"stamp":             "a liveness stamp table (endpoint_live), never a sample table",
+	"RenameRegistry":    "the name column of a renameable registry (renameableRegistries: vendor, driver, product, standard, location_type), never a sample table",
 }
 
 // sampleWriters reads this package's non-test source and returns every

@@ -109,7 +109,7 @@ func startServer(t *testing.T, bin string, env ...string) runningServer {
 	cmd := exec.CommandContext(ctx, bin, "server")
 	cmd.Env = append(os.Environ(),
 		"OMNIGLASS_NATS_STORE_DIR="+t.TempDir(),
-		// Keep the fallback secret key out of the source tree (the server's
+		// Keep the fallback encryption key out of the source tree (the server's
 		// cwd is this package dir under `go test`).
 		"OMNIGLASS_DATA_DIR="+t.TempDir(),
 	)

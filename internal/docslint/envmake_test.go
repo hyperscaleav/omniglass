@@ -84,7 +84,7 @@ func TestEnvUniverseSpansTheBinary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"OMNIGLASS_SECRET_KEY", "OMNIGLASS_SERVER", "OMNIGLASS_NODE_TOKEN"} {
+	for _, name := range []string{"OMNIGLASS_ENCRYPTION_KEY", "OMNIGLASS_SERVER", "OMNIGLASS_NODE_TOKEN"} {
 		if !universe[name] {
 			t.Errorf("env universe is missing %s; the scan must span the whole binary", name)
 		}

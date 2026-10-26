@@ -52,7 +52,7 @@
    "key": "OMNIGLASS_DATA_DIR",
    "default": ".omniglass",
    "scope": "server",
-   "doc": "local non-Postgres server state (notably the fallback secret key)"
+   "doc": "local non-Postgres server state (notably the fallback encryption key)"
   },
   {
    "key": "OMNIGLASS_SETTINGS_FILE",
@@ -65,14 +65,26 @@
    "doc": "path the server writes once it serves: a JSON object of the addresses it bound (addr, nats_addr) and the bus URL it advertises (nats_url), for a supervisor or test that asked for port 0; cleared at boot, removed at a graceful shutdown"
   },
   {
+   "key": "OMNIGLASS_ENCRYPTION_KEY",
+   "scope": "server",
+   "doc": "base64 32-byte encryption key, the key-encryption key every secret is sealed under at rest; wins over the key file"
+  },
+  {
+   "key": "OMNIGLASS_ENCRYPTION_KEY_FILE",
+   "scope": "server",
+   "doc": "path to a file holding the encryption key; the intended production source (the generated fallback under the data dir is convenience, not security)"
+  },
+  {
    "key": "OMNIGLASS_SECRET_KEY",
    "scope": "server",
-   "doc": "base64 32-byte key-encryption key for secrets at rest; wins over the key file"
+   "doc": "the encryption key's old name, read only when neither OMNIGLASS_ENCRYPTION_KEY nor OMNIGLASS_ENCRYPTION_KEY_FILE is set; warns on every boot, removed in a later release",
+   "deprecated": "OMNIGLASS_ENCRYPTION_KEY"
   },
   {
    "key": "OMNIGLASS_SECRET_KEY_FILE",
    "scope": "server",
-   "doc": "path to the key-encryption key; the intended production source (the generated fallback under the data dir is convenience, not security)"
+   "doc": "the encryption key file's old name, read only when neither OMNIGLASS_ENCRYPTION_KEY nor OMNIGLASS_ENCRYPTION_KEY_FILE is set; warns on every boot, removed in a later release",
+   "deprecated": "OMNIGLASS_ENCRYPTION_KEY_FILE"
   },
   {
    "key": "OMNIGLASS_SERVER",

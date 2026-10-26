@@ -18,7 +18,7 @@ to the slice. It costs two minutes; losing the finding costs the rediscovery.
 - A **chore, drift, or tooling gap** (docs contradicting code, a stale generated
   artifact, a missing flag): Type `Task`, title `chore:`/`docs:`/`test:` as fits.
 - Kind of work is the **Issue Type, never a label**; priority is the Project board
-  field, never a `prio:*` label. Labels are only `area:<subsystem>` (one or more, from
+  field (the architect's to set), never a `prio:*` label. Labels are only `area:<subsystem>` (one or more, from
   the fixed set) and `run:<task>`.
 - Titles are conventional-commit phrased with a lowercase subject, matching the PR that
   will eventually close them.
@@ -36,8 +36,12 @@ issue ("harden input handling on X") if tracking is needed.
 2. **File it** with the shape below. In a remote session this is the GitHub MCP
    `issue_write` (Type via its `type` field); on the bridge worker it is `gh api
    repos/hyperscaleav/omniglass/issues -f type=Bug ...` (the REST create takes the Type
-   directly). Set the Priority field where the tooling allows, otherwise state the suggested priority in the body.
-3. **Return to the slice.** The finding is captured; fixing it is a different day's
+   directly). Never set the Priority field, which is the architect's alone; state the
+   suggested priority in the body instead.
+3. **Put it on the board** in Backlog: `scripts/board.sh add <n>`. Where the script cannot
+   run (no `gh`, or a token without the `project` scope; it says which), name the missed
+   move in your report ([the board](../../../docs/src/content/docs/contributing/labels.md#the-board)).
+4. **Return to the slice.** The finding is captured; fixing it is a different day's
    scope decision.
 
 ## The shape

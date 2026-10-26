@@ -28,6 +28,11 @@ type Var struct {
 	Scope string `json:"scope"`
 	// Doc is the one-line operator description.
 	Doc string `json:"doc"`
+	// Deprecated names the variable that replaces this one, for an old name the
+	// binary still reads through a deprecation window and warns about on every
+	// read. Empty for a current variable. The reference renders it, so the
+	// deployment guides teach the rename from the same declaration.
+	Deprecated string `json:"deprecated,omitempty"`
 }
 
 // Registry declares every environment variable the binary reads, in the order
@@ -50,15 +55,21 @@ var Registry = []Var{
 	{Key: "OMNIGLASS_NATS_URL", Default: "the bus's bound address", Scope: "server",
 		Doc: "bus URL the node-claim exchange advertises to nodes; unset, the URL of the address the bus bound (loopback for a wildcard host such as 0.0.0.0)"},
 	{Key: "OMNIGLASS_DATA_DIR", Default: ".omniglass", Scope: "server",
-		Doc: "local non-Postgres server state (notably the fallback secret key)"},
+		Doc: "local non-Postgres server state (notably the fallback encryption key)"},
 	{Key: "OMNIGLASS_SETTINGS_FILE", Scope: "server",
 		Doc: "optional operator settings file (JSON or YAML), the layer between code defaults and the DB override"},
 	{Key: "OMNIGLASS_READY_FILE", Scope: "server",
 		Doc: "path the server writes once it serves: a JSON object of the addresses it bound (addr, nats_addr) and the bus URL it advertises (nats_url), for a supervisor or test that asked for port 0; cleared at boot, removed at a graceful shutdown"},
-	{Key: "OMNIGLASS_SECRET_KEY", Scope: "server",
-		Doc: "base64 32-byte key-encryption key for secrets at rest; wins over the key file"},
-	{Key: "OMNIGLASS_SECRET_KEY_FILE", Scope: "server",
-		Doc: "path to the key-encryption key; the intended production source (the generated fallback under the data dir is convenience, not security)"},
+	{Key: "OMNIGLASS_ENCRYPTION_KEY", Scope: "server",
+		Doc: "base64 32-byte encryption key, the key-encryption key every secret is sealed under at rest; wins over the key file"},
+	{Key: "OMNIGLASS_ENCRYPTION_KEY_FILE", Scope: "server",
+		Doc: "path to a file holding the encryption key; the intended production source (the generated fallback under the data dir is convenience, not security)"},
+	// The encryption key's names before #558, read only while neither new name
+	// is set, with a warning on every boot (internal/secret.LoadKEK).
+	{Key: "OMNIGLASS_SECRET_KEY", Scope: "server", Deprecated: "OMNIGLASS_ENCRYPTION_KEY",
+		Doc: "the encryption key's old name, read only when neither OMNIGLASS_ENCRYPTION_KEY nor OMNIGLASS_ENCRYPTION_KEY_FILE is set; warns on every boot, removed in a later release"},
+	{Key: "OMNIGLASS_SECRET_KEY_FILE", Scope: "server", Deprecated: "OMNIGLASS_ENCRYPTION_KEY_FILE",
+		Doc: "the encryption key file's old name, read only when neither OMNIGLASS_ENCRYPTION_KEY nor OMNIGLASS_ENCRYPTION_KEY_FILE is set; warns on every boot, removed in a later release"},
 	{Key: "OMNIGLASS_SERVER", Scope: "cli",
 		Doc: "server base URL the CLI and the node use when --server is omitted, read when the command runs"},
 	{Key: "OMNIGLASS_TOKEN", Scope: "cli",
