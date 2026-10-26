@@ -452,6 +452,14 @@ system-declared ones are ad-hoc, how a one-off system gets roles and a conformin
 its standard. A role carries a **`quorum`** (two ceiling mics is one role with quorum 2), at least
 one.
 
+**A role name means one role in a system.** Staffing, health and the console all address a role by
+its name within the system, so a write that would give a system two roles of one name is refused with
+a 409 naming the role, the standard and the system: a system declaring a name its standard declares, a
+standard declaring a name a conforming system declares itself, and a system moving onto a standard
+that declares a name it declares itself. A system role never shadows an inherited one; a second slot
+takes a second name
+([ADR-0503](/architecture/decisions/#adr-0503-a-role-name-addresses-one-role-per-system)).
+
 **The typed-slot guard is what `AssignRole` checks (#626).** A component fills a slot only when its
 product's `component_type` falls within a type the role's `system_role_type` set names (self or a
 descendant; empty accepts any type), and, if `system_role_product` pins specific products, only when
@@ -494,6 +502,9 @@ Shipped content is two kinds, never conflated:
   accepted types and pinned products in one transaction), and a later boot fills a set that a role
   nobody has revised is entirely missing, which is what an interrupted install could leave
   ([ADR-0508](/architecture/decisions/#adr-0508-the-boot-seed-installs-a-shipped-role-whole-and-repairs-a-set-an-unrevised-role-is-missing)).
+  A shipped role that a conforming system already declares itself is not installed, since the name
+  would then mean two roles there
+  ([ADR-0503](/architecture/decisions/#adr-0503-a-role-name-addresses-one-role-per-system)).
 - **Canonical vocabulary** (the [`metric_type` and `property_type` catalogs](/architecture/properties/),
   the `event_type`
   and `command_type` registries) is the shared namespace a driver maps onto, identical install to

@@ -855,6 +855,12 @@ in the same form. Gating follows the owner:
 - `PATCH` / `DELETE /systems/{name}/roles/{role}`, gated `system:update`, for a role declared **directly on
   one system**. A role the system does not declare **itself** is a 404 here: an inherited role is
   withdrawn on the standard.
+- A role name means **one role in a system**, so every write that would give a system two of one name
+  is a 409 naming the role, the standard and the system: a system declaring a name its standard
+  declares, a standard declaring a name a conforming system declares itself, and `PATCH
+  /systems/{name}` moving a system onto a standard that declares a name it declares itself. A staffing
+  write that meets such a pair (written before the rule) is the same 409 rather than a silent pick
+  ([ADR-0503](/architecture/decisions/#adr-0503-a-role-name-addresses-one-role-per-system)).
 - `GET /systems/{name}/roles` is the **resolved read**, gated `system:read`: the declaration
   (including `impact`, `capacity`, `position_labels`, `alternate`) plus `from_standard`, `assigned_to` (the
   component names filling it here, in position order), `positions` (each entry's own 1-based

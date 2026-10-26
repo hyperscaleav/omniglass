@@ -279,7 +279,7 @@ func registerStandardRoleRoutes(api huma.API, a *authenticator, gw storage.Gatew
 		Method:      http.MethodPatch,
 		Path:        "/standards/{id}/roles/{role}",
 		Summary:     "Declare a role on a standard",
-		Description: "Declares a role every conforming system needs filled, or revises it in place (the role is addressed by name, so the write is idempotent and declaring is this same route). Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and [\"*\"] replaces the whole declaration. An unknown standard, type, or product is a 422, as is a mask naming a field this resource does not patch. Gated by standard:update.",
+		Description: "Declares a role every conforming system needs filled, or revises it in place (the role is addressed by name, so the write is idempotent and declaring is this same route). Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and [\"*\"] replaces the whole declaration. An unknown standard, type, or product is a 422, as is a mask naming a field this resource does not patch. A name a conforming system already declares itself is a 409 naming that system, since a role name must mean one role in a system. Gated by standard:update.",
 	}, "standard", "update"), func(ctx context.Context, in *setStandardRoleInput) (*systemRoleOutput, error) {
 		altID, err := resolveAlternateBody(ctx, gw, "standard", in.ID, in.Body)
 		if err != nil {
@@ -341,7 +341,7 @@ func registerSystemRoleRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		Method:      http.MethodPatch,
 		Path:        "/systems/{name}/roles/{role}",
 		Summary:     "Declare a role on a system",
-		Description: "Declares a role directly on this system (how a one-off system gets roles at all, and how a conforming one adds what its standard does not cover), or revises it in place. Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and [\"*\"] replaces the whole declaration. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
+		Description: "Declares a role directly on this system (how a one-off system gets roles at all, and how a conforming one adds what its standard does not cover), or revises it in place. Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and [\"*\"] replaces the whole declaration. A name the system's standard already declares is a 409: a system role never shadows an inherited one, since a role name must mean one role in a system. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
 	}, "system", "update"), func(ctx context.Context, in *setSystemRoleInput) (*systemRoleOutput, error) {
 		sysID, err := requireSystemInScope(ctx, a, gw, in.Name)
 		if err != nil {
@@ -532,6 +532,19 @@ func requireComponentInScope(ctx context.Context, a *authenticator, gw storage.G
 	return id, nil
 }
 
+// roleCollisionMessage renders a role-name collision (#503, ADR-0503) as the
+// 409 every path that meets one answers, whichever write it was: it names the
+// role and both owners, and the recovery, so the same sentence serves a
+// declaration, a standard change and a staffing write alike.
+func roleCollisionMessage(err error) (string, bool) {
+	var c *storage.RoleNameCollision
+	if !errors.As(err, &c) {
+		return "", false
+	}
+	return fmt.Sprintf("role %q would mean two roles in system %q: its standard %q declares it, and so does the system itself. A role is addressed by its name within a system, so the name must mean one role there; withdraw or rename one of the two first",
+		c.Role, c.System, c.Standard), true
+}
+
 // mapRoleErr translates the role sentinels into HTTP status. The one that
 // matters is the shortfall: a component that cannot fill a role is a 422 that
 // names both parties in operator vocabulary, what the component actually is
@@ -548,6 +561,9 @@ func mapRoleErr(err error) error {
 	var maskErr *updatemask.Error
 	if errors.As(err, &maskErr) {
 		return huma.Error422UnprocessableEntity(maskErr.Error())
+	}
+	if msg, ok := roleCollisionMessage(err); ok {
+		return huma.Error409Conflict(msg)
 	}
 	var typeShort *storage.TypeShortfall
 	if errors.As(err, &typeShort) {

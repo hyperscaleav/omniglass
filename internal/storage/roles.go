@@ -219,6 +219,99 @@ var (
 	ErrCapacityBelowQuorum = errors.New("storage: capacity must be at least the role's quorum")
 )
 
+// RoleNameCollision is the refusal when a write would leave one system with two
+// roles of one name, one inherited from its standard and one declared on it
+// (#503, ADR-0503), and the refusal a staffing write gives when it finds such a
+// pair already there (a collision written before the rule). Every staffing
+// route addresses a role by its name within a system, so the name must mean one
+// role there; picking a winner between the two is the bug, not a resolution.
+type RoleNameCollision struct {
+	Role     string
+	Standard string
+	System   string
+}
+
+func (e *RoleNameCollision) Error() string {
+	return fmt.Sprintf("storage: role %q would mean two roles in system %q: standard %q declares it and so does the system itself",
+		e.Role, e.System, e.Standard)
+}
+
+// roleNameLockKey serializes every write that can give a system two roles of
+// one name (#503): a declaration on either arc, a standard change, and the
+// role seed. The check reads one arc and the write lands on the other (or on
+// the system's standard pointer), so it is compare-then-act across tables and
+// needs one lock all of them take. It is taken FIRST in each of those
+// transactions, before any other lock, so it adds no edge to any lock order.
+// Role declarations and standard changes are rare acts; serializing them
+// fleet-wide costs nothing anyone waits on.
+const roleNameLockKey = "system_role/name"
+
+func lockRoleNames(ctx context.Context, q txQuerier) error {
+	return lockAdvisory(ctx, q, roleNameLockKey)
+}
+
+// systemArcCollision is the refusal for declaring name on a system whose
+// standard already declares it. systemArg is the owner roleOwnerArg resolved:
+// a system's id, or an unresolved reference, which matches nothing here and is
+// left to the owner arc CHECK to refuse.
+func systemArcCollision(ctx context.Context, q querier, systemArg, name string) error {
+	if _, err := uuid.Parse(systemArg); err != nil {
+		return nil
+	}
+	var systemName, standardName string
+	err := q.QueryRow(ctx, `
+		select s.name, st.name from system s
+		join standard st on st.id = s.standard_id
+		join system_role r on r.owner_kind = 'standard' and r.standard_id = s.standard_id and r.name = $2
+		where s.id = $1::uuid`, systemArg, name).Scan(&systemName, &standardName)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("storage: role name check %s/%s: %w", systemArg, name, err)
+	}
+	return &RoleNameCollision{Role: name, Standard: standardName, System: systemName}
+}
+
+// standardArcCollision is the refusal for declaring name on a standard one of
+// whose conforming systems already declares it itself, naming the first such
+// system by name.
+func standardArcCollision(ctx context.Context, q querier, standardID, standardName, name string) error {
+	var systemName string
+	err := q.QueryRow(ctx, `
+		select s.name from system s
+		join system_role r on r.owner_kind = 'system' and r.system_id = s.id and r.name = $2
+		where s.standard_id = $1::uuid
+		order by s.name limit 1`, standardID, name).Scan(&systemName)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("storage: role name check %s/%s: %w", standardName, name, err)
+	}
+	return &RoleNameCollision{Role: name, Standard: standardName, System: systemName}
+}
+
+// standardMoveCollision is the refusal for moving a system onto a standard
+// that declares a name the system declares itself, naming the first such role.
+func standardMoveCollision(ctx context.Context, q querier, systemID, systemName, standardID string) error {
+	var role, standardName string
+	err := q.QueryRow(ctx, `
+		select r.name, st.name from system_role r
+		join standard st on st.id = r.standard_id
+		where r.owner_kind = 'standard' and r.standard_id = $2::uuid
+		  and exists (select 1 from system_role a
+		               where a.owner_kind = 'system' and a.system_id = $1::uuid and a.name = r.name)
+		order by r.name limit 1`, systemID, standardID).Scan(&role, &standardName)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("storage: role name check on move %s: %w", systemID, err)
+	}
+	return &RoleNameCollision{Role: role, Standard: standardName, System: systemName}
+}
+
 // roleImpacts is the impact domain, mirroring the table's CHECK. Validating here
 // turns a typo into a named refusal rather than a constraint violation.
 var roleImpacts = map[string]bool{"outage": true, "degraded": true, "none": true}
@@ -818,19 +911,48 @@ func roleRefNames(refs []roleRef) []string {
 // role name it looks up within stays scoped to a single owner arc either way,
 // so binding the id here avoids one more name-subquery that would raise
 // SQLSTATE 21000 the moment two systems share a name (#627).
+//
+// Every match is read, not just the first (#503, ADR-0503): a name declared on
+// both arcs, which the declaration paths now refuse but a database from before
+// that rule can still hold, is a RoleNameCollision naming both owners, never
+// whichever row the database happened to return.
 func (p *PG) resolveRole(ctx context.Context, q txQuerier, systemID, roleName string) (id, label string, acceptedTypes, pinnedProducts []roleRef, err error) {
-	err = q.QueryRow(ctx, `
+	rows, err := q.Query(ctx, `
 		with sys as (select id, name, standard_id from system where id = $1::uuid)
-		select r.id, coalesce(r.label, '')
+		select r.id, coalesce(r.label, ''), sys.name,
+		       coalesce((select st.name from standard st where st.id = r.standard_id), '')
 		from sys
 		join system_role r
 		     on (r.owner_kind = 'system' and r.system_id = sys.id)
 		     or (r.owner_kind = 'standard' and r.standard_id = sys.standard_id)
-		where r.name = $2`, systemID, roleName).Scan(&id, &label)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return "", "", nil, nil, ErrRoleNotFound
-	} else if err != nil {
+		where r.name = $2`, systemID, roleName)
+	if err != nil {
 		return "", "", nil, nil, fmt.Errorf("storage: resolve role %s/%s: %w", systemID, roleName, err)
+	}
+	var matches int
+	var systemName, standardName string
+	for rows.Next() {
+		var mID, mLabel, mSystem, mStandard string
+		if err := rows.Scan(&mID, &mLabel, &mSystem, &mStandard); err != nil {
+			rows.Close()
+			return "", "", nil, nil, fmt.Errorf("storage: scan role %s/%s: %w", systemID, roleName, err)
+		}
+		matches++
+		systemName = mSystem
+		if mStandard != "" {
+			standardName = mStandard
+		}
+		id, label = mID, mLabel
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return "", "", nil, nil, fmt.Errorf("storage: resolve role %s/%s: %w", systemID, roleName, err)
+	}
+	switch {
+	case matches == 0:
+		return "", "", nil, nil, ErrRoleNotFound
+	case matches > 1:
+		return "", "", nil, nil, &RoleNameCollision{Role: roleName, Standard: standardName, System: systemName}
 	}
 
 	typeRows, err := q.Query(ctx, `

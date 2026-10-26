@@ -798,6 +798,8 @@ func (p *PG) systemIsDescendant(ctx context.Context, q querier, targetID, candid
 // UpdateSystem patches a system by name with the three-way scope split and
 // in-transaction audit, recomputing health when the standard moved (it swaps
 // the whole inherited role set, so the verdict can flip in either direction).
+// A standard move is refused when the new standard declares a role name the
+// system declares itself (ADR-0503).
 //
 // Placement (a relocate or a reparent) is NOT here (#627 Task 13): it is its
 // own act, MoveSystem, gated by system:move. See that function's doc comment,
@@ -808,6 +810,14 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 		return nil, fmt.Errorf("storage: begin update system: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	// A standard change swaps the system's inherited roles, so it is one of
+	// the writes a role-name collision can come from (#503): it takes the
+	// same lock the declarations take, first, before any other.
+	if patch.StandardID != nil {
+		if err := lockRoleNames(ctx, tx); err != nil {
+			return nil, err
+		}
+	}
 
 	before, err := p.resolveSystemForAction(ctx, tx, name, read, action)
 	if err != nil {
@@ -820,6 +830,15 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 			return nil, ErrUnknownStandard
 		}
 		standardPatchID = &sid
+	}
+	// Moving onto a standard that declares a name the system declares itself
+	// would make the name mean two roles here (#503, ADR-0503). Judged only on
+	// an actual move, so an unrelated edit that resends the current standard
+	// is never refused over a collision written before the rule.
+	if standardPatchID != nil && !sameOptional(before.StandardID, standardPatchID) {
+		if err := standardMoveCollision(ctx, tx, before.ID, before.Name, *standardPatchID); err != nil {
+			return nil, err
+		}
 	}
 	var systemTypePatchID *string
 	if patch.SystemTypeID != nil && *patch.SystemTypeID != "" {

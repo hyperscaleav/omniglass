@@ -300,12 +300,40 @@ func (p *PG) SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID stri
 		return nil, fmt.Errorf("storage: begin set role: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	// First, before any other lock: see roleNameLockKey.
+	if err := lockRoleNames(ctx, tx); err != nil {
+		return nil, err
+	}
 
 	// Resolved once, inside this transaction, and reused for both queries
 	// below: see roleOwnerArg.
 	ownerArg, err := p.roleOwnerArg(ctx, tx, ownerKind, ownerID)
 	if err != nil {
 		return nil, err
+	}
+
+	// A role name means one role per system (#503, ADR-0503): declaring a
+	// name on a system its standard declares, or on a standard a conforming
+	// system declares itself, is refused naming both owners. Checked on
+	// every write, not only a create, so an edit to either half of a
+	// collision written before the rule surfaces it rather than revising it
+	// in place. An unknown standard is refused here as the unknown owner it
+	// is (the owner arc CHECK is the backstop for a direct write).
+	switch ownerKind {
+	case "system":
+		if err := systemArcCollision(ctx, tx, ownerArg, spec.Name); err != nil {
+			return nil, err
+		}
+	case "standard":
+		stdID, stdName, err := standardRef(ctx, tx, ownerArg)
+		if errors.Is(err, ErrUnknownStandard) {
+			return nil, ErrRoleRefNotFound
+		} else if err != nil {
+			return nil, err
+		}
+		if err := standardArcCollision(ctx, tx, stdID, stdName, spec.Name); err != nil {
+			return nil, err
+		}
 	}
 
 	// The before-image decides create vs update and gives the audit its old side.
@@ -554,10 +582,25 @@ func (p *PG) SeedSystemRole(ctx context.Context, ownerKind, ownerID string, spec
 		return fmt.Errorf("storage: begin seed role: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	// First, before any other lock: see roleNameLockKey.
+	if err := lockRoleNames(ctx, tx); err != nil {
+		return err
+	}
 
 	ownerArg, err := p.roleOwnerArg(ctx, tx, ownerKind, ownerID)
 	if err != nil {
 		return err
+	}
+	// A shipped role a conforming system already declares itself is not
+	// installed (#503, ADR-0503): the operator's own declaration of the name
+	// wins, the same way the seed never reasserts over an edit, and installing
+	// the shipped one would make the name mean two roles in that system.
+	deferred, err := seedDefersToSystemRole(ctx, tx, ownerKind, ownerArg, spec.Name)
+	if err != nil {
+		return err
+	}
+	if deferred {
+		return nil
 	}
 	var id string
 	err = tx.QueryRow(ctx, fmt.Sprintf(`
@@ -584,6 +627,36 @@ func (p *PG) SeedSystemRole(ctx context.Context, ownerKind, ownerID string, spec
 		return fmt.Errorf("storage: commit seed role: %w", err)
 	}
 	return nil
+}
+
+// seedDefersToSystemRole reports whether the seed should skip a shipped
+// standard role because it is absent and a conforming system already declares
+// a role of the same name itself. A role already present takes the repair path
+// whatever, and an unknown standard is left to the insert's own refusal.
+func seedDefersToSystemRole(ctx context.Context, tx pgx.Tx, ownerKind, ownerArg, name string) (bool, error) {
+	if ownerKind != "standard" {
+		return false, nil
+	}
+	stdID, stdName, err := standardRef(ctx, tx, ownerArg)
+	if errors.Is(err, ErrUnknownStandard) {
+		return false, nil
+	} else if err != nil {
+		return false, err
+	}
+	var present bool
+	if err := tx.QueryRow(ctx, `select exists (select 1 from system_role
+		where owner_kind = 'standard' and standard_id = $1::uuid and name = $2)`, stdID, name).Scan(&present); err != nil {
+		return false, fmt.Errorf("storage: seeded role present %s/%s: %w", stdName, name, err)
+	}
+	if present {
+		return false, nil
+	}
+	err = standardArcCollision(ctx, tx, stdID, stdName, name)
+	var collision *RoleNameCollision
+	if errors.As(err, &collision) {
+		return true, nil
+	}
+	return false, err
 }
 
 // insertSeededSlot writes a seeded role's accepted types and pinned products,
