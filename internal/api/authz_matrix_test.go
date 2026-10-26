@@ -12,6 +12,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
+	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -206,8 +207,31 @@ func componentActions() []actionRoute {
 			},
 			ok: http.StatusOK,
 		},
+		{
+			// The push route (#752, ADR-0752): it names its owner in the
+			// body rather than the path, but the owner is a component target
+			// all the same, so it takes the same split. Gated on
+			// telemetry:push, whose scope decides what may be pushed to; the
+			// caller's component:read decides only which refusal it is owed.
+			name:  "push-telemetry",
+			needs: []string{"telemetry:push"},
+			request: func(target, _ string) (string, string, map[string]any) {
+				return http.MethodPost, "/telemetry:push", map[string]any{
+					"owner":   map[string]any{"kind": "component", "ref": target},
+					"metrics": []map[string]any{{"name": "room-temperature", "value": 21.5}},
+				}
+			},
+			ok: http.StatusAccepted,
+		},
 	}
 }
+
+// discardPublisher stands in for the bus behind the push route: the matrix
+// asserts the route's authorization, which is decided before anything is
+// published, so what it would publish is not the matrix's question.
+type discardPublisher struct{}
+
+func (discardPublisher) PublishTelemetry(context.Context, *ogv1.TelemetryBatch) error { return nil }
 
 // systemActions are the membership and role writes, the routes that hang off a
 // system. Each one that needs a component makes its own, named after the route
@@ -400,7 +424,7 @@ func runAuthzMatrix(t *testing.T, e scopedEntity) {
 	conn.Close(ctx)
 
 	ownerTok := bootstrapOwnerTok(t, ctx, gw)
-	srv := httptest.NewServer(api.NewHandler(gw))
+	srv := httptest.NewServer(api.NewHandler(gw, api.WithTelemetryPublisher(discardPublisher{})))
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 

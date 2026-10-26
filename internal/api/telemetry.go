@@ -124,8 +124,9 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 			"writes only a collected key: a key a native probe writes (a reachability verdict or rung, a probe metric " +
 			"or timing, a held session's state, collection-failed) is a node's own observation and a platform key " +
 			"(health) is the platform's, each rejected by name on every lane; a key a calc rule outputs is rejected " +
-			"naming the rule. Gated by telemetry:push, and the caller's scope must cover the declared owner; an " +
-			"out-of-scope owner is a non-disclosing 404.",
+			"naming the rule. Gated by telemetry:push, whose scope must cover the declared owner (one check per batch): " +
+			"an owner outside the caller's component:read is a non-disclosing 404, and one the caller can read but " +
+			"may not push to is a 403.",
 	}, "telemetry", "push"), func(ctx context.Context, in *pushInput) (*pushOutput, error) {
 		if pub == nil {
 			return nil, huma.Error503ServiceUnavailable("telemetry ingest is unavailable (no bus)")
@@ -141,19 +142,26 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 			return nil, huma.Error422UnprocessableEntity("batch exceeds the per-request item limit")
 		}
 
-		// Scope is the fence that makes a caller-declared owner trustworthy, and it must
-		// be the scope that actually confers telemetry:push, NOT the component:read
-		// scope. A principal routinely holds a wide read and a narrow write (viewer over
-		// the fleet plus operator on one component), so fencing this with the read scope
-		// would let it push telemetry to anything it can see. Resolving the push scope and
-		// looking the owner up through it means an owner outside the caller's push
-		// authority is a non-disclosing 404, the same shape as everywhere else.
+		// Scope is the fence that makes a caller-declared owner trustworthy
+		// (ADR-0752, superseding the 2026-08-27 ruling on #752): the owner is a
+		// component target, resolved the way every route that acts on one is
+		// (#736, ADR-0116). The ACTION scope is the one that confers
+		// telemetry:push, never component:read: a principal routinely holds a
+		// wide read and a narrow write (viewer over the fleet plus operator on
+		// one component), so fencing with the read scope would let it push to
+		// anything it can see. The caller's own component:read decides only
+		// which refusal it is owed: a component outside it is the non-disclosing
+		// 404, and one inside it the push scope does not reach is the truthful
+		// 403, safe because only a caller who could read that row anyway can
+		// meet it. A push-only integration holds no component read and only
+		// ever sees 404.
 		//
 		// This is the ONLY fence on the write: the route publishes to the bus, and the
 		// consumer that finally writes runs as a trusted server process with no scope of
-		// its own. Nothing downstream will catch a mistake made here.
-		pushScope := a.scopeFor(ctx, "telemetry", "push")
-		comp, err := gw.GetComponent(ctx, in.Body.Owner.Ref, pushScope)
+		// its own. Nothing downstream will catch a mistake made here. It runs once per
+		// batch (a batch has one owner), never per sample.
+		compID, err := gw.ResolveActionTarget(ctx, "component", in.Body.Owner.Ref,
+			a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "telemetry", "push"))
 		if err != nil {
 			return nil, mapComponentErr(err)
 		}
@@ -178,7 +186,7 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 
 		out := &pushOutput{Status: http.StatusAccepted}
 		batch := &ogv1.TelemetryBatch{
-			// comp.ID, not comp.Name: this is the one and only authorization
+			// The resolved id, not a name: this is the one and only authorization
 			// fence on the write (see the comment above), and the consumer
 			// that lands this batch runs untrusted-input-shaped re-resolves on
 			// every lane (ownerArcValue -> scopedByName). Publishing the name
@@ -189,7 +197,7 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 			// got its 202. The wire's Owner.Ref stays dual-accept
 			// (ADR-0062, proto/og/v1/telemetry.proto) for any other producer;
 			// this route always has an id in hand, so it sends it.
-			Owner:  &ogv1.Owner{Kind: "component", Ref: comp.ID},
+			Owner:  &ogv1.Owner{Kind: "component", Ref: compID},
 			Source: in.Body.Source,
 		}
 		if !in.Body.TS.IsZero() {
