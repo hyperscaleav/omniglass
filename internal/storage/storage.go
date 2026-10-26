@@ -702,6 +702,9 @@ type Gateway interface {
 	ClaimNode(ctx context.Context, name, tokenHashHex string) (*Node, error)
 	AuthenticateNode(ctx context.Context, name, tokenHashHex string) (bool, error)
 	RecordHeartbeat(ctx context.Context, name string) error
+	// RecordOrphanedBatches counts a node's batches the confinement fence
+	// orphaned (#1200), once per flush rather than per batch.
+	RecordOrphanedBatches(ctx context.Context, name string, batches int64, at time.Time) error
 	NodeWorklist(ctx context.Context, name string) (Worklist, error)
 	// The command wire (#815): a node's pending queue, resolved and rendered,
 	// and its execution reports.

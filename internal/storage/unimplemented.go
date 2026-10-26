@@ -480,6 +480,9 @@ func (UnimplementedGateway) AuthenticateNode(context.Context, string, string) (b
 	return false, nil
 }
 func (UnimplementedGateway) RecordHeartbeat(context.Context, string) error { return nil }
+func (UnimplementedGateway) RecordOrphanedBatches(context.Context, string, int64, time.Time) error {
+	return nil
+}
 func (UnimplementedGateway) NodeWorklist(context.Context, string) (Worklist, error) {
 	return Worklist{}, nil
 }
