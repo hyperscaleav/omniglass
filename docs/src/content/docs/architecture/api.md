@@ -737,9 +737,13 @@ It is the fleet tiers' custom method, not a `PATCH` field, and it is gated by it
 `<resource>:rename` (admin), because it breaks what was typed outside the platform while nothing
 inside it moves: the uuid stays, so every foreign key still resolves and reads the new name. A
 location type's name is also stored by value in `allowed_parent_types`, on every type row and in an
-operator's fork, and the rename rewrites those in the same transaction. An official row keeps its
-shipped name (422), since the boot seed owns it by name; a taken name is a 409, an illegal or
-uuid-shaped one a 422, `root` is reserved for a location type (422), and the rename is audited as
+operator's fork, and the rename rewrites those in the same transaction. A driver's name is baked
+into every task it derives, so a driver rename re-derives its attached endpoints' tasks in the same
+transaction, as a version change does. An official row keeps its shipped name (422), since the boot
+seed owns it by name, and so does a shipped example standard (409): the seed plants one by name
+whenever it is absent, so a renamed one would return on the next boot
+([#827](https://github.com/hyperscaleav/omniglass/issues/827) forks templates instead). A taken name is
+a 409, an illegal or uuid-shaped one a 422, `root` is reserved for a location type (422), and the rename is audited as
 `rename` keyed on the uuid. The answer is the row as its `GET` reads it. The catalogs keyed by a
 telemetry name and the remaining type registries do not rename yet
 ([#1188](https://github.com/hyperscaleav/omniglass/issues/1188)).

@@ -14,8 +14,10 @@ could change it. `POST /<registry>/{id}:rename` now moves the name of a vendor, 
 standard or location type, by its current name or its uuid, gated by its own `<registry>:rename`
 (admin) and served by one gateway primitive, `RenameRegistry`. Every foreign key holds the uuid, so
 every referencing row reads the new name; a location type's by-value copies in
-`allowed_parent_types` and in forks move in the same transaction. An official row keeps its shipped
-name, and the rename is audited. The CLI gains `omniglass <registry> rename`. The remaining
+`allowed_parent_types` and in forks move in the same transaction, and a driver's attached tasks
+re-derive under the new name. An official row keeps its shipped name, and so does a shipped example
+standard (409), which the boot seed plants by name whenever it is absent (`standard.seeded` marks
+them; #827 forks templates instead). The rename is audited. The CLI gains `omniglass <registry> rename`. The remaining
 registries are #1188.
 
 **A product's references can be cleared (#260).** The product patch wrote its nullable columns with
