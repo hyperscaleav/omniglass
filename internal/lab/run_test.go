@@ -52,7 +52,9 @@ func matches(l, want map[string]string) bool {
 	return true
 }
 
-func (f *fakeEngine) Ping(context.Context) (EngineInfo, error) { return EngineInfo{APIVersion: "1.56"}, nil }
+func (f *fakeEngine) Ping(context.Context) (EngineInfo, error) {
+	return EngineInfo{APIVersion: "1.56"}, nil
+}
 func (f *fakeEngine) ImageLabels(_ context.Context, ref string) (map[string]string, bool, error) {
 	l, ok := f.images[ref]
 	return l, ok, nil
