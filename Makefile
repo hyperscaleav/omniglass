@@ -1,7 +1,7 @@
 # Local dev loop + the build/run flow for the single binary. Production deploy
 # is BYO Postgres; tests use ephemeral testcontainer Postgres.
 
-.PHONY: build build-web web image gen gen-proto gen-web adr-renumber test test-web test-short test-e2e bench clean-testcontainers tidy up down dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify docs-walkthroughs dev-sim bench-sim test-netadmin walkthrough-stack dev-sim-container test-walkthrough-stack walkthroughs test-walkthroughs demo test-demos probe
+.PHONY: build build-web web image gen gen-proto gen-web adr-renumber migration migration-check test test-web test-short test-e2e bench clean-testcontainers tidy up down dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify docs-walkthroughs dev-sim bench-sim test-netadmin walkthrough-stack dev-sim-container test-walkthrough-stack walkthroughs test-walkthroughs demo test-demos probe
 
 # Build the single binary (no console embedded; serves the build-the-console
 # placeholder under /web).
@@ -75,6 +75,25 @@ gen-web:
 adr-renumber:
 	@test -n "$(FROM)" && test -n "$(TO)" || { echo "usage: make adr-renumber FROM=NNNN.2 TO=NNNN.3 [FILE=adr-NNNN.2-<slug>.md [SINCE=<rev>]]"; exit 2; }
 	go run ./cmd/adrrenumber -from $(FROM) -to $(TO) -file "$(FILE)" -since "$(SINCE)"
+
+# Create a schema migration (#1246): dbmate new stamps the current UTC time as
+# the version, so it sorts after every migration already on main instead of
+# being picked by hand. NAME is snake_case, what the change does; the file lands
+# in db/migrations/ holding the empty up and down sections. The dbmate is the one
+# go.mod pins, run by version (first run builds it, about a minute).
+DBMATE_VERSION = $(shell go list -m -f '{{.Version}}' github.com/amacneil/dbmate/v2)
+migration:
+	@echo "$(NAME)" | grep -Eq '^[a-z0-9]+(_[a-z0-9]+)*$$' || { echo "usage: make migration NAME=<snake_case_name>"; exit 2; }
+	go run github.com/amacneil/dbmate/v2@$(DBMATE_VERSION) --migrations-dir db/migrations new $(NAME)
+
+# The migration version rules a branch is held to before it merges (#1246): no
+# two files share a version, and every migration the branch adds is newer than
+# the newest on BASE and no later than the clock. CI runs the same check on every
+# PR (.github/workflows/migrations.yml); make test holds uniqueness alone, since
+# the rest needs a base. Fetch first: git fetch origin main.
+BASE ?= origin/main
+migration-check:
+	go run ./cmd/migrationcheck -base $(BASE)
 
 # Full gate: every test, including the testcontainer-backed integration and
 # end-to-end tests (real Postgres) plus the SPA (vitest). Green before commit and

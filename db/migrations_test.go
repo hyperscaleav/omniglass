@@ -1,31 +1,23 @@
 package db
 
-import (
-	"strings"
-	"testing"
-)
+import "testing"
 
-// TestMigrationVersionsAreUnique fails when two migration files share a
-// version prefix. dbmate keys an applied migration on its version alone, so
-// of two files with one version, whichever merges second is recorded as
-// applied without ever running (#933: two branches each took 20261019050000).
+// TestMigrationVersionsAreUnique holds the real migration tree to CheckUnique:
+// every file carries a dbmate new stamp, and no two share one. dbmate keys an
+// applied migration on its version alone, so of two files with one version,
+// whichever merges second is recorded as applied without ever running (#933:
+// two branches each took 20261019050000). The fixture cases are in
+// versions_test.go; the base-relative rule needs a base revision, so CI and
+// make migration-check run it (cmd/migrationcheck, #1246).
 func TestMigrationVersionsAreUnique(t *testing.T) {
-	entries, err := FS.ReadDir("migrations")
+	names, err := Names()
 	if err != nil {
 		t.Fatalf("read migrations: %v", err)
 	}
-	seen := map[string]string{}
-	for _, e := range entries {
-		name := e.Name()
-		version, _, ok := strings.Cut(name, "_")
-		if !ok || version == "" {
-			t.Errorf("%s: no version prefix before the first underscore", name)
-			continue
-		}
-		if first, dup := seen[version]; dup {
-			t.Errorf("version %s is taken twice: %s and %s; dbmate would never apply one of them", version, first, name)
-			continue
-		}
-		seen[version] = name
+	if len(names) == 0 {
+		t.Fatal("no migrations embedded")
+	}
+	for _, err := range CheckUnique(names) {
+		t.Error(err)
 	}
 }

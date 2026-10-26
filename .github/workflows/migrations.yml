@@ -1,0 +1,71 @@
+name: migrations
+
+# The migration version gate (#1246). dbmate keys an applied migration on its
+# version alone, so two branches that each pass make test can still collide
+# once both merge (one is recorded as applied and never runs), and a branch cut
+# before another migration landed carries a version older than main's newest
+# (dbmate, not in strict mode, runs it after the newer one on an upgraded
+# database and before it on a fresh one). make test holds the tree to unique
+# versions; this job holds what a change ADDS against the base it merges into,
+# which needs the base: every added migration is newer than the base's newest,
+# and stamped no later than the clock (make migration-check is the same check,
+# locally).
+#
+# On a pull request the base is the target branch's tip, fetched fresh, so a
+# migration that landed after the branch was cut is in it. On a push to main it
+# is the commit before the push: the backstop for two PRs that both went green
+# before either merged.
+
+on:
+  pull_request:
+    paths:
+      - db/**
+      - cmd/migrationcheck/**
+      - .github/workflows/migrations.yml
+  push:
+    branches: [main]
+    paths:
+      - db/**
+      - cmd/migrationcheck/**
+      - .github/workflows/migrations.yml
+
+permissions:
+  contents: read
+
+# A newer push to a PR supersedes the run before it; a push to main never does,
+# since each push there is judged against its own before-commit and a cancelled
+# run would leave that push unchecked.
+concurrency:
+  group: migrations-${{ github.ref }}-${{ github.event_name == 'push' && github.sha || 'pr' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  versions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # The checkout is one commit deep; the base's tree is all the check reads.
+      - name: Fetch the base
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then
+            git fetch --no-tags --depth=1 origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+            echo "BASE=origin/${BASE_REF}" >> "$GITHUB_ENV"
+          else
+            git fetch --no-tags --depth=1 origin "$BEFORE"
+            echo "BASE=${BEFORE}" >> "$GITHUB_ENV"
+          fi
+
+      # make migration-check runs this same command; calling it directly keeps
+      # the ref a shell word rather than text make expands into a recipe.
+      - name: Added migrations are newer than the base
+        run: go run ./cmd/migrationcheck -base "$BASE"
