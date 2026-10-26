@@ -528,6 +528,13 @@ func (p *PG) DeleteSystemRole(ctx context.Context, actorID, ownerKind, ownerID, 
 // absent, never reasserted, so an operator who retunes a shipped standard's
 // roles keeps their edit across restarts. Deliberately unaudited, the same lane
 // SeedStandard uses for the standards these roles hang off.
+//
+// It is one transaction (#508, ADR-0508): the role and its typed-slot sets land
+// together or not at all, so a fault between the statements can never commit a
+// role that accepts any component. And it repairs what the old two-statement
+// shape could leave behind: on a boot that finds the role already present, a
+// role nobody has revised (see repairSeededSlot) whose accepted types or pinned
+// products are missing outright gets the declared set.
 func (p *PG) SeedSystemRole(ctx context.Context, ownerKind, ownerID string, spec SystemRoleSpec) error {
 	col, err := roleOwnerColumn(ownerKind)
 	if err != nil {
@@ -541,42 +548,108 @@ func (p *PG) SeedSystemRole(ctx context.Context, ownerKind, ownerID string, spec
 		return ErrRoleImpact
 	}
 	positionLabels := normalizePositionLabels(spec.PositionLabels)
-	ownerArg, err := p.roleOwnerArg(ctx, p.pool, ownerKind, ownerID)
+
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("storage: begin seed role: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	ownerArg, err := p.roleOwnerArg(ctx, tx, ownerKind, ownerID)
 	if err != nil {
 		return err
 	}
 	var id string
-	err = p.pool.QueryRow(ctx, fmt.Sprintf(`
+	err = tx.QueryRow(ctx, fmt.Sprintf(`
 		insert into system_role (owner_kind, %s, name, label, quorum, capacity, position_labels, impact, alternate_id)
 		values ($1, %s, $3, $4, $5, $6, $7, $8, nullif($9, '')::uuid)
 		on conflict (owner_kind, standard_id, system_id, name) do nothing
 		returning id`, col, roleOwnerExpr(ownerKind)),
 		ownerKind, ownerArg, spec.Name, labelOrNull(spec.Label), max(spec.Quorum, 1), spec.Capacity, positionLabels, impact, spec.AlternateID).Scan(&id)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil // already there, and the operator owns it now
-	}
-	if err != nil {
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		// Already there, and the operator owns it now: only a set an
+		// interrupted install left missing is filled.
+		if err := repairSeededSlot(ctx, tx, ownerKind, col, ownerArg, spec); err != nil {
+			return err
+		}
+	case err != nil:
 		return mapRoleWriteErr(err)
+	default:
+		if err := insertSeededSlot(ctx, tx, id, spec.AcceptedTypes, spec.PinnedProducts); err != nil {
+			return err
+		}
 	}
-	if len(spec.AcceptedTypes) > 0 {
-		if _, err := p.pool.Exec(ctx, `
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("storage: commit seed role: %w", err)
+	}
+	return nil
+}
+
+// insertSeededSlot writes a seeded role's accepted types and pinned products,
+// inside the seed's transaction. A name the registry lacks resolves to NULL on
+// a NOT NULL column and is ErrRoleRefNotFound, rolling the whole role back.
+func insertSeededSlot(ctx context.Context, tx pgx.Tx, roleID string, types, products []string) error {
+	if len(types) > 0 {
+		if _, err := tx.Exec(ctx, `
 			insert into system_role_type (role_id, component_type_id)
 			select $1, (select id from component_type where name = c or id::text = c)
 			from unnest($2::text[]) c
-			on conflict (role_id, component_type_id) do nothing`, id, spec.AcceptedTypes); err != nil {
+			on conflict (role_id, component_type_id) do nothing`, roleID, types); err != nil {
 			return mapRoleWriteErr(err)
 		}
 	}
-	if len(spec.PinnedProducts) > 0 {
-		if _, err := p.pool.Exec(ctx, `
+	if len(products) > 0 {
+		if _, err := tx.Exec(ctx, `
 			insert into system_role_product (role_id, product_id)
 			select $1, (select id from product where name = c or id::text = c)
 			from unnest($2::text[]) c
-			on conflict (role_id, product_id) do nothing`, id, spec.PinnedProducts); err != nil {
+			on conflict (role_id, product_id) do nothing`, roleID, products); err != nil {
 			return mapRoleWriteErr(err)
 		}
 	}
 	return nil
+}
+
+// repairSeededSlot fills a typed-slot set that an already-present seeded role
+// is missing outright, the one state the seed's old two-statement shape could
+// commit (the role insert landed, a set insert after it did not), and that no
+// later boot would otherwise ever look at (#508).
+//
+// Two conditions keep it from touching anything an operator owns. The role
+// must be unrevised: updated_at still equal to created_at, which holds exactly
+// until the first SetSystemRole, whose upsert bumps updated_at on every write
+// and is the only statement that updates the row. And the set must be empty:
+// a set holding any rows is whatever an install or an operator left there, and
+// is never merged into. Each set is judged on its own, so a role whose types
+// landed and whose products did not gets the products alone.
+func repairSeededSlot(ctx context.Context, tx pgx.Tx, ownerKind, col, ownerArg string, spec SystemRoleSpec) error {
+	var (
+		id                  string
+		unrevised           bool
+		hasTypes, hasProdts bool
+	)
+	err := tx.QueryRow(ctx, fmt.Sprintf(`
+		select r.id, r.updated_at = r.created_at,
+		       exists (select 1 from system_role_type t where t.role_id = r.id),
+		       exists (select 1 from system_role_product p where p.role_id = r.id)
+		from system_role r
+		where r.owner_kind = $1 and r.%s = %s and r.name = $3
+		for update`, col, roleOwnerExpr(ownerKind)), ownerKind, ownerArg, spec.Name).Scan(&id, &unrevised, &hasTypes, &hasProdts)
+	if err != nil {
+		return fmt.Errorf("storage: read seeded role %s: %w", spec.Name, err)
+	}
+	if !unrevised {
+		return nil
+	}
+	var types, products []string
+	if !hasTypes {
+		types = spec.AcceptedTypes
+	}
+	if !hasProdts {
+		products = spec.PinnedProducts
+	}
+	return insertSeededSlot(ctx, tx, id, types, products)
 }
 
 // ownerRefIDs is the refs' ids.
