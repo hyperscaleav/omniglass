@@ -1,7 +1,7 @@
 // The system map's pure core (#791, ADR-0128): the standard declares WHERE a
 // role position sits (normalized 2D against an aspect); the system's staffing
 // says WHO is there. A marker is the join, and an empty position is a marker
-// too (hollow): the map shows the room as built, gaps included.
+// too (a dashed ring): the map shows the room as built, gaps included.
 import type { SlotVM, SystemZoomVM } from "./system_zoom";
 
 export type StandardMapDecl = {
@@ -58,3 +58,14 @@ export function mapMarkers(decl: StandardMapDecl, vm: SystemZoomVM): MapMarker[]
   }
   return markers;
 }
+
+// markerAnchor says how a marker hangs off its point (#1074, toward #1072).
+// In the open it centres under the point, label below; within reach of a side
+// it anchors inward, and near the bottom its label rides above the icon, so
+// the icon and its label stay inside the map box. Pure, so the thresholds are
+// tested without layout.
+export type MarkerAnchor = { x: "start" | "center" | "end"; y: "below" | "above" };
+export function markerAnchor(x: number, y: number): MarkerAnchor {
+  return { x: x < 0.12 ? "start" : x > 0.88 ? "end" : "center", y: y > 0.85 ? "above" : "below" };
+}
+
