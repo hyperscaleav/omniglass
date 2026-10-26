@@ -137,6 +137,63 @@ describe("Products page", () => {
     expect(within(blade).getByRole("option", { name: "Crestron CT" })).toBeInTheDocument();
   });
 
+  // #260: the "None" the vendor and driver pickers offer has to reach the
+  // server as the three-state string's clear (""), the same sentinel the type
+  // registries' blades send (#716). The blade used to omit an emptied picker
+  // (`|| undefined`), which the patch read as "unchanged", so choosing None and
+  // saving reverted on the refetch.
+  it("sends the clear when an operator picks None for the vendor and the driver", async () => {
+    let sent: unknown;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "PATCH" && req.url.includes("/products/")) {
+        sent = JSON.parse(await req.clone().text());
+        return new Response(JSON.stringify({ ...seed[1], vendor: undefined, vendor_id: undefined }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ products: seed }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    mount();
+    fireEvent.click(screen.getByText("Acme Panel"));
+    const blade = await waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    fireEvent.click(within(blade).getByLabelText("Edit"));
+    const vendor = within(blade).getByLabelText("Vendor") as HTMLSelectElement;
+    expect(vendor.value).toBe("acme-av");
+    fireEvent.change(vendor, { target: { value: "" } });
+    fireEvent.click(within(blade).getByText("Save"));
+    await waitFor(() => expect(sent).toBeTruthy());
+    // Both pickers read None now (Acme Panel never had a driver), and both ride
+    // as the clear rather than being left out of the body.
+    expect(sent).toMatchObject({ vendor_id: "", driver_id: "" });
+  });
+
+  it("still sends a chosen vendor by its handle", async () => {
+    let sent: unknown;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "PATCH" && req.url.includes("/products/")) {
+        sent = JSON.parse(await req.clone().text());
+        return new Response(JSON.stringify(seed[1]), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ products: seed }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    mount();
+    fireEvent.click(screen.getByText("Acme Panel"));
+    const blade = await waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    fireEvent.click(within(blade).getByLabelText("Edit"));
+    fireEvent.change(within(blade).getByLabelText("Vendor"), { target: { value: "crestron" } });
+    fireEvent.click(within(blade).getByText("Save"));
+    await waitFor(() => expect(sent).toBeTruthy());
+    expect(sent).toMatchObject({ vendor_id: "crestron" });
+  });
+
   it("shows the product's own vendor when the registries answer after edit opened", async () => {
     // Three pickers on this blade read three separate registries, none of which
     // is guaranteed to answer before the operator is looking at the field. A
