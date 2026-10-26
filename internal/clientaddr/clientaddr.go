@@ -59,6 +59,11 @@ func parseEntry(entry string) (netip.Prefix, error) {
 		if err != nil {
 			return netip.Prefix{}, err
 		}
+		// A peer is unmapped before it is matched, so a mapped prefix is
+		// read as the IPv4 range it maps, or it would never match.
+		if p.Addr().Is4In6() && p.Bits() >= 96 {
+			p = netip.PrefixFrom(p.Addr().Unmap(), p.Bits()-96)
+		}
 		return p.Masked(), nil
 	}
 	a, err := netip.ParseAddr(entry)

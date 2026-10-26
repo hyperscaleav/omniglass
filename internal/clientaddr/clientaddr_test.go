@@ -80,6 +80,9 @@ func TestParseReadsAListAndRefusesAnythingElse(t *testing.T) {
 		" 10.1.2.0/24 ,::1": "10.1.2.0/24,::1/128",
 		"10.1.2.3/24":       "10.1.2.0/24",
 		"::ffff:10.0.0.1":   "10.0.0.1/32",
+		// A mapped prefix is the IPv4 range it maps, since a peer is
+		// unmapped before it is matched.
+		"::ffff:10.0.0.0/104": "10.0.0.0/8",
 	} {
 		got, err := clientaddr.Parse(in)
 		if err != nil {
