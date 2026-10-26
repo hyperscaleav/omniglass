@@ -3,9 +3,12 @@ package storage_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"maps"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/secret"
@@ -220,5 +223,167 @@ func TestLocationTypeRenameRewritesPlacementRules(t *testing.T) {
 	}
 	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "room-100", LocationType: "room", ParentName: strptr("west")}, all); err != nil {
 		t.Errorf("a forked room under the renamed type was refused: %v", err)
+	}
+}
+
+// TestASeededStandardKeepsItsName: the boot seed plants its example standards
+// by NAME, only when absent (SeedStandard), so a renamed one would be planted
+// again on the next boot, beside the operator's renamed row, with the shipped
+// roles and choices hung on it. The rename refuses a seeded standard instead,
+// naming why, and a reboot then finds one row under the shipped name. A row an
+// older binary seeded (before the marker existed) is marked by the next boot,
+// so it is refused too. Forking a template into a standard of the operator's
+// own is #827's.
+func TestASeededStandardKeepsItsName(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	t.Cleanup(gw.Close)
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer conn.Close(ctx)
+	named := func(name string) int {
+		t.Helper()
+		var n int
+		if err := conn.QueryRow(ctx, `select count(*) from standard where name = $1`, name).Scan(&n); err != nil {
+			t.Fatalf("count standards named %q: %v", name, err)
+		}
+		return n
+	}
+
+	if _, err := gw.RenameRegistry(ctx, "", "standard", "meeting-room", "conference-room"); !errors.Is(err, storage.ErrRegistrySeededExample) {
+		t.Fatalf("rename a seeded standard: want ErrRegistrySeededExample, got %v", err)
+	}
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("reboot seed: %v", err)
+	}
+	if n, m := named("meeting-room"), named("conference-room"); n != 1 || m != 0 {
+		t.Fatalf("after a refused rename and a reboot: %d meeting-room, %d conference-room; want 1 and 0", n, m)
+	}
+
+	// A row seeded before the marker existed reads unmarked until the next boot,
+	// which marks it without touching anything the operator edited.
+	if _, err := conn.Exec(ctx, `update standard set seeded = false, label = 'Our Meeting Room' where name = 'meeting-room'`); err != nil {
+		t.Fatalf("unmark: %v", err)
+	}
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("reboot seed: %v", err)
+	}
+	if _, err := gw.RenameRegistry(ctx, "", "standard", "meeting-room", "conference-room"); !errors.Is(err, storage.ErrRegistrySeededExample) {
+		t.Fatalf("rename a standard an older boot seeded: want ErrRegistrySeededExample, got %v", err)
+	}
+	if got, err := gw.GetStandard(ctx, "meeting-room"); err != nil || got.Label != "Our Meeting Room" {
+		t.Fatalf("the boot that marked it reverted the operator's edit: %+v, %v", got, err)
+	}
+}
+
+// TestADriverRenameRederivesItsTasks: every task a driver derives bakes the
+// driver's name into its spec (and its id hashes the spec), so a rename that
+// only moved the column would leave the node running tasks under a name the
+// registry no longer has, and hand the churn to the next unrelated edit. The
+// rename re-derives the attached endpoints' tasks in its own transaction, as a
+// version change does (#823): every driver task carries the new name, the
+// endpoint is bumped so the node picks the set up, and a later label edit moves
+// nothing.
+func TestADriverRenameRederivesItsTasks(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	t.Cleanup(gw.Close)
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	all := scope.Set{All: true}
+	if _, err := gw.CreateDriver(ctx, "", storage.Driver{Name: "panel-proto", Label: "Panel", Version: "1.0.0", Spec: []byte(lineProtoSpec)}); err != nil {
+		t.Fatalf("driver: %v", err)
+	}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-n"}, all, all, all, all); err != nil {
+		t.Fatalf("component: %v", err)
+	}
+	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-n"}, all, all); err != nil {
+		t.Fatalf("node: %v", err)
+	}
+	comp, name, node := "panel-n", "panel-proto", "edge-n"
+	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
+		Driver: &name, Component: &comp, Node: &node,
+		Inputs: map[string]string{"host": "10.20.4.62"}, SecretRead: all, CanAdmin: true,
+	}, all)
+	if err != nil {
+		t.Fatalf("endpoint: %v", err)
+	}
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer conn.Close(ctx)
+	driverTasks := func() map[string]string {
+		t.Helper()
+		out := map[string]string{}
+		for _, r := range endpointTasks(t, ctx, conn, ep.ID) {
+			var spec struct {
+				Driver string `json:"driver"`
+			}
+			if err := json.Unmarshal([]byte(r.Spec), &spec); err != nil {
+				t.Fatalf("task spec: %v", err)
+			}
+			if spec.Driver != "" {
+				out[r.ID] = spec.Driver
+			}
+		}
+		return out
+	}
+	epUpdated := func() time.Time {
+		t.Helper()
+		var ts time.Time
+		if err := conn.QueryRow(ctx, `select updated_at from endpoint where id = $1`, ep.ID).Scan(&ts); err != nil {
+			t.Fatalf("endpoint updated_at: %v", err)
+		}
+		return ts
+	}
+	before, stampedBefore := driverTasks(), epUpdated()
+	if len(before) == 0 {
+		t.Fatal("the fixture derived no driver tasks")
+	}
+
+	if _, err := gw.RenameRegistry(ctx, "", "driver", "panel-proto", "panel-protocol"); err != nil {
+		t.Fatalf("rename driver: %v", err)
+	}
+	after := driverTasks()
+	if len(after) != len(before) {
+		t.Fatalf("driver tasks went from %d to %d across the rename", len(before), len(after))
+	}
+	for id, drv := range after {
+		if drv != "panel-protocol" {
+			t.Errorf("task %s still bakes driver %q after the rename", id, drv)
+		}
+	}
+	if !epUpdated().After(stampedBefore) {
+		t.Error("the endpoint was not bumped, so the node would keep the old task set")
+	}
+
+	// The churn happened at the rename, so an unrelated edit moves nothing.
+	label := "Panel protocol"
+	if _, err := gw.UpdateDriver(ctx, "", "panel-protocol", storage.DriverPatch{Label: &label}); err != nil {
+		t.Fatalf("label edit: %v", err)
+	}
+	if again := driverTasks(); !maps.Equal(again, after) {
+		t.Errorf("a label edit after the rename re-derived the tasks: %v, want %v", again, after)
 	}
 }

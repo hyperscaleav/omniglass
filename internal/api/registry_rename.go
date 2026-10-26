@@ -30,6 +30,9 @@ type registryRename[O any] struct {
 	resource   string
 	collection string
 	noun       string
+	// refusals adds the registry's own refusals to the generated description,
+	// after the ones every registry shares.
+	refusals string
 	// read answers the renamed row, by the uuid the rename returned, in the
 	// registry's own response shape, so a rename answers exactly what a GET does.
 	read func(ctx context.Context, gw storage.Gateway, id string) (*O, error)
@@ -56,7 +59,7 @@ func registerRegistryRename[O any](api huma.API, a *authenticator, gw storage.Ga
 			"a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. "+
 			"A label rendered from the name is not restamped (the recompute verb applies that). "+
 			"An official %[1]s keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; "+
-			"an illegal or uuid-shaped name is a 422. Audited as rename. Gated by %[2]s:rename.", r.noun, r.resource),
+			"an illegal or uuid-shaped name is a 422.%[3]s Audited as rename. Gated by %[2]s:rename.", r.noun, r.resource, r.refusals),
 	}, r.resource, "rename"), func(ctx context.Context, in *renameRegistryInput) (*O, error) {
 		id, err := gw.RenameRegistry(ctx, actorID(ctx), r.resource, in.ID, in.Body.Name)
 		switch {
@@ -64,6 +67,9 @@ func registerRegistryRename[O any](api huma.API, a *authenticator, gw storage.Ga
 			return nil, huma.Error409Conflict(fmt.Sprintf("a %s named %q already exists", r.noun, in.Body.Name))
 		case errors.Is(err, storage.ErrTypeOfficial):
 			return nil, huma.Error422UnprocessableEntity(fmt.Sprintf("an official %s keeps its shipped name", r.noun))
+		case errors.Is(err, storage.ErrRegistrySeededExample):
+			return nil, huma.Error409Conflict(fmt.Sprintf("this %[1]s is a shipped example, which the boot seed plants by name whenever it is absent, "+
+				"so renaming it would bring the shipped one back on the next boot beside yours; create a %[1]s of your own under the new name instead", r.noun))
 		case err != nil:
 			return nil, r.mapErr(err)
 		}
@@ -114,6 +120,7 @@ func registerRegistryRenames(api huma.API, a *authenticator, gw storage.Gateway)
 	})
 	registerRegistryRename(api, a, gw, registryRename[standardOutput]{
 		resource: "standard", collection: "standards", noun: "standard",
+		refusals: " A shipped example standard keeps its name too (409): the boot seed plants it by name whenever it is absent, so a renamed one would come back on the next boot; forking a template into a standard of your own is #827.",
 		read: func(ctx context.Context, gw storage.Gateway, id string) (*standardOutput, error) {
 			st, err := gw.GetStandard(ctx, id)
 			if err != nil {

@@ -6,12 +6,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
+	"github.com/jackc/pgx/v5"
 )
 
 // TestRegistryRenameAPI drives #555 over HTTP: each of the five registries
@@ -32,6 +34,18 @@ func TestRegistryRenameAPI(t *testing.T) {
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
+	// A role holding vendor:update but not vendor:rename: the rename is its own
+	// permission (ADR-0555), so an editor is not thereby a renamer. Inserted
+	// before the handler reads the role set.
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	if _, err := conn.Exec(ctx, `insert into role (name, official, permissions, inherits) values ('vendor-editor', false, $1, '{viewer}')`,
+		[]string{"vendor:update"}); err != nil {
+		t.Fatalf("insert vendor-editor role: %v", err)
+	}
+	conn.Close(ctx)
 	ownerTok := bootstrapOwnerTok(t, ctx, gw)
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
@@ -119,4 +133,19 @@ func TestRegistryRenameAPI(t *testing.T) {
 		})
 	}
 	c.do(adminTok, http.MethodPost, "/location-types/wing:rename", map[string]any{"name": "root"}, http.StatusUnprocessableEntity)
+
+	// A seeded example standard keeps its name: the boot seed plants it by name
+	// when absent, so a rename would bring the shipped one back on the next boot.
+	// A 409 that says so, and the row is untouched.
+	refusal := string(c.do(adminTok, http.MethodPost, "/standards/meeting-room:rename", map[string]any{"name": "conference-room"}, http.StatusConflict))
+	if !strings.Contains(refusal, "shipped example") || !strings.Contains(refusal, "next boot") {
+		t.Errorf("seeded standard rename refusal = %s, want it to name the shipped example and the next boot", refusal)
+	}
+	c.do(adminTok, http.MethodGet, "/standards/meeting-room", nil, http.StatusOK)
+
+	// vendor:update without vendor:rename edits the vendor and cannot rename it.
+	editorTok := principalWithGrants(t, ctx, dsn, "vendor-editor", []grant{{role: "vendor-editor", scopeKind: "all"}})
+	c.do(editorTok, http.MethodPatch, "/vendors/acme", map[string]any{"label": "Acme Audio"}, http.StatusOK)
+	c.do(editorTok, http.MethodPost, "/vendors/acme:rename", map[string]any{"name": "acme-audio"}, http.StatusForbidden)
+	c.do(adminTok, http.MethodGet, "/vendors/acme", nil, http.StatusOK)
 }
