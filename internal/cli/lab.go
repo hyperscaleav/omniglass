@@ -49,6 +49,7 @@ func newLabRunCmd(version string) *cobra.Command {
 		scenario string
 		image    string
 		project  string
+		script   labScript
 	)
 	cmd := &cobra.Command{
 		Use:   "run",
@@ -64,13 +65,23 @@ func newLabRunCmd(version string) *cobra.Command {
 			"database.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+			sigs := []os.Signal{os.Interrupt, syscall.SIGTERM}
+			if script.whilePID != 0 {
+				// A lab held for a script is the script's to stop, with
+				// one SIGTERM from its trap: the terminal's Ctrl-C, which
+				// reaches the whole process group, is the script's, and a
+				// second signal would cut the teardown short.
+				signal.Ignore(os.Interrupt)
+				sigs = sigs[1:]
+			}
+			ctx, stop := signal.NotifyContext(cmd.Context(), sigs...)
 			defer stop()
 			// A second Ctrl-C during teardown kills the process: the next run
 			// reaps what is left.
 			go func() { <-ctx.Done(); stop() }()
 			return runLab(ctx, cmd.OutOrStdout(), version, labFlags{
 				port: port, listen: listen, fresh: fresh, scenario: scenario, image: image, project: project,
+				script: script,
 			})
 		},
 	}
@@ -81,13 +92,30 @@ func newLabRunCmd(version string) *cobra.Command {
 	cmd.Flags().StringVar(&image, "image", "", "run this omniglass image instead of the one this binary was built with (env OMNIGLASS_LAB_IMAGE); one that is not this binary's own build is warned about")
 	cmd.Flags().StringVar(&project, "project", lab.DefaultProject, "the Docker compose project name")
 	_ = cmd.Flags().MarkHidden("project")
+	// For scripts, not learners (the demo pipeline's recorders and the
+	// probe, web/e2e/lib/lab.sh, #1197): a throwaway lab of its own project,
+	// held for the script's process, saying how to reach it in a file.
+	cmd.Flags().BoolVar(&script.ephemeral, "ephemeral", false, "a throwaway lab: its data goes when it stops (needs its own --project)")
+	cmd.Flags().StringVar(&script.readyFile, "ready-file", "", "once ready, write how to reach the lab here, as shell assignments")
+	cmd.Flags().IntVar(&script.whilePID, "while-pid", 0, "stop the lab once this process is gone")
+	for _, name := range []string{"ephemeral", "ready-file", "while-pid"} {
+		_ = cmd.Flags().MarkHidden(name)
+	}
 	return cmd
+}
+
+// labScript are lab run's script-only settings.
+type labScript struct {
+	ephemeral bool
+	readyFile string
+	whilePID  int
 }
 
 type labFlags struct {
 	port                             int
 	listen, scenario, image, project string
 	fresh                            bool
+	script                           labScript
 }
 
 func runLab(ctx context.Context, out io.Writer, version string, f labFlags) error {
@@ -147,8 +175,10 @@ func runLab(ctx context.Context, out io.Writer, version string, f labFlags) erro
 			Project: f.project, Listen: f.listen, Port: f.port, Image: choice.Ref, Scenario: sc.Name,
 			NodeToken: token, NodeTokenHash: hex.EncodeToString(hash),
 			Owner: lab.Owner{Host: host, PID: os.Getpid(), PIDNS: lab.CurrentPIDNS()}, WorkDir: wd,
+			Ephemeral: f.script.ephemeral,
 		},
 		Image: choice, Fresh: f.fresh, PlantedFaults: plantedLabels(faults), Hold: true,
+		ReadyFile: f.script.readyFile, WhilePID: f.script.whilePID,
 	})
 	return err
 }

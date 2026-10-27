@@ -1,19 +1,22 @@
 # Set up monitoring (#927): give a component nothing collects from yet the
 # SNMP driver and a reachability probe, collected by the node edge-hq, and
-# watch reachability and samples arrive from the simulated component. The
-# walkthrough stack places the component (bay-2-display, a Boreal Edge 55 in
-# Bay 2) with no endpoint (web/e2e/lib/stack.sh). Enrolling a node is not
-# shown: its second half runs on the node's host (omniglass node run with the
-# one-time token), out of the console's reach; the stack enrolls edge-hq that
-# way. Unplugging a component and watching the rule's alarm open is
-# watch-a-rule-raise-an-alarm.
+# watch reachability and samples arrive from the simulated component. Its
+# setup places the component (bay-2-display, a Boreal Edge 55 in Bay 2) with
+# no endpoint, off camera (#1197); fix-an-endpoint-in-place stages the same
+# scene. Enrolling a node is not shown: its second half runs on the node's
+# host (omniglass node run with the one-time token), out of the console's
+# reach; the lab enrolls edge-hq that way. Unplugging a component and
+# watching the rule's alarm open is watch-a-rule-raise-an-alarm.
 # The component view refreshes on its own (#934), so the walkthrough stays on
 # the page: it turns to Overview and waits for the first samples to land
-# there, which takes the node's next 2s check-in (the walkthrough stack's
-# setting, web/e2e/lib/stack.sh), when it pulls the new tasks, and the next
-# probe and poll. Recorded on the 2s check-in, it runs 48 to 51s.
+# there, which takes the node's next 2s check-in (the lab's cadence,
+# internal/lab), when it pulls the new tasks, and the next probe and poll.
+# Recorded on the 2s check-in, it runs 48 to 51s.
 title: Set up monitoring on a component
 description: Attach the SNMP driver and add a reachability probe to a component, both collected by an edge node, and watch reachability and samples arrive.
+setup:
+  - post: /components
+    body: { name: bay-2-display, label: Bay 2 Display, product: boreal-edge-55, location: bay-2 }
 steps:
   - goto: /components/bay-2-display?tab=configure
     caption: A display mounted in Bay 2. Endpoints are how it is reached, and it has none yet, so nothing collects from it.

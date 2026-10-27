@@ -35,6 +35,11 @@ const (
 	LoginPassword = "dev"
 	// PostgresImage is the database the lab runs.
 	PostgresImage = "postgres:18"
+	// DSN is the database's address on the lab network.
+	DSN = "postgres://omniglass:omniglass@db:5432/omniglass?sslmode=disable"
+	// ServerURL is the server's address on the lab network, where a
+	// container that joins it reaches the API and the console.
+	ServerURL = "http://server:8080"
 )
 
 // In-container paths and ports.
@@ -54,20 +59,24 @@ const (
 // and Docker Desktop, show the lab as one project; the lab's own keys name
 // the owner (host and pid) the reaper checks.
 const (
-	LabelComposeProject   = "com.docker.compose.project"
-	LabelComposeService   = "com.docker.compose.service"
-	LabelComposeNumber    = "com.docker.compose.container-number"
-	LabelComposeOneOff    = "com.docker.compose.oneoff"
-	LabelComposeNetwork   = "com.docker.compose.network"
-	LabelComposeVolume    = "com.docker.compose.volume"
-	LabelComposeWorkDir   = "com.docker.compose.project.working_dir"
-	LabelComposeVersion   = "com.docker.compose.version"
-	LabelComposeHash      = "com.docker.compose.config-hash"
-	LabelComposeFiles     = "com.docker.compose.project.config_files"
-	LabelLab              = "omniglass.lab"
-	LabelLabHost          = "omniglass.lab.host"
-	LabelLabPID           = "omniglass.lab.pid"
-	LabelLabPIDNS         = "omniglass.lab.pidns"
+	LabelComposeProject = "com.docker.compose.project"
+	LabelComposeService = "com.docker.compose.service"
+	LabelComposeNumber  = "com.docker.compose.container-number"
+	LabelComposeOneOff  = "com.docker.compose.oneoff"
+	LabelComposeNetwork = "com.docker.compose.network"
+	LabelComposeVolume  = "com.docker.compose.volume"
+	LabelComposeWorkDir = "com.docker.compose.project.working_dir"
+	LabelComposeVersion = "com.docker.compose.version"
+	LabelComposeHash    = "com.docker.compose.config-hash"
+	LabelComposeFiles   = "com.docker.compose.project.config_files"
+	LabelLab            = "omniglass.lab"
+	LabelLabHost        = "omniglass.lab.host"
+	LabelLabPID         = "omniglass.lab.pid"
+	LabelLabPIDNS       = "omniglass.lab.pidns"
+	// LabelLabEphemeral marks a throwaway lab (a demo recorder's, #1197):
+	// its data goes with it, and the reaper may remove an abandoned one of
+	// any project, which it never does to a learner's lab.
+	LabelLabEphemeral     = "omniglass.lab.ephemeral"
 	composeVersionClaimed = "2.0.0"
 )
 
@@ -101,6 +110,10 @@ type Options struct {
 	Owner         Owner
 	// WorkDir is reported to compose as the project's working directory.
 	WorkDir string
+	// Ephemeral makes a throwaway lab, for a script (the demo pipeline's
+	// recorders and the probe, #1197) rather than a learner: every resource
+	// is labeled as such, and its volumes go at teardown.
+	Ephemeral bool
 }
 
 // Mount is a named volume mounted into a container.
@@ -158,8 +171,10 @@ type Spec struct {
 	Project string
 	// Owner is the run that owns what the spec creates; its own teardown
 	// removes only what carries this owner.
-	Owner   Owner
-	Network string
+	Owner Owner
+	// Ephemeral is a throwaway lab's (Options.Ephemeral).
+	Ephemeral bool
+	Network   string
 	// NetworkLabels label the lab network.
 	NetworkLabels map[string]string
 	Volumes       []Volume
@@ -185,6 +200,9 @@ func OwnedLabels(s Spec) map[string]string {
 	if s.Owner.PID != 0 {
 		l[LabelLabHost], l[LabelLabPID], l[LabelLabPIDNS] = s.Owner.Host, strconv.Itoa(s.Owner.PID), s.Owner.PIDNS
 	}
+	if s.Ephemeral {
+		l[LabelLabEphemeral] = "true"
+	}
 	return l
 }
 
@@ -208,9 +226,15 @@ func Plan(o Options) (Spec, error) {
 	if o.Image == "" {
 		return Spec{}, fmt.Errorf("lab: no image to run")
 	}
+	if o.Ephemeral && o.Project == DefaultProject {
+		return Spec{}, fmt.Errorf("a throwaway lab removes its data when it stops, so it needs a --project of its own, never %s", DefaultProject)
+	}
 	owner := map[string]string{
 		LabelLab: o.Project, LabelLabHost: o.Owner.Host, LabelLabPID: strconv.Itoa(o.Owner.PID), LabelLabPIDNS: o.Owner.PIDNS,
 		LabelComposeProject: o.Project,
+	}
+	if o.Ephemeral {
+		owner[LabelLabEphemeral] = "true"
 	}
 	with := func(extra map[string]string) map[string]string {
 		m := map[string]string{}
@@ -226,6 +250,7 @@ func Plan(o Options) (Spec, error) {
 	spec := Spec{
 		Project:       o.Project,
 		Owner:         o.Owner,
+		Ephemeral:     o.Ephemeral,
 		Network:       o.Project + "_default",
 		NetworkLabels: with(map[string]string{LabelComposeNetwork: "default", LabelComposeVersion: composeVersionClaimed}),
 		Volumes: []Volume{
@@ -245,7 +270,7 @@ func Plan(o Options) (Spec, error) {
 			LabelComposeWorkDir: o.WorkDir, LabelComposeVersion: composeVersionClaimed,
 		})
 	}
-	dsn := "postgres://omniglass:omniglass@db:5432/omniglass?sslmode=disable"
+	dsn := DSN
 	appEnv := []string{
 		"OMNIGLASS_DSN=" + dsn,
 		"OMNIGLASS_DATA_DIR=" + dataDir,

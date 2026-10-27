@@ -3,7 +3,7 @@
 # #1193). Production deploy is BYO Postgres; tests use ephemeral testcontainer
 # Postgres.
 
-.PHONY: all lab test-lab build build-web web image gen gen-proto gen-web adr-renumber migration migration-check test test-web test-short test-e2e bench clean-testcontainers tidy dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify docs-walkthroughs bench-sim test-netadmin walkthrough-stack dev-sim-container test-walkthrough-stack walkthroughs test-walkthroughs demo test-demos probe
+.PHONY: all lab test-lab build build-web web image gen gen-proto gen-web adr-renumber migration migration-check test test-web test-short test-e2e bench clean-testcontainers tidy dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify docs-walkthroughs bench-sim test-netadmin walkthroughs test-walkthroughs demo test-demos probe
 
 # The bare `make` (#1196) needs only Docker. From one Dockerfile and one tree
 # it builds the image omniglass:dev and exports this machine's own binary to
@@ -34,7 +34,7 @@ lab: all
 # up, publishes one loopback port, keeps privilege on the node, collects, takes
 # an impairment, tears down leaving no container and no network, keeps its
 # estate across a re-run, reaps a killed run, and starts over with --fresh.
-# Outside make test, because it builds the image (as test-walkthrough-stack does).
+# Outside make test, because it builds the image (as the demo targets do).
 test-lab: all
 	OMNIGLASS_LAB_TEST=1 go test -tags labintegration -count=1 -timeout 20m -v -run Integration ./internal/lab/
 
@@ -239,68 +239,49 @@ bench-sim:
 test-e2e:
 	bash web/e2e/run.sh
 
-# The walkthrough stack (web/e2e/walkthrough-stack.sh, recipe in
-# web/e2e/lib/stack.sh): Postgres, the server seeded with the dev and simulated
-# fleets, the node edge-hq enrolled with a one-time token, and the simulator
-# with --impairments in the node's network namespace (NET_ADMIN there only).
-# All in Docker, built from this tree with the Dockerfile, nothing on a fixed
-# host port, unique per-run names, torn down on exit. walkthrough-stack holds
-# it up for authoring a walkthrough and prints how a Playwright container
-# reaches it; dev-sim-container is the same stack for exploring by hand, with
-# the console published on an ephemeral 127.0.0.1 port (slice 5 of #1193 folds
-# both into the lab). test-walkthrough-stack proves the recipe:
-# the node collects, and an impairment set through the API applies and repairs.
-# Not part of make test: it builds the release image (minutes after a Go
-# change), and the impairment loop itself is gated there by test-netadmin.
-walkthrough-stack:
-	bash web/e2e/walkthrough-stack.sh up
-
-dev-sim-container:
-	STACK_PUBLISH=1 bash web/e2e/walkthrough-stack.sh up
-
-test-walkthrough-stack:
-	bash web/e2e/walkthrough-stack.sh check
-
-# Walkthroughs (#924): web/e2e/walkthroughs/<id>.yaml, recorded on the
-# walkthrough stack with a visible cursor, captions and a title card, to
+# The demo pipeline rides the lab (#1197): each target below builds (make),
+# then brings up a throwaway lab of its own with ./bin/omniglass lab run
+# (web/e2e/lib/lab.sh: a project per run, nothing on a fixed host port, torn
+# down with its data on every exit path) and records or probes on it. None is
+# part of make test: each builds the image and runs a lab.
+#
+# Walkthroughs (#924): web/e2e/walkthroughs/<id>.yaml, recorded on a lab with
+# a visible cursor, captions and a title card, to
 # web/e2e/walkthroughs/out/<id>/ (an mp4, an animated preview.webp, poster.png,
 # a still per step; gitignored). A walkthrough is a test: a step whose result
 # never appears, or a recording over the budget (walkthroughlib.mjs), fails the
 # run.
 # make walkthroughs ID=<id> records one (ID="<a> <b>", several), listing any
 # that failed in out/failed.txt. test-walkthroughs is the recorder's own test
-# (the failure and budget paths). Neither is part of make test: both build
-# the release image.
-walkthroughs:
+# (the failure and budget paths).
+walkthroughs: all
 	bash web/e2e/walkthroughs.sh record $(ID)
 
-test-walkthroughs:
+test-walkthroughs: all
 	bash web/e2e/walkthroughs.sh selftest
 
 # Demos (#1132): a demo is a recording of a feature working, by one of two
 # recorders. A terminal demo is a VHS tape, scripts/demo/<id>.tape, for CLI and
 # API work: VHS (pinned by digest to its own image, which bundles ttyd, ffmpeg
-# and chromium) types it into a real terminal against the walkthrough stack and
+# and chromium) types it into a real terminal against a lab and
 # renders scripts/demo/out/<id>/: a GIF (inline on the PR) and an MP4
 # (scrubbable). A walkthrough (above) is the console's. make demo ID=<id>
 # records one demo of either kind (ID="<a> <b>", several; no ID, every demo),
-# each recorder on a stack of its own. A demo is a test: a command a tape types
+# each recorder on a lab of its own. A demo is a test: a command a tape types
 # that exits non-zero, a wait that runs out, or a recording over budget
 # (tapelib.mjs) fails the run. test-demos is the terminal recorder's own test.
-# Neither is part of make test: both build the release image.
-demo:
+demo: all
 	bash web/e2e/demo.sh record $(ID)
 
-test-demos:
+test-demos: all
 	bash web/e2e/tapes.sh selftest
 
-# The probe (#965): bring up the walkthrough stack (STACK_SCENARIO picks its
-# fleet), drive every console route and replay every walkthrough at machine
-# speed, and reduce what it saw (console and page errors, API failures and
-# timings, web vitals, accessibility violations, walkthrough failures) to
+# The probe (#965): bring up a lab (STACK_SCENARIO picks its fleet), drive
+# every console route and replay every walkthrough at machine speed, and
+# reduce what it saw (console and page errors, API failures and timings, web
+# vitals, accessibility violations, walkthrough failures) to
 # web/e2e/probe/out/digest.json, the one file an agent reads about the run.
-# Not part of make test: it builds the release image.
-probe:
+probe: all
 	bash web/e2e/probe.sh
 
 # Backstop cleanup: force-remove any orphaned Postgres test containers left by

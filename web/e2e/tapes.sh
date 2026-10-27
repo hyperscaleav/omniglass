@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Record terminal demos (#1132) on the walkthrough stack (#923). One stack per
-# invocation, torn down on every exit path.
+# Record terminal demos (#1132) on the lab (omniglass lab run, #1193; #1197): a
+# throwaway lab per invocation, torn down on every exit path
+# (web/e2e/lib/lab.sh).
 #
 #   tapes.sh record [ID...]  record scripts/demo/<ID>.tape (default: every one) to
 #                            scripts/demo/out/<ID>/: <ID>.gif, <ID>.mp4 and demo.json,
@@ -8,9 +9,9 @@
 #                            unseen output (shell.log), the commands that failed
 #                            (failed-commands.txt) and the hold the pacing rule
 #                            gave each line (pace.txt); the ids that failed are listed
-#                            in out/failed.txt, out/stack-up marks that the stack
+#                            in out/failed.txt, out/stack-up marks that the lab
 #                            came up (the run:demo workflow reads both), and
-#                            out/stack-logs/ keeps the stack's container logs
+#                            out/stack-logs/ keeps the lab's container logs
 #   tapes.sh selftest        the recorder's own test: a tape whose command fails, one
 #                            whose command fails inside an && list, one whose unseen
 #                            wait runs out and one stuck past its Wait each fail
@@ -23,22 +24,24 @@
 # tape to the house rules and wraps it in the house settings (tapelib.mjs);
 # VHS, in its pinned image with jq, the prelude and this tree's omniglass
 # binary added (web/e2e/tape/Dockerfile, its base images pulled while the
-# stack builds), plays it on the stack network as
-# this user, with the stack's server and an owner token in the CLI's env and
-# the stack's container logs readable under /stack/logs/; ffprobe reads the
+# lab comes up), plays it on the lab network as
+# this user, with the lab's server and an owner token in the CLI's env and
+# the lab's container logs readable under /stack/logs/ (server.log, and
+# node.log, the node and its in-process simulator); ffprobe reads the
 # MP4's length; and tape.mjs judges the recording. A demo is a test: a command
 # the tape typed that exited non-zero (the prelude lists each), VHS failing (a
 # Wait that ran out, a tape it cannot play), a missing GIF or MP4, or a
 # recording over budget fails it, naming the tape, and the run exits non-zero.
 #
-# Prereqs: docker.
+# Prereqs: docker, and `make` run first (make demo does): the lab is the
+# binary and the image it builds.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
-. web/e2e/lib/stack.sh
+. web/e2e/lib/lab.sh
 
 command -v docker >/dev/null 2>&1 || {
-  echo "tapes: docker is required (the stack and the recorder run in containers)" >&2
+  echo "tapes: docker is required (the lab and the recorder run in containers)" >&2
   exit 2
 }
 # The demos need the example fleet; a fresh install (STACK_SCENARIO=empty) has none.
@@ -85,18 +88,18 @@ selftest) ;;
   ;;
 esac
 
-# tape.mjs in the Playwright container the stack already pulled, the repo at
+# tape.mjs in the Playwright container the walkthroughs use, the repo at
 # /w, as this user. Env overrides (the selftest's lowered budget) pass through
 # $TAPE_ENV as docker run -e flags.
 TAPE_ENV=()
 tape_node() {
-  stack_run -v "$ROOT:/w" -w /w/web --user "$(id -u):$(id -g)" -e HOME=/tmp "${TAPE_ENV[@]}" \
-    "$STACK_PWIMG" node e2e/tape.mjs "$@"
+  lab_run -v "$ROOT:/w" -w /w/web --user "$(id -u):$(id -g)" -e HOME=/tmp "${TAPE_ENV[@]}" \
+    "$LAB_PWIMG" node e2e/tape.mjs "$@"
 }
 
-# The recorder's base images, pulled by digest while the stack builds (#1180).
+# The recorder's base images, pulled by digest while the lab comes up (#1180).
 # The VHS image is about 0.9 GB to pull (3 GB on disk), and a fresh CI runner
-# has none of it; pulled here, it lands while the omniglass image builds
+# has none of it; pulled here, it lands while the lab seeds and collects
 # rather than after, and the recorder's build below finds its layers in the
 # daemon's image store (a host that has pulled it once pulls nothing). The
 # pins are read from the Dockerfile's FROM lines, so each lives in one place.
@@ -119,33 +122,52 @@ stop_prefetch() {
   [ ! -e "$PREFETCH_SECONDS" ] || rm -- "$PREFETCH_SECONDS"
 }
 
-# The recorder image for this run, as $DEMO_IMG: tagged with the run id and
-# labeled like the stack, so teardown (or the orphan reaper) untags it.
+# The recorder image for this run, as $DEMO_IMG, built on the lab's own
+# image (the binary a tape types is the one the lab serves): tagged with the
+# run id, untagged at teardown, and labeled with this host so a run killed
+# too hard to untag it has its tag removed by the next (reap_demo_images).
 DEMO_IMG=""
+DEMO_HOST_LABEL=omniglass.demo.host
 demo_image() {
-  local labels started=$SECONDS
+  local started=$SECONDS
   if [ -n "$PREFETCH_PID" ]; then
     wait "$PREFETCH_PID" || true
     PREFETCH_PID=""
-    [ ! -s "$PREFETCH_SECONDS" ] || echo "stack $STACK_ID: the recorder's base images pulled in $(<"$PREFETCH_SECONDS")s, alongside the stack" >&2
+    [ ! -s "$PREFETCH_SECONDS" ] || echo "lab $LAB_ID: the recorder's base images pulled in $(<"$PREFETCH_SECONDS")s, alongside the lab" >&2
   fi
-  mapfile -t labels < <(stack__labels)
-  DEMO_IMG="omniglass-demo:$STACK_ID"
-  echo "stack $STACK_ID: building the terminal recorder" >&2
-  docker build -q "${labels[@]}" -t "$DEMO_IMG" --build-arg OG_IMAGE="$STACK_IMG" web/e2e/tape >/dev/null &
-  STACK_FG_PID=$!
-  wait "$STACK_FG_PID"
-  STACK_FG_PID=""
-  echo "stack $STACK_ID: the terminal recorder was ready in $((SECONDS - started))s" >&2
+  DEMO_IMG="omniglass-demo:$LAB_ID"
+  LAB_IMAGES+=("$DEMO_IMG")
+  echo "lab $LAB_ID: building the terminal recorder" >&2
+  docker build -q --label "$DEMO_HOST_LABEL=$(uname -n)" -t "$DEMO_IMG" \
+    --build-arg OG_IMAGE="$LAB_IMAGE" web/e2e/tape >/dev/null &
+  LAB_FG_PID=$!
+  wait "$LAB_FG_PID"
+  LAB_FG_PID=""
+  echo "lab $LAB_ID: the terminal recorder was ready in $((SECONDS - started))s" >&2
 }
 
-# The stack's container logs, followed into out/stack-logs/ for a tape to read
-# (mounted at /stack/logs/) and for the artifact to keep.
+# Untag the recorder images earlier runs on this host left behind when they
+# were killed too hard to untag their own: a tag is the run id
+# (<prefix>-<pid>-<random>), whose pid is the run's.
+reap_demo_images() {
+  local tag pid
+  docker images --filter "label=$DEMO_HOST_LABEL=$(uname -n)" --format '{{.Repository}}:{{.Tag}}' |
+    while read -r tag; do
+      pid=$(awk -F- 'NF >= 3 { print $(NF-1) }' <<<"${tag#*:}")
+      if [ -n "$pid" ] && ! ps -p "$pid" >/dev/null 2>&1; then
+        docker image rm "$tag" >/dev/null 2>&1 || true
+      fi
+    done
+}
+
+# The lab's container logs, followed into out/stack-logs/ for a tape to read
+# (mounted at /stack/logs/) and for the artifact to keep: the server's, and
+# the node's, which carries its in-process simulator's too.
 LOG_PIDS=()
 follow_logs() {
   local name
   mkdir -p "$OUT/stack-logs"
-  for name in server:"$STACK_SRV" node:"$STACK_NODE" sim:"$STACK_SIM"; do
+  for name in server:"$LAB_SERVER" node:"$LAB_NODE"; do
     docker logs -f "${name#*:}" >"$OUT/stack-logs/${name%%:*}.log" 2>&1 &
     LOG_PIDS+=($!)
   done
@@ -160,7 +182,7 @@ stop_logs() {
 # The MP4's length in seconds, empty if ffprobe cannot read it.
 mp4_seconds() {
   local out=$1 id=$2
-  stack_run --user "$(id -u):$(id -g)" -v "$ROOT/$out:/out:ro" --entrypoint ffprobe "$DEMO_IMG" \
+  lab_run --user "$(id -u):$(id -g)" -v "$ROOT/$out:/out:ro" --entrypoint ffprobe "$DEMO_IMG" \
     -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "/out/$id.mp4" || true
 }
 
@@ -182,24 +204,23 @@ tape_one() {
     # DEMO_DOCKER_SOCKET=1 (demo.yml does, on a throwaway CI runner): the
     # socket hands the recorder root on the host. On the host's network, so
     # the console the lab publishes on the host's loopback is the one the
-    # tape's lab reaches; the stack's image is the binary's own build.
+    # tape's lab reaches; the recording lab's image is the binary's own build.
     if [ "${DEMO_DOCKER_SOCKET:-}" != 1 ]; then
       echo "tape $id: needs the Docker socket; it records only where DEMO_DOCKER_SOCKET=1 opts in (CI)" >&2
       return 1
     fi
-    local sock=/var/run/docker.sock labels
-    mapfile -t labels < <(stack__labels)
-    docker run --rm "${labels[@]}" --network host --user "$(id -u):$(id -g)" --group-add "$(stat -c %g "$sock")" \
-      -v "$sock:$sock" -e HOME=/tmp -e OMNIGLASS_LAB_IMAGE="$STACK_IMG" \
+    local sock=/var/run/docker.sock
+    docker run --rm "${LAB_LABEL_ARGS[@]}" --network host --user "$(id -u):$(id -g)" --group-add "$(stat -c %g "$sock")" \
+      -v "$sock:$sock" -e HOME=/tmp -e OMNIGLASS_LAB_IMAGE="$LAB_IMAGE" \
       -e DEMO_FAILED=/out/failed-commands.txt -e DEMO_LOG=/out/shell.log -e DEMO_PACE_LOG=/out/pace.txt \
       -v "$ROOT/$out:/out" -v "$ROOT/$OUT/stack-logs:/stack/logs:ro" \
       "$DEMO_IMG" "/out/$id.tape" >"$out/vhs.log" 2>&1 &
-    STACK_FG_PID=$!
-    wait "$STACK_FG_PID" || rc=$?
-    STACK_FG_PID=""
+    LAB_FG_PID=$!
+    wait "$LAB_FG_PID" || rc=$?
+    LAB_FG_PID=""
   else
-    stack_run --user "$(id -u):$(id -g)" -e HOME=/tmp \
-      -e OMNIGLASS_SERVER="$STACK_SRV_URL" -e OMNIGLASS_TOKEN="$STACK_TOKEN" \
+    lab_run --user "$(id -u):$(id -g)" -e HOME=/tmp \
+      -e OMNIGLASS_SERVER="$LAB_SERVER_URL" -e OMNIGLASS_TOKEN="$LAB_TOKEN" \
       -e DEMO_FAILED=/out/failed-commands.txt -e DEMO_LOG=/out/shell.log -e DEMO_PACE_LOG=/out/pace.txt \
       -v "$ROOT/$out:/out" -v "$ROOT/$OUT/stack-logs:/stack/logs:ro" \
       "$DEMO_IMG" "/out/$id.tape" >"$out/vhs.log" 2>&1 || rc=$?
@@ -216,7 +237,7 @@ tape_one() {
   tape_node finish "../$file" "../$out" "$seconds"
 }
 
-# Reset before the stack comes up, so a stack that never comes up leaves no
+# Reset before the lab comes up, so a lab that never comes up leaves no
 # previous run's list behind.
 if [ "$mode" = record ]; then
   mkdir -p "$OUT"
@@ -224,12 +245,13 @@ if [ "$mode" = record ]; then
   [ ! -e "$OUT/stack-up" ] || rm -- "$OUT/stack-up"
 fi
 
-stack_init ogdemo
-# The log followers and the prefetch stop before the stack's own teardown,
+lab_init ogdemo
+# The log followers and the prefetch stop before the lab's own teardown,
 # which keeps the exit status it is handed.
-trap 'rc=$?; stop_logs; stop_prefetch; (exit "$rc"); stack__exit' EXIT
+trap 'rc=$?; stop_logs; stop_prefetch; (exit "$rc"); lab__exit' EXIT
+reap_demo_images
 prefetch_images
-stack_walkthrough_up
+lab_up
 demo_image
 follow_logs
 [ "$mode" != record ] || : >"$OUT/stack-up"
@@ -239,7 +261,7 @@ if [ "$mode" = record ]; then
   for f in "${files[@]}"; do
     id=$(basename "$f" .tape)
     tape_one "$f" "$OUT/$id" || { failed+=("$id"); echo "$id" >>"$OUT/failed.txt"; }
-    stack_assert_intact
+    lab_assert_intact
   done
   echo
   for f in "${files[@]}"; do
@@ -336,5 +358,5 @@ grep -qF "tape passes: over budget: the GIF is" <<<"$log" || fail "the GIF overr
 grep -qF "tape passes: over budget: it runs" <<<"$log" || fail "the length overrun was not named"
 [ ! -e "$ST/passes/demo.json" ] || fail "an over-budget recording kept its manifest"
 echo "ok: an over-budget recording fails naming which limit, and loses its mark"
-stack_assert_intact
+lab_assert_intact
 echo "tapes selftest: passed"

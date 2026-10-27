@@ -5,7 +5,7 @@
 # authorizationError, gates the endpoint at the session rung and sends no more
 # gets, and the console shows the refusal on the endpoint all the same.
 # Pointing the community at the fleet's own secret moves the connection
-# fingerprint, and the node's next get (2s on the walkthrough stack) is
+# fingerprint, and the node's next get (2s on the lab) is
 # answered.
 title: Fix a refused probe
 description: A touch panel's SNMP agent refused the endpoint's community, so the node stopped asking. Read why, point the endpoint at the right community, and watch the refusal lift.

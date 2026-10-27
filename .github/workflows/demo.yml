@@ -38,8 +38,9 @@ name: demo
 #   nothing), and a demo that fails opens or updates one issue, which the next
 #   green run closes.
 #
-# Each selected demo records on a runner of its own, with a stack of its own,
-# in parallel (the record matrix), so a run takes as long as its slowest demo
+# Each selected demo records on a runner of its own, on a lab of its own
+# (omniglass lab run, the product's own, #1193; web/e2e/lib/lab.sh, #1197), in
+# parallel (the record matrix), so a run takes as long as its slowest demo
 # rather than the sum. The run records the branch tip as `select` resolves it,
 # every leg the same commit. GitHub runs no pull_request workflow on a PR with
 # merge conflicts, so resolve them first. demo-prune.yml deletes an evidence
@@ -187,7 +188,7 @@ jobs:
     if: ${{ needs.select.outputs.ids != '' }}
     name: record ${{ matrix.id }}
     runs-on: ubuntu-latest
-    # Generous: building the images, the stack and the demo with its encodes;
+    # Generous: building the images, the lab and the demo with its encodes;
     # a wedged container must not hold the runner for the default six hours.
     timeout-minutes: 30
     permissions:
@@ -229,10 +230,18 @@ jobs:
         if: ${{ matrix.kind == 'walkthrough' }}
         run: cd web && npm ci
 
-      # The demo's recorder brings up a walkthrough stack of its own, all in
-      # Docker (the simulator's NET_ADMIN is a container capability inside its
-      # own namespace, as make test-netadmin already uses on this runner). A
-      # failure is recorded, not fatal yet, so the recording still uploads.
+      # The lab is the binary and the image make builds from this tree (one
+      # build id, which the lab checks), so every recorder needs make first,
+      # and needs only Docker for it. A failed build leaves no stack-up mark,
+      # so combine names the leg as never run rather than blaming the demo.
+      - name: Build the lab
+        run: make
+
+      # The demo's recorder brings up a lab of its own, all in Docker (the
+      # node's NET_ADMIN, for its simulator's impairments, is a container
+      # capability inside its own namespace, as make test-netadmin already
+      # uses on this runner). A failure is recorded, not fatal yet, so the
+      # recording still uploads.
       # DEMO_DOCKER_SOCKET opts in the one kind of tape that drives Docker
       # itself (lab-first-run types omniglass lab run, #1193): only a tape that
       # declares `# demo-needs: docker-socket` gets the socket, and only here,
@@ -250,7 +259,7 @@ jobs:
           fi
 
       # The recorder's whole out/ (the demo's files, its failed.txt and its
-      # stack-up mark, the stack's logs): combine reads the leg from it, and
+      # stack-up mark, the lab's logs): combine reads the leg from it, and
       # the artifact keeps a failed demo's partial output.
       - name: Upload the recording
         if: ${{ !cancelled() }}
@@ -265,7 +274,7 @@ jobs:
       - name: Fail on a failed demo
         if: ${{ steps.record.outputs.failed == '1' }}
         run: |
-          echo "demo $ID failed, or its stack never came up (the Record step says which)" >&2
+          echo "demo $ID failed, or its lab never came up (the Record step says which)" >&2
           exit 1
 
   # Every leg, passed or failed, into one result, by the tree's code with a

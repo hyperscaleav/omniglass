@@ -5,7 +5,7 @@
 # refuses the connection before logging in and the session reads rejected,
 # class host-key, naming both keys. Trust this key confirms, teaching why a key
 # changes, then makes the offered key the pin; the node redials onto it at its
-# next check-in (2s on the walkthrough stack) and the session reads up.
+# next check-in (2s on the lab) and the session reads up.
 title: Trust a changed host key
 description: A touch panel was reimaged, so it presents a new ssh host key and the node refused it. Read both keys, learn why a key changes, trust the new one, and watch the session come up.
 steps:

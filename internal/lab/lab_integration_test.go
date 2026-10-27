@@ -293,3 +293,91 @@ func tokenHash(tok string) string {
 	sum := sha256.Sum256([]byte(tok))
 	return hex.EncodeToString(sum[:])
 }
+
+// A throwaway lab held for a process (the demo pipeline's way, #1197): once
+// ready it writes the ready file, whose token reaches the API; once the
+// process is gone it tears itself down, its volumes with it.
+func TestIntegrationThrowawayLabHeldForAProcess(t *testing.T) {
+	if os.Getenv("OMNIGLASS_LAB_TEST") != "1" {
+		t.Skip("the lab's integration test runs through make test-lab (it needs the image make builds)")
+	}
+	ctx := context.Background()
+	home, _ := os.UserHomeDir()
+	daemon, err := ResolveDaemon(Env{Getenv: os.Getenv, ReadFile: os.ReadFile, Home: home, GOOS: "linux"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	eng, err := NewDockerEngine(daemon.Host)
+	if err != nil {
+		t.Fatal(err)
+	}
+	labels, found, err := eng.ImageLabels(ctx, DevImage)
+	if err != nil || !found {
+		t.Fatalf("the image %s (run make first): found %v, %v", DevImage, found, err)
+	}
+	host, _ := os.Hostname()
+	project := fmt.Sprintf("omniglass-lab-it-throwaway-%d", os.Getpid())
+	t.Cleanup(func() {
+		r := runner(eng, io.Discard, host)
+		r.TearDown(Spec{Project: project, Network: project + "_default"})
+		vols, _ := eng.Volumes(context.Background(), ProjectLabels(project))
+		for _, v := range vols {
+			_ = eng.RemoveVolume(context.Background(), v.Name)
+		}
+	})
+	holder := exec.Command("sleep", "600")
+	if err := holder.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = holder.Process.Kill(); _ = holder.Wait() })
+	file := t.TempDir() + "/lab.env"
+	cfg := Config{
+		Options: Options{Project: project, Listen: DefaultListen, Port: 0, Image: DevImage, Scenario: "empty",
+			NodeToken: "lab-it-node-token", NodeTokenHash: tokenHash("lab-it-node-token"),
+			Owner: Owner{Host: host, PID: os.Getpid(), PIDNS: CurrentPIDNS()}, Ephemeral: true},
+		Image: SelectImage(labels[VersionLabel], ""), Hold: true, ReadyFile: file, WhilePID: holder.Process.Pid,
+	}
+	var out bytes.Buffer
+	done := make(chan error, 1)
+	go func() { _, err := runner(eng, &out, host).Run(ctx, cfg); done <- err }()
+	waitUntil(t, 4*time.Minute, "the ready file", func() bool { _, err := os.Stat(file); return err == nil })
+	b, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vars := map[string]string{}
+	for _, line := range strings.Split(strings.TrimSpace(string(b)), "\n") {
+		k, v, _ := strings.Cut(line, "=")
+		vars[k] = strings.Trim(v, "'")
+	}
+	req, _ := http.NewRequest(http.MethodGet, vars["LAB_HOST_URL"]+"/api/v1/auth/me", nil)
+	req.Header.Set("Authorization", "Bearer "+vars["LAB_TOKEN"])
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("the ready file's token on /auth/me: %s, want 200", resp.Status)
+	}
+	if vols, _ := eng.Volumes(ctx, ProjectLabels(project)); len(vols) != 2 {
+		t.Fatalf("a held throwaway lab has %d volumes, want 2", len(vols))
+	}
+
+	_ = holder.Process.Kill()
+	_ = holder.Wait()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("%v\n%s", err, out.String())
+		}
+	case <-time.After(2 * time.Minute):
+		t.Fatalf("the lab kept holding after its process was gone:\n%s", out.String())
+	}
+	cs, _ := eng.Containers(ctx, ProjectLabels(project))
+	ns, _ := eng.Networks(ctx, ProjectLabels(project))
+	vs, _ := eng.Volumes(ctx, ProjectLabels(project))
+	if len(cs)+len(ns)+len(vs) != 0 {
+		t.Fatalf("after its process went: %d containers, %d networks, %d volumes remain, want none\n%s", len(cs), len(ns), len(vs), out.String())
+	}
+}

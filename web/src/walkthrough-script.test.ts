@@ -13,6 +13,7 @@ import {
   budgetProblems,
   idProblem,
   parseWalkthrough,
+  runSetup,
   stepFailure,
   stillName,
   validateWalkthrough,
@@ -123,6 +124,57 @@ describe("walkthrough script validation", () => {
   it("lists every problem at once", () => {
     const m = bad({ title: "T", steps: [{ hover: 1 }, { wait: { text: "x" } }] });
     expect(m.split("\n")).toHaveLength(2);
+  });
+});
+
+// A walkthrough's setup (#1197): what the scene needs that the walkthrough
+// does not teach, made through the API off camera before the title card
+// (set-up-monitoring's display in Bay 2, which nothing collects from yet).
+describe("walkthrough setup", () => {
+  const body = { name: "bay-2-display", product: "boreal-edge-55", location: "bay-2" };
+  it("is optional, and a list of API creates when present", () => {
+    expect(ok([{ wait: { text: "x" }, caption: "a" }]).setup).toEqual([]);
+    const w = ok([{ wait: { text: "x" }, caption: "a" }], { setup: [{ post: "/components", body }] });
+    expect(w.setup).toEqual([{ method: "POST", path: "/components", body }]);
+  });
+  it("refuses a setup that is not a list of { post, body }, naming the item", () => {
+    const m = bad({ title: "T", steps: [{ wait: { text: "x" }, caption: "a" }], setup: [{ post: "components", body }, { get: "/x" }, { post: "/y" }] });
+    expect(m).toContain('setup 1 (post) must be an API path starting with "/"');
+    expect(m).toContain('setup 2 has unknown key "get"');
+    expect(m).toContain("setup 3 (post) needs a body");
+    expect(bad({ title: "T", steps: [{ wait: { text: "x" }, caption: "a" }], setup: { post: "/x" } })).toContain("setup must be a list");
+  });
+
+  type Call = { url: string; init: RequestInit };
+  const fake = (statuses: number[]) => {
+    const calls: Call[] = [];
+    const fetch = async (url: string, init: RequestInit) => {
+      calls.push({ url, init });
+      const status = statuses[calls.length - 1];
+      return new Response(status === 409 ? '{"detail":"exists"}' : "{}", { status });
+    };
+    return { calls, fetch };
+  };
+  const setup = [{ method: "POST", path: "/components", body }];
+
+  it("posts each create to the API with the owner token, and takes an existing one as made", async () => {
+    for (const status of [201, 409]) {
+      const f = fake([status]);
+      await runSetup(setup, { base: "http://server:8080", token: "ogp_t", fetch: f.fetch });
+      expect(f.calls).toHaveLength(1);
+      expect(f.calls[0].url).toBe("http://server:8080/api/v1/components");
+      expect(f.calls[0].init.method).toBe("POST");
+      expect((f.calls[0].init.headers as Record<string, string>).Authorization).toBe("Bearer ogp_t");
+      expect(JSON.parse(f.calls[0].init.body as string)).toEqual(body);
+    }
+  });
+  it("fails naming the setup item, the request and the answer", async () => {
+    const f = fake([422]);
+    await expect(runSetup(setup, { base: "http://s", token: "t", fetch: f.fetch })).rejects.toThrow(/setup 1: POST \/components answered 422/);
+  });
+  it("needs a token only when there is something to set up", async () => {
+    await expect(runSetup([], { base: "http://s", token: undefined, fetch: fake([]).fetch })).resolves.toBeUndefined();
+    await expect(runSetup(setup, { base: "http://s", token: undefined, fetch: fake([201]).fetch })).rejects.toThrow(/OG_TOKEN/);
   });
 });
 
