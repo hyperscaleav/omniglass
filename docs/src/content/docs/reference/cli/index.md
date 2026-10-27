@@ -2250,7 +2250,7 @@ Docker is the only requirement. Only the console is published, on 127.0.0.1 (--l
 | `--image` | string | (none) | run this omniglass image instead of the one this binary was built with (env OMNIGLASS_LAB_IMAGE); one that is not this binary's own build is warned about |
 | `--listen` | string | `127.0.0.1` | the address the console is published on; anything but loopback exposes the lab, and its well-known login, to your network |
 | `--port` | int | `8080` | the console's port on this machine; 0 lets Docker pick a free one, printed when the lab is ready |
-| `--scenario` | string | `dev` | the fleet the lab seeds on its first run (omniglass seed-dev --help lists them) |
+| `--scenario` | string | `dev` | the fleet the lab seeds on its first run (omniglass help seed-dev lists them) |
 
 ## `omniglass location`
 
