@@ -15,6 +15,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/bus"
+	"github.com/hyperscaleav/omniglass/internal/clientaddr"
 	"github.com/hyperscaleav/omniglass/internal/config"
 	"github.com/hyperscaleav/omniglass/internal/migrate"
 	"github.com/hyperscaleav/omniglass/internal/secret"
@@ -132,6 +133,12 @@ func runServer(ctx context.Context, version string, lab bool) error {
 		natsURL = busSrv.LocalURL()
 	}
 
+	trust, err := clientaddr.Parse(c.TrustedProxies)
+	if err != nil {
+		return fmt.Errorf("server: %w", err)
+	}
+	log.Info("trusted proxies", "networks", trust.String())
+
 	// Bind before serving, so the address the listener got (the kernel's
 	// pick, for port 0) is known and can be reported.
 	ln, err := net.Listen("tcp", c.Addr)
@@ -139,7 +146,7 @@ func runServer(ctx context.Context, version string, lab bool) error {
 		return err
 	}
 	srv := &http.Server{
-		Handler:           api.NewHandler(gw, api.WithVersion(version), api.WithSecureCookies(c.SecureCookies), api.WithNatsURL(natsURL), api.WithSettingsService(gw.Settings()), api.WithTelemetryPublisher(busSrv), api.WithSimHub(busSrv), api.WithNodeRunner(busSrv), api.WithLab(lab)),
+		Handler:           api.NewHandler(gw, api.WithVersion(version), api.WithSecureCookies(c.SecureCookies), api.WithTrustedProxies(trust), api.WithNatsURL(natsURL), api.WithSettingsService(gw.Settings()), api.WithTelemetryPublisher(busSrv), api.WithSimHub(busSrv), api.WithNodeRunner(busSrv), api.WithLab(lab)),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	log.Info("http api listening", "addr", ln.Addr().String())

@@ -58,10 +58,12 @@ func TestALocationGrantOfDeployReachesOneTier(t *testing.T) {
 		"location": "read create update rename move",
 		// The exclusive-arc families, whose owner may BE a location, so a
 		// location-kind grant contains the ones this location owns.
-		"secret":    "read create update reveal",
-		"variable":  "read",
-		"field":     "read",
-		"telemetry": "read",
+		"secret":   "read create update reveal",
+		"variable": "read",
+		"field":    "read",
+		// Telemetry resolves on the COMPONENT tier alone (ADR-0752): the push
+		// route's owner is a component, so a location grant reaches none.
+		"telemetry": "",
 		// The tiers the description used to claim and the role's permissions
 		// still name. Empty, every action, including read.
 		"system":    "",

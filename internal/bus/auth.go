@@ -21,6 +21,9 @@ type Store interface {
 	// NodeSimDevices lists the components a simulator beside the node serves.
 	NodeSimDevices(ctx context.Context, name string, read scope.Set) ([]storage.SimDevice, error)
 	RecordHeartbeat(ctx context.Context, name string) error
+	// RecordOrphanedBatches counts a node's batches the confinement fence
+	// orphaned (#1200), once per flush rather than per batch.
+	RecordOrphanedBatches(ctx context.Context, name string, batches int64, at time.Time) error
 	// The command wire (#815): resolve-and-dispatch a node's pending command
 	// queue, and record its execution reports.
 	PendingNodeCommands(ctx context.Context, name string) ([]storage.CommandDelivery, error)

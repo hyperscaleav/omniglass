@@ -55,6 +55,9 @@ func (f fakeStore) ListPropertyTypes(context.Context) ([]storage.PropertyType, e
 	return nil, nil
 }
 func (f fakeStore) StampEndpointsSeen(context.Context, []string) error { return nil }
+func (f fakeStore) RecordOrphanedBatches(context.Context, string, int64, time.Time) error {
+	return nil
+}
 
 func (f fakeStore) LandBatch(context.Context, storage.IngestBatch) (bool, error) {
 	return true, nil

@@ -18,7 +18,11 @@ component's endpoints (each an **API named by the protocol it speaks**, typed by
 `icmp-reachable` / `icmp-rtt-avg` land in `metric` owned by the target component. The owner is bound
 **server-side** from the task's endpoint (the node stamps no component identity); the ingest
 consumer confines a node to its own tasks (another node's `task_id` is orphan-dropped) and rejects
-unregistered sample names per lane. A non-answering icmp target is DATA (`icmp-reachable=0` with a reason);
+unregistered sample names per lane. An orphan drop is never silent and never a flood (#1200): the
+first orphaned batch from a node in a minute is logged as a warning naming the node, the task and
+the samples dropped, the rest of that minute only counted (the next warning says how many), and
+every one is added to the node's `orphaned_batches` (with `last_orphaned_at`) on `GET /nodes/{name}`,
+written once a minute rather than once a batch. A non-answering icmp target is DATA (`icmp-reachable=0` with a reason);
 an error means the node cannot do ICMP at all (a once-cached loopback self-check tells them apart).
 The node computes the per-endpoint verdict `endpoint-reachable` (the AND of its probe results) as
 a built-in **property**; the wire is **per-lane arrays** (`metrics` / `properties` / `events` /
@@ -1056,6 +1060,13 @@ flight, a 1 MiB body whose read stops at the cap, a read deadline), **authentica
 **route** (listeners first), **extract**, **land**. The server hosts it for webhooks; a node hosts it
 for the push transports of #1148, #1149 and #1150.
 
+A webhook sender's **source**, the key its bucket, its refusals and the inbox count it by, is the
+client address the server resolves for every request: the connection's peer, or, only when that
+peer is in `OMNIGLASS_TRUSTED_PROXIES` (default the loopback and private ranges, where the chart's
+ingress sits), the rightmost `X-Forwarded-For` hop outside it. An IPv6 sender is its /64. The
+address a session or token is stamped with is the same answer, so the two never disagree about who
+posted ([ADR-1185](/architecture/decisions/#adr-1185-the-client-address-believes-a-forwarded-header-only-from-a-configured-proxy)).
+
 **The URL and its token.** Creating a webhook endpoint mints its token (128 random bits) as the
 `webhook-token` secret on the endpoint's component: sealed, revealed and copied only under
 `secret:reveal`, audited, deleted with the endpoint, and rotated by
@@ -1313,7 +1324,8 @@ pull. An attach reads the driver row under a share lock, so one that races an up
 and derives the committed spec, and a re-derive skips an endpoint a concurrent delete removes.
 One gap is accepted: between the re-derive and the node's next pull (one tick), samples the node
 still publishes under a retired task's id are dropped at ingest as orphans, the same confinement
-that drops any unknown task id; the next tick publishes under the new one. Refusals name the fault as a 422: a missing required input, an
+that drops any unknown task id, warned and counted on the node like any orphan; the next tick
+publishes under the new one. Refusals name the fault as a 422: a missing required input, an
 input the spec does not declare, an ambiguous secret name. A secret input is resolved under the
 **caller's own secret read scope and admin tier**, so an attach can only bind a credential the
 operator could themselves read: an out-of-scope or admin-sensitive secret refuses

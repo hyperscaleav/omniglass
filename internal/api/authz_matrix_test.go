@@ -217,6 +217,22 @@ func componentActions() []actionRoute {
 			},
 			ok: http.StatusOK,
 		},
+		{
+			// The push route (#752, ADR-0752): it names its owner in the
+			// body rather than the path, but the owner is a component target
+			// all the same, so it takes the same split. Gated on
+			// telemetry:push, whose scope decides what may be pushed to; the
+			// caller's component:read decides only which refusal it is owed.
+			name:  "push-telemetry",
+			needs: []string{"telemetry:push"},
+			request: func(target, _ string) (string, string, map[string]any) {
+				return http.MethodPost, "/telemetry:push", map[string]any{
+					"owner":   map[string]any{"kind": "component", "ref": target},
+					"metrics": []map[string]any{{"name": "room-temperature", "value": 21.5}},
+				}
+			},
+			ok: http.StatusAccepted,
+		},
 	}
 }
 
@@ -416,7 +432,7 @@ func runAuthzMatrix(t *testing.T, e scopedEntity) {
 	conn.Close(ctx)
 
 	ownerTok := bootstrapOwnerTok(t, ctx, gw)
-	srv := httptest.NewServer(api.NewHandler(gw))
+	srv := httptest.NewServer(api.NewHandler(gw, api.WithTelemetryPublisher(discardPublisher{})))
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
