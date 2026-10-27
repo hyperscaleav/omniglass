@@ -190,7 +190,7 @@ func TestFixturesLetThePlatformNameTheFleet(t *testing.T) {
 	}
 
 	// Every shipped location type is nominal: a nameless create of one is
-	// refused outright, so a fixture row without a name would fail `make dev`.
+	// refused outright, so a fixture row without a name would fail seed-dev.
 	nominal := map[string]bool{"campus": true, "building": true, "floor": true, "room": true}
 	for _, l := range doc.Locations {
 		switch {
@@ -334,7 +334,7 @@ func TestFixturesFleetIsAForest(t *testing.T) {
 
 // TestRunIdempotent proves devseed.Run lands the example fleet (and the worked
 // reachability check) through the Storage Gateway and that a second run neither
-// duplicates nor errors: make dev runs it on every start. Reference data (roles,
+// duplicates nor errors: a lab may run it again. Reference data (roles,
 // location types, sample types) must exist first, so the boot seed runs ahead of
 // it, exactly as bootstrap does. Skipped under -short by the testcontainer harness.
 func TestRunIdempotent(t *testing.T) {
@@ -398,7 +398,7 @@ func TestRunIdempotent(t *testing.T) {
 	}
 	// Alarms matter most and were the ones going unchecked: the fixtures
 	// section leans entirely on RaiseAlarm's dedup_key to be idempotent, with
-	// no read-before-write of its own, and devseed runs on every `make dev`
+	// no read-before-write of its own, and devseed may run again
 	// start. An untested dedup would stack one more alarm per restart and drag
 	// the seeded verdicts along with it.
 	if err := conn.QueryRow(ctx, `select count(*) from alarm`).Scan(&alarms); err != nil {
@@ -502,7 +502,7 @@ func TestRunIdempotent(t *testing.T) {
 		t.Errorf("west parent = %q, want hq", parentName)
 	}
 
-	// Each seeded user has a password credential (so they can sign in to make dev).
+	// Each seeded user has a password credential (so they can sign in to a lab).
 	var pwCreds int
 	if err := conn.QueryRow(ctx, `
 		select count(*) from credential
@@ -1705,7 +1705,7 @@ func TestSeededFleetIsSimulated(t *testing.T) {
 // TestReachabilityDemoIsSimulatedWithTheFleet proves the worked reachability
 // check stays truthful under a live node: with the simulated fleet, the demo
 // DSP is a simulated polaris-dsp-16 whose endpoints target its simulated
-// address (HTTP at the lifted port, the line protocol as declared); without
+// address (HTTP and the line protocol at their real ports); without
 // it (the docs screenshots), the demo is untouched.
 func TestReachabilityDemoIsSimulatedWithTheFleet(t *testing.T) {
 	targets := func(ctx context.Context, conn *pgx.Conn) (product string, got map[string]string) {
@@ -1735,8 +1735,8 @@ func TestReachabilityDemoIsSimulatedWithTheFleet(t *testing.T) {
 		t.Errorf("demo DSP product = %q, want the simulated polaris-dsp-16", product)
 	}
 	host, _, _ := strings.Cut(got["http"], ":")
-	if !strings.HasPrefix(host, "127.60.") || got["http"] != host+":10080" || got["tcp"] != host+":1710" {
-		t.Errorf("demo DSP endpoints = %v, want one simulated address, HTTP lifted and 1710 as declared", got)
+	if !strings.HasPrefix(host, "127.60.") || got["http"] != host+":80" || got["tcp"] != host+":1710" {
+		t.Errorf("demo DSP endpoints = %v, want one simulated address, HTTP on 80 and 1710 as declared", got)
 	}
 
 	// Without the simulated fleet the demo keeps its fixed address.
@@ -1763,9 +1763,10 @@ func TestReachabilityDemoIsSimulatedWithTheFleet(t *testing.T) {
 }
 
 // TestSimulatedFleetAtRealPorts proves a seed for a simulator that may bind
-// low ports (in a container, the walkthrough stack) aims the fleet at the
-// profiles' real ports: with no lift, the demo DSP's HTTP is 80 and every
-// probe below 1024 is served as declared, where make dev lifts them by 10000.
+// low ports (in a container: the lab, the walkthrough stack) aims the fleet at
+// the profiles' real ports: with no lift, the demo DSP's HTTP is 80 and every
+// probe below 1024 is served as declared. A lift is opt-in, for a simulator
+// run unprivileged on a host (seed-dev --sim-port-offset).
 func TestSimulatedFleetAtRealPorts(t *testing.T) {
 	ctx := context.Background()
 	dsn := storagetest.NewDSN(t)
@@ -1849,10 +1850,10 @@ func TestSeededFleetHoldsARejectedSession(t *testing.T) {
 		where d.name = 'newtron-nvp' and l.name = 'huddle'`).Scan(&nvpHost); err != nil {
 		t.Fatalf("the huddle panel's nvp endpoint: %v", err)
 	}
-	// The panel's own simulated address, its telnet port lifted as make dev
-	// lifts every port below 1024, on the dev node, with the stale login.
-	if got.host != nvpHost || got.port != "10023" || got.node != "edge-hq" || got.login != "sim-panel-login" {
-		t.Fatalf("huddle telnet endpoint = %+v, want host %s, port 10023, node edge-hq, login sim-panel-login", got, nvpHost)
+	// The panel's own simulated address, its real telnet port, on the dev
+	// node, with the stale login.
+	if got.host != nvpHost || got.port != "23" || got.node != "edge-hq" || got.login != "sim-panel-login" {
+		t.Fatalf("huddle telnet endpoint = %+v, want host %s, port 23, node edge-hq, login sim-panel-login", got, nvpHost)
 	}
 
 	all := scope.Set{All: true}
@@ -1885,7 +1886,7 @@ func TestSeededFleetHoldsARejectedSession(t *testing.T) {
 	}
 }
 
-// TestSeededFleetHoldsAProbeGate pins the refusal make dev shows on an
+// TestSeededFleetHoldsAProbeGate pins the refusal a lab shows on an
 // endpoint holding no session (#1110): the auditorium's touch panel answers
 // SNMP, and its snmp-generic endpoint reads its community from a secret
 // holding the one the panel's agent knows and refuses, so a live node's
@@ -1922,8 +1923,8 @@ func TestSeededFleetHoldsAProbeGate(t *testing.T) {
 		t.Fatalf("auditorium touch panel snmp endpoints: want 1, got %d", len(got))
 	}
 	e := got[0]
-	if !strings.HasPrefix(e.host, "127.60.") || e.port != "10161" || e.node != "edge-hq" || e.community != "sim-snmp-revoked" {
-		t.Fatalf("auditorium snmp endpoint = %+v, want the panel's simulated address, port 10161, node edge-hq, community sim-snmp-revoked", e)
+	if !strings.HasPrefix(e.host, "127.60.") || e.port != "161" || e.node != "edge-hq" || e.community != "sim-snmp-revoked" {
+		t.Fatalf("auditorium snmp endpoint = %+v, want the panel's simulated address, port 161, node edge-hq, community sim-snmp-revoked", e)
 	}
 
 	// The secret holds the community the panel's agent refuses, by the
@@ -1981,7 +1982,7 @@ func TestSeededFleetHoldsAProbeGate(t *testing.T) {
 	}
 }
 
-// TestSeededFleetHoldsAHostKeyRejection pins the changed host key make dev
+// TestSeededFleetHoldsAHostKeyRejection pins the changed host key a lab
 // shows (#1078): the touch panel in the briefing place answers NVP over its ssh
 // console, and its endpoint pins a host key from before the panel was
 // reimaged, so the simulated panel's own key (minted when the simulator
@@ -2018,8 +2019,8 @@ func TestSeededFleetHoldsAHostKeyRejection(t *testing.T) {
 		t.Fatalf("briefing ssh endpoints: want 1, got %d", len(got))
 	}
 	e := got[0]
-	if !strings.HasPrefix(e.host, "127.60.") || e.port != "10022" || e.node != "edge-hq" || e.login != "sim-panel-login-rotated" {
-		t.Fatalf("briefing ssh endpoint = %+v, want the panel's simulated address, port 10022, node edge-hq, the panel's right login", e)
+	if !strings.HasPrefix(e.host, "127.60.") || e.port != "22" || e.node != "edge-hq" || e.login != "sim-panel-login-rotated" {
+		t.Fatalf("briefing ssh endpoint = %+v, want the panel's simulated address, port 22, node edge-hq, the panel's right login", e)
 	}
 	const stalePin = "SHA256:twSJOxqCcLND44UmG2UgaA2xfebMGW5hCWNq2eHE16M"
 	pin := func() string {

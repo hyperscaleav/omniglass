@@ -78,6 +78,18 @@ var Registry = []Var{
 		Doc: "the node's registered name, used by omniglass node run and sim run when --name is omitted"},
 	{Key: "OMNIGLASS_NODE_TOKEN", Scope: "node",
 		Doc: "the node's enrollment token, used by omniglass node run and sim run when --token is omitted, read when the command runs and never printed by help"},
+	// omniglass lab run finds its Docker daemon the way the docker CLI does
+	// (#1194): these three, then the platform's default socket or pipe.
+	{Key: "DOCKER_HOST", Scope: "cli",
+		Doc: "the Docker daemon omniglass lab run drives, ahead of any docker context; a daemon on another machine is refused"},
+	{Key: "DOCKER_CONTEXT", Scope: "cli",
+		Doc: "the docker context omniglass lab run uses when DOCKER_HOST is unset, ahead of the docker CLI's current context"},
+	{Key: "DOCKER_CONFIG", Default: "~/.docker", Scope: "cli",
+		Doc: "the docker CLI's config directory, where omniglass lab run reads the current context and the context store"},
+	{Key: "OMNIGLASS_LAB_IMAGE", Scope: "cli",
+		Doc: "the omniglass image omniglass lab run runs when --image is omitted; one that is not the binary's own build is warned about"},
+	{Key: "OMNIGLASS_LAB_NODE_TOKEN_HASH", Scope: "cli",
+		Doc: "set by omniglass lab run for its seed one-off: the hash of the node token it minted for this run, never set by hand"},
 	{Key: "OMNIGLASS_TEST_ADMIN_DSN", Scope: "test",
 		Doc: "points the storage test harness at an existing admin database instead of a testcontainer"},
 }

@@ -182,6 +182,9 @@ var IdentityShapes = map[string]TableIdentity{
 	"setting_override": {Shape: ShapeIDOnly}, "standard_metric": {Shape: ShapeIDOnly},
 	"standard_property": {Shape: ShapeIDOnly}, "system_member": {Shape: ShapeIDOnly},
 	"system_role_assignment": {Shape: ShapeIDOnly},
+	// The one row omniglass lab writes into its own database (#1195); nobody
+	// names or addresses it.
+	"lab_mark": {Shape: ShapeIDOnly},
 	// One row per impaired simulated component, keyed by that component's uuid.
 	"sim_impairment":       {Shape: ShapeIDOnly},
 	"event_rule_state":     {Shape: ShapeIDOnly, Reason: "a rule's pending streak, keyed by rule, component and instance; nothing addresses it by name"},

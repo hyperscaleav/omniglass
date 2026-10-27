@@ -255,7 +255,7 @@ above, no floor between, which the type registry allows and the model has never 
 came up covered by exactly one thing: the `platform` binding. Every location-tier binding written
 before it existed still misses it.
 
-`make dev` seeds this fleet, so the rule is inspectable rather than illustrative: four unparented
+The dev seed (the fleet a [lab](/guides/lab/) comes up with) seeds this fleet, so the rule is inspectable rather than illustrative: four unparented
 tops with a device under two of them, one carrying the `staging` tag its subtree's binding sets and
 the other the `prod` the `platform` binding sets.
 

@@ -1,17 +1,52 @@
-# Local dev loop + the build/run flow for the single binary. Production deploy
-# is BYO Postgres; tests use ephemeral testcontainer Postgres.
+# The build flow for the single binary, and the gates. `make` only builds;
+# running anything goes through the omniglass CLI (./bin/omniglass lab run,
+# #1193). Production deploy is BYO Postgres; tests use ephemeral testcontainer
+# Postgres.
 
-.PHONY: build build-web web image gen gen-proto gen-web adr-renumber migration migration-check test test-web test-short test-e2e bench clean-testcontainers tidy up down dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify docs-walkthroughs dev-sim bench-sim test-netadmin walkthrough-stack dev-sim-container test-walkthrough-stack walkthroughs test-walkthroughs demo test-demos probe
+.PHONY: all lab test-lab build build-web web image gen gen-proto gen-web adr-renumber migration migration-check test test-web test-short test-e2e bench clean-testcontainers tidy dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify docs-walkthroughs bench-sim test-netadmin walkthrough-stack dev-sim-container test-walkthrough-stack walkthroughs test-walkthroughs demo test-demos probe
 
-# Build the single binary (no console embedded; serves the build-the-console
-# placeholder under /web).
+# The bare `make` (#1196) needs only Docker. From one Dockerfile and one tree
+# it builds the image omniglass:dev and exports this machine's own binary to
+# bin/omniglass (the hostbin stage, cross-compiled for this OS and
+# architecture), both stamped with one build id: the commit, plus a dirty
+# marker and the build time for an uncommitted tree. `omniglass lab run` runs
+# only the image whose version label is its own build id, so a lab always
+# reflects the code it was built from; the lab never builds implicitly.
+# BuildKit cache mounts keep a Go-only change to seconds. The image is built
+# for this machine's architecture only; CI keeps the multi-arch build.
+.DEFAULT_GOAL := all
+BUILD_ID := $(shell c=$$(git rev-parse --short HEAD 2>/dev/null || echo unknown); \
+	if [ -n "$$(git status --porcelain 2>/dev/null)" ]; then c="$$c-dirty-$$(date -u +%Y%m%dT%H%M%SZ)"; fi; echo $$c)
+HOST_OS := $(shell uname -s | tr '[:upper:]' '[:lower:]' | sed -e 's/^mingw.*/windows/' -e 's/^msys.*/windows/' -e 's/^cygwin.*/windows/')
+HOST_ARCH := $(shell uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/')
+all:
+	docker build -t omniglass:dev --build-arg VERSION=$(BUILD_ID) .
+	docker build --target hostbin --build-arg VERSION=$(BUILD_ID) \
+		--build-arg HOSTOS=$(HOST_OS) --build-arg HOSTARCH=$(HOST_ARCH) --output type=local,dest=bin .
+	@echo "built omniglass:dev and bin/omniglass (build $(BUILD_ID)); run a lab with ./bin/omniglass lab run"
+
+# The lab (#1193), the short form: build, then `./bin/omniglass lab run` in
+# the foreground until Ctrl-C. LAB_ARGS passes flags (LAB_ARGS="--fresh").
+lab: all
+	./bin/omniglass lab run $(LAB_ARGS)
+
+# The lab against a real daemon (internal/lab's integration test): it comes
+# up, publishes one loopback port, keeps privilege on the node, collects, takes
+# an impairment, tears down leaving no container and no network, keeps its
+# estate across a re-run, reaps a killed run, and starts over with --fresh.
+# Outside make test, because it builds the image (as test-walkthrough-stack does).
+test-lab: all
+	OMNIGLASS_LAB_TEST=1 go test -tags labintegration -count=1 -timeout 20m -v -run Integration ./internal/lab/
+
+# Build the single binary with the Go toolchain (no console embedded; serves
+# the build-the-console placeholder under /web), stamped with the build id.
 build:
-	go build -o bin/omniglass ./cmd/omniglass
+	go build -ldflags "-X main.version=$(BUILD_ID)" -o bin/omniglass ./cmd/omniglass
 
 # Build the binary WITH the operator console embedded: run the Vite build into
 # internal/webui/dist, then compile with -tags web so go:embed picks it up.
 build-web: web
-	go build -tags web -o bin/omniglass ./cmd/omniglass
+	go build -tags web -ldflags "-X main.version=$(BUILD_ID)" -o bin/omniglass ./cmd/omniglass
 
 # Build the SPA into the embed target (internal/webui/dist).
 web:
@@ -22,7 +57,7 @@ web:
 # it defaults to the short commit sha. Override TAG/IMAGE/VERSION as needed.
 IMAGE   ?= omniglass
 TAG     ?= dev
-VERSION ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo dev)
+VERSION ?= $(BUILD_ID)
 image:
 	docker build -t $(IMAGE):$(TAG) --build-arg VERSION=$(VERSION) .
 
@@ -47,6 +82,7 @@ gen: gen-proto
 	go run ./cmd/exprgen
 	go run ./cmd/configgen
 	go run ./cmd/identitygen
+	go run ./cmd/labgen
 	cd web && npm install && npm run gen:api
 
 # Regenerate the protobuf telemetry wire (proto/og/v1/telemetry.pb.go) from its
@@ -211,8 +247,8 @@ test-e2e:
 # host port, unique per-run names, torn down on exit. walkthrough-stack holds
 # it up for authoring a walkthrough and prints how a Playwright container
 # reaches it; dev-sim-container is the same stack for exploring by hand, with
-# the console published on an ephemeral 127.0.0.1 port (make dev-sim, in
-# containers, impairments applied). test-walkthrough-stack proves the recipe:
+# the console published on an ephemeral 127.0.0.1 port (slice 5 of #1193 folds
+# both into the lab). test-walkthrough-stack proves the recipe:
 # the node collects, and an impairment set through the API applies and repairs.
 # Not part of make test: it builds the release image (minutes after a Go
 # change), and the impairment loop itself is gated there by test-netadmin.
@@ -270,7 +306,7 @@ probe:
 # Backstop cleanup: force-remove any orphaned Postgres test containers left by
 # an interrupted run (a hard kill before the harness TestMain or the ryuk reaper
 # could reclaim them). Scoped by the testcontainers label AND the postgres:18
-# image so it never touches the compose dev stack (`make up`) or a running ryuk.
+# image so it never touches a lab's database or a running ryuk.
 # Destructive by design; run it deliberately.
 clean-testcontainers:
 	docker ps -aq --filter "label=org.testcontainers=true" --filter "ancestor=postgres:18" | xargs -r docker rm -f
@@ -312,19 +348,15 @@ release-snapshot:
 tidy:
 	go mod tidy
 
-# ---- local dev stack -------------------------------------------------------
-# Bring up the dev Postgres (docker compose) and wait until it is ready. It
-# matches config.DefaultDSN, so the server needs no env override.
-up:
-	docker compose up -d db
-	@echo "waiting for postgres..."
-	@until docker compose exec -T db pg_isready -U omniglass -d omniglass >/dev/null 2>&1; do sleep 1; done
-	@echo "postgres ready on localhost:5432"
-
-# Stop the dev stack. The named volume persists data across runs; add `-v`
-# (docker compose down -v) to wipe it and re-mint a token on the next `make dev`.
-down:
-	docker compose down
+# ---- console development -----------------------------------------------------
+# `make dev` builds and runs nothing (#1196): the bare `make` outputs plus the
+# console's dependencies, so the fast console loop is ready. That loop is
+# ./bin/omniglass lab run in one terminal and `cd web && npm run dev` in
+# another: Vite serves the console from source with hot reload and proxies
+# /api to the lab at http://127.0.0.1:8080 (OMNIGLASS_LAB_URL moves it, for a
+# lab on another --port).
+dev: all
+	cd web && npm install
 
 # Capture the docs screenshots against the real console (dev stack + Playwright),
 # writing PNGs into docs/public/screenshots/ from each page's `screenshots`
@@ -362,42 +394,3 @@ docs-shots-verify:
 # (make walkthroughs ID=<id>).
 docs-walkthroughs:
 	node docs/scripts/copy-walkthroughs.mjs
-
-# Full stack for a browser session: Postgres + the server with the console
-# embedded. Creates (idempotently) a dev owner with password "dev", also mints a
-# bearer token, then serves the API and console at http://localhost:8080/web.
-# Ctrl-C stops the server; `make down` stops Postgres.
-# SEED_SCENARIO picks the seeded fleet (omniglass help seed-dev lists them).
-SEED_SCENARIO ?= dev
-dev: up build-web
-	@./bin/omniglass bootstrap dev --password dev >/dev/null 2>&1 || true
-	@./bin/omniglass set-password dev dev >/dev/null 2>&1 || true
-	@./bin/omniglass seed-dev --scenario $(SEED_SCENARIO) || true
-	@echo "console: http://localhost:8080/web"
-	@echo "  sign in with username 'dev' and password 'dev', or paste a bearer token:"
-	@./bin/omniglass token dev --description "dev login token"
-	./bin/omniglass server
-
-# The simulated dev fleet, collected for real: run it in a second terminal while
-# `make dev` serves. It runs the simulator and the node side by side as edge-hq,
-# the dev node the seed placed every simulated device's endpoints on, so samples
-# land across the fleet. The first run enrolls edge-hq with the dev owner's token
-# (the dev seed keeps no node secret) and keeps the node token in
-# bin/edge-hq.token; later runs reuse it. Empty the file to enroll afresh.
-# SIM_PORT_OFFSET lifts the simulated devices' ports below 1024 so this runs
-# unprivileged; the dev seed aims its endpoints at the lifted ports, and a test
-# holds this default to devseed.SimPortOffset.
-SIM_PORT_OFFSET ?= 10000
-dev-sim: build
-	@if [ ! -s bin/edge-hq.token ]; then \
-		owner=$$(./bin/omniglass token dev --description "dev sim enroll" | sed -n 's/^  \([^ ][^ ]*\)$$/\1/p'); \
-		./bin/omniglass node enroll edge-hq --server http://localhost:8080 --token "$$owner" \
-			| sed -n 's/.*"token": *"\([^"]*\)".*/\1/p' > bin/edge-hq.token; \
-	fi; \
-	test -s bin/edge-hq.token || { echo "dev-sim: could not enroll edge-hq; is make dev serving?"; exit 1; }; \
-	test "$(SIM_PORT_OFFSET)" = "10000" || echo "dev-sim: SIM_PORT_OFFSET=$(SIM_PORT_OFFSET), but the dev seed aims its endpoints at ports lifted by 10000; the node will not reach the devices"; \
-	tok=$$(cat bin/edge-hq.token); \
-	./bin/omniglass node run --server http://localhost:8080 --name edge-hq --token "$$tok" & node=$$!; \
-	trap 'kill $$node 2>/dev/null' EXIT INT TERM; \
-	sleep 2; kill -0 $$node 2>/dev/null || { echo "dev-sim: the node exited at startup (see above); empty bin/edge-hq.token to enroll afresh"; exit 1; }; \
-	./bin/omniglass sim run --server http://localhost:8080 --name edge-hq --token "$$tok" --port-offset $(SIM_PORT_OFFSET)

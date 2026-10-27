@@ -362,8 +362,12 @@ components:
           type: string
         bootstrapped:
           type: boolean
+        lab:
+          description: "Whether this server is a lab started by omniglass lab run: disposable data and a well-known login, never a real deployment"
+          type: boolean
       required:
         - bootstrapped
+        - lab
       type: object
     AvatarOutputBody:
       additionalProperties: false
@@ -10496,7 +10500,7 @@ paths:
       summary: Stop the current impersonation session
   /auth/status:
     get:
-      description: "Public: reports whether any owner has been bootstrapped, so the login screen can hide the bootstrap hint."
+      description: "Public: reports whether any owner has been bootstrapped, so the login screen can hide the bootstrap hint, and whether this server is a lab (`omniglass lab run`), so the console can say so before anyone signs in."
       operationId: get-auth-status
       responses:
         "200":
@@ -10511,7 +10515,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: Whether the system has an owner yet
+      summary: Whether the system has an owner yet, and whether it is a lab
   /calc-rules:
     get:
       description: "Lists the calc rules, by name: the authored config that derives an output key on each owner from aliased inputs, each with its live state as counts (owners_computed, owners_pending, owners_unsupported, owners_failed) over the owners the caller may read. Rules read like a registry, so every rule is listed whatever the caller's scope. Gated by rule:read."

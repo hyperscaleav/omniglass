@@ -5,6 +5,7 @@ import { resolveNext } from "../lib/next";
 import { api } from "../api/client";
 import { BrandMark, Wordmark } from "../components/Brand";
 import Button from "../components/Button";
+import LabBanner from "../components/LabBanner";
 
 // Login signs in with a username + password (the default, session-cookie path) or,
 // behind a toggle, a pasted bearer token. On success it lands at ?next= (a safe
@@ -25,10 +26,12 @@ export default function Login() {
   // Whether an owner exists yet: the bootstrap hint shows only before the first
   // owner is created. Default to true (and undefined while loading) so the hint
   // never flashes for an already-bootstrapped system.
-  const [bootstrapped] = createResource(async () => {
+  // The same read says whether this server is a lab, for its banner (#1195).
+  const [status] = createResource(async () => {
     const { data } = await api.GET("/auth/status");
-    return data?.bootstrapped ?? true;
+    return { bootstrapped: data?.bootstrapped ?? true, lab: data?.lab ?? false };
   });
+  const bootstrapped = () => status()?.bootstrapped;
 
   // Resolve ?next= to a safe in-app path. The rule and its inverse live together
   // in lib/next, because they used to disagree: AuthGuard captured the query
@@ -54,7 +57,9 @@ export default function Login() {
   }
 
   return (
-    <div class="flex min-h-screen items-center justify-center bg-base-100 px-6">
+    <div class="flex min-h-screen flex-col bg-base-100">
+      <LabBanner lab={status()?.lab} />
+      <div class="flex flex-1 items-center justify-center px-6">
       <div class="card w-full max-w-sm border border-base-300 bg-base-200">
         <div class="card-body gap-4">
           <div>
@@ -136,6 +141,7 @@ export default function Login() {
             </p>
           </Show>
         </div>
+      </div>
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 // Package devseed installs a small example fleet (locations, users, grants, and a
-// worked reachability check) for a dev environment, applied by `make dev` through the
+// worked reachability check) for a dev environment, applied by a lab's first run through the
 // trusted direct-DB lane. It is idempotent: rows that already exist are left untouched,
 // so it runs safely on every start.
 //
@@ -73,6 +73,36 @@ type SimEndpoint struct {
 	// declared the way an operator declares one (endpoint retry with a host
 	// key), so the simulated face's own key is refused until it is trusted.
 	HostKey string `yaml:"host_key"`
+	// PlantedFault, when set, says this endpoint is broken on purpose and
+	// why: a fault for a learner to find and fix (#1193). The lab's readiness
+	// does not wait for it to read up.
+	PlantedFault string `yaml:"planted_fault"`
+}
+
+// PlantedFault is a simulated endpoint the seed breaks on purpose.
+type PlantedFault struct {
+	Component string
+	Driver    string
+	// Label is the endpoint's label, which the API reports beside its
+	// reachability: how the lab tells a planted fault from a real one.
+	Label string
+	Why   string
+}
+
+// PlantedFaults lists the simulated endpoints a scenario breaks on purpose,
+// read from its fixture.
+func PlantedFaults(sc Scenario) ([]PlantedFault, error) {
+	doc, err := sc.Doc()
+	if err != nil {
+		return nil, err
+	}
+	var out []PlantedFault
+	for _, e := range doc.SimEndpoints {
+		if e.PlantedFault != "" {
+			out = append(out, PlantedFault{Component: e.Component, Driver: e.Driver, Label: e.Label, Why: e.PlantedFault})
+		}
+	}
+	return out, nil
 }
 
 // System is one example system: a thing in a room that either works or does not.
@@ -246,8 +276,8 @@ func Fixtures() (Doc, error) {
 // Options tunes a Run. SimFleet wires the simulated fleet (addresses and
 // endpoints on the dev node for every component the simulator serves).
 // SimPortOffset is the lift the simulator applies to ports below 1024, which
-// the endpoints target: SimPortOffset for a simulator run unprivileged (make
-// dev-sim), 0 for one that binds the real ports (in a container).
+// the endpoints target: 0 (the default) for one that binds the real ports, in
+// a container as the lab's does; a lift for one run unprivileged on a host.
 type Options struct {
 	SimFleet      bool
 	SimPortOffset int
@@ -258,7 +288,7 @@ type Options struct {
 // trusted lane grants the all scope; callers are the direct-DB commands, never a
 // request handler.
 func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
-	return RunWith(ctx, gw, actorID, Options{SimFleet: true, SimPortOffset: SimPortOffset})
+	return RunWith(ctx, gw, actorID, Options{SimFleet: true})
 }
 
 // RunWith is Run with options: the docs screenshot harness seeds without
@@ -337,7 +367,7 @@ func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, op
 	// grants are not one transaction (the Gateway has no cross-entity write), so an
 	// infra fault between them could leave a user under-granted, and a re-run would
 	// skip it. That is an accepted limit of dev-only fixture data: reset with
-	// `docker compose down -v` and re-run `make dev`.
+	// `omniglass lab run --fresh`.
 	for _, u := range doc.Users {
 		hash, err := auth.HashPassword(u.Password)
 		if err != nil {
@@ -688,7 +718,7 @@ func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, op
 		return err
 	}
 	// Last: the simulated fleet, addresses and endpoints on the dev node for
-	// every component the simulator serves, so make dev-sim collects for
+	// every component the simulator serves, so a lab's node collects for
 	// real. Last, so a failure here cannot skip the seeding before it.
 	if !opts.SimFleet {
 		return nil
@@ -889,7 +919,7 @@ var exampleLogs = []struct {
 
 // seedLogs installs the example log lines on the huddle display idempotently.
 // The log_line table has an auto id and no natural unique key, so a naive
-// re-insert would pile up duplicates on every make dev; guard on the component
+// re-insert would pile up duplicates on every seed-dev; guard on the component
 // already carrying lines (ListComponentLogs unwindowed, limit 1) and skip
 // when present. componentID is the row the fixture key resolved to.
 func seedLogs(ctx context.Context, gw storage.Gateway, componentID string) error {
@@ -1019,7 +1049,7 @@ var reachChecks = []struct {
 // seedReachability installs the worked reachability checks idempotently through the
 // Storage Gateway. Its sentinel is the first endpoint: samples are append-only,
 // so once it exists the whole block has run and a re-run is a no-op (a second
-// `make dev` must not double the samples). It authors each check the way a node
+// a second seed-dev must not double the samples). It authors each check the way a node
 // runs one (endpoint + poll task) and writes a handful of samples keyed by the
 // component (owner) and endpoint (instance), using ONLY registered canonical
 // property_type names, so a wrong name would reject-not-project.
@@ -1177,7 +1207,7 @@ var exampleEvents = []struct {
 
 // seedEvents installs the example events on the video bar idempotently.
 // The event table has an auto id (bigint identity) and no natural unique key, so a
-// naive re-insert would pile up duplicates on every `make dev`; guard on the component
+// naive re-insert would pile up duplicates on every seed-dev; guard on the component
 // already carrying events (ListComponentEvents from the epoch, limit 1) and skip when
 // present, so a second run is a no-op. Owner = the component, instance empty (a
 // device-level log, not per-interface). Mirrors seedReachability's sentinel pattern.

@@ -1305,6 +1305,29 @@
      }
     ]
    },
+   "lab_mark": {
+    "columns": [
+     {
+      "name": "singleton",
+      "type": "boolean",
+      "nullable": false,
+      "default": "true",
+      "pk": true
+     },
+     {
+      "name": "marked_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     }
+    ],
+    "checks": [
+     {
+      "name": "lab_mark_singleton_check",
+      "expr": "CHECK (singleton)"
+     }
+    ]
+   },
    "label_rule": {
     "columns": [
      {

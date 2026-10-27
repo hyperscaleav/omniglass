@@ -23,7 +23,7 @@ import (
 // would be a refusal listing three candidates.
 //
 // The second half of the problem is recognising a row on a LATER run, which is
-// what keeps `make dev` from stacking a second fleet on every start. A row the
+// what keeps a second seed-dev from stacking a second fleet. A row the
 // fixture names is found by its name, the way it always was. A row the PLATFORM
 // named is found by its position: among the platform-named rows of the same
 // classification in the same bucket, in the order the generator allocated them,

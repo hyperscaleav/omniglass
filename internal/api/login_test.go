@@ -255,3 +255,46 @@ func TestAuthStatus(t *testing.T) {
 		t.Fatal("after bootstrap the system should report bootstrapped")
 	}
 }
+
+// TestAuthStatusReportsALab proves the public /auth/status says whether the
+// server runs as a lab (#1195): the console's "lab instance" banner reads it,
+// on the login page before anyone signs in. A server that is not a lab says
+// so too, so the banner never shows on a real deployment.
+func TestAuthStatusReportsALab(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	for _, tc := range []struct {
+		name string
+		opts []api.Option
+		want bool
+	}{
+		{"a real server", nil, false},
+		{"a lab", []api.Option{api.WithLab(true)}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(api.NewHandler(gw, tc.opts...))
+			defer srv.Close()
+			resp, err := http.DefaultClient.Get(srv.URL + "/api/v1/auth/status")
+			if err != nil {
+				t.Fatalf("status: %v", err)
+			}
+			defer resp.Body.Close()
+			var body map[string]any
+			if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			lab, present := body["lab"]
+			if !present || lab != tc.want {
+				t.Fatalf("auth/status lab = %v (present %v), want %v", lab, present, tc.want)
+			}
+		})
+	}
+}

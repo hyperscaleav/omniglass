@@ -8,6 +8,8 @@
       "Bash(make gen-web)",
       "Bash(make build:*)",
       "Bash(make dev)",
+      "Bash(make lab:*)",
+      "Bash(make test-lab)",
       "Bash(make tidy)",
       "Bash(make docs-shots:*)",
       "Bash(make clean-testcontainers)",

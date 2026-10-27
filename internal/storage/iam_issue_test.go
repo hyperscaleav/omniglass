@@ -15,7 +15,7 @@ import (
 // TestIssueBearerCredential proves a second bearer credential can be minted for
 // an existing principal and authenticates to the same identity, and that an
 // unknown username is reported (not an error). This backs `omniglass token` and
-// the `make dev` login when the owner already exists.
+// the dev login when the owner already exists.
 func TestIssueBearerCredential(t *testing.T) {
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()

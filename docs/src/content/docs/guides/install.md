@@ -54,14 +54,31 @@ console you need Postgres and the same environment the image uses; see
 `migrate`/`server`/`bootstrap`/`token` flow, which is identical for the binary. To drive a
 running server from the command line, see [the CLI](/guides/cli/).
 
+To try it first, with nothing to set up but Docker, run `omniglass lab run`: it brings up a working
+omniglass, its own Postgres and an edge node collecting from a simulated fleet, prints the console's
+address and the login, and removes it all on Ctrl-C. The [lab guide](/guides/lab/) walks through it.
+
 ## Run a simulator
 
-The same binary simulates devices: `omniglass sim run`, beside a collection node, serves every
-component placed on that node whose product it has a profile for, each on its own loopback address
+The same binary simulates components. The simplest way is to let the node run it:
+`omniglass node run --simulate` runs the simulator in the node's own process, serving every component
+placed on that node whose product it has a profile for, each on its own loopback address
 ([simulation](/architecture/simulation/), and the operator's walk-through in
-[simulate a fleet](/guides/operator/simulation/)). It must share the node's loopback: the same host,
-or the same container or pod network namespace. With Docker, run it in the node container's
-namespace:
+[simulate a fleet](/guides/operator/simulation/)). One process means one network namespace, so the
+simulated components sit on the loopback the node collects from by construction, and one identity:
+the simulator uses the node's own name and token, with no second enrollment.
+
+```bash
+omniglass node run --name edge-hq --token "$NODE_TOKEN" --simulate
+```
+
+`--impairments`, `--port-offset` and `--poll` are the simulator's flags, and the node refuses them
+without `--simulate`. A simulator crash stops the node with it, so run it under something that
+restarts it (a container restart policy, as the [lab](/guides/lab/) does).
+
+To keep the simulator a process of its own beside a node, `omniglass sim run` does the same with the
+node's identity. It must share the node's loopback: the same host, or the same container or pod
+network namespace. With Docker, run it in the node container's namespace:
 
 ```bash
 docker run -d --name omniglass-sim --network container:omniglass-node \
@@ -70,12 +87,13 @@ docker run -d --name omniglass-sim --network container:omniglass-node \
 ```
 
 A sidecar in the node's pod is the Helm chart's to offer ([#892](https://github.com/hyperscaleav/omniglass/issues/892)).
-It runs unprivileged, and each privilege it is given buys one thing:
+Either way the simulator runs unprivileged, and each privilege it is given buys one thing:
 
 - **Ports below 1024** (SNMP 161, HTTP 80, SSH 22). In a container, Docker already lets any user bind
   them; in Kubernetes, set the safe sysctl `net.ipv4.ip_unprivileged_port_start=0` on the pod. A bare
   binary needs `sudo setcap cap_net_bind_service=+ep ./omniglass`. Without any of these, lift the ports
-  with `--port-offset 10000` and aim the endpoints at the lifted ports, as the dev fleet does.
+  with `--port-offset 10000` and aim the endpoints at the lifted ports
+  (`omniglass seed-dev --sim-port-offset 10000` seeds the dev fleet that way).
 - **Ping.** The node's pinger is unprivileged: the kernel must let its group send ICMP echo through
   `net.ipv4.ping_group_range` (with Docker, `--sysctl net.ipv4.ping_group_range="0 2147483647"`).
 - **Impairments and truthful ping** need `--impairments` and `NET_ADMIN`
@@ -91,19 +109,19 @@ alias for each simulated address it serves (the dev fleet uses `127.60.0.0/16`),
 
 ### Seed a different fleet
 
-`make dev` and the Docker stack below seed the example fleet, but `omniglass seed-dev --scenario
+The lab and the walkthrough stack seed the example fleet, but `omniglass seed-dev --scenario
 <name>` can stand up other fleets: a fresh install with nothing in it, the example fleet having a bad
 day, or the example fleet at enterprise size. The list, with what each one holds, is the command's own help, rendered in the
 [CLI reference](/reference/cli/#omniglass-seed-dev).
 Every scenario except the fresh install is the example fleet plus a generated expansion of it, so a
 scenario never drifts from the fleet it grows from, and like the example fleet every one is
-idempotent. Pick one with `SEED_SCENARIO` for `make dev`, or `STACK_SCENARIO` for the Docker stack
-(on a fresh install the stack is the server and its owner alone, since its node and simulated
-devices come from the example fleet):
+idempotent. Pick one with `--scenario` for the lab (on its first run, or with `--fresh`), or
+`STACK_SCENARIO` for the walkthrough stack (on a fresh install either is the server and its owner
+alone, since the node's simulated components come from the example fleet):
 
 ```bash
-SEED_SCENARIO=degraded make dev
-STACK_SCENARIO=large make dev-sim-container
+omniglass lab run --fresh --scenario degraded
+STACK_SCENARIO=large make walkthrough-stack
 ```
 
 The large fleet copies the example fleet's self-contained rooms (a room whose devices serve only the
@@ -113,22 +131,19 @@ wired by the seed, whatever the scenario). It takes a couple of minutes to seed.
 
 ### The whole loop in Docker
 
-From a checkout, with nothing but Docker, `make dev-sim-container` runs every piece of the above as
-containers on a private network of their own: Postgres, the server (seeded with the example fleet and
-its simulated components), the node `edge-hq` enrolled with a one-time token, and the simulator with
-`--impairments` in the node container's network namespace. Only the simulator holds `NET_ADMIN`, and it
-reaches only that namespace; only the node takes the ping sysctl. In a container the simulator binds the
-real ports, so the fleet is seeded unlifted (`omniglass seed-dev --sim-port-offset 0`). It prints the
-console's address, on a `127.0.0.1` port Docker picks so two copies never collide (sign in as
-`dev`/`dev`), and tears everything down on Ctrl-C. Breaking a component on purpose works there as in
-[simulate a fleet](/guides/operator/simulation/#break-it-on-purpose).
+From a checkout or a release binary, with nothing but Docker, `omniglass lab run` runs every piece of
+the above as containers on a private network of their own: Postgres, the server (seeded with the
+example fleet and its simulated components), and the node `edge-hq` running `node run --simulate
+--impairments`, re-enrolled on every run. Only the node holds `NET_ADMIN` and the ping sysctl, and
+they reach only its own container's namespace. In a container the simulator binds the real ports, so
+the fleet is seeded unlifted. It prints the console's address, on `127.0.0.1:8080` (sign in as
+`dev`/`dev`), and tears everything down on Ctrl-C, keeping the data for the next run. Breaking a
+component on purpose works there as in
+[simulate a fleet](/guides/operator/simulation/#break-it-on-purpose). The [lab guide](/guides/lab/)
+covers what runs, with which privilege, and why Docker is required.
 
-It does not attach to a `make dev` already running on the host: that server's bus listens on the
-host's loopback only, so a containerized node could reach it only on the host's network, where the
-simulator's `NET_ADMIN` would rewrite the host's own firewall. The stack carries its own server instead.
-
-The same stack is what demos are recorded against, the terminal demos and the console walkthroughs
-alike: `make walkthrough-stack` holds it
+The demo pipeline still records on the walkthrough stack, the lab's predecessor, until it moves onto
+the lab ([#1197](https://github.com/hyperscaleav/omniglass/issues/1197)): `make walkthrough-stack` holds it
 up without publishing anything and prints how a Playwright container on its network reaches it, and
 `make test-walkthrough-stack` proves it (the node collects, and an impairment set through the API
 takes a component's reachability down and its repair brings it back). The recipe is

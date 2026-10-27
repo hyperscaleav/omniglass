@@ -14,14 +14,14 @@ command, its flags, and an example, see the **[CLI reference](/reference/cli/)**
 
 ## Running the full stack locally
 
-`make dev` brings up the whole stack for a browser session: a dev Postgres (docker
-compose, matching the default DSN), the migrations and boot seed, a bootstrapped `dev`
-owner whose token is printed once, a dev example fleet (a few campuses with rooms, a few
-sign-in-able users, and their grants, so the console is not empty), and the server with
-the operator console at `http://localhost:8080/web`. Ctrl-C stops the server; `make down` stops Postgres (the
-named volume persists data between runs; `docker compose down -v` wipes it and re-mints a
-token next run). `make up` / `make down` manage just the database. Tests never touch this
-stack: they spin their own ephemeral Postgres via testcontainers.
+`omniglass lab run` (or `make lab`, the short form from a checkout) brings up the whole stack
+for a browser session on Docker: Postgres, the server with the operator console at
+`http://127.0.0.1:8080/web`, and the edge node `edge-hq` running the simulator in its own
+process, serving and collecting from the seeded dev fleet. The login is `dev` / `dev`. Ctrl-C
+removes the containers and keeps the data for the next run; `--fresh` starts over from the seed.
+The [lab guide](/guides/lab/) covers what runs, its safety rails and its flags. `make` itself
+only builds (`make lab` is `make`, then `./bin/omniglass lab run`). Tests never touch the lab: they spin their own
+ephemeral Postgres via testcontainers.
 
 The example fleet deliberately types almost none of its own names: its devices and its
 systems all ask the platform to name them, so what you sign in to is the name generator's
@@ -278,10 +278,18 @@ unplugged device plugs it back in.
 Impairments apply only on a simulator started with `--impairments` and `NET_ADMIN`, in a namespace
 of its own, since it rewrites that namespace's firewall.
 
-Locally, `make dev-sim` (beside `make dev`) enrolls the dev fleet's node once, keeps its token in
-`bin/edge-hq.token`, and runs the simulator and the node side by side, so the seeded fleet is
-collected for real; its devices' ports below 1024 are lifted by `SIM_PORT_OFFSET` (default 10000, where
-the dev seed aims its endpoints).
+A node can also run the simulator in its own process: `omniglass node run --simulate` serves the
+components placed on that node on the node's own loopback and collects from them, on one identity
+and one enrollment. `--impairments`, `--port-offset` and `--poll` are the simulator's flags and are
+refused without `--simulate`; `omniglass sim run` stays for a simulator as a process of its own.
+
+```sh
+omniglass node run --name edge-hq --token ogp_... --simulate                # the node and its simulated components, one process
+omniglass node run --name edge-hq --token ogp_... --simulate --impairments  # in a container of its own, with NET_ADMIN
+```
+
+The [lab](/guides/lab/) runs exactly that, with `--impairments`, in a container of its own, so the
+seeded fleet is collected for real and every impairment above works with nothing but Docker.
 
 The node-facing `claim` exchange is public (the enrollment token is the authentication), so
 a node presents its name and token to receive its NATS credential:

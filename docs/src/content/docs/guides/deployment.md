@@ -10,6 +10,10 @@ database, so a deployment is that one binary in one of its run modes (`server`, 
 plus a database. How it scales and the deploy model behind these pages is
 [scaling and deployment](/architecture/scaling/).
 
+To try it before deploying anything, [the lab](/guides/lab/) brings up a working omniglass on
+Docker with one command, with a simulated fleet to collect from; it is for learning, not for
+production.
+
 Pick the path that fits where you are running it:
 
 - **[Install](/guides/install/)** downloads a prebuilt binary for your OS and architecture, the

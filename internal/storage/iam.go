@@ -135,7 +135,7 @@ func (p *PG) BootstrapOwner(ctx context.Context, spec OwnerSpec) (created bool, 
 // principal addressed by its human username, returning false if no such
 // username exists. The caller generates and hashes the token and shows the
 // cleartext once; this is the same trusted direct-DB lane as BootstrapOwner
-// (token reissue, break-glass, and the `make dev` login). purpose is 'session' (a
+// (token reissue, break-glass, and the dev login). purpose is 'session' (a
 // web login) or 'token' (a CLI/API credential), the discriminator between the two
 // kinds of bearer, and expiresAt bounds the credential's lifetime: every credential
 // is time-bounded now (a session for 12h, a token for 90 days by default), so a

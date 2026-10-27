@@ -1,0 +1,269 @@
+---
+title: "Try omniglass in five minutes"
+description: "One command brings up a working omniglass on Docker, with an edge node collecting from a simulated fleet, to learn on: what it runs, with which privilege, and the walkthroughs to follow in it."
+sidebar:
+  badge:
+    text: Built
+    variant: success
+---
+
+import LabTopology from '../../../components/LabTopology.astro';
+import LabWalkthroughs from '../../../components/LabWalkthroughs.astro';
+
+A **lab** is a working omniglass on your own machine, brought up by one command, to learn on. It
+runs the real server and console, its own Postgres, and an edge node that runs the simulator in its
+own process, serving a fleet of simulated components and collecting from them for real. Break a
+component on purpose and watch the platform notice. The only thing it needs is Docker, on Linux,
+macOS or Windows.
+
+## Three commands
+
+From a checkout:
+
+```bash
+git clone https://github.com/hyperscaleav/omniglass.git && cd omniglass
+make
+./bin/omniglass lab run
+```
+
+`make` builds two things from one Dockerfile, with nothing but Docker: the image `omniglass:dev` and
+this machine's own binary, `bin/omniglass`, both stamped with one build id. It builds and runs
+nothing else. `make lab` is the short form of the last two commands (`make`, then
+`./bin/omniglass lab run`; `LAB_ARGS` passes flags, as in `make lab LAB_ARGS=--fresh`).
+
+With a [release binary](/guides/install/#download-a-binary) there is nothing to build: run
+`omniglass lab run`, and it pulls its own release's image.
+
+## What you see
+
+The lab says what it is doing while it comes up, one line per stage, then where to go:
+
+```text
+Starting your omniglass lab. The first run takes a few minutes; later ones, under one.
+
+  docker     running (Engine API 1.56, unix:///var/run/docker.sock, from the default socket)
+  image      omniglass:dev (built by make beside this binary)
+  network    omniglass-lab_default (a private bridge; only the console is published)
+  database   Postgres is ready
+  seed       the dev fleet, seeded on this lab's first run
+  server     answering at http://127.0.0.1:8080/web
+  sign in    the login dev / dev works
+  node       edge-hq with its simulator: 124 of 124 simulated components running
+  collecting 128 of 128 simulated endpoints up, and 3 broken on purpose for you to find
+
+Your omniglass lab is ready (it took 14s).
+
+  Console    http://127.0.0.1:8080/web
+  Sign in    user dev, password dev
+
+  Stop it    press Ctrl-C here. Your lab's data is kept for next time;
+             omniglass lab run --fresh starts over from the seed.
+
+Where to go next: the guided walkthroughs, each recorded on this same lab,
+so every screen matches yours:
+  https://docs.omniglass.hyperscaleav.com/guides/lab/#walk-through-it
+
+The lab is one Docker project; see it with: docker compose -p omniglass-lab ps
+```
+
+Ready means four things, each checked before the lab says so: the console answers at the printed
+address, the printed login signs in, the simulator reports every simulated component `running`, and
+every simulated endpoint reads up except the ones the seed breaks on purpose. Two kinds of endpoint
+are left out of that count: an endpoint that receives pushes (a webhook carries no reachability
+verdict to wait for), and the planted faults below, which the seed marks itself rather than a list
+kept here. The lab is one compose project, so `docker compose ls`, `docker compose -p omniglass-lab
+ps` and `docker compose -p omniglass-lab logs server` all see it, and Docker Desktop groups it.
+
+## Sign in
+
+Open the printed console address and sign in as user `dev`, password `dev`: an owner, so every
+screen is open to you. The login is the same well-known one every walkthrough is recorded with, so
+the steps you follow match the screen you have. Every screen, the sign-in page included, carries a
+**Lab instance** banner, so a lab is never mistaken for a real deployment.
+
+The fleet is the dev fleet, the same one every walkthrough is recorded on: places with systems in
+them, components of several products from several vendors, and the edge node `edge-hq` collecting
+from all of them.
+
+## Walk through it
+
+Each guided walkthrough is a recording of a real console flow on this same lab, so you can replay
+it step by step in yours and see the same screens. Start with one that matches what you came to
+learn:
+
+<LabWalkthroughs />
+
+## Faults planted for you to find
+
+The seed breaks a few things on purpose, so there is something real to diagnose the moment the lab
+is up: the readiness line counts them as "broken on purpose". Each is marked as a planted fault in
+the dev fleet's own fixtures, with a sentence saying what went wrong, and the lab reads them from
+there, so the count never drifts from the seed. They are the kind of thing that happens in the field:
+a credential rotated under an endpoint, a component reimaged so its key no longer matches the pin, an
+agent that refuses what the endpoint presents. The walkthroughs that fix a rejected session, trust a
+changed host key and fix a refused probe each start from one; try finding them on your own first.
+
+Breaking a component yourself works too, from its page or the CLI
+([break it on purpose](/guides/operator/simulation/#break-it-on-purpose)):
+
+```bash
+./bin/omniglass component impairment set <component> --unplugged   # dark on every protocol
+./bin/omniglass component impairment set <component>                # plug it back in
+```
+
+## Stopping it, and your data
+
+Press **Ctrl-C** in the lab's terminal (or send it SIGTERM). The lab stops and removes every
+container and the network it created, and keeps its two volumes, so the next `omniglass lab run`
+picks up where you left off: a component you added is still there, and your secrets still decrypt,
+because the server's encryption key lives in the data volume too. Press Ctrl-C a second time to
+leave without cleaning up; a lab stopped that hard, or killed outright (SIGKILL, a closed laptop
+lid), is cleaned up by the next run before it starts.
+
+`omniglass lab run --fresh` removes both volumes first and starts over from the seed. Use it after
+pulling a change whose seed or schema an old lab cannot carry forward: lab data is disposable.
+
+The node is enrolled afresh on every run (its token re-minted), so the lab stores no node secret.
+
+## What runs, with which privilege
+
+The lab is one Docker compose project, `omniglass-lab`: one private bridge network, the containers
+below, and two named volumes. This table is rendered from the lab's own plan, the same spec it hands
+Docker, so it cannot describe a container or a privilege the lab does not create:
+
+<LabTopology />
+
+The data lives in two named volumes, kept across runs and removed by `--fresh`:
+
+<LabTopology part="volumes" />
+
+Only the console is published, on `127.0.0.1` (`127.0.0.1:8080` by default). The database, the
+server's bus and the node publish nothing; the node reaches the server across the lab network.
+`NET_ADMIN`, root and the ping sysctl are held by the `node` container alone, for the simulator's
+impairments and truthful ping, and they reach only that container's own network namespace, never
+your machine's. The `server` and `db` containers carry no added capability.
+
+Publishing nothing is not the same as unreachable. On Linux, a Docker bridge network's addresses are
+routable from the machine itself, so a local process that finds the lab network's address can reach
+the database there, with the lab's fixed Postgres login (`omniglass` / `omniglass`, a superuser of
+that database and so of its container). That is the lab's data and the lab's container, both
+disposable, on a machine you share only with people you would hand the console's well-known login
+to anyway; it is one more reason a lab is never a place for real data.
+
+## Safety rails
+
+A lab's login is well known and its data is disposable, so it is kept apart from anything real:
+
+- **Loopback only.** The console is published on `127.0.0.1`, reachable from this machine alone.
+  `--listen` moves it to another address, and the lab then says, once it is ready, that anyone who
+  can reach that address can sign in with the well-known login.
+- **It says it is a lab.** The server runs in lab mode, a setting only `omniglass lab run` passes,
+  and reports it on `GET /auth/status`; the console shows the **Lab instance** banner on the sign-in
+  page and in the shell.
+- **Lab and real databases refuse each other.** The lab writes a mark into the database it creates.
+  A server outside lab mode refuses a database that carries the mark, and a lab refuses a database
+  that holds data and no mark (a real deployment's). Each refusal says why and what to do. The mark
+  is data the lab writes, never a migration or a boot-seed row.
+- **A local daemon only.** The lab refuses a Docker daemon on another machine, where the loopback
+  publish would land on that machine and not this one.
+- **One lab at a time.** A run refuses to start while another lab is running here (or was started
+  from another machine, or from inside a container, on the same daemon), and never touches it; a run
+  that fails to come up removes only what it created itself.
+
+## Flags
+
+The [CLI reference](/reference/cli/#omniglass-lab-run) renders every flag and its default from the
+command itself; here is when you would reach for each:
+
+- `--port` moves the console off 8080 when something else holds it. A taken port fails before
+  anything is created, rather than silently picking another, so the address you bookmarked survives
+  a restart. `--port 0` lets Docker pick a free one, and the ready line prints it.
+- `--listen` publishes the console on another address of this machine, to show a lab to someone on
+  your network. It exposes the well-known login with it, and the lab says so.
+- `--fresh` starts over from the seed, removing the lab's data first.
+- `--scenario` picks another fleet for the lab's first run (the [seed-dev reference](/reference/cli/#omniglass-seed-dev) lists them:
+  an empty install, the dev fleet having a bad day, the dev fleet at enterprise size). On a lab that
+  already has data, pair it with `--fresh`.
+- `--image` runs an omniglass image of your choosing, with a warning: a lab whose server and binary
+  disagree is yours to debug.
+
+**Which image runs.** A binary built by `make` runs the `omniglass:dev` image the same `make` built:
+the image carries its build id in the OCI label `org.opencontainers.image.version`, and the lab
+refuses an image whose label is not its own build id, saying to run `make`. The lab never builds
+anything itself, so it always runs the code you built. A release binary runs
+`ghcr.io/hyperscaleav/omniglass:v<version>`, pulled if absent
+([container image](/guides/container-image/#where-it-ships)).
+
+## Why Docker is required
+
+A lab is worth running only if collection behaves as it does against real gear: every component
+answers on its own address, ping tells the truth, and an unplugged component goes dark. Each of
+those leans on Linux networking that a bare binary on a workstation does not get:
+
+- **Every simulated component has its own address**, one each in `127.60.0.0/16`. Linux treats all
+  of `127.0.0.0/8` as local; macOS answers only `127.0.0.1` until each address is aliased with
+  `sudo ifconfig lo0 alias`. Windows binds any `127.x` address without aliasing.
+- **The ports are the profiles' real ports**, and some are privileged (SNMP 161, SSH 22, HTTP 80,
+  HTTPS 443), because the seeded endpoints target them. Binding below 1024 needs a privilege on a
+  Linux host.
+- **Ping needs a kernel grant, and tells the truth only behind a firewall rule.** The node's pinger
+  is unprivileged datagram ICMP: Linux allows it only where `net.ipv4.ping_group_range` admits the
+  process's group, macOS allows it, and Windows offers no unprivileged ICMP socket. Even with the
+  grant, every loopback address answers ping, component or not, until a firewall rule drops echoes
+  to addresses that are no component, and that rule needs `NET_ADMIN`.
+- **Impairments rewrite the network namespace.** Unplug, latency, jitter, loss and rate are an
+  nftables table and traffic shaping on `lo`, applied with `NET_ADMIN`, and Linux only. On a
+  workstation's own namespace they would reshape the whole machine's loopback.
+
+Every container runs on a Linux kernel: natively on Linux, and inside Docker Desktop's VM on macOS
+and on Windows (WSL2). So all of the above holds the same way on all three. Each container gets a
+namespace of its own; Docker lets any user bind ports below 1024 inside one; the ping sysctl is set
+per container; and `NET_ADMIN` goes to the node's container alone, where it reaches only that
+container. A native lab without Docker would need an admin prompt per address and a second
+impairment backend on macOS, a privileged pinger and a third backend on Windows, its own namespace
+plumbing on Linux, and an embedded Postgres everywhere, and would still behave differently on two of
+three platforms. `make test` already needs Docker, so a contributor installs nothing new.
+
+## When it will not start
+
+Every check runs before the lab creates anything, and each failure exits non-zero, naming the cause
+and the fix. The lab finds Docker the way the docker CLI does: `DOCKER_HOST`, then `DOCKER_CONTEXT`,
+then the CLI's current context, then the platform's default socket or named pipe.
+
+- **No Docker found.** Nothing answers at the default socket: install Docker Desktop (macOS,
+  Windows) or Docker Engine (Linux), start it, and run the lab again.
+- **Docker is not running.** The socket the context names does not answer: start Docker Desktop, or
+  the service (`sudo systemctl start docker`).
+- **Permission denied on the socket.** On Linux, add yourself to the `docker` group
+  (`sudo usermod -aG docker $USER`, then sign out and back in), or use rootless Docker.
+- **The console's port is taken.** Stop whatever holds it, or move the lab with `--port`.
+- **The daemon is on another machine.** Unset `DOCKER_HOST` or `docker context use default`, or run
+  the lab where the daemon runs.
+- **A lab is already running.** Use that one, or stop it with Ctrl-C in its terminal.
+- **The image is not built, or was built from another tree.** Run `make`, which builds the binary
+  and the image together, then run the lab again. A binary built without `make` carries no build id
+  and cannot tell which image is its own, so it asks for `make` too.
+
+## The console fast loop
+
+Working on the console itself, run the lab in one terminal and the console from source in another:
+
+```bash
+./bin/omniglass lab run       # terminal 1
+cd web && npm run dev         # terminal 2: the console on http://localhost:5173/web, hot reload
+```
+
+The Vite dev server serves the console from source and proxies `/api` to the lab at
+`http://127.0.0.1:8080` (IPv4 loopback, because the lab publishes on it alone). For a lab on
+another port, point the proxy at it:
+
+```bash
+./bin/omniglass lab run --port 8081
+OMNIGLASS_LAB_URL=http://127.0.0.1:8081 npm run dev
+```
+
+This loop needs Node; the lab itself needs only Docker. A change to the server, node or simulator
+Go code is a rebuild instead: run `make` (the image rebuilds from cache) and then the lab again.
+[Contributing](https://github.com/hyperscaleav/omniglass/blob/main/CONTRIBUTING.md) lists who needs
+which toolchain, and the [design system](/contributing/design-system/#build-and-embed) covers how
+the console builds.

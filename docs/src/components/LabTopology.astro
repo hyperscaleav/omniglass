@@ -1,0 +1,98 @@
+---
+// What the lab runs, with which privilege, rendered from the planner's own
+// spec (docs/src/generated/lab.json, written by make gen via cmd/labgen from
+// internal/lab's Plan). The planner is what the lab hands Docker, so this
+// table cannot describe a container, a capability or a publish the lab does
+// not create.
+//
+// Usage: <LabTopology /> for the containers, <LabTopology part="volumes" />
+// for the named volumes that hold the lab's data.
+import facts from '../generated/lab.json';
+
+interface Props {
+  part?: 'containers' | 'volumes';
+}
+
+const { part = 'containers' } = Astro.props;
+if (!facts.containers.length || !facts.volumes.length) {
+  throw new Error('LabTopology: lab.json has no containers or no volumes; run make gen');
+}
+
+// The planner names the omniglass image by its role; which image that is
+// (omniglass:dev or a release's) follows the binary, so say so.
+const image = (ref: string) => (ref === 'omniglass' ? 'omniglass (the image your binary selects)' : ref);
+const privilege = (c: (typeof facts.containers)[number]) => {
+  const parts = [
+    ...c.caps.map((cap) => `capability ${cap}`),
+    ...c.sysctls.map((s) => `sysctl ${s}`),
+  ];
+  return parts.length ? parts : null;
+};
+---
+
+{
+  part === 'containers' ? (
+    <table class="lab-topology">
+      <thead>
+        <tr>
+          <th>Container</th>
+          <th>Image and command</th>
+          <th>Runs as</th>
+          <th>Added privilege</th>
+          <th>Published</th>
+          <th>What it is</th>
+        </tr>
+      </thead>
+      <tbody>
+        {facts.containers.map((c) => (
+          <tr>
+            <td>
+              <code>{c.name}</code>
+              {c.runs_once && <> (one-off)</>}
+            </td>
+            <td>
+              {image(c.image)}
+              {c.command && (
+                <>
+                  : <code>{c.command}</code>
+                </>
+              )}
+            </td>
+            <td>{c.user.startsWith('the image') ? c.user : <code>{c.user}</code>}</td>
+            <td>
+              {privilege(c)
+                ? privilege(c)!.map((p, i) => (
+                    <>
+                      {i > 0 && <br />}
+                      <code>{p}</code>
+                    </>
+                  ))
+                : 'none'}
+            </td>
+            <td>{c.publish ? <code>{c.publish}</code> : 'nothing'}</td>
+            <td>{c.role}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  ) : (
+    <table class="lab-topology">
+      <thead>
+        <tr>
+          <th>Volume</th>
+          <th>Holds</th>
+        </tr>
+      </thead>
+      <tbody>
+        {facts.volumes.map((v) => (
+          <tr>
+            <td>
+              <code>{v.name}</code>
+            </td>
+            <td>{v.holds}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}

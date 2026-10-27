@@ -45,20 +45,22 @@ and `kobalte` cover the reactivity and primitive mechanics.
 
 ## The proof pass (drive the real console)
 
-**Bring it up.** Full fidelity is `make dev`: compose Postgres, the embedded build at
-`http://localhost:8080/web`, boot seed plus the dev fleet, login `dev`/`dev`. While
-iterating, run `./bin/omniglass server` with `cd web && npm run dev` on :5173 (Vite
-proxies `/api`; no rebuild per change), but **PR captures come from the embedded build**,
+**Bring it up.** Full fidelity is `make lab`: Postgres, the server with the embedded build
+at `http://127.0.0.1:8080/web`, and a node collecting from the simulated fleet, boot seed
+plus the dev fleet, login `dev`/`dev` (`make lab LAB_ARGS=--fresh` starts over from the
+seed). While iterating, keep the lab up and run `cd web && npm run dev` on :5173 (Vite
+proxies `/api` to the lab; no rebuild per change), but **PR captures come from the embedded build**,
 per the PR template. Permission-variant states use the seeded users `operator`,
 `viewer` (fleet-wide read-only, the one who sees a component and may act on nothing),
 `viewer-hq`, `tech-east` (password `dev`; a location grant reaches no component, so the
-last two never open one), or a per-user token (`./bin/omniglass token viewer`).
+last two never open one), or a per-user token from signing in as them
+(`./bin/omniglass auth login --server http://127.0.0.1:8080 --username viewer --password dev`).
 
 **Capture the matrix.** One capture per state on the plan list, at the house viewport
 (1320x860 at 2x, what `shot.mjs` ships):
 
 ```bash
-node web/e2e/shot.mjs "http://localhost:8080/web/<route>" out.png \
+node web/e2e/shot.mjs "http://127.0.0.1:8080/web/<route>" out.png \
   --token "$(./bin/omniglass token dev)" \
   [--click SEL]... [--select "SEL||VALUE"]... [--type "SEL||TEXT"]... \
   [--hover SEL]... [--press KEY]... [--wait MS] [--full]

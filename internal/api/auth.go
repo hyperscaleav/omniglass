@@ -111,6 +111,8 @@ type authenticator struct {
 	// secureCookies marks the session cookie Secure (https only): off for local
 	// http dev, on behind TLS. Set from config.
 	secureCookies bool
+	// lab is reported by /auth/status (#1195).
+	lab bool
 
 	once   sync.Once
 	index  rbac.RoleIndex
@@ -450,6 +452,7 @@ func (a *authenticator) clearedCookie() http.Cookie {
 type authStatusOutput struct {
 	Body struct {
 		Bootstrapped bool `json:"bootstrapped"`
+		Lab          bool `json:"lab" doc:"Whether this server is a lab started by omniglass lab run: disposable data and a well-known login, never a real deployment"`
 	}
 }
 
@@ -460,6 +463,7 @@ func (a *authenticator) statusHandler(ctx context.Context, _ *struct{}) (*authSt
 	}
 	out := &authStatusOutput{}
 	out.Body.Bootstrapped = exists
+	out.Body.Lab = a.lab
 	return out, nil
 }
 

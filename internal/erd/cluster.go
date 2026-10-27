@@ -55,6 +55,9 @@ var Subsystems = []Cluster{
 		// tunes, not a row any entity points at.
 		"label_rule",
 		"secret", "secret_type", "credential",
+		// lab_mark is the one row omniglass lab writes into its own database
+		// (#1195), so a lab and a real deployment refuse each other's.
+		"lab_mark",
 	}},
 	{Name: "content", Tables: []string{
 		"blob", "file", "tag", "tag_binding",

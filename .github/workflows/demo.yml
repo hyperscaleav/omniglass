@@ -233,8 +233,15 @@ jobs:
       # Docker (the simulator's NET_ADMIN is a container capability inside its
       # own namespace, as make test-netadmin already uses on this runner). A
       # failure is recorded, not fatal yet, so the recording still uploads.
+      # DEMO_DOCKER_SOCKET opts in the one kind of tape that drives Docker
+      # itself (lab-first-run types omniglass lab run, #1193): only a tape that
+      # declares `# demo-needs: docker-socket` gets the socket, and only here,
+      # on a throwaway runner; mounting it hands that container root on the
+      # host, which is never done on a workstation by default.
       - name: Record
         id: record
+        env:
+          DEMO_DOCKER_SOCKET: "1"
         run: |
           if bash web/e2e/demo.sh record "$ID"; then
             echo "failed=0" >>"$GITHUB_OUTPUT"

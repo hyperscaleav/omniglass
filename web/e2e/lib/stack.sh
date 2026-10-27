@@ -240,7 +240,7 @@ stack_server() {
 # the ping sysctl its unprivileged pinger needs (a namespace sysctl, so it is
 # set on the container that owns the namespace). In a container the simulator
 # binds the profiles' real ports (161, 80, 22), so the fleet is seeded with no
-# port lift (seed-dev --sim-port-offset 0), unlike make dev-sim on a host.
+# port lift (seed-dev --sim-port-offset 0), as the lab does (omniglass lab run).
 #
 # The binary is the release image, built from this tree with the Dockerfile,
 # so the stack needs nothing but Docker; the image is tagged with the run id
@@ -251,7 +251,9 @@ stack_image() {
   local labels
   mapfile -t labels < <(stack__labels)
   echo "stack $STACK_ID: building the omniglass image from $STACK_ROOT" >&2
-  docker build -q "${labels[@]}" -t "$STACK_IMG" "$STACK_ROOT" >/dev/null &
+  # Stamped with the run id, as make stamps its build id: the binary inside
+  # knows this image as its own build (omniglass lab run --image, #1193).
+  docker build -q "${labels[@]}" --build-arg VERSION="$STACK_ID" -t "$STACK_IMG" "$STACK_ROOT" >/dev/null &
   STACK_FG_PID=$!
   wait "$STACK_FG_PID"
   STACK_FG_PID=""
@@ -314,8 +316,8 @@ stack_walkthrough_up() {
     --product boreal-edge-55 --location bay-2 --server "$STACK_SRV_URL" --token "$STACK_TOKEN" >/dev/null ||
     { echo "stack $STACK_ID: could not place bay-2-display" >&2; return 1; }
 
-  # Enroll edge-hq (the node the seed placed the simulated fleet on) the way
-  # make dev-sim does: a one-time enrollment token from the API.
+  # Enroll edge-hq (the node the seed placed the simulated fleet on) with a
+  # one-time enrollment token from the API.
   local node_token
   node_token=$(stack_run "$STACK_IMG" node enroll edge-hq --server "$STACK_SRV_URL" --token "$STACK_TOKEN" |
     sed -n 's/.*"token": *"\([^"]*\)".*/\1/p')

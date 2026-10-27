@@ -1,4 +1,4 @@
-# Dev-only example fleet, applied by `make dev` (via `omniglass seed-dev`) so a
+# Dev-only example fleet, applied by a lab's first run (via `omniglass seed-dev`) so a
 # fresh dev environment comes up populated instead of empty: a few campuses (a
 # multi-site fleet), a few users, and their grants. Idempotent: re-running leaves
 # anything that already exists untouched.
@@ -2069,7 +2069,8 @@ alarms:
 # panel's own words beside Retry. Pointing the endpoint's login at the rotated
 # secret moves the connection fingerprint and the session comes up, which is
 # the walkthrough (fix-a-rejected-session). The host is the panel's simulated
-# address and the port the driver's default, lifted as make dev lifts it.
+# address and the port the driver's default (lifted only for a simulator run
+# unprivileged on a host, seed-dev --sim-port-offset).
 sim_secrets:
   - name: sim-panel-login
     label: Simulated panel login (before the rotation)
@@ -2105,6 +2106,7 @@ sim_endpoints:
     driver: newtron-nvp-telnet
     label: Panel console
     inputs: { login: sim-panel-login }
+    planted_fault: the panel's console password was rotated, and the endpoint still logs in with the old one
   # The same panel answers NVP over TLS on 51326 (its nvp-tls face, #1035),
   # its certificate self-signed with a key the simulator derives from the
   # panel's id, so it is the same on every run. The driver pins that key on
@@ -2136,6 +2138,7 @@ sim_endpoints:
     label: Panel SSH
     inputs: { login: sim-panel-login-rotated }
     host_key: SHA256:twSJOxqCcLND44UmG2UgaA2xfebMGW5hCWNq2eHE16M
+    planted_fault: the panel was reimaged, so its host key no longer matches the pin
   # A refusal on an endpoint holding no session worth showing (#1110). The
   # auditorium's touch panel answers SNMP, and this endpoint reads its
   # community from the secret holding the one the panel's agent refuses: a
@@ -2147,6 +2150,7 @@ sim_endpoints:
     driver: snmp-generic
     label: Panel SNMP
     inputs: { community: sim-snmp-revoked }
+    planted_fault: the endpoint names a community the panel's agent refuses
 
 # Components that exist only beside the simulator (#1024), so the docs'
 # screenshots, seeded without it, carry none of them: the meeting platform's
