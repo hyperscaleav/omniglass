@@ -5520,26 +5520,6 @@ Example:
 omniglass system recomputeLabels
 ```
 
-### `omniglass system reconciliation`
-
-Commands for the reconciliation resource
-
-#### `omniglass system reconciliation list`
-
-Read a system's property reconciliation (want/told/is)
-
-```
-omniglass system reconciliation list <name>
-```
-
-Pivots, per property the system's standard declares or the system sets, the declared value (want, resolved live from the cascade), the intended value (told), and the observed value (is: what a push reported for the system as a whole), with config-drift computed on read: drift when the observed value differs from want. Gated by system:read; an out-of-scope system is a non-disclosing 404.
-
-Example:
-
-```sh
-omniglass system reconciliation list <name>
-```
-
 ### `omniglass system removeTag`
 
 Remove a tag value from a system

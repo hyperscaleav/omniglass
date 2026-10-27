@@ -21,8 +21,8 @@ import (
 // system-owned sample: a calc rule over the system's members (the primary
 // path), and a push naming the system as its owner (telemetry about the room
 // as a whole, from a cloud service). Both read back on the system's own
-// surfaces: its effective metrics and properties, a property's change
-// history, and its reconciliation.
+// surfaces: its effective metrics and properties, and a property's change
+// history.
 func TestASystemOwnsItsMetricsAndProperties(t *testing.T) {
 	if testing.Short() {
 		t.Skip("system telemetry e2e: skipped under -short (Postgres testcontainer + go build)")
@@ -132,13 +132,6 @@ func TestASystemOwnsItsMetricsAndProperties(t *testing.T) {
 	if !strings.Contains(history, `"value": "hdmi2"`) || !strings.Contains(history, `"provenance": "observed"`) ||
 		!strings.Contains(history, `"source": "room-booking-cloud"`) {
 		t.Fatalf("the pushed property's history:\n%s", history)
-	}
-
-	// Declared beside observed: the reconciliation names the drift.
-	run("system", "property", "update", "huddle-1", "video-input", "--value", `"hdmi1"`)
-	recon := run("system", "reconciliation", "list", "huddle-1")
-	if !strings.Contains(recon, `"want": "hdmi1"`) || !strings.Contains(recon, `"is": "hdmi2"`) || !strings.Contains(recon, `"drift": true`) {
-		t.Fatalf("the system's reconciliation:\n%s", recon)
 	}
 
 	// A system owns no log lines: the CLI exits non-zero with the reason.

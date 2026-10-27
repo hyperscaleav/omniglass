@@ -588,10 +588,10 @@ out-of-scope component is a non-disclosing 404 (a deliberate early exception to
   three [latest-series-row reads](/architecture/properties/#current-value-is-the-latest-series-row),
   with **drift** (any observed instance disagreeing with declared) computed on read
   ([how an instance resolves](/architecture/properties/#the-instance-dimension-many-values-of-one-name-on-one-owner)).
-  `GET /systems/{name}/reconciliation` (`system:read`, an out-of-scope system a non-disclosing 404) is
-  the same pivot for a system, over the properties its standard declares or it sets: a system's
-  observed value is what a push reported for it as a whole
-  ([ADR-0422](/architecture/decisions/#adr-0422-a-system-owns-its-own-telemetry-and-a-location-owns-no-observed-sample)).
+  A system has no reconciliation read: a property a push observed on a system reads on its change
+  history, `GET /systems/{name}/properties/{property}/samples`, until one `/properties` read carries
+  observed and told values for components and systems alike (#1297,
+  [ADR-0422](/architecture/decisions/#adr-0422-a-system-owns-its-own-telemetry-and-a-location-owns-no-observed-sample)).
 
 **Three registries ride the `/property-types` shape** (fleet-wide reference data, no scope injection;
 official types are read-only, a 409). The **metric_type catalog is the numeric keyspace**:

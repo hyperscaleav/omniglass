@@ -21,7 +21,7 @@ Each tool says what a client may assume of it, from one rule over the route's me
 
 A tool that is not read-only and not destructive adds something (a create).
 
-52 tools.
+51 tools.
 
 | Tool | What it does | Gate | Assume |
 |---|---|---|---|
@@ -72,7 +72,6 @@ A tool that is not read-only and not destructive adds something (a create).
 | [`get-system-health`](#get-system-health) | Read a system's health | `system:read` | read-only, idempotent |
 | [`list-system-metric-series`](#list-system-metric-series) | Read one metric series' raw samples | `system:read` | read-only, idempotent |
 | [`list-system-property-series`](#list-system-property-series) | Read one property series' change history | `system:read` | read-only, idempotent |
-| [`get-system-reconciliation`](#get-system-reconciliation) | Read a system's property reconciliation (want/told/is) | `system:read` | read-only, idempotent |
 | [`list-tasks`](#list-tasks) | List tasks in scope | `task:read` | read-only, idempotent |
 | [`list-transports`](#list-transports) | List the transports the platform speaks | `endpoint:read` | read-only, idempotent |
 | [`list-unclaimed-sources`](#list-unclaimed-sources) | List the sources no endpoint claims | `node:read` | read-only, idempotent |
@@ -767,20 +766,6 @@ The change history behind the effective value for one property series, newest fi
 | `limit` | integer | no | The row cap, newest kept; 500 when unset |
 | `name` | string | yes | The owner's name or uuid |
 | `property` | string | yes | The property_type name of the series |
-
-## `get-system-reconciliation`
-
-Read a system's property reconciliation (want/told/is)
-
-Pivots, per property the system's standard declares or the system sets, the declared value (want, resolved live from the cascade), the intended value (told), and the observed value (is: what a push reported for the system as a whole), with config-drift computed on read: drift when the observed value differs from want. Gated by system:read; an out-of-scope system is a non-disclosing 404.
-
-- Route: `GET /api/v1/systems/{name}/reconciliation`
-- Gate: `system:read`
-- Assume: read-only, idempotent
-
-| Argument | Type | Required | Description |
-|---|---|---|---|
-| `name` | string | yes | The system's name, or a dotted address (e.g. boi.17c.$sys.av) |
 
 ## `list-tasks`
 

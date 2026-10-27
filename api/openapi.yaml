@@ -8914,28 +8914,6 @@ components:
         - value
         - value_id
       type: object
-    SystemReconciliationOutputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/SystemReconciliationOutputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        properties:
-          items:
-            $ref: "#/components/schemas/ReconPropertyBody"
-          type:
-            - array
-            - "null"
-        system:
-          type: string
-      required:
-        - system
-        - properties
-      type: object
     SystemRoleBody:
       additionalProperties: false
       properties:
@@ -17897,34 +17875,6 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Read one property series' change history
-      x-omniglass-mcp: {}
-      x-omniglass-permission: system:read
-  /systems/{name}/reconciliation:
-    get:
-      description: "Pivots, per property the system's standard declares or the system sets, the declared value (want, resolved live from the cascade), the intended value (told), and the observed value (is: what a push reported for the system as a whole), with config-drift computed on read: drift when the observed value differs from want. Gated by system:read; an out-of-scope system is a non-disclosing 404."
-      operationId: get-system-reconciliation
-      parameters:
-        - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
-          in: path
-          name: name
-          required: true
-          schema:
-            description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
-            type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SystemReconciliationOutputBody"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Read a system's property reconciliation (want/told/is)
       x-omniglass-mcp: {}
       x-omniglass-permission: system:read
   /systems/{name}/roles:

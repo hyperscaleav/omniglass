@@ -7271,30 +7271,6 @@ func generatedCommands() []*cobra.Command {
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
-			parent := &cobra.Command{
-				Use:   "reconciliation",
-				Short: "Commands for the reconciliation resource",
-			}
-			parent.AddCommand(func() *cobra.Command {
-				cmd := func() *cobra.Command {
-					cmd := &cobra.Command{
-						Use:     "list <name>",
-						Short:   "Read a system's property reconciliation (want/told/is)",
-						Long:    "Pivots, per property the system's standard declares or the system sets, the declared value (want, resolved live from the cascade), the intended value (told), and the observed value (is: what a push reported for the system as a whole), with config-drift computed on read: drift when the observed value differs from want. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
-						Example: "  omniglass system reconciliation list <name>",
-						Args:    pathArgs(1),
-						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/systems/%s/reconciliation", pathSegment(args[0]))
-							return runAPICommand(cmd, "GET", path, nil)
-						},
-					}
-					return cmd
-				}()
-				return cmd
-			}())
-			return parent
-		}())
-		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				var fKey string
 				cmd := &cobra.Command{

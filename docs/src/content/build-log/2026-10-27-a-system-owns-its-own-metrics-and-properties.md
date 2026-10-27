@@ -1,7 +1,7 @@
 ---
 title: "A system owns its own metrics and properties (#422)"
 date: 2026-10-27
-refs: [422, 1282]
+refs: [422, 1282, 1297]
 ---
 
 A system now owns telemetry of its own on both producers that have one. A system calc rule's output
@@ -16,8 +16,8 @@ resolves on the component and system tiers, the push scope alone sees a system i
 unreadable miss is a 404 and a readable one a 403, once per batch, and a test pins that the two tiers
 do not reach each other. A system has no endpoints and owns no log lines, so a system push naming an
 instance or carrying a log line is a 422 before anything is published. A system's observed property
-reads beside its declared value on the new `GET /systems/{name}/reconciliation`
-(`omniglass system reconciliation list`).
+reads on its change history (`omniglass system property sample list`) until the unified properties
+read (#1297) carries observed values beside declared ones for components and systems alike.
 
 The ruling narrowed the issue (ADR-0422): location-owned observed telemetry is out, and the docs stop
 claiming it; a location keeps its calculated health. Node-collected system telemetry is the

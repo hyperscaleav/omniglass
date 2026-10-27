@@ -4132,26 +4132,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/systems/{name}/reconciliation": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Read a system's property reconciliation (want/told/is)
-         * @description Pivots, per property the system's standard declares or the system sets, the declared value (want, resolved live from the cascade), the intended value (told), and the observed value (is: what a push reported for the system as a whole), with config-drift computed on read: drift when the observed value differs from want. Gated by system:read; an out-of-scope system is a non-disclosing 404.
-         */
-        get: operations["get-system-reconciliation"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/systems/{name}/roles": {
         parameters: {
             query?: never;
@@ -9849,16 +9829,6 @@ export interface components {
             value: unknown;
             /** @description The stored value's id */
             value_id: string;
-        };
-        SystemReconciliationOutputBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/SystemReconciliationOutputBody.json
-             */
-            readonly $schema?: string;
-            properties: components["schemas"]["ReconPropertyBody"][] | null;
-            system: string;
         };
         SystemRoleBody: {
             /**
@@ -19559,38 +19529,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PropertySeriesOutputBody"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "get-system-reconciliation": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The system's name, or a dotted address (e.g. boi.17c.$sys.av) */
-                name: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SystemReconciliationOutputBody"];
                 };
             };
             /** @description Error */

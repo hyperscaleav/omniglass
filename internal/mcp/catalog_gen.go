@@ -527,17 +527,6 @@ var catalog = []tooldef.Def{
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"hours\":{\"description\":\"The window in hours, counted back from now; 24 when unset\",\"format\":\"int64\",\"maximum\":720,\"minimum\":1,\"type\":\"integer\"},\"limit\":{\"description\":\"The row cap, newest kept; 500 when unset\",\"format\":\"int64\",\"maximum\":2000,\"minimum\":1,\"type\":\"integer\"},\"name\":{\"description\":\"The owner's name or uuid\",\"type\":\"string\"},\"property\":{\"description\":\"The property_type name of the series\",\"type\":\"string\"}},\"required\":[\"name\",\"property\"],\"type\":\"object\"}",
 	},
 	{
-		Name:        "get-system-reconciliation",
-		Title:       "Read a system's property reconciliation (want/told/is)",
-		Description: "Pivots, per property the system's standard declares or the system sets, the declared value (want, resolved live from the cascade), the intended value (told), and the observed value (is: what a push reported for the system as a whole), with config-drift computed on read: drift when the observed value differs from want. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
-		Method:      "GET",
-		Path:        "/systems/{name}/reconciliation",
-		Permission:  "system:read",
-		PathParams:  []string{"name"},
-		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
-		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"name\":{\"description\":\"The system's name, or a dotted address (e.g. boi.17c.$sys.av)\",\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"}",
-	},
-	{
 		Name:        "list-tasks",
 		Title:       "List tasks in scope",
 		Description: "Lists the tasks whose endpoint's owning component the caller may read (the component cascade). Tasks are derived from endpoints, not authored. Gated by task:read.",

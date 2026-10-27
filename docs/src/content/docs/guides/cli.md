@@ -384,13 +384,13 @@ omniglass telemetry push --owner '{"kind":"system","ref":"huddle-1"}' --source r
 ```
 
 A system's samples read on its own surfaces: its metrics (an observed or a calculated series), its
-properties (declared, or a calc rule's), one series' history, and the same reconciliation pivot a
-component has, where a pushed value reads as `is` beside the declared `want`:
+properties (declared, or a calc rule's), and one series' history, which is where a pushed property
+reads today (the system's property list shows declared and calculated values; #1297 brings observed
+values into it):
 
 ```sh
 omniglass system metric list huddle-1                                                  # needs system:read
 omniglass system property sample list huddle-1 video-input                             # needs system:read
-omniglass system reconciliation list huddle-1                                          # needs system:read
 ```
 
 ## Secrets

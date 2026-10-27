@@ -2,8 +2,8 @@
 title: "A system owns its own telemetry, and a location owns no observed sample"
 date: 2026-10-27
 status: Accepted
-summary: "A system owns metrics, properties and events of its own, written by a calc rule over its members (the primary path) or by a push naming it as the owner (`owner.kind: system` on `POST /telemetry:push`, fenced by `telemetry:push` on the system tier with ADR-0752's refusal split, one check per batch). A system has no endpoints, so a system push names no instance and carries no log line (each a 422), and a system's samples read on its own surfaces, its observed properties through a new `GET /systems/{name}/reconciliation`. Node-collected system telemetry is the shared-API fan-out of #1282, never a system-owned endpoint. A location owns no observed sample: the claim that location-level samples are first-class narrows to a location's declared properties and calculated health"
-refs: [422, 1282, 752, 456, 430]
+summary: "A system owns metrics, properties and events of its own, written by a calc rule over its members (the primary path) or by a push naming it as the owner (`owner.kind: system` on `POST /telemetry:push`, fenced by `telemetry:push` on the system tier with ADR-0752's refusal split, one check per batch). A system has no endpoints, so a system push names no instance and carries no log line (each a 422), and a system's samples read on its own surfaces, an observed property through its change history (`/systems/{name}/properties/{property}/samples`) until the unified properties read (#1297) carries it. Node-collected system telemetry is the shared-API fan-out of #1282, never a system-owned endpoint. A location owns no observed sample: the claim that location-level samples are first-class narrows to a location's declared properties and calculated health"
+refs: [422, 1282, 1297, 752, 456, 430]
 ---
 
 - **Date:** 2026-10-27 | **Status:** Accepted | **Pages:** [metrics and properties](/architecture/properties/), [storage](/architecture/storage/), [core entities](/architecture/core-entities/), [collection](/architecture/collection/), [identity and access](/architecture/identity-access/), [api](/architecture/api/), [architecture](/architecture/)
@@ -27,10 +27,12 @@ refs: [422, 1282, 752, 456, 430]
      component-owned (#589), so a system batch carrying one is a 422 too, before anything resolves.
   4. **A system's samples read where its own reads are.** Its effective metrics carry an observed or
      calculated series, its effective properties a calculated one, a series' history reads on
-     `/systems/{name}/metrics/{metric}/samples` and `/properties/{property}/samples`, and the new
-     `GET /systems/{name}/reconciliation` pivots want, told and is for a system as the component's
-     does, so an observed property reads beside its declared value. Every read is gated by
-     `system:read` and scope-injected on the system tier.
+     `/systems/{name}/metrics/{metric}/samples` and `/properties/{property}/samples`, which is where
+     an observed system property reads today. Every read is gated by `system:read` and
+     scope-injected on the system tier. A separate reconciliation read for systems was built and
+     withdrawn in review: every property, declared, calculated, observed or told, is to be read
+     through one `/properties` read for components and systems alike, carrying want, told, is and
+     drift on the rows that have them (the unified properties read, #1297).
   5. **Node-collected system telemetry is a fan-out, not a system-owned endpoint.** A component that
      speaks for many owners (a cloud or SaaS service modeled as a component) collects once, and each
      value lands on the owner its identity names through the value-to-owner index, one primitive for

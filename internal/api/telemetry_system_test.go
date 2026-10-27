@@ -118,27 +118,8 @@ func TestASystemOwnsItsPushedTelemetry(t *testing.T) {
 		}
 	}
 
-	// The observed value is the "is" of the system's reconciliation, beside
-	// the value the operator declared for it.
-	c.do(ownerTok, http.MethodPut, "/systems/huddle-1/properties/video-input", map[string]any{"value": "hdmi1"}, http.StatusOK)
-	var rec struct {
-		System     string `json:"system"`
-		Properties []struct {
-			Property   string          `json:"property"`
-			Want       json.RawMessage `json:"want"`
-			Is         json.RawMessage `json:"is"`
-			IsInstance string          `json:"is_instance"`
-			Drift      bool            `json:"drift"`
-		} `json:"properties"`
-	}
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/systems/huddle-1/reconciliation", nil, http.StatusOK), &rec); err != nil {
-		t.Fatalf("decode reconciliation: %v", err)
-	}
-	if rec.System != "huddle-1" || len(rec.Properties) != 1 || rec.Properties[0].Property != "video-input" ||
-		string(rec.Properties[0].Want) != `"hdmi1"` || string(rec.Properties[0].Is) != `"hdmi2"` || rec.Properties[0].IsInstance != "" || !rec.Properties[0].Drift {
-		t.Fatalf("reconciliation = %+v, want video-input wanting hdmi1, observed hdmi2 at the owner level, drifting", rec)
-	}
-	c.do(ownerTok, http.MethodGet, "/systems/no-such-system/reconciliation", nil, http.StatusNotFound)
+	// An unknown system's series is the non-disclosing 404.
+	c.do(ownerTok, http.MethodGet, "/systems/no-such-system/properties/video-input/samples", nil, http.StatusNotFound)
 
 	// A log line is component-owned (#589): a system batch carrying one is
 	// refused whole, its sample with it, and the refusal says why.
