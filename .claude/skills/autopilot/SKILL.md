@@ -167,9 +167,10 @@ Then:
 2. Subscribe to the PR's activity (`subscribe_pr_activity`) and answer what arrives: CI
    red is yours until green, review comments are implemented or answered, and the
    optional-finding etiquette for bot reviews applies.
-3. Try to enable auto-merge (squash). It arms only where the repo requires an approving
-   review, which makes the architect's approval the last click; if the repo refuses, say
-   so in the report instead of retrying.
+3. Never enable auto-merge (`gh pr merge --auto`) and never merge. The architect's own merge
+   is the approval gate (ADR-0859): the PR is opened under the architect's token, so GitHub
+   would never let them approve it, and a required check alone would merge it the moment CI
+   went green.
 4. Schedule a check-in about an hour out (`send_later`) to re-check CI, conflicts, and
    reviews; re-arm it until the PR merges or closes.
 
