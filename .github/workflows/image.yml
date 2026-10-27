@@ -2,11 +2,14 @@ name: image
 
 # Build the single container image (console embedded) and publish it to GHCR.
 # On main it tags `latest` + the commit sha; on a PR it tags `pr-<n>` + the
-# commit sha so the preview pipeline can pin a deploy to an exact build.
+# commit sha so the preview pipeline can pin a deploy to an exact build. On a
+# release tag (v<version>) it tags `v<version>`, the image a release binary's
+# `omniglass lab run` pulls (#1194).
 
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
 
 # Least privilege: read the repo, write packages (GHCR). Fork PRs get a
@@ -52,79 +55,36 @@ jobs:
         # and exits 0 only if the cross-compiled arm64 binary actually runs.
         run: docker run --rm --platform linux/arm64 omniglass:arm64-smoke --help
 
-  # End-to-end boot smoke: build the native amd64 image, run it in `server` mode
-  # against a real Postgres, and prove the deploy unit actually comes up: the
-  # migrations apply, the boot seed runs, the health endpoint is green, and the
-  # operator console (the login page) is served. `--help` alone (above) proves the
-  # binary runs, not that a fresh instance boots and serves; this closes that gap.
-  smoke-boot:
+  # The lab smoke (#1194): the user's path end to end, on a runner with only
+  # Docker doing the work. `make` builds the image and the host binary from
+  # this tree with one build id; ./bin/omniglass lab run brings up Postgres,
+  # the server (which migrates and applies the boot seed) and the node with its
+  # simulator; the smoke waits for the ready banner, proves the console and the
+  # lab flag answer on the printed URL, stops it with Ctrl-C, and proves it
+  # left nothing behind (scripts/lab-smoke.sh). It replaces the boot smoke: the
+  # lab boots the same image against a real Postgres and serves the console.
+  smoke-lab:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - name: Build the image and the host binary
+        run: make
 
-      - name: Build the amd64 image
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
-        with:
-          context: .
-          platforms: linux/amd64
-          load: true
-          tags: omniglass:boot-smoke
-          build-args: |
-            VERSION=${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - name: Bring a lab up, use it, and stop it
+        run: bash scripts/lab-smoke.sh
 
-      - name: Boot a fresh instance and probe the login page
-        run: |
-          set -euo pipefail
-          docker network create og-smoke
-          docker run -d --name pg --network og-smoke \
-            -e POSTGRES_USER=omniglass -e POSTGRES_PASSWORD=omniglass -e POSTGRES_DB=omniglass \
-            postgres:18
-          echo "waiting for postgres..."
-          for i in $(seq 1 30); do
-            if docker exec pg pg_isready -U omniglass -d omniglass >/dev/null 2>&1; then break; fi
-            sleep 2
-          done
-          docker exec pg pg_isready -U omniglass -d omniglass
-
-          # The container in `server` mode auto-migrates, runs the boot seed, and serves.
-          docker run -d --name app --network og-smoke \
-            -e OMNIGLASS_DSN="postgres://omniglass:omniglass@pg:5432/omniglass?sslmode=disable" \
-            -e OMNIGLASS_ADDR=":8080" \
-            -p 127.0.0.1:8080:8080 \
-            omniglass:boot-smoke
-
-          echo "waiting for the health endpoint..."
-          ok=""
-          for i in $(seq 1 30); do
-            code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/v1/healthz || true)
-            if [ "$code" = "200" ]; then ok=1; break; fi
-            sleep 2
-          done
-          if [ -z "$ok" ]; then echo "healthz never returned 200"; exit 1; fi
-
-          # The operator console (login page) must be served, following the trailing
-          # slash redirect. A fresh instance not serving /web is a broken deploy.
-          web=$(curl -sL -o /dev/null -w '%{http_code}' http://localhost:8080/web)
-          echo "healthz=200 web=$web"
-          if [ "$web" != "200" ]; then echo "login page did not come up (/web=$web)"; exit 1; fi
-
-          # The public bootstrap-status endpoint the login screen reads must answer.
-          curl -sf http://localhost:8080/api/v1/auth/status >/dev/null
-
-      - name: Dump container logs on failure
+      - name: Dump the lab's logs on failure
         if: failure()
         run: |
-          echo "=== app ==="; docker logs app 2>&1 | tail -50 || true
-          echo "=== pg ===";  docker logs pg  2>&1 | tail -30 || true
+          for c in $(docker ps -aq --filter label=omniglass.lab); do
+            echo "=== $(docker inspect -f '{{.Name}}' "$c") ==="; docker logs --tail 50 "$c" 2>&1 || true
+          done
 
   build-push:
     # Only publish the multi-arch manifest once arm64 cross-build boots and a
-    # fresh amd64 instance actually comes up end to end.
-    needs: [smoke-arm64, smoke-boot]
+    # lab on the amd64 image actually comes up end to end.
+    needs: [smoke-arm64, smoke-lab]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -154,6 +114,7 @@ jobs:
             type=sha,format=long
             type=ref,event=pr
             type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern=v{{version}}
 
       - name: Build and push
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
@@ -163,7 +124,9 @@ jobs:
           push: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # A release tag stamps its version, which the image's
+          # org.opencontainers.image.version label then carries too.
           build-args: |
-            VERSION=${{ github.sha }}
+            VERSION=${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
