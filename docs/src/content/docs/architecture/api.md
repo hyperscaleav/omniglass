@@ -21,8 +21,11 @@ Built today: the Huma-over-chi API with the OpenAPI 3.1 document generated from 
 ([ADR-0068](/architecture/decisions/#adr-0068-the-api-error-model-is-the-stock-rfc-9457-shape)), proven
 on `/auth`, `/roles`, `/locations`, `/systems`, `/components`, `/nodes`, `/endpoints`, `/tasks`, the
 first-party ingest write `POST /telemetry:push` (gated `telemetry:push`, owner declared in the body and
-fenced by the caller's scope, every native probe key refused by name, every key held to its writer
-class, answering `202` only once the stream has acked the batch and `503` when it will not,
+fenced once per batch by the `telemetry:push` scope with the caller's `component:read` deciding the
+refusal, a 404 or a truthful 403,
+[ADR-0752](/architecture/decisions/#adr-0752-a-telemetry-push-is-fenced-by-telemetrypush-on-the-component-it-names),
+an instance naming no endpoint of the owner refused with a 422, every native probe key refused by
+name, every key held to its writer class, answering `202` only once the stream has acked the batch and `503` when it will not,
 [ADR-0453](/architecture/decisions/#adr-0453-telemetry-is-published-through-jetstream-with-an-ack-a-minted-nats-msg-id-and-a-bounded-spool)), the per-component reachability read, the type registries, the
 `/products` and `/standards` catalogs, the classifier-contract and instance-value property routes, the
 role declaration, resolution, and staffing routes, and the component alarm plus system and location
@@ -576,10 +579,12 @@ out-of-scope component is a non-disclosing 404 (a deliberate early exception to
   non-disclosing 404).
 - `GET /components/{name}/reconciliation` pivots want/told/is over the series: per declared
   property, the **want** (the current declared value, with the contract default coalesced in), the
-  **told** (the `intended` value a command
-  set), and the **is** (the latest `observed` value), all three
-  [latest-series-row reads](/architecture/properties/#current-value-is-the-latest-series-row),
-  with **drift** (observed present and disagreeing with declared) computed on read.
+  **told** (the newest `intended` value a command set, on any instance), and the **is** (the
+  `observed` value, resolved across every live instance worst-case, a deleted endpoint's frozen
+  reading left out, and named by `is_instance`), all
+  three [latest-series-row reads](/architecture/properties/#current-value-is-the-latest-series-row),
+  with **drift** (any observed instance disagreeing with declared) computed on read
+  ([how an instance resolves](/architecture/properties/#the-instance-dimension-many-values-of-one-name-on-one-owner)).
 
 **Three registries ride the `/property-types` shape** (fleet-wide reference data, no scope injection;
 official types are read-only, a 409). The **metric_type catalog is the numeric keyspace**:

@@ -25,6 +25,12 @@
    "doc": "set true behind TLS to mark the session cookie Secure (https only)"
   },
   {
+   "key": "OMNIGLASS_TRUSTED_PROXIES",
+   "default": "loopback and private ranges",
+   "scope": "server",
+   "doc": "comma-separated CIDRs or addresses of the proxies whose X-Forwarded-For is believed, for the client address sessions, tokens and webhook limits record; a list replaces the default whole, none believes no proxy, and a bad entry fails the boot"
+  },
+  {
    "key": "OMNIGLASS_NATS_ADDR",
    "default": "127.0.0.1:4222",
    "scope": "server",
