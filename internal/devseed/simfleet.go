@@ -20,15 +20,11 @@ import (
 )
 
 // The simulated fleet: every dev-seed component whose product the simulator
-// serves gets a loopback address and endpoints on the dev node, so `make dev`
-// beside `make dev-sim` (the simulator and the node) collects for real.
-const (
-	// SimPortOffset lifts the simulated devices' privileged ports (SNMP 161,
-	// HTTP 80, SSH 22) above 1024 so the dev simulator runs unprivileged; the
-	// endpoints target the lifted ports. It is seed-dev's default, and `make
-	// dev-sim` passes the same value (a test holds the Makefile to it).
-	SimPortOffset = 10000
-)
+// serves gets a loopback address and endpoints on the dev node, so a lab
+// (omniglass lab run, whose node runs the simulator in process) collects for
+// real. The endpoints target the profiles' real ports, which a simulator in a
+// container binds; seed-dev --sim-port-offset lifts them for one run
+// unprivileged on a host.
 
 // seedSimFleet lands the plan through the gateway: the community secret,
 // then each planned component's endpoints on the dev node. A component that
@@ -147,7 +143,7 @@ func endpointTarget(params []byte) string {
 
 // simulateReachabilityDemo re-aims the worked reachability check at a
 // simulated device. The demo DSP targets a fixed address nothing answers,
-// which reads as down the moment make dev-sim runs a real node; with the
+// which reads as down the moment a lab's node collects it; with the
 // simulated fleet it becomes the simulated DSP it was modeled on (HTTP 80
 // and the line protocol on 1710), at a free simulated address, so a live
 // node finds it up. Its seeded history stays, as history. Without the

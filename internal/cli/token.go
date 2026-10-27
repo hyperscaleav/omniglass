@@ -19,7 +19,7 @@ func newTokenCmd() *cobra.Command {
 		Short: "Mint an additional bearer token for an existing principal (direct DB)",
 		Long: "Issues a new bearer credential for an existing principal, addressed by username, and prints " +
 			"the token once. The same trusted direct-DB lane as bootstrap: token reissue, break-glass, or a " +
-			"fresh login token for `make dev` when the owner already exists. A --description (required) names " +
+			"fresh login token for a dev database when the owner already exists. A --description (required) names " +
 			"what the token is for. The token expires after --ttl (default 90 days, hard maximum 365 days); " +
 			"every credential is time-bounded.",
 		Args: cobra.ExactArgs(1),

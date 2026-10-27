@@ -1,13 +1,15 @@
 import { defineConfig } from "vite";
 import solid from "vite-plugin-solid";
 import tailwindcss from "@tailwindcss/vite";
+import { labProxyTarget } from "./src/dev/labProxy";
 
 // The console is served by the Go binary under /web (api.go nests it there;
 // Solid Router's base matches). base makes Vite emit asset URLs as /web/assets/*
 // so they resolve both embedded and under `npm run dev`. The build writes into
 // the Go module's embed target (internal/webui/dist), which spa_embed.go embeds
-// under the `web` build tag. In dev, server.proxy forwards API calls to a
-// locally-running `omniglass server`, so the frontend loop needs no rebuild.
+// under the `web` build tag. In dev, server.proxy forwards API calls to a lab
+// running on this machine (./bin/omniglass lab run; OMNIGLASS_LAB_URL moves it),
+// so the frontend loop needs no rebuild.
 //
 // The vendored typefaces (public/fonts/, #775) are referenced from src/fonts.css by
 // their served path, `/web/fonts/...`, base included, the same way index.html
@@ -26,7 +28,7 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      "/api": "http://localhost:8080",
+      "/api": labProxyTarget(process.env),
     },
   },
 });

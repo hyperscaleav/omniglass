@@ -1,4 +1,4 @@
-# Dev-only example fleet, applied by `make dev` (via `omniglass seed-dev`) so a
+# Dev-only example fleet, applied by a lab's first run (via `omniglass seed-dev`) so a
 # fresh dev environment comes up populated instead of empty: a few campuses (a
 # multi-site fleet), a few users, and their grants. Idempotent: re-running leaves
 # anything that already exists untouched.
@@ -2069,7 +2069,8 @@ alarms:
 # panel's own words beside Retry. Pointing the endpoint's login at the rotated
 # secret moves the connection fingerprint and the session comes up, which is
 # the walkthrough (fix-a-rejected-session). The host is the panel's simulated
-# address and the port the driver's default, lifted as make dev lifts it.
+# address and the port the driver's default (lifted only for a simulator run
+# unprivileged on a host, seed-dev --sim-port-offset).
 sim_secrets:
   - name: sim-panel-login
     label: Simulated panel login (before the rotation)

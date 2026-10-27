@@ -37,7 +37,7 @@ var LargeFleet = ReplicaParams{Sites: 5, RoomCopies: 6}
 const DegradedEvery = 3
 
 var scenarios = []Scenario{
-	{Name: "dev", Summary: "the example fleet `make dev` comes up with"},
+	{Name: "dev", Summary: "the example fleet a lab comes up with"},
 	{Name: "empty", Summary: "nothing beyond the boot seed: a fresh install's first run", Empty: true},
 	{
 		Name:    "degraded",

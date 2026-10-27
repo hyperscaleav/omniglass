@@ -37,7 +37,7 @@ $ make test
 ## Visual confirmation
 
 <!-- REQUIRED for any operator-facing (UI) change: screenshots of the surface,
-     driven live (e.g. against `make dev`). Upload via the gh-image extension
+     driven live (against a lab, `make lab`). Upload via the gh-image extension
      (`gh image <path>` auto-extracts the browser session cookie; `gh image
      check-token` verifies it); otherwise commit them under
      .github/screenshots/ and embed by immutable commit SHA

@@ -22,9 +22,9 @@ func newSeedDevCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "seed-dev",
 		Short: "Seed a dev database with example locations, users, and grants (idempotent; never for production)",
-		Long: "Populate a fresh dev database with a small example fleet so `make dev` comes up " +
+		Long: "Populate a fresh dev database with a small example fleet so a dev stack comes up " +
 			"with locations, sign-in-able users, and their grants instead of empty. The same " +
-			"trusted direct-DB lane as bootstrap, and idempotent, so it runs on every `make dev`. " +
+			"trusted direct-DB lane as bootstrap, and idempotent, so a re-run changes nothing. " +
 			"Not for production: these are operator rows, not ship-with reference data.\n\n" +
 			"--scenario picks the fleet:\n" + scenarioHelp(),
 		Args: cobra.NoArgs,
@@ -36,8 +36,8 @@ func newSeedDevCmd() *cobra.Command {
 			return runSeedDev(cmd.Context(), sc, simFleet, simPortOffset)
 		},
 	}
-	cmd.Flags().BoolVar(&simFleet, "sim-fleet", true, "wire the simulated fleet: addresses and endpoints on the dev node for every example-fleet component the simulator serves, never a scenario's copies or a hand-added device (make dev-sim collects from them)")
-	cmd.Flags().IntVar(&simPortOffset, "sim-port-offset", devseed.SimPortOffset, "the lift the simulator applies to ports below 1024, which the simulated fleet's endpoints target: the default for make dev-sim's unprivileged simulator, 0 for one that binds the real ports (in a container)")
+	cmd.Flags().BoolVar(&simFleet, "sim-fleet", true, "wire the simulated fleet: addresses and endpoints on the dev node for every example-fleet component the simulator serves, never a scenario's copies or a hand-added device (a lab's node collects from them)")
+	cmd.Flags().IntVar(&simPortOffset, "sim-port-offset", 0, "the lift the simulator applies to ports below 1024, which the simulated fleet's endpoints target: 0 for one that binds the real ports (in a container, as the lab's does), or the --port-offset of a simulator run unprivileged on a host")
 	cmd.Flags().StringVar(&scenario, "scenario", devseed.Scenarios()[0].Name, "the fleet to seed (see the list above)")
 	return cmd
 }
