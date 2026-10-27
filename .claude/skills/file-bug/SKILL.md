@@ -53,7 +53,7 @@ issue ("harden input handling on X") if tracking is needed.
 
 ## Repro
 
-<exact steps or commands, from a clean `make dev` or a named test>
+<exact steps or commands, from a fresh `make lab LAB_ARGS=--fresh` or a named test>
 
 ## Expected / Actual
 
