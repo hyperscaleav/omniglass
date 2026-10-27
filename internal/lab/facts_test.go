@@ -30,12 +30,12 @@ func TestLabFactsMatchCommitted(t *testing.T) {
 // it, so a learner's own lab can stage the same scene the recording shows.
 func TestSetupCommandIsTheCLICreate(t *testing.T) {
 	got, err := SetupCommand("/components", map[string]any{
-		"name": "bay-2-display", "label": "Bay 2 Display", "product": "boreal-edge-55", "location": "bay-2",
+		"name": "bay-2-display", "label": "Bay 2 Display", "product": "acme-panel", "location": "bay-2",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `omniglass component create --label "Bay 2 Display" --location bay-2 --name bay-2-display --product boreal-edge-55`
+	want := `omniglass component create --label "Bay 2 Display" --location bay-2 --name bay-2-display --product acme-panel`
 	if got != want {
 		t.Fatalf("got  %s\nwant %s", got, want)
 	}
