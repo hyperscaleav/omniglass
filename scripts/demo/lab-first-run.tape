@@ -14,6 +14,5 @@ Wait
 Type "omniglass lab run"
 Enter
 Wait+Screen@150s /Your omniglass lab is ready/
-Sleep 4s
 Ctrl+C
 Wait@60s
