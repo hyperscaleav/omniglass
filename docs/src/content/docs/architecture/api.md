@@ -20,11 +20,13 @@ Built today: the Huma-over-chi API with the OpenAPI 3.1 document generated from 
 (`make gen`), the AIP-style resource and `:verb` routing, and the problem+json error model
 ([ADR-0068](/architecture/decisions/#adr-0068-the-api-error-model-is-the-stock-rfc-9457-shape)), proven
 on `/auth`, `/roles`, `/locations`, `/systems`, `/components`, `/nodes`, `/endpoints`, `/tasks`, the
-first-party ingest write `POST /telemetry:push` (gated `telemetry:push`, owner declared in the body and
-fenced once per batch by the `telemetry:push` scope with the caller's `component:read` deciding the
-refusal, a 404 or a truthful 403,
+first-party ingest write `POST /telemetry:push` (gated `telemetry:push`, owner declared in the body, a
+component or a system, and fenced once per batch by the `telemetry:push` scope on the owner's own tier
+with the caller's `component:read` or `system:read` deciding the refusal, a 404 or a truthful 403,
 [ADR-0752](/architecture/decisions/#adr-0752-a-telemetry-push-is-fenced-by-telemetrypush-on-the-component-it-names),
-an instance naming no endpoint of the owner refused with a 422, every native probe key refused by
+[ADR-0422](/architecture/decisions/#adr-0422-a-system-owns-its-own-telemetry-and-a-location-owns-no-observed-sample),
+an instance naming no endpoint of the owner refused with a 422, and a system, which has no endpoints
+and owns no log line, refused a named instance or a log line with a 422, every native probe key refused by
 name, every key held to its writer class, answering `202` only once the stream has acked the batch and `503` when it will not,
 [ADR-0453](/architecture/decisions/#adr-0453-telemetry-is-published-through-jetstream-with-an-ack-a-minted-nats-msg-id-and-a-bounded-spool)), the per-component reachability read, the type registries, the
 `/products` and `/standards` catalogs, the classifier-contract and instance-value property routes, the
@@ -563,7 +565,8 @@ out-of-scope component is a non-disclosing 404 (a deliberate early exception to
   endpoint type. An event a rule derived also carries `derived_by_rule` (the rule's name) and, when the
   same transaction opened or resolved an alarm, its `alarm_id` (#949); `GET /systems/{name}/events`
   carries both the same way, and names each row's owner by uuid as well (`owner_id`), since names
-  repeat across a system's members.
+  repeat across a system's members; a system's own events, a push's caught occurrence included, read
+  there beside its members'.
 - `GET /components/{name}/logs` is the component's raw **log lines**
   ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)), the
   newest arrival first, bounded to those that arrived in the last 24 hours (a line kept before its
@@ -585,6 +588,10 @@ out-of-scope component is a non-disclosing 404 (a deliberate early exception to
   three [latest-series-row reads](/architecture/properties/#current-value-is-the-latest-series-row),
   with **drift** (any observed instance disagreeing with declared) computed on read
   ([how an instance resolves](/architecture/properties/#the-instance-dimension-many-values-of-one-name-on-one-owner)).
+  `GET /systems/{name}/reconciliation` (`system:read`, an out-of-scope system a non-disclosing 404) is
+  the same pivot for a system, over the properties its standard declares or it sets: a system's
+  observed value is what a push reported for it as a whole
+  ([ADR-0422](/architecture/decisions/#adr-0422-a-system-owns-its-own-telemetry-and-a-location-owns-no-observed-sample)).
 
 **Three registries ride the `/property-types` shape** (fleet-wide reference data, no scope injection;
 official types are read-only, a 409). The **metric_type catalog is the numeric keyspace**:

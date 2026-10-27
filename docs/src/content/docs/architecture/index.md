@@ -214,7 +214,7 @@ A handful of patterns hold everywhere:
   and its siblings) gated on its own, so it moves one column and nothing else
   ([ADR-0076](/architecture/decisions/#adr-0076-a-renameable-human-typed-identifier-stays-in-the-url-and-the-write-returns-the-uuid)).
 - **Exclusive-arc ownership**: every sample, event, and alarm names exactly one owner (component,
-  system, location, or node), so system- and location-level signals are first-class.
+  system, location, or node), so system-level signals are first-class (a location's is its health).
 - **Templates fork, nothing pins**: creating from a [template](/architecture/templates/) is a
   one-time clone with no back-pointer, so a template can be rewritten in any release without
   migrating an install ([ADR-0071](/architecture/decisions/#adr-0071-a-template-is-a-clonable-example-not-a-versioned-shape-an-instance-pins)).

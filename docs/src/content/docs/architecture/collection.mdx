@@ -1246,10 +1246,17 @@ audited: a preview on the node (and on each secret it used), a run now on the en
 
 ## Shared-API collection: one component, many owners
 
+What is built today: a system owns the telemetry a push names it for and what a system calc rule
+derives from its members ([ADR-0422](/architecture/decisions/#adr-0422-a-system-owns-its-own-telemetry-and-a-location-owns-no-observed-sample)), and a webhook endpoint lands every post on its own
+component. A component that fans its values out to other owners is the design below. An endpoint
+stays a component's: system telemetry a node collects arrives through this fan-out, never through a
+system-owned endpoint.
+
+:::design[Shared-API fan-out and identity binding, tracked in #1282; the discovery_rule is its own design]
 Some sources describe **many entities at once**: a SaaS / UCC platform (Zoom, Teams), a controller fronting many devices, a building gateway. The API is **one component** (one endpoint, one credential) whose data **fans out** to the entities it describes, not one component per described entity.
 
 - Its function pulls the batch in one call, **labeling each emitted sample with the external identity** it belongs to (a Zoom Room ID).
-- The function is the conduit, not the owner: ownership resolves **server-side** against a declared **identity config** (`zoom-room-id` on the target), the same shared-ingress owner-binding used for webhooks and traps.
+- The function is the conduit, not the owner: ownership resolves **server-side** against a declared **identity config** (`zoom-room-id` on the target). **One primitive for pull and push**: a node polling the API and a [webhook endpoint](#push-ingress-webhooks-on-the-server) on the same component receiving posts about many owners bind through the same index, so the fan-out extends the webhook ingress rather than duplicating it.
 - **The owner can be a system.** SaaS state that is telemetry *of* a room maps to **system-owned samples**; a virtual component is for the genuine *member* case (its own topology node, a `health_role`, a lifecycle). **Member -> component, telemetry -> system.**
 - **Unmatched identities are orphans**, discovery candidates (below).
 
@@ -1266,6 +1273,7 @@ A `discovery_rule` turns the orphan stream, every emitted identity the index doe
 - **Creates** candidate components or owners, each seeded with the identity that surfaced it (it becomes the new entity's identity arc), so the next batch resolves through the index.
 - **Idempotent on re-discovery**: keyed on the `(property_type, value)` already bound, so a steady stream of the same orphan resolves to one candidate.
 - **Scope and standing**: a cascade **scope** and an `official` / private standing like the other rule families (`event_rule`, calc).
+:::
 
 ## Drivers: the declarative menu
 
