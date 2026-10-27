@@ -77,7 +77,7 @@ func newLabRunCmd(version string) *cobra.Command {
 	cmd.Flags().IntVar(&port, "port", lab.DefaultPort, "the console's port on this machine; 0 lets Docker pick a free one, printed when the lab is ready")
 	cmd.Flags().StringVar(&listen, "listen", lab.DefaultListen, "the address the console is published on; anything but loopback exposes the lab, and its well-known login, to your network")
 	cmd.Flags().BoolVar(&fresh, "fresh", false, "remove the lab's data first and start over from the seed")
-	cmd.Flags().StringVar(&scenario, "scenario", lab.DefaultScenario, "the fleet the lab seeds on its first run (omniglass help seed-dev lists them)")
+	cmd.Flags().StringVar(&scenario, "scenario", lab.DefaultScenario, "the fleet the lab seeds on its first run (the seed-dev command lists them)")
 	cmd.Flags().StringVar(&image, "image", "", "run this omniglass image instead of the one this binary was built with (env OMNIGLASS_LAB_IMAGE); one that is not this binary's own build is warned about")
 	cmd.Flags().StringVar(&project, "project", lab.DefaultProject, "the Docker compose project name")
 	_ = cmd.Flags().MarkHidden("project")
