@@ -15,7 +15,6 @@ Wait
 Type `omniglass mcp tools | jq -c '.[] | select(.name | test("^(get-component-reachability|create-secret|update-endpoint|issue-component-command)$")) | {name, read_only, destructive}'`
 Enter
 Wait
-Sleep 2s
 
 Type "# A read tool over stdio: a simulated panel's reachability, as the route answers it"
 Enter
@@ -37,7 +36,6 @@ Wait
 Type `omniglass mcp call get-component --args '{"name":"mcp-server-no-such-panel"}' | jq -r .detail || true`
 Enter
 Wait
-Sleep 2s
 
 Hide
 Type "clear"
@@ -56,7 +54,6 @@ Wait
 Type `omniglass secret create --name mcp-server-tape-direct --owner-kind platform --secret-type api-key --fields '{"key":"demo-value"}' | jq -c '{name, owner_kind}'`
 Enter
 Wait
-Sleep 1s
 
 Type "# The audit trail: both writes are the user's; the MCP one says how it arrived"
 Enter
@@ -64,4 +61,3 @@ Wait
 Type `omniglass audit-log list --resource secret --verb create --limit 2 | jq -c '.events[] | {secret: .new.name, actor_name, channel, client: (.client // "" | split("/")[0])}'`
 Enter
 Wait
-Sleep 3s

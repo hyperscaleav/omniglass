@@ -12,9 +12,12 @@
 //       writes <out>/demo.json, the manifest with the budget mark; a failure
 //       prints each problem, removes any demo.json an earlier pass left, and
 //       exits 1. OG_TAPE_MAX_GIF_BYTES and OG_TAPE_MAX_SECONDS lower the budget.
+//   node e2e/tape.mjs pace-base
+//       the pacing rule's shortest hold after a command, in milliseconds (the
+//       recorder's own test holds a recording to it)
 import { existsSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
-import { parseTape, tapeLimits, tapeManifest, tapeProblems, wrapTape } from './tapelib.mjs';
+import { PACE, parseTape, tapeLimits, tapeManifest, tapeProblems, wrapTape } from './tapelib.mjs';
 
 /** @param {string} file */
 function read(file) {
@@ -50,8 +53,11 @@ function main([cmd, ...args]) {
       console.log(`tape ${tape.id}: recorded, ${rec.seconds.toFixed(1)}s, GIF ${rec.gifBytes} bytes, MP4 ${rec.mp4Bytes} bytes`);
       return 0;
     }
+    case 'pace-base':
+      console.log(PACE.output.baseMs);
+      return 0;
     default:
-      console.error('usage: tape.mjs wrap <tape> | finish <tape> <out> <seconds>');
+      console.error('usage: tape.mjs wrap <tape> | finish <tape> <out> <seconds> | pace-base');
       return 2;
   }
 }

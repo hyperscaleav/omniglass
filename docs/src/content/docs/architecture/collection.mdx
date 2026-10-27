@@ -949,42 +949,30 @@ socket over websocket and wss ([above](#websocket-and-wss)). There is no serial 
 through an IP-to-serial gateway, which is the `tcp` transport (or `tls` or `telnet`), so its driver is
 a line protocol like any other ([ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)).
 
-:::design[The remaining transports and their per-task spec, tracked in #603 and #1036 (mqtt), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
-
-| endpoint type | shape | host/target | per-task params | samples |
-|---|---|---|---|---|
-| `raw-tcp` | held connection | `endpoint.address` (`host:port`) | `task.params.command` (sent verbatim + line ending), `timeout`, `extract` (comma-separated `name=re:<pattern>`); `endpoint.params.line_ending` (default `\r\n`), `read_delim` (default `\n`), `connect_timeout`, `read_timeout` | `rawtcp-reachable`, `rawtcp-response-time` (fixed) + one per `extract` entry |
-
-:::
+The `raw-tcp` endpoint type an earlier design tabled here is the built `tcp` transport: a line protocol held as a session, driven by its driver's polls and emits rather than per-task `command` and `extract` params ([ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)).
 
 `icmp`/`tcp` are inline probes (config on `endpoint.params`); `snmp` is built as its own stateless transport, configured by its driver's inputs ([snmp](#snmp)), and `http` and `https` as request transports configured by their driver's spec, a declared stream held as a session ([http and https](#http-and-https)); the rest, in the design model, are held connections: the connection lives on the endpoint, the task names what to read. The ship-with registry seeds the probe built-ins above, the endpoint verdicts, and `session-state` (`internal/seed/metric_types.yaml`, `internal/seed/property_types.yaml`; the [metrics](/guides/admin/metrics/) and [properties](/guides/admin/properties/) guides render each set from the seed); the wider per-transport set (`<proto>-reachable`/`<proto>-response-time` for the remaining text family; an http answer's status is a poll fault's reason, never a sample of its own; `telnet-response-time`, `udp-response-time` and `snmp-response-time` are seeded, and there is no `udp-open`, since an open udp port cannot be detected) is Design, and unregistered names would be reject-not-project dropped at ingest.
 
-:::design[The held-connection transports in detail, tracked in #603 and #1036 (mqtt), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
+Built for every transport above: a driver's spec, not the task, declares what to read; the lane is
+decided by catalog membership, baked into each emit at attach, never by the value's type (an snmp
+OctetString and a numeric gauge land where the catalog puts their names); a missing path or a
+non-matching pattern yields no sample, and a non-compiling one fails the spec's validation. A regex extract
+takes one capture per emit. A held session's rejected credentials are connection health (the session rung
+and `session-state`), not collection errors (a stateless http poll's refusal also lands one
+`collection-failed` before its gate holds), and the line protocol is held over `tcp`, `tls`, `telnet` and
+`ssh` (ssh also as an `exec` channel), with udp its own transport ([#1037](#udp)).
 
-For `snmp`, each OID keeps its **native SNMP type**: numeric OIDs land as `metric`, string OIDs
-(OctetString / IPAddress / OID) as `property`, the lane decided at ingest by catalog membership;
-the component template will declare the OID set, demoting `task.params.oids`
-to an override. v2c plaintext community or v3 auth/priv, resolved from endpoint params or an
-`auth_secret` credential.
+:::design[The held-connection transports still ahead: #1036 (mqtt), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip), snmp v3 (#1083), prompt-delimited answers (#1057), and the instance suffix (#1252)]
 
-Every extract spec shares one name grammar: a trailing **`name[instance]`** suffix
+snmp speaks v2c today; **v3** auth/priv, resolved from a secret, is #1083. A held session's answer
+is delimited by its declared reply shape today; a driver's declared **prompt** delimiting it
+(prompt-expect, Q-SYS-style framing) is #1057.
+
+Every extract spec will share one name grammar: a trailing **`name[instance]`** suffix
 (`fan-speed[intake]=<oid>`) strips into the sample's reserved `instance` label so the catalog
 matches the bare name
 ([the instance dimension](/architecture/properties/#the-instance-dimension-many-values-of-one-name-on-one-owner));
-no bracket = singleton (`instance = ''`).
-
-Extraction is typed by value: a numeric leaf or numeric capture -> `metric`, a string or bool ->
-`property`; a missing path, non-matching pattern, or unreachable endpoint yields no sample, while a
-non-compiling regex is a configuration error. The text
-family (`raw-tcp`/`telnet`/`ssh`, one ephemeral round trip: connect, authenticate, send
-`task.params.command`, read, extract, close) uses **regex named capture**, each named group routing
-to the same-name sample; the text family counts rejected credentials as connection health, not
-errors, and `<proto>-response-time` is absent when unreachable. (http is built otherwise:
-[http and https](#http-and-https).) Credentials are never labelled, and the `target` label is the
-command (text). The transport swaps behind one boundary (udp is built as its own
-transport, the line protocol as datagrams with its listen on the endpoint's own socket, [#1037](#udp)), and a held session carries the same
-text family persistently (prompt-expect, echo handling, Q-SYS-style framing), ssh as one-shot
-`exec`.
+no bracket = singleton (`instance = ''`). That is #1252.
 
 :::
 

@@ -24,6 +24,27 @@ description: Use when adding or altering an omniglass storage schema element (a 
   positional ordering an orphan would collide on; see [storage](/architecture/storage/) and
   ADR-0087 before copying it for a different table.
 
+## Creating the migration (never pick the version by hand)
+
+```bash
+make migration NAME=add_widget_color   # dbmate new: db/migrations/<UTC now>_add_widget_color.sql
+```
+
+`make migration` runs `dbmate new` (the version `go.mod` pins), which stamps the current UTC time
+as the version and writes the empty `-- migrate:up` / `-- migrate:down` sections. A hand-picked
+version is how two branches collided on `20261019050000` (#933): whichever merged second was
+recorded as applied and never ran. Two checks hold the rule (#1246):
+
+- **Unique versions** (`make test`, `db/migrations_test.go`): no two files share a version, and
+  every file opens with a 14-digit `dbmate new` stamp.
+- **Newer than the base** (`make migration-check`, and the `migrations` CI workflow on every PR
+  and every push to `main`): each migration the branch adds is newer than the newest one on
+  `origin/main`, and stamped no later than the clock. Run `git fetch origin main` first.
+
+If a migration landed on `main` after your branch was cut, the check fails with the remedy:
+`make migration NAME=...` again, move the SQL into the new file, delete the old one. Do this
+before the PR merges, never after: a merged migration is applied somewhere and is never renamed.
+
 ## Writing the migration (idempotent)
 
 Existing databases may have partial state, so DDL is idempotent:

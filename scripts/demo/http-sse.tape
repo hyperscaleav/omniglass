@@ -14,7 +14,6 @@ Wait
 Type `omniglass driver get kestrel-api | jq -c '{stream: .spec.session.stream, listeners: [.spec.listeners[].name]}'`
 Enter
 Wait
-Sleep 2s
 
 Hide
 Type `demo_hush 'addr=$(omniglass component simulation get "$bar" | jq -r .address)'`
@@ -56,7 +55,6 @@ Wait
 Type `reach`
 Enter
 Wait
-Sleep 2s
 
 Hide
 Type "clear"
@@ -77,7 +75,6 @@ Show
 Type `omniglass component metric sample list "$bar" volume --limit 1 | jq -c '.samples[0] | {instance, value}'`
 Enter
 Wait
-Sleep 2s
 
 Hide
 Type "clear"
@@ -107,7 +104,6 @@ Wait
 Type `omniglass component metric sample list "$bar" volume | jq -c '[.samples[] | select(.instance == "https") | .value][:3] | reverse'`
 Enter
 Wait
-Sleep 2s
 
 Hide
 Type `demo_hush 'login=$(omniglass secret list | jq -r ".secrets[] | select(.name == \"demo-bar-login\") | .id")'`
@@ -131,7 +127,6 @@ Show
 Type `reach`
 Enter
 Wait
-Sleep 2s
 
 Type "# The secret fixed in place: the stream comes back, and a change lands again"
 Enter
@@ -158,4 +153,3 @@ Show
 Type `omniglass component metric sample list "$bar" volume | jq -c '[.samples[] | select(.instance == "https") | .value][:4] | reverse'`
 Enter
 Wait
-Sleep 3s

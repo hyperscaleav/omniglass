@@ -5,8 +5,9 @@
 #   tapes.sh record [ID...]  record scripts/demo/<ID>.tape (default: every one) to
 #                            scripts/demo/out/<ID>/: <ID>.gif, <ID>.mp4 and demo.json,
 #                            beside the tape as played (<ID>.tape), the shell's
-#                            unseen output (shell.log) and the commands that failed
-#                            (failed-commands.txt); the ids that failed are listed
+#                            unseen output (shell.log), the commands that failed
+#                            (failed-commands.txt) and the hold the pacing rule
+#                            gave each line (pace.txt); the ids that failed are listed
 #                            in out/failed.txt, out/stack-up marks that the stack
 #                            came up (the run:demo workflow reads both), and
 #                            out/stack-logs/ keeps the stack's container logs
@@ -15,7 +16,8 @@
 #                            wait runs out and one stuck past its Wait each fail
 #                            naming the tape and the cause; an over-budget
 #                            recording fails naming its limit; a passing one renders
-#                            its GIF and MP4 and carries the budget mark
+#                            its GIF and MP4, carries the budget mark, and holds
+#                            each command and caption it showed for its read time
 #
 # Per tape: tape.mjs, in the Playwright container (node, no install), holds the
 # tape to the house rules and wraps it in the house settings (tapelib.mjs);
@@ -169,7 +171,7 @@ tape_one() {
   id=$(basename "$file" .tape)
   valid_id "$id" || return 1
   mkdir -p "$out"
-  for f in "$id.tape" "$id.gif" "$id.mp4" demo.json failed-commands.txt shell.log; do
+  for f in "$id.tape" "$id.gif" "$id.mp4" demo.json failed-commands.txt shell.log pace.txt; do
     [ ! -e "$out/$f" ] || rm -- "$out/$f"
   done
   echo "tape $id: recording" >&2
@@ -189,7 +191,7 @@ tape_one() {
     mapfile -t labels < <(stack__labels)
     docker run --rm "${labels[@]}" --network host --user "$(id -u):$(id -g)" --group-add "$(stat -c %g "$sock")" \
       -v "$sock:$sock" -e HOME=/tmp -e OMNIGLASS_LAB_IMAGE="$STACK_IMG" \
-      -e DEMO_FAILED=/out/failed-commands.txt -e DEMO_LOG=/out/shell.log \
+      -e DEMO_FAILED=/out/failed-commands.txt -e DEMO_LOG=/out/shell.log -e DEMO_PACE_LOG=/out/pace.txt \
       -v "$ROOT/$out:/out" -v "$ROOT/$OUT/stack-logs:/stack/logs:ro" \
       "$DEMO_IMG" "/out/$id.tape" >"$out/vhs.log" 2>&1 &
     STACK_FG_PID=$!
@@ -198,7 +200,7 @@ tape_one() {
   else
     stack_run --user "$(id -u):$(id -g)" -e HOME=/tmp \
       -e OMNIGLASS_SERVER="$STACK_SRV_URL" -e OMNIGLASS_TOKEN="$STACK_TOKEN" \
-      -e DEMO_FAILED=/out/failed-commands.txt -e DEMO_LOG=/out/shell.log \
+      -e DEMO_FAILED=/out/failed-commands.txt -e DEMO_LOG=/out/shell.log -e DEMO_PACE_LOG=/out/pace.txt \
       -v "$ROOT/$out:/out" -v "$ROOT/$OUT/stack-logs:/stack/logs:ro" \
       "$DEMO_IMG" "/out/$id.tape" >"$out/vhs.log" 2>&1 || rc=$?
   fi
@@ -271,6 +273,23 @@ echo "$log" | sed 's/^/  | /'
 grep -qF '"budget"' "$ST/passes/demo.json" || fail "a passing recording has no budget mark in its manifest"
 [ ! -s "$ST/passes/failed-commands.txt" ] || fail "a passing tape listed a failed command"
 echo "ok: a passing tape renders its GIF and MP4 and carries the budget mark"
+
+# 1b. The pacing rule (#1247): each line the passing tape showed (its caption
+#     and its two commands) was held for its read time, at least the rule's
+#     base, before its prompt returned; the unseen helpers and the clear were
+#     not; and the holds play in the video, which runs at least their sum.
+pace="$ST/passes/pace.txt"
+[ -s "$pace" ] || fail "the passing tape left no pace log"
+sed 's/^/  | pace: /' "$pace"
+! grep -q ' unheld ' "$pace" || fail "a line went unheld: the shell's log never caught up"
+grep -qE '^[0-9]+ caption [0-9]+ # ' "$pace" || fail "the caption was not held"
+[ "$(grep -cE '^[0-9]+ output [0-9]+ (omniglass component get|test -e)' "$pace")" -eq 2 ] || fail "the two commands shown were not each held once"
+! grep -qE ' (demo_hush|demo_until|clear)( |$)' "$pace" || fail "an unseen helper or a clear was held"
+min=$(tape_node pace-base)
+awk -v min="$min" '$2 == "output" && $1 < min { bad = 1 } END { exit bad }' "$pace" || fail "a command was held under the rule's base of ${min}ms"
+held=$(awk '{ s += $1 } END { print s / 1000 }' "$pace")
+awk -v s="$(mp4_seconds "$ST/passes" passes)" -v h="$held" 'BEGIN { exit !(s >= h) }' || fail "the video is shorter than the ${held}s it held"
+echo "ok: a passing tape holds each caption and command it shows for its read time"
 
 # 2. A command the tape typed exits non-zero: the tape plays on to its end, and
 #    the demo fails naming the command; no manifest is written.

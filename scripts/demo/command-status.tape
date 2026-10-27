@@ -39,21 +39,18 @@ Wait
 Type `omniglass component command issue "$web" --command-type set-volume --value 42 --wait | jq -c '{status, endpoint, driver, settled_by, reason, reply}'`
 Enter
 Wait
-Sleep 2s
 Type "# Over the control socket: the answer frame carries back the minted id, and the value set"
 Enter
 Wait
 Type `omniglass component command issue "$socket" --command-type set-volume --value 37 --wait | jq -c '{status, endpoint, driver, reason, reply: (.reply | fromjson | {type, value})}'`
 Enter
 Wait
-Sleep 2s
 Type "# Each reads back by its id under its component, the whole arc stamped"
 Enter
 Wait
 Type `omniglass component command list "$socket" --limit 1 | jq -c '.commands[0] | {command_type, intended, phase, settle_mode, issuer, stamped: ([.issued_at, .delivered_at, .executed_at, .settled_at] | map(. != null))}'`
 Enter
 Wait
-Sleep 2s
 
 Hide
 Type "clear"
@@ -99,4 +96,3 @@ Wait
 Type `omniglass component event list "$dark" | jq -c '[.events[] | .key]'`
 Enter
 Wait
-Sleep 3s

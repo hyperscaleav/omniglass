@@ -14,7 +14,6 @@ Wait
 Type `omniglass driver get kestrel-ws | jq -c '.spec | {transport, upgrade: .session.upgrade, set_volume: .commands[0].request}'`
 Enter
 Wait
-Sleep 3s
 
 Hide
 Type `demo_hush 'addr=$(omniglass component simulation get "$bar" | jq -r .address)'`
@@ -59,7 +58,6 @@ Wait
 Type `armed`
 Enter
 Wait
-Sleep 2s
 
 Hide
 Type "clear"
@@ -97,7 +95,6 @@ Show
 Type `vols`
 Enter
 Wait
-Sleep 2s
 
 Hide
 Type "clear"
@@ -121,7 +118,6 @@ Wait
 Type `armed`
 Enter
 Wait
-Sleep 2s
 
 Hide
 Type "clear"
@@ -142,7 +138,6 @@ Show
 Type `reach`
 Enter
 Wait
-Sleep 2s
 Type "# The secret fixed in place: the socket comes back, and a change lands again"
 Enter
 Wait
@@ -168,4 +163,3 @@ Show
 Type `vols`
 Enter
 Wait
-Sleep 3s

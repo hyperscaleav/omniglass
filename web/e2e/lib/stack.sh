@@ -27,7 +27,7 @@
 # STACK_USER STACK_PASSWORD (and STACK_HOST_URL when STACK_PUBLISH=1).
 
 STACK_LABEL=omniglass.stack
-STACK_PWIMG=mcr.microsoft.com/playwright:v1.61.1-jammy
+STACK_PWIMG=mcr.microsoft.com/playwright:v1.64.1-jammy
 STACK_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
 stack_init() {

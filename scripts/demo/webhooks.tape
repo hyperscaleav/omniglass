@@ -45,7 +45,6 @@ Wait
 Type `omniglass unclaimed-source list | jq -c '.sources[0] | {host, transport, count, last_message}'`
 Enter
 Wait
-Sleep 3s
 
 Hide
 Type "clear"
@@ -98,7 +97,6 @@ Wait
 Type `omniglass unclaimed-source list | jq -c '.sources | length'`
 Enter
 Wait
-Sleep 3s
 
 Hide
 Type "clear"
@@ -125,4 +123,3 @@ Wait
 Type `omniglass component event list "$ucc" | jq -c '[.events[] | select(.attributes.meeting == "m-1003")] | length'`
 Enter
 Wait
-Sleep 4s

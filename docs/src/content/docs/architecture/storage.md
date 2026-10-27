@@ -86,7 +86,11 @@ A schema change is authored with **dbmate**: pure-DDL migrations under `db/migra
 the binary and applied by the `migrate` run mode. Two rules hold everywhere: a migration **runs exactly
 once** (dbmate keys on the timestamp version, not the contents, so it is never edited after it ships,
 only followed by a new one), and DDL is **idempotent** (`IF NOT EXISTS`, a guarded `DO` block for a
-Postgres statement with no `IF NOT EXISTS` form of its own, e.g. a column rename).
+Postgres statement with no `IF NOT EXISTS` form of its own, e.g. a column rename). Because the
+version is the identity, nobody picks it by hand: `make migration NAME=<snake_case_name>` runs
+`dbmate new`, which stamps the current UTC time. `make test` fails when two files share a version,
+and the `migrations` CI workflow (locally, `make migration-check`) fails a change whose added
+migration is not newer than the newest on `main`, the branch cut before another migration landed.
 
 A change that both reshapes the schema and needs default rows for the shape to be usable never mixes
 the two in one migration. Three buckets, never conflated:
