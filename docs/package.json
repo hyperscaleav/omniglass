@@ -13,14 +13,14 @@
   "dependencies": {
     "@astrojs/mdx": "^5.0.0",
     "@astrojs/sitemap": "^3.7.4",
-    "@astrojs/starlight": "^0.42.6",
+    "@astrojs/starlight": "^0.39.3",
     "astro": "^6.1.0",
     "github-slugger": "^2.0.0",
     "remark-directive": "^4.0.0",
-    "starlight-openapi": "^0.27.0",
+    "starlight-openapi": "^0.25.3",
     "unist-util-visit": "^5.1.0"
   },
   "devDependencies": {
-    "astro-d2": "^0.14.0"
+    "astro-d2": "^0.11.0"
   }
 }
