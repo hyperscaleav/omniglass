@@ -221,6 +221,12 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 			// instance a node-probe key lands under (ADR-0161).
 			bind.SampleOwner = &owner
 			bind.Writer = storage.NodeWriter(owner.ComponentID, owner.EndpointName)
+		} else {
+			// The fence drops these by design, but never silently (#1200): a
+			// warning per node per window and a count on the node, so a node
+			// stuck on a task it no longer holds reads as that, not as a
+			// broken pipeline, and a flood of orphans is not a flood of logs.
+			s.recordOrphan(node, ev.GetTaskId(), sampleCount(&ev), len(ev.GetTaskLogs()))
 		}
 	}
 

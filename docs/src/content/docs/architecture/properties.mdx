@@ -34,7 +34,11 @@ insert itself, and one transaction per batch under its receipt, so a redelivered
 the protobuf `TelemetryBatch` with **per-lane arrays** (`metrics`, `properties`, `events`, `logs`).
 Declared values are series rows and current values are derived from the series
 ([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)).
-Owner kinds beyond `component` on ingest are directional (#422). The `calculated` producer is built for
+The `instance` column has one meaning, stamped per provenance, and reconciliation and command
+settlement resolve an owner-level question across every instance of a key
+([ADR-0456](/architecture/decisions/#adr-0456-an-instance-names-which-value-of-one-key-on-one-owner-a-row-is-and-an-owner-level-read-reduces-across-every-instance),
+[below](#the-instance-dimension-many-values-of-one-name-on-one-owner)); the authored
+`name[instance]` form is design. Owner kinds beyond `component` on ingest are directional (#422). The `calculated` producer is built for
 component- and system-owned calc rules (#996, #997; a system's output is not yet judged by event rules,
 #1002): a calc rule's output is written through the same sample-write path
 as an observed sample, with `provenance = calculated`, `source_rule` and `source_rule_version`, on a
@@ -73,16 +77,20 @@ The owner is the **exclusive-arc**: an `owner_kind` enum (`component` / `system`
 
 One owner can hold several values of the *same* name (three fan speeds, per-port counters). The catalog holds **one** row per measurement (`fan-speed`, not `fan-speed-intake`); the discriminator is an `instance text NOT NULL DEFAULT ''` column on both sample tables. Series identity is **`(owner, type, instance, provenance)`**: each instance its own series, the singleton (`instance = ''`) the default; aggregation groups by name and ignores `instance`, so per-instance trends stay distinct.
 
-**Built today, `instance` is stamped server-side**: the ingest consumer sets each node-lane sample's `instance` to the **observing endpoint's name**, keeping two endpoints reporting one name distinct series; the API push lane sets it directly.
+**An instance names which one of several values of one key on one owner a row is**, and each provenance has exactly one stamper ([ADR-0456](/architecture/decisions/#adr-0456-an-instance-names-which-value-of-one-key-on-one-owner-a-row-is-and-an-owner-level-read-reduces-across-every-instance)):
+
+- **observed**: the observer. The ingest stamps a node-lane sample with the **name of the endpoint whose task collected it** where the sample names none, so two endpoints reporting one name stay distinct series (a driver naming its own instance, one series per port, is the authored form below, still design); a webhook's samples carry the endpoint the post arrived at; a push names an endpoint of its owner as its instance (an endpoint's name is its transport), else it lands on the owner-level series. A push naming an instance that is no endpoint on its owner is refused whole with a 422 that names the instance and lists the owner's endpoint names (at most ten, then a count), so a series no observer stands behind is never written.
+- **declared**: the operator. Every shipped route declares owner-level (the empty instance), and a per-instance declaration waits for a surface that addresses instances; an endpoint's key pin is the one declared row written under an endpoint.
+- **intended**: the command's instance, empty for an owner-level intent.
+- **calculated**: the empty instance. A calc rule reads every instance of an input key and writes its output aggregate ([calculations](/architecture/calculations/#how-a-calc-rule-runs)); per-instance outputs are a separate capability, not a silent gap.
+- **health**: the empty instance, always and on purpose: an entity has exactly one [health](/architecture/health/).
+
+**How a read resolves an instance.** A question about the owner (the empty instance) over an instanced key reduces across every live instance of the key on that owner; a question that names an instance reads exactly that series and never reduces. A **retired observer** is not live: an instance naming a transport the owner has no endpoint of names an endpoint since deleted (an endpoint's name is its transport), and its frozen last reading is left out of the reduction rather than held against the owner forever, while an instance naming no transport (a series a push wrote before the push lane required an endpoint) stays live, since nothing extends it. One residual is open: an endpoint that still exists but no longer emits the key keeps its last reading live (#1217). [Reconciliation](#reconciliation-want-told-is) reduces worst-case, [command settlement](/architecture/commands/#settlement-the-verdict-is-computed-the-outcome-is-recorded) reduces any-instance-agrees, and a current-value display shows the newest value across instances and says which one it is (#1020).
 
 :::design[The authored instance form, tracked in #430]
-Pending as an ADR: the instance
-rides the pipeline as a reserved **`instance` label**, authored in the extract spec as a
+The instance rides the pipeline as a reserved **`instance` label**, authored in the extract spec as a
 `name[instance]` suffix (`fan-speed[intake]=<oid>`); the parser strips the bracket into the label so
-the catalog lookup matches the bare name, the derive step reads it into the column. Calc folds
-**every** instance of an input name into the reduce (a filter can select one, `instance == "intake"`);
-a recompute runs over the current state of all instances for `(owner, name)`. Calc **outputs** stay
-aggregate (`instance = ''`); per-instance outputs are a separate capability, not a silent gap.
+the catalog lookup matches the bare name, and the derive step reads it into the column.
 :::
 
 ### The has-a-value-now razor (sample vs event)
@@ -276,7 +284,7 @@ Two rules keep the read honest under [retention](/architecture/storage/#partitio
 
 ## Reconciliation: want, told, is
 
-The read side pivots three values per property of an owner: **want** (the current declared value, with the contract default coalesced in), **told** (intended, nil until a command opens one), **is** (observed). All three are series reads. **Drift** is `is` present and disagreeing with `want`, computed on read so it cannot go stale ([`disagree`](#disagree-and-divergence)). The [command pillar](/architecture/commands/) adds the **windowed** form: settlement is `told` vs `is` gated on the command's settle window, and the command records the outcome as its status.
+The read side pivots three values per property of an owner: **want** (the current declared value, with the contract default coalesced in), **told** (intended, nil until a command opens one), **is** (observed). All three are series reads, and the question is the owner's, so told and is [resolve across every instance](#the-instance-dimension-many-values-of-one-name-on-one-owner) of the key: told is the newest intended value on any instance a command named, and is is worst-case over the live instances, an instance that disagrees with want when any does (the newest such), else the newest agreeing one, named by the instance it came from (`is_instance`). **Drift** is any observed instance disagreeing with `want`, computed on read so it cannot go stale ([`disagree`](#disagree-and-divergence)). The [command pillar](/architecture/commands/) adds the **windowed** form: settlement is `told` vs `is` gated on the command's settle window, and the command records the outcome as its status.
 
 ## Ground truth versus derived
 

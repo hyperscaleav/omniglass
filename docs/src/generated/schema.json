@@ -902,6 +902,17 @@
       "nullable": true,
       "fk": true,
       "fk_target": "location.id"
+     },
+     {
+      "name": "orphaned_batches",
+      "type": "bigint",
+      "nullable": false,
+      "default": "0"
+     },
+     {
+      "name": "last_orphaned_at",
+      "type": "timestamp with time zone",
+      "nullable": true
      }
     ],
     "uniques": [
