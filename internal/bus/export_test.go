@@ -18,6 +18,15 @@ func SetTelemetryAckWait(d time.Duration) (restore func()) {
 	return func() { telemetryAckWait = prior }
 }
 
+// SetOrphanWindow sets how often one node's orphaned batches are warned about
+// and how often their count reaches the store, for a test of #1200; the
+// returned func restores both. It applies to a Server built after it.
+func SetOrphanWindow(window, flush time.Duration) (restore func()) {
+	pw, pf := orphanWindow, orphanFlushEvery
+	orphanWindow, orphanFlushEvery = window, flush
+	return func() { orphanWindow, orphanFlushEvery = pw, pf }
+}
+
 // PublishTelemetryAs publishes b on the push lane under the given id, as
 // PublishTelemetry does under a fresh one, and reports whether the stream
 // held it as a duplicate: what a publisher's retry looks like to the stream.

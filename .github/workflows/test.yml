@@ -44,7 +44,7 @@ jobs:
 
       # test-web (inside make test) installs the SPA's dependencies and runs its
       # typecheck and vitest suite, so the job needs node.
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
           cache: npm
@@ -78,7 +78,7 @@ jobs:
 
       # The SPA build (make build-web) runs on the host; Playwright itself runs
       # in the pinned container the runner pulls, matching local runs exactly.
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
 

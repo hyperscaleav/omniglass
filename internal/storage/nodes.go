@@ -40,6 +40,12 @@ type Node struct {
 	LastHeartbeatAt *time.Time
 	EnrolledAt      *time.Time
 	Enrolled        bool
+	// OrphanedBatches is how many of this node's telemetry batches the
+	// confinement fence orphaned (a task on another node, or unknown), their
+	// samples dropped; LastOrphanedAt the newest (#1200). Counted, not logged
+	// per batch, so a node stuck on a moved task is visible without a flood.
+	OrphanedBatches int64
+	LastOrphanedAt  *time.Time
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
 }
@@ -125,11 +131,11 @@ type Worklist struct {
 // list alike, so the insert and update paths need no join.
 const nodeCols = `principal_id, name, coalesce(label, ''), description,
 	(select l.name from location l where l.id = node.location_id) as location_name, location_id,
-	last_heartbeat_at, enrolled_at, created_at, updated_at`
+	last_heartbeat_at, enrolled_at, orphaned_batches, last_orphaned_at, created_at, updated_at`
 
 func scanNode(row pgx.Row) (*Node, error) {
 	var n Node
-	if err := row.Scan(&n.PrincipalID, &n.Name, &n.Label, &n.Description, &n.LocationName, &n.LocationID, &n.LastHeartbeatAt, &n.EnrolledAt, &n.CreatedAt, &n.UpdatedAt); err != nil {
+	if err := row.Scan(&n.PrincipalID, &n.Name, &n.Label, &n.Description, &n.LocationName, &n.LocationID, &n.LastHeartbeatAt, &n.EnrolledAt, &n.OrphanedBatches, &n.LastOrphanedAt, &n.CreatedAt, &n.UpdatedAt); err != nil {
 		return nil, err
 	}
 	n.Enrolled = n.EnrolledAt != nil
@@ -398,6 +404,25 @@ func (p *PG) RecordHeartbeat(ctx context.Context, name string) error {
 	tag, err := p.pool.Exec(ctx, `update node set last_heartbeat_at = now() where name = $1`, name)
 	if err != nil {
 		return fmt.Errorf("storage: record heartbeat %q: %w", name, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNodeNotFound
+	}
+	return nil
+}
+
+// RecordOrphanedBatches adds batches to the node's orphaned-batch count and
+// moves its last_orphaned_at to at, never backwards (#1200). Keyed by the node
+// name the server took from the telemetry subject, which subject permissions
+// guarantee is the publisher's own, so it trusts the name. The ingest
+// consumer calls it once per node per flush, never once per batch.
+func (p *PG) RecordOrphanedBatches(ctx context.Context, name string, batches int64, at time.Time) error {
+	tag, err := p.pool.Exec(ctx, `update node
+		set orphaned_batches = orphaned_batches + $2,
+		    last_orphaned_at = greatest(last_orphaned_at, $3)
+		where name = $1`, name, batches, at)
+	if err != nil {
+		return fmt.Errorf("storage: record orphaned batches %q: %w", name, err)
 	}
 	if tag.RowsAffected() == 0 {
 		return ErrNodeNotFound

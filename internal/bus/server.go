@@ -40,22 +40,24 @@ type Config struct {
 
 // Server is the embedded NATS server plus the server-side control-plane handlers.
 type Server struct {
-	ns            *server.Server
-	nc            *nats.Conn
-	store         Store
-	subs          []*nats.Subscription
-	consumeCtx    jetstream.ConsumeContext // the telemetry durable consumer's pull loop
-	js            jetstream.JetStream      // the internal client's JetStream, the push lane's publisher
-	streamEpoch   string                   // OG_TELEMETRY's creation time, keying a batch with no id (batchID)
-	internalToken string
-	sims          *simhub.Registry   // the simulators beside this server's nodes
-	stopSweep     chan struct{}      // ends the settlement sweep
-	stopReconcile context.CancelFunc // ends the rule reconcile loop
-	stopCalc      context.CancelFunc // ends the calc tick
-	stopPrune     context.CancelFunc // ends the receipt retention pass
-	sweepStop     sync.Once
-	sweepDone     sync.WaitGroup
-	ownStoreDir   string // non-empty when the Server created (and must clean) it
+	ns              *server.Server
+	nc              *nats.Conn
+	store           Store
+	subs            []*nats.Subscription
+	consumeCtx      jetstream.ConsumeContext // the telemetry durable consumer's pull loop
+	js              jetstream.JetStream      // the internal client's JetStream, the push lane's publisher
+	streamEpoch     string                   // OG_TELEMETRY's creation time, keying a batch with no id (batchID)
+	internalToken   string
+	sims            *simhub.Registry   // the simulators beside this server's nodes
+	stopSweep       chan struct{}      // ends the settlement sweep
+	stopReconcile   context.CancelFunc // ends the rule reconcile loop
+	stopCalc        context.CancelFunc // ends the calc tick
+	stopPrune       context.CancelFunc // ends the receipt retention pass
+	orphans         *orphanTally       // the node lane's orphaned batches, warned and counted (#1200)
+	stopOrphanFlush context.CancelFunc // ends the orphan count's flush
+	sweepStop       sync.Once
+	sweepDone       sync.WaitGroup
+	ownStoreDir     string // non-empty when the Server created (and must clean) it
 }
 
 // New starts an in-process NATS server (JetStream on) with the per-node auth
@@ -66,7 +68,7 @@ func New(cfg Config, store Store) (*Server, error) {
 	if _, err := rand.Read(tok); err != nil {
 		return nil, fmt.Errorf("bus: internal token: %w", err)
 	}
-	s := &Server{store: store, internalToken: hex.EncodeToString(tok), sims: simhub.New()}
+	s := &Server{store: store, internalToken: hex.EncodeToString(tok), sims: simhub.New(), orphans: newOrphanTally(orphanWindow)}
 
 	storeDir := cfg.StoreDir
 	if storeDir == "" {
@@ -216,6 +218,7 @@ func (s *Server) subscribe() error {
 		return fmt.Errorf("bus: start telemetry consumer: %w", err)
 	}
 	s.startReceiptPrune()
+	s.startOrphanFlush()
 	return nil
 }
 
@@ -271,6 +274,9 @@ func (s *Server) Shutdown() {
 	if s.stopPrune != nil {
 		s.stopPrune()
 	}
+	if s.stopOrphanFlush != nil {
+		s.stopOrphanFlush()
+	}
 	if s.stopSweep != nil {
 		s.sweepStop.Do(func() { close(s.stopSweep) })
 		s.sweepDone.Wait()
@@ -282,6 +288,13 @@ func (s *Server) Shutdown() {
 	if s.consumeCtx != nil {
 		s.consumeCtx.Stop()
 		s.consumeCtx = nil
+	}
+	// The consumer has stopped, so no orphan is counted after this: write the
+	// last of the counts rather than lose them with the process.
+	if s.orphans != nil && s.stopOrphanFlush != nil {
+		final, done := context.WithTimeout(context.Background(), orphanFlushTimeout)
+		s.flushOrphans(final)
+		done()
 	}
 	if s.nc != nil {
 		s.nc.Close()

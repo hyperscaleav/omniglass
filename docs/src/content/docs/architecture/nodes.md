@@ -19,7 +19,9 @@ credential is permitted only its own `<node>` subjects. Also built: running task
 `internal/node/probe.go`), shipping telemetry (the JetStream `TelemetryBatch` ingested by
 `internal/bus/consumer.go`, each publish waiting for the stream's ack under a minted `Nats-Msg-Id`, a
 batch the stream has not acked held in a bounded spool and shipped on the next tick,
-[below](#delivery-a-batch-lands-once)), and the raw self-log lane (ADR-0066: `internal/node/logs.go`,
+[below](#delivery-a-batch-lands-once); a batch whose task is not placed on the node is dropped by
+the confinement fence, warned about once per node per minute and counted on the node's
+`orphaned_batches` and `last_orphaned_at`, #1200), and the raw self-log lane (ADR-0066: `internal/node/logs.go`,
 `GET /nodes/{name}/logs`, the console Self-logs panel), the command wire (a per-node pull, actuated
 over the driver's binding, [ADR-0136](/architecture/decisions/#adr-0136-actuation-is-a-per-node-pull-rendered-at-dispatch)),
 driver polls on their declared schedule (#822), and, for the line protocol over `tcp`, `tls` (#1035), `telnet` (#1033) and `ssh` (#1032), held sessions
