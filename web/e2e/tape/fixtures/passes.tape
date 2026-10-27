@@ -11,6 +11,9 @@ Type `demo_until 30 'test -n "$lobby"'`
 Enter
 Wait@40s
 Show
+Type "# One component, read by its dotted address"
+Enter
+Wait
 Type `omniglass component get "$lobby" | jq -c '{name, product, location}'`
 Enter
 Wait

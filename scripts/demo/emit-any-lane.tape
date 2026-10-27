@@ -17,7 +17,6 @@ Wait
 Type `omniglass driver get newtron-nvp | jq -c '{unmatched: .spec.unmatched, listeners: [.spec.listeners[] | {name, match: .match.prefix, emits: [.emits[] | (.name // "a log line")]}]}'`
 Enter
 Wait
-Sleep 3s
 
 Hide
 Type `demo_until 120 'omniglass component reachability list "$panel" | jq -e ".endpoints[] | select(.endpoint == \"tcp\") | .session.state == \"up\""'`
@@ -45,7 +44,6 @@ Wait
 Type `omniglass component property sample list "$panel" video-input --limit 1 | jq -c '.samples[0] | {instance, value}'`
 Enter
 Wait
-Sleep 3s
 
 Hide
 Type "clear"
@@ -78,7 +76,6 @@ Wait
 Type `omniglass component log list "$panel" --severity warning | jq -c '{first: (.logs[0] | {severity, message}), sources}'`
 Enter
 Wait
-Sleep 3s
 
 Hide
 Type "clear"
@@ -102,4 +99,3 @@ Show
 Type `omniglass component event list "$bar" | jq -c '[.events[] | select(.attributes.call_id == "demo-call-1145")] | reverse | .[] | {key, message, attributes}'`
 Enter
 Wait
-Sleep 4s

@@ -19,7 +19,6 @@ Show
 Type `omniglass secret create --name driver-preview-login --owner-kind platform --secret-type basic-auth --fields '{"username":"admin","password":"boreal"}' | jq -c '{name}'`
 Enter
 Wait
-Sleep 1s
 
 Type "# A spec whose first emit names a key no catalog has: validate names the fault, saving nothing"
 Enter
@@ -30,7 +29,6 @@ Wait
 Type `omniglass driver validate --spec "$(cat spec.json)" | jq -c '{valid, findings: [.findings[] | {function, message}]}'`
 Enter
 Wait
-Sleep 2s
 
 Type "# Fixed, it validates; previewed through the node, the display answers and nothing is stored"
 Enter
@@ -44,7 +42,6 @@ Wait
 Type `omniglass driver preview --node edge-hq --spec "$(cat fixed.json)" --inputs "$inputs" | jq -c '{stored, results: [.results[] | {poll, samples: [.samples[] | {name, text}]}]}'`
 Enter
 Wait
-Sleep 2s
 
 Hide
 Type "clear"
@@ -68,7 +65,6 @@ Show
 Type `omniglass component property sample list "$display" model-number --limit 5 | jq -c '[.samples[] | select(.instance == "http")][0] | {instance, value}'`
 Enter
 Wait
-Sleep 1s
 
 Type "# The same three are MCP tools; a preview reaches the component, so it says so"
 Enter
@@ -76,4 +72,3 @@ Wait
 Type `omniglass mcp tools | jq -c '.[] | select(.name | test("^(validate-driver-spec|preview-driver|run-endpoint-poll)$")) | {name, read_only, destructive, open_world}'`
 Enter
 Wait
-Sleep 3s

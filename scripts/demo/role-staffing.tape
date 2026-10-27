@@ -20,7 +20,6 @@ Wait
 Type `omniglass standard role update staff-huddle-v1 room-display --accepted-types '["display"]' | jq -c '{name, accepted_types}'`
 Enter
 Wait
-Sleep 1s
 
 Type "# A room built to v1, staffed with a video bar and a display"
 Enter
@@ -37,7 +36,6 @@ Wait
 Type `omniglass system role list staff-room | jq -c '.roles[] | {name, assigned_to}'`
 Enter
 Wait
-Sleep 2s
 
 Hide
 Type "clear"
@@ -65,7 +63,6 @@ Wait
 Type `omniglass system role update staff-room table-mic --label "Second mic" 2>/dev/null | jq -r .detail || true`
 Enter
 Wait
-Sleep 2s
 
 Hide
 Type "clear"
@@ -107,4 +104,3 @@ Wait
 Type `omniglass component membership list staff-other-bar | jq -c '[.memberships[].system]'`
 Enter
 Wait
-Sleep 3s

@@ -55,3 +55,6 @@ refs: [1132, 939, 1131]
   run on main re-records every demo instead. Each demo records on a runner of its own, and the
   publish job also writes each demo's clip into the PR body. See
   [ADR-1180](#adr-1180-a-pr-records-only-the-demos-it-tags-carries-its-clip-in-its-body-and-main-re-records-every-demo-nightly).
+- **Amended (#1247):** a terminal demo's length budget is 180s, not two minutes, and one pacing
+  rule holds each line a tape shows before its prompt returns (a tape writes no `Sleep`). See
+  [ADR-1247](#adr-1247-terminal-demos-are-paced-by-one-rule-and-a-terminal-demos-budget-is-180-seconds).

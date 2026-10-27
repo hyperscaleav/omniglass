@@ -29,7 +29,6 @@ Wait
 Type `omniglass session list | jq -c '.sessions[] | select(.description == "behind-the-proxy") | {kind, description, client_ip}'`
 Enter
 Wait
-Sleep 2s
 Type "# A stranger's webhook through the same proxy: its inbox row is the same client"
 Enter
 Wait
@@ -44,4 +43,3 @@ Show
 Type `omniglass unclaimed-source list | jq -c '.sources[] | select(.last_message | contains("proxy-probe")) | {transport, source, count}'`
 Enter
 Wait
-Sleep 4s
