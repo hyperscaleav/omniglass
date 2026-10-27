@@ -155,7 +155,7 @@ describe("walkthrough setup", () => {
     };
     return { calls, fetch };
   };
-  const setup = [{ method: "POST", path: "/components", body }];
+  const setup = [{ method: "POST" as const, path: "/components", body }];
 
   it("posts each create to the API with the owner token, and takes an existing one as made", async () => {
     for (const status of [201, 409]) {

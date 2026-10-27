@@ -221,6 +221,7 @@ function validateSetup(raw) {
   if (!Array.isArray(raw)) return [[], ['setup must be a list of { post, body }']];
   /** @type {SetupItem[]} */
   const items = [];
+  /** @type {string[]} */
   const problems = [];
   raw.forEach((item, i) => {
     const at = `setup ${i + 1}`;
