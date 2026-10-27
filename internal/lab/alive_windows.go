@@ -22,3 +22,6 @@ func processAlive(pid int) bool {
 	const stillActive = 259
 	return code == stillActive
 }
+
+// currentPIDNS is empty on Windows: there are no PID namespaces to tell apart.
+func currentPIDNS() string { return "" }

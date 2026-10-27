@@ -45,17 +45,30 @@ func CheckLabMark(labMode, marked, holdsData bool) error {
 	return nil
 }
 
-// LabState reads the mark and whether the database holds data.
+// LabState reads the mark and whether the database holds data. It reads a
+// schema of any age, so the lab's seed can judge a database BEFORE it
+// migrates it: a table that is not there yet (no lab_mark, no human) reads as
+// unmarked or empty, never as an error.
 func (p *PG) LabState(ctx context.Context) (LabState, error) {
 	var st LabState
-	var at *time.Time
-	err := p.pool.QueryRow(ctx, `
-		select (select marked_at from lab_mark), exists(select 1 from human)`).Scan(&at, &st.HoldsData)
-	if err != nil {
+	var hasMark, hasHuman bool
+	if err := p.pool.QueryRow(ctx, `
+		select to_regclass('lab_mark') is not null, to_regclass('human') is not null`).Scan(&hasMark, &hasHuman); err != nil {
 		return LabState{}, fmt.Errorf("storage: lab state: %w", err)
 	}
-	if at != nil {
-		st.Marked, st.MarkedAt = true, *at
+	if hasMark {
+		var at *time.Time
+		if err := p.pool.QueryRow(ctx, `select (select marked_at from lab_mark)`).Scan(&at); err != nil {
+			return LabState{}, fmt.Errorf("storage: lab mark: %w", err)
+		}
+		if at != nil {
+			st.Marked, st.MarkedAt = true, *at
+		}
+	}
+	if hasHuman {
+		if err := p.pool.QueryRow(ctx, `select exists(select 1 from human)`).Scan(&st.HoldsData); err != nil {
+			return LabState{}, fmt.Errorf("storage: lab state: %w", err)
+		}
 	}
 	return st, nil
 }

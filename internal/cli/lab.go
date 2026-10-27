@@ -139,14 +139,14 @@ func runLab(ctx context.Context, out io.Writer, version string, f labFlags) erro
 	wd, _ := os.Getwd()
 	r := &lab.Runner{
 		Engine: eng, Daemon: daemon, Out: out, Host: host,
-		Alive: lab.ProcessAlive, PortFree: lab.PortFree,
+		Alive: lab.ProcessAlive, PIDNS: lab.CurrentPIDNS(), PortFree: lab.PortFree,
 		HTTP: &http.Client{Timeout: 10 * time.Second}, Poll: time.Second, ReadyTimeout: 4 * time.Minute,
 	}
 	_, err = r.Run(ctx, lab.Config{
 		Options: lab.Options{
 			Project: f.project, Listen: f.listen, Port: f.port, Image: choice.Ref, Scenario: sc.Name,
 			NodeToken: token, NodeTokenHash: hex.EncodeToString(hash),
-			Owner: lab.Owner{Host: host, PID: os.Getpid()}, WorkDir: wd,
+			Owner: lab.Owner{Host: host, PID: os.Getpid(), PIDNS: lab.CurrentPIDNS()}, WorkDir: wd,
 		},
 		Image: choice, Fresh: f.fresh, PlantedFaults: plantedLabels(faults), Hold: true,
 	})
@@ -201,6 +201,11 @@ func runLabSeed(ctx context.Context, out io.Writer, scenario, node, user, passwo
 		return err
 	}
 	c := cfg()
+	// Judge the database before migrating it: a real database is refused as
+	// it is, never first moved to the lab's schema.
+	if err := labSeedGate(ctx, c.DSN); err != nil {
+		return err
+	}
 	if err := migrate.Run(c.DSN); err != nil {
 		return err
 	}
@@ -275,4 +280,19 @@ func plantedLabels(fs []devseed.PlantedFault) []string {
 		out = append(out, f.Label)
 	}
 	return out
+}
+
+// labSeedGate is the seed's refusal of a database that holds data and no lab
+// mark, read before any migration.
+func labSeedGate(ctx context.Context, dsn string) error {
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		return err
+	}
+	defer gw.Close()
+	st, err := gw.LabState(ctx)
+	if err != nil {
+		return err
+	}
+	return storage.CheckLabMark(true, st.Marked, st.HoldsData)
 }

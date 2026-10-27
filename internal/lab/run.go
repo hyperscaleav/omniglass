@@ -23,6 +23,8 @@ type Runner struct {
 	// creates; Alive reports whether an owner pid on this host still runs.
 	Host  string
 	Alive func(pid int) bool
+	// PIDNS is this process's PID namespace (see Owner.PIDNS).
+	PIDNS string
 	// PortFree checks the console's address before anything is created.
 	PortFree func(listen string, port int) error
 	// HTTP reaches the lab's console from this machine.
@@ -449,7 +451,7 @@ func (r *Runner) hold(ctx context.Context, lab *Lab) error {
 func (r *Runner) TearDown(spec Spec) {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
-	n, err := r.removeProject(ctx, ProjectLabels(spec.Project))
+	n, err := r.removeProject(ctx, OwnedLabels(spec))
 	if err != nil {
 		r.say("  Could not remove everything: %v", err)
 		r.say("  Remove what is left with: docker compose -p %s down", spec.Project)
@@ -510,9 +512,12 @@ func (r *Runner) Reap(ctx context.Context, project string) error {
 	for _, res := range append(cs, nets...) {
 		host, pid := res.Labels[LabelLabHost], res.Labels[LabelLabPID]
 		owners[host+" "+pid] = true
-		if host != r.Host {
+		if host != r.Host || res.Labels[LabelLabPIDNS] != r.PIDNS {
+			if host == r.Host {
+				host += ", in another container"
+			}
 			return &PreflightError{
-				Cause: fmt.Sprintf("A lab named %s is already running, started from another machine (%s).", project, host),
+				Cause: fmt.Sprintf("A lab named %s is already running, started from another machine or container (%s).", project, host),
 				Fix:   "stop it there, or remove it with `docker compose -p " + project + " down` if you know it is abandoned.",
 			}
 		}

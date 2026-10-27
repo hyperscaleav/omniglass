@@ -89,3 +89,7 @@ func PortFree(listen string, port int) error {
 // ProcessAlive reports whether a process with the pid runs on this host: the
 // reaper's check that a lab's owner is gone.
 func ProcessAlive(pid int) bool { return processAlive(pid) }
+
+// CurrentPIDNS names this process's PID namespace, recorded beside its pid as
+// a lab's owner.
+func CurrentPIDNS() string { return currentPIDNS() }

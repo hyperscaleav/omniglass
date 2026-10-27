@@ -56,7 +56,7 @@ func TestIntegrationLabOnARealDaemon(t *testing.T) {
 		return Config{
 			Options: Options{Project: project, Listen: DefaultListen, Port: 0, Image: DevImage, Scenario: DefaultScenario,
 				NodeToken: "lab-it-node-token", NodeTokenHash: tokenHash("lab-it-node-token"),
-				Owner: Owner{Host: host, PID: pid}},
+				Owner: Owner{Host: host, PID: pid, PIDNS: CurrentPIDNS()}},
 			Image:         SelectImage(labels[VersionLabel], ""),
 			PlantedFaults: []string{"Panel SNMP", "Panel SSH", "Panel console"},
 		}
@@ -220,7 +220,7 @@ func TestIntegrationLabOnARealDaemon(t *testing.T) {
 }
 
 func runner(eng Engine, out io.Writer, host string) *Runner {
-	return &Runner{Engine: eng, Out: out, Host: host, Alive: ProcessAlive, PortFree: PortFree,
+	return &Runner{Engine: eng, Out: out, Host: host, Alive: ProcessAlive, PIDNS: CurrentPIDNS(), PortFree: PortFree,
 		HTTP: &http.Client{Timeout: 10 * time.Second}, Poll: time.Second, ReadyTimeout: 4 * time.Minute}
 }
 

@@ -143,6 +143,13 @@ server's bus and the node publish nothing; the node reaches the server across th
 impairments and truthful ping, and they reach only that container's own network namespace, never
 your machine's. The `server` and `db` containers carry no added capability.
 
+Publishing nothing is not the same as unreachable. On Linux, a Docker bridge network's addresses are
+routable from the machine itself, so a local process that finds the lab network's address can reach
+the database there, with the lab's fixed Postgres login (`omniglass` / `omniglass`, a superuser of
+that database and so of its container). That is the lab's data and the lab's container, both
+disposable, on a machine you share only with people you would hand the console's well-known login
+to anyway; it is one more reason a lab is never a place for real data.
+
 ## Safety rails
 
 A lab's login is well known and its data is disposable, so it is kept apart from anything real:
@@ -160,7 +167,8 @@ A lab's login is well known and its data is disposable, so it is kept apart from
 - **A local daemon only.** The lab refuses a Docker daemon on another machine, where the loopback
   publish would land on that machine and not this one.
 - **One lab at a time.** A run refuses to start while another lab is running here (or was started
-  from another machine on the same daemon), and never touches it.
+  from another machine, or from inside a container, on the same daemon), and never touches it; a run
+  that fails to come up removes only what it created itself.
 
 ## Flags
 

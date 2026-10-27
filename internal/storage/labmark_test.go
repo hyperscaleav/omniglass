@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
@@ -93,5 +95,40 @@ func TestLabMarkRoundTrip(t *testing.T) {
 	}
 	if st, err := gw.LabState(ctx); err != nil || !st.HoldsData {
 		t.Fatalf("with an owner: %+v (%v), want it to hold data", st, err)
+	}
+}
+
+// The lab's seed reads the mark BEFORE it migrates, so it refuses a real
+// database without first moving it to the lab's schema: on a schema that
+// predates the mark (no lab_mark table), the state reads unmarked, and an
+// owner still reads as data.
+func TestLabStateReadsASchemaWithoutTheMark(t *testing.T) {
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "owner", SecretHash: []byte("h"), Prefix: "p"}); err != nil {
+		t.Fatal(err)
+	}
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(ctx)
+	if _, err := conn.Exec(ctx, `drop table lab_mark`); err != nil {
+		t.Fatal(err)
+	}
+	st, err := gw.LabState(ctx)
+	if err != nil {
+		t.Fatalf("a schema without the mark: %v", err)
+	}
+	if st.Marked || !st.HoldsData {
+		t.Fatalf("got %+v, want unmarked and holding data", st)
 	}
 }

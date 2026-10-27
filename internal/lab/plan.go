@@ -67,6 +67,7 @@ const (
 	LabelLab              = "omniglass.lab"
 	LabelLabHost          = "omniglass.lab.host"
 	LabelLabPID           = "omniglass.lab.pid"
+	LabelLabPIDNS         = "omniglass.lab.pidns"
 	composeVersionClaimed = "2.0.0"
 )
 
@@ -75,6 +76,10 @@ const (
 type Owner struct {
 	Host string
 	PID  int
+	// PIDNS is the owner's PID namespace: a pid means something only inside
+	// it, so an owner in another one (a lab run from a container that shares
+	// the host's name) is never judged by this namespace's pids.
+	PIDNS string
 }
 
 // Options are a lab's settings.
@@ -151,6 +156,9 @@ type Volume struct {
 // Spec is the whole project: what the runner realizes.
 type Spec struct {
 	Project string
+	// Owner is the run that owns what the spec creates; its own teardown
+	// removes only what carries this owner.
+	Owner   Owner
 	Network string
 	// NetworkLabels label the lab network.
 	NetworkLabels map[string]string
@@ -167,6 +175,17 @@ func (s Spec) Services() []Service { return []Service{s.DB, s.Seed, s.Server, s.
 // ProjectLabels are the labels that select everything a project created.
 func ProjectLabels(project string) map[string]string {
 	return map[string]string{LabelComposeProject: project, LabelLab: project}
+}
+
+// OwnedLabels select what one run of the project created: its teardown
+// removes only those, so a run never removes another live lab's (two runs
+// racing to one project). A spec with no owner selects the whole project.
+func OwnedLabels(s Spec) map[string]string {
+	l := ProjectLabels(s.Project)
+	if s.Owner.PID != 0 {
+		l[LabelLabHost], l[LabelLabPID], l[LabelLabPIDNS] = s.Owner.Host, strconv.Itoa(s.Owner.PID), s.Owner.PIDNS
+	}
+	return l
 }
 
 // Plan turns the options into the project spec. Pure.
@@ -190,7 +209,7 @@ func Plan(o Options) (Spec, error) {
 		return Spec{}, fmt.Errorf("lab: no image to run")
 	}
 	owner := map[string]string{
-		LabelLab: o.Project, LabelLabHost: o.Owner.Host, LabelLabPID: strconv.Itoa(o.Owner.PID),
+		LabelLab: o.Project, LabelLabHost: o.Owner.Host, LabelLabPID: strconv.Itoa(o.Owner.PID), LabelLabPIDNS: o.Owner.PIDNS,
 		LabelComposeProject: o.Project,
 	}
 	with := func(extra map[string]string) map[string]string {
@@ -206,6 +225,7 @@ func Plan(o Options) (Spec, error) {
 	volDB, volData := o.Project+"_db", o.Project+"_data"
 	spec := Spec{
 		Project:       o.Project,
+		Owner:         o.Owner,
 		Network:       o.Project + "_default",
 		NetworkLabels: with(map[string]string{LabelComposeNetwork: "default", LabelComposeVersion: composeVersionClaimed}),
 		Volumes: []Volume{

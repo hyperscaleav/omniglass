@@ -406,3 +406,46 @@ func TestImageOverrideWarnsOnlyForAnotherBuild(t *testing.T) {
 		})
 	}
 }
+
+// A bring-up that fails removes only what this run created: another lab of
+// the same project, started alongside and live, is never touched (two
+// worktrees racing to the default project on one daemon).
+func TestAFailedBringUpLeavesAnotherLabAlone(t *testing.T) {
+	srv := fakeServer(t)
+	eng := newFakeEngine(strings.TrimPrefix(srv.URL, "http://"))
+	eng.seedExit, eng.seedLog = 1, "boom"
+	other := map[string]string{LabelLab: DefaultProject, LabelComposeProject: DefaultProject, LabelLabHost: "box", LabelLabPID: "77"}
+	r := testRunner(eng, &bytes.Buffer{})
+	// The other lab appears after this run's preflight, as a racing one would.
+	r.PortFree = func(string, int) error {
+		eng.containers["theirs"] = Resource{ID: "theirs", Labels: other}
+		return nil
+	}
+	if _, err := r.Run(context.Background(), testConfig()); err == nil {
+		t.Fatal("the failing seed did not fail the run")
+	}
+	if _, ok := eng.containers["theirs"]; !ok {
+		t.Fatal("a failed bring-up removed another live lab's container")
+	}
+}
+
+// An owner in another PID namespace (a lab run from inside a container that
+// shares the host's name) is not judged by this namespace's pids: it is
+// refused like a lab from another machine, never reaped.
+func TestReapRefusesAnOwnerInAnotherPIDNamespace(t *testing.T) {
+	srv := fakeServer(t)
+	eng := newFakeEngine(strings.TrimPrefix(srv.URL, "http://"))
+	eng.containers["c"] = Resource{ID: "c", Labels: map[string]string{
+		LabelLab: DefaultProject, LabelComposeProject: DefaultProject, LabelLabHost: "box", LabelLabPID: "9999",
+		LabelLabPIDNS: "pid:[4026531836]"}}
+	r := testRunner(eng, &bytes.Buffer{})
+	r.PIDNS = "pid:[4026532999]"
+	err := r.Reap(context.Background(), DefaultProject)
+	var pe *PreflightError
+	if !errors.As(err, &pe) {
+		t.Fatalf("got %v, want a refusal", err)
+	}
+	if _, ok := eng.containers["c"]; !ok {
+		t.Fatal("the reaper removed a lab owned from another PID namespace")
+	}
+}
