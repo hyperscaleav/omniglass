@@ -14,7 +14,7 @@
     "@astrojs/mdx": "^5.0.0",
     "@astrojs/sitemap": "^3.2.1",
     "@astrojs/starlight": "^0.38.2",
-    "astro": "^6.1.0",
+    "astro": "^6.4.8",
     "github-slugger": "^2.0.0",
     "remark-directive": "^4.0.0",
     "starlight-openapi": "^0.25.0",

@@ -175,7 +175,7 @@ bench:
 # the test container is waited on in the background so a signal is handled at
 # once rather than after the tests finish. The two module/build cache volumes
 # are shared across runs on purpose.
-NETADMIN_IMG ?= golang:1.25
+NETADMIN_IMG ?= golang:1.26
 NETADMIN_PKGS ?= ./internal/sim/impair/ ./internal/e2e/
 NETADMIN_RUN ?= Netlink|Impair|Validate|PlanFor
 test-netadmin:

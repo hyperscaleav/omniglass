@@ -540,6 +540,23 @@ func TestLoweringCapacityBelowCountRefusedAcrossInheritingSystems(t *testing.T) 
 	if short.System != "cap-sys-b" || short.Have != 3 || short.Want != 2 {
 		t.Fatalf("shortfall = %+v, want cap-sys-b with 3 exceeding a new cap of 2", short)
 	}
+	// The refusal carries every exceeding system with its id, so the API can
+	// name only one the caller may read (#1216).
+	if len(short.Exceeding) != 1 || short.Exceeding[0].System != "cap-sys-b" || short.Exceeding[0].SystemID == "" {
+		t.Fatalf("exceeding = %+v, want only cap-sys-b, with its id", short.Exceeding)
+	}
+
+	// At a cap of zero both exceed, worst first.
+	cap0 := 0
+	_, err = gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
+		Name: "table-mic", Label: "Table Mic", AcceptedTypes: []string{"video-bar"}, Capacity: &cap0,
+	})
+	if !errors.As(err, &short) {
+		t.Fatalf("lower capacity to zero: err = %v, want CapacityShortfall", err)
+	}
+	if len(short.Exceeding) != 2 || short.Exceeding[0].System != "cap-sys-b" || short.Exceeding[1].System != "cap-sys-a" {
+		t.Fatalf("exceeding = %+v, want cap-sys-b then cap-sys-a", short.Exceeding)
+	}
 }
 
 func hasAll(got []string, want ...string) bool {
