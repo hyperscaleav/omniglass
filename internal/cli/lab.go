@@ -78,7 +78,7 @@ func newLabRunCmd(version string) *cobra.Command {
 	cmd.Flags().StringVar(&listen, "listen", lab.DefaultListen, "the address the console is published on; anything but loopback exposes the lab, and its well-known login, to your network")
 	cmd.Flags().BoolVar(&fresh, "fresh", false, "remove the lab's data first and start over from the seed")
 	cmd.Flags().StringVar(&scenario, "scenario", lab.DefaultScenario, "the fleet the lab seeds on its first run (omniglass seed-dev --help lists them)")
-	cmd.Flags().StringVar(&image, "image", "", "run this omniglass image instead of the one this binary was built with")
+	cmd.Flags().StringVar(&image, "image", "", "run this omniglass image instead of the one this binary was built with (env OMNIGLASS_LAB_IMAGE); one that is not this binary's own build is warned about")
 	cmd.Flags().StringVar(&project, "project", lab.DefaultProject, "the Docker compose project name")
 	_ = cmd.Flags().MarkHidden("project")
 	return cmd
@@ -126,10 +126,11 @@ func runLab(ctx context.Context, out io.Writer, version string, f labFlags) erro
 	}
 	fmt.Fprintf(out, "  %-10s %s\n", "docker", fmt.Sprintf("running (Engine API %s, %s, from %s)", info.APIVersion, daemon.Host, daemon.Source))
 
-	choice := lab.SelectImage(version, f.image)
-	if choice.Warning != "" {
-		fmt.Fprintf(out, "  %-10s %s\n", "warning", choice.Warning)
+	image := f.image
+	if image == "" {
+		image = config.Get("OMNIGLASS_LAB_IMAGE")
 	}
+	choice := lab.SelectImage(version, image)
 	token, hash, _, err := auth.NewBearerToken()
 	if err != nil {
 		return err

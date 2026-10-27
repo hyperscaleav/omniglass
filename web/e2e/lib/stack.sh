@@ -251,7 +251,9 @@ stack_image() {
   local labels
   mapfile -t labels < <(stack__labels)
   echo "stack $STACK_ID: building the omniglass image from $STACK_ROOT" >&2
-  docker build -q "${labels[@]}" -t "$STACK_IMG" "$STACK_ROOT" >/dev/null &
+  # Stamped with the run id, as make stamps its build id: the binary inside
+  # knows this image as its own build (omniglass lab run --image, #1193).
+  docker build -q "${labels[@]}" --build-arg VERSION="$STACK_ID" -t "$STACK_IMG" "$STACK_ROOT" >/dev/null &
   STACK_FG_PID=$!
   wait "$STACK_FG_PID"
   STACK_FG_PID=""

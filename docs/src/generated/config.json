@@ -123,6 +123,11 @@
    "doc": "the docker CLI's config directory, where omniglass lab run reads the current context and the context store"
   },
   {
+   "key": "OMNIGLASS_LAB_IMAGE",
+   "scope": "cli",
+   "doc": "the omniglass image omniglass lab run runs when --image is omitted; one that is not the binary's own build is warned about"
+  },
+  {
    "key": "OMNIGLASS_LAB_NODE_TOKEN_HASH",
    "scope": "cli",
    "doc": "set by omniglass lab run for its seed one-off: the hash of the node token it minted for this run, never set by hand"

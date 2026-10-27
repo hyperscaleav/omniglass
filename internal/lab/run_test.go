@@ -377,3 +377,32 @@ func TestRunSaysWhatIsPendingWhenCollectionIsSlow(t *testing.T) {
 		t.Fatalf("pending %q, want it to say 1 of 2 endpoints are not up", lab.Pending)
 	}
 }
+
+// --image naming this binary's own build (its version label is the binary's
+// build id, as the walkthrough stack's image is for the binary inside it) is
+// no override worth a warning; any other image is warned about.
+func TestImageOverrideWarnsOnlyForAnotherBuild(t *testing.T) {
+	srv := fakeServer(t)
+	for name, tc := range map[string]struct {
+		label string
+		warns bool
+	}{
+		"its own build": {"abc123", false},
+		"another build": {"0ther", true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			eng := newFakeEngine(strings.TrimPrefix(srv.URL, "http://"))
+			eng.images["stack:x"] = map[string]string{VersionLabel: tc.label}
+			var out bytes.Buffer
+			cfg := testConfig()
+			cfg.Image = SelectImage("abc123", "stack:x")
+			cfg.Options.Image = "stack:x"
+			if _, err := testRunner(eng, &out).Run(context.Background(), cfg); err != nil {
+				t.Fatalf("%v\n%s", err, out.String())
+			}
+			if got := strings.Contains(out.String(), "warning"); got != tc.warns {
+				t.Fatalf("warned %v, want %v:\n%s", got, tc.warns, out.String())
+			}
+		})
+	}
+}

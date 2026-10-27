@@ -86,6 +86,8 @@ var Registry = []Var{
 		Doc: "the docker context omniglass lab run uses when DOCKER_HOST is unset, ahead of the docker CLI's current context"},
 	{Key: "DOCKER_CONFIG", Default: "~/.docker", Scope: "cli",
 		Doc: "the docker CLI's config directory, where omniglass lab run reads the current context and the context store"},
+	{Key: "OMNIGLASS_LAB_IMAGE", Scope: "cli",
+		Doc: "the omniglass image omniglass lab run runs when --image is omitted; one that is not the binary's own build is warned about"},
 	{Key: "OMNIGLASS_LAB_NODE_TOKEN_HASH", Scope: "cli",
 		Doc: "set by omniglass lab run for its seed one-off: the hash of the node token it minted for this run, never set by hand"},
 	{Key: "OMNIGLASS_TEST_ADMIN_DSN", Scope: "test",

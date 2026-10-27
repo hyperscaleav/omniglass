@@ -82,7 +82,7 @@ func (r *Runner) Run(ctx context.Context, cfg Config) (*Lab, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := r.preflight(ctx, spec, cfg); err != nil {
+	if cfg.Image, err = r.preflight(ctx, spec, cfg); err != nil {
 		return nil, err
 	}
 	lab, err := r.up(ctx, spec, cfg)
@@ -114,21 +114,30 @@ func (r *Runner) Run(ctx context.Context, cfg Config) (*Lab, error) {
 
 // preflight runs every check that comes before anything is created: a live
 // lab already holding the project, the console's port, and the image.
-func (r *Runner) preflight(ctx context.Context, spec Spec, cfg Config) error {
+// It returns the image choice as the image found settles it: an override
+// that is the binary's own build is no override worth a warning.
+func (r *Runner) preflight(ctx context.Context, spec Spec, cfg Config) (ImageChoice, error) {
+	c := cfg.Image
 	if err := r.Reap(ctx, spec.Project); err != nil {
-		return err
+		return c, err
 	}
 	if err := r.PortFree(cfg.Listen, cfg.Port); err != nil {
-		return err
+		return c, err
 	}
-	labels, found, err := r.Engine.ImageLabels(ctx, cfg.Image.Ref)
+	labels, found, err := r.Engine.ImageLabels(ctx, c.Ref)
 	if err != nil {
-		return fmt.Errorf("look up the image %s: %w", cfg.Image.Ref, err)
+		return c, fmt.Errorf("look up the image %s: %w", c.Ref, err)
 	}
-	if err := CheckDevImage(cfg.Image, found, labels); err != nil {
-		return &PreflightError{Cause: err.Error(), Fix: "run `make` in your omniglass checkout, then run the lab again.", Err: err}
+	if err := CheckDevImage(c, found, labels); err != nil {
+		return c, &PreflightError{Cause: err.Error(), Fix: "run `make` in your omniglass checkout, then run the lab again.", Err: err}
 	}
-	return nil
+	if c.Warning != "" && found && c.OwnBuild(labels) {
+		c.Warning, c.Why = "", "this binary's own build"
+	}
+	if c.Warning != "" {
+		r.step("warning", c.Warning)
+	}
+	return c, nil
 }
 
 // up creates the project and waits until it is ready.

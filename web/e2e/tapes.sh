@@ -174,11 +174,34 @@ tape_one() {
   done
   echo "tape $id: recording" >&2
   tape_node wrap "../$file" >"$out/$id.tape" || return 1
-  stack_run --user "$(id -u):$(id -g)" -e HOME=/tmp \
-    -e OMNIGLASS_SERVER="$STACK_SRV_URL" -e OMNIGLASS_TOKEN="$STACK_TOKEN" \
-    -e DEMO_FAILED=/out/failed-commands.txt -e DEMO_LOG=/out/shell.log \
-    -v "$ROOT/$out:/out" -v "$ROOT/$OUT/stack-logs:/stack/logs:ro" \
-    "$DEMO_IMG" "/out/$id.tape" >"$out/vhs.log" 2>&1 || rc=$?
+  if grep -qx '# demo-needs: docker-socket' "$file"; then
+    # A tape that drives Docker itself (lab-first-run types omniglass lab
+    # run, #1193). Opt-in twice: the tape declares it, and the runner sets
+    # DEMO_DOCKER_SOCKET=1 (demo.yml does, on a throwaway CI runner): the
+    # socket hands the recorder root on the host. On the host's network, so
+    # the console the lab publishes on the host's loopback is the one the
+    # tape's lab reaches; the stack's image is the binary's own build.
+    if [ "${DEMO_DOCKER_SOCKET:-}" != 1 ]; then
+      echo "tape $id: needs the Docker socket; it records only where DEMO_DOCKER_SOCKET=1 opts in (CI)" >&2
+      return 1
+    fi
+    local sock=/var/run/docker.sock labels
+    mapfile -t labels < <(stack__labels)
+    docker run --rm "${labels[@]}" --network host --user "$(id -u):$(id -g)" --group-add "$(stat -c %g "$sock")" \
+      -v "$sock:$sock" -e HOME=/tmp -e OMNIGLASS_LAB_IMAGE="$STACK_IMG" \
+      -e DEMO_FAILED=/out/failed-commands.txt -e DEMO_LOG=/out/shell.log \
+      -v "$ROOT/$out:/out" -v "$ROOT/$OUT/stack-logs:/stack/logs:ro" \
+      "$DEMO_IMG" "/out/$id.tape" >"$out/vhs.log" 2>&1 &
+    STACK_FG_PID=$!
+    wait "$STACK_FG_PID" || rc=$?
+    STACK_FG_PID=""
+  else
+    stack_run --user "$(id -u):$(id -g)" -e HOME=/tmp \
+      -e OMNIGLASS_SERVER="$STACK_SRV_URL" -e OMNIGLASS_TOKEN="$STACK_TOKEN" \
+      -e DEMO_FAILED=/out/failed-commands.txt -e DEMO_LOG=/out/shell.log \
+      -v "$ROOT/$out:/out" -v "$ROOT/$OUT/stack-logs:/stack/logs:ro" \
+      "$DEMO_IMG" "/out/$id.tape" >"$out/vhs.log" 2>&1 || rc=$?
+  fi
   if [ "$rc" -ne 0 ]; then
     sed 's/^/  | /' "$out/vhs.log" | tail -n 20 >&2
     echo "tape $id: VHS failed (exit $rc): a Wait that ran out, or a tape VHS could not play (above)" >&2

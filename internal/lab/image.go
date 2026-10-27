@@ -32,6 +32,14 @@ type ImageChoice struct {
 	Warning string
 	// Why says where the choice came from, for the status line.
 	Why string
+	// BinaryVersion is the build id of the binary choosing.
+	BinaryVersion string
+}
+
+// OwnBuild reports whether an image is the choosing binary's own build: its
+// version label is the binary's build id (never the unstamped "dev").
+func (c ImageChoice) OwnBuild(labels map[string]string) bool {
+	return c.BinaryVersion != "" && c.BinaryVersion != "dev" && labels[VersionLabel] == c.BinaryVersion
 }
 
 var releaseVersion = regexp.MustCompile(`^v?\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$`)
@@ -44,15 +52,15 @@ var releaseVersion = regexp.MustCompile(`^v?\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$`)
 //     match the binary's build id; the lab never builds implicitly.
 func SelectImage(version, override string) ImageChoice {
 	if override != "" {
-		return ImageChoice{Ref: override, Pull: true, Why: "--image",
+		return ImageChoice{Ref: override, Pull: true, Why: "--image", BinaryVersion: version,
 			Warning: fmt.Sprintf("--image %s overrides the image this binary was built with (version %s); "+
 				"a lab whose server and binary disagree is yours to debug", override, version)}
 	}
 	if releaseVersion.MatchString(version) {
 		return ImageChoice{Ref: ReleaseRepo + ":v" + strings.TrimPrefix(version, "v"), Pull: true,
-			Why: "the release image for this binary"}
+			Why: "the release image for this binary", BinaryVersion: version}
 	}
-	return ImageChoice{Ref: DevImage, WantVersion: version, Why: "built by make beside this binary"}
+	return ImageChoice{Ref: DevImage, WantVersion: version, Why: "built by make beside this binary", BinaryVersion: version}
 }
 
 // CheckDevImage holds a dev image to the binary that runs it: the image must
