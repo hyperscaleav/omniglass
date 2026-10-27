@@ -351,26 +351,40 @@ func (p *PG) SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID stri
 	}
 
 	// Lowering capacity below what some conforming system already has
-	// assigned refuses naming the worst-exceeding one: a standard-owned role
-	// is staffed independently in every system that conforms to it, so any
-	// one of them can exceed a new, lower cap regardless of what this system
-	// (the one whose edit triggered the check) looks like.
+	// assigned refuses, listing every system that would exceed the new cap,
+	// worst first: a standard-owned role is staffed independently in every
+	// system that conforms to it, so any one of them can exceed a new, lower
+	// cap regardless of what this system (the one whose edit triggered the
+	// check) looks like. The list is fleet-wide, beyond any scope the
+	// declarer holds, so it carries ids for the API to name only the systems
+	// that caller may read (#1216).
 	if capacity != nil && prior != nil {
-		var sysName string
-		var have int
-		err := tx.QueryRow(ctx, `
-			select s.name, count(*) from system_role_assignment ra
+		rows, err := tx.Query(ctx, `
+			select s.id, s.name, count(*) from system_role_assignment ra
 			  join system s on s.id = ra.system_id
 			 where ra.role_id = $1
-			 group by s.name having count(*) > $2
-			 order by count(*) desc, s.name limit 1`, prior.ID, *capacity).Scan(&sysName, &have)
-		switch {
-		case errors.Is(err, pgx.ErrNoRows):
-			// nothing exceeds the new cap
-		case err != nil:
+			 group by s.id, s.name having count(*) > $2
+			 order by count(*) desc, s.name, s.id`, prior.ID, *capacity)
+		if err != nil {
 			return nil, fmt.Errorf("storage: capacity precheck %s: %w", prior.ID, err)
-		default:
-			return nil, &CapacityShortfall{Role: prior.Label, System: sysName, Have: have, Want: *capacity}
+		}
+		var excess []CapacityExcess
+		for rows.Next() {
+			var e CapacityExcess
+			if err := rows.Scan(&e.SystemID, &e.System, &e.Have); err != nil {
+				rows.Close()
+				return nil, fmt.Errorf("storage: capacity precheck %s: %w", prior.ID, err)
+			}
+			excess = append(excess, e)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return nil, fmt.Errorf("storage: capacity precheck %s: %w", prior.ID, err)
+		}
+		if len(excess) > 0 {
+			return nil, &CapacityShortfall{
+				Role: prior.Label, System: excess[0].System, Have: excess[0].Have, Want: *capacity, Exceeding: excess,
+			}
 		}
 	}
 

@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -97,5 +98,70 @@ func TestARoleCollisionNamesOnlyAReadableSystem(t *testing.T) {
 	st, raw = c.send(owner, http.MethodPatch, "/standards/redact-std/roles/lectern-mic", map[string]any{"label": "Lectern mic"})
 	if st != http.StatusConflict || !strings.Contains(string(raw), "secret-boardroom") {
 		t.Fatalf("the same refusal to a caller who reads the system = %d %s, want 409 naming it", st, raw)
+	}
+}
+
+// TestACapacityRefusalNamesOnlyAReadableSystem: lowering a standard role's
+// capacity below what a conforming system already holds is refused naming
+// that system, but only to a caller who may read it. standard:update can be
+// held beside a narrow grant, and the precheck looks at every conforming
+// system, so a refusal to that caller names a system it can read, or none.
+func TestACapacityRefusalNamesOnlyAReadableSystem(t *testing.T) {
+	f := newStaffingFixture(t)
+	c, owner := f.c, f.owner
+	c.do(owner, http.MethodPost, "/standards", map[string]any{"name": "cap-std", "label": "Cap"}, http.StatusCreated)
+	c.do(owner, http.MethodPatch, "/standards/cap-std/roles/table-mic", map[string]any{
+		"label": "Table mic", "accepted_types": []string{"video-bar"},
+	}, http.StatusOK)
+	c.do(owner, http.MethodPost, "/systems", map[string]any{"name": "hidden-boardroom", "standard_id": "cap-std"}, http.StatusCreated)
+	c.do(owner, http.MethodPost, "/systems", map[string]any{"name": "site-huddle", "standard_id": "cap-std"}, http.StatusCreated)
+	staff := func(system string, n int) {
+		t.Helper()
+		for i := 1; i <= n; i++ {
+			comp := fmt.Sprintf("%s-bar-%d", system, i)
+			f.component(comp, f.bar)
+			c.do(owner, http.MethodPut, "/systems/"+system+"/roles/table-mic/assignments/"+comp, nil, http.StatusNoContent)
+		}
+	}
+	staff("hidden-boardroom", 3)
+	staff("site-huddle", 2)
+
+	narrow := principalWithGrants(t, f.ctx, f.dsn, "site-admin", []grant{
+		{role: "admin", scopeKind: "system", scopeID: entityID(t, c, owner, "/systems", "site-huddle")},
+	})
+	c.do(narrow, http.MethodGet, "/systems/hidden-boardroom", nil, http.StatusNotFound)
+	c.do(narrow, http.MethodGet, "/systems/site-huddle", nil, http.StatusOK)
+
+	// Both systems exceed a cap of 1; the worst is one the caller cannot read,
+	// so the refusal names the one it can.
+	st, raw := c.send(narrow, http.MethodPatch, "/standards/cap-std/roles/table-mic", map[string]any{"capacity": 1})
+	if st != http.StatusConflict || !strings.Contains(string(raw), "site-huddle") {
+		t.Fatalf("a capacity below a readable system's staffing = %d %s, want 409 naming site-huddle", st, raw)
+	}
+	if strings.Contains(string(raw), "hidden-boardroom") {
+		t.Fatalf("the refusal names a system the caller cannot read: %s", raw)
+	}
+
+	// Only the unreadable system exceeds a cap of 2: no name, no staffing
+	// count, and no tally of how many such systems there are.
+	st, raw = c.send(narrow, http.MethodPatch, "/standards/cap-std/roles/table-mic", map[string]any{"capacity": 2})
+	if st != http.StatusConflict {
+		t.Fatalf("a capacity below an unreadable system's staffing = %d %s, want 409", st, raw)
+	}
+	if strings.Contains(string(raw), "hidden-boardroom") || strings.Contains(string(raw), "site-huddle") ||
+		strings.Contains(string(raw), "by 3") {
+		t.Fatalf("the refusal discloses a system the caller cannot read: %s", raw)
+	}
+	if !strings.Contains(string(raw), "a conforming system you cannot read") {
+		t.Fatalf("the redacted refusal should say a system it cannot read is in the way: %s", raw)
+	}
+
+	// The same refusal to a caller who reads the system names it.
+	st, raw = c.send(owner, http.MethodPatch, "/standards/cap-std/roles/table-mic", map[string]any{"capacity": 2})
+	if st != http.StatusConflict || !strings.Contains(string(raw), "hidden-boardroom") {
+		t.Fatalf("the same refusal to a caller who reads the system = %d %s, want 409 naming it", st, raw)
+	}
+	if n := f.count(`select count(*) from system_role where name = 'table-mic' and capacity is not null`); n != 0 {
+		t.Fatalf("a refused capacity was written anyway (%d rows)", n)
 	}
 }

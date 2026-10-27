@@ -376,11 +376,24 @@ func (e *ComponentStaffedShortfall) Error() string {
 // independently in every conforming system (assignments carry both role_id
 // and system_id), so the pre-check refuses if ANY conforming system would
 // exceed the new cap, naming whichever one exceeds it by the widest margin.
+// Exceeding lists every system over the new cap, worst first, so a caller
+// can name only one it may read: a standard-arc declaration finds them
+// fleet-wide, beyond any scope the declarer holds (#1216). System and Have
+// are the named one; an empty System means none is nameable to this caller.
 type CapacityShortfall struct {
-	Role   string
-	System string
-	Have   int
-	Want   int
+	Role      string
+	System    string
+	Have      int
+	Want      int
+	Exceeding []CapacityExcess
+}
+
+// CapacityExcess is one conforming system holding more components in a role
+// than a proposed capacity allows.
+type CapacityExcess struct {
+	SystemID string
+	System   string
+	Have     int
 }
 
 func (e *CapacityShortfall) Error() string {
