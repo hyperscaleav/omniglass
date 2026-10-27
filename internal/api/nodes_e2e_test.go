@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/auth"
@@ -114,6 +115,25 @@ func TestNodeAPI(t *testing.T) {
 	json.Unmarshal(c.do(ownerTok, http.MethodGet, "/nodes/site-a", nil, http.StatusOK), &node)
 	if !node.Enrolled {
 		t.Fatalf("node not marked enrolled after claim")
+	}
+
+	// The node read serves the count of its batches the confinement fence
+	// orphaned (#1200), zero and absent-time until one is, then both.
+	var orphans struct {
+		OrphanedBatches int64      `json:"orphaned_batches"`
+		LastOrphanedAt  *time.Time `json:"last_orphaned_at"`
+	}
+	raw := c.do(ownerTok, http.MethodGet, "/nodes/site-a", nil, http.StatusOK)
+	if !strings.Contains(string(raw), `"orphaned_batches":0`) {
+		t.Fatalf("a fresh node's read carries no orphaned_batches 0: %s", raw)
+	}
+	at := time.Date(2026, 10, 26, 12, 0, 0, 0, time.UTC)
+	if err := gw.RecordOrphanedBatches(ctx, "site-a", 7, at); err != nil {
+		t.Fatalf("record orphans: %v", err)
+	}
+	json.Unmarshal(c.do(ownerTok, http.MethodGet, "/nodes/site-a", nil, http.StatusOK), &orphans)
+	if orphans.OrphanedBatches != 7 || orphans.LastOrphanedAt == nil || !orphans.LastOrphanedAt.Equal(at) {
+		t.Fatalf("node read after 7 orphans = %+v, want 7 at %s", orphans, at)
 	}
 
 	// A viewer (no node:create / node:enroll) is capability-forbidden.

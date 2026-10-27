@@ -49,6 +49,10 @@ type Config struct {
 	// SecureCookies marks the session cookie Secure (https only). Set
 	// OMNIGLASS_SECURE_COOKIES=true behind TLS; off by default for local http dev.
 	SecureCookies bool
+	// TrustedProxies is the raw OMNIGLASS_TRUSTED_PROXIES list: the peers a
+	// forwarded header is believed from (#1185). The server parses it at boot
+	// (clientaddr.Parse), so a bad entry fails the boot, not this Load.
+	TrustedProxies string
 	// NatsAddr is the host:port the embedded NATS server binds.
 	NatsAddr string
 	// NatsStoreDir is the JetStream store directory.
@@ -81,15 +85,16 @@ type Config struct {
 // database independently of any DATABASE_URL the surrounding platform sets.
 func Load() Config {
 	return Config{
-		DSN:           resolveDSN(),
-		Addr:          firstNonEmpty(Get("OMNIGLASS_ADDR"), DefaultAddr),
-		SecureCookies: Get("OMNIGLASS_SECURE_COOKIES") == "true",
-		NatsAddr:      firstNonEmpty(Get("OMNIGLASS_NATS_ADDR"), DefaultNatsAddr),
-		NatsStoreDir:  firstNonEmpty(Get("OMNIGLASS_NATS_STORE_DIR"), filepath.Join(os.TempDir(), "omniglass-nats")),
-		NatsURL:       Get("OMNIGLASS_NATS_URL"),
-		DataDir:       firstNonEmpty(Get("OMNIGLASS_DATA_DIR"), DefaultDataDir),
-		SettingsFile:  firstNonEmpty(Get("OMNIGLASS_SETTINGS_FILE"), DefaultSettingsFile),
-		ReadyFile:     Get("OMNIGLASS_READY_FILE"),
+		DSN:            resolveDSN(),
+		Addr:           firstNonEmpty(Get("OMNIGLASS_ADDR"), DefaultAddr),
+		SecureCookies:  Get("OMNIGLASS_SECURE_COOKIES") == "true",
+		TrustedProxies: Get("OMNIGLASS_TRUSTED_PROXIES"),
+		NatsAddr:       firstNonEmpty(Get("OMNIGLASS_NATS_ADDR"), DefaultNatsAddr),
+		NatsStoreDir:   firstNonEmpty(Get("OMNIGLASS_NATS_STORE_DIR"), filepath.Join(os.TempDir(), "omniglass-nats")),
+		NatsURL:        Get("OMNIGLASS_NATS_URL"),
+		DataDir:        firstNonEmpty(Get("OMNIGLASS_DATA_DIR"), DefaultDataDir),
+		SettingsFile:   firstNonEmpty(Get("OMNIGLASS_SETTINGS_FILE"), DefaultSettingsFile),
+		ReadyFile:      Get("OMNIGLASS_READY_FILE"),
 	}
 }
 

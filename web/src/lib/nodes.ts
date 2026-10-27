@@ -15,6 +15,10 @@ export type Node = {
   enrolled: boolean;
   enrolled_at?: string;
   last_heartbeat_at?: string;
+  // Batches the server dropped because no task owned them (#1200), and when the
+  // last one arrived.
+  orphaned_batches?: number;
+  last_orphaned_at?: string;
   // The resolved effective tags (its direct bindings plus propagating globals),
   // mapped from the API `effective_tags` so the row satisfies the shared tag-facet
   // and TagPills contract, exactly as the component row does.

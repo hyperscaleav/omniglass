@@ -17,6 +17,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
+	"github.com/jackc/pgx/v5"
 )
 
 // TestTelemetryPushRefusesNativeKeys holds the push lane to #1080: a key a
@@ -225,6 +226,18 @@ func pushHarness(t *testing.T, ctx context.Context) (storage.Gateway, *apiClient
 	all := scope.Set{All: true}
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-1"}, all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
+	}
+	// bar-1's ssh endpoint, so a push naming the instance "ssh" names an
+	// endpoint of its owner, as the push lane requires (ADR-0456). Placed on no
+	// node: nothing here dials it.
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer conn.Close(ctx)
+	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, params)
+		values ('ssh', 'ssh', (select id from component where name = 'bar-1'), '{"target":"10.0.0.9:22"}'::jsonb)`); err != nil {
+		t.Fatalf("insert the ssh endpoint: %v", err)
 	}
 	busSrv, err := bus.New(bus.Config{Host: "127.0.0.1", Port: -1}, gw)
 	if err != nil {
