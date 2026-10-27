@@ -25,12 +25,15 @@ computed fields over shared state, follows a changing fleet in place, and report
 connection and request it answers on one hit stream. Also built: the `sim run` mode beside a node
 (#887), which pulls the devices placed on the node, serves them, and reports hits the server shows
 at `GET /nodes/{name}/simulation`. Also built: the simulated dev fleet (#888), where every dev-seed
-component a profile serves gets an address and endpoints on the dev node, so `make dev-sim`
+component a profile serves gets an address and endpoints on the dev node, so the dev node
 collects for real. Also built: impairments (#889), an operator unplugging, slowing or degrading a
 simulated device through the API and CLI, applied by a simulator run with `--impairments` and
 `NET_ADMIN`, with ping made truthful. Also built: the console surfaces (#890): the fleet view, a
 device's API surface and firing any operation at it, adding a device, and the Simulation page,
-drawer and component section over them. Still `Design`: the Helm sidecar (#892).
+drawer and component section over them. Also built: the simulator in the node's own process,
+`omniglass node run --simulate` (#1198), and the [lab](/guides/lab/) (#1194), which runs that node
+in a container of its own with every privilege the simulator can use. Still `Design`: the Helm
+sidecar (#892).
 :::
 
 ## The catalog
@@ -85,7 +88,9 @@ pushed to) is a separate stream. The engine does not know who consumes either; t
 ## Addresses and reachability
 
 A device's address is a loopback address (`127.x.y.z`), so the whole fleet shares one host's
-network with the collector beside it, no containers or routing required. On Linux every
+network with the collector beside it, with no routing between them: on Linux, no containers are
+required either (macOS needs an alias per address, and impairments need a namespace of their own,
+which is why the [lab](/guides/lab/#why-docker-is-required) runs in Docker). On Linux every
 `127.0.0.0/8` address is local without configuration, and the kernel routes each connection by its
 destination, so a device's TCP and UDP listeners answer on its address alone: a TCP connect to an
 address with no device is refused, and a UDP datagram draws a port-unreachable.
@@ -96,7 +101,7 @@ Two facts shape where the simulator runs:
   ping to tell the truth, addresses without a device must be dropped by a firewall rule, which
   needs `NET_ADMIN`.
 - **Ports below 1024 need a privilege** (SNMP 161, SSH 22, HTTP 80 and 443). The engine can lift
-  the ports below 1024 at listen time, which is how the dev fleet serves unprivileged; the tests
+  the ports below 1024 at listen time, which is how a simulator on a workstation serves unprivileged; the tests
   sidestep the question with ephemeral ports (below).
 
 ### Fixed ports and ephemeral ports
@@ -109,9 +114,9 @@ There is one bind path, so the two choices differ only in the port asked for:
 
 - **Fixed** (no map, or `sim.PrivilegedPortShift(offset)`): every face binds the port its
   profile declares, ports below 1024 lifted by the offset. This is the operator-facing simulator:
-  `omniglass sim run`, `make dev-sim` and the dev fleet, where an operator, a seeded endpoint and
-  these docs all name the same port (a display's SNMP on 161, lifted to 10161 in the dev fleet;
-  a panel's line protocol on 51325, above the lift).
+  `omniglass sim run`, `omniglass node run --simulate` and the dev fleet, where an operator, a
+  seeded endpoint and these docs all name the same port (a display's SNMP on 161, or 10161 when a
+  simulator lifts it by 10000; a panel's line protocol on 51325, above the lift).
 - **Ephemeral** (`sim.EphemeralPorts`): every face binds port 0, so the kernel hands it a free
   port, and the face reports the one it got. Tests serve this way and aim their endpoints and
   clients at the reported address, so two test runs on one host (two worktrees, or a `-count`
@@ -234,6 +239,27 @@ reachability's up and down or health's verdicts. A
 connection a device accepts counts as a hit, so a collector's bare reachability probe shows there
 as `tcp`, beside the requests it answers.
 
+### In the node's own process
+
+`omniglass node run --simulate` runs the same simulator inside the node's process: the node's run
+loop and the simulator side by side, under one context (`simnode.RunWithNode`). Loopback addresses
+belong to a network namespace, and the kernel never routes `127.0.0.0/8` off `lo`, so a separate
+`sim run` must be arranged into the node's namespace; in one process the simulated components sit on
+the loopback the node collects from by construction. Both halves already claim with the node's name
+and enrollment token, so in process they share that identity: no second enrollment and no second
+grant, and the simulator stays inside the node's subject grant, as
+[ADR-0142](/architecture/decisions/#adr-0142-the-simulator-is-a-run-mode-beside-its-node-holding-that-nodes-identity)
+requires. `--impairments`, `--port-offset` and `--poll` are the simulator's flags and the node refuses
+them without `--simulate`. The two halves live and die together: when either stops, the other is
+stopped, and the first real failure is the one reported.
+
+With `--impairments`, root and `NET_ADMIN` sit on the node process itself (a distroless image grants
+added capabilities to root only), so the mode belongs in a container of the node's own, where the
+privilege reaches only that container's namespace. The impairments touch only the simulated
+components' addresses on `lo`; the node's traffic to the server leaves through the container's own
+interface and is never shaped or dropped. `omniglass sim run` stays, for a simulator as a process of
+its own beside a node, and for the Helm sidecar (#892).
+
 ## The dev fleet
 
 The dev seed simulates its own fleet. Every component whose product a profile serves gets an
@@ -247,14 +273,16 @@ also carries its line protocol over telnet behind a login (`newtron-nvp-telnet`,
 rejected-session demonstration) and over TLS (`newtron-nvp-tls` on 51326, pinning the panel's key
 on first use). A product whose driver
 is still a stub gets a reachability probe on the port its profile serves. The endpoints target the
-devices' ports below 1024 lifted by 10000 (`devseed.SimPortOffset`), so the simulator runs without
-a privilege.
+profiles' real ports, which a simulator in a container binds; for a simulator on a host that may not
+bind below 1024, `omniglass seed-dev --sim-port-offset 10000` aims them at the lifted ports instead.
 
-`make dev-sim`, run beside `make dev`, runs the simulator and the node side by side as `edge-hq`, so
-the whole loop is local: the node polls the simulated devices, the samples land on the seeded
+The [lab](/guides/lab/) runs the dev fleet with the node `edge-hq` serving it in process, so the
+whole loop is one command: the node polls the simulated components, the samples land on the seeded
 components (the worked reachability check's boardroom DSP among them, re-aimed at a simulated DSP so a
 live node finds it up), and a command issued to a panel (`omniglass component command issue <panel>
---command-type set-input --value hdmi3`) changes the simulated device.
+--command-type set-input --value hdmi3`) changes the simulated component. The lab is where the
+simulator gets every privilege it can use: the real ports, the ping sysctl, and `NET_ADMIN` for
+impairments and truthful ping, all confined to the node's own container.
 
 :::design[Target design: the simulator as a sidecar, tracked in #892]
 In a deployment the simulator is a sidecar container in the node's pod, granted `NET_ADMIN` and the

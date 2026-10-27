@@ -19,7 +19,7 @@ automatically. See [Platforms](#platforms) for how that is built.
 ## Where it ships
 
 The `image` workflow builds and pushes to the GitHub Container Registry on every
-push to `main` and every same-repo pull request. A fork PR builds the image but
+push to `main`, every same-repo pull request, and every release tag. A fork PR builds the image but
 does not push it (a fork run has no registry credential), so a fork branch never
 gets a published tag:
 
@@ -34,10 +34,18 @@ Tags:
 | `latest` | push to `main` | yes |
 | `sha-<full sha>` | every build | no, pins an exact commit |
 | `pr-<n>` | head of open PR #n | yes, moves on each push |
+| `v<version>` | a release tag (`v0.1.0`) | no, the release's image |
 
 The sha tag carries the full 40-character commit sha (`type=sha,format=long`).
 The preview pipeline pins a deploy to `sha-<full sha>` so a rollout follows the
-exact build.
+exact build. A release binary's `omniglass lab run` pulls `v<version>`, the image
+of its own release ([the lab](/guides/lab/)).
+
+Every image carries the build it came from in the OCI label
+`org.opencontainers.image.version`: the release version, or the build id `make`
+stamps (the commit, plus a dirty marker and the build time for an uncommitted
+tree). A binary built by `make` runs a lab only on the `omniglass:dev` image whose
+label is its own build id, so a lab always runs the code it was built from.
 
 ## Platforms
 
@@ -99,10 +107,14 @@ docker run --rm -e OMNIGLASS_DSN="$DSN" \
 
 ## Building it locally
 
-`make image` builds the image for your host architecture only:
+The bare `make` builds `omniglass:dev` and exports this machine's own binary to
+`bin/omniglass` from the same Dockerfile, both stamped with one build id, with
+nothing but Docker (BuildKit cache mounts keep a Go-only change to seconds).
+`make image` builds just the image, for your host architecture only:
 
 ```bash
-make image                 # omniglass:dev, VERSION = short commit sha
+make                       # omniglass:dev and bin/omniglass, one build id
+make image                 # omniglass:dev only, VERSION = the build id
 make image TAG=v1 IMAGE=ghcr.io/hyperscaleav/omniglass
 ```
 

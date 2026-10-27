@@ -49,6 +49,11 @@ over NATS and the gateway. The roles:
 
 ## Embedded services (single-binary mode)
 
+Until embedded Postgres lands, the one-command way to run omniglass on a laptop is the
+[lab](/guides/lab/): Docker runs Postgres, the server and a node with its simulated fleet as three
+containers of one project. It is a place to learn, not the all-in-one deployment this section
+describes: its data is disposable, its login is well known, and its database refuses a real server.
+
 In all-in-one mode the binary brings its dependencies up in-process, so an operator runs **one container,
 zero external setup**:
 

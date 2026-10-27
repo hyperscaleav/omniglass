@@ -43,14 +43,20 @@ func loadMakeTargets() (map[string]bool, error) {
 // loadEnvUniverse scans non-test Go under internal/ and cmd/ for OMNIGLASS_*
 // reads. The source of truth is the whole binary, not one config package: the
 // secret KEK, the CLI client, and the node runner all read their own vars.
+// The console's dev tooling (web/src/dev, read by vite.config.ts) is scanned
+// too: it reads OMNIGLASS_LAB_URL to proxy the console loop to a lab (#1196).
 func loadEnvUniverse() (map[string]bool, error) {
 	universe := map[string]bool{}
-	for _, root := range []string{"internal", "cmd"} {
-		err := filepath.WalkDir(filepath.Join(repoRoot, root), func(path string, d fs.DirEntry, err error) error {
+	for _, src := range []struct{ root, ext, testExt string }{
+		{"internal", ".go", "_test.go"},
+		{"cmd", ".go", "_test.go"},
+		{filepath.Join("web", "src", "dev"), ".ts", ".test.ts"},
+	} {
+		err := filepath.WalkDir(filepath.Join(repoRoot, src.root), func(path string, d fs.DirEntry, err error) error {
 			if err != nil || d.IsDir() {
 				return err
 			}
-			if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			if !strings.HasSuffix(path, src.ext) || strings.HasSuffix(path, src.testExt) {
 				return nil
 			}
 			b, err := os.ReadFile(path)

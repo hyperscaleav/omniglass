@@ -1,0 +1,49 @@
+---
+// The guided walkthroughs a learner follows in a lab, rendered from their
+// manifests (docs/src/generated/lab.json's walkthroughs, written by make gen
+// via cmd/labgen from web/e2e/walkthroughs/<id>.yaml). Each one links to the
+// docs page that embeds its recording, found from the pages' own
+// `walkthroughs` frontmatter, so adding a walkthrough or embedding it on a page
+// needs no edit here.
+import { getCollection } from 'astro:content';
+import facts from '../generated/lab.json';
+
+if (!facts.walkthroughs.length) {
+  throw new Error('LabWalkthroughs: lab.json lists no walkthroughs; run make gen');
+}
+
+// Where each walkthrough is embedded: the first guide page, else any page.
+const pages = (await getCollection('docs'))
+  .filter((e) => e.data.walkthroughs?.length)
+  .sort((a, b) => Number(!a.id.startsWith('guides/')) - Number(!b.id.startsWith('guides/')) || a.id.localeCompare(b.id));
+const home = new Map<string, { id: string; title: string }>();
+for (const p of pages) {
+  for (const w of p.data.walkthroughs ?? []) {
+    if (!home.has(w.id)) home.set(w.id, { id: p.id, title: p.data.title });
+  }
+}
+const script = (id: string) =>
+  `https://github.com/hyperscaleav/omniglass/blob/main/web/e2e/walkthroughs/${id}.yaml`;
+---
+
+<ul class="lab-walkthroughs">
+  {
+    facts.walkthroughs.map((w) => {
+      const page = home.get(w.id);
+      return (
+        <li>
+          <strong>{w.title}.</strong> {w.description}{' '}
+          {page ? (
+            <>
+              Watch it on <a href={`/${page.id}/`}>{page.title}</a>.
+            </>
+          ) : (
+            <>
+              Its steps are the <a href={script(w.id)}>script it is recorded from</a>.
+            </>
+          )}
+        </li>
+      );
+    })
+  }
+</ul>

@@ -32,14 +32,20 @@ It is two things at once, on purpose:
 
 ## Quick start
 
-> Filled in as the first slices land. The shape:
+With Docker running (Linux, macOS or Windows), three commands bring up a working omniglass to learn
+on: the server and console, its own Postgres, and an edge node collecting from a simulated fleet.
 
 ```bash
-make build        # build the omniglass binary (web + docs embedded)
-make pg-up        # ephemeral dev Postgres
-make migrate      # apply schema
-make run          # start the server; docs served at http://localhost:PORT/docs
+git clone https://github.com/hyperscaleav/omniglass.git && cd omniglass
+make                      # builds bin/omniglass and the omniglass:dev image, with only Docker
+./bin/omniglass lab run   # the lab: prints the console's address and the login; Ctrl-C stops it
 ```
+
+`make lab` is the short form of the last two. With a
+[release binary](https://github.com/hyperscaleav/omniglass/releases), run `omniglass lab run`.
+The console is at `http://127.0.0.1:8080/web`, signed in as `dev` / `dev`.
+[Try omniglass in five minutes](https://docs.omniglass.hyperscaleav.com/guides/lab/) is the guide:
+what runs, the guided walkthroughs to follow, and why Docker is required.
 
 ## Repository layout
 

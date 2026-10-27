@@ -2249,7 +2249,7 @@ Docker is the only requirement. Only the console is published, on 127.0.0.1 (--l
 | `--fresh` | bool | `false` | remove the lab's data first and start over from the seed |
 | `--image` | string | (none) | run this omniglass image instead of the one this binary was built with |
 | `--listen` | string | `127.0.0.1` | the address the console is published on; anything but loopback exposes the lab, and its well-known login, to your network |
-| `--port` | int | `8080` | the console's port on this machine; 0 lets Docker pick one, for a second lab |
+| `--port` | int | `8080` | the console's port on this machine; 0 lets Docker pick a free one, printed when the lab is ready |
 | `--scenario` | string | `dev` | the fleet the lab seeds on its first run (omniglass seed-dev --help lists them) |
 
 ## `omniglass location`
@@ -4363,10 +4363,10 @@ Seed a dev database with example locations, users, and grants (idempotent; never
 omniglass seed-dev [flags]
 ```
 
-Populate a fresh dev database with a small example fleet so `make dev` comes up with locations, sign-in-able users, and their grants instead of empty. The same trusted direct-DB lane as bootstrap, and idempotent, so it runs on every `make dev`. Not for production: these are operator rows, not ship-with reference data.
+Populate a fresh dev database with a small example fleet so a dev stack comes up with locations, sign-in-able users, and their grants instead of empty. The same trusted direct-DB lane as bootstrap, and idempotent, so a re-run changes nothing. Not for production: these are operator rows, not ship-with reference data.
 
 --scenario picks the fleet:
-  dev       the example fleet `make dev` comes up with
+  dev       the example fleet a lab comes up with
   empty     nothing beyond the boot seed: a fresh install's first run
   degraded  the example fleet with an open alarm on one in every 3 components
   large     the example fleet plus its self-contained rooms copied 6 times under each of 5 replica sites (only the example fleet is simulated)
@@ -4374,8 +4374,8 @@ Populate a fresh dev database with a small example fleet so `make dev` comes up 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--scenario` | string | `dev` | the fleet to seed (see the list above) |
-| `--sim-fleet` | bool | `true` | wire the simulated fleet: addresses and endpoints on the dev node for every example-fleet component the simulator serves, never a scenario's copies or a hand-added device (make dev-sim collects from them) |
-| `--sim-port-offset` | int | `10000` | the lift the simulator applies to ports below 1024, which the simulated fleet's endpoints target: the default for make dev-sim's unprivileged simulator, 0 for one that binds the real ports (in a container) |
+| `--sim-fleet` | bool | `true` | wire the simulated fleet: addresses and endpoints on the dev node for every example-fleet component the simulator serves, never a scenario's copies or a hand-added device (a lab's node collects from them) |
+| `--sim-port-offset` | int | `0` | the lift the simulator applies to ports below 1024, which the simulated fleet's endpoints target: 0 for one that binds the real ports (in a container, as the lab's does), or the --port-offset of a simulator run unprivileged on a host |
 
 ## `omniglass server`
 
@@ -6059,7 +6059,7 @@ Mint an additional bearer token for an existing principal (direct DB)
 omniglass token <username> [flags]
 ```
 
-Issues a new bearer credential for an existing principal, addressed by username, and prints the token once. The same trusted direct-DB lane as bootstrap: token reissue, break-glass, or a fresh login token for `make dev` when the owner already exists. A --description (required) names what the token is for. The token expires after --ttl (default 90 days, hard maximum 365 days); every credential is time-bounded.
+Issues a new bearer credential for an existing principal, addressed by username, and prints the token once. The same trusted direct-DB lane as bootstrap: token reissue, break-glass, or a fresh login token for a dev database when the owner already exists. A --description (required) names what the token is for. The token expires after --ttl (default 90 days, hard maximum 365 days); every credential is time-bounded.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|

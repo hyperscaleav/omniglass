@@ -39,7 +39,9 @@ listeners as a line is, resumed from its last event id after a drop
 ([a server-sent events stream](/architecture/collection/#a-server-sent-events-stream)); and a
 websocket or wss endpoint's socket (#1034), held as a session whose upgrade rides that state, its
 frames routed as a line is, a poll's or a command's answer matched by the id the node minted into it,
-kept alive by ping and pong ([websocket and wss](/architecture/collection/#websocket-and-wss)). Still `Design`: the
+kept alive by ping and pong ([websocket and wss](/architecture/collection/#websocket-and-wss)). Also built: a
+node serving its own simulated components, `omniglass node run --simulate` (#1198,
+[below](#serving-its-own-simulated-components)). Still `Design`: the
 durable JetStream command queue, the session pool knobs and the held transports beyond these
 (#1036 (mqtt), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip), [ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)),
 config-generation-driven cache invalidation, node self-telemetry, the node-down sweep, the
@@ -56,6 +58,18 @@ The node is the edge process (`omniglass node run`), one per site, or the **serv
 A node carries the identity triad with one exception. Its **`id`** is `principal_id`, the immutable primary key every reference stores (a node is the detail row of a principal, and `endpoint.node_name` holds that uuid whatever its column name suggests). Its **`name`** is the operator-typed identifier and fleet address, the NATS subject token and the enrollment identity, and it is the one name with no `:rename` custom method: moving it would move a live subject, so the PATCH body carries no name at all. Its **`label`** is the operator label (console falls back to the name). Its optional `location` is **descriptive**, **not** a scope: a node stays fleet-wide, `location` clearing if that location is deleted (`ON DELETE SET NULL`). Descriptive does not mean unguarded: the create and the update resolve that reference within the caller's own `location:read` scope, the seam every other placement bind uses, and a location outside it is refused as **absent** rather than as forbidden ([ADR-0089](/architecture/decisions/#adr-0089-a-uuid-is-the-address-a-dotted-path-is-a-positional-lookup), amended by [#705](https://github.com/hyperscaleav/omniglass/issues/705)). The console blade is read-edit-save via `PATCH /nodes/{name}` (Edit primary, gated `node:update`, editing label, description, location; name read-only; enrolling secondary).
 
 A node is a **taggable owner**: governed [tags](/architecture/tags/) whose `applies_to` includes `node` bind to it (fleet-wide, all-scope, `node:update`); effective tags are the `platform` layer plus direct bindings, no cascade (a node is not a scope tree); the blade carries a **Tags** panel, the list a Tags column and per-key facet. **Decommissioning** (`DELETE /nodes/{name}`, `node:delete`) hard-deletes, cascading its endpoints, their derived tasks, its node-owned tags and self-telemetry, and its enrollment credential; collected component telemetry is untouched.
+
+### Serving its own simulated components
+
+A node can run the [simulator](/architecture/simulation/#in-the-nodes-own-process) in its own
+process: `omniglass node run --simulate` serves every component placed on the node whose product a
+profile simulates, each on its own `127.60.0.x` address on the node's loopback, and collects from them
+as it would from hardware. The simulator holds the node's own identity (its name and enrollment
+token), so there is no second enrollment and no grant beyond the node's own subjects
+([ADR-0142](/architecture/decisions/#adr-0142-the-simulator-is-a-run-mode-beside-its-node-holding-that-nodes-identity)).
+`--impairments`, `--port-offset` and `--poll` belong to the simulator and are refused without
+`--simulate`; `--impairments` needs `NET_ADMIN`, so it belongs in a container of the node's own. The
+[lab](/guides/lab/) runs its node `edge-hq` this way.
 
 ## Getting its instructions
 

@@ -25,6 +25,30 @@ operational checklist.
 5. **One shippable slice per PR.** Prefer a thin vertical cut that a user can observe
    over horizontal scaffolding.
 
+## Prerequisites
+
+- **Docker** is all `make` and the lab need. The bare `make` builds the image `omniglass:dev` and
+  exports this machine's binary to `bin/omniglass` from one Dockerfile, so neither Go nor Node is
+  required to build or run omniglass. `make` builds and runs nothing else; running goes through the
+  CLI (`./bin/omniglass lab run`, or `make lab`). See
+  [the lab guide](docs/src/content/docs/guides/lab.mdx).
+- **Go and Node** are needed for `make test` (the Go tiers and the SPA's typecheck and vitest
+  suite), `make gen`, and the console's fast loop below. `make dev` builds the `make` outputs and
+  runs `npm install` in `web/`, so the loop is ready; it starts nothing.
+
+### The console's fast loop
+
+Run a lab in one terminal and the console from source in another:
+
+```bash
+./bin/omniglass lab run       # terminal 1: the lab, console on http://127.0.0.1:8080/web
+cd web && npm run dev         # terminal 2: the console from source with hot reload, /api proxied to the lab
+```
+
+The Vite dev server proxies to `http://127.0.0.1:8080`; for a lab on another `--port`, set
+`OMNIGLASS_LAB_URL` (`OMNIGLASS_LAB_URL=http://127.0.0.1:8081 npm run dev`). A change to server,
+node or simulator Go code needs `make` again (the image rebuilds from cache), then the lab.
+
 ## Workflow
 
 ```bash

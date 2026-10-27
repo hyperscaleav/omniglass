@@ -101,6 +101,8 @@ export default defineConfig({
         baseUrl: 'https://github.com/hyperscaleav/omniglass/edit/main/docs/',
       },
       sidebar: [
+        // The front door: one command to a working omniglass to learn on (#1193).
+        { label: 'Try omniglass in five minutes', slug: 'guides/lab' },
         {
           label: 'Architecture',
           items: [

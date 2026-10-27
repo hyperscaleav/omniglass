@@ -16,17 +16,17 @@ console.
 
 ## Run it
 
-**Locally**, beside `make dev`, run `make dev-sim`. It enrolls the dev node `edge-hq` once (keeping
-its token in `bin/edge-hq.token`) and runs the node and the simulator side by side, so the seeded
-fleet is collected for real. Its components' ports below 1024 are lifted by 10000, so it needs no
-privilege.
+**In a lab**, with nothing but Docker, run `omniglass lab run` (`make lab` from a checkout): its own
+server and database, and the node `edge-hq` running the simulator in its own process with impairments
+applied, so the seeded fleet is collected for real and the console is at `http://127.0.0.1:8080/web`
+([try omniglass in five minutes](/guides/lab/)).
 
-**In containers**, with nothing but Docker, run `make dev-sim-container`: its own server, node and
-simulator, with impairments applied, and the console on a local port it prints
-([the whole loop in Docker](/guides/install/#the-whole-loop-in-docker)).
+**Beside a node of your own**, run the node with the simulator in its process:
+`omniglass node run --simulate` serves the components placed on that node on its own loopback, with
+the node's own identity ([run a simulator](/guides/install/#run-a-simulator)).
 
-**Anywhere else**, the simulator is `omniglass sim run`, started beside a node with that node's
-identity:
+**As a process of its own**, the simulator is `omniglass sim run`, started beside a node with that
+node's identity:
 
 ```sh
 omniglass sim run --server https://omniglass.example --name edge-hq --token "$NODE_TOKEN"
