@@ -4,7 +4,9 @@
 // via cmd/labgen from web/e2e/walkthroughs/<id>.yaml). Each one links to the
 // docs page that embeds its recording, found from the pages' own
 // `walkthroughs` frontmatter, so adding a walkthrough or embedding it on a page
-// needs no edit here.
+// needs no edit here. A walkthrough whose scene needs one more thing than the
+// dev fleet holds lists the CLI command that makes it (its setup, which the
+// recorder makes off camera), so a learner's lab can follow along.
 import { getCollection } from 'astro:content';
 import facts from '../generated/lab.json';
 
@@ -33,6 +35,15 @@ const script = (id: string) =>
       return (
         <li>
           <strong>{w.title}.</strong> {w.description}{' '}
+          {w.setup.length > 0 && (
+            <>
+              Before you start, stage its scene (the recording made it off camera):{' '}
+              {w.setup.map((c) => (
+                <code>{c.replace(/^omniglass /, './bin/omniglass ')}</code>
+              ))}
+              .{' '}
+            </>
+          )}
           {page ? (
             <>
               Watch it on <a href={`/${page.id}/`}>{page.title}</a>.

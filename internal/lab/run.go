@@ -48,6 +48,13 @@ type Config struct {
 	// it, Run returns once the lab is ready and leaves it running (the
 	// integration test's way in); TearDown removes it.
 	Hold bool
+	// ReadyFile, when set, is where a held lab writes, once it is ready,
+	// how a script reaches it (FormatReadyEnv): the demo pipeline's way in
+	// (#1197).
+	ReadyFile string
+	// WhilePID, when set, ends the hold once that process is gone, so a
+	// script killed too hard to stop its lab leaves none behind.
+	WhilePID int
 }
 
 // Lab is a lab that is up.
@@ -65,6 +72,9 @@ type Lab struct {
 	// Took is how long the lab took to come up.
 	Took time.Duration
 	ids  map[string]string
+	// client carries the login's session, for the readiness reads and the
+	// ready file's token.
+	client *http.Client
 }
 
 // ID is the container id of a service.
@@ -102,16 +112,40 @@ func (r *Runner) Run(ctx context.Context, cfg Config) (*Lab, error) {
 		return lab, nil
 	}
 	r.readyBanner(lab, cfg)
-	err = r.hold(ctx, lab)
+	if cfg.ReadyFile != "" {
+		if err := r.writeReady(ctx, lab, cfg.ReadyFile); err != nil {
+			r.say("")
+			r.say("Could not write the ready file, so the lab is being removed: %v", err)
+			r.TearDown(spec)
+			return nil, err
+		}
+	}
+	err = r.hold(ctx, lab, cfg.WhilePID)
 	r.say("")
-	if err != nil {
+	var gone *heldForGone
+	if errors.As(err, &gone) {
+		r.say("%v", err)
+		err = nil
+	} else if err != nil {
 		r.say("%v", err)
 	}
 	r.say("Stopping your lab (press Ctrl-C again to leave it for the next run to clean up).")
 	r.TearDown(spec)
-	r.say("Stopped. Its data is kept in the volumes %s and %s, so `omniglass lab run` picks up where you left off; --fresh starts over from the seed.",
-		spec.Volumes[0].Name, spec.Volumes[1].Name)
+	if spec.Ephemeral {
+		r.say("Stopped, and its data removed with it (a throwaway lab).")
+	} else {
+		r.say("Stopped. Its data is kept in the volumes %s and %s, so `omniglass lab run` picks up where you left off; --fresh starts over from the seed.",
+			spec.Volumes[0].Name, spec.Volumes[1].Name)
+	}
 	return lab, err
+}
+
+// heldForGone ends a hold whose process (Config.WhilePID) is gone: the
+// expected end of a script's lab, not a failure.
+type heldForGone struct{ pid int }
+
+func (e *heldForGone) Error() string {
+	return fmt.Sprintf("The process this lab was held for (process %d) is gone.", e.pid)
 }
 
 // preflight runs every check that comes before anything is created: a live
@@ -262,6 +296,7 @@ func (r *Runner) up(ctx context.Context, spec Spec, cfg Config) (*Lab, error) {
 	if err != nil {
 		return nil, err
 	}
+	lab.client = client
 	r.step("sign in", fmt.Sprintf("the login %s / %s works", LoginUser, LoginPassword))
 
 	if !res.Node {
@@ -417,7 +452,7 @@ func (r *Runner) waitFor(ctx context.Context, what string, cond func() (bool, er
 // hold keeps the lab up until ctx ends, watching that its long-lived
 // containers stay up: one stopped or removed from outside ends the hold,
 // saying which.
-func (r *Runner) hold(ctx context.Context, lab *Lab) error {
+func (r *Runner) hold(ctx context.Context, lab *Lab, whilePID int) error {
 	services := []string{"db", "server"}
 	if lab.NodeRunning {
 		services = append(services, "node")
@@ -429,6 +464,9 @@ func (r *Runner) hold(ctx context.Context, lab *Lab) error {
 		case <-ctx.Done():
 			return nil
 		case <-t.C:
+			if whilePID != 0 && !r.Alive(whilePID) {
+				return &heldForGone{pid: whilePID}
+			}
 			for _, s := range services {
 				st, err := r.Engine.Inspect(ctx, lab.ID(s))
 				if ctx.Err() != nil {
@@ -446,18 +484,35 @@ func (r *Runner) hold(ctx context.Context, lab *Lab) error {
 }
 
 // TearDown removes every container and the network of the project, and
-// keeps its volumes. It runs on its own clock: the run's context has
-// usually ended by now.
+// keeps its volumes, but a throwaway lab's. It runs on its own clock: the
+// run's context has usually ended by now.
 func (r *Runner) TearDown(spec Spec) {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 	n, err := r.removeProject(ctx, OwnedLabels(spec))
+	if err == nil && spec.Ephemeral {
+		err = r.removeVolumes(ctx, OwnedLabels(spec))
+	}
 	if err != nil {
 		r.say("  Could not remove everything: %v", err)
 		r.say("  Remove what is left with: docker compose -p %s down", spec.Project)
 		return
 	}
 	r.step("removed", fmt.Sprintf("%d container(s) and the network %s", n, spec.Network))
+}
+
+// removeVolumes removes the volumes that carry labels.
+func (r *Runner) removeVolumes(ctx context.Context, labels map[string]string) error {
+	vols, err := r.Engine.Volumes(ctx, labels)
+	if err != nil {
+		return err
+	}
+	for _, v := range vols {
+		if err := r.Engine.RemoveVolume(ctx, v.Name); err != nil {
+			return fmt.Errorf("remove the volume %s: %w", v.Name, err)
+		}
+	}
+	return nil
 }
 
 // removeProject stops and removes the containers, then the networks, that
@@ -496,6 +551,9 @@ func (r *Runner) removeProject(ctx context.Context, labels map[string]string) (i
 // hard to tear down (its owner on this host is gone). A lab whose owner is
 // alive, or that another host owns, is refused, never touched.
 func (r *Runner) Reap(ctx context.Context, project string) error {
+	if err := r.reapThrowaway(ctx); err != nil {
+		return err
+	}
 	labels := ProjectLabels(project)
 	cs, err := r.Engine.Containers(ctx, labels)
 	if err != nil {
@@ -531,6 +589,50 @@ func (r *Runner) Reap(ctx context.Context, project string) error {
 	r.say("  %-10s a previous lab was stopped too hard to clean up after itself; removing what it left", "cleanup")
 	if _, err := r.removeProject(ctx, labels); err != nil {
 		return fmt.Errorf("remove what a previous lab left behind: %w", err)
+	}
+	return nil
+}
+
+// reapThrowaway removes every throwaway lab, of any project, whose owner on
+// this host (and in this PID namespace) is gone, its volumes with it: a
+// recorder and its lab both killed too hard to clean up. A throwaway lab
+// whose owner lives, or that another host or namespace owns, is not touched.
+func (r *Runner) reapThrowaway(ctx context.Context) error {
+	sel := map[string]string{LabelLabEphemeral: "true"}
+	var all []Resource
+	for _, list := range []func(context.Context, map[string]string) ([]Resource, error){
+		r.Engine.Containers, r.Engine.Networks, r.Engine.Volumes,
+	} {
+		rs, err := list(ctx, sel)
+		if err != nil {
+			return err
+		}
+		all = append(all, rs...)
+	}
+	abandoned := map[string]bool{}
+	alive := map[string]bool{}
+	for _, res := range all {
+		p := res.Labels[LabelComposeProject]
+		pid, err := strconv.Atoi(res.Labels[LabelLabPID])
+		mine := res.Labels[LabelLabHost] == r.Host && res.Labels[LabelLabPIDNS] == r.PIDNS
+		if p == "" || err != nil || !mine || r.Alive(pid) {
+			alive[p] = true
+			continue
+		}
+		abandoned[p] = true
+	}
+	for _, p := range SortedKeys(abandoned) {
+		if alive[p] {
+			continue
+		}
+		r.say("  %-10s removing the throwaway lab %s, left behind by a run that no longer exists", "cleanup", p)
+		sel := map[string]string{LabelComposeProject: p, LabelLabEphemeral: "true"}
+		if _, err := r.removeProject(ctx, sel); err != nil {
+			return fmt.Errorf("remove the abandoned lab %s: %w", p, err)
+		}
+		if err := r.removeVolumes(ctx, sel); err != nil {
+			return fmt.Errorf("remove the abandoned lab %s: %w", p, err)
+		}
 	}
 	return nil
 }

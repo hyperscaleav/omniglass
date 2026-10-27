@@ -9,13 +9,15 @@
 #   web/e2e/walkthroughs/out/<id>/.
 #
 #   demo.sh record [ID...]   record each demo named (default: every demo of both
-#                            kinds), each recorder on a walkthrough stack of its
-#                            own; exits non-zero if any demo failed, and each
-#                            recorder lists its failed ids in its out/failed.txt
+#                            kinds), each recorder on a throwaway lab of its own
+#                            (web/e2e/lib/lab.sh); exits non-zero if any demo
+#                            failed, and each recorder lists its failed ids in
+#                            its out/failed.txt
 #
 # This is what make demo and the run:demo workflow's record step run.
 #
-# Prereqs: docker.
+# Prereqs: docker, and `make` run first (make demo and the workflow do): the
+# lab is the binary and the image it builds.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"

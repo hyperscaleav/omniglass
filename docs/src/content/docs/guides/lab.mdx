@@ -87,9 +87,18 @@ from all of them.
 
 ## Walk through it
 
-Each guided walkthrough is a recording of a real console flow on this same lab, so you can replay
-it step by step in yours and see the same screens. Start with one that matches what you came to
-learn:
+Each guided walkthrough is a recording of a real console flow on this same lab, banner and all, so
+you can replay it step by step in yours and see the same screens. A walkthrough whose scene needs
+one thing the dev fleet does not hold (set up monitoring starts from a display nothing collects from
+yet) lists the command that makes it, which its recording ran off camera. The CLI signs in with an
+API token: create one on your profile page in the console (**Create token**), then point the CLI at
+your lab:
+
+```bash
+export OMNIGLASS_SERVER=http://127.0.0.1:8080 OMNIGLASS_TOKEN=ogp_...
+```
+
+Start with one that matches what you came to learn:
 
 <LabWalkthroughs />
 

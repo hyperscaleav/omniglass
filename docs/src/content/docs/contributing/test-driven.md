@@ -63,9 +63,11 @@ unproven proves nothing about the capability.
   ([a server on ports it picks](/guides/cli/#a-server-on-ports-it-picks)). Nothing picks a
   free port, releases it and hands the number to a later bind, which a concurrent run on the
   host could take in between; a guard test in the package fails any test there that starts
-  the server another way or sets its listen addresses. The browser tier and the walkthrough
-  stack run the server in Docker instead, on a private network per run with nothing on a
-  host port (`web/e2e/lib/stack.sh`), which isolates them the same way. The browser tier has a floor
+  the server another way or sets its listen addresses. The browser tier runs the server
+  in Docker instead, on a private network per run with nothing on a host port
+  (`web/e2e/lib/stack.sh`), and the demo pipeline and the probe run a throwaway lab of a
+  project of their own per run, on a port Docker picks (`web/e2e/lib/lab.sh`), which isolates
+  them the same way. The browser tier has a floor
   no console route can dodge: the router renders from a route manifest
   (`web/src/lib/routemanifest.ts`) and the smoke spec (`web/e2e/routes.spec.ts`) drives
   the same manifest, visiting every route and failing on any page or console error, so

@@ -29,14 +29,14 @@ Every decision that needs no judgment is made by `web/e2e/explorer.mjs` (pure lo
 
 ```bash
 git fetch -q origin main
-make build                                   # bin/omniglass, the CLI you drive
+make                                         # bin/omniglass (the CLI you drive) and the image its lab runs
 node web/e2e/explorer.mjs pick > /tmp/mission.json
 ```
 
 `pick` returns the mission, the lenses (the mission's own, or a backstop lens unused for a
 week), and why it was chosen. Do not second-guess it; steering is the missions file.
 
-## 2. Stand the stack up and read the digest
+## 2. Stand the lab up and read the digest
 
 Start it in the background (the Bash tool's `run_in_background`), logging to a file:
 
@@ -44,11 +44,12 @@ Start it in the background (the Bash tool's `run_in_background`), logging to a f
 STACK_SCENARIO=<mission.scenario> PROBE_USER=<mission.user> bash web/e2e/probe.sh hold > /tmp/hold.log 2>&1
 ```
 
-then wait for it with a second background command, `until grep -q 'holding the stack'
+then wait for it with a second background command, `until grep -q 'holding the lab'
 /tmp/hold.log; do sleep 5; done`, and continue when that one completes (a foreground sleep is
-refused). It takes a few minutes: it builds the image and probes every surface first.
+refused). It takes a few minutes: it brings up a throwaway lab (`omniglass lab run`, the image `make`
+built) and probes every surface first.
 
-It probes every route and walkthrough first, then holds the stack. Read
+It probes every route and walkthrough first, then holds the lab. Read
 `web/e2e/probe/out/digest.json` and nothing else from `out/` (raw.jsonl is not for reading).
 `node web/e2e/explorer.mjs digest-keys web/e2e/probe/out/digest.json` gives each digest
 finding the key it files under.

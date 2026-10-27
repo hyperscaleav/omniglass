@@ -2,15 +2,16 @@ import { test, type BrowserContext, type Page } from "@playwright/test";
 import { appendFileSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { ROUTE_MANIFEST } from "../src/lib/routemanifest";
-import { locate, parseWalkthrough } from "./walkthroughlib.mjs";
+import { locate, parseWalkthrough, runSetup } from "./walkthroughlib.mjs";
 
 // The probe (#965): drive every console route and replay every walkthrough at
 // machine speed against a running stack, recording what each surface did as
 // raw events (digestlib.mjs documents the shapes) in OG_PROBE_OUT, one JSON
 // object per line. It asserts nothing itself: a probe run is evidence, and
 // digest.mjs reduces it to the digest an agent reads. Run by web/e2e/probe.sh
-// on the walkthrough stack; skipped when OG_PROBE_OUT is unset, so the e2e
-// tier never runs it by accident.
+// on a lab; skipped when OG_PROBE_OUT is unset, so the e2e tier never runs it
+// by accident. A walkthrough's setup is made first, with the owner token in
+// OG_TOKEN, as the recorder makes it.
 //
 // Routes come first and walkthroughs after, since a walkthrough may change
 // what a route shows (one renames a place).
@@ -148,7 +149,12 @@ test.describe("probe", () => {
       watch(page, surface);
       emit({ kind: "visit", surface });
       let failed: { step: number; reason: string; still: string } | null = null;
-      for (const step of w.steps) {
+      try {
+        await runSetup(w.setup, { base: process.env.OG_E2E_BASE as string, token: process.env.OG_TOKEN, fetch });
+      } catch (e) {
+        failed = { step: 0, reason: (e as Error).message, still: "" };
+      }
+      for (const step of failed ? [] : w.steps) {
         try {
           await replay(page, step);
           if (step.kind !== "wait") await page.waitForTimeout(SETTLE_MS);

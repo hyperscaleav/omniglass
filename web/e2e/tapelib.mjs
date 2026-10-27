@@ -1,8 +1,8 @@
 // @ts-check
 // Terminal demos (#1132): the pure half of the terminal recorder
 // (web/e2e/tapes.sh). A demo of CLI or API work is a VHS tape,
-// scripts/demo/<id>.tape, typed into a real terminal against the walkthrough
-// stack and rendered as a GIF (what plays inline on the PR) and an MP4 (the
+// scripts/demo/<id>.tape, typed into a real terminal against a lab
+// (omniglass lab run) and rendered as a GIF (what plays inline on the PR) and an MP4 (the
 // scrubbable video). This module reads a tape's title and description, holds
 // it to the house rules, wraps it in the house settings the recorder plays,
 // and judges the recording. Plain ESM with no dependencies, so the recorder
@@ -54,8 +54,9 @@
 // Sleep; it reads at the rule's pace.
 //
 // Inside the terminal (web/e2e/tape/prelude.sh, sourced unseen first): the
-// stack's server and an owner token are in the CLI's env; the stack's container
-// logs are files under /stack/logs/ (server.log, node.log, sim.log); and
+// lab's server and an owner token are in the CLI's env; the lab's container
+// logs are files under /stack/logs/ (server.log, and node.log, which carries
+// the node's in-process simulator too); and
 // demo_hush '<code>' runs code unseen, demo_until <seconds> '<code>' retries it
 // until it succeeds, each erasing its own command line, so a hidden block
 // leaves the screen as it found it.

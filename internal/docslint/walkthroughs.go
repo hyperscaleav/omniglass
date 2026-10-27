@@ -31,7 +31,7 @@ import (
 //   - no copied directory outlives its declaration.
 //
 // Whether the stills' pixels are current is not checked: that is a
-// re-recording, which needs the walkthrough stack.
+// re-recording, which needs a lab.
 
 var directiveID = regexp.MustCompile(`(?:^|\s)#([A-Za-z0-9_-]+)`)
 

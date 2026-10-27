@@ -18,7 +18,7 @@ import {
 } from "../e2e/tapelib.mjs";
 
 // Terminal demos (#1132): a demo for CLI or API work is a VHS tape under
-// scripts/demo/, played in a real terminal against the walkthrough stack. The
+// scripts/demo/, played in a real terminal on a lab (omniglass lab run). The
 // rules a tape is held to, the house settings it is wrapped in and the verdict
 // on a recording are pure, so they are pinned here; make test-demos proves the
 // recorder itself (a failing command, a stuck wait, an over-budget recording)

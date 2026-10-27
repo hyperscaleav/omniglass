@@ -11,14 +11,14 @@ reads.
 
 ## The fleet it runs against
 
-Every run starts from a throwaway stack seeded with a **scenario**: a fresh install, the example
+Every run starts from a throwaway lab seeded with a **scenario**: a fresh install, the example
 fleet, the example fleet having a bad day, or the example fleet at enterprise size. Scenarios are
 `omniglass seed-dev --scenario <name>`; see [seed a different fleet](/guides/install/#seed-a-different-fleet).
 
 ## The probe and its digest
 
-`make probe` brings up the [walkthrough stack](/guides/install/#the-whole-loop-in-docker) (the
-fleet picked by `STACK_SCENARIO`), visits every route in the console's route manifest, and replays
+`make probe` brings up a throwaway [lab](/guides/lab/) of its own (the fleet picked by
+`STACK_SCENARIO`; a fresh install runs no node), visits every route in the console's route manifest, and replays
 every [walkthrough](/contributing/demos/) at machine speed, a beat after each action rather
 than a person's pace. On every surface it records:
 
@@ -60,12 +60,12 @@ is the whole day, and `web/e2e/explorer.mjs` makes every decision in it that nee
    goal, the scenario it starts from, the lenses it wants and what `done` looks like. The user
    is never the owner (except on a fresh install, which has no one else), so a missing
    permission or a scope leak is a finding rather than something owner rights hide.
-2. **Stand up and probe.** `probe.sh hold` probes the scenario's stack, then keeps it up with the
+2. **Stand up and probe.** `probe.sh hold` probes the scenario's lab, then keeps it up with the
    console published on a local port and `stack.env` (in the same output directory) holding the address and a
    token for the mission's user. `probe.sh replay <script>` plays one walkthrough script against
    it in a directory of its own with a still per step (exit 0 reached its end, 1 failed at a
    step, 2 never ran), which is how the run drives the console and how a repro is proven.
-   `probe.sh node <name> <token>` runs a node the persona enrolled on the stack's network, how a
+   `probe.sh node <name> <token>` runs a node the persona enrolled on the lab's network, how a
    fresh install gets a collector. `probe.sh release` tears it all down.
 3. **Pursue the goal** as the persona: the CLI first, the API where the CLI has no verb, the
    console through replayed scripts, never screenshot by screenshot. The run keeps a journal of
@@ -80,7 +80,7 @@ is the whole day, and `web/e2e/explorer.mjs` makes every decision in it that nee
    The design lens grades with the `/assess-ui` rubric rather than its own; the AI-friendliness
    lens reads the run's own stumbles as evidence of how an agent fares with the CLI, API and docs.
    The autopilot may dispatch the same lenses over its own slices.
-5. **File and report** with `explorer.mjs file` (below), then release the stack.
+5. **File and report** with `explorer.mjs file` (below), then release the lab.
 
 ## Filing
 
@@ -124,17 +124,17 @@ ends the exploring; the run files what it has and its report names the cap.
 One scheduled Routine fires a fresh Sonnet session nightly at 02:52 Mountain time, so its issues
 are waiting in the morning. It runs on the same worker machine as the
 [autopilot](/contributing/autopilot/), which already has what the run needs: Docker for the
-stack, an authenticated `gh` and the Playwright Chromium. Each night works in a throwaway
+lab, an authenticated `gh` and the Playwright Chromium. Each night works in a throwaway
 worktree, so the machine's standing clone is never touched. The prompt is thin, so the behavior
 lives in the versioned skill:
 
 ```text
 Omniglass synthetic user: run tonight's mission. In the hyperscaleav/omniglass clone in this
 environment, git fetch origin and create a fresh detached worktree of origin/main under
-.claude/worktrees/explore-<YYYY-MM-DD>, and work only there: cd web && npm ci, then make build.
+.claude/worktrees/explore-<YYYY-MM-DD>, and work only there: cd web && npm ci, then make.
 Read CLAUDE.md, then read .claude/skills/explore/SKILL.md and follow it end to end: pick the
-mission, hold its stack, pursue the goal as its persona, bring the picked lenses, dry-run then
-file with explorer.mjs (resolving any possible duplicates), release the stack. Find and file
+mission, hold its lab, pursue the goal as its persona, bring the picked lenses, dry-run then
+file with explorer.mjs (resolving any possible duplicates), release the lab. Find and file
 only; never branch, commit, push or open a PR. When finished, git worktree remove tonight's
 worktree.
 ```

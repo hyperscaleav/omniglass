@@ -1763,7 +1763,7 @@ func TestReachabilityDemoIsSimulatedWithTheFleet(t *testing.T) {
 }
 
 // TestSimulatedFleetAtRealPorts proves a seed for a simulator that may bind
-// low ports (in a container: the lab, the walkthrough stack) aims the fleet at
+// low ports (in a container: the lab) aims the fleet at
 // the profiles' real ports: with no lift, the demo DSP's HTTP is 80 and every
 // probe below 1024 is served as declared. A lift is opt-in, for a simulator
 // run unprivileged on a host (seed-dev --sim-port-offset).

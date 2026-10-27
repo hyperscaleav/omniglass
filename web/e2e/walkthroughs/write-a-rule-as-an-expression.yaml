@@ -3,7 +3,7 @@
 # expression itself, watch the field point at an unfinished line, finish it,
 # preview the draft against the last day of samples, and save it. The rule
 # reads endpoint-reachable, which every simulated component reports, so the
-# preview has real edges on the walkthrough stack.
+# preview has real edges on the lab.
 title: Write a rule as an expression
 description: Author an event rule's criteria as an expression, see a mistake pointed at by line and column, fix it, preview what the rule would have done over the last day, and save it.
 steps:

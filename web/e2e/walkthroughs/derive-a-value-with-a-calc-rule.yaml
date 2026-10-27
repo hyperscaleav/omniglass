@@ -5,7 +5,7 @@
 # derived value shows among its vitals linked to the rule. Picking the key
 # fills its alias, the name the expression uses for the input's list of
 # values. The simulated fleet answers TCP on every component, so
-# tcp-connect-time has current values on the walkthrough stack.
+# tcp-connect-time has current values on the lab.
 title: Derive a value with a calc rule
 description: Author a calc rule and the metric it writes in one drawer, write the expression that takes each component's slowest TCP connect time, preview and save it, and find the derived value on a component, linked to its rule.
 steps:

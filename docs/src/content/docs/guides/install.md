@@ -109,19 +109,19 @@ alias for each simulated address it serves (the dev fleet uses `127.60.0.0/16`),
 
 ### Seed a different fleet
 
-The lab and the walkthrough stack seed the example fleet, but `omniglass seed-dev --scenario
+The lab seeds the example fleet, but `omniglass seed-dev --scenario
 <name>` can stand up other fleets: a fresh install with nothing in it, the example fleet having a bad
 day, or the example fleet at enterprise size. The list, with what each one holds, is the command's own help, rendered in the
 [CLI reference](/reference/cli/#omniglass-seed-dev).
 Every scenario except the fresh install is the example fleet plus a generated expansion of it, so a
 scenario never drifts from the fleet it grows from, and like the example fleet every one is
 idempotent. Pick one with `--scenario` for the lab (on its first run, or with `--fresh`), or
-`STACK_SCENARIO` for the walkthrough stack (on a fresh install either is the server and its owner
-alone, since the node's simulated components come from the example fleet):
+`STACK_SCENARIO` for the probe's lab (on a fresh install either is the server and its owner alone,
+and no node runs, since the node's simulated components come from the example fleet):
 
 ```bash
 omniglass lab run --fresh --scenario degraded
-STACK_SCENARIO=large make walkthrough-stack
+STACK_SCENARIO=large make probe
 ```
 
 The large fleet copies the example fleet's self-contained rooms (a room whose devices serve only the
@@ -142,18 +142,19 @@ component on purpose works there as in
 [simulate a fleet](/guides/operator/simulation/#break-it-on-purpose). The [lab guide](/guides/lab/)
 covers what runs, with which privilege, and why Docker is required.
 
-The demo pipeline still records on the walkthrough stack, the lab's predecessor, until it moves onto
-the lab ([#1197](https://github.com/hyperscaleav/omniglass/issues/1197)): `make walkthrough-stack` holds it
-up without publishing anything and prints how a Playwright container on its network reaches it, and
-`make test-walkthrough-stack` proves it (the node collects, and an impairment set through the API
-takes a component's reachability down and its repair brings it back). The recipe is
-`stack_walkthrough_up` in `web/e2e/lib/stack.sh`.
+The demo pipeline records on the same lab ([#1197](https://github.com/hyperscaleav/omniglass/issues/1197)),
+so every walkthrough shows the screens a learner's lab shows, the "lab instance" banner included. Each
+recorder (and the probe) runs `./bin/omniglass lab run` as a throwaway lab of a project of its own, on
+a port Docker picks, held for the recorder's process and torn down with its data when it ends
+(`web/e2e/lib/lab.sh`); a browser or a terminal recorder joins the lab's network and reaches the
+server there. `make test-lab` proves the lab itself, the impairment loop among it.
 
 #### Recording a demo
 
 A demo is a recording of a feature working, by one of two recorders: a terminal demo for CLI and API
 work, a walkthrough for a console flow. `make demo ID=<id>` records one demo of either kind
-(`ID="<a> <b>"` several, no `ID` every demo), each recorder on a stack of its own; when a PR needs
+(`ID="<a> <b>"` several, no `ID` every demo), each recorder on a lab of its own (it runs `make` first,
+since the lab is the binary and the image `make` builds); when a PR needs
 which, and how to write and review each, are in [demos](/contributing/demos/).
 
 **A terminal demo** is a [VHS](https://github.com/charmbracelet/vhs) tape, `scripts/demo/<id>.tape`.
@@ -162,7 +163,7 @@ VHS runs from its own image, `ghcr.io/charmbracelet/vhs` at v0.12.1, pinned by d
 the image bundles what VHS drives (ttyd for the terminal, chromium to render it, ffmpeg to encode the
 GIF and MP4) and the fonts the house settings name, and publishes a multi-platform index, so it runs
 on amd64 and arm64 hosts alike. The recorder adds `jq`, the prelude every tape sources, and this
-tree's `omniglass` binary, copied out of the stack's image, so a tape types the CLI the stack serves.
+tree's `omniglass` binary, copied out of the lab's image, so a tape types the CLI the lab serves.
 Nothing is installed on the host. `make demo` writes `scripts/demo/out/<id>/`: the GIF, the MP4 and
 `demo.json`, the manifest a passing recording carries. A terminal demo is a test: a command it types
 that exits non-zero, a wait in it that runs out, or a recording over its budget (`MAX_GIF_BYTES` and
@@ -176,7 +177,9 @@ visible result, with a `caption` shown while it runs. The step kinds, their fiel
 defined, with an annotated example, at the top of
 [`web/e2e/walkthroughlib.mjs`](https://github.com/hyperscaleav/omniglass/blob/main/web/e2e/walkthroughlib.mjs).
 The format is validated strictly: an unknown key or kind fails, naming the file and the step, and so does a
-script that ends on an action rather than a wait for its result.
+script that ends on an action rather than a wait for its result. An optional `setup` makes, through the
+API and off camera, what the scene needs that the walkthrough does not teach (set-up-monitoring's
+display in Bay 2, which nothing collects from yet); one that already exists counts as made.
 
 ```yaml
 title: Read a simulated component's status
@@ -193,7 +196,7 @@ steps:
 The recording's ffmpeg image is pinned by digest to an amd64-only image (its tag publishes no
 multi-platform index), so recording on an arm64 host needs amd64 emulation registered with Docker.
 
-`make walkthroughs` records every script on the walkthrough stack (`make walkthroughs ID=<id>` records
+`make walkthroughs` records every script on a lab (`make walkthroughs ID=<id>` records
 one) into `web/e2e/walkthroughs/out/<id>/`: an mp4 opening on a title card, with a cursor that glides to
 each target and ripples where it clicks, a highlight on the target and a caption bar; `preview.webp`, an
 animated preview encoded from the mp4 by the same pinned ffmpeg (a lower frame rate and width, looping),

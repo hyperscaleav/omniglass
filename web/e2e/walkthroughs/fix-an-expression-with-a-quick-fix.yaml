@@ -2,7 +2,7 @@
 # component's slow endpoints, write the count as a sum (the common mistake),
 # read the field explain it on the sum with its code, apply the one-click fix,
 # and save the rule. The simulated fleet answers TCP on every component, so
-# tcp-connect-time has current values on the walkthrough stack.
+# tcp-connect-time has current values on the lab.
 title: Fix an expression with a quick fix
 description: Write a calc rule's expression with a common mistake, read the plain-words diagnostic the field gives on the spot, apply its one-click fix, and save the rule.
 steps:

@@ -24,6 +24,15 @@
 // A script may not end on an action (click, type, select, press): its last step
 // is a wait for the result the action should produce, or nothing proves it.
 //
+// An optional `setup` makes what the scene needs that the walkthrough does not
+// teach (#1197), through the API, off camera, before the title card, with the
+// lab's owner token (OG_TOKEN). Each item is a create; one that already exists
+// (409) counts as made, so a lab the walkthrough already ran on replays it:
+//
+//   setup:
+//     - post: /components                           # an API path (under /api/v1)
+//       body: { name: bay-2-display, product: boreal-edge-55, location: bay-2 }
+//
 // Every step also takes `hold` (extra milliseconds to linger after it, for a
 // result worth reading) and `poster: true` (its still is the poster frame, at
 // most one step; default the last). Unknown keys, unknown kinds, and a step with two kinds
@@ -52,7 +61,8 @@ import { PREVIEW } from './walkthroughcore.mjs';
  * @property {string} [value]
  * @property {number} [timeout]
  */
-/** @typedef {{ title: string, description: string, steps: Step[], poster: number }} Walkthrough */
+/** @typedef {{ method: 'POST', path: string, body: Record<string, unknown> }} SetupItem */
+/** @typedef {{ title: string, description: string, setup: SetupItem[], steps: Step[], poster: number }} Walkthrough */
 /**
  * Where a step failed: waiting for its target to be visible, scrolling to it,
  * acting on it, loading a page, or taking its still; with that phase's timeout
@@ -91,7 +101,7 @@ export const DEFAULT_WAIT_MS = 10_000;
 const MAX_WAIT_MS = 60_000;
 const MAX_HOLD_MS = 10_000;
 const COMMON = ['caption', 'hold', 'poster'];
-const TOP = ['title', 'description', 'steps'];
+const TOP = ['title', 'description', 'setup', 'steps'];
 
 /** @type {(v: unknown) => v is Record<string, any>} */
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -201,6 +211,39 @@ function validateStep(raw, n) {
   return [step, problems];
 }
 
+// Validates a walkthrough's setup; returns [normalized items, problems].
+/**
+ * @param {unknown} raw
+ * @returns {[SetupItem[], string[]]}
+ */
+function validateSetup(raw) {
+  if (raw === undefined) return [[], []];
+  if (!Array.isArray(raw)) return [[], ['setup must be a list of { post, body }']];
+  /** @type {SetupItem[]} */
+  const items = [];
+  /** @type {string[]} */
+  const problems = [];
+  raw.forEach((item, i) => {
+    const at = `setup ${i + 1}`;
+    if (!isObj(item)) {
+      problems.push(`${at} must be a mapping`);
+      return;
+    }
+    const unknown = Object.keys(item).filter((k) => k !== 'post' && k !== 'body');
+    problems.push(...unknown.map((k) => `${at} has unknown key "${k}"`));
+    if (!('post' in item)) {
+      if (!unknown.length) problems.push(`${at} needs post: an API path`);
+      return;
+    }
+    const where = `${at} (post)`;
+    const before = problems.length;
+    if (!isStr(item.post) || !item.post.startsWith('/')) problems.push(`${where} must be an API path starting with "/"`);
+    if (!isObj(item.body)) problems.push(`${where} needs a body`);
+    if (problems.length === before) items.push({ method: 'POST', path: item.post, body: item.body });
+  });
+  return [items, problems];
+}
+
 // Validates a parsed walkthrough document. Throws one Error listing every
 // problem, each prefixed with the file; returns the normalized walkthrough.
 /**
@@ -214,6 +257,8 @@ export function validateWalkthrough(doc, file) {
   for (const k of Object.keys(doc)) if (!TOP.includes(k)) problems.push(`unknown key "${k}"`);
   if (!isStr(doc.title)) problems.push('needs a title');
   if ('description' in doc && !isStr(doc.description)) problems.push('description must be a non-empty string');
+  const [setup, setupProblems] = validateSetup(doc.setup);
+  problems.push(...setupProblems);
   /** @type {Step[]} */
   const steps = [];
   if (!Array.isArray(doc.steps) || doc.steps.length === 0) {
@@ -232,7 +277,30 @@ export function validateWalkthrough(doc, file) {
   const posters = steps.filter((s) => s.poster).map((s) => s.n);
   if (posters.length > 1) problems.push(`only one step may be the poster (steps ${posters.join(', ')} are)`);
   if (problems.length) throw new Error(problems.map((p) => `${file}: ${p}`).join('\n'));
-  return { title: doc.title, description: doc.description ?? '', steps, poster: posters[0] ?? steps.length };
+  return { title: doc.title, description: doc.description ?? '', setup, steps, poster: posters[0] ?? steps.length };
+}
+
+// Makes a walkthrough's setup through the API at base, with the owner token:
+// each item in turn, an existing one (409) taken as made. Throws naming the
+// item, the request and the answer. Shared by the recorder and the probe, so
+// both stage the same scene.
+/**
+ * @param {SetupItem[]} setup
+ * @param {{ base: string, token: string | undefined, fetch: (url: string, init: RequestInit) => Promise<Response> }} at
+ */
+export async function runSetup(setup, { base, token, fetch }) {
+  if (!setup.length) return;
+  if (!token) throw new Error('walkthrough setup needs the owner token in OG_TOKEN (run via make walkthroughs)');
+  for (const [i, item] of setup.entries()) {
+    const res = await fetch(`${base}/api/v1${item.path}`, {
+      method: item.method,
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(item.body),
+    });
+    if (res.ok || res.status === 409) continue;
+    const text = (await res.text().catch(() => '')).slice(0, 300);
+    throw new Error(`walkthrough setup ${i + 1}: ${item.method} ${item.path} answered ${res.status}${text ? `: ${text}` : ''}`);
+  }
 }
 
 // Parses and validates a walkthrough's YAML text; a syntax error names the file.

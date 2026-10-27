@@ -44,7 +44,7 @@ import { checkTapeId } from './tapelib.mjs';
 /** @typedef {import('./tapelib.mjs').TapeManifest} TapeManifest */
 /**
  * One recorder's results: the manifests of the demos that passed, the ids of
- * those that ran and failed, and the ids of those that never ran (their stack
+ * those that ran and failed, and the ids of those that never ran (their lab
  * never came up, or their job ended before recording).
  * @template M
  * @typedef {{ recorded: M[], failed: string[], unstarted: string[] }} Results
@@ -166,7 +166,7 @@ function checkTree(tapes, walkthroughs) {
 // `walkthroughs` every tape's and walkthrough script's id in the tree. A PR
 // records exactly the demos it tags, plus any tape or walkthrough script it
 // adds or changes (a demo is a test, so a changed one is played). Nothing
-// else: a change to the console, a recorder, the stack or this pipeline
+// else: a change to the console, a recorder, the lab or this pipeline
 // records no demo it did not name, since a demo it could break is the
 // freshness run's to catch (everyDemo). A tag naming a demo the tree does not
 // have is refused, naming it.
@@ -212,7 +212,7 @@ export function everyDemo(tapes, walkthroughs) {
 
 // What a selected demo's recording says happened: recorded (a manifest with
 // the budget mark only a pass writes, not listed as failed), failed (it ran
-// and did not pass), or unstarted (its stack never came up, or its job ended
+// and did not pass), or unstarted (its lab never came up, or its job ended
 // first). In the run:demo workflow each demo's leg marks the commit it
 // checked out (`legHead`) before anything can fail, and a leg that marked
 // another commit than the run's (`headSha`), or none, is an earlier attempt's
@@ -400,7 +400,7 @@ const FAILED_NOTE =
   '**Failed** (a demo is a test: a terminal demo fails when a command it typed exited non-zero or a wait ran out, a walkthrough when a ' +
   "step's result never appeared, and either when its recording is over budget; the run log names the cause, and the artifact keeps the partial output):";
 const UNSTARTED_NOTE =
-  '**Did not run** (its stack never came up, or its record job ended before recording: this is the stack or the runner, not the demo, ' +
+  '**Did not run** (its lab never came up, or its record job ended before recording: this is the lab or the runner, not the demo, ' +
   "and that demo's record job log says why):";
 
 // The comment body: one comment listing every demo the run recorded, terminal
@@ -409,8 +409,8 @@ const UNSTARTED_NOTE =
 // `tapes` and `walkthroughs` each recorder's results: the manifests
 // (demo.json, walkthrough.json) of the demos that passed, the ids of those
 // that failed, and the ids of those that never ran (each demo records on a
-// stack of its own, #1180, so a stack that never came up costs that demo
-// alone, and is named as the stack's fault rather than the demo's).
+// lab of its own, #1180, #1197, so a lab that never came up costs that demo
+// alone, and is named as the lab's fault rather than the demo's).
 /**
  * @param {{ repo: string, pr: number, sha: string, headSha: string, runUrl: string,
  *   artifactUrl: string, tapes: Results<TapeManifest>, walkthroughs: Results<Manifest> }} args
@@ -509,7 +509,7 @@ export function freshnessReport({ runUrl, headSha, tapes, walkthroughs }) {
   if (unstarted.length) lines.push(UNSTARTED_NOTE, '', ...unstarted, '');
   if (!ok) {
     lines.push(
-      `Each demo's partial output and its stack's logs are in the run's \`demo-leg-<id>\` artifact. Reproduce one with \`make demo ID=${first}\`, ` +
+      `Each demo's partial output and its lab's logs are in the run's \`demo-leg-<id>\` artifact. Reproduce one with \`make demo ID=${first}\`, ` +
         'fix the feature or the demo, and the next green run closes this issue.',
     );
   }

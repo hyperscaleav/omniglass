@@ -4,7 +4,7 @@
 # answers "auth rejected", the driver declares that terminal, so the session
 # reads rejected after one attempt and the node dials no more. Pointing the
 # endpoint's login at the rotated secret moves the connection fingerprint, and
-# the node logs in at its next check-in (2s on the walkthrough stack).
+# the node logs in at its next check-in (2s on the lab).
 title: Fix a rejected session
 description: A touch panel refused its console login, so the node stopped dialing it. Read why, point the endpoint at the rotated credential, and watch the session come up.
 steps:

@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# Record walkthroughs (#924) on the walkthrough stack (#923). One stack per
-# invocation, torn down on every exit path.
+# Record walkthroughs (#924) on the lab (omniglass lab run, #1193; #1197): a
+# throwaway lab per invocation, torn down on every exit path
+# (web/e2e/lib/lab.sh).
 #
 #   walkthroughs.sh record [ID...]  record web/e2e/walkthroughs/<ID>.yaml (default: every
 #                                 one) to web/e2e/walkthroughs/out/<ID>/: <ID>.mp4,
 #                                 preview.webp, poster.png, step-NN.png,
 #                                 walkthrough.json; the ids
 #                                 that failed are listed in out/failed.txt, and
-#                                 out/stack-up marks that the stack came up (the
+#                                 out/stack-up marks that the lab came up (the
 #                                 run:demo workflow reads both, #925, #1132)
 #   walkthroughs.sh selftest      the recorder's own test: a broken step fails naming the
 #                                 step and its wait, keeping its stills; an over-budget
@@ -15,21 +16,23 @@
 #                                 and a preview opening on a blank frame fails
 #
 # Per walkthrough: the recorder (web/e2e/walkthrough.mjs) plays the script in a
-# Playwright container on the stack network and writes a webm; ffmpeg, in its
+# Playwright container on the lab network (after the script's setup, if any)
+# and writes a webm; ffmpeg, in its
 # own pinned container with no network, converts it to H.264 mp4 and encodes the
 # animated WebP preview from that mp4 (#937); ffprobe reads the mp4's duration;
 # and the budget gate (MAX_SECONDS, MAX_BYTES and MAX_PREVIEW_BYTES in
 # walkthroughlib.mjs) passes or fails it. A walkthrough is a test: any failure
 # exits non-zero, naming it.
 #
-# Prereqs: docker.
+# Prereqs: docker, and `make` run first (make walkthroughs does): the lab is
+# the binary and the image it builds.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
-. web/e2e/lib/stack.sh
+. web/e2e/lib/lab.sh
 
-# The walkthroughs and the stack's own check need the example fleet's places,
-# node and simulated devices; a fresh install (STACK_SCENARIO=empty) has none.
+# The walkthroughs need the example fleet's places, node and simulated
+# components; a fresh install (STACK_SCENARIO=empty) has none.
 if [ "${STACK_SCENARIO:-dev}" = empty ]; then
   echo "$(basename "$0"): STACK_SCENARIO=empty has no example fleet to walk through; use make probe for a fresh install" >&2
   exit 2
@@ -84,18 +87,17 @@ if [ "$mode" = record ]; then
 fi
 
 # The ffmpeg image (or ffprobe, with --entrypoint ffprobe) on directory $1,
-# mounted at /o, as this user, offline. Labeled with the run id and run in the
-# background like stack_run, so a signal reaches the trap at once and teardown
-# (or the orphan reaper) finds and stops the container by label; not stack_run
-# itself, which joins the stack network.
+# mounted at /o, as this user, offline. Labeled as the lab's and run in the
+# background like lab_run, so a signal reaches the trap at once and the lab's
+# teardown (or the reaper) stops the container; not lab_run itself, which
+# joins the lab network.
 ffmpeg_in() {
-  local dir=$1 rc=0 labels
+  local dir=$1 rc=0
   shift
-  mapfile -t labels < <(stack__labels)
-  docker run --rm "${labels[@]}" --network none --user "$(id -u):$(id -g)" -v "$ROOT/$dir:/o" "$@" &
-  STACK_FG_PID=$!
-  wait "$STACK_FG_PID" || rc=$?
-  STACK_FG_PID=""
+  docker run --rm "${LAB_LABEL_ARGS[@]}" --network none --user "$(id -u):$(id -g)" -v "$ROOT/$dir:/o" "$@" &
+  LAB_FG_PID=$!
+  wait "$LAB_FG_PID" || rc=$?
+  LAB_FG_PID=""
   return "$rc"
 }
 
@@ -103,13 +105,13 @@ ffmpeg_in() {
 # out/<id>/ for a shipped walkthrough): the webm, then the mp4, its preview,
 # and their budget.
 # Env overrides for the recorder (the lowered budget) pass
-# through stack_walkthrough_pw's -e flags in $WT_ENV.
+# through budget_one's -e flags in $WT_ENV.
 walkthrough_one() {
   local file=$1 out=$2 id
   id=$(basename "$file" .yaml)
   valid_id "$id" || return 1
   echo "walkthrough $id: recording" >&2
-  stack_walkthrough_pw node e2e/walkthrough.mjs record "${file#web/}" "${out#web/}" || return 1
+  lab_pw node e2e/walkthrough.mjs record "${file#web/}" "${out#web/}" || return 1
   ffmpeg_in "$out" "$FFMPEG_IMG" -hide_banner -loglevel error -y -i "/o/$id.webm" \
     -c:v libx264 -preset slow -crf 26 -pix_fmt yuv420p -movflags +faststart -an "/o/$id.mp4" || return 1
   rm -- "$out/$id.webm"
@@ -146,12 +148,12 @@ opening_ymax() {
 budget_one() {
   local out=$1 id=$2 seconds=$3 ymax=$4
   shift 4
-  stack_run -v "$ROOT:/w" -w /w/web --user "$(id -u):$(id -g)" -e HOME=/tmp "$@" \
-    "$STACK_PWIMG" node e2e/walkthrough.mjs budget "${out#web/}/$id.mp4" "$seconds" "$ymax"
+  lab_run -v "$ROOT:/w" -w /w/web --user "$(id -u):$(id -g)" -e HOME=/tmp "$@" \
+    "$LAB_PWIMG" node e2e/walkthrough.mjs budget "${out#web/}/$id.mp4" "$seconds" "$ymax"
 }
 WT_ENV=()
 
-# Reset before the stack comes up, so a stack that never comes up leaves no
+# Reset before the lab comes up, so a lab that never comes up leaves no
 # previous run's list behind.
 if [ "$mode" = record ]; then
   mkdir -p "$OUT"
@@ -159,8 +161,8 @@ if [ "$mode" = record ]; then
   [ ! -e "$OUT/stack-up" ] || rm -- "$OUT/stack-up"
 fi
 
-stack_init ogwalk
-stack_walkthrough_up
+lab_init ogwalk
+lab_up
 [ "$mode" != record ] || : >"$OUT/stack-up"
 
 if [ "$mode" = record ]; then
@@ -169,7 +171,7 @@ if [ "$mode" = record ]; then
     id=$(basename "$f" .yaml)
     mkdir -p "$OUT/$id"
     walkthrough_one "$f" "$OUT/$id" || { failed+=("$id"); echo "$id" >>"$OUT/failed.txt"; }
-    stack_assert_intact
+    lab_assert_intact
   done
   echo
   for f in "${files[@]}"; do
@@ -251,5 +253,5 @@ echo "$log" | sed 's/^/  | /'
 grep -qF 'walkthrough tiny: the preview opens on a blank frame' <<<"$log" || fail "the blank opening frame was not named"
 grep -qF '"budget"' "$ST/tiny/walkthrough.json" && fail "a preview opening on a blank frame got the budget mark"
 echo "ok: a preview that opens on a blank frame fails"
-stack_assert_intact
+lab_assert_intact
 echo "walkthroughs selftest: passed"

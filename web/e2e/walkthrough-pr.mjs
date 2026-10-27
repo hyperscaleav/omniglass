@@ -47,8 +47,8 @@
 // attempt's, left in the run) counts as never run. A selected demo counts as recorded only if
 // failed.txt does not list it and its manifest carries the budget mark the
 // recorder writes only on a pass; with no stack-up mark beside it, it never ran
-// (its stack never came up, or its job ended first), which the comment, the
-// clip and the report name as the stack's fault rather than the demo's.
+// (its lab never came up, or its job ended first), which the comment, the
+// clip and the report name as the lab's fault rather than the demo's.
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';

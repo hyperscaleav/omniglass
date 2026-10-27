@@ -1,13 +1,15 @@
 # Fix an endpoint in place (#1061): a driver attached with its host typed one
 # octet short collects nothing; the host is corrected on the endpoint itself,
 # checked against the driver's inputs, and samples arrive with no re-attach.
-# The walkthrough stack places bay-2-display (a Boreal Edge 55 in Bay 2, SNMP
-# on 127.60.9.9) with no endpoint (web/e2e/lib/stack.sh), as set-up-monitoring
-# uses it. The edit moves the endpoint's connection fingerprint, so the node's
+# Its setup places bay-2-display (a Boreal Edge 55 in Bay 2, SNMP on
+# 127.60.9.9) with no endpoint, off camera, as set-up-monitoring's does. The edit moves the endpoint's connection fingerprint, so the node's
 # poll runs at its next 2s check-in rather than waiting out the backoff the
 # wrong address built up.
 title: Fix an endpoint in place
 description: Attach the SNMP driver with its host typed one octet short, then correct the host on the endpoint itself and watch samples arrive, with no re-attach.
+setup:
+  - post: /components
+    body: { name: bay-2-display, label: Bay 2 Display, product: boreal-edge-55, location: bay-2 }
 steps:
   - goto: /components/bay-2-display?tab=configure
     caption: A display in Bay 2, with no endpoint yet.

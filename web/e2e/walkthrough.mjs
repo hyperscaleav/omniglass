@@ -1,8 +1,9 @@
 // The walkthrough recorder (#924). Run inside the Playwright container on the
-// walkthrough stack (web/e2e/walkthroughs.sh, via stack_walkthrough_pw):
+// lab's network (web/e2e/walkthroughs.sh, via lab_pw):
 //
 //   node e2e/walkthrough.mjs record <file.yaml> <out-dir>
-//       sign in, play the script against the real console with Playwright's
+//       make the script's setup through the API (off camera), sign in, play the
+//       script against the real console with Playwright's
 //       video capture on, and write <out-dir>/<id>.webm, a still per step
 //       (step-NN.png), poster.png and walkthrough.json. A step whose expected
 //       result never appears fails the run naming the step, keeping the stills
@@ -28,7 +29,8 @@
 // pace is a person's: a beat to read the caption, the glide, the action, a beat
 // to see its result; typing is keyed at a readable speed.
 //
-// Env: OG_E2E_BASE, OG_E2E_USER, OG_E2E_PASSWORD (set by stack_walkthrough_pw).
+// Env: OG_E2E_BASE, OG_E2E_USER, OG_E2E_PASSWORD, and OG_TOKEN for a script's
+// setup (set by lab_pw).
 import { chromium } from '@playwright/test';
 import { copyFile, mkdir, readFile, readdir, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
@@ -41,6 +43,7 @@ import {
   locate,
   parseWalkthrough,
   previewOpeningProblem,
+  runSetup,
   previewStartSeconds,
   stepFailure,
   stillName,
@@ -118,6 +121,13 @@ async function record(file, out) {
   if (!base || !user || !password) {
     console.error('walkthrough: set OG_E2E_BASE, OG_E2E_USER and OG_E2E_PASSWORD (run via make walkthroughs)');
     return 2;
+  }
+
+  try {
+    await runSetup(w.setup, { base, token: process.env.OG_TOKEN, fetch });
+  } catch (e) {
+    console.error(`walkthrough ${id}: ${e.message}`);
+    return 1;
   }
 
   const browser = await chromium.launch();

@@ -103,6 +103,17 @@ describe("the run:demo workflow's matrix", () => {
     expect(mark).toBeLessThan(steps.findIndex((s) => s.name === "Install web deps"));
   });
 
+  it("builds the lab with make before recording, since every recorder rides the lab (#1197), and opts the socket in only there", () => {
+    const steps = demo.jobs.record.steps;
+    const build = steps.findIndex((s) => s.run?.trim() === "make");
+    const record = steps.findIndex((s) => s.name === "Record");
+    expect(build).toBeGreaterThan(steps.findIndex((s) => s.uses?.startsWith("actions/checkout")));
+    expect(build).toBeLessThan(record);
+    expect(steps[record].run).toContain("web/e2e/demo.sh record");
+    const socket = steps.filter((s) => JSON.stringify(s.env ?? {}).includes("DEMO_DOCKER_SOCKET"));
+    expect(socket.map((s) => s.name)).toEqual(["Record"]);
+  });
+
   it("swaps the pending SHA the staged clip and comment are written against for the evidence commit's", () => {
     const run = demo.jobs.publish.steps.map((s) => s.run ?? "").join("\n");
     expect(run).toContain(PENDING_SHA);

@@ -75,13 +75,18 @@ func getJSON(ctx context.Context, c *http.Client, url string, into any) error {
 	if err != nil {
 		return err
 	}
+	return doJSON(c, req, http.StatusOK, into)
+}
+
+// doJSON sends req and decodes its answer, which must carry the status want.
+func doJSON(c *http.Client, req *http.Request, want int, into any) error {
 	resp, err := c.Do(req)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("GET %s: %s", url, resp.Status)
+	if resp.StatusCode != want {
+		return fmt.Errorf("%s %s: %s", req.Method, req.URL, resp.Status)
 	}
 	return json.NewDecoder(resp.Body).Decode(into)
 }
