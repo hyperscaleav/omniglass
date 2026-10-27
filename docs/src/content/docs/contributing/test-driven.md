@@ -167,18 +167,18 @@ brand; and a test whose assertions read the **type tree** (stems, labels,
 inherited facts) mints a product under the type it needs, because the walk
 under test never looked at the product anyway.
 
-## Three performance instruments, two of which gate
+## Four performance instruments, three of which gate
 
-Performance has three instruments in this repo, and they are deliberately not the same
+Performance has four instruments in this repo, and they are deliberately not the same
 thing. Knowing which answers a given question is most of the value:
 
-| | **Round-trip counting** | **Access-path assertions** | **Wall-clock benchmarks** |
-|---|---|---|---|
-| Catches | N+1s: cost that grows with row count | A read that cannot reach the index it was built for | Cost inside one statement: a recursive CTE that stops being bounded, a plan that degrades on real volume |
-| Blind to | Anything a single statement does | Everything except one relation's access path | Anything smaller than the host's own noise |
-| Determinism | Exact. Same number every run | Exact. Independent of the fixture's size | Noisy. Interpreted by comparison, never by threshold |
-| Gates a merge | **Yes.** Ordinary tests in `make test` | **Yes.** Ordinary tests in `make test` | **No.** Inert without `-bench` |
-| How you run it | `make test` | `make test` | `make bench`, deliberately, before and after |
+| | **Round-trip counting** | **Access-path assertions** | **Ingest footprint** | **Wall-clock benchmarks** |
+|---|---|---|---|---|
+| Catches | N+1s: cost that grows with row count | A read that cannot reach the index it was built for | What one node batch costs the database: statements, rows per observation, bytes per row | Cost inside one statement: a recursive CTE that stops being bounded, a plan that degrades on real volume |
+| Blind to | Anything a single statement does | Everything except one relation's access path | Reads, and time | Anything smaller than the host's own noise |
+| Determinism | Exact. Same number every run | Exact. Independent of the fixture's size | Exact, except index bytes, which are bounded | Noisy. Interpreted by comparison, never by threshold |
+| Gates a merge | **Yes.** Ordinary tests in `make test` | **Yes.** Ordinary tests in `make test` | **Yes.** An ordinary test in `make test` | **No.** Inert without `-bench` |
+| How you run it | `make test` | `make test` | `make test`; `make footprint` prints it | `make bench`, deliberately, before and after |
 
 They are complements, not alternatives. A dropped index issues exactly as many statements
 as the index scan it replaced, so counting never moves; an N+1 that doubles from twenty to
@@ -217,10 +217,42 @@ Three rules, and an assertion that breaks one of them is worse than none:
    rather than a copy maintained beside it; a copy is exactly what stops failing when the
    original changes.
 
+### Counting what ingest costs
+
+`TestIngestFootprint` (`internal/bus/footprint_test.go`) holds what one node batch costs the
+database ([ADR-1272](/architecture/decisions/#adr-1272-the-ingest-footprint-is-counted-and-a-stored-rows-heap-bytes-are-a-count)).
+It seeds the dev scenario's fleet for real and delivers a **standard workload** through the
+telemetry handler exactly as JetStream would: the owner binding, the catalog reads,
+`LandBatch` with its receipt, locks, transition guard and rule evaluation, and the endpoint's
+seen stamp. Only the transport is a double. The workload (`internal/footprint`) is one batch
+per task per check, built deterministically from the task and the tick, so two runs land the
+same rows and a number that moves is the code moving.
+
+It holds four quantities and reports two more:
+
+- **Statements per batch**, exact. A change that adds one fails with the statements a batch
+  issued, so the failure names what moved.
+- **Rows per observation on each lane**, exact. A metric stores every observation; a property
+  stores transitions only, so a steady window writes no property rows.
+- **Heap bytes per stored metric row** after `VACUUM`, exact. The rows are fixed width and land
+  in order, so their pages are the same on every machine for one Postgres major.
+- **Index bytes per stored metric row** after `VACUUM`, bounded, not pinned. The indexes lead
+  with the fleet's component uuids, which the dev seed mints at random, so page splits differ
+  from run to run; the bound catches an added index or a wider key, not a split.
+- Reported only: receipt bytes per batch, and **WAL bytes per observation**, which moves with
+  checkpoint timing and is the cost a replica or a WAL archive pays.
+
+The workload is declared by shape, not by driver: storage cost follows series per component,
+lane, cadence and how often a value changes, not the protocol that produced it.
+`footprint.StandardMix` is calibrated to a measured lab run and is re-derived when the
+simulated fleet changes. A change that moves a held number **on purpose** (batched writes,
+narrower rows) updates the constant in the same PR and says why; `make footprint` prints the
+current figures, and `BenchmarkIngestFootprint` in `make bench` times the same path.
+
 ### Benchmarks are diagnostic, never a gate
 
-`make bench` runs `go test -bench` over `internal/storage`, at a small fleet and a larger
-one, against real Postgres through the same harness the integration tests use. What it
+`make bench` runs `go test -bench` over `internal/storage` and the ingest handler in
+`internal/bus`, at a small fleet and a larger one, against real Postgres through the same harness the integration tests use. What it
 deliberately does **not** do is as much of the design as what it does:
 
 - **No CI job and no merge gate.** A wall-clock threshold on a shared runner either sits so
