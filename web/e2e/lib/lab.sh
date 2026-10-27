@@ -113,8 +113,11 @@ lab_up() {
     return 1
   }
   echo "lab $LAB_ID: starting (the scenario ${STACK_SCENARIO:-dev})" >&2
+  # The prefixer ignores the terminal's Ctrl-C (it reaches the whole process
+  # group): were it to die first, the lab's next line would end the lab with
+  # SIGPIPE before its teardown. It ends when the lab closes its output.
   "$LAB_BIN" lab run --project "$LAB_ID" --ephemeral --port 0 --scenario "${STACK_SCENARIO:-dev}" \
-    --ready-file "$LAB_READY" --while-pid $$ > >(sed -u "s/^/lab $LAB_ID: /" >&2) 2>&1 &
+    --ready-file "$LAB_READY" --while-pid $$ > >(trap '' INT TERM HUP; sed -u "s/^/lab $LAB_ID: /" >&2) 2>&1 &
   LAB_RUN_PID=$!
   until [ -s "$LAB_READY" ]; do
     if ! kill -0 "$LAB_RUN_PID" 2>/dev/null; then
@@ -154,10 +157,15 @@ lab__report_disturbed() {
   [ -z "$LAB_REPORTED" ] || return 0
   LAB_REPORTED=1
   local c gone=""
-  [ -n "$LAB_RUN_PID" ] && kill -0 "$LAB_RUN_PID" 2>/dev/null || gone=" the lab process"
-  for c in "${LAB_CONTAINERS[@]}"; do
-    [ "$(docker inspect -f '{{.State.Running}}' "$c" 2>/dev/null)" = true ] || gone="$gone $c"
-  done
+  if [ -n "$LAB_RUN_PID" ] && kill -0 "$LAB_RUN_PID" 2>/dev/null; then
+    for c in "${LAB_CONTAINERS[@]}"; do
+      [ "$(docker inspect -f '{{.State.Running}}' "$c" 2>/dev/null)" = true ] || gone="$gone $c"
+    done
+  else
+    # The lab ends its hold when one of its containers stops, and tears the
+    # rest down; its own lines above name the one that stopped.
+    gone=" the lab (its lines above name the container)"
+  fi
   {
     echo "lab $LAB_ID DISTURBED:${gone:- something} stopped or vanished mid-run"
     echo "  (stopped or removed from outside this run, or crashed). The results above are"

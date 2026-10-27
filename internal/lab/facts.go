@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"path"
 	"sort"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -43,11 +44,34 @@ type FactVolume struct {
 }
 
 // Walkthrough is a guided walkthrough's id, title and description, from its
-// manifest (web/e2e/walkthroughs/<id>.yaml).
+// manifest (web/e2e/walkthroughs/<id>.yaml), and the CLI commands that stage
+// its scene in a learner's lab (its setup, which the recorder makes off
+// camera).
 type Walkthrough struct {
-	ID          string `json:"id"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
+	ID          string   `json:"id"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	Setup       []string `json:"setup"`
+}
+
+// SetupCommand is the CLI command that makes a walkthrough's setup item, a
+// create through the API: POST /<resources> with body is
+// `omniglass <resource> create --<field> <value>...`, fields in order. Only a
+// top-level collection is a create the CLI spells this way.
+func SetupCommand(apiPath string, body map[string]any) (string, error) {
+	res, ok := strings.CutPrefix(apiPath, "/")
+	if !ok || res == "" || strings.ContainsAny(res, "/:{}") || !strings.HasSuffix(res, "s") {
+		return "", fmt.Errorf("walkthrough setup: %q is not a collection the CLI creates in", apiPath)
+	}
+	words := []string{"omniglass", strings.TrimSuffix(res, "s"), "create"}
+	for _, k := range SortedKeys(body) {
+		v := fmt.Sprint(body[k])
+		if strings.ContainsAny(v, " \t\"'$`\\") {
+			v = strconv.Quote(v)
+		}
+		words = append(words, "--"+k, v)
+	}
+	return strings.Join(words, " "), nil
 }
 
 // FactsJSON renders the facts for the default lab, reading the walkthrough
@@ -97,11 +121,23 @@ func FactsJSON(walkthroughs fs.FS) ([]byte, error) {
 		var m struct {
 			Title       string `yaml:"title"`
 			Description string `yaml:"description"`
+			Setup       []struct {
+				Post string         `yaml:"post"`
+				Body map[string]any `yaml:"body"`
+			} `yaml:"setup"`
 		}
 		if err := yaml.Unmarshal(b, &m); err != nil {
 			return nil, fmt.Errorf("walkthrough %s: %w", n, err)
 		}
-		f.Walkthroughs = append(f.Walkthroughs, Walkthrough{ID: strings.TrimSuffix(path.Base(n), ".yaml"), Title: m.Title, Description: m.Description})
+		w := Walkthrough{ID: strings.TrimSuffix(path.Base(n), ".yaml"), Title: m.Title, Description: m.Description, Setup: []string{}}
+		for _, it := range m.Setup {
+			c, err := SetupCommand(it.Post, it.Body)
+			if err != nil {
+				return nil, fmt.Errorf("walkthrough %s: %w", n, err)
+			}
+			w.Setup = append(w.Setup, c)
+		}
+		f.Walkthroughs = append(f.Walkthroughs, w)
 	}
 	out, err := json.MarshalIndent(f, "", "  ")
 	if err != nil {

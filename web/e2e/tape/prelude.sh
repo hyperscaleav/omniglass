@@ -29,7 +29,7 @@
 #   listed in $DEMO_PACE_LOG as "<ms> <caption|output> <words|rows> <line>".
 #
 # The recorder sets DEMO_FAILED, DEMO_LOG, DEMO_PACE_LOG, OMNIGLASS_SERVER and
-# OMNIGLASS_TOKEN; the stack's container logs are under /stack/logs/.
+# OMNIGLASS_TOKEN; the lab's container logs are under /stack/logs/.
 
 # First sourced by VHS's own shell: replace it with one under script(1), which
 # sources this file again as its startup file.

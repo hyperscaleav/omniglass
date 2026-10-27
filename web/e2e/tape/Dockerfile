@@ -4,10 +4,10 @@
 # Added here: jq, which demos filter the CLI's JSON through (the static binary
 # of jq's own image, pinned by digest at the version Debian trixie ships, so
 # the build fetches no package index, #1180); the prelude every tape sources
-# unseen, with the pacing rule it applies (pace.sh, #1247); and this tree's omniglass binary, copied out of the walkthrough
-# stack's image (OG_IMAGE) so the CLI a tape types is the one the stack
-# serves. Built and tagged per run by web/e2e/tapes.sh, which pulls the VHS
-# image while the stack builds, and untagged at teardown. Both tags publish a
+# unseen, with the pacing rule it applies (pace.sh, #1247); and this tree's omniglass binary, copied out of the lab's
+# image (OG_IMAGE, the omniglass:dev make built) so the CLI a tape types is the
+# one the lab serves. Built and tagged per run by web/e2e/tapes.sh, which pulls
+# the VHS image while the lab comes up, and untagged at teardown. Both tags publish a
 # multi-platform index, so it builds on amd64 and arm64 alike.
 ARG OG_IMAGE
 FROM ${OG_IMAGE} AS omniglass

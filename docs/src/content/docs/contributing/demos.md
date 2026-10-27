@@ -1,11 +1,11 @@
 ---
 title: Demos
-description: "A demo is a recording of a PR's feature working, made against the real stack: a terminal demo (a VHS tape) for CLI and API work, a walkthrough (a Playwright script) for a console flow. When a PR needs one, how a PR tags it, how to write, record and review each, and how a docs page embeds a walkthrough."
+description: "A demo is a recording of a PR's feature working, made on the lab (omniglass lab run): a terminal demo (a VHS tape) for CLI and API work, a walkthrough (a Playwright script) for a console flow. When a PR needs one, how a PR tags it, how to write, record and review each, and how a docs page embeds a walkthrough."
 ---
 
-A **demo** is a short recording of a pull request's feature working, made against the
-[walkthrough stack](/guides/install/#the-whole-loop-in-docker) (a server, a collecting node and a
-simulator, all in Docker) and posted on the PR, so a reviewer watches the feature work rather than
+A **demo** is a short recording of a pull request's feature working, made on the
+[lab](/guides/lab/) (the server, and a node collecting from the simulator in its own process, all in
+Docker: the same lab a learner runs, "lab instance" banner and all) and posted on the PR, so a reviewer watches the feature work rather than
 reading a transcript of it. A demo is one concept with two recorders, one for each way the product
 is driven:
 
@@ -84,7 +84,7 @@ new interactive shell. An unseen `demo_until` or `demo_hush` and a `clear` are n
 the rule gave is listed in the recording's `pace.txt`, one line each: the milliseconds, `output` and
 the rows or `caption` and the words, and the line typed.
 
-Inside the terminal, the CLI is already pointed at the stack's server with an owner token, and a
+Inside the terminal, the CLI is already pointed at the lab's server with an owner token, and a
 prelude, sourced unseen before the first frame
 ([`web/e2e/tape/prelude.sh`](https://github.com/hyperscaleav/omniglass/blob/main/web/e2e/tape/prelude.sh)),
 makes the shell a test and gives a tape two helpers. Write it the way a reviewer will watch it:
@@ -96,20 +96,20 @@ makes the shell a test and gives a tape two helpers. Write it the way a reviewer
 - **Address by name.** A component by its name or dotted address
   (`hq.west.level-2.huddle.$comp.panel-1`), never a uuid; the rules refuse a uuid in typed text.
   Where a route still takes an id, look it up by name inside the tape and type the variable.
-- **Show only what holds still.** An id, a timestamp, a count of requests or the stack's own address
+- **Show only what holds still.** An id, a timestamp, a count of requests or the lab's own address
   changes from run to run; pick the stable fields with `jq` (`jq -c '{name, driver}'`), so a
   re-recording shows only what changed in the product.
 - **Hide the waits.** The fleet answers on its own schedule. In a `Hide` block,
   `demo_until <seconds> '<code>'` retries code until it succeeds (and fails the demo if it never
   does), and `demo_hush '<code>'` runs a lookup unseen; each erases its own line, so the screen
   shows nothing of the block when `Show` resumes. A wait never costs the GIF any frames.
-- **Read the stack's logs.** The server's, the node's and the simulator's logs are files
-  (`/stack/logs/server.log`, `/stack/logs/node.log`, `/stack/logs/sim.log`): grep them for what
-  the API does not show, keeping to the stable part of each line.
+- **Read the lab's logs.** The server's and the node's logs are files (`/stack/logs/server.log`,
+  `/stack/logs/node.log`; the node's carries its in-process simulator's lines too): grep them for
+  what the API does not show, keeping to the stable part of each line.
 - **Expect a failure out loud.** A command the tape types that exits non-zero fails the demo. One
   that is meant to fail says so on screen, with `|| true`.
 
-`make test-web` holds every tape in the tree to the rules, so a malformed one fails before a stack
+`make test-web` holds every tape in the tree to the rules, so a malformed one fails before a lab
 starts. [`scripts/demo/http-logins.tape`](https://github.com/hyperscaleav/omniglass/blob/main/scripts/demo/http-logins.tape)
 is the first one.
 
@@ -136,6 +136,11 @@ Write it the way an operator would work:
 - **Mark the payoff.** `poster: true` on the step the walkthrough builds to makes its still the
   poster, the still that stands for the whole flow (the docs video's poster frame, and the PR
   comment's still below its animated preview); without it the last step is the poster.
+- **Stage what the flow does not teach in `setup`.** A walkthrough plays on the lab's dev fleet. When
+  its scene needs one more thing the operator does not make on camera (set-up-monitoring's display
+  in Bay 2 that nothing collects from yet), a `setup` list makes it through the API before the
+  title card, with the lab's owner token; one that already exists counts as made, so a replay on a
+  lab the walkthrough already ran on works. Keep it to the scene: the flow itself stays on camera.
 
 `make test-web` validates every script in the tree, so a malformed one fails before a browser
 starts.
@@ -148,7 +153,7 @@ restated here. A terminal demo is held to `MAX_GIF_BYTES` (its GIF plays inline 
 [`web/e2e/tapelib.mjs`](https://github.com/hyperscaleav/omniglass/blob/main/web/e2e/tapelib.mjs);
 its hidden waits cost nothing, so what counts is typing, answers and the pacing rule's holds.
 `make test-web` adds up the least each tape can run (its typing on screen and the rule's least
-hold after each line) and fails one already over `MAX_SECONDS`, before a stack starts. A walkthrough is held to
+hold after each line) and fails one already over `MAX_SECONDS`, before a lab starts. A walkthrough is held to
 `MAX_SECONDS`, `MAX_BYTES` and `MAX_PREVIEW_BYTES` in
 [`web/e2e/walkthroughlib.mjs`](https://github.com/hyperscaleav/omniglass/blob/main/web/e2e/walkthroughlib.mjs),
 and a recording with no preview fails too. A recording at or over a limit fails, naming which, and
@@ -166,9 +171,17 @@ make test-demos            # the terminal recorder's own test: the pacing, a fai
 make test-walkthroughs     # the walkthrough recorder's own test: the failure and budget paths
 ```
 
-`make demo` records each demo it names with its own recorder, each on a walkthrough stack of its
-own, and exits non-zero if any failed; each recorder lists the ids that failed in its own
-`failed.txt`. (`make walkthroughs` still records walkthroughs alone.)
+`make demo` builds (`make`), then records each demo it names with its own recorder, each on a lab of
+its own, and exits non-zero if any failed; each recorder lists the ids that failed in its own
+`failed.txt`. (`make walkthroughs` still records walkthroughs alone.) A recorder's lab is the
+product's own (`./bin/omniglass lab run`, run by
+[`web/e2e/lib/lab.sh`](https://github.com/hyperscaleav/omniglass/blob/main/web/e2e/lib/lab.sh)) as a
+throwaway: a project of its own per run, so two recordings on one Docker daemon never meet, on a port
+Docker picks, held for the recorder's process, and torn down with its data on every exit path (a
+recorder killed too hard to stop it leaves the lab to notice and tear itself down). The recorder's
+browser or terminal joins the lab's network and reaches the server there. A lab disturbed from
+outside mid-recording (a container stopped or removed) fails the run saying so, never as a test
+failure or UI drift.
 
 **A terminal demo** is played by VHS from its own image, pinned by digest, which bundles what VHS
 drives (ttyd for the terminal, chromium to render it, ffmpeg to encode) and the fonts the house
@@ -176,12 +189,12 @@ settings name; the recorder adds `jq` (copied from jq's own image, also pinned b
 prelude and this tree's `omniglass` binary
 ([`web/e2e/tape/Dockerfile`](https://github.com/hyperscaleav/omniglass/blob/main/web/e2e/tape/Dockerfile)),
 so there is nothing to install, and a recording renders the same on a laptop and in CI. The
-recorder pulls those base images while the stack builds, so the VHS image (about 0.9 GB to pull)
+recorder pulls those base images while the lab comes up, so the VHS image (about 0.9 GB to pull)
 costs a fresh CI runner no time of its own, and a machine that has pulled it once pulls nothing. It writes
 `scripts/demo/out/<id>/`: `<id>.gif`, `<id>.mp4`, and `demo.json`, the manifest with the title, the
 description and the budget mark; beside them, the tape as it was played (wrapped in the house
 settings), the shell's unseen output (`shell.log`), the hold the pacing rule gave each line
-(`pace.txt`), and any command that failed (`failed-commands.txt`). The stack's container logs are kept under the output directory too.
+(`pace.txt`), and any command that failed (`failed-commands.txt`). The lab's container logs are kept under the output directory too.
 
 **A walkthrough** is played in a Playwright container with a visible cursor, a highlight on each
 target and a caption bar, and written to `web/e2e/walkthroughs/out/<id>/`: `<id>.mp4`;
@@ -206,14 +219,14 @@ records exactly the demos the PR is about:
 - any tape or walkthrough script the PR adds or changes, tagged or not (a demo is a test, so a
   changed one is played).
 
-Nothing else. Touching the console, a recorder, the stack or the pipeline records no demo the PR
+Nothing else. Touching the console, a recorder, the lab or the pipeline records no demo the PR
 did not name: a change that could break a demo it never named is caught by the nightly freshness
 run (below), not by recording every demo on every PR, which took 20 minutes or more a run. A PR
 whose tag is `demo: none (<reason>)` and that changes no demo records nothing; a PR with no tag
-fails the run, saying how to tag. To prove a change to a recorder or the stack, tag a demo of each
+fails the run, saying how to tag. To prove a change to a recorder or the lab, tag a demo of each
 kind it touches.
 
-Each selected demo records on a runner and a stack of its own, in parallel, so a run takes as long
+Each selected demo records on a runner and a lab of its own, in parallel, so a run takes as long
 as its slowest demo (about five to seven minutes) rather than the sum, and the run's summary says
 which demos it chose and why. One job then combines every demo into one result:
 
@@ -229,7 +242,7 @@ which demos it chose and why. One job then combines every demo into one result:
 - **The demo comment, the full record.** **One PR comment** lists every demo: a terminal demo's GIF
   with its MP4 linked as **Watch (scrubbable)**; a walkthrough's video linked the same way, then its
   animated preview, its poster and its stills folded below; the run and its artifacts; and any demo
-  that failed or never ran (a demo whose stack never came up is named as that, not as a failure).
+  that failed or never ran (a demo whose lab never came up is named as that, not as a failure).
   The clip links it. A failed demo fails its job. A PR labelled before demos keeps its walkthrough
   comment, updated in place.
 

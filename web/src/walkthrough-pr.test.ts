@@ -137,7 +137,7 @@ describe("which demos a PR records", () => {
     expect(ids(["scripts/demo/node-enroll.tape"], "demo: monitoring")).toEqual(["node-enroll", "monitoring"]);
   });
 
-  it("fans out to nothing else: touching the console, a recorder, the stack or the evidence pipeline records no extra demo", () => {
+  it("fans out to nothing else: touching the console, a recorder, the lab or the evidence pipeline records no extra demo", () => {
     const wide = [
       "web/src/pages/Explore.tsx",
       "web/e2e/walkthrough.mjs",
@@ -146,7 +146,8 @@ describe("which demos a PR records", () => {
       "web/e2e/tapelib.mjs",
       "web/e2e/tape/prelude.sh",
       "scripts/demo/README",
-      "web/e2e/lib/stack.sh",
+      "web/e2e/lib/lab.sh",
+      "internal/lab/run.go",
       "web/e2e/demo.sh",
       "web/e2e/walkthroughpr.mjs",
       ".github/workflows/demo.yml",
@@ -225,7 +226,7 @@ describe("what a demo's recording says happened", () => {
     expect(legOutcome({ ...base, listedFailed: true })).toBe("failed");
   });
 
-  it("never ran when its stack never came up", () => {
+  it("never ran when its lab never came up", () => {
     expect(legOutcome({ ...base, manifest: null, stackUp: false })).toBe("unstarted");
   });
 
@@ -470,11 +471,11 @@ describe("the demo comment", () => {
     expect(b.match(/<\/details>/g)).toHaveLength(1);
   });
 
-  it("says which demos never ran because their stack never came up, rather than blaming them", () => {
+  it("says which demos never ran because their lab never came up, rather than blaming them", () => {
     const b = body([manifest("a")], [], ["b", "c"]);
     expect(b).toContain("1 walkthrough recorded, 2 did not run");
     expect(b).toContain("**Did not run**");
-    expect(b).toMatch(/stack never came up.*not the demo/s);
+    expect(b).toMatch(/lab never came up.*not the demo/s);
     expect(b).toContain("- `b` (walkthrough)");
     expect(b).toContain("- `c` (walkthrough)");
     expect(b).not.toContain("**Failed**");

@@ -154,7 +154,7 @@ Each is a gate; a red one blocks the ship.
      terminal demo's frames (ffmpeg pulls them from the MP4); the agent cannot watch video. A demo
      is a test: a failing command, a wait that runs out or a result that never appears fails it.
    - **Tag it.** The PR body's Demo section carries the tag on a line of its own (`demo: <id>`),
-     the demo this PR is about; a PR touching a recorder or the stack tags one demo of each kind it
+     the demo this PR is about; a PR touching a recorder or the lab tags one demo of each kind it
      could break, since nothing fans out on its own.
    - **Record it on the PR.** Resolve any merge conflicts (GitHub runs no `pull_request` workflow
      on a conflicted PR), push, then apply the `run:demo` label. CI records the branch tip: exactly
@@ -165,7 +165,7 @@ Each is a gate; a red one blocks the ship.
      demo's GIF with its MP4 linked, a walkthrough's scrubbable video, preview, poster and stills),
      and **writes each demo's clip into the PR body** under the tag, between its own markers, so
      the body plays its video. A failed demo fails its job and is named in the comment and the clip
-     (a stack that never came up says so instead); fix it and re-run.
+     (a lab that never came up says so instead); fix it and re-run.
    - **Leave the clip alone.** Edit the body around the marked block freely; a re-run replaces only
      the block. Do not paste the clip markers anywhere else in the body.
 

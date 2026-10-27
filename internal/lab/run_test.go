@@ -379,7 +379,7 @@ func TestRunSaysWhatIsPendingWhenCollectionIsSlow(t *testing.T) {
 }
 
 // --image naming this binary's own build (its version label is the binary's
-// build id, as the walkthrough stack's image is for the binary inside it) is
+// build id, as the lab image is for the binary inside a tape's recorder) is
 // no override worth a warning; any other image is warned about.
 func TestImageOverrideWarnsOnlyForAnotherBuild(t *testing.T) {
 	srv := fakeServer(t)

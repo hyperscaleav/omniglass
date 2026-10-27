@@ -48,7 +48,7 @@ const (
 	pgDataDir   = "/var/lib/postgresql"
 	consolePort = 8080
 	busPort     = 4222
-	// The walkthrough stack's cadence: a change in the console shows in the
+	// The cadence every walkthrough is recorded at: a change in the console shows in the
 	// lab within seconds. The product defaults are unchanged.
 	labCadence = "2s"
 	// The unprivileged pinger needs the whole group range admitted.
