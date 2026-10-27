@@ -26,7 +26,7 @@ RUN npm run build
 
 # ---- stage 2: compile the binary with the console embedded -----------------
 # Runs natively on the host ($BUILDPLATFORM); cross-compiles to the target arch.
-FROM --platform=$BUILDPLATFORM golang:1.25.3-bookworm AS build
+FROM --platform=$BUILDPLATFORM golang:1.26.0-bookworm AS build
 WORKDIR /src
 # Module graph first for a cached download layer.
 COPY go.mod go.sum ./
