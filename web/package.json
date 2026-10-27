@@ -30,7 +30,7 @@
     "@playwright/test": "^1.64.1",
     "@solidjs/testing-library": "^0.8.10",
     "@tailwindcss/vite": "^4.3.3",
-    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/jest-dom": "^7.0.1",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "26.6.5",
     "@types/pngjs": "^6.0.5",
