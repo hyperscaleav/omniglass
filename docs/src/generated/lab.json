@@ -1,0 +1,125 @@
+{
+  "published": "127.0.0.1:8080",
+  "containers": [
+    {
+      "name": "db",
+      "image": "postgres:18",
+      "command": "",
+      "user": "the image's (postgres)",
+      "caps": [],
+      "sysctls": [],
+      "publish": "",
+      "runs_once": false,
+      "role": "Postgres, the lab's own database. On the lab network only, never published."
+    },
+    {
+      "name": "seed",
+      "image": "omniglass",
+      "command": "lab seed --scenario dev --node edge-hq --user dev --password dev",
+      "user": "the image's (nonroot)",
+      "caps": [],
+      "sysctls": [],
+      "publish": "",
+      "runs_once": true,
+      "role": "Runs once per lab start: migrates, marks the database as a lab's, seeds the fleet and the login on the first run, and enrolls the node afresh."
+    },
+    {
+      "name": "server",
+      "image": "omniglass",
+      "command": "server --lab",
+      "user": "the image's (nonroot)",
+      "caps": [],
+      "sysctls": [],
+      "publish": "127.0.0.1:8080 -\u003e 8080",
+      "runs_once": false,
+      "role": "The control plane and the console, in lab mode. Its console is the one published port; its bus listens on the lab network for the node."
+    },
+    {
+      "name": "node",
+      "image": "omniglass",
+      "command": "node run --simulate --impairments --heartbeat 2s --poll 2s",
+      "user": "0:0",
+      "caps": [
+        "NET_ADMIN"
+      ],
+      "sysctls": [
+        "net.ipv4.ping_group_range=0 2147483647"
+      ],
+      "publish": "",
+      "runs_once": false,
+      "role": "The edge node edge-hq with the simulator in its own process: the simulated components sit on its loopback, and it collects from them for real. NET_ADMIN, for the impairments, reaches only this container's network."
+    }
+  ],
+  "volumes": [
+    {
+      "name": "omniglass-lab_db",
+      "holds": "the database"
+    },
+    {
+      "name": "omniglass-lab_data",
+      "holds": "the server's data directory: the lab's own encryption key and the bus's store"
+    }
+  ],
+  "walkthroughs": [
+    {
+      "id": "derive-a-value-with-a-calc-rule",
+      "title": "Derive a value with a calc rule",
+      "description": "Author a calc rule and the metric it writes in one drawer, write the expression that takes each component's slowest TCP connect time, preview and save it, and find the derived value on a component, linked to its rule."
+    },
+    {
+      "id": "find-and-fix-a-place",
+      "title": "Find a place and fix its label",
+      "description": "Drill Explore down to a place, open the system it holds, and rename the place from Configure. The new label follows everywhere the place is read."
+    },
+    {
+      "id": "fix-a-refused-probe",
+      "title": "Fix a refused probe",
+      "description": "A touch panel's SNMP agent refused the endpoint's community, so the node stopped asking. Read why, point the endpoint at the right community, and watch the refusal lift."
+    },
+    {
+      "id": "fix-a-rejected-session",
+      "title": "Fix a rejected session",
+      "description": "A touch panel refused its console login, so the node stopped dialing it. Read why, point the endpoint at the rotated credential, and watch the session come up."
+    },
+    {
+      "id": "fix-an-endpoint-in-place",
+      "title": "Fix an endpoint in place",
+      "description": "Attach the SNMP driver with its host typed one octet short, then correct the host on the endpoint itself and watch samples arrive, with no re-attach."
+    },
+    {
+      "id": "fix-an-expression-with-a-quick-fix",
+      "title": "Fix an expression with a quick fix",
+      "description": "Write a calc rule's expression with a common mistake, read the plain-words diagnostic the field gives on the spot, apply its one-click fix, and save the rule."
+    },
+    {
+      "id": "issue-a-command",
+      "title": "Issue a command and follow it",
+      "description": "Tell a video bar its volume from its Activity tab, watch the toast follow the command until the bar's reply settles it, and open the command to read its reply and timing."
+    },
+    {
+      "id": "sample-simulation",
+      "title": "Read a simulated component's status",
+      "description": "The Simulation page lists every component a simulator serves beside a node. Open one to see where it is served and what has reached it."
+    },
+    {
+      "id": "set-up-monitoring",
+      "title": "Set up monitoring on a component",
+      "description": "Attach the SNMP driver and add a reachability probe to a component, both collected by an edge node, and watch reachability and samples arrive."
+    },
+    {
+      "id": "trust-a-changed-host-key",
+      "title": "Trust a changed host key",
+      "description": "A touch panel was reimaged, so it presents a new ssh host key and the node refused it. Read both keys, learn why a key changes, trust the new one, and watch the session come up."
+    },
+    {
+      "id": "watch-a-rule-raise-an-alarm",
+      "title": "Watch a rule raise an alarm",
+      "description": "Unplug a simulated touch panel from its page, open the system it serves, and watch the official reachability rule open a High alarm that takes the system to degraded while you look."
+    },
+    {
+      "id": "write-a-rule-as-an-expression",
+      "title": "Write a rule as an expression",
+      "description": "Author an event rule's criteria as an expression, see a mistake pointed at by line and column, fix it, preview what the rule would have done over the last day, and save it."
+    }
+  ]
+}
