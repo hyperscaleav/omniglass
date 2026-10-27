@@ -27,7 +27,6 @@ Wait
 Type `omniglass endpoint create --component "$d" --transport ssh --params '{"target":"192.0.2.40:22"}' | jq -c '{name}'`
 Enter
 Wait
-Sleep 2s
 
 Hide
 Type "clear"
@@ -40,7 +39,6 @@ Wait
 Type `omniglass telemetry push --owner "{\"kind\":\"component\",\"ref\":\"$d\"}" --properties '[{"name":"video-input","value":"hdmi3","instance":"rx-2"}]' 2>/dev/null | jq -r .detail || true`
 Enter
 Wait
-Sleep 3s
 
 Type "# The webhook reports HDMI 3, naming itself as the instance"
 Enter
@@ -59,7 +57,6 @@ Wait
 Type `omniglass component reconciliation list "$d" | jq -c '.properties[] | select(.property == "video-input") | {want, is, is_instance, drift}'`
 Enter
 Wait
-Sleep 3s
 
 Hide
 Type "clear"
@@ -80,7 +77,6 @@ Show
 Type `omniglass component reconciliation list "$d" | jq -c '.properties[] | select(.property == "video-input") | {want, is, is_instance, drift}'`
 Enter
 Wait
-Sleep 2s
 Type "# The webhook reports HDMI 1 too: every instance agrees, and drift clears"
 Enter
 Wait
@@ -95,4 +91,3 @@ Show
 Type `omniglass component reconciliation list "$d" | jq -c '.properties[] | select(.property == "video-input") | {want, is, is_instance, drift}'`
 Enter
 Wait
-Sleep 4s

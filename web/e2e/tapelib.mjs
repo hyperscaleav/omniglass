@@ -115,11 +115,63 @@ export function holdTable(holdMs) {
   return t;
 }
 
+// A typed line that is a caption: bash runs nothing for it.
+/** @param {string} typed */
+const caption = (typed) => typed.trimStart().startsWith('#');
+
+// A line the prelude holds nothing for: an unseen helper, which erases its own
+// line, or a clear (web/e2e/tape/pace.sh's demo__hold says the same).
+/** @param {string} typed */
+const unheld = (typed) => /^(?:demo_hush|demo_until) /.test(typed) || typed === 'clear';
+
+/** @param {string} d a VHS duration (20ms, 3s, 1.5m) @returns {number} milliseconds */
+function durationMs(d) {
+  const m = /^(\d+(?:\.\d+)?)(ms|s|m)$/.exec(d);
+  if (!m) throw new Error(`not a duration: ${d}`);
+  const unit = m[2] === 'ms' ? 1 : m[2] === 's' ? 1000 : 60_000;
+  return Number(m[1]) * unit;
+}
+
+// The least a tape can run, in seconds, before a command takes any time of its
+// own (#1247): each line it types on screen, at the house typing speed, and
+// the pacing rule's hold after it (a caption's by its words; a command's as if
+// its output filled no row), and the last frame's hold. What is hidden is not
+// recorded, so it costs nothing. A tape whose least is over the budget can
+// never pass, so make test-web refuses it before a recording is tried.
+/** @param {Tape} tape @returns {number} */
+export function tapeMinSeconds(tape) {
+  const typeMs = durationMs(HOUSE.typingSpeed);
+  let hidden = false;
+  let ms = durationMs(HOUSE.hold);
+  let line = '';
+  for (const raw of tape.body) {
+    const cmd = raw.trim();
+    if (cmd === 'Hide' || cmd === 'Show') hidden = cmd === 'Hide';
+    if (cmd.startsWith('Type ')) {
+      const typed = quoted(cmd.slice('Type '.length).trim()) ?? '';
+      line += typed;
+      if (!hidden) ms += typed.length * typeMs;
+    } else if (/^Enter\b/.test(cmd)) {
+      // The hold follows the line entered, once (a repeated Enter enters blanks).
+      if (!hidden && line !== '') {
+        if (caption(line)) ms += captionHoldMs(line.trimStart().slice(1).split(/\s+/).filter(Boolean).length);
+        else if (!unheld(line)) ms += outputHoldMs(0);
+      }
+      line = '';
+    }
+  }
+  return ms / 1000;
+}
+
 // The budget: the GIF plays inline on the PR page, so it is held to the
 // walkthrough preview's ceiling; the length keeps a demo watchable (its waits
 // are hidden, so what plays is typing and answers).
 export const MAX_GIF_BYTES = 5_000_000;
-export const MAX_SECONDS = 120;
+// 180s, raised from 120s by the pacing rule (#1247, ADR-1247): every answer now
+// holds a few seconds on screen, which a tape of fifteen to twenty commands pays
+// once each; the GIF stays far under its byte limit, since a held frame costs
+// almost nothing to encode.
+export const MAX_SECONDS = 180;
 
 const MAX_TITLE = 100;
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
@@ -128,14 +180,20 @@ const DURATION = /^\d+(?:\.\d+)?(?:ms|s|m)$/;
 const RECORDERS = new Set(['Set', 'Output', 'Require', 'Source', 'Env', 'Screenshot', 'Copy', 'Paste']);
 // Typed text that reaches the pacing rule's hooks: the prompt variables, the
 // DEMO_ variables the recorder and the prelude set, the prelude's demo__ names,
-// and, in a command's place, an exec or a trap (either replaces what the
-// prelude installed) or an interactive shell (it would run without the
-// prelude); a shell given -c only runs its command, and is paced as one.
-const CMD_AT = String.raw`(?:^|[;&|(){}!]|\b(?:then|do|else|time))\s*`;
+// the shell's history (the prelude reads each line's number from it to pace and
+// to check it, so a line history skips is neither), and, in a command's place
+// (behind env, command, builtin or a path, too), an exec or a trap (either
+// replaces what the prelude installed; an exec that only opens or closes a
+// file descriptor replaces nothing) or an interactive shell (it would run
+// without the prelude); a shell given -c only runs its command, and is paced as
+// one. A typed `# caption` runs nothing, so it is never held to this.
+const CMD_AT = String.raw`(?:^|[;&|(){}!]|\b(?:then|do|else|time))\s*(?:(?:[^\s;&|()]*/)?(?:env|command|builtin|nohup)(?:\s+-\S+)*\s+)*(?:[^\s;&|()]*/)?`;
 const HOOKS = new RegExp(
   String.raw`\b(?:PROMPT_COMMAND|PS0|PS1|PS2)\b|\bDEMO_\w|\bdemo__\w|` +
-    `${CMD_AT}(?:exec|trap)(?=\\s|$)|` +
-    `${CMD_AT}(?:bash|sh|zsh)(?!\\s+-c\\b)(?=\\s|$)`,
+    String.raw`\bHIST\w*\s*[+]?=|\bunset\s[^;&|]*\bHIST|\bset\s+[-+]o\s+history\b|\bset\s+\+o\b|\bhistory\s+-[a-z]*[cdrwns]|` +
+    `${CMD_AT}exec(?=\\s|$)(?!\\s+(?:\\d+|\\{\\w+\\})?[<>])|` +
+    `${CMD_AT}trap(?=\\s|$)|` +
+    `${CMD_AT}(?:bash|sh|zsh|dash)(?!\\s+-c\\b)(?=\\s|$)`,
 );
 const KEYS = new Set(['Enter', 'Backspace', 'Delete', 'Tab', 'Space', 'Up', 'Down', 'Left', 'Right', 'Escape']);
 
@@ -203,8 +261,8 @@ export function parseTape(id, text, file) {
       const s = quoted(rest);
       if (s === null) fail(n, 'Type takes one quoted string ("...", \'...\' or `...`)');
       if (UUID.test(/** @type {string} */ (s))) fail(n, 'types a uuid; address it by name or dotted address, or look its id up by name inside the tape');
-      if (HOOKS.test(/** @type {string} */ (s))) {
-        fail(n, "types into the pacing rule's hooks (the prompt, its hold tables, the prelude's own names, a new shell or a trap); a tape's commands are paced, never the pacing");
+      if (!caption(/** @type {string} */ (s)) && HOOKS.test(/** @type {string} */ (s))) {
+        fail(n, "types into the pacing rule's hooks (the prompt, its hold tables, the prelude's own names, the shell's history, a new shell or a trap); a tape's commands are paced, never the pacing");
       }
       if (pendingEnter) fail(pendingEnter, 'the command entered here is not waited on (a Wait) before the next Type');
       if (!hidden) typedOnScreen = true;

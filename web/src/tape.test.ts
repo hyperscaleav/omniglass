@@ -7,6 +7,7 @@ import {
   MAX_SECONDS,
   PACE,
   captionHoldMs,
+  tapeMinSeconds,
   holdTable,
   outputHoldMs,
   parseTape,
@@ -255,6 +256,8 @@ describe("a tape cannot bypass the pacing rule", () => {
     expect(bad(`Hide\nSleep 30s\n${CMD}Show\n${CMD}`)).toContain(`${F}:6: Sleep is the pacing rule's`);
   });
 
+  const HOOKED = `${F}:5: types into the pacing rule's hooks (the prompt, its hold tables, the prelude's own names, the shell's history, a new shell or a trap); a tape's commands are paced, never the pacing`;
+
   it("refuses typed text that would unhook the rule: the prompt hooks, its tables, the prelude's internals, a replaced shell or a trap", () => {
     for (const typed of [
       "PROMPT_COMMAND=",
@@ -269,16 +272,62 @@ describe("a tape cannot bypass the pacing rule", () => {
       "bash --norc",
       "sh -i",
     ]) {
-      expect(bad(`Type "${typed}"\nEnter\nWait\n`)).toBe(
-        `${F}:5: types into the pacing rule's hooks (the prompt, its hold tables, the prelude's own names, a new shell or a trap); a tape's commands are paced, never the pacing`,
-      );
+      expect(bad(`Type "${typed}"\nEnter\nWait\n`)).toBe(HOOKED);
     }
   });
 
-  it("still types what only looks like a hook: a word containing one, or bash running a script", () => {
+  it("refuses a shell or an exec or a trap reached by a path, env, command or builtin", () => {
+    for (const typed of ["/bin/bash", "/usr/bin/env bash", "env -i bash", "command exec bash", "builtin trap - ERR", "true && /bin/sh -i", "nohup zsh"]) {
+      expect(bad(`Type "${typed}"\nEnter\nWait\n`), typed).toBe(HOOKED);
+    }
+  });
+
+  it("refuses typed text that turns off or rewrites the history the rule reads each line's number from", () => {
+    for (const typed of ["set +o history", "set -o history", "HISTCONTROL=ignorespace", "export HISTIGNORE='*'", "HISTSIZE=0 true", "unset HISTFILE HISTSIZE", "history -c", "history -d 3", "set +o pipefail"]) {
+      expect(bad(`Type "${typed}"\nEnter\nWait\n`), typed).toBe(HOOKED);
+    }
+  });
+
+  it("still types what only looks like a hook: a word containing one, bash running a script, an exec that only moves a file descriptor", () => {
     ok(`Type "omniglass component list | jq -c '.components[] | {name, trap_count: 0}'"\nEnter\nWait\n`);
-    ok(`Type "echo exec-summary PS10"\nEnter\nWait\n`);
+    ok(`Type "echo exec-summary PS10 history"\nEnter\nWait\n`);
     ok(`Type "bash -c 'echo hi'"\nEnter\nWait\n`);
+    ok("Type `exec 3<>/dev/tcp/127.0.0.1/80; head -1 <&3; exec 3<&-`\nEnter\nWait\n");
+    ok("Type `exec {fd}>/dev/null`\nEnter\nWait\n");
+  });
+
+  it("never holds a caption to the hooks: bash runs nothing for it", () => {
+    ok(`Type "# Alarms (trap receivers) fire"\nEnter\nWait\n${CMD}`);
+    ok(`Type "# Each poll's response (exec time) shows; bash sees none of it"\nEnter\nWait\n${CMD}`);
+  });
+});
+
+// The least a tape can run (#1247): what it types on screen and the rule's
+// holds, so a tape that could never fit the budget fails here, before a stack.
+describe("the least a tape can run", () => {
+  const typeMs = 20;
+  const hold = 3;
+
+  it("is the last frame's hold for a tape that shows nothing it types", () => {
+    expect(HOUSE.typingSpeed).toBe(`${typeMs}ms`);
+    expect(HOUSE.hold).toBe(`${hold}s`);
+    expect(tapeMinSeconds(ok(`Hide\n${CMD}Show\nType "x"\nBackspace\n`))).toBeCloseTo(hold + typeMs / 1000);
+  });
+
+  it("adds each command typed on screen, at the house speed, and the rule's least hold after it", () => {
+    const typed = "omniglass component list";
+    expect(tapeMinSeconds(ok(CMD))).toBeCloseTo(hold + (typed.length * typeMs + outputHoldMs(0)) / 1000);
+  });
+
+  it("holds a caption by its words, and holds nothing after an unseen helper or a clear", () => {
+    const cap = "# Three words here";
+    const body = `Type "${cap}"\nEnter\nWait\nType "clear"\nEnter\nWait\nType \`demo_hush 'x=1'\`\nEnter\nWait\n`;
+    const chars = cap.length + "clear".length + "demo_hush 'x=1'".length;
+    expect(tapeMinSeconds(ok(body))).toBeCloseTo(hold + (chars * typeMs + captionHoldMs(3)) / 1000);
+  });
+
+  it("costs nothing for what is hidden", () => {
+    expect(tapeMinSeconds(ok(`Hide\n${CMD}${CMD}Show\n${CMD}`))).toBeCloseTo(tapeMinSeconds(ok(CMD)));
   });
 });
 
@@ -347,6 +396,11 @@ describe("the tapes in the tree", () => {
 
   it.each(tapes)("%s keeps the house rules", (f) => {
     expect(() => parseTape(f.slice(0, -".tape".length), readFileSync(join(dir, f), "utf8"), `scripts/demo/${f}`)).not.toThrow();
+  });
+
+  it.each(tapes)("%s fits the budget at the least it can run (#1247)", (f) => {
+    const t = parseTape(f.slice(0, -".tape".length), readFileSync(join(dir, f), "utf8"), `scripts/demo/${f}`);
+    expect(tapeMinSeconds(t)).toBeLessThan(MAX_SECONDS);
   });
 
   it("names no demo twice: a tape's id is never a walkthrough's", () => {
