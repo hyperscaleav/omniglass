@@ -3,7 +3,7 @@
 # #1193). Production deploy is BYO Postgres; tests use ephemeral testcontainer
 # Postgres.
 
-.PHONY: all lab test-lab build build-web web image gen gen-proto gen-web adr-renumber migration migration-check test test-web test-short test-e2e bench clean-testcontainers tidy dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify docs-walkthroughs bench-sim test-netadmin walkthroughs test-walkthroughs demo test-demos probe
+.PHONY: all lab test-lab footprint build build-web web image gen gen-proto gen-web adr-renumber migration migration-check test test-web test-short test-e2e bench clean-testcontainers tidy dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify docs-walkthroughs bench-sim test-netadmin walkthroughs test-walkthroughs demo test-demos probe
 
 # The bare `make` (#1196) needs only Docker. From one Dockerfile and one tree
 # it builds the image omniglass:dev and exports this machine's own binary to
@@ -196,7 +196,18 @@ test-short:
 # noisy. Compare on an otherwise idle machine: a concurrent `make test` in
 # another worktree moves these numbers more than most regressions would.
 bench:
-	go test -run '^$$' -bench . -benchmem -count=5 ./internal/storage/...
+	go test -run '^$$' -bench . -benchmem -count=5 ./internal/storage/... ./internal/bus/...
+
+# The ingest footprint (#1272): the standard workload delivered through the real
+# telemetry handler over the dev scenario's fleet, printing what one node batch
+# costs the database (statements, rows per observation, heap and index bytes
+# per row, receipt bytes, WAL bytes per observation, and the statements of one
+# batch). The same test runs in make test and holds the counts; this target
+# prints them and exits with the test's own status.
+footprint:
+	@out=$$(go test ./internal/bus/ -run '^TestIngestFootprint$$' -count=1 -v 2>&1); status=$$?; \
+	printf '%s\n' "$$out" | grep -E 'footprint_test.go|^ {10}[a-z]|^(ok|FAIL|---)'; \
+	if [ $$status -ne 0 ]; then printf '%s\n' "$$out" | tail -40; fi; exit $$status
 
 # The tests that need NET_ADMIN (impairments rewrite the firewall and tc of the
 # network they run in) run in a container of their own, never on the host:
