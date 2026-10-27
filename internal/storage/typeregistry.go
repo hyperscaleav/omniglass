@@ -134,11 +134,24 @@ func countTypeRefs(ctx context.Context, q querier, ref typeRef, id string) (int,
 // classifies) and both must come back as the clean ErrTypeInUse a caller can
 // map to a 409, not as whichever raw foreign-key error happened to fire first.
 func deleteTypeRow(ctx context.Context, p *PG, table, resource, actorID, id string, refs ...typeRef) error {
+	return deleteTypeRowLocked(ctx, p, nil, table, resource, actorID, id, refs...)
+}
+
+// deleteTypeRowLocked is deleteTypeRow with a lock taken first in its
+// transaction, before the in-use count, for a registry whose count must not be
+// overtaken by a concurrent write that adds a reference (a standard, whose
+// conforming systems' standard changes take the same lock).
+func deleteTypeRowLocked(ctx context.Context, p *PG, lock func(context.Context, txQuerier) error, table, resource, actorID, id string, refs ...typeRef) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("storage: begin delete %s: %w", table, err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	if lock != nil {
+		if err := lock(ctx, tx); err != nil {
+			return err
+		}
+	}
 
 	if err := guardTypeMutable(ctx, tx, table, id); err != nil {
 		return err

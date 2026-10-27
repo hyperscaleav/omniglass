@@ -160,6 +160,11 @@ var IdentityShapes = map[string]TableIdentity{
 	"blob": {Shape: ShapeHumanNotAKey, Reason: "content-addressed by sha256, for the same reason",
 		NoLabel: "no operator surface of its own: a blob is reached through the file that references " +
 			"it, and nothing renders a blob row for a label to appear on"},
+	"telemetry_receipt": {Shape: ShapeHumanNotAKey, Reason: "a publisher-minted batch id (the subject a batch " +
+		"arrived on and its Nats-Msg-Id, ADR-0311), not a name: it identifies one landed ingest batch for as " +
+		"long as its horizon keeps it",
+		NoLabel: "no operator surface of its own: only the ingest's conflict check reads a receipt, and " +
+			"nothing renders a receipt row for a label to appear on"},
 
 	// Id only.
 	"alarm":     {Shape: ShapeIDOnly},

@@ -235,7 +235,9 @@ func (p *PG) IssueCommand(ctx context.Context, actorID, ownerKind, ownerID, comm
 
 // CommandSettlement computes the settlement verdict for a command_type's target on an
 // owner: none for a fire-and-forget command (no target), else Settle over the target
-// series' latest intended and observed values within the settle window. It is also
+// series' latest intended value and the observation it is judged on (one series for an
+// instanced intent, every instance for an owner-level one, ADR-0456) within the settle
+// window. It is also
 // the settle-check's read-side trigger: before computing, it sweeps the series'
 // still-issued commands and records any terminal outcome it sees (settleCheck), so a
 // command whose window expired since the last look is stamped here.
@@ -302,7 +304,16 @@ func (p *PG) CommandSettlement(ctx context.Context, ownerKind, ownerID, commandT
 		if err != nil {
 			return "", err
 		}
-		observed, err := p.latestTargetValue(ctx, tx, ct, ownerKind, arc, instance, "observed")
+		// The observation is the one the settle-check judged the command
+		// behind that intent on (ADR-0456): an un-instanced intent reads the
+		// endpoint its command was dispatched over, else every instance.
+		series := instance
+		if series == "" {
+			if series, err = p.intendedSeries(ctx, tx, ct, ownerKind, arc, instance); err != nil {
+				return "", err
+			}
+		}
+		observed, err := p.judgedObservation(ctx, tx, ct, ownerKind, arc, series, intended, &observationReads{on: map[string]*CurrentValue{}})
 		if err != nil {
 			return "", err
 		}

@@ -219,6 +219,106 @@ var (
 	ErrCapacityBelowQuorum = errors.New("storage: capacity must be at least the role's quorum")
 )
 
+// RoleNameCollision is the refusal when a write would leave one system with two
+// roles of one name, one inherited from its standard and one declared on it
+// (#503, ADR-0503), and the refusal a staffing write gives when it finds such a
+// pair already there (a collision written before the rule). Every staffing
+// route addresses a role by its name within a system, so the name must mean one
+// role there; picking a winner between the two is the bug, not a resolution.
+type RoleNameCollision struct {
+	Role     string
+	Standard string
+	System   string
+	// SystemID is the system's id, so a caller can check it may read the
+	// system before a refusal names it: a standard-arc declaration finds the
+	// colliding system fleet-wide, beyond any scope the declarer holds.
+	SystemID string
+}
+
+func (e *RoleNameCollision) Error() string {
+	return fmt.Sprintf("storage: role %q would mean two roles in system %q: standard %q declares it and so does the system itself",
+		e.Role, e.System, e.Standard)
+}
+
+// roleNameLockKey serializes every write that changes which roles a system
+// has: a declaration or a withdrawal on either arc, a standard change, the role
+// seed, and a standard's delete (#503, #506). A collision check reads one arc
+// and the write lands on the other (or on the system's standard pointer), so it
+// is compare-then-act across tables and needs one lock all of them take; and a
+// standard change carrying staffing must not interleave with a withdrawal or a
+// delete of the roles it carries between. It is taken FIRST in each of those
+// transactions, before any other lock (plain reads before it take none), so it
+// adds no edge to any lock order. These are rare acts, and an edit that leaves
+// a system's standard where it is takes no part (UpdateSystem), so serializing
+// them install-wide costs nothing anyone waits on.
+const roleNameLockKey = "system_role/name"
+
+func lockRoleNames(ctx context.Context, q txQuerier) error {
+	return lockAdvisory(ctx, q, roleNameLockKey)
+}
+
+// systemArcCollision is the refusal for declaring name on a system whose
+// standard already declares it. systemArg is the owner roleOwnerArg resolved:
+// a system's id, or an unresolved reference, which matches nothing here and is
+// left to the owner arc CHECK to refuse.
+func systemArcCollision(ctx context.Context, q querier, systemArg, name string) error {
+	if _, err := uuid.Parse(systemArg); err != nil {
+		return nil
+	}
+	var systemName, standardName string
+	err := q.QueryRow(ctx, `
+		select s.name, st.name from system s
+		join standard st on st.id = s.standard_id
+		join system_role r on r.owner_kind = 'standard' and r.standard_id = s.standard_id and r.name = $2
+		where s.id = $1::uuid`, systemArg, name).Scan(&systemName, &standardName)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("storage: role name check %s/%s: %w", systemArg, name, err)
+	}
+	return &RoleNameCollision{Role: name, Standard: standardName, System: systemName, SystemID: systemArg}
+}
+
+// standardArcCollision is the refusal for declaring name on a standard one of
+// whose conforming systems already declares it itself, naming the first such
+// system by name.
+func standardArcCollision(ctx context.Context, q querier, standardID, standardName, name string) error {
+	var systemID, systemName string
+	err := q.QueryRow(ctx, `
+		select s.id, s.name from system s
+		join system_role r on r.owner_kind = 'system' and r.system_id = s.id and r.name = $2
+		where s.standard_id = $1::uuid
+		order by s.name, s.id limit 1`, standardID, name).Scan(&systemID, &systemName)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("storage: role name check %s/%s: %w", standardName, name, err)
+	}
+	return &RoleNameCollision{Role: name, Standard: standardName, System: systemName, SystemID: systemID}
+}
+
+// standardMoveCollision is the refusal for moving a system onto a standard
+// that declares a name the system declares itself, naming the first such role.
+func standardMoveCollision(ctx context.Context, q querier, systemID, systemName, standardID string) error {
+	var role, standardName string
+	err := q.QueryRow(ctx, `
+		select r.name, st.name from system_role r
+		join standard st on st.id = r.standard_id
+		where r.owner_kind = 'standard' and r.standard_id = $2::uuid
+		  and exists (select 1 from system_role a
+		               where a.owner_kind = 'system' and a.system_id = $1::uuid and a.name = r.name)
+		order by r.name limit 1`, systemID, standardID).Scan(&role, &standardName)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("storage: role name check on move %s: %w", systemID, err)
+	}
+	return &RoleNameCollision{Role: role, Standard: standardName, System: systemName, SystemID: systemID}
+}
+
 // roleImpacts is the impact domain, mirroring the table's CHECK. Validating here
 // turns a typo into a named refusal rather than a constraint violation.
 var roleImpacts = map[string]bool{"outage": true, "degraded": true, "none": true}
@@ -389,13 +489,18 @@ func (p *PG) EffectiveRoles(ctx context.Context, systemName string, read scope.S
 // so the operator can act on the refusal rather than guess.
 //
 // Idempotent: assigning the same component to the same role twice is a no-op.
-func (p *PG) AssignRole(ctx context.Context, actorID, systemName, roleName, componentName string, read, action scope.Set) error {
+//
+// Both ends are scope-checked, the way AddMember checks them (#510): read and
+// action are the caller's system:read and system:update sets, componentRead and
+// componentAction its component:read and component:update sets. Staffing a role
+// is membership, so it writes onto the component as well as the system.
+func (p *PG) AssignRole(ctx context.Context, actorID, systemName, roleName, componentName string, read, action, componentRead, componentAction scope.Set) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("storage: begin assign role: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if err := p.assignRoleTx(ctx, tx, actorID, systemName, roleName, componentName, read, action); err != nil {
+	if err := p.assignRoleTx(ctx, tx, actorID, systemName, roleName, componentName, read, action, componentRead, componentAction); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -406,7 +511,7 @@ func (p *PG) AssignRole(ctx context.Context, actorID, systemName, roleName, comp
 
 // assignRoleTx is AssignRole inside a transaction the caller owns, so a composite write (adding
 // a simulated system) can create it alongside the rest and commit once.
-func (p *PG) assignRoleTx(ctx context.Context, tx pgx.Tx, actorID, systemName, roleName, componentName string, read, action scope.Set) error {
+func (p *PG) assignRoleTx(ctx context.Context, tx pgx.Tx, actorID, systemName, roleName, componentName string, read, action, componentRead, componentAction scope.Set) error {
 
 	// system and component are each resolved once here, inside this
 	// transaction, and their ids bound everywhere below: under scoped name
@@ -422,6 +527,9 @@ func (p *PG) assignRoleTx(ctx context.Context, tx pgx.Tx, actorID, systemName, r
 	if err != nil {
 		return err // ErrSystemNotFound out of read scope, ErrSystemForbidden out of action scope
 	}
+	if err := lockSystemForStaffing(ctx, tx, sys.ID); err != nil {
+		return err
+	}
 
 	roleID, roleDisplay, acceptedTypes, pinnedProducts, err := p.resolveRole(ctx, tx, sys.ID, roleName)
 	if err != nil {
@@ -436,57 +544,22 @@ func (p *PG) assignRoleTx(ctx context.Context, tx pgx.Tx, actorID, systemName, r
 	if err := lockAdvisory(ctx, tx, rolePositionLockKey(sys.ID, roleID)); err != nil {
 		return err
 	}
-	// Confirm the component exists before judging what it is. An absent
-	// component has no product to classify, which would otherwise surface as a
-	// confusing type refusal for what is really a typo. scopedByName, not
-	// scopedByNameInScope: the only scope in hand here is write, resolved for
-	// "system", and a component's ancestor chain is unrelated to it, so
-	// checking write against componentConfig could never match (the same
-	// tier-mismatch shape Critical A fixed elsewhere). withoutCandidates
-	// closes the resulting disclosure: an ambiguous component name here
-	// listed every matching uuid fleet-wide, including ones a
-	// system:update-only caller holds no component:read grant to see.
-	component, err := scopedByName(ctx, tx, componentConfig, componentName)
-	if err != nil {
-		return withoutCandidates(err) // ErrComponentNotFound when absent
-	}
-	cls, err := p.classifyComponent(ctx, tx, component.ID)
+	// Resolve the component on its own tier before judging what it is (#510):
+	// in componentRead, then componentAction, the caller's component:read and
+	// component:update sets, the read-then-action split resolveMembershipEnds
+	// makes for AddMember. An absent or unreadable component is
+	// ErrComponentNotFound (so a typo is never a confusing type refusal), a
+	// readable one the caller may not write is ErrComponentForbidden. It used
+	// to resolve by existence alone, which let a principal scoped to one system
+	// staff a component it could not read. Ambiguity is judged inside
+	// componentRead, so the candidates a refusal lists are rows this caller may
+	// read.
+	component, err := resolvePlacementWriteRef(ctx, tx, componentConfig, componentName, componentRead, componentAction)
 	if err != nil {
 		return err
 	}
-	if len(acceptedTypes) > 0 {
-		within := false
-		for _, at := range acceptedTypes {
-			ok, err := p.TypeIsWithin(ctx, cls.TypeID, at.ID)
-			if err != nil {
-				return err
-			}
-			if ok {
-				within = true
-				break
-			}
-		}
-		if !within {
-			return &TypeShortfall{
-				Component: componentName, ComponentType: cls.TypeName,
-				Role: roleDisplay, WantTypes: roleRefNames(acceptedTypes),
-			}
-		}
-	}
-	if len(pinnedProducts) > 0 {
-		pinned := false
-		for _, pp := range pinnedProducts {
-			if pp.ID == cls.ProductID {
-				pinned = true
-				break
-			}
-		}
-		if !pinned {
-			return &ProductPinShortfall{
-				Component: componentName, ComponentProduct: cls.ProductName,
-				Role: roleDisplay, WantProducts: roleRefNames(pinnedProducts),
-			}
-		}
+	if err := p.slotShortfall(ctx, tx, component.ID, componentName, roleDisplay, acceptedTypes, pinnedProducts); err != nil {
+		return err
 	}
 
 	// A component fills at most one role per system (#626). This pre-check runs
@@ -614,8 +687,13 @@ func (p *PG) assignRoleTx(ctx context.Context, tx pgx.Tx, actorID, systemName, r
 }
 
 // UnassignRole removes a component from a role, returning ErrAssignmentMissing
-// when it was not filling it.
-func (p *PG) UnassignRole(ctx context.Context, actorID, systemName, roleName, componentName string, read, action scope.Set) error {
+// when it was not filling it. The occupant must be inside componentAction, the
+// caller's component:update set (#510), or the write is ErrComponentForbidden;
+// like RemoveMember an occupant gets no non-disclosing not-found, because the
+// role's own read names its occupants to anyone who reads the system, and a
+// name that occupies nothing here is told apart from a missing one only within
+// componentRead (see resolveMembershipEndsForRemoval).
+func (p *PG) UnassignRole(ctx context.Context, actorID, systemName, roleName, componentName string, read, action, componentRead, componentAction scope.Set) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("storage: begin unassign role: %w", err)
@@ -628,6 +706,9 @@ func (p *PG) UnassignRole(ctx context.Context, actorID, systemName, roleName, co
 	// rather than fleet-wide (ruling 2, #627).
 	sys, err := resolveScoped(ctx, tx, systemConfig, systemName, read, action)
 	if err != nil {
+		return err
+	}
+	if err := lockSystemForStaffing(ctx, tx, sys.ID); err != nil {
 		return err
 	}
 	roleID, _, _, _, err := p.resolveRole(ctx, tx, sys.ID, roleName)
@@ -662,12 +743,19 @@ func (p *PG) UnassignRole(ctx context.Context, actorID, systemName, roleName, co
 	component, err := resolveMatches(componentConfig, componentName, occupying)
 	if err != nil {
 		if errors.Is(err, ErrComponentNotFound) {
-			if len(all) > 0 {
+			readable, err := anyComponentInScope(ctx, tx, all, componentRead)
+			if err != nil {
+				return err
+			}
+			if readable {
 				return ErrAssignmentMissing
 			}
 			return ErrComponentNotFound
 		}
 		return withoutCandidates(err)
+	}
+	if err := requireComponentAction(ctx, tx, component.ID, componentAction); err != nil {
+		return err
 	}
 	// Same key AssignRole and SwapPositions take: an unassign vacating a
 	// position must serialize against a concurrent assign that could
@@ -714,6 +802,44 @@ func rolePositionLockKey(systemID, roleID string) string {
 	return "system_role_assignment/" + systemID + "/" + roleID
 }
 
+// systemStaffingLockKey is the advisory-lock key that serializes a system's
+// staffing writes against a change of its standard (#506, ADR-0506): staffing
+// writes take it shared (lockSystemForStaffing), a standard change exclusive
+// (lockSystemStandardChange). An id, never a name.
+func systemStaffingLockKey(systemID string) string {
+	return "system/staffing/" + systemID
+}
+
+// lockSystemForStaffing takes the system's staffing lock SHARED for the rest of
+// a staffing write (#506, ADR-0506), before the write resolves its role. A
+// standard change holds the same lock exclusive while it carries the system's
+// staffing onto the new standard's roles, so a staffing write either finishes
+// before the change reads the assignments or resolves its role after the change
+// commits, against the new standard. Without it, an assign resolved against the
+// standard being left could land after the change had settled the rest,
+// stranding exactly the row the change exists to carry. Staffing writes share
+// the lock, so they never wait on each other here.
+//
+// It is an advisory lock and not the system's row FOR SHARE on purpose: every
+// label cascade takes the label lock and then system rows FOR UPDATE, and a
+// staffing write takes the label lock after this one (it re-stamps the
+// component's label), so a row lock here would close a cycle with every
+// cascade. The label path never takes this key, so no cycle forms.
+func lockSystemForStaffing(ctx context.Context, q txQuerier, systemID string) error {
+	if _, err := q.Exec(ctx, `select pg_advisory_xact_lock_shared(hashtextextended($1, 0))`, systemStaffingLockKey(systemID)); err != nil {
+		return fmt.Errorf("storage: lock system %s for staffing: %w", systemID, err)
+	}
+	return nil
+}
+
+// lockSystemStandardChange takes the system's staffing lock EXCLUSIVE for the
+// rest of a standard change, after the role-name lock and before the change
+// touches the system's row, so no staffing write on the system is mid-flight
+// while the change carries its staffing (see lockSystemForStaffing).
+func lockSystemStandardChange(ctx context.Context, q txQuerier, systemID string) error {
+	return lockAdvisory(ctx, q, systemStaffingLockKey(systemID))
+}
+
 // SwapPositions exchanges the positions of whichever components currently
 // hold positions a and b within a role. It is an ordering change only: who
 // occupies the role and the system's health are unaffected, so this does
@@ -732,6 +858,9 @@ func (p *PG) SwapPositions(ctx context.Context, actorID, systemName, roleName st
 	// split (#736) and ambiguity judged inside the read scope (ruling 2, #627).
 	sys, err := resolveScoped(ctx, tx, systemConfig, systemName, read, action)
 	if err != nil {
+		return err
+	}
+	if err := lockSystemForStaffing(ctx, tx, sys.ID); err != nil {
 		return err
 	}
 	roleID, _, _, _, err := p.resolveRole(ctx, tx, sys.ID, roleName)
@@ -807,58 +936,149 @@ func roleRefNames(refs []roleRef) []string {
 // role name it looks up within stays scoped to a single owner arc either way,
 // so binding the id here avoids one more name-subquery that would raise
 // SQLSTATE 21000 the moment two systems share a name (#627).
+//
+// Every match is read, not just the first (#503, ADR-0503): a name declared on
+// both arcs, which the declaration paths now refuse but a database from before
+// that rule can still hold, is a RoleNameCollision naming both owners, never
+// whichever row the database happened to return.
 func (p *PG) resolveRole(ctx context.Context, q txQuerier, systemID, roleName string) (id, label string, acceptedTypes, pinnedProducts []roleRef, err error) {
-	err = q.QueryRow(ctx, `
+	rows, err := q.Query(ctx, `
 		with sys as (select id, name, standard_id from system where id = $1::uuid)
-		select r.id, coalesce(r.label, '')
+		select r.id, coalesce(r.label, ''), sys.name,
+		       coalesce((select st.name from standard st where st.id = r.standard_id), '')
 		from sys
 		join system_role r
 		     on (r.owner_kind = 'system' and r.system_id = sys.id)
 		     or (r.owner_kind = 'standard' and r.standard_id = sys.standard_id)
-		where r.name = $2`, systemID, roleName).Scan(&id, &label)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return "", "", nil, nil, ErrRoleNotFound
-	} else if err != nil {
+		where r.name = $2`, systemID, roleName)
+	if err != nil {
 		return "", "", nil, nil, fmt.Errorf("storage: resolve role %s/%s: %w", systemID, roleName, err)
 	}
+	var matches int
+	var systemName, standardName string
+	for rows.Next() {
+		var mID, mLabel, mSystem, mStandard string
+		if err := rows.Scan(&mID, &mLabel, &mSystem, &mStandard); err != nil {
+			rows.Close()
+			return "", "", nil, nil, fmt.Errorf("storage: scan role %s/%s: %w", systemID, roleName, err)
+		}
+		matches++
+		systemName = mSystem
+		if mStandard != "" {
+			standardName = mStandard
+		}
+		id, label = mID, mLabel
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return "", "", nil, nil, fmt.Errorf("storage: resolve role %s/%s: %w", systemID, roleName, err)
+	}
+	switch {
+	case matches == 0:
+		return "", "", nil, nil, ErrRoleNotFound
+	case matches > 1:
+		return "", "", nil, nil, &RoleNameCollision{Role: roleName, Standard: standardName, System: systemName, SystemID: systemID}
+	}
 
+	acceptedTypes, pinnedProducts, err = roleSlot(ctx, q, id)
+	if err != nil {
+		return "", "", nil, nil, err
+	}
+	return id, label, acceptedTypes, pinnedProducts, nil
+}
+
+// roleSlot loads one role's typed-slot requirements, the two sets the guard
+// compares a component against: the component_types it accepts (empty means
+// any) and the products it pins (empty means any product of an accepted type),
+// each alphabetical so a refusal naming them reads deterministically.
+func roleSlot(ctx context.Context, q querier, roleID string) (acceptedTypes, pinnedProducts []roleRef, err error) {
 	typeRows, err := q.Query(ctx, `
 		select ct.id, ct.name
 		from system_role_type rt join component_type ct on ct.id = rt.component_type_id
 		where rt.role_id = $1
-		order by ct.name`, id)
+		order by ct.name`, roleID)
 	if err != nil {
-		return "", "", nil, nil, fmt.Errorf("storage: role accepted types %s: %w", id, err)
+		return nil, nil, fmt.Errorf("storage: role accepted types %s: %w", roleID, err)
 	}
 	defer typeRows.Close()
 	for typeRows.Next() {
 		var t roleRef
 		if err := typeRows.Scan(&t.ID, &t.Name); err != nil {
-			return "", "", nil, nil, fmt.Errorf("storage: scan accepted type: %w", err)
+			return nil, nil, fmt.Errorf("storage: scan accepted type: %w", err)
 		}
 		acceptedTypes = append(acceptedTypes, t)
 	}
 	if err := typeRows.Err(); err != nil {
-		return "", "", nil, nil, err
+		return nil, nil, err
 	}
 
 	prodRows, err := q.Query(ctx, `
 		select pr.id, pr.name
 		from system_role_product rp join product pr on pr.id = rp.product_id
 		where rp.role_id = $1
-		order by pr.name`, id)
+		order by pr.name`, roleID)
 	if err != nil {
-		return "", "", nil, nil, fmt.Errorf("storage: role pinned products %s: %w", id, err)
+		return nil, nil, fmt.Errorf("storage: role pinned products %s: %w", roleID, err)
 	}
 	defer prodRows.Close()
 	for prodRows.Next() {
 		var pr roleRef
 		if err := prodRows.Scan(&pr.ID, &pr.Name); err != nil {
-			return "", "", nil, nil, fmt.Errorf("storage: scan pinned product: %w", err)
+			return nil, nil, fmt.Errorf("storage: scan pinned product: %w", err)
 		}
 		pinnedProducts = append(pinnedProducts, pr)
 	}
-	return id, label, acceptedTypes, pinnedProducts, prodRows.Err()
+	return acceptedTypes, pinnedProducts, prodRows.Err()
+}
+
+// slotShortfall is the typed-slot guard (#626), the one judgment of whether a
+// component may fill a role: its product's component_type must fall within
+// the subtree of a type the role accepts (any type, if the role accepts none),
+// and if the role pins products, its product must be one of them. It returns
+// the refusal naming both parties (TypeShortfall, ProductPinShortfall), or nil
+// when the component fits. AssignRole runs it before staffing, and a standard
+// change runs it again before carrying an occupant onto the new standard's
+// role of the same name (ADR-0506), so no path staffs a mismatch.
+func (p *PG) slotShortfall(ctx context.Context, q querier, componentID, componentName, roleDisplay string, acceptedTypes, pinnedProducts []roleRef) error {
+	cls, err := p.classifyComponent(ctx, q, componentID)
+	if err != nil {
+		return err
+	}
+	if len(acceptedTypes) > 0 {
+		within := false
+		for _, at := range acceptedTypes {
+			ok, err := p.TypeIsWithin(ctx, cls.TypeID, at.ID)
+			if err != nil {
+				return err
+			}
+			if ok {
+				within = true
+				break
+			}
+		}
+		if !within {
+			return &TypeShortfall{
+				Component: componentName, ComponentType: cls.TypeName,
+				Role: roleDisplay, WantTypes: roleRefNames(acceptedTypes),
+			}
+		}
+	}
+	if len(pinnedProducts) > 0 {
+		pinned := false
+		for _, pp := range pinnedProducts {
+			if pp.ID == cls.ProductID {
+				pinned = true
+				break
+			}
+		}
+		if !pinned {
+			return &ProductPinShortfall{
+				Component: componentName, ComponentProduct: cls.ProductName,
+				Role: roleDisplay, WantProducts: roleRefNames(pinnedProducts),
+			}
+		}
+	}
+	return nil
 }
 
 // componentClassification is the pair the typed-slot guard compares against a

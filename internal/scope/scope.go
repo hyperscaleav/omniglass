@@ -135,7 +135,7 @@ func Resolve(grants []Grant, idx rbac.RoleIndex, resource, action string) Set {
 // scopedConfig's own resource label: "component", "system", or "location").
 // It is the query-time twin of Resolve's own applicableKinds. Most resources
 // are scoped to exactly one tier, so Covers is only ever true for resource ==
-// target there; secret, variable, field, and telemetry are owned on the
+// target there; secret, variable, and field are owned on the
 // exclusive arc, so a grant at ANY of the three tree tiers can confer them,
 // and the one resolved Set is checked against whichever tier the owner
 // actually sits at. A caller that resolves a scope for one tier and checks it
@@ -145,7 +145,7 @@ func Resolve(grants []Grant, idx rbac.RoleIndex, resource, action string) Set {
 // path, would leak a candidate fleet-wide) instead of being loudly caught.
 // See resolveRef in internal/storage/scopedcrud.go, the caller of this.
 //
-// Blind spot: for the four-tier family (secret, variable, field, telemetry),
+// Blind spot: for the arc family (secret, variable, field),
 // Covers admits ANY of location/system/component paired with that resource,
 // with no way to tell whether the specific pairing a call site passed is the
 // one the owner actually sits at. A resolveRef call site that named the
@@ -202,17 +202,23 @@ func applicableKinds(resource string) map[string]bool {
 		// command scope may be checked against those tables. A route that issues
 		// to another tier adds that tier here, with a test.
 		return map[string]bool{"component": true}
-	case "secret", "variable", "field", "telemetry":
+	case "telemetry":
+		// Pushed telemetry resolves on the component tier alone, for the
+		// command's reason (ADR-0752, the ADR-0117 precedent): the push route's
+		// owner is a component, and a location- or system-tier root could never
+		// match a component's own ancestor chain, so it would sit in the set
+		// reaching nothing while telling Covers a telemetry scope may be checked
+		// against those tables. It resolves from telemetry:push rather than
+		// component:read, since a principal often holds a wide read and a
+		// narrow write; the read decides only which refusal the caller is owed.
+		// The day a push may name a system or a location owner (#422), that tier
+		// joins here, with a test.
+		return map[string]bool{"component": true}
+	case "secret", "variable", "field":
 		// A secret, variable, or field value is owned on the exclusive arc
 		// (location, system, or component), so a grant scoped to any of those
 		// tiers can contain the owner: the gateway's inScopeTree walk resolves
 		// the specific owner within it.
-		//
-		// Pushed telemetry is the same shape: a batch is owned by a fleet entity
-		// on that arc, so a grant at any arc tier can contain its owner. This is
-		// what fences POST /telemetry:push, and it matters that the fence resolves
-		// from telemetry:push rather than component:read, since a principal often
-		// holds a wide read and a narrow write.
 		return map[string]bool{"location": true, "system": true, "component": true}
 	default:
 		return map[string]bool{}

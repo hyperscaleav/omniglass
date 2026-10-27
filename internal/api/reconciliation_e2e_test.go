@@ -21,18 +21,20 @@ import (
 type reconResp struct {
 	Component  string `json:"component"`
 	Properties []struct {
-		Property string          `json:"property"`
-		Want     json.RawMessage `json:"want"`
-		Told     json.RawMessage `json:"told"`
-		Is       json.RawMessage `json:"is"`
-		Drift    bool            `json:"drift"`
+		Property   string          `json:"property"`
+		Want       json.RawMessage `json:"want"`
+		Told       json.RawMessage `json:"told"`
+		Is         json.RawMessage `json:"is"`
+		IsInstance string          `json:"is_instance"`
+		Drift      bool            `json:"drift"`
 	} `json:"properties"`
 }
 
 // TestReconciliationAPI drives the reconciliation read over HTTP: an owner sees a
 // component's declared property pivoted against its observed value with drift
-// computed on read; a viewer scoped to a different component gets a non-disclosing
-// 404 (permission gate + scope injection). Skipped under -short.
+// computed on read, the observed value read off the endpoint that reported it
+// and named (ADR-0456); a viewer scoped to a different component gets a
+// non-disclosing 404 (permission gate + scope injection). Skipped under -short.
 func TestReconciliationAPI(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -60,14 +62,15 @@ func TestReconciliationAPI(t *testing.T) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-1"}, all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	// A declared value (want) and an observed value (is) that differ, so the read
-	// reports drift.
+	// A declared value (want, owner-level) and an observed value (is) that
+	// differ, so the read reports drift. The observation is the node lane's,
+	// stamped with the endpoint whose task collected it.
 	if _, err := gw.SetProperty(ctx, "", "component", "disp-1", "firmware-version", "", json.RawMessage(`"1.0.0"`), all, all); err != nil {
 		t.Fatalf("set declared: %v", err)
 	}
-	if err := gw.InsertPropertySamples(ctx, storage.PushWriter(), []storage.PropertySampleWrite{{
+	if err := gw.InsertPropertySamples(ctx, storage.NodeWriter("disp-1", "panel-ip"), []storage.PropertySampleWrite{{
 		OwnerKind: "component", OwnerID: "disp-1", Key: "firmware-version",
-		Instance: "", Value: "2.0.0", TS: time.Now().UTC(),
+		Instance: "panel-ip", Value: "2.0.0", TS: time.Now().UTC(),
 	}}); err != nil {
 		t.Fatalf("insert observed: %v", err)
 	}
@@ -90,8 +93,8 @@ func TestReconciliationAPI(t *testing.T) {
 			continue
 		}
 		found = true
-		if string(p.Want) != `"1.0.0"` || string(p.Is) != `"2.0.0"` || !p.Drift {
-			t.Fatalf("firmware-version pivot: want want=1.0.0 is=2.0.0 drift=true, got %+v", p)
+		if string(p.Want) != `"1.0.0"` || string(p.Is) != `"2.0.0"` || p.IsInstance != "panel-ip" || !p.Drift {
+			t.Fatalf("firmware-version pivot: want want=1.0.0 is=2.0.0 from panel-ip drift=true, got %+v", p)
 		}
 	}
 	if !found {

@@ -641,10 +641,11 @@ func foldPathNotFound(err error) error {
 // that has no caller scope to filter by AT ALL: the three *NameTaken
 // advisories, which intentionally resolve scope-blind so availability matches
 // the placement bucket asked about rather than the caller's own grant (the ADR
-// the checkName routes document); the component end of a membership or a role
-// write, whose only scope in hand is resolved for "system" and can never narrow
-// a component resolve; and ResolveTags' forSystem, the same tier mismatch in
-// the other direction. The reference is still refused as ambiguous; the
+// the checkName routes document); the member- or occupant-scoped resolve a
+// removal makes (RemoveMember, SetPrimaryMember, UnassignRole), whose
+// candidates the system's own read already names, redacted as defense in
+// depth; and ResolveTags' forSystem, a tier mismatch with no scope of the
+// referenced tier in hand. The reference is still refused as ambiguous; the
 // response just never names uuids the caller might have no scope to read, since
 // nothing on those paths can tell which ones it may.
 //
