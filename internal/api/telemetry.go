@@ -84,7 +84,7 @@ type pushLog struct {
 type pushInput struct {
 	Body struct {
 		Owner struct {
-			Kind string `json:"kind" enum:"component" doc:"The owner arc. Only component today; system and location arrive with #422"`
+			Kind string `json:"kind" enum:"component,system" doc:"The owner arc: a component, or a system (telemetry about the system as a whole, such as a cloud service's account of the room it serves). A system batch carries no log lines, since a log line is component-owned"`
 			Ref  string `json:"ref" minLength:"1" doc:"The owning entity, by name or id"`
 		} `json:"owner" doc:"The entity every row in the batch lands under"`
 		Source     string         `json:"source,omitempty" doc:"Who observed this batch (recorded as the provenance source on every row)"`
@@ -92,7 +92,7 @@ type pushInput struct {
 		Metrics    []pushMetric   `json:"metrics,omitempty" doc:"Numeric observations, validated against metric_type"`
 		Properties []pushProperty `json:"properties,omitempty" doc:"Categorical observations, validated against property_type and each type's validation schema"`
 		Events     []pushEvent    `json:"events,omitempty" doc:"Natively caught occurrences, validated against event_type"`
-		Logs       []pushLog      `json:"logs,omitempty" doc:"Raw untyped log lines. No registry gate"`
+		Logs       []pushLog      `json:"logs,omitempty" doc:"Raw untyped log lines. No registry gate. Component owners only: a system batch carrying one is refused with a 422"`
 	}
 }
 
@@ -129,17 +129,26 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 			"writes only a collected key: a key a native probe writes (a reachability verdict or rung, a probe metric " +
 			"or timing, a held session's state, collection-failed) is a node's own observation and a platform key " +
 			"(health) is the platform's, each rejected by name on every lane; a key a calc rule outputs is rejected " +
-			"naming the rule. An observation's instance is the endpoint it came through: one naming no endpoint on the " +
-			"owner refuses the batch with a 422 naming it and listing the owner's endpoints. Gated by telemetry:push, whose scope must cover the declared owner (one check per batch): " +
-			"the push scope alone is enough to see the owner (no component:read is needed), an owner outside both " +
-			"the push scope and the caller's component:read is a non-disclosing 404, and one the caller can read " +
-			"but may not push to is a 403.",
+			"naming the rule. The owner is a component or a system; a system batch carries no log lines (a log line is " +
+			"component-owned), refused with a 422. An observation's instance is the endpoint it came through: one naming " +
+			"no endpoint on the owner refuses the batch with a 422 naming it and listing the owner's endpoints, and a " +
+			"system has none, so a system's observations name no instance. Gated by telemetry:push, whose scope must " +
+			"cover the declared owner on its own tier (one check per batch): the push scope alone is enough to see the " +
+			"owner (no component:read or system:read is needed), an owner outside both the push scope and the caller's " +
+			"read of that kind is a non-disclosing 404, and one the caller can read but may not push to is a 403.",
 	}, "telemetry", "push"), func(ctx context.Context, in *pushInput) (*pushOutput, error) {
 		if pub == nil {
 			return nil, huma.Error503ServiceUnavailable("telemetry ingest is unavailable (no bus)")
 		}
-		if in.Body.Owner.Kind != "component" {
-			return nil, huma.Error422UnprocessableEntity("owner.kind must be component")
+		kind := in.Body.Owner.Kind
+		if kind != "component" && kind != "system" {
+			return nil, huma.Error422UnprocessableEntity("owner.kind must be component or system")
+		}
+		// A log line comes off a component (#589, log_line is component-owned),
+		// so a system has none to land: refused whole, before anything is
+		// resolved, rather than half-landing the batch around it.
+		if kind == "system" && len(in.Body.Logs) > 0 {
+			return nil, huma.Error422UnprocessableEntity("a system batch carries no log lines: a log line is component-owned, so push it under the component it came off")
 		}
 		items := len(in.Body.Metrics) + len(in.Body.Properties) + len(in.Body.Events) + len(in.Body.Logs)
 		if items == 0 {
@@ -150,36 +159,29 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 		}
 
 		// Scope is the fence that makes a caller-declared owner trustworthy
-		// (ADR-0752, superseding the 2026-08-27 ruling on #752): the owner is a
-		// component target, resolved the way every route that acts on one is
-		// (#736, ADR-0116). The ACTION scope is the one that confers
-		// telemetry:push, never component:read: a principal routinely holds a
+		// (ADR-0752, superseding the 2026-08-27 ruling on #752, widened to a
+		// system owner by ADR-0422): the owner is a component or a system
+		// target, resolved the way every route that acts on one is (#736,
+		// ADR-0116), each on its own tier. The ACTION scope is the one that
+		// confers telemetry:push, never a read: a principal routinely holds a
 		// wide read and a narrow write (viewer over the fleet plus operator on
 		// one component), so fencing with the read scope would let it push to
 		// anything it can see. Push is the stronger grant, so its own scope is
-		// also enough to see the component: a push-only integration (no
-		// component:read) pushes where it is granted and learns nothing else.
-		// The caller's component:read decides only which refusal a miss is
-		// owed: a component outside both scopes is the non-disclosing 404, and
-		// one it can read but not push is the truthful 403, safe because only a
-		// caller who could read that row anyway can meet it.
+		// also enough to see the owner: a push-only integration (no read)
+		// pushes where it is granted and learns nothing else. The caller's
+		// read of the owner's kind decides only which refusal a miss is owed:
+		// an owner outside both scopes is the non-disclosing 404, and one it
+		// can read but not push the truthful 403, safe because only a caller
+		// who could read that row anyway can meet it.
 		//
 		// This is the ONLY fence on the write: the route publishes to the bus, and the
 		// consumer that finally writes runs as a trusted server process with no scope of
 		// its own. Nothing downstream will catch a mistake made here. It runs once per
 		// batch (a batch has one owner), never per sample; the second resolve runs
 		// only on a refusal, to choose its status.
-		pushScope := a.scopeFor(ctx, "telemetry", "push")
-		compID, err := gw.ResolveActionTarget(ctx, "component", in.Body.Owner.Ref, pushScope, pushScope)
-		if errors.Is(err, storage.ErrComponentNotFound) {
-			_, err = gw.ResolveActionTarget(ctx, "component", in.Body.Owner.Ref,
-				a.scopeFor(ctx, "component", "read"), pushScope)
-			if err == nil {
-				err = storage.ErrComponentNotFound
-			}
-		}
+		ownerID, err := resolvePushOwner(ctx, a, gw, kind, in.Body.Owner.Ref)
 		if err != nil {
-			return nil, mapComponentErr(err)
+			return nil, err
 		}
 
 		// Reject-not-project, applied HERE so rejection is synchronous. Publishing is
@@ -213,7 +215,7 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 			// got its 202. The wire's Owner.Ref stays dual-accept
 			// (ADR-0062, proto/og/v1/telemetry.proto) for any other producer;
 			// this route always has an id in hand, so it sends it.
-			Owner:  &ogv1.Owner{Kind: "component", Ref: compID},
+			Owner:  &ogv1.Owner{Kind: kind, Ref: ownerID},
 			Source: in.Body.Source,
 		}
 		if !in.Body.TS.IsZero() {
@@ -350,7 +352,7 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 		// endpoint of the owner, named, or none (the owner-level series). One
 		// naming no endpoint refuses the batch, checked once per batch over
 		// what would be published.
-		if err := checkInstances(ctx, gw, compID, batch); err != nil {
+		if err := checkInstances(ctx, gw, kind, ownerID, batch); err != nil {
 			return nil, err
 		}
 		if err := pub.PublishTelemetry(ctx, batch); err != nil {
@@ -362,6 +364,31 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 		out.Body.Accepted.Logs = len(batch.Logs)
 		return out, nil
 	})
+}
+
+// resolvePushOwner resolves a push's declared owner through the fence
+// (ADR-0752, ADR-0422): first with the telemetry:push scope as both halves, so
+// the push grant alone sees its target; on a miss, again with the caller's own
+// read of that kind as the read half, only to choose the refusal (outside
+// both, the non-disclosing 404; readable but not pushable, the 403). kind is a
+// component or a system, each resolved and refused on its own tier.
+func resolvePushOwner(ctx context.Context, a *authenticator, gw storage.Gateway, kind, ref string) (string, error) {
+	notFound, mapErr := storage.ErrComponentNotFound, mapComponentErr
+	if kind == "system" {
+		notFound, mapErr = storage.ErrSystemNotFound, mapSystemErr
+	}
+	pushScope := a.scopeFor(ctx, "telemetry", "push")
+	id, err := gw.ResolveActionTarget(ctx, kind, ref, pushScope, pushScope)
+	if errors.Is(err, notFound) {
+		_, err = gw.ResolveActionTarget(ctx, kind, ref, a.scopeFor(ctx, kind, "read"), pushScope)
+		if err == nil {
+			err = notFound
+		}
+	}
+	if err != nil {
+		return "", mapErr(err)
+	}
+	return id, nil
 }
 
 // reservedRejection refuses a key of the reserved family on every lane, by
@@ -410,10 +437,12 @@ const maxListedEndpoints = 10
 // that is no endpoint on its owner (ADR-0456: an observed row's instance is
 // its observer, and on the push lane that is one of the owner's endpoints).
 // It reads the owner's endpoint names once, and only when an instance is
-// named at all, so its cost is per batch, never per sample. The refusal
-// names the first unknown instance and lists the owner's endpoints, bounded:
-// the caller already resolved the owner within its own component:read.
-func checkInstances(ctx context.Context, gw storage.Gateway, compID string, b *ogv1.TelemetryBatch) error {
+// named at all, so its cost is per batch, never per sample. A system has no
+// endpoints (ADR-0422), so on a system any named instance refuses, with no
+// read at all. The refusal names the first unknown instance and lists the
+// owner's endpoints, bounded: the caller already resolved the owner within
+// its own scope.
+func checkInstances(ctx context.Context, gw storage.Gateway, kind, ownerID string, b *ogv1.TelemetryBatch) error {
 	named := map[string]bool{}
 	for _, m := range b.Metrics {
 		named[m.GetInstance()] = true
@@ -428,9 +457,12 @@ func checkInstances(ctx context.Context, gw storage.Gateway, compID string, b *o
 	if len(named) == 0 {
 		return nil
 	}
-	names, err := gw.ComponentEndpointNames(ctx, compID)
-	if err != nil {
-		return huma.Error500InternalServerError("read the owner's endpoints")
+	var names []string
+	if kind == "component" {
+		var err error
+		if names, err = gw.ComponentEndpointNames(ctx, ownerID); err != nil {
+			return huma.Error500InternalServerError("read the owner's endpoints")
+		}
 	}
 	known := make(map[string]bool, len(names))
 	for _, n := range names {
@@ -439,8 +471,8 @@ func checkInstances(ctx context.Context, gw storage.Gateway, compID string, b *o
 	for _, inst := range slices.Sorted(maps.Keys(named)) {
 		if !known[inst] {
 			return huma.Error422UnprocessableEntity(fmt.Sprintf(
-				"instance %q names no endpoint on this component: an observation's instance is the endpoint it came through, or none for the component as a whole; %s",
-				inst, endpointListing(names)))
+				"instance %q names no endpoint on this %s: an observation's instance is the endpoint it came through, or none for the %s as a whole; %s",
+				inst, kind, kind, endpointListing(names)))
 		}
 	}
 	return nil

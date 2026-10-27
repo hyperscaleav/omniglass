@@ -203,17 +203,19 @@ func applicableKinds(resource string) map[string]bool {
 		// to another tier adds that tier here, with a test.
 		return map[string]bool{"component": true}
 	case "telemetry":
-		// Pushed telemetry resolves on the component tier alone, for the
-		// command's reason (ADR-0752, the ADR-0117 precedent): the push route's
-		// owner is a component, and a location- or system-tier root could never
-		// match a component's own ancestor chain, so it would sit in the set
-		// reaching nothing while telling Covers a telemetry scope may be checked
-		// against those tables. It resolves from telemetry:push rather than
-		// component:read, since a principal often holds a wide read and a
-		// narrow write; the read decides only which refusal the caller is owed.
-		// The day a push may name a system or a location owner (#422), that tier
-		// joins here, with a test.
-		return map[string]bool{"component": true}
+		// Pushed telemetry resolves on the component and system tiers, the two
+		// owner kinds the push route accepts (ADR-0752, widened by ADR-0422):
+		// each root is matched against its own tier's chain, so a system root
+		// fences a system owner and a component root a component owner, and
+		// neither reaches the other (a system's members are not beneath it in
+		// the component tree). The location tier stays out, for the command's
+		// reason (the ADR-0117 precedent): no push names a location, and a
+		// location root could never match either chain while telling Covers a
+		// telemetry scope may be checked against the location table. It
+		// resolves from telemetry:push rather than a read permission, since a
+		// principal often holds a wide read and a narrow write; the read
+		// decides only which refusal the caller is owed.
+		return map[string]bool{"component": true, "system": true}
 	case "secret", "variable", "field":
 		// A secret, variable, or field value is owned on the exclusive arc
 		// (location, system, or component), so a grant scoped to any of those

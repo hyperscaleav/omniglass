@@ -5520,6 +5520,26 @@ Example:
 omniglass system recomputeLabels
 ```
 
+### `omniglass system reconciliation`
+
+Commands for the reconciliation resource
+
+#### `omniglass system reconciliation list`
+
+Read a system's property reconciliation (want/told/is)
+
+```
+omniglass system reconciliation list <name>
+```
+
+Pivots, per property the system's standard declares or the system sets, the declared value (want, resolved live from the cascade), the intended value (told), and the observed value (is: what a push reported for the system as a whole), with config-drift computed on read: drift when the observed value differs from want. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass system reconciliation list <name>
+```
+
 ### `omniglass system removeTag`
 
 Remove a tag value from a system
@@ -6033,12 +6053,12 @@ Push telemetry for an owner
 omniglass telemetry push [flags]
 ```
 
-Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is rejected and reported in the response rather than silently dropped, and a property or event payload violating its type's schema refuses the batch with a 422. Every key has one writer class, and a push writes only a collected key: a key a native probe writes (a reachability verdict or rung, a probe metric or timing, a held session's state, collection-failed) is a node's own observation and a platform key (health) is the platform's, each rejected by name on every lane; a key a calc rule outputs is rejected naming the rule. An observation's instance is the endpoint it came through: one naming no endpoint on the owner refuses the batch with a 422 naming it and listing the owner's endpoints. Gated by telemetry:push, whose scope must cover the declared owner (one check per batch): the push scope alone is enough to see the owner (no component:read is needed), an owner outside both the push scope and the caller's component:read is a non-disclosing 404, and one the caller can read but may not push to is a 403.
+Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is rejected and reported in the response rather than silently dropped, and a property or event payload violating its type's schema refuses the batch with a 422. Every key has one writer class, and a push writes only a collected key: a key a native probe writes (a reachability verdict or rung, a probe metric or timing, a held session's state, collection-failed) is a node's own observation and a platform key (health) is the platform's, each rejected by name on every lane; a key a calc rule outputs is rejected naming the rule. The owner is a component or a system; a system batch carries no log lines (a log line is component-owned), refused with a 422. An observation's instance is the endpoint it came through: one naming no endpoint on the owner refuses the batch with a 422 naming it and listing the owner's endpoints, and a system has none, so a system's observations name no instance. Gated by telemetry:push, whose scope must cover the declared owner on its own tier (one check per batch): the push scope alone is enough to see the owner (no component:read or system:read is needed), an owner outside both the push scope and the caller's read of that kind is a non-disclosing 404, and one the caller can read but may not push to is a 403.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--events` | string | (none) | Natively caught occurrences, validated against event_type |
-| `--logs` | string | (none) | Raw untyped log lines. No registry gate |
+| `--logs` | string | (none) | Raw untyped log lines. No registry gate. Component owners only: a system batch carrying one is refused with a 422 |
 | `--metrics` | string | (none) | Numeric observations, validated against metric_type |
 | `--owner` | string | (none) | The entity every row in the batch lands under |
 | `--properties` | string | (none) | Categorical observations, validated against property_type and each type's validation schema |

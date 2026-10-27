@@ -33,8 +33,30 @@ type reconciliationOutput struct {
 	}
 }
 
-// registerReconciliationRoutes wires the per-component reconciliation read, the
-// operator-facing surface over want/told/is and drift.
+// systemReconciliationOutput is the same pivot for a system (#422): a system
+// owns observed properties a push lands on it (ADR-0422), so its is reads
+// beside its declared want exactly as a component's does.
+type systemReconciliationOutput struct {
+	Body struct {
+		System     string              `json:"system"`
+		Properties []reconPropertyBody `json:"properties"`
+	}
+}
+
+// reconBodies maps the gateway's pivot to the wire, for either owner.
+func reconBodies(recs []storage.PropertyReconciliation) []reconPropertyBody {
+	out := make([]reconPropertyBody, 0, len(recs))
+	for _, r := range recs {
+		out = append(out, reconPropertyBody{
+			Property: r.PropertyTypeName, Want: r.Want, Told: r.Told, Is: r.Is, IsInstance: r.IsInstance, Drift: r.Drift,
+		})
+	}
+	return out
+}
+
+// registerReconciliationRoutes wires the per-component and per-system
+// reconciliation reads, the operator-facing surface over want/told/is and
+// drift.
 func registerReconciliationRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-component-reconciliation",
@@ -54,12 +76,29 @@ func registerReconciliationRoutes(api huma.API, a *authenticator, gw storage.Gat
 		}
 		out := &reconciliationOutput{}
 		out.Body.Component = comp.Name
-		out.Body.Properties = make([]reconPropertyBody, 0, len(recs))
-		for _, r := range recs {
-			out.Body.Properties = append(out.Body.Properties, reconPropertyBody{
-				Property: r.PropertyTypeName, Want: r.Want, Told: r.Told, Is: r.Is, IsInstance: r.IsInstance, Drift: r.Drift,
-			})
+		out.Body.Properties = reconBodies(recs)
+		return out, nil
+	})
+
+	huma.Register(api, a.gated(huma.Operation{
+		OperationID: "get-system-reconciliation",
+		Extensions:  mcpExposed(),
+		Method:      http.MethodGet,
+		Path:        "/systems/{name}/reconciliation",
+		Summary:     "Read a system's property reconciliation (want/told/is)",
+		Description: "Pivots, per property the system's standard declares or the system sets, the declared value (want, resolved live from the cascade), the intended value (told), and the observed value (is: what a push reported for the system as a whole), with config-drift computed on read: drift when the observed value differs from want. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
+	}, "system", "read"), func(ctx context.Context, in *systemPathInput) (*systemReconciliationOutput, error) {
+		sys, err := gw.GetSystem(ctx, in.Name, a.scopeFor(ctx, "system", "read"))
+		if err != nil {
+			return nil, mapSystemErr(err)
 		}
+		recs, err := gw.Reconciliation(ctx, "system", sys.ID, a.scopeFor(ctx, "system", "read"))
+		if err != nil {
+			return nil, huma.Error500InternalServerError("read reconciliation")
+		}
+		out := &systemReconciliationOutput{}
+		out.Body.System = sys.Name
+		out.Body.Properties = reconBodies(recs)
 		return out, nil
 	})
 }

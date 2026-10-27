@@ -101,7 +101,7 @@ func TestLandFilesTaskLogsAndSelfLogsApart(t *testing.T) {
 		Logs:     []*ogv1.LogLine{{Message: "worklist pulled", Source: "node"}},
 		TaskLogs: []*ogv1.LogLine{{Message: "backlight driver reset", Severity: "warn", Facility: "panel", Ts: timestamppb.New(at)}},
 	}
-	if err := s.land(ctx, "", ev, ingestBinding{LogNode: "node-a", SampleOwner: &owner, Writer: storage.NodeWriter(owner.ComponentID, owner.EndpointName)}); err != nil {
+	if err := s.land(ctx, "", ev, ingestBinding{LogNode: "node-a", SampleOwner: &owner, Arc: componentArc(owner), Writer: storage.NodeWriter(owner.ComponentID, owner.EndpointName)}); err != nil {
 		t.Fatalf("land: %v", err)
 	}
 	lines, err := gw.ListComponentLogs(ctx, comp.ID, time.Hour, 10, storage.LogFilter{})
