@@ -68,10 +68,12 @@ func newLabRunCmd(version string) *cobra.Command {
 			sigs := []os.Signal{os.Interrupt, syscall.SIGTERM}
 			if script.whilePID != 0 {
 				// A lab held for a script is the script's to stop, with
-				// one SIGTERM from its trap: the terminal's Ctrl-C, which
-				// reaches the whole process group, is the script's, and a
-				// second signal would cut the teardown short.
-				signal.Ignore(os.Interrupt)
+				// one SIGTERM from its trap: the terminal's Ctrl-C and
+				// hangup, which reach the whole process group, are the
+				// script's, a second signal would cut the teardown short,
+				// and a reader of its output that went away (the script's
+				// prefixer, a tee) must not end it before it tears down.
+				signal.Ignore(os.Interrupt, syscall.SIGHUP, syscall.SIGPIPE)
 				sigs = sigs[1:]
 			}
 			ctx, stop := signal.NotifyContext(cmd.Context(), sigs...)

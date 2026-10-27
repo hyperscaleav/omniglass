@@ -72,9 +72,13 @@ lab__exit() {
   if [ "$rc" -ne 0 ] && [ -z "$LAB_SIGNAL" ] && [ -n "$LAB_RUN_PID" ] && ! lab_intact; then
     lab__report_disturbed
   fi
+  local held=""
+  [ -z "$LAB_RUN_PID" ] || ! kill -0 "$LAB_RUN_PID" 2>/dev/null || held=1
   lab_down
-  if [ -n "$LAB_SIGNAL" ]; then
+  if [ -n "$LAB_SIGNAL" ] && [ -n "$held" ]; then
     echo "lab $LAB_ID: interrupted ($LAB_SIGNAL), torn down" >&2
+  elif [ -n "$LAB_SIGNAL" ]; then
+    echo "lab $LAB_ID: interrupted ($LAB_SIGNAL); the lab had already stopped (the next lab run reaps anything it left)" >&2
   fi
   exit "$rc"
 }
@@ -113,9 +117,10 @@ lab_up() {
     return 1
   }
   echo "lab $LAB_ID: starting (the scenario ${STACK_SCENARIO:-dev})" >&2
-  # The prefixer ignores the terminal's Ctrl-C (it reaches the whole process
-  # group): were it to die first, the lab's next line would end the lab with
-  # SIGPIPE before its teardown. It ends when the lab closes its output.
+  # The prefixer ignores the terminal's Ctrl-C and hangup (they reach the
+  # whole process group), so the lab's lines keep a reader while it tears
+  # down; the lab itself ignores INT, HUP and PIPE when held for a script.
+  # The prefixer ends when the lab closes its output.
   "$LAB_BIN" lab run --project "$LAB_ID" --ephemeral --port 0 --scenario "${STACK_SCENARIO:-dev}" \
     --ready-file "$LAB_READY" --while-pid $$ > >(trap '' INT TERM HUP; sed -u "s/^/lab $LAB_ID: /" >&2) 2>&1 &
   LAB_RUN_PID=$!
