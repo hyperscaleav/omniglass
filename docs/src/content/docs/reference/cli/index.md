@@ -203,13 +203,13 @@ Commands for the status resource
 
 #### `omniglass auth status list`
 
-Whether the system has an owner yet
+Whether the system has an owner yet, and whether it is a lab
 
 ```
 omniglass auth status list
 ```
 
-Public: reports whether any owner has been bootstrapped, so the login screen can hide the bootstrap hint.
+Public: reports whether any owner has been bootstrapped, so the login screen can hide the bootstrap hint, and whether this server is a lab (`omniglass lab run`), so the console can say so before anyone signs in.
 
 Example:
 
@@ -2228,6 +2228,30 @@ Example:
 omniglass healthz
 ```
 
+## `omniglass lab`
+
+A working omniglass on Docker, to learn on
+
+### `omniglass lab run`
+
+Bring up a lab: omniglass, its database and a node collecting from a simulated fleet, until Ctrl-C
+
+```
+omniglass lab run [flags]
+```
+
+Brings up a working omniglass on this machine's Docker as one compose project of three containers: Postgres, the server, and the edge node edge-hq running the simulator in its own process, serving the seeded dev fleet. The node collects from the fleet for real, and impairments work. It prints what it is doing while it comes up, then the console's address and the login, and holds until Ctrl-C, which removes the containers and the network and keeps the data for the next run.
+
+Docker is the only requirement. Only the console is published, on 127.0.0.1 (--listen moves it, and says what that exposes). A binary built by make runs the image the same make built; a release binary runs its release's image. The lab's database is marked as a lab's, and a lab and a real server refuse each other's database.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--fresh` | bool | `false` | remove the lab's data first and start over from the seed |
+| `--image` | string | (none) | run this omniglass image instead of the one this binary was built with |
+| `--listen` | string | `127.0.0.1` | the address the console is published on; anything but loopback exposes the lab, and its well-known login, to your network |
+| `--port` | int | `8080` | the console's port on this machine; 0 lets Docker pick one, for a second lab |
+| `--scenario` | string | `dev` | the fleet the lab seeds on its first run (omniglass seed-dev --help lists them) |
+
 ## `omniglass location`
 
 Commands for the location resource
@@ -3170,12 +3194,20 @@ Run the edge node: claim, pull the worklist, and heartbeat over NATS
 omniglass node run [flags]
 ```
 
+Runs the edge node: claims its NATS credential with the enrollment token, pulls its worklist, collects, and heartbeats until interrupted. Outbound-only: the node dials the server, never the reverse.
+
+--simulate also runs the simulator in the same process, serving the simulated components placed on this node on its own loopback (each on its 127.x address), with this node's identity: one process, one enrollment, nothing to arrange between them. --impairments, --port-offset and --poll are the simulator's and are refused without --simulate. `omniglass sim run` is the same simulator as a process of its own, beside a node.
+
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--heartbeat` | duration | `30s` | heartbeat interval |
+| `--impairments` | bool | `false` | with --simulate: apply impairments (unplug, latency, loss) and truthful ping by rewriting the firewall and traffic shaping of this network namespace; needs NET_ADMIN, and is meant for a namespace of the node's own (a container) |
 | `--name` | string | (none) | this node's registered name (env OMNIGLASS_NODE_NAME) |
 | `--once` | bool | `false` | run a single claim + pull + heartbeat cycle and exit |
+| `--poll` | duration | `10s` | with --simulate: how often the simulator re-pulls its component list |
+| `--port-offset` | int | `0` | with --simulate: lift the simulated ports below 1024 by this much, to serve without the privilege to bind them |
 | `--server` | string | (none) | Omniglass server base URL (env OMNIGLASS_SERVER) |
+| `--simulate` | bool | `false` | also run the simulator in this process, serving the simulated components placed on this node on its own loopback |
 | `--token` | string | (none) | enrollment token from POST /nodes/{name}:enroll (env OMNIGLASS_NODE_TOKEN) |
 
 ### `omniglass node setTag`
@@ -4354,6 +4386,9 @@ omniglass server
 ```
 
 Runs the control plane: applies pending migrations and the boot seed, then serves the HTTP API on OMNIGLASS_ADDR and hosts the embedded NATS bus nodes connect to on OMNIGLASS_NATS_ADDR. Either address may name port 0, which binds whatever free port the kernel hands out; set OMNIGLASS_READY_FILE to a path and, once both listeners are bound, the server writes the addresses it got there as JSON (addr, nats_addr, and the nats_url it advertises to nodes). A file already at that path is cleared first thing at boot, and the server removes its own at a graceful shutdown (SIGINT or SIGTERM). A supervisor or a test reads the ports from that file rather than picking one and hoping it stays free. Configured by environment; see the deployment guides.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
 
 ## `omniglass session`
 

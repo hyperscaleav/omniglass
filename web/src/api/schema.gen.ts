@@ -276,8 +276,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Whether the system has an owner yet
-         * @description Public: reports whether any owner has been bootstrapped, so the login screen can hide the bootstrap hint.
+         * Whether the system has an owner yet, and whether it is a lab
+         * @description Public: reports whether any owner has been bootstrapped, so the login screen can hide the bootstrap hint, and whether this server is a lab (`omniglass lab run`), so the console can say so before anyone signs in.
          */
         get: operations["get-auth-status"];
         put?: never;
@@ -5018,6 +5018,8 @@ export interface components {
              */
             readonly $schema?: string;
             bootstrapped: boolean;
+            /** @description Whether this server is a lab started by omniglass lab run: disposable data and a well-known login, never a real deployment */
+            lab: boolean;
         };
         AvatarOutputBody: {
             /**

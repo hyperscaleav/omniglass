@@ -257,8 +257,8 @@ func generatedCommands() []*cobra.Command {
 				cmd := func() *cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list",
-						Short:   "Whether the system has an owner yet",
-						Long:    "Public: reports whether any owner has been bootstrapped, so the login screen can hide the bootstrap hint.",
+						Short:   "Whether the system has an owner yet, and whether it is a lab",
+						Long:    "Public: reports whether any owner has been bootstrapped, so the login screen can hide the bootstrap hint, and whether this server is a lab (`omniglass lab run`), so the console can say so before anyone signs in.",
 						Example: "  omniglass auth status list",
 						Args:    pathArgs(0),
 						RunE: func(cmd *cobra.Command, args []string) error {

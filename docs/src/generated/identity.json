@@ -145,6 +145,11 @@
       "labelled": false
     },
     {
+      "table": "lab_mark",
+      "shape": "id only",
+      "labelled": false
+    },
+    {
       "table": "label_rule",
       "shape": "fixed key, declared by the platform",
       "reason": "keyed by the entity kind it applies to (component, system, location), a closed set the table's own CHECK enforces",

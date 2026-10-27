@@ -416,6 +416,10 @@ config: {
     id: uuid {constraint: primary_key}
     principal_id: uuid {constraint: foreign_key}
   }
+  lab_mark: {
+    shape: sql_table
+    singleton: boolean {constraint: primary_key}
+  }
   label_rule: {
     shape: sql_table
     entity_kind: text {constraint: primary_key}

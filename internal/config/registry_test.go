@@ -25,7 +25,9 @@ func TestRegistryShape(t *testing.T) {
 			t.Errorf("registry entry %s: duplicate key", v.Key)
 		}
 		seen[v.Key] = true
-		if !strings.HasPrefix(v.Key, "OMNIGLASS_") && v.Key != "DATABASE_URL" {
+		// DOCKER_* are the docker CLI's own names, which omniglass lab run
+		// reads to find the daemon the way the docker CLI does (#1194).
+		if !strings.HasPrefix(v.Key, "OMNIGLASS_") && v.Key != "DATABASE_URL" && !dockerCLIVars[v.Key] {
 			t.Errorf("registry entry %s: unexpected key shape", v.Key)
 		}
 	}
@@ -126,3 +128,6 @@ func TestConfigFactsMatchesCommitted(t *testing.T) {
 		t.Errorf("facts carries %d vars, registry %d", len(doc.Vars), len(Registry))
 	}
 }
+
+// dockerCLIVars are the docker CLI's variables the lab's daemon resolver reads.
+var dockerCLIVars = map[string]bool{"DOCKER_HOST": true, "DOCKER_CONTEXT": true, "DOCKER_CONFIG": true}

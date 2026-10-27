@@ -489,10 +489,15 @@
           },
           "bootstrapped": {
             "type": "boolean"
+          },
+          "lab": {
+            "description": "Whether this server is a lab started by omniglass lab run: disposable data and a well-known login, never a real deployment",
+            "type": "boolean"
           }
         },
         "required": [
-          "bootstrapped"
+          "bootstrapped",
+          "lab"
         ],
         "type": "object"
       },
@@ -14264,7 +14269,7 @@
     },
     "/auth/status": {
       "get": {
-        "description": "Public: reports whether any owner has been bootstrapped, so the login screen can hide the bootstrap hint.",
+        "description": "Public: reports whether any owner has been bootstrapped, so the login screen can hide the bootstrap hint, and whether this server is a lab (`omniglass lab run`), so the console can say so before anyone signs in.",
         "operationId": "get-auth-status",
         "responses": {
           "200": {
@@ -14288,7 +14293,7 @@
             "description": "Error"
           }
         },
-        "summary": "Whether the system has an owner yet"
+        "summary": "Whether the system has an owner yet, and whether it is a lab"
       }
     },
     "/calc-rules": {
