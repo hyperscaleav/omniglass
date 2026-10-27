@@ -13,8 +13,6 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/driver"
 	"github.com/hyperscaleav/omniglass/internal/transport"
 	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
-	"github.com/nats-io/nats.go"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -41,7 +39,7 @@ type endpointParams struct {
 // never stalls the rest of the worklist. tcp and icmp are the wired probe types;
 // their samples ride the same pipeline (the ingest consumer does not branch
 // on probe type).
-func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.WorklistReply, runner *collection.Runner, sessions *sessionManager, sched *pollSchedule, verdicts map[string]string, faultseen map[string]string) error {
+func runTasks(ctx context.Context, out *telemetrySpool, node string, wl collection.WorklistReply, runner *collection.Runner, sessions *sessionManager, sched *pollSchedule, verdicts map[string]string, faultseen map[string]string) error {
 	now := time.Now()
 	present := make(map[string]bool, len(wl.Tasks))
 	for _, task := range wl.Tasks {
@@ -109,7 +107,7 @@ func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.Wor
 			if current != faultseen[task.ID] {
 				for _, f := range faults {
 					slog.Warn("driver poll fault", "facility", "collection", "task", task.ID, "error", f.Error())
-					if pubErr := publishCollectionFailed(nc, node, task.ID, f); pubErr != nil {
+					if pubErr := publishCollectionFailed(out, node, task.ID, f); pubErr != nil {
 						return pubErr
 					}
 				}
@@ -127,7 +125,7 @@ func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.Wor
 			if len(dps) == 0 {
 				continue
 			}
-			if err := publishBatch(nc, node, task.ID, dps); err != nil {
+			if err := publishBatch(out, node, task.ID, dps); err != nil {
 				return err
 			}
 			sched.commitChanged(task.ID, dps)
@@ -146,7 +144,7 @@ func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.Wor
 			// visible on the component's timeline rather than only in the
 			// node's own logs. Never a false-down state sample.
 			slog.Warn("task skipped", "facility", "collection", "task", task.ID, "error", err.Error())
-			if pubErr := publishCollectionFailed(nc, node, task.ID, err); pubErr != nil {
+			if pubErr := publishCollectionFailed(out, node, task.ID, err); pubErr != nil {
 				return pubErr
 			}
 			continue // unusable config or inconclusive probe: skip, no false down
@@ -162,11 +160,11 @@ func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.Wor
 		// component, so a node routinely probes two components' endpoints that
 		// share a friendly name (the default is the protocol), and a name-keyed map
 		// would suppress the second one's verdict. The task id is node-unique (a
-		// content hash over the endpoint). The ingest-side latest-value guard is
-		// the net for a node restart.
+		// content hash over the endpoint). The property lane's transition guard,
+		// held in the ingest's insert, is the net for a node restart.
 		dps = appendVerdict(dps, task.ID, verdicts)
 		dps = append(dps, pings...)
-		if err := publishBatch(nc, node, task.ID, dps); err != nil {
+		if err := publishBatch(out, node, task.ID, dps); err != nil {
 			return err
 		}
 	}
@@ -236,18 +234,11 @@ func clampedCount(dps []collection.Sample) int {
 	return n
 }
 
-// publishBatch maps samples to a per-lane TelemetryBatch and publishes it on
-// the node's own telemetry subject.
-func publishBatch(nc *nats.Conn, node, taskID string, dps []collection.Sample) error {
-	ev := buildBatch(taskID, node, dps)
-	b, err := proto.Marshal(ev)
-	if err != nil {
-		return fmt.Errorf("node: marshal telemetry event: %w", err)
-	}
-	if err := nc.Publish(collection.TelemetrySubject(node), b); err != nil {
-		return fmt.Errorf("node: publish telemetry: %w", err)
-	}
-	return nil
+// publishBatch maps samples to a per-lane TelemetryBatch and hands it to the
+// spool, which ships it on the node's own telemetry subject once the stream
+// acks it, holding it until then (#453).
+func publishBatch(out *telemetrySpool, node, taskID string, dps []collection.Sample) error {
+	return out.send(buildBatch(taskID, node, dps))
 }
 
 // collectDriverTask parses one derived driver poll and runs it: the baked
@@ -743,7 +734,7 @@ func validLabels(labels map[string]string) map[string]string {
 // whose config or payload could not be used: the event carries the reason as
 // its message and the task identity in its payload, so a failing check is a
 // fact on the component's timeline, never only a line in the node's own logs.
-func publishCollectionFailed(nc *nats.Conn, node, taskID string, cause error) error {
+func publishCollectionFailed(out *telemetrySpool, node, taskID string, cause error) error {
 	payload, _ := json.Marshal(map[string]string{"task": taskID})
 	ev := &ogv1.TelemetryBatch{
 		TaskId: taskID,
@@ -757,14 +748,7 @@ func publishCollectionFailed(nc *nats.Conn, node, taskID string, cause error) er
 			Payload: payload,
 		}},
 	}
-	b, err := proto.Marshal(ev)
-	if err != nil {
-		return fmt.Errorf("node: marshal collection-failed event: %w", err)
-	}
-	if err := nc.Publish(collection.TelemetrySubject(node), b); err != nil {
-		return fmt.Errorf("node: publish collection-failed event: %w", err)
-	}
-	return nil
+	return out.send(ev)
 }
 
 // parseHTTPTask reads the request target and timeout from a task's endpoint

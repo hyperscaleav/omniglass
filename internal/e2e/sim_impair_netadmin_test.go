@@ -94,7 +94,7 @@ func TestImpairingASimulatedDeviceShowsInCollection(t *testing.T) {
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "impair-sys", StandardID: &std}, all, all); err != nil {
 		t.Fatal(err)
 	}
-	if err := gw.AssignRole(ctx, "", "impair-sys", "target", "sim-dev", all, all); err != nil {
+	if err := gw.AssignRole(ctx, "", "impair-sys", "target", "sim-dev", all, all, all, all); err != nil {
 		t.Fatal(err)
 	}
 
