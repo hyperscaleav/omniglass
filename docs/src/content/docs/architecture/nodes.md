@@ -61,10 +61,17 @@ A node is a **taggable owner**: governed [tags](/architecture/tags/) whose `appl
 
 The node pulls a **worklist** (the tasks and commands resolved for the components **placed on it**) over a NATS request-reply config pull, and **heartbeats** separately on its own subject ([the protocol](#the-node-server-protocol)), so liveness tracks independently of the pull.
 
-:::design[Target design: the cascade-resolved worklist, tracked in #603]
-The server, not the template, decides placement (next) and resolves the cascade (config / `$var:`
-values, effective `interval`, credentials) before handing the node concrete work. The node never
-sees a template, only materialized, resolved task and command instances.
+Built: the server materializes every task before the node sees it. A driver task carries one baked
+function (its request, schedule and emits, each emit's lane baked at attach), the driver's `session`
+block and resolved ladder, its inputs defaulted at attach, and the secrets that cascade onto its
+component ([ADR-0135](/architecture/decisions/#adr-0135-a-drivers-spec-is-data-one-engine-interprets-it)); the node never
+sees a driver spec, only resolved task and command instances.
+
+:::design[Target design: templates, `$var:` values and placement in the worklist, tracked in #827 and #296]
+The server, not the template, decides placement (next; today an endpoint names its node) and
+resolves the rest of the cascade (`$var:` values, an effective `interval` overriding the driver's
+schedule) before handing the node concrete work. The node never sees a template, only
+materialized, resolved task and command instances.
 :::
 
 ### Config propagation (declared change to running node)
@@ -174,9 +181,13 @@ tree. A full buffer **sheds oldest metrics first and surfaces it** as a
 
 ### Credentials at the edge
 
-:::design[Target design: credentials at the edge, tracked in #603]
-Worklist materialization resolves credentials server-side, so **device secrets travel to the
-node** (over TLS), held **decrypt-on-use**: in memory, or encrypted at rest in a scratch dir with
+Built: worklist materialization resolves credentials server-side down the cascade, so **device
+secrets travel to the node**, confined to the components placed on it; the node holds them in
+memory only and never writes them, and a rotated secret moves the connection fingerprint and
+recycles the session ([ADR-0158](/architecture/decisions/#adr-0158-one-connection-fingerprint-gates-every-connection-on-a-ladder-the-driver-declares)).
+
+:::design[Target design: a TLS bus and decrypt-on-use, tracked in #1250]
+The secrets travel **over TLS** and are held **decrypt-on-use**: in memory, or encrypted at rest in a scratch dir with
 the key from the [`SecretProvider`](/architecture/variables/), **never persisted in plaintext**,
 scoped to the node's placement, re-fetched on the config-generation bump.
 :::
@@ -216,16 +227,16 @@ callback URL resolves to the placed listener's address, never a hardcode.
 Built for driver tasks: a poll runs its request on its schedule and a listen task claims pushed lines
 over its endpoint's held session, both locating and transforming each emit at the edge and landing a
 `collection-failed` for anything that does not parse ([collection](/architecture/collection/)). The
-Expr extraction and the cascading labels below remain design.
+Expr extraction and the cascading labels below remain design. A task runs in one of the two
+[collection](/architecture/collection/) modes, **poll** (on its declared schedule) or **listen**; a
+held-open connection is a **stateful endpoint transport**, not a third task type, and both modes
+assemble the same telemetry payload (below).
 
-:::design[Target design: edge normalization (locate + Expr) and the listen mode, tracked in #603]
+:::design[Target design: the Expr transform and cascading labels at the edge, tracked in #1253; raw on failure is #1251]
 Per task the node runs the protocol over the endpoint's connection, then **normalizes at the
 edge**: the locate + Expr extraction ([collection](/architecture/collection/)) produces samples and
 stamps labels (cascading union + override), keeping the wire bytes as `raw` only on a parse or
-validation failure (for `collection.failed`) or under dev raw-mode. A task runs in one of the two
-[collection](/architecture/collection/) modes, **poll** (on the resolved `interval`) or **listen**;
-a held-open connection is a **stateful endpoint transport**, not a third task type. Both modes
-assemble the same telemetry payload (below).
+validation failure (for `collection.failed`) or under dev raw-mode.
 :::
 
 The built endpoint types, their per-task params, and the fixed samples each emits are the collection **type catalog** ([endpoint types and their config](/architecture/collection/#endpoint-types-and-their-config)); this page covers how the node *executes* them: reachability gating, sessions, the task queue, tick scheduling.
@@ -277,18 +288,12 @@ connect
 [ADR-0160](/architecture/decisions/#adr-0160-tls-is-its-own-transport-over-a-shared-primitive-and-its-pin-is-the-public-key)).
 Still design below: the pool knobs.
 
-::::design[Target design: sessions and the session pool, tracked in #603; the held transports beyond the line protocol, the http stream and the websocket are #1036 (mqtt), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
 A stateful endpoint (`ssh`, `mqtt`, anything held open) becomes a **session** at runtime: one
 connection keyed by `(node, endpoint)`, shared by every task and command under it, handshake and
 auth paid once. A pool holds it open across ticks (reconnect, backoff, keepalive); a listener
 runtime wakes on its inbound. The socket is ephemeral on the node, which **reports lifecycle
 transitions as the `session-state` property and its own logs** (ADR-0150 replaced the designed
 `session_log` rows and `session` view).
-
-:::caution[Open question]
-The exact `session` lifecycle state enum and pooling parameters (idle timeout, max lifetime, pool
-size per endpoint, a shared versus dedicated session for a stream).
-:::
 
 Lifecycle: **establish** (connect, authenticate, subscribe if a stream rides the session),
 **operate** (pollers and stream events over the held connection, demuxed; built for the line
@@ -299,8 +304,17 @@ credential risks lockout; a subscription is session-scoped, so a reconnect **re-
 
 **Where failures land.** `session-state` and the node's logs own **connection health** (cannot connect, auth rejected,
 dropped, timeout); the **data event owns parse health**: a parse failure emits a `collection.failed`
-event carrying the `raw` (plus the `action` row for commands), surfacing as an alertable
+event carrying the cause (plus the `action` row for commands; the `raw` bytes beside it are #1251), surfacing as an alertable
 collection-health sample. A command timeout can touch both.
+
+::::design[Target design: the session pool's knobs, tracked in #1254; the held transports beyond the line protocol, the http stream and the websocket are #1036 (mqtt), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip)]
+A pool holds each session open across ticks today with fixed reconnect, backoff and keepalive; its
+knobs are not yet declared.
+
+:::caution[Open question]
+The exact `session` lifecycle state enum and pooling parameters (idle timeout, max lifetime, pool
+size per endpoint, a shared versus dedicated session for a stream).
+:::
 ::::
 
 ## Inbound handling on a shared connection
@@ -313,16 +327,19 @@ says so). This reverses the design's order below, which tried an outstanding pol
 ([ADR-0151](/architecture/decisions/#adr-0151-a-held-line-session-routes-every-inbound-line-listeners-first-answers-by-reply-shape)); the precedence and its reasons are on
 [collection](/architecture/collection/#listeners-over-a-held-session).
 
-:::design[Target design: the ordered matcher set, tracked in #603]
+:::design[Target design: framing-driven routing and the orphan frame, tracked in #1057; raw on failure is #1251]
 One connection carrying heterogeneous inbound frames cannot assume an arriving frame answers the
 last command. Frames route through an **ordered matcher set**: every task
 contributes a matcher (a poller's awaited-response shape, a listener/stream's `match:` predicate),
 each frame tested **in order**, first match winning. While a poll is **outstanding** its response
 matcher is tried first, then the standing matchers in declared order, so an event arriving mid-poll
-falls through to its stream instead of being mis-eaten as the response; where the protocol itself
-frames responses vs events (xAPI `*r` vs `*e`, a request id), framing drives routing and the regex
-only extracts within the matched frame. An **unmatched** frame lands as `raw` (orphan, logged): a
-missing matcher surfaces, never fails silently.
+falls through to its stream instead of being mis-eaten as the response (the built order reverses
+this, above). Where the protocol itself frames responses vs events (xAPI `*r` vs `*e`, a request
+id; built for a correlated websocket exchange's id), framing drives routing and the regex only
+extracts within the matched frame, and a driver's declared prompt delimits a held answer (#1057).
+An **unmatched** frame lands as `raw` (orphan, logged): a missing matcher surfaces, never fails
+silently. Today it is counted and logged once per tick, and lands as a log line only where the
+spec asks (`unmatched: log`).
 :::
 
 ## The component task queue
@@ -331,7 +348,7 @@ Built: a standing listen task shares its endpoint's held session with the endpoi
 commands, demuxed by one reader (#817); the per-component lanes and the smart-wait gate below remain
 design.
 
-::::design[Target design: the component task queue, tracked in #603; the durable command queue is ADR-0036]
+::::design[Target design: the component task queue, tracked in #1249; commands ride the per-node pull of ADR-0136]
 The node's work is the **component task queue** (distinct from the central **rule engine**;
 [workers](/architecture/workers/)): **poll tasks** (produce samples) and **command tasks** (from
 `run` actions, producing a caused `event` + `action`-row status), split by shape:
@@ -345,8 +362,8 @@ The node's work is the **component task queue** (distinct from the central **rul
 **Smart-wait gate.** After a disruptive command the lane blocks until reachability reports the host
 back up, read from the node's **local** copy, not the sample store; a fixed timeout backstops.
 
-Tasks within one endpoint run serially (one probe, then its tasks in order); only distinct
-endpoints run concurrently.
+Today the node runs its whole worklist serially, one task after another, then its commands; the
+lanes above are what make distinct components run concurrently.
 
 :::caution[Open question]
 Whether to add intra-endpoint concurrency, given that connection and order semantics differ per
@@ -363,7 +380,7 @@ resumes its durable consumer on the command queue, and replays unacked telemetry
 
 Any endpoint with a host address gets reachability for free: the node pings the host and checks the declared port(s), continuously and out of band; a smart default, **bypassable per endpoint** (for endpoints that drop ICMP or have no port).
 
-:::design[Target design: the layered availability gate, tracked in #603]
+:::design[Target design: the layered availability gate's per-host ping, concurrent pre-pass and verdict-gated polls, tracked in #1249; the ping's rtt and loss are #1063]
 The results come back as `reachable` / `port_open` **samples** usable in rules and dashboards, and
 feed the smart-wait gate from the node's local copy: the connection detector and the dashboard
 signal are one always-on probe.
@@ -420,7 +437,7 @@ The node ships a native `TelemetryBatch`: `{ samples, labels }` plus an envelope
 
 The publish is **held and retried** until the stream acks it ([delivery](#delivery-a-batch-lands-once)).
 
-:::design[Target design: raw on failure and the OTLP adapter, tracked in #430]
+:::design[Target design: raw on failure, tracked in #1251; the OTLP adapter and the admission consumer, #430]
 On a parse or validation failure the node also ships
 the **raw** wire bytes so the server can emit a `collection.failed` event; on success raw is omitted
 (there is no telemetry table), unless a **dev raw-mode** is on. An **OTLP adapter** at the edge

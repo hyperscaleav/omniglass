@@ -48,7 +48,7 @@ plus a `template`-scoped binding the sample arc lacks (and unlike samples, confi
 
 ## config: declared device state, keyed to a signal
 
-::::design[The `config` member, tracked in #603]
+::::design[The `config` member's reconcile policy, tracked in #1248]
 A **config** item is the **declared side of a canonical signal**: `video-input` is one key with two
 sides, the **observed** value the device reports (a `property` sample, provenance=observed) and the
 **declared** value you set, sharing the **key**: under the lane model the declared value is itself
@@ -69,9 +69,9 @@ Each piece of a config item has one home, joined by the canonical key:
 |---|---|---|
 | signal definition | name, value domain | `property_type` (the catalog; a numeric signal's unit lives on `metric_type`) |
 | get / set binding | how this device class reads and writes the signal | the component's **product** |
-| declared value | the intent (`HDMI1`), plus the per-item `reconcile` policy | the **config table** (cascaded) |
+| declared value | the intent (`HDMI1`), plus the per-item `reconcile` policy | a `property` series row, `provenance='declared'` (built, [ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)); the policy is #1248 |
 | observed value | what the device reports (`HDMI2`) | `property` rows (observed) |
-| drift | declared ≠ observed | **computed on read**, not stored |
+| drift | declared ≠ observed | **computed on read**, not stored (built: the reconciliation read) |
 
 ### Drift and reconcile
 
@@ -274,7 +274,7 @@ All four have writers: ingest lands `observed`, the command pillar `intended`, t
 `declared`, and since #1017 a [calc rule](/architecture/calculations/) writes `calculated` through the
 same sample-write path.
 
-:::design[Target design: the cross-owner cascade (#291), interpolation and sources (#296), file typing (#242), and the driver column (#603)]
+:::design[Target design: the cross-owner cascade (#1255), interpolation and sources (#296), file typing (#242), and the driver column (#1248)]
 What the design intends, and this slice does **not** yet do:
 
 - **The cross-owner cascade** (`product -> location -> system -> component`, deepest-wins): today a
@@ -286,8 +286,9 @@ What the design intends, and this slice does **not** yet do:
   (`literal` / `variable` / `secret` / `sample` / `file`), the inline pickers, and override rules.
 - **File typing**: a `file` `data_type` with accepted MIME types and formats, giving an attached
   file a semantic role by the property it fills (a `floor_plan`, a `firmware`).
-- **A driver access/mode column** on the contract (get, set, or declare-only), landing with the
-  driver slice; a **node** still has no classifier to declare a contract, by design.
+- **A driver access/mode column** on the contract (get, set, or declare-only): settability comes
+  from the driver spec's command bindings today, and a contract-level column lands with the
+  reconcile policy (#1248); a **node** still has no classifier to declare a contract, by design.
 :::
 
 The Properties panel can set, re-set, and **clear** a value: the effective read returns the
@@ -324,40 +325,21 @@ synonyms) so `Prod`, `prod `, and `PROD` resolve to one value.
 - **Interpolation** renders variables (`$var:`) and secret fields (`$sec:`) into requests (a later
   consumer slice for both); config is read by key like a sample.
 
-:::design[The `config` member's observed-side worker, tracked in #603]
-The observed side of config is maintained by one **event-driven worker** (the one-worker-plus-stages
-model): when a `property` sample lands whose `(owner, key)` a config item is keyed to, it refreshes that item's
-cached observed value, reverse-indexed so "is this sample a config's observed side?" is a sargable
-lookup, not a scan. It is the one controlled, one-directional crossing from the timeseries back into
-current-value config.
-
-```d2
-direction: right
-classes: { node: { style.border-radius: 8 }; key: { style: { border-radius: 8; bold: true } } }
-operator: operator { class: node }
-declared: "config\ndeclared (spec)" { class: key }
-device: device { class: node }
-state: state { class: node }
-observed: "config\nobserved (status)" { class: key }
-command: "command (intended)" { class: node }
-operator -> declared: declares (cascade)
-device -> state: observed (get fn)
-state -> observed: observed-value worker
-declared -- observed: "disagree = drift" { style.stroke-dash: 4 }
-declared -> command: reconcile: enforce (set fn)
-command -> device
-```
-:::
+There is no observed-side worker for config. A design once kept a cached observed value per config
+item, refreshed by a worker as `property` samples landed; [ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)
+retired every maintained current-value cache, so the observed side is the latest `observed` series
+row, read on demand, and the reconciliation read pivots it against the declared row (want, told, is),
+with drift computed on read.
 
 ## How this changes provenance
 
-:::design[The `config` member, tracked in #603]
-Modeling declared state as **config** keeps **declared** out of the sample provenances: samples carry
-three ([observed, calculated, intended](/architecture/properties/#provenance-how-we-know-a-value)),
-and declared intent lives in config, keyed to the same signal but stored down the cascade. The
-lane is unchanged (an observed `power-state = on` is still a `property` sample); only the
-*declared* value moved.
-:::
+Declared intent is the fourth sample provenance, beside
+[observed, calculated and intended](/architecture/properties/#provenance-how-we-know-a-value): a
+declared value is a `property` series row with `provenance='declared'`, keyed to the same signal as
+the observed rows, so an edit appends and an unset is a tombstone row
+([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus),
+built). The lane is unchanged (an observed `power-state = on` is still a `property` sample). The
+earlier design kept declared out of the samples in a separate config store; ADR-0079 reversed it.
 
 ## Storage
 
