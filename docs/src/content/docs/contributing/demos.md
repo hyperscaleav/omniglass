@@ -146,7 +146,9 @@ Every recording has a ceiling, and the limits are defined once beside each recor
 restated here. A terminal demo is held to `MAX_GIF_BYTES` (its GIF plays inline on the PR page) and
 `MAX_SECONDS` in
 [`web/e2e/tapelib.mjs`](https://github.com/hyperscaleav/omniglass/blob/main/web/e2e/tapelib.mjs);
-its hidden waits cost nothing, so what counts is typing and answers. A walkthrough is held to
+its hidden waits cost nothing, so what counts is typing, answers and the pacing rule's holds.
+`make test-web` adds up the least each tape can run (its typing on screen and the rule's least
+hold after each line) and fails one already over `MAX_SECONDS`, before a stack starts. A walkthrough is held to
 `MAX_SECONDS`, `MAX_BYTES` and `MAX_PREVIEW_BYTES` in
 [`web/e2e/walkthroughlib.mjs`](https://github.com/hyperscaleav/omniglass/blob/main/web/e2e/walkthroughlib.mjs),
 and a recording with no preview fails too. A recording at or over a limit fails, naming which, and
