@@ -2,7 +2,7 @@
 title: "A system owns its own telemetry, and a location owns no observed sample"
 date: 2026-10-27
 status: Accepted
-summary: "A system owns metrics, properties and events of its own, written by a calc rule over its members (the primary path) or by a push naming it as the owner (`owner.kind: system` on `POST /telemetry:push`, fenced by `telemetry:push` on the system tier with ADR-0752's refusal split, one check per batch). A system has no endpoints, so a system push names no instance and carries no log line (each a 422), and a system's samples read on its own surfaces, its observed properties through a new `GET /systems/{name}/reconciliation`. Node-collected system telemetry is the shared-API fan-out of #1282, never a system-owned endpoint. A location owns no observed sample: the claim that location-level samples are first-class narrows to a location's calculated health"
+summary: "A system owns metrics, properties and events of its own, written by a calc rule over its members (the primary path) or by a push naming it as the owner (`owner.kind: system` on `POST /telemetry:push`, fenced by `telemetry:push` on the system tier with ADR-0752's refusal split, one check per batch). A system has no endpoints, so a system push names no instance and carries no log line (each a 422), and a system's samples read on its own surfaces, its observed properties through a new `GET /systems/{name}/reconciliation`. Node-collected system telemetry is the shared-API fan-out of #1282, never a system-owned endpoint. A location owns no observed sample: the claim that location-level samples are first-class narrows to a location's declared properties and calculated health"
 refs: [422, 1282, 752, 456, 430]
 ---
 
@@ -38,8 +38,8 @@ refs: [422, 1282, 752, 456, 430]
      (#1282). An endpoint stays a component's.
   6. **A location owns no observed sample.** Nothing collects or pushes telemetry for a place: a
      push may not name a location, and the docs no longer claim location-level samples are
-     first-class. The location arm of the sample arc stays for the one location-owned sample there
-     is, its calculated health.
+     first-class. The location arm of the sample arc stays for what a location does own: an
+     operator's declared properties and its calculated health.
 - **Context:** The docs called system-, location- and node-level samples first-class while the ingest
   hardcoded `owner_kind=component` on every lane and the push route refused any other owner kind, so
   an operator following the SaaS guidance ("telemetry of a room maps to system-owned samples") found
