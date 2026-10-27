@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, fireEvent, screen, waitFor } from "@solidjs/testing-library";
+import { render, fireEvent, screen, waitFor, within } from "@solidjs/testing-library";
 import { createSignal } from "solid-js";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import SessionNotice from "./SessionNotice";
@@ -63,6 +63,9 @@ function mount(start: ReachEndpoint, me: Me | null = operator) {
 
 const trustButton = () => screen.getByRole("button", { name: "Trust this key" }) as HTMLButtonElement;
 const dialog = () => screen.getByRole("alertdialog");
+// The confirm's own button, found inside the dialog: the trigger shares its name, and
+// Kobalte hides the page outside a modal a frame after it opens, not on open.
+const confirmButton = () => within(dialog()).getByRole("button", { name: "Trust this key" }) as HTMLButtonElement;
 
 describe("PinnedKeyNotice", () => {
   beforeEach(() => vi.restoreAllMocks());
@@ -107,7 +110,7 @@ describe("PinnedKeyNotice", () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(ok());
     const { invalidate } = mount(hostKeyRejected());
     fireEvent.click(trustButton());
-    fireEvent.click(screen.getByRole("button", { name: "Trust this key" }));
+    fireEvent.click(confirmButton());
     await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
     const req = fetchMock.mock.calls[0][0] as Request;
     expect(req.method).toBe("POST");
@@ -131,7 +134,7 @@ describe("PinnedKeyNotice", () => {
     const d = dialog();
     await waitFor(() => expect(screen.getByRole("alert").textContent).toMatch(/offers a different key/i));
     expect(d.textContent).toContain(offered);
-    const confirm = screen.getByRole("button", { name: "Trust this key" }) as HTMLButtonElement;
+    const confirm = confirmButton();
     expect(confirm.disabled).toBe(true);
     fireEvent.click(confirm);
     await new Promise((r) => setTimeout(r, 20));
@@ -147,7 +150,7 @@ describe("PinnedKeyNotice", () => {
     );
     mount(hostKeyRejected());
     fireEvent.click(trustButton());
-    fireEvent.click(screen.getByRole("button", { name: "Trust this key" }));
+    fireEvent.click(confirmButton());
     expect((await screen.findByRole("alert")).textContent).toContain(offeredAgain);
     expect(screen.getByRole("alertdialog")).toBeTruthy();
   });
@@ -197,7 +200,7 @@ describe("PinnedKeyNotice for a probe's gate, no session held", () => {
     expect(screen.getByTestId("offered-key").textContent).toBe(offered);
     expect(screen.getByRole("button", { name: /retry/i })).toBeTruthy();
     fireEvent.click(trustButton());
-    fireEvent.click(screen.getByRole("button", { name: "Trust this key" }));
+    fireEvent.click(confirmButton());
     await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
     expect(await (fetchMock.mock.calls[0][0] as Request).json()).toEqual({ host_key: offered });
     await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: [...REACHABILITY_KEY(compId)] }));
