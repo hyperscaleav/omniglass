@@ -228,19 +228,23 @@ seen stamp. Only the transport is a double. The workload (`internal/footprint`) 
 per task per check, built deterministically from the task and the tick, so two runs land the
 same rows and a number that moves is the code moving.
 
-It holds four quantities and reports two more:
+It holds five things and reports the rest:
 
 - **Statements per batch**, exact. A change that adds one fails with the statements a batch
   issued, so the failure names what moved.
 - **Rows per observation on each lane**, exact. A metric stores every observation; a property
   stores transitions only, so a steady window writes no property rows.
-- **Heap bytes per stored metric row** after `VACUUM`, exact. The rows are fixed width and land
-  in order, so their pages are the same on every machine for one Postgres major.
-- **Index bytes per stored metric row** after `VACUUM`, bounded, not pinned. The indexes lead
-  with the fleet's component uuids, which the dev seed mints at random, so page splits differ
-  from run to run; the bound catches an added index or a wider key, not a split.
-- Reported only: receipt bytes per batch, and **WAL bytes per observation**, which moves with
-  checkpoint timing and is the cost a replica or a WAL archive pays.
+- **Metric rows per full heap page**, exact, after `VACUUM`. Density rather than a page count,
+  so a fleet that grows by a few endpoints moves nothing unless a row does.
+- **The metric table's index definitions**, exact, so an added, dropped or re-keyed index
+  fails by name.
+- **Index bytes per stored metric row**, bounded, measured after `REINDEX`. A live index's page
+  splits follow the fleet's component uuids, which the dev seed mints at random, so its size
+  differs from run to run by about a fifth; a rebuilt index is the same every run, and the
+  bound sits just over it.
+- Reported only: the live index size, receipt bytes per batch, and **WAL bytes per
+  observation**, which moves with checkpoint timing and is the cost a replica or a WAL archive
+  pays. Wall-clock time is `BenchmarkIngestFootprint`'s, in `make bench`.
 
 The workload is declared by shape, not by driver: storage cost follows series per component,
 lane, cadence and how often a value changes, not the protocol that produced it.

@@ -201,10 +201,13 @@ bench:
 # The ingest footprint (#1272): the standard workload delivered through the real
 # telemetry handler over the dev scenario's fleet, printing what one node batch
 # costs the database (statements, rows per observation, heap and index bytes
-# per row, receipt bytes, WAL bytes per observation). The same test runs in
-# make test and holds the counts; this target only prints them.
+# per row, receipt bytes, WAL bytes per observation, and the statements of one
+# batch). The same test runs in make test and holds the counts; this target
+# prints them and exits with the test's own status.
 footprint:
-	go test ./internal/bus/ -run '^TestIngestFootprint$$' -count=1 -v 2>&1 | grep -E 'footprint_test.go|^(ok|FAIL|---)'
+	@out=$$(go test ./internal/bus/ -run '^TestIngestFootprint$$' -count=1 -v 2>&1); status=$$?; \
+	printf '%s\n' "$$out" | grep -E 'footprint_test.go|^ {10}[a-z]|^(ok|FAIL|---)'; \
+	if [ $$status -ne 0 ]; then printf '%s\n' "$$out" | tail -40; fi; exit $$status
 
 # The tests that need NET_ADMIN (impairments rewrite the firewall and tc of the
 # network they run in) run in a container of their own, never on the host:

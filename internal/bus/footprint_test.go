@@ -34,12 +34,15 @@ import (
 // one of its simulated endpoints' tasks, so the node writer's binding check
 // runs as it does in production.
 //
-// What gates (exact or bounded, deterministic): statements per batch, rows per
-// observation on each lane, and bytes per stored metric row after VACUUM. None
-// of these depends on the machine or the day; bytes depend on the schema and
-// the Postgres major, which the harness pins. What does not gate: WAL bytes
-// per observation, which moves with checkpoint timing, and wall-clock time,
-// which BenchmarkIngestFootprint measures and ADR-0094 forbids gating on.
+// What gates, all deterministic: statements per batch (exact), rows per
+// observation on each lane (exact), metric rows per full heap page (exact),
+// the metric table's index definitions (exact), and metric index bytes per
+// row after REINDEX (bounded). None of these depends on the machine or the
+// day; bytes depend on the schema and the Postgres major, which the harness
+// pins. What does not gate: the live index size (its page splits follow the
+// fleet's random uuids), receipt bytes, WAL bytes per observation, which move
+// with checkpoint timing, and wall-clock time, which BenchmarkIngestFootprint
+// measures and ADR-0094 forbids gating on.
 
 const footprintNode = "edge-hq"
 
@@ -50,22 +53,31 @@ const footprintTicks = 4
 // The held footprint of the standard workload, measured 2026-10-27 on main at
 // 50d4ae8d. A change that moves one of these on purpose updates it in the same
 // PR and says why in the PR body; one that moves it by accident fails here
-// with the statements a batch issued.
+// with what moved.
 const (
 	// wantStatementsPerBatch is every statement one batch costs, from the
 	// owner resolution to the endpoint's seen stamp. Exact.
 	wantStatementsPerBatch = 31
-	// wantMetricHeapPages is the heap the window's 2,080 metric rows occupy
-	// after VACUUM: 65 rows to an 8 KiB page, 126 bytes a row. Exact, because
-	// the rows are fixed width and land in order.
-	wantMetricHeapPages = 32
-	// maxMetricIndexBytesPerRow bounds the metric indexes per row after VACUUM.
-	// It is a bound, not a pin: the indexes lead with the fleet's component
-	// uuids, which the dev seed mints at random, so page splits differ from run
-	// to run (measured 110 to 130). The bound catches a structural change (an
-	// added index, a wider key), not a page split.
-	maxMetricIndexBytesPerRow = 150
+	// wantMetricRowsPerPage is how many of the window's metric rows fill one
+	// 8 KiB heap page (about 126 bytes a row). Exact on every full page. Density
+	// rather than a page count, so a fleet that grows by a few endpoints moves
+	// nothing here unless a row does.
+	wantMetricRowsPerPage = 65
+	// maxMetricIndexBytesPerRow bounds the metric indexes per window row,
+	// measured after REINDEX so the figure is the same on every run (a live
+	// index's page splits follow the fleet's random uuids and vary by a fifth).
+	// The bound is a little over the measured figure; the index definitions
+	// below are pinned exactly, so an added index fails by name, not by size.
+	maxMetricIndexBytesPerRow = 96
 )
+
+// wantMetricIndexes is every index on the metric table, by definition. An
+// added, dropped or re-keyed index changes this list.
+var wantMetricIndexes = []string{
+	"CREATE INDEX metric_owner_idx ON public.metric USING btree (component_id, metric_type_id, instance, ts DESC) WHERE (component_id IS NOT NULL)",
+	"CREATE UNIQUE INDEX metric_pkey ON public.metric USING btree (id)",
+	"CREATE INDEX metric_ts_brin ON public.metric USING brin (ts)",
+}
 
 type footprintFixture struct {
 	srv     *Server
@@ -128,7 +140,7 @@ func newFootprintFixture(tb testing.TB) *footprintFixture {
 	}
 	tb.Cleanup(func() { _ = conn.Close(context.Background()) })
 	return &footprintFixture{
-		srv:     &Server{store: gw},
+		srv:     &Server{store: gw, orphans: newOrphanTally(orphanWindow)},
 		counter: counter,
 		conn:    conn,
 		tasks:   tasks,
@@ -167,19 +179,58 @@ func (f *footprintFixture) tick(tb testing.TB, tick int) {
 	}
 }
 
-// relationBytes is a relation's heap and its indexes after VACUUM, so the
-// figures are what the rows occupy rather than what the last writes left
-// dirty.
-func (f *footprintFixture) relationBytes(tb testing.TB, table string) (heap, index int64) {
+// relationBytes is a relation's heap and its indexes after VACUUM. With
+// rebuilt set, the indexes are rebuilt first (REINDEX), so the figure is what
+// the entries occupy packed, the same on every run, rather than what this
+// run's page splits left.
+func (f *footprintFixture) relationBytes(tb testing.TB, table string, rebuilt bool) (heap, index int64) {
 	tb.Helper()
 	ctx := context.Background()
 	if _, err := f.conn.Exec(ctx, "vacuum "+pgx.Identifier{table}.Sanitize()); err != nil {
 		tb.Fatalf("vacuum %s: %v", table, err)
 	}
+	if rebuilt {
+		if _, err := f.conn.Exec(ctx, "reindex table "+pgx.Identifier{table}.Sanitize()); err != nil {
+			tb.Fatalf("reindex %s: %v", table, err)
+		}
+	}
 	if err := f.conn.QueryRow(ctx, `select pg_relation_size($1::regclass), pg_indexes_size($1::regclass)`, table).Scan(&heap, &index); err != nil {
 		tb.Fatalf("size %s: %v", table, err)
 	}
 	return heap, index
+}
+
+// rowsPerFullPage is how many of the metric rows after afterID each heap page
+// holds, for every page but the window's first and last (which share space
+// with rows outside it, or are not full yet).
+func (f *footprintFixture) rowsPerFullPage(tb testing.TB, afterID int64) []int64 {
+	tb.Helper()
+	rows, err := f.conn.Query(context.Background(), `select count(*) from metric where id > $1
+		group by (ctid::text::point)[0] order by (ctid::text::point)[0]`, afterID)
+	if err != nil {
+		tb.Fatalf("rows per page: %v", err)
+	}
+	counts, err := pgx.CollectRows(rows, pgx.RowTo[int64])
+	if err != nil {
+		tb.Fatalf("rows per page: %v", err)
+	}
+	if len(counts) < 3 {
+		tb.Fatalf("the window spans %d heap pages; at least 3 are needed to see a full one", len(counts))
+	}
+	return counts[1 : len(counts)-1]
+}
+
+func (f *footprintFixture) indexDefinitions(tb testing.TB, table string) []string {
+	tb.Helper()
+	rows, err := f.conn.Query(context.Background(), `select indexdef from pg_indexes where tablename = $1 order by indexname`, table)
+	if err != nil {
+		tb.Fatalf("index definitions: %v", err)
+	}
+	defs, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		tb.Fatalf("index definitions: %v", err)
+	}
+	return defs
 }
 
 func (f *footprintFixture) count(tb testing.TB, sql string) int64 {
@@ -213,9 +264,10 @@ func TestIngestFootprint(t *testing.T) {
 	f.tick(t, 0)
 
 	metricRows0 := f.count(t, `select count(*) from metric`)
+	lastMetricID := f.count(t, `select coalesce(max(id), 0) from metric`)
 	propertyRows0 := f.count(t, `select count(*) from property where provenance = 'observed'`)
-	metricHeap0, metricIndex0 := f.relationBytes(t, "metric")
-	receiptHeap0, receiptIndex0 := f.relationBytes(t, "telemetry_receipt")
+	_, metricIndex0 := f.relationBytes(t, "metric", true)
+	receiptHeap0, receiptIndex0 := f.relationBytes(t, "telemetry_receipt", false)
 	lsn0 := f.walLSN(t)
 	f.counter.Reset()
 
@@ -237,9 +289,12 @@ func TestIngestFootprint(t *testing.T) {
 	observations := batches * (metricsPerBatch + propertiesPerBatch)
 	metricRows := f.count(t, `select count(*) from metric`) - metricRows0
 	propertyRows := f.count(t, `select count(*) from property where provenance = 'observed'`) - propertyRows0
-	metricHeap, metricIndex := f.relationBytes(t, "metric")
-	metricHeap, metricIndex = metricHeap-metricHeap0, metricIndex-metricIndex0
-	receiptHeap, receiptIndex := f.relationBytes(t, "telemetry_receipt")
+	_, liveIndex := f.relationBytes(t, "metric", false)
+	liveIndex -= metricIndex0
+	perPage := f.rowsPerFullPage(t, lastMetricID)
+	_, metricIndex := f.relationBytes(t, "metric", true)
+	metricIndex -= metricIndex0
+	receiptHeap, receiptIndex := f.relationBytes(t, "telemetry_receipt", false)
 	receiptBytes := receiptHeap - receiptHeap0 + receiptIndex - receiptIndex0
 	var walBytes int64
 	if err := f.conn.QueryRow(ctx, `select pg_wal_lsn_diff($1::pg_lsn, $2::pg_lsn)::bigint`, lsn1, lsn0).Scan(&walBytes); err != nil {
@@ -251,8 +306,9 @@ func TestIngestFootprint(t *testing.T) {
 	t.Logf("  statements per batch     %8.2f", float64(statements)/float64(batches))
 	t.Logf("  metric rows per obs      %8.3f  (%d rows for %d metric observations)", float64(metricRows)/float64(batches*metricsPerBatch), metricRows, batches*metricsPerBatch)
 	t.Logf("  property rows per obs    %8.3f  (%d rows for %d property observations)", float64(propertyRows)/float64(batches*propertiesPerBatch), propertyRows, batches*propertiesPerBatch)
-	t.Logf("  metric heap per row      %8.1f  (after VACUUM; %d bytes)", float64(metricHeap)/float64(metricRows), metricHeap)
-	t.Logf("  metric index per row     %8.1f  (after VACUUM; varies with the fleet's random uuids)", float64(metricIndex)/float64(metricRows))
+	t.Logf("  metric rows per heap page %7d  (%d full pages; %.1f bytes a row)", perPage[0], len(perPage), 8192/float64(perPage[0]))
+	t.Logf("  metric index per row     %8.1f  (after REINDEX; held)", float64(metricIndex)/float64(metricRows))
+	t.Logf("  metric index per row     %8.1f  (live, as this run's splits left it; varies with the fleet's random uuids)", float64(liveIndex)/float64(metricRows))
 	t.Logf("  receipt bytes per batch  %8.1f", float64(receiptBytes)/float64(batches))
 	t.Logf("  WAL bytes per obs        %8.1f  (diagnostic, not held)", float64(walBytes)/float64(observations))
 
@@ -267,12 +323,20 @@ func TestIngestFootprint(t *testing.T) {
 	if propertyRows != 0 {
 		t.Errorf("property rows: %d in a window where no property changed; the property lane stores transitions only", propertyRows)
 	}
-	if want := int64(wantMetricHeapPages * 8192); metricHeap != want {
-		t.Errorf("metric heap: %d bytes (%.1f a row) for the window, want %d (%d pages, %.1f a row)",
-			metricHeap, float64(metricHeap)/float64(metricRows), want, wantMetricHeapPages, float64(want)/float64(metricRows))
+	for i, n := range perPage {
+		if n != wantMetricRowsPerPage {
+			t.Errorf("metric heap: full page %d of the window holds %d rows, want %d (%.1f bytes a row, want %.1f)",
+				i+1, n, wantMetricRowsPerPage, 8192/float64(n), 8192/float64(wantMetricRowsPerPage))
+		}
 	}
 	if perRow := float64(metricIndex) / float64(metricRows); perRow > maxMetricIndexBytesPerRow {
-		t.Errorf("metric indexes: %.1f bytes a row, over the %d bound", perRow, maxMetricIndexBytesPerRow)
+		t.Errorf("metric indexes: %.1f bytes a row after REINDEX, over the %d bound", perRow, maxMetricIndexBytesPerRow)
+	}
+	if got := f.indexDefinitions(t, "metric"); strings.Join(got, "\n") != strings.Join(wantMetricIndexes, "\n") {
+		t.Errorf("metric indexes changed:\n  got  %s\n  want %s", strings.Join(got, "\n       "), strings.Join(wantMetricIndexes, "\n       "))
+	}
+	if testing.Verbose() {
+		t.Logf("the statements of one batch:\n  %s", strings.Join(firstBatchStatements(f.counter, wantStatementsPerBatch), "\n  "))
 	}
 }
 
