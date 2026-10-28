@@ -565,6 +565,9 @@ type Gateway interface {
 	// CatalogFingerprint digests the rows the ingest sample registry is built
 	// from, so the consumer rebuilds its registry only when it changes (#1279).
 	CatalogFingerprint(ctx context.Context) (string, error)
+	// CommandTargetedProperties is the property type names some command type
+	// targets, for the consumer to keep beside its registry (#1299).
+	CommandTargetedProperties(ctx context.Context) (map[string]bool, error)
 	GetEventType(ctx context.Context, name string) (*EventType, error)
 	CreateEventType(ctx context.Context, actorID string, spec EventTypeSpec) (*EventType, error)
 	UpdateEventType(ctx context.Context, actorID, name string, patch EventTypePatch) (*EventType, error)

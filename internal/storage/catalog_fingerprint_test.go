@@ -68,6 +68,10 @@ func TestCatalogFingerprintMovesWithEveryRegistryTable(t *testing.T) {
 		{"calc_rule insert", `insert into calc_rule (name, owner_kind, reduce, output_lane, output_metric_type_id)
 			values ('fp-calc', 'component', '{}', 'metric', (select id from metric_type where name = 'fp-metric'))`},
 		{"calc_rule update", `update calc_rule set enabled = false where name = 'fp-calc'`},
+		{"command_type insert", `insert into command_type (name, label, target_property_type_id)
+			values ('fp-command', 'FP command', (select id from property_type where name = 'fp-property'))`},
+		{"command_type update", `update command_type set description = 'changed' where name = 'fp-command'`},
+		{"command_type delete", `delete from command_type where name = 'fp-command'`},
 		{"calc_rule delete", `delete from calc_rule where name = 'fp-calc'`},
 		{"event_type delete", `delete from event_type where name = 'fp-event'`},
 		{"property_type delete", `delete from property_type where name = 'fp-property'`},
