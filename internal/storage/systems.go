@@ -100,6 +100,10 @@ type StandardMapPosition struct {
 // duplicate (role, position) pair.
 var ErrStandardMapInvalid = errors.New("storage: standard map invalid")
 
+// ValidateStandardMap is validateStandardMap for a caller outside storage:
+// the template loader holds a shipped map to the rule a write applies.
+func ValidateStandardMap(raw json.RawMessage) error { return validateStandardMap(raw) }
+
 // validateStandardMap parses and checks a map declaration. A JSON null is
 // valid and means "clear the declaration".
 func validateStandardMap(raw json.RawMessage) error {
@@ -279,30 +283,8 @@ func mapStandardWriteErr(err error) error {
 	return fmt.Errorf("storage: standard write: %w", err)
 }
 
-// UpsertStandard installs or updates a standard by id, the boot-seed phase's
-// write. Idempotent: re-seeding the same id updates it in place.
-// SeedStandard inserts a shipped example standard only when it is absent. A
-// standard is operator-owned content: it is forked from an in-code template and
-// then belongs to the fleet, so re-seeding must never reassert over an edit the
-// operator made. This is deliberately not UpsertStandard, whose ON CONFLICT DO
-// UPDATE is the authoritative behavior the canonical catalogs want.
-//
-// It marks the row seeded, on the insert and on every later boot (a row an
-// older binary seeded included), touching nothing else: the mark is what makes
-// RenameRegistry refuse it, since a renamed example would be planted again
-// here under its shipped name.
-func (p *PG) SeedStandard(ctx context.Context, st Standard) error {
-	_, err := p.pool.Exec(ctx, `
-		insert into standard (name, official, label, parent_standard_id, label_rule, seeded)
-		values ($1, $2, $3, (select id from standard where name = nullif($4, '')), $5, true)
-		on conflict (name) do update set seeded = true where not standard.seeded`,
-		st.Name, st.Official, labelOrNull(st.Label), st.ParentStandardID, nilIfEmpty(st.LabelRule))
-	if err != nil {
-		return fmt.Errorf("storage: seed standard %q: %w", st.Name, err)
-	}
-	return nil
-}
-
+// UpsertStandard installs or updates a standard by id. Idempotent:
+// re-running the same id updates it in place.
 func (p *PG) UpsertStandard(ctx context.Context, st Standard) error {
 	_, err := p.pool.Exec(ctx, `
 		insert into standard (name, official, label, parent_standard_id, label_rule)

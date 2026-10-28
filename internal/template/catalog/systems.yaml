@@ -1,0 +1,36 @@
+# The system templates (kind system_template): a whole system, built to a
+# standard, a component for each role. Instantiating one
+# (POST /systems:instantiate) lands the system, its standard (the operator's
+# of that name, else forked from the standard template in the same
+# transaction), a component per role filled to quorum and assigned, and the
+# declared values, together or not at all (ADR-0827).
+#
+# Each role names a component template (product, attach preset and declared
+# values) or a bare product. A role inside a choice is filled only for the
+# template's alternate: a system template staffs one way of answering each
+# choice, and leaves the others unbuilt without impairing the system.
+templates:
+  - kind: system_template
+    name: mr55-system
+    label: Meeting Room 55, staffed
+    description: >-
+      A Meeting Room 55 system with a video bar, its pinned 55-inch display,
+      touch control and a scheduling panel.
+    system:
+      standard: mr55
+      system_type: meeting
+      roles:
+        video-bar: { component: kestrel-vroom }
+        main-display: { component: boreal-edge-55 }
+        touch-control: { component: newtron-panel-7 }
+        scheduling-panel: { component: newtron-slate-5 }
+  - kind: system_template
+    name: ds55-system
+    label: Digital Sign 55, staffed
+    description: A Digital Sign 55 system with its pinned 55-inch panel and a media player.
+    system:
+      standard: ds55
+      system_type: sign
+      roles:
+        panel: { component: boreal-edge-55 }
+        player: { component: boreal-cast-m1 }

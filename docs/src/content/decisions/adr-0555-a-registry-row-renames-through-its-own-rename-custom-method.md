@@ -1,7 +1,7 @@
 ---
 title: "A registry row renames through its own :rename custom method"
 date: 2026-10-26
-status: "Accepted"
+status: "Accepted, amended by ADR-0827"
 summary: "A vendor, driver, product, standard or location type renames through `POST /<registry>/{id}:rename`, gated by its own `<registry>:rename` (admin), not a name field on each patch as #555 first proposed. One gateway primitive (`RenameRegistry`) serves all five: it validates the name, refuses an official row and a seeded example standard (the boot seed owns both by name), moves the one column, carries every by-value copy of the name along (a location type's in `allowed_parent_types` and in forks, a driver's in the tasks it derives, by re-deriving them), and audits it in the transaction. The telemetry-keyed catalogs and the remaining type registries wait on #1188"
 refs: [555, 825, 827, 1188]
 ---

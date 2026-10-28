@@ -226,15 +226,12 @@ func TestLocationTypeRenameRewritesPlacementRules(t *testing.T) {
 	}
 }
 
-// TestASeededStandardKeepsItsName: the boot seed plants its example standards
-// by NAME, only when absent (SeedStandard), so a renamed one would be planted
-// again on the next boot, beside the operator's renamed row, with the shipped
-// roles and choices hung on it. The rename refuses a seeded standard instead,
-// naming why, and a reboot then finds one row under the shipped name. A row an
-// older binary seeded (before the marker existed) is marked by the next boot,
-// so it is refused too. Forking a template into a standard of the operator's
-// own is #827's.
-func TestASeededStandardKeepsItsName(t *testing.T) {
+// TestAStandardTheOldSeedPlantedIsTheOperators: a fleet that booted an older
+// binary holds the shipped example standards as rows the seed planted by name.
+// The seed plants none now (ADR-0827), so such a row is the operator's like any
+// other: it renames, a reboot brings nothing back under the shipped name, and
+// it deletes and stays deleted.
+func TestAStandardTheOldSeedPlantedIsTheOperators(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -261,30 +258,27 @@ func TestASeededStandardKeepsItsName(t *testing.T) {
 		}
 		return n
 	}
+	// What the old seed left behind: two example standards, written as it
+	// wrote them (unaudited, official false).
+	for _, name := range []string{"meeting-room", "classroom"} {
+		if _, err := conn.Exec(ctx, `insert into standard (name, official, label) values ($1, false, $1)`, name); err != nil {
+			t.Fatalf("plant %s as the old seed did: %v", name, err)
+		}
+	}
 
-	if _, err := gw.RenameRegistry(ctx, "", "standard", "meeting-room", "conference-room"); !errors.Is(err, storage.ErrRegistrySeededExample) {
-		t.Fatalf("rename a seeded standard: want ErrRegistrySeededExample, got %v", err)
+	if _, err := gw.RenameRegistry(ctx, "", "standard", "meeting-room", "conference-room"); err != nil {
+		t.Fatalf("rename a standard the old seed planted: %v", err)
+	}
+	if err := gw.DeleteStandard(ctx, "", "classroom"); err != nil {
+		t.Fatalf("delete a standard the old seed planted: %v", err)
 	}
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatalf("reboot seed: %v", err)
 	}
-	if n, m := named("meeting-room"), named("conference-room"); n != 1 || m != 0 {
-		t.Fatalf("after a refused rename and a reboot: %d meeting-room, %d conference-room; want 1 and 0", n, m)
-	}
-
-	// A row seeded before the marker existed reads unmarked until the next boot,
-	// which marks it without touching anything the operator edited.
-	if _, err := conn.Exec(ctx, `update standard set seeded = false, label = 'Our Meeting Room' where name = 'meeting-room'`); err != nil {
-		t.Fatalf("unmark: %v", err)
-	}
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("reboot seed: %v", err)
-	}
-	if _, err := gw.RenameRegistry(ctx, "", "standard", "meeting-room", "conference-room"); !errors.Is(err, storage.ErrRegistrySeededExample) {
-		t.Fatalf("rename a standard an older boot seeded: want ErrRegistrySeededExample, got %v", err)
-	}
-	if got, err := gw.GetStandard(ctx, "meeting-room"); err != nil || got.Label != "Our Meeting Room" {
-		t.Fatalf("the boot that marked it reverted the operator's edit: %+v, %v", got, err)
+	for name, want := range map[string]int{"meeting-room": 0, "conference-room": 1, "classroom": 0} {
+		if got := named(name); got != want {
+			t.Errorf("after the rename, the delete and a reboot: %d standards named %s, want %d", got, name, want)
+		}
 	}
 }
 

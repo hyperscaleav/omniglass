@@ -4051,9 +4051,29 @@ export interface paths {
         put?: never;
         /**
          * Rename a standard
-         * @description Moves a custom standard's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official standard keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. A shipped example standard keeps its name too (409): the boot seed plants it by name whenever it is absent, so a renamed one would come back on the next boot; forking a template into a standard of your own is #827. Audited as rename. Gated by standard:rename.
+         * @description Moves a custom standard's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official standard keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. Audited as rename. Gated by standard:rename.
          */
         post: operations["rename-standard"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/standards:fork": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fork a standard from a template
+         * @description Writes one standard of your own (official false) from a standard template in the catalog: its roles, choices, property and metric contract lines and map, in one transaction, audited once as a fork naming the template. Nothing points back at the template, so a later release can change the template without touching your standard, and your standard renames, edits and deletes like any you created. The name is the template's unless you give one; a taken name is a 409, so forking the same template again needs a second name. A variant forks only once you hold the standard it hangs off (the parent you name, or yours named for the template's parent), else a 422 naming the template to fork first. An unknown template is a 404. Gated by standard:create.
+         */
+        post: operations["fork-standard"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4878,6 +4898,46 @@ export interface paths {
          * @description Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is rejected and reported in the response rather than silently dropped, and a property or event payload violating its type's schema refuses the batch with a 422. Every key has one writer class, and a push writes only a collected key: a key a native probe writes (a reachability verdict or rung, a probe metric or timing, a held session's state, collection-failed) is a node's own observation and a platform key (health) is the platform's, each rejected by name on every lane; a key a calc rule outputs is rejected naming the rule. The owner is a component or a system; a system batch carries no log lines (a log line is component-owned), refused with a 422. An observation's instance is the endpoint it came through: one naming no endpoint on the owner refuses the batch with a 422 naming it and listing the owner's endpoints, and a system has none, so a system's observations name no instance. Gated by telemetry:push, whose scope must cover the declared owner on its own tier (one check per batch): the push scope alone is enough to see the owner (no component:read or system:read is needed), an owner outside both the push scope and the caller's read of that kind is a non-disclosing 404, and one the caller can read but may not push to is a 403.
          */
         post: operations["push-telemetry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List templates
+         * @description Lists the template catalog this binary ships, ordered by kind then name, optionally one kind. A template is an example an operator clones: forking a standard template (POST /standards:fork) writes an ordinary standard the operator owns, and nothing points back at the template. Gated by template:read.
+         */
+        get: operations["list-templates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/templates/{template}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a template
+         * @description Reads one template from the catalog by name, whole: its kind and the body that kind carries. An unknown name is a 404. Gated by template:read.
+         */
+        get: operations["get-template"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -7428,6 +7488,25 @@ export interface components {
             /** @description Every system the caller may read, each carrying its dots */
             systems: components["schemas"]["FleetSystemBody"][] | null;
         };
+        ForkStandardInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ForkStandardInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The standard's label; omitted takes the template's */
+            label?: string;
+            /** @description The name the standard takes; omitted takes the template's */
+            name?: string;
+            /** @description For a variant, the standard it hangs off, by name or uuid; omitted takes your standard named for the template's parent */
+            parent?: string;
+            /**
+             * @description The standard template to fork, by name
+             * @example meeting-room
+             */
+            template: string;
+        };
         GrantBody: {
             /**
              * Format: uri
@@ -8132,6 +8211,16 @@ export interface components {
              */
             readonly $schema?: string;
             tasks: components["schemas"]["TaskBody"][] | null;
+        };
+        ListTemplatesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListTemplatesOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The catalog's templates, ordered by kind then name */
+            templates: components["schemas"]["TemplateBody"][] | null;
         };
         ListTransportsOutputBody: {
             /**
@@ -10612,6 +10701,175 @@ export interface components {
             node_id?: string;
             /** @description The inline probe settings (jsonb) */
             spec?: unknown;
+        };
+        TemplateAlternateBody: {
+            /** @description What an operator reads for the alternate */
+            label: string;
+            /** @description The alternate's name, unique within its choice */
+            name: string;
+        };
+        TemplateBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/TemplateBody.json
+             */
+            readonly $schema?: string;
+            /** @description A component template's body */
+            component?: components["schemas"]["TemplateComponentBody"];
+            /** @description What the template is for */
+            description?: string;
+            /**
+             * @description What the template creates
+             * @enum {string}
+             */
+            kind: "standard_template" | "system_template" | "place_template" | "component_template";
+            /** @description What an operator reads for the template */
+            label: string;
+            /** @description The template's name, unique across the catalog */
+            name: string;
+            /** @description A place template's body: the root of the subtree */
+            place?: components["schemas"]["TemplatePlaceBody"];
+            /** @description A standard template's body: what a fork writes */
+            standard?: components["schemas"]["TemplateStandardBody"];
+            /** @description A system template's body */
+            system?: components["schemas"]["TemplateSystemBody"];
+        };
+        TemplateChoiceBody: {
+            /** @description The ways to answer the choice, the first the template's default */
+            alternates: components["schemas"]["TemplateAlternateBody"][] | null;
+            /** @description What an operator reads for the choice */
+            label: string;
+            /** @description The choice's name, unique within the standard */
+            name: string;
+        };
+        TemplateComponentBody: {
+            /** @description The driver the attach preset is for, when it is not the product's own */
+            driver?: string;
+            /** @description The attach preset: every driver input but the address, a secret input as a secret's name */
+            inputs?: {
+                [key: string]: string;
+            };
+            /** @description The product the component is */
+            product: string;
+            /** @description Declared property values, by property name */
+            properties?: {
+                [key: string]: unknown;
+            };
+        };
+        TemplateContractBody: {
+            /** @description The contract default, a JSON value; omitted when the line sets none */
+            default?: unknown;
+            /** @description The property or metric the standard declares */
+            name: string;
+            /** @description Whether a conforming system must carry a value */
+            required?: boolean;
+        };
+        TemplateMapBody: {
+            /**
+             * Format: double
+             * @description The layout's width over its height
+             */
+            aspect: number;
+            /** @description Where each role's components sit */
+            positions: components["schemas"]["TemplateMapPositionBody"][] | null;
+        };
+        TemplateMapPositionBody: {
+            /**
+             * Format: int64
+             * @description Which of the role's components, from 1
+             */
+            position: number;
+            /** @description The role placed */
+            role: string;
+            /**
+             * Format: double
+             * @description Horizontal position, 0 to 1 from the left
+             */
+            x: number;
+            /**
+             * Format: double
+             * @description Vertical position, 0 to 1 from the top
+             */
+            y: number;
+        };
+        TemplatePlaceBody: {
+            /** @description The place's label */
+            label?: string;
+            /** @description The place's name; omitted where its type's name rule mints one, or the caller names it */
+            name?: string;
+            /** @description The places nested under this one */
+            places?: components["schemas"]["TemplatePlaceBody"][] | null;
+            /** @description The system templates that land in the place */
+            systems?: components["schemas"]["TemplatePlaceSystemBody"][] | null;
+            /** @description The place's location type */
+            type: string;
+        };
+        TemplatePlaceSystemBody: {
+            /** @description The system's label */
+            label?: string;
+            /** @description The system template that lands in the place */
+            template: string;
+        };
+        TemplateRoleBody: {
+            /** @description The component types that may fill the role; empty accepts any */
+            accepted_types?: string[] | null;
+            /** @description The alternate of that choice the role belongs to */
+            alternate?: string;
+            /**
+             * Format: int64
+             * @description The most components the role takes; omitted for no cap
+             */
+            capacity?: number;
+            /** @description The choice the role belongs to, when it is one way of answering a choice */
+            choice?: string;
+            /** @description What the system loses when the role is below quorum: outage, degraded (the default) or none */
+            impact?: string;
+            /** @description What an operator reads for the role */
+            label: string;
+            /** @description The role's name, unique within the standard */
+            name: string;
+            /** @description The products the role is pinned to; empty pins none */
+            pinned_products?: string[] | null;
+            /**
+             * Format: int64
+             * @description How many components must fill the role (at least one)
+             */
+            quorum: number;
+        };
+        TemplateRoleFillBody: {
+            /** @description The component template that fills the role */
+            component?: string;
+            /** @description The product that fills the role, when no component template does */
+            product?: string;
+        };
+        TemplateStandardBody: {
+            /** @description The exclusive-or groups of roles a conforming system answers one way */
+            choices?: components["schemas"]["TemplateChoiceBody"][] | null;
+            /** @description The layout a conforming system's Map tab draws */
+            map?: components["schemas"]["TemplateMapBody"];
+            /** @description The metric contract lines a fork declares */
+            metrics?: components["schemas"]["TemplateContractBody"][] | null;
+            /** @description The standard template this variant hangs off; a variant forks once the operator holds a standard of that name */
+            parent?: string;
+            /** @description The property contract lines a fork declares */
+            properties?: components["schemas"]["TemplateContractBody"][] | null;
+            /** @description The roles a conforming system needs filled */
+            roles: components["schemas"]["TemplateRoleBody"][] | null;
+        };
+        TemplateSystemBody: {
+            /** @description Declared system property values, by property name */
+            properties?: {
+                [key: string]: unknown;
+            };
+            /** @description What fills each role, by role name */
+            roles: {
+                [key: string]: components["schemas"]["TemplateRoleFillBody"];
+            };
+            /** @description The standard the system conforms to, a standard template's name */
+            standard: string;
+            /** @description The system type the system is classified as */
+            system_type?: string;
         };
         TestNotificationTargetOutputBody: {
             /**
@@ -20172,6 +20430,39 @@ export interface operations {
             };
         };
     };
+    "fork-standard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ForkStandardInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StandardBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "list-system-types": {
         parameters: {
             query?: never;
@@ -21805,6 +22096,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PushOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-templates": {
+        parameters: {
+            query?: {
+                /** @description Only templates of this kind; omitted lists every kind */
+                kind?: "standard_template" | "system_template" | "place_template" | "component_template";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListTemplatesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The template, by name */
+                template: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateBody"];
                 };
             };
             /** @description Error */

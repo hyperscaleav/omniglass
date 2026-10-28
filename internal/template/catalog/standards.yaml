@@ -1,0 +1,471 @@
+# The standard templates (kind standard_template): example standards an
+# operator forks (POST /standards:fork, ADR-0071, ADR-0827). The binary
+# offers them and inserts nothing: a fork writes one standard the operator
+# owns outright, with these roles, choices and contract lines, and nothing
+# points back here, so a release can rewrite any of these without touching a
+# fleet.
+#
+# The catalog is written the way an integrator writes space standards (#802):
+# a standard is a space type's full signal chain, and a size-serialized family
+# (mr55..mr98, ds55/ds75) pins the display SKU per variant while the chain
+# stays the parent's. A variant names its parent template, and forks only
+# once the operator holds a standard forked from it. Domain rules that shaped
+# it: a video bar is the ONE all-in-one conferencing appliance at the front of
+# a space, never a microphone and never shared; microphones are typed by form
+# factor; a divisible space shares its DSP and amplifier rack, which is what
+# the shared-component quorum case teaches. The occupied-space archetypes
+# declare the room-temperature and occupancy-count metric contract, so every
+# conforming system's zoom carries the KPI tiles; some carry a map, the layout
+# a system's Map tab draws (ADR-0128).
+templates:
+  - kind: standard_template
+    name: meeting-room
+    label: Meeting Room
+    description: >-
+      A meeting space's full chain: a video bar at the front, a main display, touch control and a scheduling panel. The parent of the sized variants, with no display pinned.
+    standard:
+      roles:
+        - name: video-bar
+          label: Video Bar
+          accepted_types: [video-bar]
+        - name: main-display
+          label: Main Display
+          accepted_types: [display]
+        - name: touch-control
+          label: Touch Control
+          accepted_types: [touch-panel]
+        - name: scheduling-panel
+          label: Scheduling Panel
+          accepted_types: [scheduling-panel]
+      metrics:
+        - { name: room-temperature }
+        - { name: occupancy-count }
+  - kind: standard_template
+    name: mr55
+    label: Meeting Room 55
+    description: >-
+      Meeting Room with its main display pinned to a 55-inch panel. Fork Meeting Room first.
+    standard:
+      parent: meeting-room
+      roles:
+        - name: video-bar
+          label: Video Bar
+          accepted_types: [video-bar]
+        - name: main-display
+          label: Main Display
+          accepted_types: [display]
+          pinned_products: [boreal-edge-55]
+        - name: touch-control
+          label: Touch Control
+          accepted_types: [touch-panel]
+        - name: scheduling-panel
+          label: Scheduling Panel
+          accepted_types: [scheduling-panel]
+      metrics:
+        - { name: room-temperature }
+        - { name: occupancy-count }
+      map:
+        aspect: 1.5
+        positions:
+          - { role: main-display, position: 1, x: 0.5, y: 0.06 }
+          - { role: video-bar, position: 1, x: 0.5, y: 0.14 }
+          - { role: touch-control, position: 1, x: 0.5, y: 0.55 }
+          - { role: scheduling-panel, position: 1, x: 0.06, y: 0.9 }
+  - kind: standard_template
+    name: mr65
+    label: Meeting Room 65
+    description: >-
+      Meeting Room with its main display pinned to a 65-inch panel. Fork Meeting Room first.
+    standard:
+      parent: meeting-room
+      roles:
+        - name: video-bar
+          label: Video Bar
+          accepted_types: [video-bar]
+        - name: main-display
+          label: Main Display
+          accepted_types: [display]
+          pinned_products: [boreal-edge-65]
+        - name: touch-control
+          label: Touch Control
+          accepted_types: [touch-panel]
+        - name: scheduling-panel
+          label: Scheduling Panel
+          accepted_types: [scheduling-panel]
+      metrics:
+        - { name: room-temperature }
+        - { name: occupancy-count }
+  - kind: standard_template
+    name: mr75
+    label: Meeting Room 75
+    description: >-
+      Meeting Room with its main display pinned to a 75-inch panel. Fork Meeting Room first.
+    standard:
+      parent: meeting-room
+      roles:
+        - name: video-bar
+          label: Video Bar
+          accepted_types: [video-bar]
+        - name: main-display
+          label: Main Display
+          accepted_types: [display]
+          pinned_products: [boreal-edge-75]
+        - name: touch-control
+          label: Touch Control
+          accepted_types: [touch-panel]
+        - name: scheduling-panel
+          label: Scheduling Panel
+          accepted_types: [scheduling-panel]
+      metrics:
+        - { name: room-temperature }
+        - { name: occupancy-count }
+  - kind: standard_template
+    name: mr86
+    label: Meeting Room 86
+    description: >-
+      Meeting Room with its main display pinned to an 86-inch panel. Fork Meeting Room first.
+    standard:
+      parent: meeting-room
+      roles:
+        - name: video-bar
+          label: Video Bar
+          accepted_types: [video-bar]
+        - name: main-display
+          label: Main Display
+          accepted_types: [display]
+          pinned_products: [boreal-edge-86]
+        - name: touch-control
+          label: Touch Control
+          accepted_types: [touch-panel]
+        - name: scheduling-panel
+          label: Scheduling Panel
+          accepted_types: [scheduling-panel]
+      metrics:
+        - { name: room-temperature }
+        - { name: occupancy-count }
+  - kind: standard_template
+    name: mr98
+    label: Meeting Room 98
+    description: >-
+      Meeting Room with its main display pinned to a 98-inch panel. Fork Meeting Room first.
+    standard:
+      parent: meeting-room
+      roles:
+        - name: video-bar
+          label: Video Bar
+          accepted_types: [video-bar]
+        - name: main-display
+          label: Main Display
+          accepted_types: [display]
+          pinned_products: [boreal-edge-98]
+        - name: touch-control
+          label: Touch Control
+          accepted_types: [touch-panel]
+        - name: scheduling-panel
+          label: Scheduling Panel
+          accepted_types: [scheduling-panel]
+      metrics:
+        - { name: room-temperature }
+        - { name: occupancy-count }
+  - kind: standard_template
+    name: divisible-conference
+    label: Divisible Conference
+    description: >-
+      One side of a combinable space: two displays and two room microphones each, with one DSP and amplifier rack shared by both sides, the shared-component quorum case.
+    standard:
+      roles:
+        - name: video-bar
+          label: Video Bar
+          accepted_types: [video-bar]
+        - name: main-display
+          label: Main Display
+          quorum: 2
+          accepted_types: [display]
+        - name: room-mic
+          label: Room Microphone
+          quorum: 2
+          accepted_types: [ceiling-mic]
+        - name: dsp
+          label: DSP
+          accepted_types: [dsp]
+        - name: amplifier
+          label: Amplifier
+          accepted_types: [amplifier]
+        - name: touch-control
+          label: Touch Control
+          accepted_types: [touch-panel]
+        - name: scheduling-panel
+          label: Scheduling Panel
+          accepted_types: [scheduling-panel]
+      metrics:
+        - { name: room-temperature }
+        - { name: occupancy-count }
+  - kind: standard_template
+    name: huddle-room
+    label: Huddle Room
+    description: >-
+      A small space built either of two ways (an all-in-one video bar, or a codec with its own camera, DSP, amplifier and microphone): a choice, and only one alternate need be staffed.
+    standard:
+      choices:
+        - name: conferencing
+          label: Conferencing
+          alternates:
+            - { name: all-in-one, label: All-in-one }
+            - { name: component-system, label: Component System }
+      roles:
+        - name: main-display
+          label: Main Display
+          accepted_types: [display]
+        - name: conf-bar
+          label: Conferencing Bar
+          quorum: 1
+          accepted_types: [video-bar]
+          choice: conferencing
+          alternate: all-in-one
+        - name: conf-codec
+          label: Codec
+          accepted_types: [codec]
+          choice: conferencing
+          alternate: component-system
+        - name: conf-camera
+          label: Camera
+          accepted_types: [camera]
+          choice: conferencing
+          alternate: component-system
+        - name: conf-dsp
+          label: DSP
+          accepted_types: [dsp]
+          choice: conferencing
+          alternate: component-system
+        - name: conf-amp
+          label: Amplifier
+          accepted_types: [amplifier]
+          choice: conferencing
+          alternate: component-system
+        - name: conf-mic
+          label: Microphone
+          accepted_types: [mic]
+          choice: conferencing
+          alternate: component-system
+      metrics:
+        - { name: room-temperature }
+        - { name: occupancy-count }
+      map:
+        aspect: 1.3
+        positions:
+          - { role: main-display, position: 1, x: 0.5, y: 0.06 }
+          - { role: conf-bar, position: 1, x: 0.5, y: 0.14 }
+          - { role: conf-codec, position: 1, x: 0.12, y: 0.9 }
+          - { role: conf-camera, position: 1, x: 0.5, y: 0.2 }
+          - { role: conf-dsp, position: 1, x: 0.24, y: 0.9 }
+          - { role: conf-amp, position: 1, x: 0.36, y: 0.9 }
+          - { role: conf-mic, position: 1, x: 0.5, y: 0.55 }
+  - kind: standard_template
+    name: classroom
+    label: Classroom
+    description: >-
+      The light teaching space: a display, an instructor microphone and touch control.
+    standard:
+      roles:
+        - name: class-display
+          label: Main Display
+          accepted_types: [display]
+        - name: instructor-mic
+          label: Instructor Microphone
+          accepted_types: [wireless-mic]
+        - name: touch-control
+          label: Touch Control
+          accepted_types: [touch-panel]
+      metrics:
+        - { name: room-temperature }
+        - { name: occupancy-count }
+      map:
+        aspect: 1.4
+        positions:
+          - { role: class-display, position: 1, x: 0.5, y: 0.07 }
+          - { role: instructor-mic, position: 1, x: 0.5, y: 0.3 }
+          - { role: touch-control, position: 1, x: 0.14, y: 0.6 }
+  - kind: standard_template
+    name: training-room
+    label: Training Room
+    description: >-
+      The full teaching chain: two front displays, voice lift and program audio through a rack, capture cameras at the back, and a people counter for occupancy.
+    standard:
+      roles:
+        - name: front-display
+          label: Front Display
+          quorum: 2
+          accepted_types: [display]
+          pinned_products: [boreal-edge-86]
+        - name: ceiling-mic
+          label: Ceiling Microphone
+          quorum: 2
+          accepted_types: [ceiling-mic]
+        - name: presenter-mic
+          label: Presenter Wireless Microphone
+          accepted_types: [wireless-mic]
+        - name: podium-mic
+          label: Podium Microphone
+          accepted_types: [gooseneck-mic]
+        - name: dsp
+          label: DSP
+          accepted_types: [dsp]
+        - name: amplifier
+          label: Amplifier
+          accepted_types: [amplifier]
+        - name: speakers
+          label: Speakers
+          quorum: 4
+          accepted_types: [speaker]
+        - name: video-switcher
+          label: Video Switcher
+          accepted_types: [presentation-switcher]
+        - name: display-endpoint
+          label: Display Endpoint
+          quorum: 2
+          accepted_types: [av-extender]
+        - name: control-system
+          label: Control System
+          accepted_types: [control-processor]
+        - name: touch-control
+          label: Touch Control
+          accepted_types: [touch-panel]
+        - name: scheduling-panel
+          label: Scheduling Panel
+          accepted_types: [scheduling-panel]
+        - name: people-counter
+          label: People Counter
+          accepted_types: [occupancy-sensor]
+        - name: camera
+          label: Camera
+          quorum: 2
+          accepted_types: [camera]
+      metrics:
+        - { name: room-temperature }
+        - { name: occupancy-count }
+      map:
+        aspect: 1.6
+        positions:
+          - { role: front-display, position: 1, x: 0.32, y: 0.06 }
+          - { role: front-display, position: 2, x: 0.68, y: 0.06 }
+          - { role: podium-mic, position: 1, x: 0.12, y: 0.2 }
+          - { role: ceiling-mic, position: 1, x: 0.35, y: 0.45 }
+          - { role: ceiling-mic, position: 2, x: 0.65, y: 0.45 }
+          - { role: speakers, position: 1, x: 0.25, y: 0.3 }
+          - { role: speakers, position: 2, x: 0.75, y: 0.3 }
+          - { role: speakers, position: 3, x: 0.25, y: 0.7 }
+          - { role: speakers, position: 4, x: 0.75, y: 0.7 }
+          - { role: camera, position: 1, x: 0.35, y: 0.93 }
+          - { role: camera, position: 2, x: 0.65, y: 0.93 }
+          - { role: touch-control, position: 1, x: 0.12, y: 0.3 }
+          - { role: scheduling-panel, position: 1, x: 0.05, y: 0.9 }
+  - kind: standard_template
+    name: auditorium
+    label: Auditorium
+    description: >-
+      The hall-scale chain with no conferencing: projection, stage and podium microphones, a DSP and amplifier rack, speakers and cameras.
+    standard:
+      roles:
+        - name: projection
+          label: Projection
+          accepted_types: [projector]
+        - name: confidence-display
+          label: Confidence Display
+          accepted_types: [display]
+        - name: stage-mic
+          label: Stage Microphone
+          quorum: 2
+          accepted_types: [wireless-mic]
+        - name: podium-mic
+          label: Podium Microphone
+          accepted_types: [gooseneck-mic]
+        - name: dsp
+          label: DSP
+          accepted_types: [dsp]
+        - name: amplifier
+          label: Amplifier
+          quorum: 2
+          accepted_types: [amplifier]
+        - name: speakers
+          label: Speakers
+          quorum: 4
+          accepted_types: [speaker]
+        - name: video-switcher
+          label: Video Switcher
+          accepted_types: [presentation-switcher]
+        - name: control-system
+          label: Control System
+          accepted_types: [control-processor]
+        - name: touch-control
+          label: Touch Control
+          accepted_types: [touch-panel]
+        - name: camera
+          label: Camera
+          quorum: 2
+          accepted_types: [camera]
+      metrics:
+        - { name: room-temperature }
+        - { name: occupancy-count }
+      map:
+        aspect: 1.8
+        positions:
+          - { role: projection, position: 1, x: 0.5, y: 0.06 }
+          - { role: confidence-display, position: 1, x: 0.85, y: 0.12 }
+          - { role: podium-mic, position: 1, x: 0.2, y: 0.22 }
+          - { role: stage-mic, position: 1, x: 0.4, y: 0.2 }
+          - { role: stage-mic, position: 2, x: 0.6, y: 0.2 }
+          - { role: speakers, position: 1, x: 0.15, y: 0.4 }
+          - { role: speakers, position: 2, x: 0.85, y: 0.4 }
+          - { role: speakers, position: 3, x: 0.15, y: 0.75 }
+          - { role: speakers, position: 4, x: 0.85, y: 0.75 }
+          - { role: camera, position: 1, x: 0.35, y: 0.94 }
+          - { role: camera, position: 2, x: 0.65, y: 0.94 }
+          - { role: touch-control, position: 1, x: 0.08, y: 0.3 }
+  - kind: standard_template
+    name: digital-sign
+    label: Digital Sign
+    description: >-
+      A signage point: a panel and the media player that drives it. The parent of the sized variants.
+    standard:
+      roles:
+        - name: panel
+          label: Panel
+          accepted_types: [display]
+        - name: player
+          label: Player
+          accepted_types: [media-player]
+  - kind: standard_template
+    name: ds55
+    label: Digital Sign 55
+    description: >-
+      Digital Sign with its panel pinned to a 55-inch display. Fork Digital Sign first.
+    standard:
+      parent: digital-sign
+      roles:
+        - name: panel
+          label: Panel
+          accepted_types: [display]
+          pinned_products: [boreal-edge-55]
+        - name: player
+          label: Player
+          accepted_types: [media-player]
+      map:
+        aspect: 1.2
+        positions:
+          - { role: panel, position: 1, x: 0.5, y: 0.12 }
+          - { role: player, position: 1, x: 0.5, y: 0.3 }
+  - kind: standard_template
+    name: ds75
+    label: Digital Sign 75
+    description: >-
+      Digital Sign with its panel pinned to a 75-inch display. Fork Digital Sign first.
+    standard:
+      parent: digital-sign
+      roles:
+        - name: panel
+          label: Panel
+          accepted_types: [display]
+          pinned_products: [boreal-edge-75]
+        - name: player
+          label: Player
+          accepted_types: [media-player]

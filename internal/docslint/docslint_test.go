@@ -87,12 +87,32 @@ func TestBannedPatternsStaySane(t *testing.T) {
 		"system templates you can import",
 		"a component template to clone",
 		"start from a template",
+		// ADR-0827 reclaims the bare kind names for the template catalog.
+		"component_template", "system_template", "standard_template", "place_template",
 	}
 	for _, s := range current {
 		for _, term := range Banned {
 			if m := term.Pattern.FindString(s); m != "" {
 				t.Errorf("banned pattern for %q matches current vocabulary %q (hit %q)", term.Replacement, s, m)
 			}
+		}
+	}
+}
+
+// TestTemplateRetirementStillBans pins the other side of ADR-0827's narrowing:
+// the kind names are legal again (TestBannedPatternsStaySane), but the
+// versioned-shape tables ADR-0071 retired still trip the lint, so a typo in
+// either pattern cannot silently switch the ban off.
+func TestTemplateRetirementStillBans(t *testing.T) {
+	for _, retired := range []string{"component_template_version", "system_template_version", "system_template_member"} {
+		hit := false
+		for _, term := range Banned {
+			if term.Pattern.FindString(retired) != "" {
+				hit = true
+			}
+		}
+		if !hit {
+			t.Errorf("%q no longer trips a banned pattern", retired)
 		}
 	}
 }

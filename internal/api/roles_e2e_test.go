@@ -238,6 +238,7 @@ func TestSeededStandardTypedRoles(t *testing.T) {
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
+	storagetest.ForkShippedStandards(t, gw)
 	ownerTok := bootstrapOwnerTok(t, ctx, gw)
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()

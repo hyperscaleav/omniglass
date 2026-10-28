@@ -22,6 +22,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/auth"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/internal/template"
 	"gopkg.in/yaml.v3"
 )
 
@@ -307,6 +308,13 @@ func RunWith(ctx context.Context, gw storage.Gateway, actorID string, opts Optio
 func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, opts Options) error {
 	all := scope.Set{All: true}
 
+	// The standards the fleet's systems conform to, forked from the template
+	// catalog through the same primitive POST /standards:fork uses (ADR-0827):
+	// the boot seed plants none. A standard already held is left as it is.
+	if _, err := template.ForkAllStandards(ctx, gw, template.Shipped(), actorID); err != nil {
+		return fmt.Errorf("devseed: fork the standards: %w", err)
+	}
+
 	// Locations first, parents before children (the fixture is ordered so) so a
 	// child's parent resolves. locIDs maps a fixture KEY to the row's id, which is
 	// what every later reference (a grant's scope, a tag binding, a component's
@@ -552,7 +560,7 @@ func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, op
 	}
 
 	// Systems: the thing in the room that either works or does not, conforming to a
-	// boot-seeded standard whose roles it inherits live. Locations must already be
+	// standard forked from a template (above) whose roles it inherits live. Locations must already be
 	// seeded for the placement to resolve. Recognised the same way a component is,
 	// with the system_type as the classification whose stem is minted.
 	sysIDs := map[string]string{}
@@ -698,9 +706,9 @@ func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, op
 	if err := seedNodeLogs(ctx, gw); err != nil {
 		return err
 	}
-	// The meeting-room standard's first metric contract, with samples on the
-	// huddle system (#790): the system zoom's KPI tiles render only what the
-	// standard declares, so without this no room would show a tile.
+	// Samples on the huddle system for the metric contract its standard
+	// declares (#790): the system zoom's KPI tiles render only what the
+	// standard declares, and a tile reads its latest sample.
 	if err := seedStandardMetrics(ctx, gw, sysIDs); err != nil {
 		return err
 	}
@@ -708,13 +716,6 @@ func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, op
 	// across the fleet, so the workspace views have something real to say on
 	// more rooms than the two worked examples.
 	if err := seedTelemetryBreadth(ctx, gw, actorID, compIDs, sysIDs); err != nil {
-		return err
-	}
-	// The room maps (#791, ADR-0128): every conforming system's Map tab
-	// renders from its standard's declaration, so both example standards
-	// carry one. Present is the sentinel: the write audits, so a re-run
-	// must not repeat it.
-	if err := seedStandardMaps(ctx, gw, actorID); err != nil {
 		return err
 	}
 	// Last: the simulated fleet, addresses and endpoints on the dev node for
@@ -757,79 +758,6 @@ func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, op
 	return seedBreadthRTT(ctx, gw, compIDs)
 }
 
-// standardMaps are the example rooms' layouts, drawn the way an integrator
-// sketches one: front wall at the top, the table in the middle distance.
-var standardMaps = map[string]string{
-	"mr55": `{"aspect":1.5,"positions":[
-		{"role":"main-display","position":1,"x":0.5,"y":0.06},
-		{"role":"video-bar","position":1,"x":0.5,"y":0.14},
-		{"role":"touch-control","position":1,"x":0.5,"y":0.55},
-		{"role":"scheduling-panel","position":1,"x":0.06,"y":0.9}]}`,
-	"classroom": `{"aspect":1.4,"positions":[
-		{"role":"class-display","position":1,"x":0.5,"y":0.07},
-		{"role":"instructor-mic","position":1,"x":0.5,"y":0.3},
-		{"role":"touch-control","position":1,"x":0.14,"y":0.6}]}`,
-	"training-room": `{"aspect":1.6,"positions":[
-		{"role":"front-display","position":1,"x":0.32,"y":0.06},
-		{"role":"front-display","position":2,"x":0.68,"y":0.06},
-		{"role":"podium-mic","position":1,"x":0.12,"y":0.2},
-		{"role":"ceiling-mic","position":1,"x":0.35,"y":0.45},
-		{"role":"ceiling-mic","position":2,"x":0.65,"y":0.45},
-		{"role":"speakers","position":1,"x":0.25,"y":0.3},
-		{"role":"speakers","position":2,"x":0.75,"y":0.3},
-		{"role":"speakers","position":3,"x":0.25,"y":0.7},
-		{"role":"speakers","position":4,"x":0.75,"y":0.7},
-		{"role":"camera","position":1,"x":0.35,"y":0.93},
-		{"role":"camera","position":2,"x":0.65,"y":0.93},
-		{"role":"touch-control","position":1,"x":0.12,"y":0.3},
-		{"role":"scheduling-panel","position":1,"x":0.05,"y":0.9}]}`,
-	"auditorium": `{"aspect":1.8,"positions":[
-		{"role":"projection","position":1,"x":0.5,"y":0.06},
-		{"role":"confidence-display","position":1,"x":0.85,"y":0.12},
-		{"role":"podium-mic","position":1,"x":0.2,"y":0.22},
-		{"role":"stage-mic","position":1,"x":0.4,"y":0.2},
-		{"role":"stage-mic","position":2,"x":0.6,"y":0.2},
-		{"role":"speakers","position":1,"x":0.15,"y":0.4},
-		{"role":"speakers","position":2,"x":0.85,"y":0.4},
-		{"role":"speakers","position":3,"x":0.15,"y":0.75},
-		{"role":"speakers","position":4,"x":0.85,"y":0.75},
-		{"role":"camera","position":1,"x":0.35,"y":0.94},
-		{"role":"camera","position":2,"x":0.65,"y":0.94},
-		{"role":"touch-control","position":1,"x":0.08,"y":0.3}]}`,
-	"ds55": `{"aspect":1.2,"positions":[
-		{"role":"panel","position":1,"x":0.5,"y":0.12},
-		{"role":"player","position":1,"x":0.5,"y":0.3}]}`,
-	"huddle-room": `{"aspect":1.3,"positions":[
-		{"role":"main-display","position":1,"x":0.5,"y":0.06},
-		{"role":"conf-bar","position":1,"x":0.5,"y":0.14},
-		{"role":"conf-codec","position":1,"x":0.12,"y":0.9},
-		{"role":"conf-camera","position":1,"x":0.5,"y":0.2},
-		{"role":"conf-dsp","position":1,"x":0.24,"y":0.9},
-		{"role":"conf-amp","position":1,"x":0.36,"y":0.9},
-		{"role":"conf-mic","position":1,"x":0.5,"y":0.55}]}`,
-}
-
-func seedStandardMaps(ctx context.Context, gw storage.Gateway, actorID string) error {
-	// Fixed order: the writes audit, and a Go map's random iteration order
-	// swapped the two audit rows between seeds, which the shot gate reads
-	// as drift (the #780 class).
-	for _, std := range []string{"mr55", "huddle-room", "classroom", "training-room", "auditorium", "ds55"} {
-		decl := standardMaps[std]
-		st, err := gw.GetStandard(ctx, std)
-		if err != nil {
-			return fmt.Errorf("devseed: read standard %q: %w", std, err)
-		}
-		if st.Map != nil {
-			continue
-		}
-		raw := json.RawMessage(decl)
-		if _, err := gw.UpdateStandard(ctx, actorID, std, storage.StandardPatch{Map: &raw}); err != nil {
-			return fmt.Errorf("devseed: declare the %s map: %w", std, err)
-		}
-	}
-	return nil
-}
-
 // kpiSystem carries the sampled KPI values: the huddle room, the fleet's
 // worked healthy example (and the docs shot's subject). Every other seeded
 // room still carries the tiles' CONTRACT from its standard, unsampled, which
@@ -837,22 +765,13 @@ func seedStandardMaps(ctx context.Context, gw storage.Gateway, actorID string) e
 // a source in.
 const kpiSystem = "huddle-north"
 
-// seedStandardMetrics declares room-temperature and occupancy-count on the
-// meeting-room standard and lands one sample of each on the huddle system.
-// The contract upsert is idempotent by nature; the samples are append-only,
+// seedStandardMetrics lands one sample of the room-temperature and
+// occupancy-count pair on the huddle system. The pair's contract is the
+// standard templates' own (the occupied-space archetypes declare it, so every
+// conforming system's zoom carries the tiles); the samples are append-only,
 // so the sampled series is the sentinel: present means this ran, and a
 // re-run writes nothing.
 func seedStandardMetrics(ctx context.Context, gw storage.Gateway, sysIDs map[string]string) error {
-	// Every occupied-room archetype declares the pair, so its zoom carries
-	// the tiles (the huddle is the sampled subject below); signage boards
-	// measure neither.
-	for _, std := range []string{"meeting-room", "mr55", "mr65", "mr75", "mr86", "mr98", "divisible-conference", "huddle-room", "classroom", "training-room", "auditorium"} {
-		for _, m := range []string{"room-temperature", "occupancy-count"} {
-			if err := gw.UpsertStandardMetric(ctx, std, storage.StandardMetricSpec{MetricTypeName: m}); err != nil {
-				return fmt.Errorf("devseed: declare %s on %s: %w", m, std, err)
-			}
-		}
-	}
 	sysID, ok := sysIDs[kpiSystem]
 	if !ok {
 		return fmt.Errorf("devseed: the KPI fixture system %q is not in the fleet", kpiSystem)

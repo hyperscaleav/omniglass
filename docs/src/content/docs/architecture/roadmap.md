@@ -80,8 +80,9 @@ authoritative.
 The 2026-07-30 drift-correction program ([#428](https://github.com/hyperscaleav/omniglass/issues/428) through
 [#434](https://github.com/hyperscaleav/omniglass/issues/434)) has closed except for the telemetry-integrity half of
 [#430](https://github.com/hyperscaleav/omniglass/issues/430), which rides the release. The current workstream is
-[pre-release hardening for 0.1.0 (#825)](https://github.com/hyperscaleav/omniglass/issues/825). The template layer that follows the
-collection epic is tracked on [#827](https://github.com/hyperscaleav/omniglass/issues/827), and the
+[pre-release hardening for 0.1.0 (#825)](https://github.com/hyperscaleav/omniglass/issues/825). The template layer (the clone model: standard,
+system, place and component templates an operator starts from) is tracked on
+[#827](https://github.com/hyperscaleav/omniglass/issues/827), and the
 collection work after the tag on [#1187](https://github.com/hyperscaleav/omniglass/issues/1187).
 
 ## The architectural arc ahead
@@ -102,17 +103,17 @@ that describes the target:
    #1113) or by a login whose session the node keeps, or digest (#1114), a server-sent events
    stream held as a session over either (#1038), and a websocket held over `websocket` and `wss`,
    its replies matched by a minted id (#1034, which completes #1113), and webhooks received on the
-   server, signed and mapped onto any lane (#1024, the first slice of #1146). Still ahead: [templates](/architecture/templates/) (the reusable
-   device shape, #827), SNMP v3 (#1083), the held transports beyond those (#1036, #1039 to
+   server, signed and mapped onto any lane (#1024, the first slice of #1146). Still ahead: SNMP v3 (#1083), the held transports beyond those (#1036, #1039 to
    #1041), protocols that move whole files (#1043 to
    #1047), and the node's push listeners (shared tcp and udp ports, syslog, traps: #1148 to #1150).
-2. **The data model.** Landed except one piece: [properties](/architecture/properties/) (the
+2. **The data model.** Landed except two pieces: [properties](/architecture/properties/) (the
    canonical-signal registry and the exclusive-arc owner columns), the sample sinks,
    [config and variables](/architecture/variables/) resolved down the
    [cascade](/architecture/cascade/) all shipped, and so has the
    [expression engine](/architecture/expressions/) the rules share. Still ahead on this band: the
    rest of the expression design (the Omniglass functions, unit conversion, and the sites beyond rule
-   criteria and calc).
+   criteria and calc), and [templates](/architecture/templates/) (the clone model: standard, system,
+   place and component templates an operator starts from, #827).
 3. **Detection and verdict.** [Events](/architecture/events/) shipped (their registry, sink, and
    lineage columns), as did [commands](/architecture/commands/) with settlement, and the **verdict half
    has landed**: an alarm impairs a component's own verdict, an impaired role sinks its system by its

@@ -577,14 +577,20 @@ omniglass standard get lecture-hall
 omniglass standard delete lecture-hall                              # 409 if a system still conforms to it
 ```
 
-Unlike a seeded product, the **shipped standards are `official: false`**: they are forked from an in-code
-template once, with no inheritance, so they are yours to edit, re-parent, and extend, and the boot seed
-installs one **only if absent** rather than reasserting over your edit. Because it installs by **name**,
-a shipped standard keeps its name: `rename` refuses it (409), since a renamed one would be planted again
-on the next boot beside yours, and for the same reason a deleted one returns on the next boot. Forking a
-template into a standard of your own is
-[#827](https://github.com/hyperscaleav/omniglass/issues/827); until then, create a standard under the
-name you want. See [the seed model](/architecture/core-entities/#the-seed-model-forked-templates-versus-canonical-catalogs).
+A fresh install holds **no standards**: start one from a template in the catalog the binary ships, or
+create one from nothing as above. `omniglass template list --kind standard_template` lists the
+templates, and a fork writes one standard of your own (`official: false`) with the template's roles,
+choices and contract lines:
+
+```sh
+omniglass standard fork --template meeting-room                     # takes the template's name
+omniglass standard fork --template meeting-room --name hq-meeting   # a second, independent standard
+omniglass standard fork --template mr55 --parent hq-meeting         # a variant, under a parent you hold
+```
+
+A taken name is a 409, and a variant whose parent you do not hold is a 422 naming the template to fork
+first. Nothing points back at the template, so the standard is yours to rename, edit and delete. See
+[the seed model](/architecture/core-entities/#the-seed-model-forked-templates-versus-canonical-catalogs).
 
 ## Event types
 

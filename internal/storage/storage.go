@@ -273,7 +273,9 @@ type Gateway interface {
 	// The system tier: the standard catalog (the blueprint a system conforms to,
 	// the system-side counterpart of product) and scoped CRUD, mirroring locations.
 	UpsertStandard(ctx context.Context, st Standard) error
-	SeedStandard(ctx context.Context, st Standard) error
+	// ForkStandard writes a whole standard from a template in one
+	// transaction, audited once as a fork naming the template (#827).
+	ForkStandard(ctx context.Context, actorID string, f StandardFork) (*Standard, error)
 	ListStandards(ctx context.Context) ([]Standard, error)
 	GetStandard(ctx context.Context, id string) (*Standard, error)
 	CreateStandard(ctx context.Context, actorID string, st Standard) (*Standard, error)

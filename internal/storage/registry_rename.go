@@ -22,20 +22,10 @@ import (
 // primitive does not carry yet. Refused by name rather than attempted.
 var ErrRegistryNotRenameable = errors.New("storage: table is not a renameable registry")
 
-// ErrRegistrySeededExample is a rename of a shipped example row: the boot seed
-// plants it by name, only when absent (SeedStandard), so a renamed one would be
-// planted again on the next boot beside the operator's row. Refused instead; a
-// standard of the operator's own is created, or, with #827, forked from the
-// template the example stands in for.
-var ErrRegistrySeededExample = errors.New("storage: a seeded example keeps its name")
-
 // renameableRegistry describes one registry the rename covers.
 type renameableRegistry struct {
 	// stamped says the table carries an updated_at the rename stamps.
 	stamped bool
-	// seeded says the table carries a seeded mark (a shipped example the boot
-	// seed plants by name), which refuses the rename.
-	seeded bool
 	// carry rewrites the places this registry's name is stored BY VALUE rather
 	// than through the uuid, inside the rename's transaction. Nil for a registry
 	// referenced only by uuid.
@@ -51,7 +41,7 @@ var renameableRegistries = map[string]renameableRegistry{
 	"vendor":        {stamped: true},
 	"driver":        {stamped: true, carry: carryDriverName},
 	"product":       {stamped: true},
-	"standard":      {stamped: true, seeded: true},
+	"standard":      {stamped: true},
 	"location_type": {carry: carryLocationTypeName},
 	// A notification type is referenced only by uuid (an action rule's
 	// foreign key) and is nothing a node or a driver pushes by name (#618).
@@ -69,9 +59,8 @@ var renameableRegistries = map[string]renameableRegistry{
 // Refusals: a table outside renameableRegistries is ErrRegistryNotRenameable;
 // an illegal or uuid-shaped name is the name rule's error; an unknown ref is
 // ErrTypeNotFound; an official row is ErrTypeOfficial, since the boot seed owns
-// it by name and would re-create the old one on the next start; a seeded
-// example (a standard the boot seed plants when absent) is
-// ErrRegistrySeededExample, for the same reason; a taken name is ErrTypeExists;
+// it by name and would re-create the old one on the next start; a taken name is
+// ErrTypeExists;
 // and a location_type may not take the reserved "root". A driver's rename
 // re-derives its attached tasks (carryDriverName), and a location_type's
 // carries its by-value copies (carryLocationTypeName).
@@ -92,14 +81,10 @@ func (p *PG) RenameRegistry(ctx context.Context, actorID, table, ref, newName st
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	seededCol := "false"
-	if reg.seeded {
-		seededCol = "seeded"
-	}
 	var rowID, oldName string
-	var official, seeded bool
-	err = tx.QueryRow(ctx, `select id, name, official, `+seededCol+` from `+table+` where `+registryRefCol(ref)+` = $1 for update`, ref).
-		Scan(&rowID, &oldName, &official, &seeded)
+	var official bool
+	err = tx.QueryRow(ctx, `select id, name, official from `+table+` where `+registryRefCol(ref)+` = $1 for update`, ref).
+		Scan(&rowID, &oldName, &official)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", ErrTypeNotFound
 	}
@@ -108,9 +93,6 @@ func (p *PG) RenameRegistry(ctx context.Context, actorID, table, ref, newName st
 	}
 	if official {
 		return "", ErrTypeOfficial
-	}
-	if seeded {
-		return "", ErrRegistrySeededExample
 	}
 	if oldName == newName {
 		return rowID, nil

@@ -1,0 +1,51 @@
+# The component templates (kind component_template): a product, the attach
+# preset for its driver, and declared property values. Instantiating one
+# (POST /components:instantiate) creates an ordinary component the operator
+# owns; nothing points back here (ADR-0071, ADR-0827).
+#
+# The attach preset carries every driver input except the address (host),
+# which the caller supplies per component: an address is a fact about one
+# install, never about a class of product. A secret input is a reference,
+# a secret's name resolved under the caller's own secret scope at attach, so
+# a template carries none by default and the caller names theirs.
+templates:
+  - kind: component_template
+    name: boreal-edge-55
+    label: Boreal Edge 55 display
+    description: A 55-inch display collected over SNMP v2c on the standard port.
+    component:
+      product: boreal-edge-55
+      attach:
+        inputs: { port: "161" }
+  - kind: component_template
+    name: boreal-cast-m1
+    label: Boreal Cast M1 media player
+    description: A signage media player collected over its HTTP JSON API.
+    component:
+      product: boreal-cast-m1
+      attach:
+        inputs: { port: "80" }
+  - kind: component_template
+    name: kestrel-vroom
+    label: Kestrel VRoom video bar
+    description: An all-in-one video bar collected over its HTTPS device API, its certificate pinned on first use.
+    component:
+      product: kestrel-vroom
+      attach:
+        inputs: { port: "443", tls-mode: pin }
+  - kind: component_template
+    name: newtron-panel-7
+    label: Newtron Panel 7 touch panel
+    description: A touch panel on a held Newtron NVP session.
+    component:
+      product: newtron-panel-7
+      attach:
+        inputs: { port: "51325" }
+  - kind: component_template
+    name: newtron-slate-5
+    label: Newtron Slate 5 scheduling panel
+    description: A scheduling panel on a held Newtron NVP session.
+    component:
+      product: newtron-slate-5
+      attach:
+        inputs: { port: "51325" }

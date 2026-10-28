@@ -31,9 +31,6 @@ var eventRulesYAML []byte
 //go:embed location_types.yaml
 var locationTypesYAML []byte
 
-//go:embed standards.yaml
-var standardsYAML []byte
-
 //go:embed property_types.yaml
 var propertyTypesYAML []byte
 
@@ -102,45 +99,6 @@ type locationTypesDoc struct {
 			BareFirst bool   `yaml:"bare_first"`
 		} `yaml:"name_rule"`
 	} `yaml:"location_types"`
-}
-
-type standardsDoc struct {
-	Standards []struct {
-		ID               string `yaml:"id"`
-		Label            string `yaml:"label"`
-		ParentStandardID string `yaml:"parent_standard_id"`
-		// Choices are exclusive-or groups a conforming system can satisfy
-		// through exactly one of their named alternates (#626): an
-		// all-in-one video bar, or a component-built codec+camera+dsp+
-		// amp+mic. Seeded before Roles, since a role's Choice/Alternate
-		// fields point into one.
-		Choices []struct {
-			Name  string `yaml:"name"`
-			Label string `yaml:"label"`
-			// Alternates is in the order a tie between two
-			// equally-satisfied alternates breaks by
-			// (internal/health.Choice.Active).
-			Alternates []struct {
-				Name  string `yaml:"name"`
-				Label string `yaml:"label"`
-			} `yaml:"alternates"`
-		} `yaml:"choices"`
-		// The roles a conforming system needs filled, inherited live by every
-		// system on this standard. The typed-slot guard checks AcceptedTypes
-		// and PinnedProducts; capability retired with the family (#626).
-		// Choice and Alternate are both empty for an unconditional role;
-		// naming one without the other is a seed authoring error, refused
-		// at boot (see seedStandardRoles).
-		Roles []struct {
-			Name           string   `yaml:"name"`
-			Label          string   `yaml:"label"`
-			Quorum         int      `yaml:"quorum"`
-			AcceptedTypes  []string `yaml:"accepted_types"`
-			PinnedProducts []string `yaml:"pinned_products"`
-			Choice         string   `yaml:"choice"`
-			Alternate      string   `yaml:"alternate"`
-		} `yaml:"roles"`
-	} `yaml:"standards"`
 }
 
 type propertyTypesDoc struct {
@@ -263,9 +221,6 @@ func Run(ctx context.Context, gw storage.Gateway) error {
 	if err := seedLocationTypes(ctx, gw); err != nil {
 		return err
 	}
-	if err := seedStandards(ctx, gw); err != nil {
-		return err
-	}
 	// The three registries are disjoint by name, or a shared name would be
 	// unwritable on every lane (#457): refuse to seed a collision rather than
 	// ship it.
@@ -312,23 +267,9 @@ func Run(ctx context.Context, gw storage.Gateway) error {
 	if err := seedSystemTypes(ctx, gw); err != nil {
 		return err
 	}
-	// Products before either role step: a pinned product is a role's
-	// typed-slot requirement the same way an accepted type is, and a choice
-	// role can pin one too (#626).
-	if err := seedProducts(ctx, gw); err != nil {
-		return err
-	}
-	// Choices before roles: a role's alternate_id points into a choice's
-	// alternate, so the choice must exist first, and roles before either of
-	// those (the old order) would have nothing to resolve against.
-	choiceAlts, err := seedStandardChoices(ctx, gw)
-	if err != nil {
-		return err
-	}
-	// After the component_type taxonomy, products, and choices: a declared
-	// role's typed-slot requirement points into the first two, and its
-	// optional alternate_id into the third.
-	return seedStandardRoles(ctx, gw, choiceAlts)
+	// No standards: a standard is example content an operator forks from
+	// the template catalog (ADR-0827), never planted by a boot.
+	return seedProducts(ctx, gw)
 }
 
 // seedLabelRules writes the rule this release ships for each labelled entity
@@ -744,115 +685,6 @@ func seedProducts(ctx context.Context, gw storage.Gateway) error {
 				PropertyTypeName: prop.Name, DefaultValue: def, Required: prop.Required,
 			}); err != nil {
 				return fmt.Errorf("seed: product %s property %s: %w", p.ID, prop.Name, err)
-			}
-		}
-	}
-	return nil
-}
-
-func seedStandards(ctx context.Context, gw storage.Gateway) error {
-	var doc standardsDoc
-	if err := yaml.Unmarshal(standardsYAML, &doc); err != nil {
-		return fmt.Errorf("seed: parse standards: %w", err)
-	}
-	for _, st := range doc.Standards {
-		var parent *string
-		if st.ParentStandardID != "" {
-			parent = &st.ParentStandardID
-		}
-		// Shipped standards are example content the operator owns once it lands,
-		// not authoritative reference data: seeded if absent, never reasserted.
-		if err := gw.SeedStandard(ctx, storage.Standard{
-			Name:             st.ID,
-			Official:         false,
-			Label:            st.Label,
-			ParentStandardID: parent,
-		}); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// seedStandardChoices installs the exclusive-or role groups the shipped
-// standards declare (#626), on the same seed-if-absent lane as the standards
-// and their roles: example content the operator owns once it lands, never
-// reasserted over an edit. Its own step, before seedStandardRoles, because a
-// role's alternate_id points into one of these. Returns each seeded
-// standard's alternate ids keyed by "choice/alternate", so seedStandardRoles
-// can resolve a role's Choice and Alternate fields without a second parse of
-// standards.yaml.
-func seedStandardChoices(ctx context.Context, gw storage.Gateway) (map[string]map[string]string, error) {
-	var doc standardsDoc
-	if err := yaml.Unmarshal(standardsYAML, &doc); err != nil {
-		return nil, fmt.Errorf("seed: parse standards: %w", err)
-	}
-	out := make(map[string]map[string]string, len(doc.Standards))
-	for _, st := range doc.Standards {
-		if len(st.Choices) == 0 {
-			continue
-		}
-		alts := make(map[string]string)
-		for _, c := range st.Choices {
-			spec := storage.RoleChoiceSpec{Name: c.Name, Label: c.Label}
-			for _, a := range c.Alternates {
-				spec.Alternates = append(spec.Alternates, storage.AlternateSpec{Name: a.Name, Label: a.Label})
-			}
-			ids, err := gw.SeedRoleChoice(ctx, "standard", st.ID, spec)
-			if err != nil {
-				return nil, fmt.Errorf("seed: standard %s choice %s: %w", st.ID, c.Name, err)
-			}
-			for name, id := range ids {
-				alts[c.Name+"/"+name] = id
-			}
-		}
-		out[st.ID] = alts
-	}
-	return out, nil
-}
-
-// seedStandardRoles installs the roles the shipped standards declare, on the
-// same seed-if-absent lane as the standards themselves: example content the
-// operator owns once it lands, never reasserted over an edit. Its own step
-// rather than part of seedStandards because a role's accepted types and
-// pinned products are foreign keys into registries that seed later (the
-// component_type taxonomy and the product catalog), and a choice role's
-// alternate_id into a third (choiceAlts, from seedStandardChoices).
-func seedStandardRoles(ctx context.Context, gw storage.Gateway, choiceAlts map[string]map[string]string) error {
-	var doc standardsDoc
-	if err := yaml.Unmarshal(standardsYAML, &doc); err != nil {
-		return fmt.Errorf("seed: parse standards: %w", err)
-	}
-	for _, st := range doc.Standards {
-		for _, r := range st.Roles {
-			// SeedSystemRole is ON CONFLICT DO NOTHING (never reasserts over
-			// an operator's edit), so unlike the API layer this never needs
-			// to distinguish "omitted" from "explicitly unconditional": a
-			// fresh role either names its alternate or does not, and an
-			// already-seeded one is untouched either way. A nil pointer
-			// (unconditional) is still correct here, not just convenient.
-			var altID *string
-			if r.Choice != "" || r.Alternate != "" {
-				if r.Choice == "" || r.Alternate == "" {
-					return fmt.Errorf("seed: standard %s role %s names choice %q and alternate %q, want both or neither",
-						st.ID, r.Name, r.Choice, r.Alternate)
-				}
-				id := choiceAlts[st.ID][r.Choice+"/"+r.Alternate]
-				if id == "" {
-					return fmt.Errorf("seed: standard %s role %s names unknown choice/alternate %s/%s",
-						st.ID, r.Name, r.Choice, r.Alternate)
-				}
-				altID = &id
-			}
-			if err := gw.SeedSystemRole(ctx, "standard", st.ID, storage.SystemRoleSpec{
-				Name:           r.Name,
-				Label:          r.Label,
-				Quorum:         r.Quorum,
-				AcceptedTypes:  r.AcceptedTypes,
-				PinnedProducts: r.PinnedProducts,
-				AlternateID:    altID,
-			}); err != nil {
-				return fmt.Errorf("seed: standard %s role %s: %w", st.ID, r.Name, err)
 			}
 		}
 	}
