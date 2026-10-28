@@ -132,6 +132,12 @@
       ]
     },
     {
+      "id": "start-from-template",
+      "title": "Start a system from a template",
+      "description": "Open the template catalog, read what a system template creates, start it at a place, and land on a system that is yours, with nothing pointing back at the template.",
+      "setup": []
+    },
+    {
       "id": "trust-a-changed-host-key",
       "title": "Trust a changed host key",
       "description": "A touch panel was reimaged, so it presents a new ssh host key and the node refused it. Read both keys, learn why a key changes, trust the new one, and watch the session come up.",
