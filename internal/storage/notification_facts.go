@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 
@@ -221,7 +222,17 @@ func renderNotification(eng *sandbox.Engine, subject, text string, facts sandbox
 	if err != nil {
 		return "", "", fmt.Errorf("text: %w", err)
 	}
-	return strings.Join(strings.Fields(sub), " "), strings.TrimSpace(body), nil
+	sub, body = strings.Join(strings.Fields(sub), " "), strings.TrimSpace(body)
+	// A template's string literal can spell any byte ({{"\x00"}}), and a
+	// Postgres text column refuses a NUL or invalid UTF-8: such output is a
+	// render failure, recorded on the row, never an insert that fails the
+	// alarm transition it rides in (nul-into-postgres-text).
+	for _, part := range []struct{ name, s string }{{"subject", sub}, {"text", body}} {
+		if strings.ContainsRune(part.s, 0) || !utf8.ValidString(part.s) {
+			return "", "", fmt.Errorf("%s: the rendered output holds a NUL or invalid UTF-8", part.name)
+		}
+	}
+	return sub, body, nil
 }
 
 // --- the generated artifact --------------------------------------------------

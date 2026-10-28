@@ -70,8 +70,15 @@ func (n *Notifier) Pass(ctx context.Context, max int) (int, error) {
 		return storage.SendResult{OK: res.OK, Status: res.Status, Reason: res.Reason}
 	}
 	taken := 0
-	for taken < max {
-		ok, err := n.store.DeliverNext(ctx, send)
+	for taken < max && admits(ctx, n.now()) {
+		// The row's send and its record run detached from the pass's
+		// deadline and from shutdown, bounded by the egress timeout instead:
+		// a cancel landing mid-send would roll the record back after the
+		// receiver had the message, and the next pass would send it again.
+		// The pass stops taking rows instead (admits).
+		row, done := context.WithTimeout(context.WithoutCancel(ctx), RowBound)
+		ok, err := n.store.DeliverNext(row, send)
+		done()
 		if err != nil {
 			return taken, err
 		}
@@ -81,6 +88,22 @@ func (n *Notifier) Pass(ctx context.Context, max int) (int, error) {
 		taken++
 	}
 	return taken, nil
+}
+
+// RowBound bounds one row's take, send and record: the egress client's own
+// bound on a send, with room for the row's statements.
+const RowBound = egress.TotalTimeout + 10*time.Second
+
+// admits reports whether a pass may take another row: it has not been
+// cancelled, and a row taken now would finish before its deadline.
+func admits(ctx context.Context, now time.Time) bool {
+	if ctx.Err() != nil {
+		return false
+	}
+	if dl, ok := ctx.Deadline(); ok && dl.Sub(now) < RowBound {
+		return false
+	}
+	return true
 }
 
 // Run drains on every tick until ctx ends. A panicking pass is recovered and

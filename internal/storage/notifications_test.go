@@ -357,3 +357,32 @@ func TestANotificationJoinsItsAlarmsTimelineAfterTheEdge(t *testing.T) {
 		t.Fatalf("a notification line = %+v", tl[1])
 	}
 }
+
+// The #1321 review's case: a template string literal can spell a byte a
+// Postgres text column refuses. The transition still commits; the
+// notification is a failed row with the reason, and it is never retried,
+// since it holds no message.
+func TestARenderTheDatabaseWouldRefuseFailsTheRowNotTheTransition(t *testing.T) {
+	f := newNotifyFixture(t)
+	if _, err := f.gw.CreateNotificationType(f.ctx, "", storage.NotificationTypeSpec{Name: "nul", Subject: `x{{"\x00"}}`, Text: `{{"\xff"}}`}); err != nil {
+		t.Fatal(err)
+	}
+	nul := "nul"
+	if _, err := f.gw.UpdateActionRule(f.ctx, "", "page-high", storage.ActionRulePatch{NotificationType: &nul}, f.all); err != nil {
+		t.Fatal(err)
+	}
+	a, err := f.gw.RaiseAlarm(f.ctx, "", "display-1", storage.AlarmSpec{Severity: "high", Message: "no video"})
+	if err != nil {
+		t.Fatalf("a raise whose notification cannot render = %v, want it to commit", err)
+	}
+	if _, err := f.gw.ExportRuleRaiseAndClear(f.ctx, "reachability-lost", "display-2", false); err != nil {
+		t.Fatalf("a rule raise whose notification cannot render = %v, want it to commit", err)
+	}
+	ns := f.list(t, storage.NotificationFilter{AlarmID: a.ID})
+	if len(ns) != 2 || ns[0].Status != storage.NotificationFailed || ns[0].Attempts != 0 || !strings.Contains(ns[0].LastError, "NUL") {
+		t.Fatalf("notifications = %+v, want failed with the reason", ns)
+	}
+	if _, err := f.gw.RetryNotification(f.ctx, "", ns[0].ID, f.all, f.all); err != storage.ErrNotificationNotRetryable {
+		t.Fatalf("retrying a row never attempted = %v, want not retryable", err)
+	}
+}

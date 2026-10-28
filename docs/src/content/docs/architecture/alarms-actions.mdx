@@ -558,7 +558,7 @@ attempt carries the same `Idempotency-Key`, the row's uuid, so a receiver drops 
 
 The delivery is visible where an operator already looks: each row joins its
 [alarm's timeline](#the-alarms-timeline) after the edge that queued it, reading its status as it
-stands, and a failed one is re-queued with `POST /notifications/{id}:retry` (`notification:retry`,
+stands, and a failed one that was attempted is re-queued with `POST /notifications/{id}:retry` (`notification:retry`,
 an operator's, beside `alarm:acknowledge`), from the timeline or the CLI. `GET /notifications` lists
 them by alarm, target or status, and every read is scoped by the alarm's component exactly as the
 alarm reads are: a principal never sees a message about a component outside its scope.

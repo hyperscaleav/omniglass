@@ -77,7 +77,7 @@ export default function AlarmTimeline(props: { component: string; alarmId: strin
                         <span class="min-w-0 truncate text-error/80" title={e.error}>
                           {e.error}{e.attempts ? ` (${e.attempts} attempts)` : ""}
                         </span>
-                        <Show when={e.notification}>
+                        <Show when={e.attempts ? e.notification : undefined}>
                           {(id) => <RetryButton id={id()} component={props.component} alarmId={props.alarmId} onError={setRetryErr} />}
                         </Show>
                       </Show>

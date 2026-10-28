@@ -77,7 +77,7 @@ var (
 	ErrNotificationForbidden = errors.New("storage: notification is outside the action's scope")
 	// ErrNotificationNotRetryable is a :retry of a notification that has not
 	// failed: a queued one is already on its way, a sent one arrived.
-	ErrNotificationNotRetryable = errors.New("storage: only a failed notification is retried")
+	ErrNotificationNotRetryable = errors.New("storage: only a failed notification that was attempted is retried")
 )
 
 const notificationCols = `n.id::text, n.alarm_id::text, n.component_id::text, coalesce((select c.name from component c where c.id = n.component_id), ''),
@@ -114,6 +114,29 @@ type queuedRule struct {
 // the alarm's timeline rather than in a log; the transition itself never
 // fails for a notification.
 func (p *PG) queueNotificationsTx(ctx context.Context, tx pgx.Tx, componentID, alarmID, transition string) error {
+	// Everything a notification writes runs under a savepoint: whatever goes
+	// wrong in it (a rule deleted between the read and the insert, a value
+	// the database refuses) rolls back to here and is logged, and the alarm
+	// transition commits as if no rule had matched. The notification lane
+	// never fails, or stalls into failing, the transition it is about.
+	if _, err := tx.Exec(ctx, `savepoint notify_queue`); err != nil {
+		return fmt.Errorf("storage: notification savepoint: %w", err)
+	}
+	if err := p.queueNotifications(ctx, tx, componentID, alarmID, transition); err != nil {
+		if _, rerr := tx.Exec(ctx, `rollback to savepoint notify_queue`); rerr != nil {
+			return fmt.Errorf("storage: roll back the notification savepoint: %w (after %v)", rerr, err)
+		}
+		slog.Warn("an alarm transition's notifications were not queued", "facility", "notify",
+			"alarm", alarmID, "transition", transition, "error", err.Error())
+		return nil
+	}
+	if _, err := tx.Exec(ctx, `release savepoint notify_queue`); err != nil {
+		return fmt.Errorf("storage: release the notification savepoint: %w", err)
+	}
+	return nil
+}
+
+func (p *PG) queueNotifications(ctx context.Context, tx pgx.Tx, componentID, alarmID, transition string) error {
 	rs, err := rulesOn(ctx, tx, transition)
 	if err != nil || len(rs) == 0 {
 		return err
@@ -416,7 +439,10 @@ func (p *PG) RetryNotification(ctx context.Context, actorID, id string, read, ac
 	} else if !ok {
 		return nil, ErrNotificationForbidden
 	}
-	if before.Status != NotificationFailed {
+	// Only a send that was attempted is retried: a row failed before any
+	// attempt (its rule's when did not run, its type did not render) holds no
+	// message, and sending it would page for an alarm nobody judged.
+	if before.Status != NotificationFailed || before.Attempts == 0 {
 		return nil, ErrNotificationNotRetryable
 	}
 	if _, err := tx.Exec(ctx, `update notification set status = 'queued', attempts = 0, next_attempt_at = now(), updated_at = now()

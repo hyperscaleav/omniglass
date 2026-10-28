@@ -105,7 +105,7 @@ func registerNotificationRoutes(api huma.API, a *authenticator, gw storage.Gatew
 		Method:      http.MethodPost,
 		Path:        "/notifications/{id}:retry",
 		Summary:     "Retry a failed notification",
-		Description: "Re-queues a failed notification for a fresh run of attempts, sending the same rendered message with the same Idempotency-Key. One that is queued or sent is a 409. Audited as retry. Gated by notification:retry, whose scope resolves on the component tier; a component outside the caller's component read scope is a non-disclosing 404, one it reads but may not retry on a 403.",
+		Description: "Re-queues a failed notification for a fresh run of attempts, sending the same rendered message with the same Idempotency-Key. One that is queued or sent, or one that failed before any attempt (its rule's when did not run, or its type did not render, so it holds no message), is a 409. Audited as retry. Gated by notification:retry, whose scope resolves on the component tier; a component outside the caller's component read scope is a non-disclosing 404, one it reads but may not retry on a 403.",
 	}, "notification", "retry"), func(ctx context.Context, in *notificationIDInput) (*notificationOutput, error) {
 		n, err := gw.RetryNotification(ctx, actorID(ctx), in.ID, a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "notification", "retry"))
 		if err != nil {
@@ -122,7 +122,7 @@ func mapNotificationErr(err error) error {
 	case errors.Is(err, storage.ErrNotificationForbidden):
 		return huma.Error403Forbidden("retrying a notification about this component is outside your notification:retry scope")
 	case errors.Is(err, storage.ErrNotificationNotRetryable):
-		return huma.Error409Conflict("only a failed notification is retried: a queued one is on its way and a sent one arrived")
+		return huma.Error409Conflict("only a failed notification that was attempted is retried: a queued one is on its way, a sent one arrived, and one that failed before any attempt holds no message to send")
 	}
 	return huma.Error500InternalServerError("notification operation failed")
 }
