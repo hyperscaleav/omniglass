@@ -21,7 +21,7 @@ Each tool says what a client may assume of it, from one rule over the route's me
 
 A tool that is not read-only and not destructive adds something (a create).
 
-53 tools.
+56 tools.
 
 | Tool | What it does | Gate | Assume |
 |---|---|---|---|
@@ -41,6 +41,7 @@ A tool that is not read-only and not destructive adds something (a create).
 | [`list-component-properties`](#list-component-properties) | List a component's properties and where each stands | `component:read` | read-only, idempotent |
 | [`list-component-property-series`](#list-component-property-series) | Read one property series' change history | `component:read` | read-only, idempotent |
 | [`get-component-reachability`](#get-component-reachability) | Read a component's per-endpoint reachability | `component:read` | read-only, idempotent |
+| [`instantiate-component`](#instantiate-component) | Start a component from a template | `component:create` | adds |
 | [`list-drivers`](#list-drivers) | List drivers | `driver:read` | read-only, idempotent |
 | [`create-driver`](#create-driver) | Create a driver | `driver:create` | adds |
 | [`get-driver`](#get-driver) | Get a driver | `driver:read` | read-only, idempotent |
@@ -58,6 +59,7 @@ A tool that is not read-only and not destructive adds something (a create).
 | [`list-locations`](#list-locations) | List locations in scope | `location:read` | read-only, idempotent |
 | [`get-location`](#get-location) | Get a location | `location:read` | read-only, idempotent |
 | [`get-location-health`](#get-location-health) | Read a location's health | `location:read` | read-only, idempotent |
+| [`instantiate-locations`](#instantiate-locations) | Start a subtree of places from a template | `location:create` | adds |
 | [`list-nodes`](#list-nodes) | List nodes | `node:read` | read-only, idempotent |
 | [`get-node`](#get-node) | Get a node | `node:read` | read-only, idempotent |
 | [`list-node-logs`](#list-node-logs) | List a node's recent self-logs | `node:read` | read-only, idempotent |
@@ -72,6 +74,7 @@ A tool that is not read-only and not destructive adds something (a create).
 | [`get-system-health`](#get-system-health) | Read a system's health | `system:read` | read-only, idempotent |
 | [`list-system-metric-series`](#list-system-metric-series) | Read one metric series' raw samples | `system:read` | read-only, idempotent |
 | [`list-system-property-series`](#list-system-property-series) | Read one property series' change history | `system:read` | read-only, idempotent |
+| [`instantiate-system`](#instantiate-system) | Start a whole system from a template | `system:create` | adds |
 | [`list-tasks`](#list-tasks) | List tasks in scope | `task:read` | read-only, idempotent |
 | [`list-templates`](#list-templates) | List templates | `template:read` | read-only, idempotent |
 | [`get-template`](#get-template) | Get a template | `template:read` | read-only, idempotent |
@@ -320,6 +323,25 @@ Composes, per endpoint, the latest reachability verdict, the probe-layer signals
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `name` | string | yes | The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
+
+## `instantiate-component`
+
+Start a component from a template
+
+Creates one component from a component template at a place: its product and the template's declared values, and, when the inputs carry an address (host), its endpoint attached through the driver with the template's preset under your inputs. A secret input names a secret you may read, resolved as an attach resolves it. One transaction, every piece in your own scope with its own audit row naming the template; nothing points back at the template. Gated by component:create; declared values also need component:update and an attach endpoint:create. A place outside your location scope is a 404, an unknown template a 404, inputs with no address or an attach with no node a 422.
+
+- Route: `POST /api/v1/components:instantiate`
+- Gate: `component:create`
+- Assume: adds
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `inputs` | object | no | Driver inputs laid over the template's preset: the address (host) attaches the endpoint, a secret input names a secret you may read |
+| `label` | string | no | The component's label |
+| `location` | string | no | The place the component sits in, by name or dotted path |
+| `name` | string | no | The component's name; minted as an unnamed create mints it when empty |
+| `node` | string | no | The node the endpoint is placed on; needed when inputs carry an address |
+| `template` | string | yes | The component template, by name |
 
 ## `list-drivers`
 
@@ -576,6 +598,23 @@ The location's current verdict, worst-wins over every system placed anywhere ben
 |---|---|---|---|
 | `name` | string | yes | The location's name, or a dotted address (e.g. boi.17c.415a) |
 
+## `instantiate-locations`
+
+Start a subtree of places from a template
+
+Creates a subtree of places from a place template under a parent place (or as a new top), each place's type checked against its parent type's allowed parents as this fleet has them (your fork of a shipped type included), each named by the template, the request (the root) or its type's name rule, and the systems the template places in them, staffed as a system template is, unattached. One transaction: all of it or none, every piece in your own scope with its own audit row naming the template. Gated by location:create; when the subtree carries systems it also needs system:create, system:read, system:update, component:create and component:update, and standard:create when a standard is forked. A type this fleet does not hold, or a placement its types refuse, is a 422 naming the type or the pair.
+
+- Route: `POST /api/v1/locations:instantiate`
+- Gate: `location:create`
+- Assume: adds
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `label` | string | no | The subtree root's label |
+| `name` | string | no | The subtree root's name; omitted takes the template's, else its type's name rule mints one |
+| `parent` | string | no | The place the subtree sits under, by name or dotted path; omitted makes it a new top |
+| `template` | string | yes | The place template, by name |
+
 ## `list-nodes`
 
 List nodes
@@ -771,6 +810,26 @@ The change history behind the effective value for one property series, newest fi
 | `limit` | integer | no | The row cap, newest kept; 500 when unset |
 | `name` | string | yes | The owner's name or uuid |
 | `property` | string | yes | The property_type name of the series |
+
+## `instantiate-system`
+
+Start a whole system from a template
+
+Creates a system from a system template at a place, built to the standard you name or the template's own (yours of that name when you hold one, else forked from its standard template, with any parent it hangs off, in the same write), with a component for each role filled to its quorum and assigned, and the declared values. A component whose role you give an address in attach lands attached; the rest land unattached and are listed in to_attach. One transaction: it lands whole or not at all, every piece in your own scope with its own audit row naming the template. Gated by system:create, and also needs system:read, system:update, component:create and component:update; endpoint:create when anything attaches, standard:create when a standard is forked. A place outside your location scope is a 404, an unknown template or standard a 404, a standard the template cannot staff a 422 naming the roles.
+
+- Route: `POST /api/v1/systems:instantiate`
+- Gate: `system:create`
+- Assume: adds
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `attach` | object | no | Driver inputs per role, one object per component of the role in order; an object with an address (host) attaches that component, the rest land unattached |
+| `label` | string | no | The system's label |
+| `location` | string | no | The place the system and its components sit in, by name or dotted path |
+| `name` | string | no | The system's name; minted from its type when empty |
+| `node` | string | no | The node the endpoints are placed on; needed when any component attaches |
+| `standard` | string | no | A standard of your own to build to, by name; omitted takes the template's, forked in the same write when you hold none of that name |
+| `template` | string | yes | The system template, by name |
 
 ## `list-tasks`
 

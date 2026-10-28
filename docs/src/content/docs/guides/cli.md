@@ -592,6 +592,23 @@ A taken name is a 409, and a variant whose parent you do not hold is a 422 namin
 first. Nothing points back at the template, so the standard is yours to rename, edit and delete. See
 [the seed model](/architecture/core-entities/#the-seed-model-forked-templates-versus-canonical-catalogs).
 
+### Start fleet entities from a template
+
+A component, a whole system, or a subtree of places starts from a template the same way: name the
+template and where it lands. Everything lands in one write or not at all, and nothing points back at the
+template. `inputs` and `attach` take JSON:
+
+```sh
+omniglass component instantiate --template newtron-panel-7 --location hq \
+  --node edge-hq --inputs '{"host":"10.20.0.7"}'                     # attached; without inputs it lands unattached
+omniglass system instantiate --template mr55-system --location hq.f3.mr-1 \
+  --node edge-hq --attach '{"touch-control":[{"host":"10.20.0.8"}]}' # forks mr55 (and meeting-room) if you hold neither
+omniglass location instantiate --template meeting-floor --parent hq --name f4
+```
+
+A system's answer lists `to_attach`, the components that landed with no endpoint: attach each later
+with `omniglass endpoint create`. A subtree whose root type its parent refuses is a 422 naming the pair.
+
 ## Event types
 
 The [event type](/architecture/events/#the-event_type-registry) commands cover the occurrence keyspace,

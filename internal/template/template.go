@@ -365,7 +365,7 @@ func Load(files map[string][]byte) (*Catalog, error) {
 			return nil, fmt.Errorf("template: %s holds more than one YAML document; put every template under the one templates list", file)
 		}
 		for _, t := range doc.Templates {
-			if err := t.validate(); err != nil {
+			if err := t.Validate(); err != nil {
 				return nil, fmt.Errorf("template: %s: %w", file, err)
 			}
 			if seen[t.Name] {
@@ -414,9 +414,10 @@ func checkName(what, name string) error {
 	return nil
 }
 
-// validate checks one template's own shape, without reference to the rest
-// of the catalog.
-func (t *Template) validate() error {
+// Validate checks one template's own shape, without reference to the rest
+// of the catalog: the one validator a template is held to wherever it came
+// from (the embedded catalog today, a stored manifest later, #1330).
+func (t *Template) Validate() error {
 	if err := checkName("a template", t.Name); err != nil {
 		return err
 	}

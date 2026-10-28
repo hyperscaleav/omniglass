@@ -1164,6 +1164,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/components:instantiate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a component from a template
+         * @description Creates one component from a component template at a place: its product and the template's declared values, and, when the inputs carry an address (host), its endpoint attached through the driver with the template's preset under your inputs. A secret input names a secret you may read, resolved as an attach resolves it. One transaction, every piece in your own scope with its own audit row naming the template; nothing points back at the template. Gated by component:create; declared values also need component:update and an attach endpoint:create. A place outside your location scope is a 404, an unknown template a 404, inputs with no address or an attach with no node a 422.
+         */
+        post: operations["instantiate-component"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/components:previewLabels": {
         parameters: {
             query?: never;
@@ -2166,6 +2186,26 @@ export interface paths {
          * @description Reports whether a proposed name is a valid slug and currently free within the given placement (under the given parent, or among roots when no parent is given). Advisory (Save is still gated by the unique constraint). Gated by location:update.
          */
         post: operations["check-location-name"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/locations:instantiate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a subtree of places from a template
+         * @description Creates a subtree of places from a place template under a parent place (or as a new top), each place's type checked against its parent type's allowed parents as this fleet has them (your fork of a shipped type included), each named by the template, the request (the root) or its type's name rule, and the systems the template places in them, staffed as a system template is, unattached. One transaction: all of it or none, every piece in your own scope with its own audit row naming the template. Gated by location:create; when the subtree carries systems it also needs system:create, system:read, system:update, component:create and component:update, and standard:create when a standard is forked. A type this fleet does not hold, or a placement its types refuse, is a 422 naming the type or the pair.
+         */
+        post: operations["instantiate-locations"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4374,6 +4414,26 @@ export interface paths {
         get: operations["list-system-verdicts"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/systems:instantiate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a whole system from a template
+         * @description Creates a system from a system template at a place, built to the standard you name or the template's own (yours of that name when you hold one, else forked from its standard template, with any parent it hangs off, in the same write), with a component for each role filled to its quorum and assigned, and the declared values. A component whose role you give an address in attach lands attached; the rest land unattached and are listed in to_attach. One transaction: it lands whole or not at all, every piece in your own scope with its own audit row naming the template. Gated by system:create, and also needs system:read, system:update, component:create and component:update; endpoint:create when anything attaches, standard:create when a standard is forked. A place outside your location scope is a 404, an unknown template or standard a 404, a standard the template cannot staff a 422 naming the roles.
+         */
+        post: operations["instantiate-system"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7283,6 +7343,159 @@ export interface components {
             target_id: string;
             /** @description The bearer token to send while impersonating; shown once */
             token: string;
+        };
+        InstantiateComponentInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/InstantiateComponentInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Driver inputs laid over the template's preset: the address (host) attaches the endpoint, a secret input names a secret you may read */
+            inputs?: {
+                [key: string]: string;
+            };
+            /** @description The component's label */
+            label?: string;
+            /** @description The place the component sits in, by name or dotted path */
+            location?: string;
+            /** @description The component's name; minted as an unnamed create mints it when empty */
+            name?: string;
+            /** @description The node the endpoint is placed on; needed when inputs carry an address */
+            node?: string;
+            /**
+             * @description The component template, by name
+             * @example kestrel-vroom
+             */
+            template: string;
+        };
+        InstantiateComponentOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/InstantiateComponentOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Whether its endpoint attached from the inputs given; false means it is still to attach */
+            attached: boolean;
+            /** @description The component's name */
+            component: string;
+            /** @description Its product */
+            product: string;
+            /** @description The template it came from; recorded in the audit detail only */
+            template: string;
+        };
+        InstantiateLocationsInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/InstantiateLocationsInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The subtree root's label */
+            label?: string;
+            /** @description The subtree root's name; omitted takes the template's, else its type's name rule mints one */
+            name?: string;
+            /** @description The place the subtree sits under, by name or dotted path; omitted makes it a new top */
+            parent?: string;
+            /**
+             * @description The place template, by name
+             * @example meeting-floor
+             */
+            template: string;
+        };
+        InstantiateLocationsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/InstantiateLocationsOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The places created, parents first */
+            places: components["schemas"]["InstantiatedPlaceBody"][] | null;
+            /** @description The standards this write forked from their templates */
+            standard_forked: string[] | null;
+            /** @description The systems created in them */
+            systems: components["schemas"]["InstantiatedSystemBody"][] | null;
+            /** @description The template it came from; recorded in the audit detail only */
+            template: string;
+            /** @description The components that landed with no endpoint, still to attach */
+            to_attach: string[] | null;
+        };
+        InstantiateSystemInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/InstantiateSystemInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Driver inputs per role, one object per component of the role in order; an object with an address (host) attaches that component, the rest land unattached */
+            attach?: {
+                [key: string]: {
+                    [key: string]: string;
+                }[] | null;
+            };
+            /** @description The system's label */
+            label?: string;
+            /** @description The place the system and its components sit in, by name or dotted path */
+            location?: string;
+            /** @description The system's name; minted from its type when empty */
+            name?: string;
+            /** @description The node the endpoints are placed on; needed when any component attaches */
+            node?: string;
+            /** @description A standard of your own to build to, by name; omitted takes the template's, forked in the same write when you hold none of that name */
+            standard?: string;
+            /**
+             * @description The system template, by name
+             * @example mr55-system
+             */
+            template: string;
+        };
+        InstantiateSystemOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/InstantiateSystemOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description A component per role, filled to quorum and assigned */
+            components: components["schemas"]["InstantiatedComponentBody"][] | null;
+            /** @description The standard it is built to */
+            standard: string;
+            /** @description The standards this write forked from their templates (parents first); empty when you held them */
+            standard_forked: string[] | null;
+            /** @description The system's name */
+            system: string;
+            /** @description The template it came from; recorded in the audit detail only */
+            template: string;
+            /** @description The components that landed with no endpoint, still to attach */
+            to_attach: string[] | null;
+        };
+        InstantiatedComponentBody: {
+            /** @description Whether its endpoint attached from the inputs given; false lists it as still to attach */
+            attached: boolean;
+            /** @description The component's name */
+            component: string;
+            /** @description Its product */
+            product: string;
+            /** @description The role it fills in its system */
+            role?: string;
+        };
+        InstantiatedPlaceBody: {
+            /** @description The place's name */
+            location: string;
+            /** @description The place it sits under, by name */
+            parent?: string;
+            /** @description Its location type */
+            type: string;
+        };
+        InstantiatedSystemBody: {
+            /** @description The place it sits in */
+            location: string;
+            /** @description The standard it is built to */
+            standard: string;
+            /** @description The system's name */
+            system: string;
         };
         IssueCommandInputBody: {
             /**
@@ -13231,6 +13444,39 @@ export interface operations {
             };
         };
     };
+    "instantiate-component": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstantiateComponentInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstantiateComponentOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "preview-component-labels": {
         parameters: {
             query?: never;
@@ -15440,6 +15686,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CheckNameOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "instantiate-locations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstantiateLocationsInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstantiateLocationsOutputBody"];
                 };
             };
             /** @description Error */
@@ -20275,6 +20554,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SystemVerdictsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "instantiate-system": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstantiateSystemInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstantiateSystemOutputBody"];
                 };
             };
             /** @description Error */

@@ -16,9 +16,10 @@ back-pointer, so a template can be rewritten in any release without migrating a 
 
 :::note[Partial]
 Built: the catalog in the binary, its four kinds, the build's dry-run of every template, the read
-routes (#1323), and forking a standard from a template, which retired the standards boot seed
-(#1324). Still design: instantiating a component, a system or a place subtree, tracked by
-[#827](https://github.com/hyperscaleav/omniglass/issues/827).
+routes (#1323), forking a standard from a template, which retired the standards boot seed (#1324),
+the planned-system primitive (#1325), and instantiating a component, a system or a subtree of places
+(#1326, #1327, #1328). Still design: the console's Templates page and "Start from a template"
+(#1329).
 :::
 
 ## Fork, not pin
@@ -111,20 +112,57 @@ Editing it, renaming it, deleting it, and booting a release whose template chang
 untouched. The dev seed and the lab fork every standard template through the same primitive, so their
 fleets have the standards their systems conform to.
 
-::::design[Instantiating from a template, tracked in #827]
-
 ## Instantiating from a template
 
-- **`POST /components:instantiate`**, **`POST /systems:instantiate`** and
-  **`POST /locations:instantiate`**, each gated by its resource's own create permission. Every piece
-  a call creates (a component, its endpoint attach, a system and its standard, a place) is checked
-  as its own route checks it, in the caller's own scope, audited, and landed in **one transaction**:
-  all of it or none. A target place outside the caller's location scope is a non-disclosing 404.
+Three custom methods start fleet entities from a template, each on the collection it creates in and
+gated by that resource's own create permission. Each turns the template into one **plan** and lands it
+through the planned-system primitive ([below](#one-primitive-lands-a-plan)): every piece is the
+ordinary create, checked as its own route checks it, in the caller's own scope, with its own audit row,
+in **one transaction**. A refused piece is answered as its own route answers it, and nothing lands.
 
-**Provenance lives in the audit trail only**, as it does for a fork: each created row's audit detail
-names the template it came from. No column and no back-pointer, which keeps the copy severed while
-still answering "where did this come from".
-::::
+- **`POST /components:instantiate`** (`component:create`): one component from a component template at
+  a place, with its product and the template's declared values (which also need `component:update`).
+  When the request's `inputs` carry the address (`host`) and a `node`, its endpoint attaches through the
+  driver, the template's preset under the inputs given (which also needs `endpoint:create`). A secret
+  input names a secret the caller may read, resolved exactly as an attach resolves it, so one the caller
+  cannot use is refused indistinguishably from one that does not exist. Inputs with no address, or an
+  address with no node, are a 422.
+- **`POST /systems:instantiate`** (`system:create`, and `system:read`, `system:update`,
+  `component:create`, `component:update`): a whole system from a system template at a place, built to
+  the standard the caller names, else the template's own: the caller's standard of that name when they
+  hold one, otherwise forked from its standard template in the same write, with every ancestor of a
+  variant the fleet does not hold, parents first (which needs `standard:create`). A component is
+  created for each role, filled to its quorum with the product the template names, and assigned, so the
+  system's staffing reads complete. A role given an address in `attach` (one object per component of
+  the role) lands attached; the rest land unattached and are listed in `to_attach`. A standard the
+  template cannot staff (a fill whose product is not a type its role accepts, or a role it does not
+  fill) is a 422 naming the roles.
+- **`POST /locations:instantiate`** (`location:create`, and the system permissions above when the
+  subtree carries systems): a subtree of places from a place template under a parent place, or as a new
+  top. Each place's type must be one the fleet holds and must allow its parent's type, read from the
+  fleet's own effective `allowed_parent_types` (an operator's fork of a shipped type included), and each
+  is named by the template, the request (the root), or its type's name rule. The systems the template
+  places land staffed and unattached. A type the fleet lacks is a 422 naming the type; a placement its
+  types refuse is a 422 naming the pair. Nothing is keyed on any particular type.
+
+A place outside the caller's location read scope is a non-disclosing 404, and an unknown template a
+404. The CLI is `omniglass component instantiate`, `omniglass system instantiate` and
+`omniglass location instantiate`.
+
+**Provenance lives in the audit trail only**, as it does for a fork: every audit row a plan writes
+carries the template's name as `instantiated_from`. No column and no back-pointer, which keeps the copy
+severed while still answering "where did this come from"; removing a template from the catalog leaves
+every row created from it reading identically.
+
+## One primitive lands a plan
+
+The simulator's "add a simulated system" and the three instantiations share one primitive in two
+halves. The pure planner (`internal/systemplan`) staffs a standard's roles from each role's candidate
+products: the products the simulator serves, or the one product a template names for the role. It
+fills each role to its quorum (capped by its capacity) and takes one alternate per choice. The planned
+create (`storage.CreatePlan`) then lands the standards to fork, the places parents first, each system
+with its components, their endpoints, declared values and role assignments, and any standalone
+components, in one transaction.
 
 ## Why this dissolves the shipped-defaults problem
 

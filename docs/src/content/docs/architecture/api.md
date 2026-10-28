@@ -774,6 +774,24 @@ whose parent the caller does not hold is a 422 naming the template to fork first
 does not hold (or one of another kind) is a 404, and a template naming a row the fleet's catalogs lack is
 a 422. The boot seed plants no standard, so this is how a fresh install gets one.
 
+Three custom methods **instantiate** fleet entities from a template, each on the collection it creates
+in and gated by that resource's create permission, with the other permissions its pieces need checked
+up front (a 403 naming the one missing): **`POST /components:instantiate`** (`component:create`; plus
+`component:update` for declared values and `endpoint:create` to attach), **`POST /systems:instantiate`**
+(`system:create`; plus `system:read`, `system:update`, `component:create`, `component:update`,
+`endpoint:create` to attach, and `standard:create` when the template's standard is forked), and
+**`POST /locations:instantiate`** (`location:create`; plus the system permissions when the subtree
+carries systems). Each names the `template` and where it lands (`location`, or `parent` for a subtree)
+and optionally the root's `name` and `label`; a component takes `inputs` and a `node` to attach, a
+system takes a `standard` to build to and `attach` (driver inputs per role, one object per component)
+with a `node`. The whole thing lands in one transaction, each piece the ordinary create in the caller's
+own scope with its own audit row carrying `instantiated_from`, and a refused piece is answered as its
+own route answers it with nothing landed. A target place outside the caller's location read scope is a
+non-disclosing 404, an unknown template (or named standard) a 404, and a request the template cannot
+satisfy a 422 naming why. The answer names what was created by name, the standards forked, and
+`to_attach`, the components that landed without an endpoint
+([templates](/architecture/templates/#instantiating-from-a-template)).
+
 What each catalog adds over the shared shape (bodies in the [reference](/reference/api/)):
 
 - A **vendor** (Boreal, Polaris, ...) names an organization, generalizing the former manufacturer-only

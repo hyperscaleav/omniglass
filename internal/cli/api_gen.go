@@ -1303,6 +1303,55 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var fInputs string
+				var fLabel string
+				var fLocation string
+				var fName string
+				var fNode string
+				var fTemplate string
+				cmd := &cobra.Command{
+					Use:     "instantiate",
+					Short:   "Start a component from a template",
+					Long:    "Creates one component from a component template at a place: its product and the template's declared values, and, when the inputs carry an address (host), its endpoint attached through the driver with the template's preset under your inputs. A secret input names a secret you may read, resolved as an attach resolves it. One transaction, every piece in your own scope with its own audit row naming the template; nothing points back at the template. Gated by component:create; declared values also need component:update and an attach endpoint:create. A place outside your location scope is a 404, an unknown template a 404, inputs with no address or an attach with no node a 422.",
+					Example: "  omniglass component instantiate --template template",
+					Args:    pathArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/components:instantiate")
+						body := map[string]any{}
+						if cmd.Flags().Changed("inputs") {
+							body["inputs"] = jsonOrString(fInputs)
+						}
+						if cmd.Flags().Changed("label") {
+							body["label"] = fLabel
+						}
+						if cmd.Flags().Changed("location") {
+							body["location"] = fLocation
+						}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						if cmd.Flags().Changed("node") {
+							body["node"] = fNode
+						}
+						if cmd.Flags().Changed("template") {
+							body["template"] = fTemplate
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fInputs, "inputs", "", "Driver inputs laid over the template's preset: the address (host) attaches the endpoint, a secret input names a secret you may read")
+				cmd.Flags().StringVar(&fLabel, "label", "", "The component's label")
+				cmd.Flags().StringVar(&fLocation, "location", "", "The place the component sits in, by name or dotted path")
+				cmd.Flags().StringVar(&fName, "name", "", "The component's name; minted as an unnamed create mints it when empty")
+				cmd.Flags().StringVar(&fNode, "node", "", "The node the endpoint is placed on; needed when inputs carry an address")
+				cmd.Flags().StringVar(&fTemplate, "template", "", "The component template, by name")
+				_ = cmd.MarkFlagRequired("template")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List components in scope",
@@ -3307,6 +3356,45 @@ func generatedCommands() []*cobra.Command {
 				return cmd
 			}())
 			return parent
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fLabel string
+				var fName string
+				var fParent string
+				var fTemplate string
+				cmd := &cobra.Command{
+					Use:     "instantiate",
+					Short:   "Start a subtree of places from a template",
+					Long:    "Creates a subtree of places from a place template under a parent place (or as a new top), each place's type checked against its parent type's allowed parents as this fleet has them (your fork of a shipped type included), each named by the template, the request (the root) or its type's name rule, and the systems the template places in them, staffed as a system template is, unattached. One transaction: all of it or none, every piece in your own scope with its own audit row naming the template. Gated by location:create; when the subtree carries systems it also needs system:create, system:read, system:update, component:create and component:update, and standard:create when a standard is forked. A type this fleet does not hold, or a placement its types refuse, is a 422 naming the type or the pair.",
+					Example: "  omniglass location instantiate --template template",
+					Args:    pathArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/locations:instantiate")
+						body := map[string]any{}
+						if cmd.Flags().Changed("label") {
+							body["label"] = fLabel
+						}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						if cmd.Flags().Changed("parent") {
+							body["parent"] = fParent
+						}
+						if cmd.Flags().Changed("template") {
+							body["template"] = fTemplate
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fLabel, "label", "", "The subtree root's label")
+				cmd.Flags().StringVar(&fName, "name", "", "The subtree root's name; omitted takes the template's, else its type's name rule mints one")
+				cmd.Flags().StringVar(&fParent, "parent", "", "The place the subtree sits under, by name or dotted path; omitted makes it a new top")
+				cmd.Flags().StringVar(&fTemplate, "template", "", "The place template, by name")
+				_ = cmd.MarkFlagRequired("template")
+				return cmd
+			}()
+			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
@@ -6909,6 +6997,60 @@ func generatedCommands() []*cobra.Command {
 				}()
 				return cmd
 			}())
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fAttach string
+				var fLabel string
+				var fLocation string
+				var fName string
+				var fNode string
+				var fStandard string
+				var fTemplate string
+				cmd := &cobra.Command{
+					Use:     "instantiate",
+					Short:   "Start a whole system from a template",
+					Long:    "Creates a system from a system template at a place, built to the standard you name or the template's own (yours of that name when you hold one, else forked from its standard template, with any parent it hangs off, in the same write), with a component for each role filled to its quorum and assigned, and the declared values. A component whose role you give an address in attach lands attached; the rest land unattached and are listed in to_attach. One transaction: it lands whole or not at all, every piece in your own scope with its own audit row naming the template. Gated by system:create, and also needs system:read, system:update, component:create and component:update; endpoint:create when anything attaches, standard:create when a standard is forked. A place outside your location scope is a 404, an unknown template or standard a 404, a standard the template cannot staff a 422 naming the roles.",
+					Example: "  omniglass system instantiate --template template",
+					Args:    pathArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/systems:instantiate")
+						body := map[string]any{}
+						if cmd.Flags().Changed("attach") {
+							body["attach"] = jsonOrString(fAttach)
+						}
+						if cmd.Flags().Changed("label") {
+							body["label"] = fLabel
+						}
+						if cmd.Flags().Changed("location") {
+							body["location"] = fLocation
+						}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						if cmd.Flags().Changed("node") {
+							body["node"] = fNode
+						}
+						if cmd.Flags().Changed("standard") {
+							body["standard"] = fStandard
+						}
+						if cmd.Flags().Changed("template") {
+							body["template"] = fTemplate
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fAttach, "attach", "", "Driver inputs per role, one object per component of the role in order; an object with an address (host) attaches that component, the rest land unattached")
+				cmd.Flags().StringVar(&fLabel, "label", "", "The system's label")
+				cmd.Flags().StringVar(&fLocation, "location", "", "The place the system and its components sit in, by name or dotted path")
+				cmd.Flags().StringVar(&fName, "name", "", "The system's name; minted from its type when empty")
+				cmd.Flags().StringVar(&fNode, "node", "", "The node the endpoints are placed on; needed when any component attaches")
+				cmd.Flags().StringVar(&fStandard, "standard", "", "A standard of your own to build to, by name; omitted takes the template's, forked in the same write when you hold none of that name")
+				cmd.Flags().StringVar(&fTemplate, "template", "", "The system template, by name")
+				_ = cmd.MarkFlagRequired("template")
+				return cmd
+			}()
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
