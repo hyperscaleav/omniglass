@@ -40,7 +40,7 @@ Wait
 Type `omniglass action-rule update review-warnings --opt-out-allowed=true | jq -c '{name, opt_out_allowed}'`
 Enter
 Wait
-Type `OMNIGLASS_TOKEN=$kim omniglass action-rule optOut review-warnings | jq -c .`
+Type `OMNIGLASS_TOKEN=$kim omniglass action-rule optOut review-warnings | jq -c '{action_rule, opted_out}'`
 Enter
 Wait
 Type `omniglass component alarm create panel-2 --severity warning --message 'fan noise' | jq -c '{component, severity, message}'`
@@ -55,6 +55,6 @@ Wait
 Type "# Opting back in restores her from the next alarm"
 Enter
 Wait
-Type `OMNIGLASS_TOKEN=$kim omniglass action-rule optIn review-warnings | jq -c .`
+Type `OMNIGLASS_TOKEN=$kim omniglass action-rule optIn review-warnings | jq -c '{action_rule, opted_out}'`
 Enter
 Wait

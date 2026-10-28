@@ -1,0 +1,30 @@
+# Subscribe yourself to alarms (#1341, #1355): a person writes a personal
+# alarm subscription, tests the draft against their own recent alarms before
+# saving it (the teaching surface: the predicate judged on real alarms), saves
+# it, and reads what it tells them in the console inbox. Touch Panel 2 holds a
+# High alarm raised off camera, so the test has something real to judge.
+title: Subscribe to alarms
+description: Write a personal alarm subscription, test it against your own recent alarms before saving it, and read what it tells you in your inbox.
+setup:
+  - post: /components/panel-2/alarms
+    body: { severity: high, message: Touch input lost, dedup_key: walkthrough-subscribe }
+steps:
+  - goto: /profile/subscriptions
+    caption: Alarm subscriptions are your own. Each one tells you, and only you, about the alarms you can see.
+  - click: { role: button, name: New subscription }
+    caption: Start a new one.
+  - type: { target: { role: textbox, name: Label, exact: true }, text: Touch panels high or worse }
+    caption: Give it a label; its name follows from it.
+  - type: { target: { role: textbox, name: When, exact: true }, text: 'severity_rank >= 40 && component_label != ""' }
+    caption: When says which alarms. It reads the alarm's facts, and it is only ever judged for components you can read.
+  - wait: { text: Compiles }
+    caption: The editor checks it as you type.
+  - click: '[data-testid="sub-test"] button >> text=Test'
+    caption: Before saving, test the draft against your own most recent alarms.
+  - wait: { selector: '[data-testid="sub-test-summary"]' }
+    caption: Each recent alarm, and whether this draft would have told you. Touch Panel 2's High alarm is among them.
+    hold: 2000
+  - click: { role: button, name: Subscribe }
+    caption: Subscribe. From the next alarm, it tells you in your inbox.
+  - wait: { selector: '[data-testid="sub-row"]' }
+    caption: The subscription, active. Pause it, edit it or delete it from its row.

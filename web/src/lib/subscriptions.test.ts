@@ -30,10 +30,10 @@ describe("toggled", () => {
 describe("draftFrom", () => {
   it("seeds the drawer from a rule, dropping words it does not know", () => {
     const s = {
-      id: "1", name: "hq", label: "HQ", on: ["raised", "bogus"], when: "severity_rank >= 4", channels: ["inbox"],
+      id: "1", name: "hq", label: "HQ", on: ["raised", "bogus"], when: "severity_rank >= 40", channels: ["inbox"],
       enabled: false, created_at: "", updated_at: "",
     } as Subscription;
-    expect(draftFrom(s)).toEqual({ name: "hq", label: "HQ", on: ["raised"], when: "severity_rank >= 4", channels: ["inbox"], enabled: false });
+    expect(draftFrom(s)).toEqual({ name: "hq", label: "HQ", on: ["raised"], when: "severity_rank >= 40", channels: ["inbox"], enabled: false });
   });
 });
 

@@ -14,7 +14,7 @@ const viewer: Me = { principal: { id: "u-1", kind: "human" }, human: { username:
 const noSubscribe: Me = { principal: { id: "u-2", kind: "human" }, human: { username: "bo" }, permissions: ["*:read"], grants: [] };
 
 const outages: Subscription = {
-  id: "r-1", name: "hq-outages", label: "HQ outages", on: ["raised", "cleared"], when: "severity_rank >= 4",
+  id: "r-1", name: "hq-outages", label: "HQ outages", on: ["raised", "cleared"], when: "severity_rank >= 40",
   channels: ["inbox", "email"], enabled: true, created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-01T00:00:00Z",
 } as Subscription;
 const everything: Subscription = {
@@ -67,7 +67,7 @@ describe("Subscriptions", () => {
     expect(within(a).getByText("hq-outages")).toBeTruthy();
     expect(within(a).getByText("raised")).toBeTruthy();
     expect(within(a).getByText("cleared")).toBeTruthy();
-    expect(within(a).getByText("severity_rank >= 4")).toBeTruthy();
+    expect(within(a).getByText("severity_rank >= 40")).toBeTruthy();
     expect(within(a).getByText("email")).toBeTruthy();
     expect(within(a).getByTestId("sub-status").textContent).toBe("active");
     expect(within(b).getByText("every alarm you can see")).toBeTruthy();
@@ -144,7 +144,7 @@ describe("Subscriptions", () => {
     await waitFor(() => expect((within(test).getByRole("button", { name: "Test" }) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(within(test).getByRole("button", { name: "Test" }));
     await waitFor(() => expect(within(test).getAllByTestId("sub-test-match")).toHaveLength(3));
-    expect(sent).toEqual({ on: ["raised"], when: "severity_rank >= 4", limit: 20 });
+    expect(sent).toEqual({ on: ["raised"], when: "severity_rank >= 40", limit: 20 });
     expect(within(test).getByTestId("sub-test-summary").textContent).toContain("1 of 3 would have told you");
     expect(within(test).getByText("1 could not be judged")).toBeTruthy();
     const verdicts = within(test).getAllByTestId("sub-test-match").map((m) => m.dataset.verdict);

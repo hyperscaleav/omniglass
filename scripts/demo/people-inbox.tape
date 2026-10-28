@@ -40,13 +40,13 @@ Wait
 Type `for u in dana eli; do omniglass principal get "$u" | jq -c '{user: .human.username, grants: [.grants[] | {role, scope_kind}]}'; done`
 Enter
 Wait
-Type "# The group becomes a notification target, told in the console inbox"
+Type "# The group becomes a notification target in the console inbox, paged on any alarm raised by hand, high or worse"
 Enter
 Wait
 Type `omniglass notification-target create --name on-call-page --kind principal_group --principal-group on-call --channels '["inbox"]' | jq -c '{name, kind, principal_group, channels}'`
 Enter
 Wait
-Type `omniglass action-rule create --name page-on-call --on '["raised"]' --when 'severity_rank >= 40' --targets '["on-call-page"]' | jq -c '{name, on, when, targets}'`
+Type `omniglass action-rule create --name page-on-call --on '["raised"]' --when 'severity_rank >= 40 && rule == ""' --targets '["on-call-page"]' | jq -c '{name, on, when, targets}'`
 Enter
 Wait
 Type "# Two alarms open: the depot's video bar, and Touch Panel 2"
@@ -100,7 +100,10 @@ Type `demo_hush 'grant=$(omniglass principal get eli | jq -r ".grants[0].id")'`
 Enter
 Wait
 Show
-Type "# eli loses Touch Panel 2: the entry about it is gone from his inbox at once"
+Type "# eli is moved from Touch Panel 2 to the video bar: the entry about the panel is gone at once"
+Enter
+Wait
+Type `omniglass principal grant create eli --role viewer --scope-kind component --scope-id "$bar" | jq -c '{role, scope_kind}'`
 Enter
 Wait
 Type `omniglass principal grant delete eli "$grant"`

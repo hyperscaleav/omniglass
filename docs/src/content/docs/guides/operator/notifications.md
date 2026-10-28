@@ -1,6 +1,16 @@
 ---
 title: Your inbox and alarm subscriptions
 description: "Read the alarms you are told about in your inbox, and subscribe yourself to the ones you care about: a personal rule, tested against your own recent alarms."
+screenshots:
+  - id: notifications-inbox
+    path: /web/inbox
+    alt: "The inbox, empty: what reaches it (a group notification an admin points at you, or your own subscription) and the way to subscribe."
+  - id: notifications-subscribe
+    path: /web/profile/subscriptions
+    steps:
+      - action: click
+        selector: "button:has-text('New subscription')"
+    alt: "A new alarm subscription: its label, the transitions it fires on, the when it judges with the facts it may name, the channels it tells you on, and the test against your own recent alarms."
 ---
 
 Omniglass tells people about alarms in two ways, and both end up in the same place: **your inbox**.
@@ -10,6 +20,14 @@ about an alarm on a component you can read, and an entry about a component you l
 disappears from your inbox ([alarms and actions](/architecture/alarms-actions/#people-group-and-person-targets-and-the-inbox)).
 
 ## Your inbox
+
+The bell in the top bar counts what you have not read, and opens **Inbox**: newest first, each entry
+the alarm's rendered message, its component, and the rule that told you. **Mark read** marks one,
+**Mark all read** the rest, and **Unread only** filters to what is left.
+
+::screenshot{#notifications-inbox}
+
+From the CLI:
 
 ```bash
 omniglass auth me notification list --unread      # newest first, with the unread count
@@ -22,6 +40,13 @@ about. Reading or marking an entry is yours alone; nobody else can mark your inb
 for is shown to you and to admins, and withheld from anyone else who can see the alarm.
 
 ## Subscribe yourself
+
+In the console, **Profile, Alarm subscriptions** lists your own subscriptions; **New subscription**
+opens one. Write its when with the facts it may name listed under it, then **Test**: the draft is
+judged against your own most recent alarms, each marked would-have-told-you or not, before you save
+anything.
+
+::screenshot{#notifications-subscribe}
 
 A **personal rule** says which alarms you want to hear about: on which transitions (`raised`,
 `cleared`, or both), when (a predicate over the alarm's facts: `component`, `place`, `severity`,

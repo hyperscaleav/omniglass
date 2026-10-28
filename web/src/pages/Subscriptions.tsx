@@ -369,7 +369,7 @@ function SubscriptionForm(p: {
             keyless
             sampleKey=""
             label="When"
-            placeholder="severity_rank >= 4"
+            placeholder="severity_rank >= 40"
             value={when()}
             onInput={(v) => { setWhen(v); setWhenRefused(null); }}
             onCheck={setWhenOk}
