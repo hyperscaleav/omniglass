@@ -22,11 +22,15 @@ import {
 
 const CHIP = "badge badge-ghost badge-sm whitespace-nowrap font-data";
 
-export default function TemplatePreview(props: { template: Template; all: Template[] }): JSX.Element {
+// heldRoles: the roles of the fleet's own standard a system template builds to,
+// when it holds one; the counts come from those, else from the standard template.
+type HeldRole = { name: string; label?: string; quorum: number };
+
+export default function TemplatePreview(props: { template: Template; all: Template[]; heldRoles?: HeldRole[] }): JSX.Element {
   return (
     <Switch>
       <Match when={props.template.standard}>{(s) => <StandardPreview standard={s()} />}</Match>
-      <Match when={props.template.system && props.template}>{(t) => <SystemPreview template={t()} all={props.all} />}</Match>
+      <Match when={props.template.system && props.template}>{(t) => <SystemPreview template={t()} all={props.all} heldRoles={props.heldRoles} />}</Match>
       <Match when={props.template.place}>{(p) => <PlacePreview template={props.template} all={props.all} place={p()} />}</Match>
       <Match when={props.template.component}>{(c) => <ComponentPreview component={c()} />}</Match>
     </Switch>
@@ -137,17 +141,17 @@ function Contract(props: { label: string; lines?: NonNullable<Template["standard
   );
 }
 
-function SystemPreview(props: { template: Template; all: Template[] }): JSX.Element {
+function SystemPreview(props: { template: Template; all: Template[]; heldRoles?: HeldRole[] }): JSX.Element {
   const sys = () => props.template.system!;
-  const slots = () => systemRoleSlots(props.template, props.all);
+  const slots = () => systemRoleSlots(props.template, props.all, props.heldRoles);
   return (
     <div class="flex flex-col gap-4" data-testid="preview-system">
       <div class="grid grid-cols-2 gap-3">
-        <KVStacked label="Standard" mono hint="The standard the system is built to: yours of that name when you hold one, else forked from its template in the same write." value={sys().standard} />
+        <KVStacked label="Standard" mono hint="The standard the system is built to: yours of that name when you hold one, else forked from its template in the same write." value={<span data-testid="preview-standard-source">{sys().standard} <span class="font-sans text-xs text-base-content/60">{props.heldRoles ? "(yours)" : "(forked from its template)"}</span></span>} />
         <KVStacked label="System type" mono value={sys().system_type || "none"} />
       </div>
       <section class="flex flex-col gap-1.5">
-        <Eyebrow label="Role fills" hint="A component for each role, as many as its quorum, each assigned to its role. They land unattached unless you give an address." />
+        <Eyebrow label="Role fills" hint="A component for each role, as many as the quorum of the standard it is built to (yours of that name when you hold one), each assigned to its role. They land unattached unless you give an address." />
         <ul class="flex flex-col divide-y divide-base-300 rounded-box border border-base-300 text-sm">
           <For each={slots()}>
             {(s) => (

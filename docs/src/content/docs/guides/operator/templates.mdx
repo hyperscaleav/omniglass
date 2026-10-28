@@ -37,14 +37,15 @@ carries it. Each row names its **kind** and, under **Creates**, what it writes.
 
 ::screenshot{#templates}
 
-Pick a row to open its panel, which renders what the template creates **from the template itself**,
-exactly what starting from it writes:
+Pick a row to open its panel, which renders what the template creates **from the template itself**:
 
 - a **standard** template shows its **roles**, each with its quorum, the component types it accepts and
   any products it is pinned to, then its **choices** (the first alternate is the template's default)
   and the property and metric lines it declares;
 - a **system** template shows the **standard** it is built to, its **system type**, and a component
-  for each role with the component template that fills it;
+  for each role with the component template that fills it. The counts are the quorums of the standard
+  the system is built to: **yours** of that name when you hold one (your edits to it count), else the
+  template's, forked in the same write;
 - a **place** template shows its subtree as an **indented tree**, each place with its location type and
   the systems that land in it;
 - a **component** template shows its **product**, its **preset inputs** and its declared values.
@@ -53,10 +54,22 @@ exactly what starting from it writes:
 
 ## Start from one
 
-**Start from this template** in the panel's footer opens the kind's form. It needs the permission to
-create what the template makes: `standard:create` for a standard template, `component:create`,
-`system:create` or `location:create` for the others. A panel shown to someone without it names the
-permission instead.
+**Start from this template** in the panel's footer opens the kind's form. Every piece a start writes is
+written as you, so it needs every permission those writes need, not only the one its route is gated by:
+
+- a **standard** template needs `standard:create`;
+- a **component** template needs `component:create`, plus `component:update` when it declares values;
+- a **system** template needs `system:create`, `system:read`, `system:update`, `component:create` and
+  `component:update`, plus `standard:create` when you hold no standard of the name it builds to (the
+  start forks it);
+- a **place** template needs `location:create`, plus the system set when its subtree carries systems,
+  and `standard:create` when one of those systems' standards would be forked;
+- any of them needs `endpoint:create` to **attach** a component (an address). Without it the address
+  fields are not offered and everything lands unattached.
+
+A panel shown to someone short of the set names what is missing under **To start one** instead of
+offering the action; the form names it too when a choice you make there (a standard to fork, an
+address) needs more.
 
 - **A standard template forks.** Give it a **name** (empty takes the template's) and a **label**; a
   variant also asks for the standard it hangs off, by default yours named for the template's parent.
@@ -75,7 +88,8 @@ permission instead.
 
 An address with no node is caught before you submit. On success the console lands on what you
 created, the forked standard's panel or the new component, system or root place, with a note that
-names the template and says it is yours now. The note rides the address you landed on, not the row:
+names the template and says it is yours now, and, where they apply, the standards the start forked and
+how many components are still to attach. The note rides the address you landed on, not the row:
 dismiss it and it is gone, and the row's page never shows it otherwise, because nothing about the row
 remembers the template.
 

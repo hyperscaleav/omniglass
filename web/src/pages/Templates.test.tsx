@@ -13,6 +13,7 @@ import { PRODUCTS_KEY } from "../lib/products";
 import { DRIVERS_KEY } from "../lib/drivers";
 import { SECRETS_KEY } from "../lib/secrets";
 import { uuidFor } from "../lib/testids";
+import { standardRolesKey } from "../lib/system_roles";
 
 // The Templates page (#1329): the catalog across four kinds, filtered by the
 // URL's ?kind=, each row a blade that renders what the template creates from
@@ -63,13 +64,25 @@ function Landing() {
   return <div data-testid="landed" />;
 }
 
-function mount(path: string, me: Me = admin) {
+// A deploy-shaped caller (the seeded deploy role over viewer's read floor):
+// location, system and component create/update/rename/move, no standard:create,
+// no endpoint:create.
+const deploy: Me = {
+  principal: { id: "u-deploy", kind: "human" }, human: { username: "deploy" }, grants: [],
+  permissions: ["*:read", ...["location", "system", "component"].flatMap((r) => ["create", "update", "rename", "move"].map((a) => `${r}:${a}`))],
+};
+
+// The fleet's own mr55, whose roles differ from the template's copy.
+const mr55: Standard = { id: uuidFor("std-mr55"), name: "mr55", label: "Meeting Room 55", official: false };
+
+function mount(path: string, me: Me = admin, held: Standard[] = standards, roles: Record<string, unknown[]> = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...TEMPLATES_KEY], catalog);
   qc.setQueryData([...ME_KEY], me);
   qc.setQueryData([...LOCATIONS_KEY], [hq, west]);
   qc.setQueryData([...NODES_KEY], [{ name: "lab-node", enrolled: true, tags: {} }]);
-  qc.setQueryData([...STANDARDS_KEY], standards);
+  qc.setQueryData([...STANDARDS_KEY], held);
+  for (const [id, r] of Object.entries(roles)) qc.setQueryData([...standardRolesKey(id)], r);
   qc.setQueryData([...PRODUCTS_KEY], []);
   qc.setQueryData([...DRIVERS_KEY], []);
   qc.setQueryData([...SECRETS_KEY], []);
@@ -155,7 +168,8 @@ describe("Templates page", () => {
     mount("/templates?kind=system_template", viewer);
     const b = await blade("Meeting Room 55, staffed");
     expect(within(b).queryByRole("button", { name: /start from this template/i })).toBeNull();
-    expect(within(b).getByText("needs system:create")).toBeInTheDocument();
+    // Every write the start makes, not only the route's own gate.
+    expect(within(b).getByTestId("start-needs")).toHaveTextContent("needs system:create, system:update, component:create, component:update, standard:create");
   });
 
   it("starts a system at the carried place and lands on it with ?from=", async () => {
@@ -164,9 +178,8 @@ describe("Templates page", () => {
       const req = input as Request;
       if (req.method === "POST" && req.url.endsWith("/systems:instantiate")) {
         sent = JSON.parse(await req.clone().text());
-        return json({ template: "mr55-system", system: "meeting-1", standard: "mr55", standard_forked: [], components: [], to_attach: [] }, 201);
+        return json({ template: "mr55-system", system: "meeting-1", system_id: SYS_ID, standard: "mr55", standard_forked: ["meeting-room", "mr55"], components: [], to_attach: ["display-1"] }, 201);
       }
-      if (req.url.endsWith("/systems")) return json({ systems: [{ id: SYS_ID, name: "meeting-1", location_id: west.id }] });
       return json({});
     });
     mount(`/templates?kind=system_template&place=${west.id}`);
@@ -179,7 +192,8 @@ describe("Templates page", () => {
     expect(screen.getByRole("button", { name: /start system/i })).toBeDisabled();
     fireEvent.change(within(form).getByLabelText("Node"), { target: { value: "lab-node" } });
     fireEvent.click(screen.getByRole("button", { name: /start system/i }));
-    await waitFor(() => expect(landed).toBe(`/systems/${SYS_ID}?from=mr55-system`));
+    // Lands on the id the answer carries, with what it forked and left to attach.
+    await waitFor(() => expect(landed).toBe(`/systems/${SYS_ID}?forked=meeting-room%2Cmr55&unattached=1&from=mr55-system`));
     expect(sent).toEqual({ template: "mr55-system", location: "hq.west", node: "lab-node", attach: { "video-bar": [{ host: "10.0.0.5" }] } });
   });
 
@@ -220,9 +234,9 @@ describe("Templates page", () => {
       const req = input as Request;
       if (req.method === "POST") {
         sent = JSON.parse(await req.clone().text());
-        return json({ template: "meeting-floor", places: [{ location: "level-9", type: "floor", parent: "west" }], systems: [], standard_forked: [], to_attach: [] }, 201);
+        return json({ template: "meeting-floor", places: [{ location: "level-9", location_id: LVL_ID, type: "floor", parent: "west" }], systems: [], standard_forked: [], to_attach: [] }, 201);
       }
-      return json({ locations: [hq, west, { id: LVL_ID, name: "level-9", location_type: "floor", parent_id: west.id }] });
+      return json({});
     });
     mount("/templates?kind=place_template");
     const b = await blade("A floor of meeting rooms");
@@ -241,9 +255,9 @@ describe("Templates page", () => {
       const req = input as Request;
       if (req.method === "POST") {
         sent = JSON.parse(await req.clone().text());
-        return json({ template: "boreal-edge-55", component: "display-1", product: "boreal-edge-55", attached: true }, 201);
+        return json({ template: "boreal-edge-55", component: "display-1", component_id: COMP_ID, product: "boreal-edge-55", attached: true }, 201);
       }
-      return json({ components: [{ id: COMP_ID, name: "display-1", location_id: hq.id }] });
+      return json({});
     });
     mount(`/templates?kind=component_template&place=${hq.id}`);
     const b = await blade("Boreal Edge 55 display");
@@ -255,5 +269,43 @@ describe("Templates page", () => {
     await waitFor(() => expect(landed).toBe(`/components/${COMP_ID}?from=boreal-edge-55`));
     expect(sent).toEqual({ template: "boreal-edge-55", location: "hq", node: "lab-node", inputs: { host: "10.0.0.20" } });
   });
-});
 
+  it("names everything a deploy-shaped caller lacks, and offers no Start", async () => {
+    // mr55 is not held, so starting would fork it: standard:create, which deploy lacks.
+    mount("/templates?kind=system_template", deploy);
+    const b = await blade("Meeting Room 55, staffed");
+    expect(within(b).queryByRole("button", { name: /start from this template/i })).toBeNull();
+    expect(within(b).getByTestId("start-needs")).toHaveTextContent("needs standard:create");
+  });
+
+  it("lets deploy start a system to a held standard, with no address fields to attach", async () => {
+    mount("/templates?kind=system_template", deploy, [...standards, mr55], { [mr55.id]: [] });
+    const b = await blade("Meeting Room 55, staffed");
+    fireEvent.click(within(b).getByRole("button", { name: /start from this template/i }));
+    const form = await screen.findByTestId("start-form-system");
+    expect(within(form).queryAllByPlaceholderText("unattached")).toHaveLength(0);
+    expect(within(form).getByPlaceholderText(/attaching needs endpoint:create/)).toBeDisabled();
+    expect(within(form).queryByTestId("start-missing")).toBeNull();
+  });
+
+  it("refuses a fork deploy cannot write, naming the permission", async () => {
+    mount("/templates?kind=standard_template", deploy);
+    const b = await blade("Meeting Room 55");
+    expect(within(b).getByTestId("start-needs")).toHaveTextContent("needs standard:create");
+  });
+
+  it("staffs the address slots to the fleet's own standard when it holds one", async () => {
+    const roles = [
+      { name: "video-bar", label: "Video bar", quorum: 1, accepted_types: [], pinned_products: [], position_labels: [], impact: "degraded" },
+      { name: "main-display", label: "Main display", quorum: 2, accepted_types: [], pinned_products: [], position_labels: [], impact: "degraded" },
+    ];
+    mount("/templates?kind=system_template", admin, [...standards, mr55], { [mr55.id]: roles });
+    const b = await blade("Meeting Room 55, staffed");
+    expect(within(b).getByTestId("preview-standard-source")).toHaveTextContent("(yours)");
+    expect(within(b).getByText("x2")).toBeInTheDocument();
+    fireEvent.click(within(b).getByRole("button", { name: /start from this template/i }));
+    const form = await screen.findByTestId("start-form-system");
+    expect(within(form).getByText("Main display 1")).toBeInTheDocument();
+    expect(within(form).getByText("Main display 2")).toBeInTheDocument();
+  });
+});

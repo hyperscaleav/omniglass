@@ -19,6 +19,12 @@ export default function TemplateNotice(): JSX.Element {
     return (Array.isArray(v) ? v[0] : v) || "";
   };
   const templates = useQuery(() => ({ queryKey: TEMPLATES_KEY, queryFn: listTemplates, enabled: !!from() }));
+  const one = (k: string) => {
+    const v = params[k];
+    return (Array.isArray(v) ? v[0] : v) || "";
+  };
+  const forked = () => one("forked").split(",").filter(Boolean);
+  const unattached = () => Number(one("unattached")) || 0;
   const label = () => {
     const t = (templates.data ?? []).find((x) => x.name === from());
     return t ? entityLabel(t) : from();
@@ -29,8 +35,14 @@ export default function TemplateNotice(): JSX.Element {
         <span class="flex-1">
           Started from the template <strong>{label()}</strong>. It is yours now: nothing points back at the
           template, so a later release can change it without touching this.
+          <Show when={forked().length > 0}>
+            {" "}It forked the standard{forked().length > 1 ? "s" : ""} <strong>{forked().join(", ")}</strong> to build to, yours now too.
+          </Show>
+          <Show when={unattached() > 0}>
+            {" "}{unattached()} {unattached() === 1 ? "component is" : "components are"} still to attach.
+          </Show>
         </span>
-        <Button size="xs" square icon={X} label="Dismiss" onClick={() => setParams({ [FROM_PARAM]: undefined }, { replace: true })} />
+        <Button size="xs" square icon={X} label="Dismiss" onClick={() => setParams({ [FROM_PARAM]: undefined, forked: undefined, unattached: undefined }, { replace: true })} />
       </div>
     </Show>
   );

@@ -136,6 +136,73 @@ export const START_RESOURCE: Record<TemplateKind, "standard" | "system" | "locat
   component_template: "component",
 };
 
+// The full set a start needs, mirroring the routes (internal/api/instantiate.go):
+// each route is gated by one create permission and then requires the rest of
+// what its pieces write, and a plan that forks a standard needs standard:create
+// (the storage refuses the fork without it). The form's own choices move the
+// set: an address needs endpoint:create, and a system built to a standard the
+// fleet does not hold forks it. held answers whether the fleet holds a
+// standard of that name.
+export type Perm = readonly [string, string];
+export type StartContext = {
+  all: Template[];
+  held: (standard: string) => boolean;
+  // The form's Standard choice for a system template; empty takes the template's.
+  standard?: string;
+  // Whether any address is entered (an attach).
+  address?: boolean;
+};
+
+const SYSTEM_NEEDS: Perm[] = [["system", "create"], ["system", "read"], ["system", "update"], ["component", "create"], ["component", "update"]];
+
+// The standards a place template's systems are built to.
+function placeStandards(p: TemplatePlace, all: Template[]): string[] {
+  const out: string[] = [];
+  for (const r of placeTreeRows(p)) {
+    if (r.kind !== "system") continue;
+    const st = all.find((x) => x.kind === "system_template" && x.name === r.template)?.system?.standard;
+    if (st) out.push(st);
+  }
+  return out;
+}
+
+export function startNeeds(t: Template, ctx: StartContext): Perm[] {
+  const needs: Perm[] = [];
+  const add = (p: Perm) => { if (!needs.some((n) => n[0] === p[0] && n[1] === p[1])) needs.push(p); };
+  switch (t.kind) {
+    case "standard_template":
+      add(["standard", "create"]);
+      break;
+    case "component_template":
+      add(["component", "create"]);
+      if (Object.keys(t.component?.properties ?? {}).length) add(["component", "update"]);
+      if (ctx.address) add(["endpoint", "create"]);
+      break;
+    case "system_template": {
+      SYSTEM_NEEDS.forEach(add);
+      const std = ctx.standard || t.system?.standard || "";
+      if (std && !ctx.held(std)) add(["standard", "create"]);
+      if (ctx.address) add(["endpoint", "create"]);
+      break;
+    }
+    case "place_template": {
+      add(["location", "create"]);
+      const stds = t.place ? placeStandards(t.place, ctx.all) : [];
+      const carries = t.place ? placeTreeRows(t.place).some((r) => r.kind === "system") : false;
+      if (carries) SYSTEM_NEEDS.forEach(add);
+      if (stds.some((s) => !ctx.held(s))) add(["standard", "create"]);
+      break;
+    }
+  }
+  return needs;
+}
+
+export function missingNeeds(needs: Perm[], allow: (resource: string, action: string) => boolean): Perm[] {
+  return needs.filter(([r, a]) => !allow(r, a));
+}
+
+export const permText = (ps: Perm[]): string => ps.map(([r, a]) => `${r}:${a}`).join(", ");
+
 // --- What a template creates ---------------------------------------------------
 
 // summary is the one line a list row says about what the template makes.
@@ -173,15 +240,19 @@ export function placeTreeRows(p: TemplatePlace, depth = 0): PlaceTreeRow[] {
   return out;
 }
 
-// A role a system template staffs, with how many components fill it: the
-// quorum its standard template declares (one when the catalog does not hold
-// it), and what fills it.
+// A role a system template staffs, with how many components fill it and what
+// fills it. The count is the quorum of the standard the plan builds to: the
+// fleet's own standard of that name when it holds one (its roles passed as
+// `held`, which is what the route reads), else the standard template it forks
+// (one when the catalog does not hold that either).
 export type RoleSlot = { role: string; label: string; count: number; fill: string };
+type DeclaredLike = { name: string; label?: string; quorum: number };
 
-export function systemRoleSlots(t: Template, all: Template[]): RoleSlot[] {
+export function systemRoleSlots(t: Template, all: Template[], held?: DeclaredLike[]): RoleSlot[] {
   if (!t.system) return [];
-  const std = all.find((x) => x.kind === "standard_template" && x.name === t.system!.standard);
-  const declared = new Map((std?.standard?.roles ?? []).map((r) => [r.name, r]));
+  const tpl = all.find((x) => x.kind === "standard_template" && x.name === t.system!.standard);
+  const roles: DeclaredLike[] = held ?? tpl?.standard?.roles ?? [];
+  const declared = new Map(roles.map((r) => [r.name, r]));
   return Object.entries(t.system.roles ?? {})
     .map(([role, f]) => {
       const r = declared.get(role);
@@ -193,11 +264,11 @@ export function systemRoleSlots(t: Template, all: Template[]): RoleSlot[] {
         fill: comp ? entityLabel(comp) : (f.component ?? f.product ?? ""),
       };
     })
-    .sort((a, b) => declaredOrder(std, a.role) - declaredOrder(std, b.role) || a.role.localeCompare(b.role));
+    .sort((a, b) => declaredOrder(roles, a.role) - declaredOrder(roles, b.role) || a.role.localeCompare(b.role));
 }
 
-function declaredOrder(std: Template | undefined, role: string): number {
-  const i = (std?.standard?.roles ?? []).findIndex((r) => r.name === role);
+function declaredOrder(roles: DeclaredLike[], role: string): number {
+  const i = roles.findIndex((r) => r.name === role);
   return i < 0 ? Number.MAX_SAFE_INTEGER : i;
 }
 
@@ -307,28 +378,13 @@ export function landingHref(base: string, template: string, extra: Record<string
   return `${base}?${q.toString()}`;
 }
 
-// findCreated picks the created row out of a fresh list by the name the route
-// answered and where it was placed: names are scoped to placement, so the name
-// alone can be two rows, and the placement's uuid tells them apart.
-export function findCreated<T extends { id: string; name: string }>(
-  rows: T[],
-  name: string,
-  where: (r: T) => string | undefined,
-  placedAt: string | undefined,
-): T | undefined {
-  const named = rows.filter((r) => r.name === name);
-  if (named.length <= 1) return named[0];
-  return named.find((r) => (where(r) ?? "") === (placedAt ?? ""));
-}
-
 // --- Which place --------------------------------------------------------------
 
 // A place is offered and posted by its dotted path (hq.west.level-2), which the
 // start routes take and which is unique, so the form's choice reads the same in
 // a script as on screen; a row the list has not pathed yet falls back to its
 // uuid. placeRef resolves a carried default (the create flows carry a uuid) to
-// that value, and placeId resolves the value back to the uuid a created row's
-// placement is compared on.
+// that value.
 type PlaceRow = { id: string; name: string; path?: string };
 
 export function placeValue(l: PlaceRow): string {
@@ -339,9 +395,4 @@ export function placeRef(rows: PlaceRow[], ref: string | undefined): string {
   if (!ref) return "";
   const hit = rows.find((l) => l.id === ref || l.path === ref) ?? (rows.filter((l) => l.name === ref).length === 1 ? rows.find((l) => l.name === ref) : undefined);
   return hit ? placeValue(hit) : ref;
-}
-
-export function placeId(rows: PlaceRow[], value: string): string | undefined {
-  if (!value) return undefined;
-  return rows.find((l) => l.path === value || l.id === value)?.id ?? value;
 }

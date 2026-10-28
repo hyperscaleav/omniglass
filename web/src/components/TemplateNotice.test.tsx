@@ -52,6 +52,13 @@ describe("TemplateNotice", () => {
     expect(screen.queryByTestId("template-notice")).toBeNull();
   });
 
+  it("says what the start forked and what is still to attach", () => {
+    mount("/systems/abc?from=mr55-system&forked=meeting-room,mr55&unattached=3");
+    const n = screen.getByTestId("template-notice");
+    expect(n).toHaveTextContent("It forked the standards meeting-room, mr55 to build to");
+    expect(n).toHaveTextContent("3 components are still to attach.");
+  });
+
   it("dismisses by dropping the param, keeping the rest of the address", async () => {
     mount("/systems/abc?from=mr55-system&tab=overview");
     fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));

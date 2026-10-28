@@ -2,20 +2,21 @@ import { describe, it, expect } from "vitest";
 import {
   type Template,
   componentBody,
-  findCreated,
   forkBody,
   kindChip,
   landingHref,
   needsNode,
   ofKinds,
   parseKinds,
-  placeId,
   placeRef,
   placeTreeRows,
   placeValue,
   placesBody,
   quorumText,
+  missingNeeds,
+  permText,
   splitKindChip,
+  startNeeds,
   systemBody,
   systemRoleSlots,
   templateSummary,
@@ -116,6 +117,11 @@ describe("what a template creates", () => {
       { role: "video-bar", label: "Video bar", count: 1, fill: "kestrel-vroom" },
       { role: "main-display", label: "Main display", count: 2, fill: "Boreal Edge 55 display" },
     ]);
+    // The fleet's own standard of that name sets the counts when it holds one.
+    expect(systemRoleSlots(sys, all, [{ name: "main-display", label: "Displays", quorum: 3 }, { name: "video-bar", label: "Bar", quorum: 1 }]).map((s) => [s.role, s.label, s.count])).toEqual([
+      ["main-display", "Displays", 3],
+      ["video-bar", "Bar", 1],
+    ]);
     // A standard the catalog does not hold staffs one per role, by its name.
     expect(systemRoleSlots({ ...sys, system: { ...sys.system!, standard: "absent" } }, all).map((s) => s.count)).toEqual([1, 1]);
   });
@@ -124,6 +130,46 @@ describe("what a template creates", () => {
     expect(quorumText({ name: "a", label: "", quorum: 1, capacity: 1 })).toBe("1");
     expect(quorumText({ name: "a", label: "", quorum: 1, capacity: 3 })).toBe("1 to 3");
     expect(quorumText({ name: "a", label: "", quorum: 2 })).toBe("2 or more");
+  });
+});
+
+describe("what a start needs, mirroring the routes", () => {
+  const holds = (...names: string[]) => (n: string) => names.includes(n);
+  const ctx = { all, held: holds("mr55", "ds55") };
+  const sysSet = [["system", "create"], ["system", "read"], ["system", "update"], ["component", "create"], ["component", "update"]];
+
+  it("asks a fork for standard:create alone", () => {
+    expect(startNeeds(std, ctx)).toEqual([["standard", "create"]]);
+  });
+
+  it("asks a component for update when it declares values, and endpoint:create when it attaches", () => {
+    expect(startNeeds(comp, ctx)).toEqual([["component", "create"]]);
+    const valued = { ...comp, component: { ...comp.component!, properties: { mounting: "wall" } } };
+    expect(startNeeds(valued, { ...ctx, address: true })).toEqual([["component", "create"], ["component", "update"], ["endpoint", "create"]]);
+  });
+
+  it("asks a system for the system set, standard:create only when its standard would fork", () => {
+    expect(startNeeds(sys, ctx)).toEqual(sysSet);
+    expect(startNeeds(sys, { ...ctx, held: holds() })).toEqual([...sysSet, ["standard", "create"]]);
+    // The form's own choice of a held standard forks nothing.
+    expect(startNeeds(sys, { ...ctx, held: holds("mine"), standard: "mine" })).toEqual(sysSet);
+    expect(startNeeds(sys, { ...ctx, address: true })).toEqual([...sysSet, ["endpoint", "create"]]);
+  });
+
+  it("asks places for location:create, and the system set when the subtree carries systems", () => {
+    // meeting-floor's systems are ds55-system (not in this catalog) and mr55-system (built to mr55, held).
+    expect(startNeeds(place, ctx)).toEqual([["location", "create"], ...sysSet]);
+    expect(startNeeds(place, { ...ctx, held: holds() })).toEqual([["location", "create"], ...sysSet, ["standard", "create"]]);
+    const bare: Template = { kind: "place_template", name: "f", label: "F", place: { type: "floor" } };
+    expect(startNeeds(bare, ctx)).toEqual([["location", "create"]]);
+  });
+
+  it("names what a deploy-shaped caller lacks", () => {
+    const deploy = new Set(["location:create", "location:update", "system:create", "system:update", "component:create", "component:update", "system:read", "component:read"]);
+    const allow = (r: string, a: string) => deploy.has(`${r}:${a}`);
+    expect(missingNeeds(startNeeds(sys, ctx), allow)).toEqual([]);
+    expect(permText(missingNeeds(startNeeds(sys, { ...ctx, held: holds(), address: true }), allow))).toBe("standard:create, endpoint:create");
+    expect(permText(missingNeeds(startNeeds(std, ctx), allow))).toBe("standard:create");
   });
 });
 
@@ -181,26 +227,11 @@ describe("which place", () => {
     expect(placeRef(rows, undefined)).toBe("");
   });
 
-  it("resolves the offered value back to the uuid a placement compares on", () => {
-    expect(placeId(rows, "hq.west")).toBe(uuidFor("l-west"));
-    expect(placeId(rows, "")).toBeUndefined();
-  });
 });
 
 describe("where a success lands", () => {
   it("carries the template's name as ?from= beside any other param", () => {
     expect(landingHref("/systems/abc", "mr55-system")).toBe("/systems/abc?from=mr55-system");
     expect(landingHref("/standards", "mr55", { open: "mr55-2" })).toBe("/standards?open=mr55-2&from=mr55");
-  });
-
-  it("tells two same-named rows apart by where they were placed", () => {
-    const rows = [
-      { id: uuidFor("a"), name: "meeting-1", at: "p1" },
-      { id: uuidFor("b"), name: "meeting-1", at: "p2" },
-      { id: uuidFor("c"), name: "sign-1", at: undefined },
-    ];
-    expect(findCreated(rows, "meeting-1", (r) => r.at, "p2")?.id).toBe(uuidFor("b"));
-    expect(findCreated(rows, "sign-1", (r) => r.at, "p9")?.id).toBe(uuidFor("c"));
-    expect(findCreated(rows, "nothing", (r) => r.at, undefined)).toBeUndefined();
   });
 });

@@ -8,7 +8,7 @@ import KVStacked from "../components/KVStacked";
 import Eyebrow from "../components/Eyebrow";
 import InfoTip from "../components/InfoTip";
 import TemplatePreview from "../components/TemplatePreview";
-import StartFromTemplateForm from "../components/StartFromTemplateForm";
+import StartFromTemplateForm, { useHeldRoles, useHeldStandards } from "../components/StartFromTemplateForm";
 import { identityColumn } from "../components/IdentityCell";
 import { Plus } from "../components/icons";
 import { useMe, can } from "../lib/auth";
@@ -19,13 +19,15 @@ import {
   type Template,
   KIND_FACET,
   KIND_WORD,
-  START_RESOURCE,
   TEMPLATES_KEY,
   TEMPLATE_KINDS,
   kindChip,
   listTemplates,
+  missingNeeds,
   parseKinds,
+  permText,
   splitKindChip,
+  startNeeds,
   templateSummary,
 } from "../lib/templates";
 
@@ -133,10 +135,16 @@ function TemplateBladeBody(p: { name: string }): JSX.Element {
   const ui = useContext(TemplatesUiContext);
   const templates = useQuery(() => ({ queryKey: TEMPLATES_KEY, queryFn: listTemplates }));
   const row = () => (templates.data ?? []).find((t) => t.name === p.name);
-  const mayStart = () => {
+  const { held, byName } = useHeldStandards();
+  // Everything the route asks of a start as the form opens (no address, the
+  // template's own standard), not only the create permission it is gated by.
+  const missing = createMemo(() => {
     const t = row();
-    return !!t && can(me.data, START_RESOURCE[t.kind], "create");
-  };
+    return t ? missingNeeds(startNeeds(t, { all: templates.data ?? [], held }), (r, a) => can(me.data, r, a)) : [];
+  });
+  const mayStart = () => !!row() && missing().length === 0;
+  // A system template is staffed to the fleet's standard of that name when it holds one.
+  const heldRoles = useHeldRoles(byName, () => row()?.system?.standard ?? "");
 
   useBladeEdit().bind({
     primary: () => (row() && mayStart() && ui ? { label: "Start from this template", icon: <Plus size={15} />, onClick: () => ui.openStart(p.name) } : undefined),
@@ -156,11 +164,11 @@ function TemplateBladeBody(p: { name: string }): JSX.Element {
               <KVStacked label="Variant of" mono hint="A variant forks once you hold the standard it hangs off." value={t().standard!.parent!} />
             </Show>
             <Show when={!mayStart()}>
-              <KVStacked label="To start one" value={<span class="font-data text-xs text-base-content/60">needs {START_RESOURCE[t().kind]}:create</span>} />
+              <KVStacked label="To start one" hint="Starting one writes every piece as you, so it needs each permission those writes need." value={<span data-testid="start-needs" class="font-data text-xs text-base-content/60">needs {permText(missing())}</span>} />
             </Show>
           </div>
-          <Eyebrow label="What it creates" hint="Read from the template itself, so this is exactly what starting from it writes, as ordinary rows of yours." />
-          <TemplatePreview template={t()} all={templates.data ?? []} />
+          <Eyebrow label="What it creates" hint="Read from the template itself. A system is staffed to the roles of the standard it is built to: yours of that name when you hold one, which may differ from the template's copy." />
+          <TemplatePreview template={t()} all={templates.data ?? []} heldRoles={heldRoles()} />
         </div>
       )}
     </Show>
