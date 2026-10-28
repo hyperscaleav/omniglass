@@ -25,14 +25,13 @@ type catalogFacts struct {
 		Icon               string   `json:"icon"`
 		AllowedParentTypes []string `json:"allowed_parent_types"`
 	} `json:"location_types"`
-	Standards []struct {
-		ID    string `json:"id"`
-		Roles []struct {
-			Name          string   `json:"name"`
-			Quorum        int      `json:"quorum"`
-			AcceptedTypes []string `json:"accepted_types"`
-		} `json:"roles"`
-	} `json:"standards"`
+	Templates []struct {
+		Kind     string `json:"kind"`
+		Name     string `json:"name"`
+		Standard *struct {
+			Roles []factsRoleDecl `json:"roles"`
+		} `json:"standard"`
+	} `json:"templates"`
 	Vendors []struct {
 		ID      string `json:"id"`
 		Website string `json:"website"`
@@ -53,6 +52,28 @@ type catalogFacts struct {
 	} `json:"secret_types"`
 }
 
+type factsRoleDecl struct {
+	Name          string   `json:"name"`
+	Quorum        int      `json:"quorum"`
+	AcceptedTypes []string `json:"accepted_types"`
+}
+
+type factsStandard struct {
+	ID    string
+	Roles []factsRoleDecl
+}
+
+// standards are the catalog's standard templates, the set the seed plants.
+func (f catalogFacts) standards() []factsStandard {
+	var out []factsStandard
+	for _, t := range f.Templates {
+		if t.Kind == "standard_template" && t.Standard != nil {
+			out = append(out, factsStandard{ID: t.Name, Roles: t.Standard.Roles})
+		}
+	}
+	return out
+}
+
 func seedFacts(t *testing.T) catalogFacts {
 	t.Helper()
 	raw, err := seed.FactsJSON()
@@ -69,7 +90,7 @@ func seedFacts(t *testing.T) catalogFacts {
 // standardRole finds one shipped standard's role declaration in the facts.
 func standardRole(t *testing.T, doc catalogFacts, std, role string) (quorum int, accepted []string) {
 	t.Helper()
-	for _, s := range doc.Standards {
+	for _, s := range doc.standards() {
 		if s.ID != std {
 			continue
 		}
@@ -202,8 +223,8 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	if err := conn.QueryRow(ctx, `select count(*) from standard`).Scan(&standardCount); err != nil {
 		t.Fatalf("count standards: %v", err)
 	}
-	if standardCount != len(facts.Standards) {
-		t.Errorf("standards = %d, want %d (seed not idempotent or incomplete)", standardCount, len(facts.Standards))
+	if standardCount != len(facts.standards()) {
+		t.Errorf("standards = %d, want %d (seed not idempotent or incomplete)", standardCount, len(facts.standards()))
 	}
 	if err := conn.QueryRow(ctx, `select count(*) from standard where official`).Scan(&officialStandards); err != nil {
 		t.Fatalf("count official standards: %v", err)
@@ -234,7 +255,7 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	// have duplicated them, and an operator's retune of a quorum must survive
 	// the next boot.
 	wantMeetingRoles := 0
-	for _, s := range facts.Standards {
+	for _, s := range facts.standards() {
 		if s.ID == "meeting-room" {
 			wantMeetingRoles = len(s.Roles)
 		}
@@ -436,7 +457,7 @@ func TestSeedRolesIdempotent(t *testing.T) {
 // choice (#626) seeds exactly once (the second Run above must not duplicate
 // the choice, its two alternates, or any of the roles that join them) and
 // that every conferencing role resolves a non-null alternate_id pointing at
-// the alternate its Choice/Alternate fields name in standards.yaml: the
+// the alternate its Choice/Alternate fields name in the standard template: the
 // failure mode seedStandardRoles running before seedStandardChoices would
 // produce (nothing to resolve against yet) or a name typo between the two
 // blocks would produce (a silently unconditional role instead of a grouped
@@ -486,7 +507,7 @@ func TestSeedRoleChoicesIdempotent(t *testing.T) {
 		t.Errorf("conferencing alternates = %d, want 2 (all-in-one, component-system; seed not idempotent or incomplete)", altCount)
 	}
 
-	// Positions land 1..n from standards.yaml's list order, not whatever the
+	// Positions land 1..n from the template's list order, not whatever the
 	// planner happens to return: this is what internal/health.Choice.Active
 	// reads to break a tie, and TestAlternateTieBreaksByPosition pins that
 	// nothing else in the read path orders alternates.

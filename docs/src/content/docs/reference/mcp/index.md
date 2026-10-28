@@ -21,7 +21,7 @@ Each tool says what a client may assume of it, from one rule over the route's me
 
 A tool that is not read-only and not destructive adds something (a create).
 
-50 tools.
+52 tools.
 
 | Tool | What it does | Gate | Assume |
 |---|---|---|---|
@@ -72,6 +72,8 @@ A tool that is not read-only and not destructive adds something (a create).
 | [`list-system-metric-series`](#list-system-metric-series) | Read one metric series' raw samples | `system:read` | read-only, idempotent |
 | [`list-system-property-series`](#list-system-property-series) | Read one property series' change history | `system:read` | read-only, idempotent |
 | [`list-tasks`](#list-tasks) | List tasks in scope | `task:read` | read-only, idempotent |
+| [`list-templates`](#list-templates) | List templates | `template:read` | read-only, idempotent |
+| [`get-template`](#get-template) | Get a template | `template:read` | read-only, idempotent |
 | [`list-transports`](#list-transports) | List the transports the platform speaks | `endpoint:read` | read-only, idempotent |
 | [`list-unclaimed-sources`](#list-unclaimed-sources) | List the sources no endpoint claims | `node:read` | read-only, idempotent |
 | [`list-vendors`](#list-vendors) | List vendors | `vendor:read` | read-only, idempotent |
@@ -762,6 +764,34 @@ Lists the tasks whose endpoint's owning component the caller may read (the compo
 - Gate: `task:read`
 - Assume: read-only, idempotent
 - Arguments: none
+
+## `list-templates`
+
+List templates
+
+Lists the template catalog this binary ships, ordered by kind then name, optionally one kind. A template is an example an operator clones: forking or instantiating one writes ordinary rows the operator owns, and nothing points back at the template. Gated by template:read.
+
+- Route: `GET /api/v1/templates`
+- Gate: `template:read`
+- Assume: read-only, idempotent
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `kind` | string | no | Only templates of this kind; omitted lists every kind |
+
+## `get-template`
+
+Get a template
+
+Reads one template from the catalog by name: what it creates, as the fork or instantiate method would write it. An unknown name is a 404. Gated by template:read.
+
+- Route: `GET /api/v1/templates/{template}`
+- Gate: `template:read`
+- Assume: read-only, idempotent
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `template` | string | yes | The template, by name |
 
 ## `list-transports`
 

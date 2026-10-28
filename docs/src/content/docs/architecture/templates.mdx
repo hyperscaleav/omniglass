@@ -3,23 +3,23 @@ title: Templates
 description: "Example configurations an operator clones. Forking is one-time and leaves no link back, which is exactly why a template can be improved in any release without migrating anyone."
 sidebar:
   badge:
-    text: Design
-    variant: caution
+    text: Partial
+    variant: note
 ---
 
-::::design[Target design, tracked in #827]
+import SeededSet from '../../../components/SeededSet.astro';
 
 A template is an **example configuration an operator clones**. It ships inside the binary as a menu,
 never as data: nothing is inserted until somebody picks one, and what they pick lands as ordinary rows
 they own outright. **Nothing points back at the template**: forking is one-time, no inheritance, no
 back-pointer, so a template can be rewritten in any release without migrating a single install.
 
-:::caution[Design]
-Nothing on this page is built. Interim: the shipped standards **seed as ordinary rows**
-(`official: false`, inserted only if absent, so an operator's edit is never reverted on boot), and
-the shipped location types are official rows an operator reshapes through the registry fork. The
-template catalog, its read routes, and the fork and instantiate flows are tracked by
-[#827](https://github.com/hyperscaleav/omniglass/issues/827).
+:::note[Partial]
+Built: the catalog in the binary, its four kinds, the build's dry-run of every template, and the
+read routes (#1323). Still design: forking a standard and instantiating a component, a system or a
+place subtree, tracked by [#827](https://github.com/hyperscaleav/omniglass/issues/827). Until the
+fork ships, the shipped standards still **seed as ordinary rows** (`official: false`, inserted only
+if absent) from the standard templates below.
 :::
 
 ## Fork, not pin
@@ -72,21 +72,37 @@ parent's allowance, and no wording or logic keyed on any particular type.
 **Authored as kind-tagged YAML in the repo and `go:embed`ed into the binary** (an `internal/template`
 package), exactly like the seed files; the difference is the loader. A **seed** inserts rows unasked; a
 **template** inserts nothing. The loader exposes a read-only catalog, validated against the template
-schema at load, and never writes a row: a template addressable as a row, or inserted wholesale, would
-become shipped data carrying every update-versus-local-edit problem the model exists to avoid. A build
-test dry-runs every template against the seeded catalogs in a rolled-back transaction, so a template
-naming a product, a type or a property a release withdrew fails the build rather than an operator.
+schema at load (an unknown field, a role naming half a choice, a system template leaving a role
+unfilled or answering a choice two ways, a component preset setting the address are all refused,
+naming the template), and never writes a row: a template addressable as a row, or inserted wholesale,
+would become shipped data carrying every update-versus-local-edit problem the model exists to avoid.
+A build test dry-runs every template against the seeded catalogs: each product, component and system
+type, driver input, property, metric and location type a template names must exist there, and a
+nested place's type must allow its parent's, so a template naming a row a release withdrew fails the
+build, naming the template and the row, rather than an operator.
 
 There is **no template versioning**: a template is addressed by its name and replaced by the next
 release. Only shipped templates exist; an operator authoring or saving a template of their own is
 [#1330](https://github.com/hyperscaleav/omniglass/issues/1330). Once the catalog ships, the stand-in
 standards seed retires: a fresh install starts with no standards, and the catalog offers them.
 
-## Reading and starting from a template
+## The catalog
 
-- **`GET /templates`** (filtered by `kind`) and **`GET /templates/{template}`**, gated
-  `template:read` on the viewer floor. A catalog read is a registry read: no owner and no scope
-  injection.
+What this release ships, rendered from the catalog itself:
+
+<SeededSet kind="templates" />
+
+## Reading a template
+
+**`GET /templates`** (optionally one `kind`) and **`GET /templates/{template}`**, gated
+`template:read`, which the viewer's `*:read` floor already grants. A catalog read is a registry read:
+no owner and no scope injection. The body is the template whole, as a fork or instantiate would write
+it. The CLI is `omniglass template list` and `omniglass template get <template>`.
+
+::::design[Starting from a template, tracked in #827]
+
+## Starting from a template
+
 - **`POST /standards:fork`**, gated `standard:create`: one operator-owned standard
   (`official: false`) with its roles, choices and contract lines, under a name the operator chooses
   (the template's by default).
@@ -99,6 +115,7 @@ standards seed retires: a fresh install starts with no standards, and the catalo
 **Provenance lives in the audit trail only**: each created row's audit detail names the template it
 came from. No column and no back-pointer, which keeps the fork severed while still answering "where
 did this come from".
+::::
 
 ## Why this dissolves the shipped-defaults problem
 
@@ -106,7 +123,6 @@ The thing the vendor updates and the thing the operator owns are **never the sam
 template change never needs a migration. Authoritative rows either overwrite operator edits or
 freeze the defaults; pinned versions mean persuading every install to re-point. Forking has nothing
 to reconcile.
-::::
 
 :::design[Trust: the signature and the capability manifest, tracked in #318]
 The trust surface of a catalog accepting templates from outside the binary (the hosted /

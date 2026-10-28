@@ -55,9 +55,9 @@ The same operations are `omniglass standard list/get/create/update/delete` from 
 Omniglass ships a starter set, and unlike a seeded [vendor](/guides/admin/vendors/) or
 [product](/guides/admin/products/) those rows are **not official and not read-only**. They arrive as
 ordinary **operator-owned** rows: edit them, re-parent them, add to their contract. The shipped set,
-rendered from the seed itself:
+rendered from the standard templates the seed plants them from:
 
-<SeededSet kind="standards" />
+<SeededSet kind="templates" of="standard_template" />
 
 This is deliberate. A standard is **forked from a template that lives in the code**, once, with **no
 inheritance**: nothing in your fleet points back at that template afterwards. So Omniglass can improve

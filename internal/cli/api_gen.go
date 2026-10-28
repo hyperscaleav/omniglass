@@ -8018,6 +8018,56 @@ func generatedCommands() []*cobra.Command {
 	}())
 	roots = append(roots, func() *cobra.Command {
 		parent := &cobra.Command{
+			Use:   "template",
+			Short: "Commands for the template resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "get <template>",
+					Short:   "Get a template",
+					Long:    "Reads one template from the catalog by name: what it creates, as the fork or instantiate method would write it. An unknown name is a 404. Gated by template:read.",
+					Example: "  omniglass template get meeting-room",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/templates/%s", pathSegment(args[0]))
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var qKind string
+				cmd := &cobra.Command{
+					Use:     "list",
+					Short:   "List templates",
+					Long:    "Lists the template catalog this binary ships, ordered by kind then name, optionally one kind. A template is an example an operator clones: forking or instantiating one writes ordinary rows the operator owns, and nothing points back at the template. Gated by template:read.",
+					Example: "  omniglass template list",
+					Args:    pathArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/templates")
+						q := url.Values{}
+						if cmd.Flags().Changed("kind") {
+							q.Set("kind", fmt.Sprintf("%v", qKind))
+						}
+						if enc := q.Encode(); enc != "" {
+							path += "?" + enc
+						}
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				cmd.Flags().StringVar(&qKind, "kind", "", "Only templates of this kind; omitted lists every kind")
+				return cmd
+			}()
+			return cmd
+		}())
+		return parent
+	}())
+	roots = append(roots, func() *cobra.Command {
+		parent := &cobra.Command{
 			Use:   "transport",
 			Short: "Commands for the transport resource",
 		}

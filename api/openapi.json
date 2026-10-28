@@ -6833,6 +6833,34 @@
         ],
         "type": "object"
       },
+      "ListTemplatesOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/ListTemplatesOutputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "templates": {
+            "description": "The catalog's templates, ordered by kind then name",
+            "items": {
+              "$ref": "#/components/schemas/TemplateBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "templates"
+        ],
+        "type": "object"
+      },
       "ListTransportsOutputBody": {
         "additionalProperties": false,
         "properties": {
@@ -12437,6 +12465,436 @@
           "mode",
           "endpoint_id",
           "enabled"
+        ],
+        "type": "object"
+      },
+      "TemplateAlternateBody": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "description": "What an operator reads for the alternate",
+            "type": "string"
+          },
+          "name": {
+            "description": "The alternate's name, unique within its choice",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "label"
+        ],
+        "type": "object"
+      },
+      "TemplateBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/TemplateBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "component": {
+            "$ref": "#/components/schemas/TemplateComponentBody",
+            "description": "A component template's body"
+          },
+          "description": {
+            "description": "What the template is for",
+            "type": "string"
+          },
+          "kind": {
+            "description": "What the template creates",
+            "enum": [
+              "standard_template",
+              "system_template",
+              "place_template",
+              "component_template"
+            ],
+            "type": "string"
+          },
+          "label": {
+            "description": "What an operator reads for the template",
+            "type": "string"
+          },
+          "name": {
+            "description": "The template's name, unique across the catalog",
+            "type": "string"
+          },
+          "place": {
+            "$ref": "#/components/schemas/TemplatePlaceBody",
+            "description": "A place template's body: the root of the subtree"
+          },
+          "standard": {
+            "$ref": "#/components/schemas/TemplateStandardBody",
+            "description": "A standard template's body: what a fork writes"
+          },
+          "system": {
+            "$ref": "#/components/schemas/TemplateSystemBody",
+            "description": "A system template's body"
+          }
+        },
+        "required": [
+          "kind",
+          "name",
+          "label"
+        ],
+        "type": "object"
+      },
+      "TemplateChoiceBody": {
+        "additionalProperties": false,
+        "properties": {
+          "alternates": {
+            "description": "The ways to answer the choice, the first the template's default",
+            "items": {
+              "$ref": "#/components/schemas/TemplateAlternateBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "label": {
+            "description": "What an operator reads for the choice",
+            "type": "string"
+          },
+          "name": {
+            "description": "The choice's name, unique within the standard",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "label",
+          "alternates"
+        ],
+        "type": "object"
+      },
+      "TemplateComponentBody": {
+        "additionalProperties": false,
+        "properties": {
+          "driver": {
+            "description": "The driver the attach preset is for, when it is not the product's own",
+            "type": "string"
+          },
+          "inputs": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "The attach preset: every driver input but the address, a secret input as a secret's name",
+            "type": "object"
+          },
+          "product": {
+            "description": "The product the component is",
+            "type": "string"
+          },
+          "properties": {
+            "additionalProperties": {},
+            "description": "Declared property values, by property name",
+            "type": "object"
+          }
+        },
+        "required": [
+          "product"
+        ],
+        "type": "object"
+      },
+      "TemplateContractBody": {
+        "additionalProperties": false,
+        "properties": {
+          "default": {
+            "description": "The contract default, a JSON value; omitted when the line sets none"
+          },
+          "name": {
+            "description": "The property or metric the standard declares",
+            "type": "string"
+          },
+          "required": {
+            "description": "Whether a conforming system must carry a value",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "TemplateMapBody": {
+        "additionalProperties": false,
+        "properties": {
+          "aspect": {
+            "description": "The layout's width over its height",
+            "format": "double",
+            "type": "number"
+          },
+          "positions": {
+            "description": "Where each role's components sit",
+            "items": {
+              "$ref": "#/components/schemas/TemplateMapPositionBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "aspect",
+          "positions"
+        ],
+        "type": "object"
+      },
+      "TemplateMapPositionBody": {
+        "additionalProperties": false,
+        "properties": {
+          "position": {
+            "description": "Which of the role's components, from 1",
+            "format": "int64",
+            "type": "integer"
+          },
+          "role": {
+            "description": "The role placed",
+            "type": "string"
+          },
+          "x": {
+            "description": "Horizontal position, 0 to 1 from the left",
+            "format": "double",
+            "type": "number"
+          },
+          "y": {
+            "description": "Vertical position, 0 to 1 from the top",
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "role",
+          "position",
+          "x",
+          "y"
+        ],
+        "type": "object"
+      },
+      "TemplatePlaceBody": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "description": "The place's label",
+            "type": "string"
+          },
+          "name": {
+            "description": "The place's name; omitted where its type's name rule mints one, or the caller names it",
+            "type": "string"
+          },
+          "places": {
+            "description": "The places nested under this one",
+            "items": {
+              "$ref": "#/components/schemas/TemplatePlaceBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "systems": {
+            "description": "The system templates that land in the place",
+            "items": {
+              "$ref": "#/components/schemas/TemplatePlaceSystemBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "type": {
+            "description": "The place's location type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "type": "object"
+      },
+      "TemplatePlaceSystemBody": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "description": "The system's label",
+            "type": "string"
+          },
+          "template": {
+            "description": "The system template that lands in the place",
+            "type": "string"
+          }
+        },
+        "required": [
+          "template"
+        ],
+        "type": "object"
+      },
+      "TemplateRoleBody": {
+        "additionalProperties": false,
+        "properties": {
+          "accepted_types": {
+            "description": "The component types that may fill the role; empty accepts any",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "alternate": {
+            "description": "The alternate of that choice the role belongs to",
+            "type": "string"
+          },
+          "capacity": {
+            "description": "The most components the role takes; omitted for no cap",
+            "format": "int64",
+            "type": "integer"
+          },
+          "choice": {
+            "description": "The choice the role belongs to, when it is one way of answering a choice",
+            "type": "string"
+          },
+          "impact": {
+            "description": "What the system loses when the role is below quorum: outage, degraded (the default) or none",
+            "type": "string"
+          },
+          "label": {
+            "description": "What an operator reads for the role",
+            "type": "string"
+          },
+          "name": {
+            "description": "The role's name, unique within the standard",
+            "type": "string"
+          },
+          "pinned_products": {
+            "description": "The products the role is pinned to; empty pins none",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "quorum": {
+            "description": "How many components must fill the role (at least one)",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "label",
+          "quorum"
+        ],
+        "type": "object"
+      },
+      "TemplateRoleFillBody": {
+        "additionalProperties": false,
+        "properties": {
+          "component": {
+            "description": "The component template that fills the role",
+            "type": "string"
+          },
+          "product": {
+            "description": "The product that fills the role, when no component template does",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "TemplateStandardBody": {
+        "additionalProperties": false,
+        "properties": {
+          "choices": {
+            "description": "The exclusive-or groups of roles a conforming system answers one way",
+            "items": {
+              "$ref": "#/components/schemas/TemplateChoiceBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "map": {
+            "$ref": "#/components/schemas/TemplateMapBody",
+            "description": "The layout a conforming system's Map tab draws"
+          },
+          "metrics": {
+            "description": "The metric contract lines a fork declares",
+            "items": {
+              "$ref": "#/components/schemas/TemplateContractBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "parent": {
+            "description": "The standard template this variant hangs off; a variant forks once the operator holds a standard of that name",
+            "type": "string"
+          },
+          "properties": {
+            "description": "The property contract lines a fork declares",
+            "items": {
+              "$ref": "#/components/schemas/TemplateContractBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "roles": {
+            "description": "The roles a conforming system needs filled",
+            "items": {
+              "$ref": "#/components/schemas/TemplateRoleBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "roles"
+        ],
+        "type": "object"
+      },
+      "TemplateSystemBody": {
+        "additionalProperties": false,
+        "properties": {
+          "properties": {
+            "additionalProperties": {},
+            "description": "Declared system property values, by property name",
+            "type": "object"
+          },
+          "roles": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/TemplateRoleFillBody"
+            },
+            "description": "What fills each role, by role name",
+            "type": "object"
+          },
+          "standard": {
+            "description": "The standard the system conforms to, a standard template's name",
+            "type": "string"
+          },
+          "system_type": {
+            "description": "The system type the system is classified as",
+            "type": "string"
+          }
+        },
+        "required": [
+          "standard",
+          "roles"
         ],
         "type": "object"
       },
@@ -26786,6 +27244,101 @@
         },
         "summary": "Push telemetry for an owner",
         "x-omniglass-permission": "telemetry:push"
+      }
+    },
+    "/templates": {
+      "get": {
+        "description": "Lists the template catalog this binary ships, ordered by kind then name, optionally one kind. A template is an example an operator clones: forking or instantiating one writes ordinary rows the operator owns, and nothing points back at the template. Gated by template:read.",
+        "operationId": "list-templates",
+        "parameters": [
+          {
+            "description": "Only templates of this kind; omitted lists every kind",
+            "explode": false,
+            "in": "query",
+            "name": "kind",
+            "schema": {
+              "description": "Only templates of this kind; omitted lists every kind",
+              "enum": [
+                "standard_template",
+                "system_template",
+                "place_template",
+                "component_template"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListTemplatesOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List templates",
+        "x-omniglass-mcp": {},
+        "x-omniglass-permission": "template:read"
+      }
+    },
+    "/templates/{template}": {
+      "get": {
+        "description": "Reads one template from the catalog by name: what it creates, as the fork or instantiate method would write it. An unknown name is a 404. Gated by template:read.",
+        "operationId": "get-template",
+        "parameters": [
+          {
+            "description": "The template, by name",
+            "in": "path",
+            "name": "template",
+            "required": true,
+            "schema": {
+              "description": "The template, by name",
+              "examples": [
+                "meeting-room"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Get a template",
+        "x-omniglass-mcp": {},
+        "x-omniglass-permission": "template:read"
       }
     },
     "/transports": {

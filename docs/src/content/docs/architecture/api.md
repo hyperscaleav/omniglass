@@ -754,6 +754,17 @@ a 409, an illegal or uuid-shaped one a 422, `root` is reserved for a location ty
 telemetry name and the remaining type registries do not rename yet
 ([#1188](https://github.com/hyperscaleav/omniglass/issues/1188)).
 
+The **template catalog** is read beside them but is not a registry: a
+[template](/architecture/templates/) is never a row, so it has no uuid, no create and no write of any
+kind. `GET /templates` lists what this binary ships, ordered by kind then name, and takes an optional
+`kind` (`standard_template`, `system_template`, `place_template` or `component_template`; any other
+value is a 422); `GET /templates/{template}` reads one whole by name, a 404 when the catalog does not
+hold it. Both are gated `template:read`, which the viewer's `*:read` floor carries, with no scope to
+inject since a template has no owner. The body is the template's own: a kind, a name, a label, a
+description, and the one body its kind names (a standard template's roles, choices, contract lines and
+map; a component template's product, attach preset and declared values; a system template's standard
+and role fills; a place template's subtree).
+
 What each catalog adds over the shared shape (bodies in the [reference](/reference/api/)):
 
 - A **vendor** (Boreal, Polaris, ...) names an organization, generalizing the former manufacturer-only

@@ -6,16 +6,28 @@
 // the binary actually seeds, so the claim cannot drift.
 //
 // Usage: <SeededSet kind="property_types" />, kind one of the seed.json keys.
+// The template catalog (ADR-0827) is one key, `templates`, narrowed to one
+// template kind with `of`: <SeededSet kind="templates" of="standard_template" />.
 import seed from '../generated/seed.json';
 
 interface Props {
   kind: string;
+  of?: string;
 }
 
-const { kind } = Astro.props;
-const rows = seed[kind];
-if (!rows) {
+const { kind, of } = Astro.props;
+const all = seed[kind];
+if (!all) {
   throw new Error(`SeededSet: unknown kind "${kind}" (not a key of docs/src/generated/seed.json)`);
+}
+const rows = kind === 'templates' && of ? all.filter((t) => t.kind === of) : all;
+if (kind === 'templates' && of && rows.length === 0) {
+  throw new Error(`SeededSet: the catalog ships no "${of}" templates`);
+}
+// A place template's subtree, flattened depth-first for its row.
+function placeLines(p, depth = 0) {
+  const here = `${'  '.repeat(depth)}${p.type}${p.name ? ` ${p.name}` : ''}${(p.systems ?? []).length ? `: ${p.systems.map((s) => s.template).join(', ')}` : ''}`;
+  return [here, ...(p.places ?? []).flatMap((c) => placeLines(c, depth + 1))];
 }
 
 // The inheriting registries (component_type, system_type) are nested by
@@ -100,17 +112,36 @@ if (nested && tree.length !== rows.length) {
         ))}
       </tbody>
     </table>
-  ) : kind === 'standards' ? (
+  ) : kind === 'templates' && of === 'standard_template' ? (
     <table class="seeded-set">
-      <thead><tr><th>Standard</th><th>Roles it staffs</th></tr></thead>
+      <thead><tr><th>Template</th><th>Variant of</th><th>Roles a fork declares</th></tr></thead>
       <tbody>
-        {rows.map((s) => (
+        {rows.map((t) => (
           <tr>
-            <td><code>{s.id}</code> ({s.label})</td>
+            <td><code>{t.name}</code> ({t.label})</td>
+            <td>{t.standard.parent ? <code>{t.standard.parent}</code> : ''}</td>
             <td>
-              {(s.roles ?? []).map((r) => (
-                <span><code>{r.name}</code> (quorum {r.quorum}{r.accepted_types?.length ? `, accepts ${r.accepted_types.join(' + ')}` : ''}) </span>
+              {t.standard.roles.map((r) => (
+                <span><code>{r.name}</code> (quorum {r.quorum || 1}{r.accepted_types?.length ? `, accepts ${r.accepted_types.join(' + ')}` : ''}{r.pinned_products?.length ? `, pins ${r.pinned_products.join(' + ')}` : ''}) </span>
               ))}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  ) : kind === 'templates' ? (
+    <table class="seeded-set">
+      <thead><tr><th>Template</th><th>Kind</th><th>What it creates</th></tr></thead>
+      <tbody>
+        {rows.map((t) => (
+          <tr>
+            <td><code>{t.name}</code> ({t.label})</td>
+            <td><code>{t.kind}</code></td>
+            <td>
+              {t.standard ? <>a standard{t.standard.parent ? <>, a variant of <code>{t.standard.parent}</code></> : ''}, with {t.standard.roles.length} roles</> : null}
+              {t.component ? <>a <code>{t.component.product}</code> component{Object.keys(t.component.attach?.inputs ?? {}).length ? <>, its driver preset with {Object.keys(t.component.attach.inputs).map((k) => <code>{k} </code>)}</> : ''}</> : null}
+              {t.system ? <>a system on <code>{t.system.standard}</code>, filling {Object.entries(t.system.roles).map(([role, f]) => <span><code>{role}</code> with <code>{f.component ?? f.product}</code> </span>)}</> : null}
+              {t.place ? <pre>{placeLines(t.place).join('\n')}</pre> : null}
             </td>
           </tr>
         ))}

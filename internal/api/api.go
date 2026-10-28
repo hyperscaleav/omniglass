@@ -20,6 +20,7 @@ import (
 	mcpserver "github.com/hyperscaleav/omniglass/internal/mcp"
 	"github.com/hyperscaleav/omniglass/internal/settings"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/internal/template"
 	"github.com/hyperscaleav/omniglass/internal/webui"
 )
 
@@ -319,6 +320,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 	registerLocationRoutes(api, a, gw)
 	registerSystemRoutes(api, a, gw)
 	registerStandardRoutes(api, a, gw)
+	registerTemplateRoutes(api, a, template.Shipped())
 	registerComponentRoutes(api, a, gw)
 	registerVendorRoutes(api, a, gw)
 	registerDriverRoutes(api, a, gw)

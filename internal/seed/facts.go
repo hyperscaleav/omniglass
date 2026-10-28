@@ -8,6 +8,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/health"
 	"github.com/hyperscaleav/omniglass/internal/rbac"
+	"github.com/hyperscaleav/omniglass/internal/template"
 	"github.com/hyperscaleav/omniglass/internal/transport"
 )
 
@@ -103,21 +104,6 @@ type factsTypeNode struct {
 	DefaultTags []string `json:"default_tags,omitempty"`
 }
 
-type factsStandardRole struct {
-	Name           string   `json:"name"`
-	Label          string   `json:"label,omitempty"`
-	Quorum         int      `json:"quorum"`
-	AcceptedTypes  []string `json:"accepted_types,omitempty"`
-	PinnedProducts []string `json:"pinned_products,omitempty"`
-}
-
-type factsStandard struct {
-	ID               string              `json:"id"`
-	Label            string              `json:"label"`
-	ParentStandardID string              `json:"parent_standard_id,omitempty"`
-	Roles            []factsStandardRole `json:"roles,omitempty"`
-}
-
 type factsVendor struct {
 	ID      string `json:"id"`
 	Label   string `json:"label"`
@@ -208,7 +194,7 @@ type seedFactsDoc struct {
 	LocationTypes  []factsLocationType  `json:"location_types"`
 	ComponentTypes []factsTypeNode      `json:"component_types"`
 	SystemTypes    []factsTypeNode      `json:"system_types"`
-	Standards      []factsStandard      `json:"standards"`
+	Templates      []template.Template  `json:"templates"`
 	Vendors        []factsVendor        `json:"vendors"`
 	Drivers        []factsDriver        `json:"drivers"`
 	Products       []factsProduct       `json:"products"`
@@ -355,20 +341,10 @@ func FactsJSON() ([]byte, error) {
 		})
 	}
 
-	var stds standardsDoc
-	if err := yaml.Unmarshal(standardsYAML, &stds); err != nil {
-		return nil, fmt.Errorf("seed facts: standards: %w", err)
-	}
-	for _, s := range stds.Standards {
-		fs := factsStandard{ID: s.ID, Label: s.Label, ParentStandardID: s.ParentStandardID}
-		for _, r := range s.Roles {
-			fs.Roles = append(fs.Roles, factsStandardRole{
-				Name: r.Name, Label: r.Label, Quorum: r.Quorum,
-				AcceptedTypes: r.AcceptedTypes, PinnedProducts: r.PinnedProducts,
-			})
-		}
-		doc.Standards = append(doc.Standards, fs)
-	}
+	// The template catalog (ADR-0827) renders whole: every kind, its body as
+	// the API serves it, in the catalog's order, so a docs page lists the
+	// shipped templates without restating one.
+	doc.Templates = template.Shipped().List("")
 
 	var vs vendorsDoc
 	if err := yaml.Unmarshal(vendorsYAML, &vs); err != nil {

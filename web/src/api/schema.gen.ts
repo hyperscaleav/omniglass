@@ -4588,6 +4588,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List templates
+         * @description Lists the template catalog this binary ships, ordered by kind then name, optionally one kind. A template is an example an operator clones: forking or instantiating one writes ordinary rows the operator owns, and nothing points back at the template. Gated by template:read.
+         */
+        get: operations["list-templates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/templates/{template}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a template
+         * @description Reads one template from the catalog by name: what it creates, as the fork or instantiate method would write it. An unknown name is a 404. Gated by template:read.
+         */
+        get: operations["get-template"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/transports": {
         parameters: {
             query?: never;
@@ -7687,6 +7727,16 @@ export interface components {
             readonly $schema?: string;
             tasks: components["schemas"]["TaskBody"][] | null;
         };
+        ListTemplatesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListTemplatesOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The catalog's templates, ordered by kind then name */
+            templates: components["schemas"]["TemplateBody"][] | null;
+        };
         ListTransportsOutputBody: {
             /**
              * Format: uri
@@ -9970,6 +10020,175 @@ export interface components {
             node_id?: string;
             /** @description The inline probe settings (jsonb) */
             spec?: unknown;
+        };
+        TemplateAlternateBody: {
+            /** @description What an operator reads for the alternate */
+            label: string;
+            /** @description The alternate's name, unique within its choice */
+            name: string;
+        };
+        TemplateBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/TemplateBody.json
+             */
+            readonly $schema?: string;
+            /** @description A component template's body */
+            component?: components["schemas"]["TemplateComponentBody"];
+            /** @description What the template is for */
+            description?: string;
+            /**
+             * @description What the template creates
+             * @enum {string}
+             */
+            kind: "standard_template" | "system_template" | "place_template" | "component_template";
+            /** @description What an operator reads for the template */
+            label: string;
+            /** @description The template's name, unique across the catalog */
+            name: string;
+            /** @description A place template's body: the root of the subtree */
+            place?: components["schemas"]["TemplatePlaceBody"];
+            /** @description A standard template's body: what a fork writes */
+            standard?: components["schemas"]["TemplateStandardBody"];
+            /** @description A system template's body */
+            system?: components["schemas"]["TemplateSystemBody"];
+        };
+        TemplateChoiceBody: {
+            /** @description The ways to answer the choice, the first the template's default */
+            alternates: components["schemas"]["TemplateAlternateBody"][] | null;
+            /** @description What an operator reads for the choice */
+            label: string;
+            /** @description The choice's name, unique within the standard */
+            name: string;
+        };
+        TemplateComponentBody: {
+            /** @description The driver the attach preset is for, when it is not the product's own */
+            driver?: string;
+            /** @description The attach preset: every driver input but the address, a secret input as a secret's name */
+            inputs?: {
+                [key: string]: string;
+            };
+            /** @description The product the component is */
+            product: string;
+            /** @description Declared property values, by property name */
+            properties?: {
+                [key: string]: unknown;
+            };
+        };
+        TemplateContractBody: {
+            /** @description The contract default, a JSON value; omitted when the line sets none */
+            default?: unknown;
+            /** @description The property or metric the standard declares */
+            name: string;
+            /** @description Whether a conforming system must carry a value */
+            required?: boolean;
+        };
+        TemplateMapBody: {
+            /**
+             * Format: double
+             * @description The layout's width over its height
+             */
+            aspect: number;
+            /** @description Where each role's components sit */
+            positions: components["schemas"]["TemplateMapPositionBody"][] | null;
+        };
+        TemplateMapPositionBody: {
+            /**
+             * Format: int64
+             * @description Which of the role's components, from 1
+             */
+            position: number;
+            /** @description The role placed */
+            role: string;
+            /**
+             * Format: double
+             * @description Horizontal position, 0 to 1 from the left
+             */
+            x: number;
+            /**
+             * Format: double
+             * @description Vertical position, 0 to 1 from the top
+             */
+            y: number;
+        };
+        TemplatePlaceBody: {
+            /** @description The place's label */
+            label?: string;
+            /** @description The place's name; omitted where its type's name rule mints one, or the caller names it */
+            name?: string;
+            /** @description The places nested under this one */
+            places?: components["schemas"]["TemplatePlaceBody"][] | null;
+            /** @description The system templates that land in the place */
+            systems?: components["schemas"]["TemplatePlaceSystemBody"][] | null;
+            /** @description The place's location type */
+            type: string;
+        };
+        TemplatePlaceSystemBody: {
+            /** @description The system's label */
+            label?: string;
+            /** @description The system template that lands in the place */
+            template: string;
+        };
+        TemplateRoleBody: {
+            /** @description The component types that may fill the role; empty accepts any */
+            accepted_types?: string[] | null;
+            /** @description The alternate of that choice the role belongs to */
+            alternate?: string;
+            /**
+             * Format: int64
+             * @description The most components the role takes; omitted for no cap
+             */
+            capacity?: number;
+            /** @description The choice the role belongs to, when it is one way of answering a choice */
+            choice?: string;
+            /** @description What the system loses when the role is below quorum: outage, degraded (the default) or none */
+            impact?: string;
+            /** @description What an operator reads for the role */
+            label: string;
+            /** @description The role's name, unique within the standard */
+            name: string;
+            /** @description The products the role is pinned to; empty pins none */
+            pinned_products?: string[] | null;
+            /**
+             * Format: int64
+             * @description How many components must fill the role (at least one)
+             */
+            quorum: number;
+        };
+        TemplateRoleFillBody: {
+            /** @description The component template that fills the role */
+            component?: string;
+            /** @description The product that fills the role, when no component template does */
+            product?: string;
+        };
+        TemplateStandardBody: {
+            /** @description The exclusive-or groups of roles a conforming system answers one way */
+            choices?: components["schemas"]["TemplateChoiceBody"][] | null;
+            /** @description The layout a conforming system's Map tab draws */
+            map?: components["schemas"]["TemplateMapBody"];
+            /** @description The metric contract lines a fork declares */
+            metrics?: components["schemas"]["TemplateContractBody"][] | null;
+            /** @description The standard template this variant hangs off; a variant forks once the operator holds a standard of that name */
+            parent?: string;
+            /** @description The property contract lines a fork declares */
+            properties?: components["schemas"]["TemplateContractBody"][] | null;
+            /** @description The roles a conforming system needs filled */
+            roles: components["schemas"]["TemplateRoleBody"][] | null;
+        };
+        TemplateSystemBody: {
+            /** @description Declared system property values, by property name */
+            properties?: {
+                [key: string]: unknown;
+            };
+            /** @description What fills each role, by role name */
+            roles: {
+                [key: string]: components["schemas"]["TemplateRoleFillBody"];
+            };
+            /** @description The standard the system conforms to, a standard template's name */
+            standard: string;
+            /** @description The system type the system is classified as */
+            system_type?: string;
         };
         Transport: {
             built: boolean;
@@ -20374,6 +20593,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PushOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-templates": {
+        parameters: {
+            query?: {
+                /** @description Only templates of this kind; omitted lists every kind */
+                kind?: "standard_template" | "system_template" | "place_template" | "component_template";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListTemplatesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The template, by name */
+                template: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateBody"];
                 };
             };
             /** @description Error */

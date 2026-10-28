@@ -6034,6 +6034,46 @@ Example:
 omniglass telemetry push --owner <json>
 ```
 
+## `omniglass template`
+
+Commands for the template resource
+
+### `omniglass template get`
+
+Get a template
+
+```
+omniglass template get <template>
+```
+
+Reads one template from the catalog by name: what it creates, as the fork or instantiate method would write it. An unknown name is a 404. Gated by template:read.
+
+Example:
+
+```sh
+omniglass template get meeting-room
+```
+
+### `omniglass template list`
+
+List templates
+
+```
+omniglass template list [flags]
+```
+
+Lists the template catalog this binary ships, ordered by kind then name, optionally one kind. A template is an example an operator clones: forking or instantiating one writes ordinary rows the operator owns, and nothing points back at the template. Gated by template:read.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--kind` | string | (none) | Only templates of this kind; omitted lists every kind |
+
+Example:
+
+```sh
+omniglass template list
+```
+
 ## `omniglass token`
 
 Mint an additional bearer token for an existing principal (direct DB)
