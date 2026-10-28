@@ -8,14 +8,14 @@
 Type "# A floor of meeting rooms under the West Building, systems and all"
 Enter
 Wait
-Type `omniglass location instantiate --template meeting-floor --parent hq.west --name level-4 --label 'Level 4' | jq -c '{places: [.places[] | "\(.parent)/\(.location) (\(.type))"], systems: [.systems[] | "\(.location): \(.standard)"]}'`
+Type `omniglass location instantiate --template meeting-floor --parent hq.west --name level-7 --label 'Level 7' | jq -c '{places: [.places[] | "\(.parent)/\(.location) (\(.type))"], systems: [.systems[] | "\(.location): \(.standard)"]}'`
 Enter
 Wait
 
 Type "# One more system, at a room, with its touch panel attached on the node"
 Enter
 Wait
-Type `omniglass system instantiate --template mr55-system --location hq.west.level-4.mr-1 --name mr-1-b --node edge-hq --attach '{"touch-control":[{"host":"127.0.0.9"}]}' | jq -c '{system, standard, standard_forked, components: [.components[] | "\(.role) \(.attached)"]}'`
+Type `omniglass system instantiate --template mr55-system --location hq.west.level-7.mr-1 --name mr-1-b --node edge-hq --attach '{"touch-control":[{"host":"127.0.0.9"}]}' | jq -c '{system, standard, standard_forked, components: [.components[] | "\(.role) \(.attached)"]}'`
 Enter
 Wait
 
@@ -33,12 +33,12 @@ Wait
 Type "# A single component, unattached until it is given an address"
 Enter
 Wait
-Type `omniglass component instantiate --template boreal-edge-55 --location hq.west.level-4 | jq -c '{component, product, attached}'`
+Type `omniglass component instantiate --template boreal-edge-55 --location hq.west.level-7 | jq -c '{component, product, attached}'`
 Enter
 Wait
 Type "# A floor cannot sit under a room: the types refuse the pair"
 Enter
 Wait
-Type `omniglass location instantiate --template meeting-floor --parent hq.west.level-4.mr-1 --name level-9 2>/dev/null | jq -r .detail || true`
+Type `omniglass location instantiate --template meeting-floor --parent hq.west.level-7.mr-1 --name level-9 2>/dev/null | jq -r .detail || true`
 Enter
 Wait
