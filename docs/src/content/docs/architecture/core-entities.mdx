@@ -693,7 +693,7 @@ suppress four consequences:
 
 - **action dispatch is held**: an alarm may open, but no `action_rule` pages or opens a ticket
   ([alarms and actions](/architecture/alarms-actions/));
-- **drift is observed, not enforced**: the set function never fires, so a tech mid-swap is not fought
+- **drift is observed, not enforced**: no command is sent to make the device match its declared value, so a tech mid-swap is not fought
   ([config](/architecture/variables/));
 - **health rolls up no impact**: the member does not sink its parent's
   [health](/architecture/health/); it surfaces as "outage (maintenance)", the truth plus the mode;

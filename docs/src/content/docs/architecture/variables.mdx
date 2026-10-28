@@ -70,7 +70,7 @@ Each piece of a config item has one home, joined by the canonical key:
 | Piece | What it holds | Lives in |
 |---|---|---|
 | signal definition | name, value domain | `property_type` (the catalog; a numeric signal's unit lives on `metric_type`) |
-| read / write binding | how this class of component reads and writes the signal | the **driver** its product names (an emit, and a command binding) |
+| read / write binding | how this class of component reads and writes the signal | the **driver** attached to the component's endpoint (an emit, and a command binding) |
 | declared value | the intent (`HDMI1`), plus the per-item `reconcile` policy | a `property` series row, `provenance='declared'` (built, [ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)); the policy is #1248 |
 | observed value | what the device reports (`HDMI2`) | `property` rows (observed) |
 | drift | declared ≠ observed | **computed on read**, not stored (built: each properties-read row's reconciliation) |
@@ -233,8 +233,8 @@ interpolated as `$var:<name>` into functions, endpoint definitions, and rule sco
   ([ADR-0119](/architecture/decisions/#adr-0119-a-table-an-operator-names-carries-a-label-or-declares-why-it-does-not)).
   Optional, not an identifier, and never interpolated: `$var:` reads the name and only the name. A
   variable with no label reads its name **verbatim**.
-- **Install-wide and product-wide are the same primitive at different scopes** (a company-wide NTP
-  server versus a class of component's poll interval).
+- **Install-wide and component-local are the same primitive at different scopes** (a company-wide NTP
+  server versus one component's poll interval).
 - **No observed side and no reconcile**, exactly what separates it from config.
 
 Scalar shapes (`string`, `int`, `float`, `bool`, `json`) cover the common case; a variable may be

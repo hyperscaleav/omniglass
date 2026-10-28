@@ -386,8 +386,9 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 				clear(faultseen)
 				sched.forgetOccurrences()
 			}
-			// Re-pull each tick; a changed config generation drives a refresh in
-			// later checkpoints. A pull failure is non-fatal (retry next tick).
+			// Re-pull the whole worklist each tick, so a change the server wrote
+			// runs on this tick with nothing cached to invalidate. A pull failure
+			// is non-fatal: the last worklist runs and the pull retries next tick.
 			if next, err := pullWorklist(nc, cfg.Name); err == nil {
 				wl = next
 			}
