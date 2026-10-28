@@ -18,7 +18,7 @@ func TestPruneStatementsKeepTheirShape(t *testing.T) {
 	var all []string
 	for lane := range sampleLanes {
 		for _, arc := range sampleArcs {
-			all = append(all, pruneSamplesSQL(lane, arc))
+			all = append(all, pruneSamplesSQL(lane, arc, false), pruneSamplesSQL(lane, arc, true))
 		}
 	}
 	for table := range logTables {

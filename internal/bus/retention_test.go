@@ -7,15 +7,17 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/settings"
+	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
 // backlogStore serves the retention windows it is given and a backlog of rows
 // per lane, deleting at most the limit per call, and records each call.
 type backlogStore struct {
-	windows settings.RetentionSettings
-	backlog map[string]int64
-	fail    map[string]error
-	calls   []pruneCall
+	windows   settings.RetentionSettings
+	overrides []storage.TypeRetention
+	backlog   map[string]int64
+	fail      map[string]error
+	calls     []pruneCall
 }
 
 type pruneCall struct {
@@ -26,6 +28,15 @@ type pruneCall struct {
 
 func (b *backlogStore) RetentionWindows(context.Context) (settings.RetentionSettings, error) {
 	return b.windows, nil
+}
+
+func (b *backlogStore) RetentionOverrides(context.Context) ([]storage.TypeRetention, error) {
+	return b.overrides, nil
+}
+
+// PruneSamplesOfType is a typed lane of the same store, keyed "<lane>#<type id>".
+func (b *backlogStore) PruneSamplesOfType(ctx context.Context, lane, typeID string, _ int, before time.Time, limit int) (int64, error) {
+	return b.PruneSamples(ctx, lane+"#"+typeID, before, limit)
 }
 
 // PruneLogs is a log lane of the same store, keyed "<table>/<band>".
@@ -209,5 +220,32 @@ func TestTheRetentionPassComesBackSoonerWhileBehind(t *testing.T) {
 	}
 	if got := nextRetentionWait(retentionReport{Behind: []string{"metric"}}); got != time.Minute {
 		t.Errorf("a pass that left metric behind waits %v, want a minute", got)
+	}
+}
+
+// A type with a window of its own (#417, PR 3) gets a lane of its own, pruned
+// to that window; the lane's own prune skips it (storage's job, held there).
+func TestARetentionPassPrunesATypeByItsOwnWindow(t *testing.T) {
+	now := time.Date(2026, 10, 28, 12, 0, 0, 0, time.UTC)
+	store := &backlogStore{windows: defaultWindows(),
+		overrides: []storage.TypeRetention{{Lane: "metric", TypeID: "t-1", TypeName: "tcp-connect-time", Days: 3},
+			{Lane: "property", TypeID: "t-2", TypeName: "endpoint-reachable", Days: 365}},
+		backlog: map[string]int64{"metric#t-1": 4}}
+	rep, err := retentionPass(context.Background(), store, now, 100, 10, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cutoff := map[string]time.Time{}
+	for _, c := range store.calls {
+		cutoff[c.lane] = c.before
+	}
+	if want := now.AddDate(0, 0, -3); !cutoff["metric#t-1"].Equal(want) {
+		t.Errorf("tcp-connect-time cutoff %v, want 3 days back", cutoff["metric#t-1"])
+	}
+	if want := now.AddDate(0, 0, -365); !cutoff["property#t-2"].Equal(want) {
+		t.Errorf("endpoint-reachable cutoff %v, want 365 days back", cutoff["property#t-2"])
+	}
+	if rep.Deleted["metric/tcp-connect-time"] != 4 {
+		t.Errorf("report %+v, want 4 tcp-connect-time rows under metric/tcp-connect-time", rep.Deleted)
 	}
 }

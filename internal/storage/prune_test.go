@@ -194,43 +194,53 @@ func TestPruneSamplesReachesAnIndexOnEveryArc(t *testing.T) {
 	// system or a location are ordered by id instead.
 	tsOrdered := map[string]bool{"metric_owner_idx": true, "metric_arc_owner_idx": true, "property_series_idx": true}
 	for lane, arcs := range want {
-		stmts := storage.ExportPruneSamplesSQL(lane)
-		for arc, index := range arcs {
-			plan, err := accesspath.Explain(f.ctx, f.conn, stmts[arc], time.Now(), 10)
-			if err != nil {
-				t.Fatalf("explain the %s prune on a %s: %v", lane, arc, err)
-			}
-			var probe []accesspath.Scan
-			for _, s := range plan.Scans(lane) {
-				if s.Alias == "n" {
-					probe = append(probe, s)
-				}
-			}
-			if len(probe) != 1 || probe[0].Index != index || probe[0].Disabled ||
-				!strings.Contains(probe[0].Cond, "c."+arc+"_id") && !strings.Contains(probe[0].Cond, "c.id") {
-				t.Errorf("the %s prune on a %s: the newer-row probe is not a per-row search of %s bound to the candidate:\n\t%s", lane, arc, index, plan)
-			}
-			// On a ts-ordered series index the probe walks up from the
-			// candidate's ts (a backward scan of a ts DESC index), not down
-			// from the newest row past any a skewed clock future-dated.
-			if tsOrdered[index] {
-				mustExec(t, f.conn, "set enable_seqscan = off")
-				var text string
-				rows, err := f.conn.Query(f.ctx, "explain (costs off) "+stmts[arc], time.Now(), 10)
+		// The lane's own prune, and a typed prune of one type with a window of
+		// its own (#417), which differ only in the type predicate.
+		for _, v := range []struct {
+			stmts map[string]string
+			args  []any
+		}{
+			{storage.ExportPruneSamplesSQL(lane), []any{time.Now(), 10}},
+			{storage.ExportPruneSamplesOfTypeSQL(lane), []any{time.Now(), 10, "00000000-0000-0000-0000-000000000000", 3}},
+		} {
+			stmts := v.stmts
+			for arc, index := range arcs {
+				plan, err := accesspath.Explain(f.ctx, f.conn, stmts[arc], v.args...)
 				if err != nil {
-					t.Fatal(err)
+					t.Fatalf("explain the %s prune on a %s: %v", lane, arc, err)
 				}
-				for rows.Next() {
-					var line string
-					if err := rows.Scan(&line); err != nil {
+				var probe []accesspath.Scan
+				for _, s := range plan.Scans(lane) {
+					if s.Alias == "n" {
+						probe = append(probe, s)
+					}
+				}
+				if len(probe) != 1 || probe[0].Index != index || probe[0].Disabled ||
+					!strings.Contains(probe[0].Cond, "c."+arc+"_id") && !strings.Contains(probe[0].Cond, "c.id") {
+					t.Errorf("the %s prune on a %s: the newer-row probe is not a per-row search of %s bound to the candidate:\n\t%s", lane, arc, index, plan)
+				}
+				// On a ts-ordered series index the probe walks up from the
+				// candidate's ts (a backward scan of a ts DESC index), not down
+				// from the newest row past any a skewed clock future-dated.
+				if tsOrdered[index] {
+					mustExec(t, f.conn, "set enable_seqscan = off")
+					var text string
+					rows, err := f.conn.Query(f.ctx, "explain (costs off) "+stmts[arc], v.args...)
+					if err != nil {
 						t.Fatal(err)
 					}
-					text += line + "\n"
-				}
-				rows.Close()
-				mustExec(t, f.conn, "reset enable_seqscan")
-				if !strings.Contains(text, "Index Scan Backward using "+index+" on "+lane+" n") {
-					t.Errorf("the %s prune on a %s: the probe does not walk up from the candidate's ts:\n%s", lane, arc, text)
+					for rows.Next() {
+						var line string
+						if err := rows.Scan(&line); err != nil {
+							t.Fatal(err)
+						}
+						text += line + "\n"
+					}
+					rows.Close()
+					mustExec(t, f.conn, "reset enable_seqscan")
+					if !strings.Contains(text, "Index Scan Backward using "+index+" on "+lane+" n") {
+						t.Errorf("the %s prune on a %s: the probe does not walk up from the candidate's ts:\n%s", lane, arc, text)
+					}
 				}
 			}
 		}

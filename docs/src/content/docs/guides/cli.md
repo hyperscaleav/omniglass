@@ -722,6 +722,20 @@ values alone. The value commands are **scope-injected**: an instance outside you
 non-disclosing 404 on the read and on the write. The registry and its contract share one noun:
 `omniglass location-type list` is the registry, `omniglass location-type property list <id>` its contract.
 
+## Retention
+
+How long the server keeps each lane is the `retention` settings: `omniglass setting list` shows the
+effective windows under `values.retention`. They are changed on the console's Settings page; the
+CLI's `setting update` cannot carry a body yet (#1333). A metric or property type can keep a window
+of its own, overriding its lane's, shipped types included:
+
+```sh
+omniglass metric-type setRetention tcp-connect-time --days 3       # keep this type 3 days
+omniglass property-type setRetention endpoint-reachable --days 365
+omniglass metric-type setRetention tcp-connect-time --days null    # back to the lane's window
+omniglass metric-type get tcp-connect-time | jq .retention_days
+```
+
 ## Generated versus hand-written
 
 - **Generated** (`internal/cli/api_gen.go`, do not edit): one command per API operation.

@@ -336,8 +336,14 @@ keeps itself and drops the link (`event.source_log_line_id` is `on delete set nu
   attribute. Both log tables normalize every new line at the gateway, so no band ever meets a
   stray word.
 
+**A type can keep a window of its own**, overriding its lane's: a metric or property type's
+`retention_days`, set through `POST /metric-types/{name}:setRetention` (and the property-type twin)
+on an official type too, since a shipped type's definition is the seed's but how long an install keeps
+its samples is the install's. The boot seed never writes it. The lane's own prune skips every
+overridden type, and the pass gives each one a lane of its own, pruned to its window with the same
+floor, chunking and index probe ([ADR-0417](/architecture/decisions/#adr-0417-the-server-prunes-each-sample-lane-to-a-window-in-bounded-chunks)).
+
 Not yet:
-- **A window per metric or property type** is the slice after it.
 - **The floor's amendment** to "the latest row within retention" waits for `ts` partitioning
   (#420), which a dropped partition needs.
 

@@ -25,6 +25,10 @@ type PropertyType struct {
 	FusionPolicy []byte
 	Description  string
 	Official     bool
+	// RetentionDays is the type's own retention window in days, overriding
+	// its lane's; nil is the lane's (#417). Set by SetPropertyTypeRetention,
+	// official types included.
+	RetentionDays *int
 	// WrittenBy is the calc rule that writes this property, nil when none
 	// does (#1019). Read beside the type, never stored or audited.
 	WrittenBy *CalcWriter `json:"-"`

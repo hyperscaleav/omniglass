@@ -13,16 +13,17 @@ import (
 // signal catalog (#587), carrying the numeric facts (unit, precision) the
 // property lane never holds. official marks a seed-owned, read-only type.
 type metricTypeBody struct {
-	ID          string          `json:"id" doc:"The metric type's uuid, the stable form the contract and telemetry keys store"`
-	Name        string          `json:"name"`
-	DataType    string          `json:"data_type"`
-	Label       string          `json:"label,omitempty"`
-	Description string          `json:"description,omitempty"`
-	Unit        *string         `json:"unit,omitempty" doc:"The display unit of the series (ms, dB, percent)"`
-	Precision   *int            `json:"precision,omitempty" doc:"Decimal places a rendered value keeps"`
-	Official    bool            `json:"official"`
-	WrittenBy   *calcWriterBody `json:"written_by,omitempty" required:"false" doc:"The calc rule that writes this metric, absent when none does (one enabled rule writes a key; a disabled writer is named when no rule is enabled)"`
-	WriterClass string          `json:"writer_class" enum:"node-probe,platform,calc,collected" doc:"Who may write this key (ADR-0161): node-probe (a node's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit"`
+	ID            string          `json:"id" doc:"The metric type's uuid, the stable form the contract and telemetry keys store"`
+	Name          string          `json:"name"`
+	DataType      string          `json:"data_type"`
+	Label         string          `json:"label,omitempty"`
+	Description   string          `json:"description,omitempty"`
+	Unit          *string         `json:"unit,omitempty" doc:"The display unit of the series (ms, dB, percent)"`
+	Precision     *int            `json:"precision,omitempty" doc:"Decimal places a rendered value keeps"`
+	Official      bool            `json:"official"`
+	RetentionDays *int            `json:"retention_days,omitempty" required:"false" doc:"The type's own retention window in days, overriding its lane's; absent when the lane's applies (#417)"`
+	WrittenBy     *calcWriterBody `json:"written_by,omitempty" required:"false" doc:"The calc rule that writes this metric, absent when none does (one enabled rule writes a key; a disabled writer is named when no rule is enabled)"`
+	WriterClass   string          `json:"writer_class" enum:"node-probe,platform,calc,collected" doc:"Who may write this key (ADR-0161): node-probe (a node's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit"`
 }
 
 // calcWriterBody names the calc rule that writes a key (#1019).
@@ -42,7 +43,8 @@ func toMetricTypeBody(mt *storage.MetricType) metricTypeBody {
 	return metricTypeBody{
 		ID: mt.ID, Name: mt.Name, DataType: mt.DataType, Label: mt.Label,
 		Description: mt.Description, Unit: mt.Unit, Precision: mt.Precision, Official: mt.Official,
-		WrittenBy: toCalcWriterBody(mt.WrittenBy), WriterClass: string(mt.WriterClass),
+		RetentionDays: mt.RetentionDays,
+		WrittenBy:     toCalcWriterBody(mt.WrittenBy), WriterClass: string(mt.WriterClass),
 	}
 }
 
@@ -69,6 +71,19 @@ type createMetricTypeInput struct {
 
 type metricTypeNameInput struct {
 	Name string `path:"name" doc:"The metric type's name"`
+}
+
+// setTypeRetentionBody is the setRetention body for a metric or property type
+// (#417): a window in days, or an explicit null for the lane's. Required, so an
+// empty body is refused rather than read as a clear that would let the next
+// pass delete history the override was keeping.
+type setTypeRetentionBody struct {
+	Days *int `json:"days" required:"true" nullable:"true" minimum:"1" maximum:"36500" doc:"The type's own retention window in whole days, 1 to 36,500; null clears it, so the type is kept for its lane's window (retention.metric_days or retention.property_days). Required: an empty body is refused"`
+}
+
+type setMetricTypeRetentionInput struct {
+	Name string `path:"name" doc:"The metric type's name"`
+	Body setTypeRetentionBody
 }
 
 type updateMetricTypeInput struct {
@@ -155,6 +170,25 @@ func registerMetricTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway
 			Unit:        in.Body.Unit,
 			Precision:   in.Body.Precision,
 		})
+		if err != nil {
+			return nil, mapMetricTypeErr(err)
+		}
+		return &metricTypeOutput{Body: toMetricTypeBody(mt)}, nil
+	})
+
+	huma.Register(api, a.platformGated(a.gated(huma.Operation{
+		OperationID: "set-metric-type-retention",
+		Method:      http.MethodPost,
+		Path:        "/metric-types/{name}:setRetention",
+		Summary:     "Set a metric type's retention window",
+		Description: "Sets how many days this type's samples are kept, overriding the metric lane's window (retention.metric_days), or with null returns it to the lane's. Works on an official type: a shipped type's definition is read-only, but how long an install keeps its samples is the install's, and the boot seed never resets it. The retention floor still holds: a type's latest value per series is never removed. 1 to 36,500 days. Audited as set_retention. Gated by metric_type:update and platform:update.",
+	}, "metric_type", "update"), "update"), func(ctx context.Context, in *setMetricTypeRetentionInput) (*metricTypeOutput, error) {
+		// platformGated only publishes the second permission; the handler
+		// enforces it, as every platform-tier write does.
+		if err := a.requirePlatform(ctx, "update"); err != nil {
+			return nil, err
+		}
+		mt, err := gw.SetMetricTypeRetention(ctx, actorID(ctx), in.Name, in.Body.Days)
 		if err != nil {
 			return nil, mapMetricTypeErr(err)
 		}

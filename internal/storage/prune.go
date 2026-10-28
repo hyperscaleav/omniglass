@@ -8,8 +8,11 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/settings"
 )
 
-// The sample lanes retention prunes, with each lane's type column.
+// The sample lanes retention prunes, with each lane's type column, and the
+// type catalog a type's own window (retention_days) lives on.
 var sampleLanes = map[string]string{"metric": "metric_type_id", "property": "property_type_id"}
+
+var sampleLaneTypes = map[string]string{"metric": "metric_type", "property": "property_type"}
 
 // sampleArcs is every owner arc a sample row fills one of, in the order a prune
 // visits them.
@@ -60,13 +63,30 @@ func pruneProbe(lane, arc string) string {
 // the chosen ids as an array, so it finds them by primary key rather than a
 // small table's planner hash-joining an IN over a sequential scan
 // (TestPruneStatementsKeepTheirShape).
-func pruneSamplesSQL(lane, arc string) string {
+//
+// A lane's own prune (typed false) skips every type with a window of its own
+// (#417); a typed prune ($3, one type's id) takes only that type, to its window,
+// and only while that window is still $4, the days the pass read: an override
+// cleared or changed since prunes nothing until the next pass reads it.
+func pruneSamplesSQL(lane, arc string, typed bool) string {
 	typeCol := sampleLanes[lane]
+	types := fmt.Sprintf(`c.%s <> all(array(select id from %s where retention_days is not null))`, typeCol, sampleLaneTypes[lane])
+	if typed {
+		types = fmt.Sprintf(`c.%s = $3::uuid and $4::int = (select retention_days from %s where id = $3::uuid)`, typeCol, sampleLaneTypes[lane])
+	}
+	// A row a system, a location or a node owns has no component (the owner arc
+	// is exclusive). Saying so lets the planner prove metric_arc_owner_idx's
+	// partial predicate, so a typed prune searches its type's rows through that
+	// index instead of reading every old row of the lane
+	// (TestATypedPruneSearchesItsTypesRows).
+	if arc != "component" {
+		types += ` and c.component_id is null`
+	}
 	return fmt.Sprintf(`
 		delete from %[1]s where id = any(array(
 			select c.id from %[1]s c
 			where c.ts < $1 and c.provenance <> 'declared' and c.command_id is null
-			  and c.%[2]s_id is not null
+			  and c.%[2]s_id is not null and %[5]s
 			  and (
 				select 1 from %[1]s n
 				where %[3]s
@@ -75,7 +95,7 @@ func pruneSamplesSQL(lane, arc string) string {
 				  and n.ts >= c.ts and n.id > c.id
 				order by n.ts
 				limit 1) is not null
-			limit $2))`, lane, arc, pruneProbe(lane, arc), typeCol)
+			limit $2))`, lane, arc, pruneProbe(lane, arc), typeCol, types)
 }
 
 // PruneSamples deletes up to limit rows of one sample lane (metric or property)
@@ -87,6 +107,21 @@ func pruneSamplesSQL(lane, arc string) string {
 // that time, and a re-run deletes nothing. Each owner arc is one statement of its
 // own, so no call holds a long transaction (#417).
 func (p *PG) PruneSamples(ctx context.Context, lane string, before time.Time, limit int) (int64, error) {
+	return p.pruneSamples(ctx, lane, "", 0, before, limit)
+}
+
+// PruneSamplesOfType is PruneSamples for one type with a window of its own
+// (#417): the lane's prune skips it, and this takes it to its window. days is
+// the window the caller read, and nothing is pruned unless the type still has
+// it, so a pass never prunes by an override changed since it read it.
+func (p *PG) PruneSamplesOfType(ctx context.Context, lane, typeID string, days int, before time.Time, limit int) (int64, error) {
+	if typeID == "" {
+		return 0, fmt.Errorf("storage: prune samples of type: no type")
+	}
+	return p.pruneSamples(ctx, lane, typeID, days, before, limit)
+}
+
+func (p *PG) pruneSamples(ctx context.Context, lane, typeID string, days int, before time.Time, limit int) (int64, error) {
 	if _, ok := sampleLanes[lane]; !ok {
 		return 0, fmt.Errorf("storage: prune samples: unknown lane %q", lane)
 	}
@@ -98,7 +133,11 @@ func (p *PG) PruneSamples(ctx context.Context, lane string, before time.Time, li
 		if total >= int64(limit) {
 			break
 		}
-		tag, err := p.pool.Exec(ctx, pruneSamplesSQL(lane, arc), before, int64(limit)-total)
+		args := []any{before, int64(limit) - total}
+		if typeID != "" {
+			args = append(args, typeID, days)
+		}
+		tag, err := p.pool.Exec(ctx, pruneSamplesSQL(lane, arc, typeID != ""), args...)
 		if err != nil {
 			return total, fmt.Errorf("storage: prune %s samples owned by a %s: %w", lane, arc, err)
 		}

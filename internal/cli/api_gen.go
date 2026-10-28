@@ -4692,6 +4692,30 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var fDays string
+				cmd := &cobra.Command{
+					Use:     "setRetention <name>",
+					Short:   "Set a metric type's retention window",
+					Long:    "Sets how many days this type's samples are kept, overriding the metric lane's window (retention.metric_days), or with null returns it to the lane's. Works on an official type: a shipped type's definition is read-only, but how long an install keeps its samples is the install's, and the boot seed never resets it. The retention floor still holds: a type's latest value per series is never removed. 1 to 36,500 days. Audited as set_retention. Gated by metric_type:update and platform:update.",
+					Example: "  omniglass metric-type setRetention <name> --days <json>",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/metric-types/%s:setRetention", pathSegment(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("days") {
+							body["days"] = jsonOrString(fDays)
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fDays, "days", "", "The type's own retention window in whole days, 1 to 36,500; null clears it, so the type is kept for its lane's window (retention.metric_days or retention.property_days). Required: an empty body is refused")
+				_ = cmd.MarkFlagRequired("days")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
 				var fDescription string
 				var fLabel string
 				var fPrecision int
@@ -6712,6 +6736,30 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fDays string
+				cmd := &cobra.Command{
+					Use:     "setRetention <name>",
+					Short:   "Set a property type's retention window",
+					Long:    "Sets how many days this type's transitions are kept, overriding the property lane's window (retention.property_days), or with null returns it to the lane's. Works on an official type: a shipped type's definition is read-only, but how long an install keeps its samples is the install's, and the boot seed never resets it. The retention floor still holds: a declared value and a series' latest value are never removed. 1 to 36,500 days. Audited as set_retention. Gated by property_type:update and platform:update.",
+					Example: "  omniglass property-type setRetention <name> --days <json>",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/property-types/%s:setRetention", pathSegment(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("days") {
+							body["days"] = jsonOrString(fDays)
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fDays, "days", "", "The type's own retention window in whole days, 1 to 36,500; null clears it, so the type is kept for its lane's window (retention.metric_days or retention.property_days). Required: an empty body is refused")
+				_ = cmd.MarkFlagRequired("days")
 				return cmd
 			}()
 			return cmd
