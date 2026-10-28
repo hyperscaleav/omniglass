@@ -184,8 +184,8 @@ The settings store is built at the **platform** level (the install-wide rung, re
 the pure resolver, the `setting_override` table, the
 admin API, the two `settings:<action>` permissions, and the Admin settings page, with `ui.theme` wired
 through to re-theme the SPA (see [settings](/architecture/settings/)). The **group** and **user** cascade
-rungs, and the `platform`-domain settings (`retention`, CDC routing, integrations) named above, are the
-fast-follow.
+rungs, and the `platform`-domain settings (CDC routing, integrations) named above, are the
+fast-follow; `retention` has landed with sample retention ([ADR-0417](/architecture/decisions/#adr-0417-the-server-prunes-each-sample-lane-to-a-window-in-bounded-chunks)).
 :::
 
 :::design[Target design, tracked in #57]

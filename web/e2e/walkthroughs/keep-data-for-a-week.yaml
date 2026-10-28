@@ -1,0 +1,26 @@
+# Keep data for a week (#417): the retention windows are settings an admin
+# changes on the Settings page. Shorten the metric window from 14 days to 7 and
+# see the value marked as set in the console; the server's next retention pass
+# prunes metric samples older than a week, keeping every series' latest value.
+title: Keep data for a week
+description: Shorten how long metric samples are kept, from the default 14 days to 7, on the Settings page, and see the new window take the place of the default.
+steps:
+  - goto: /settings
+    caption: Settings holds the install's preferences. The retention card says how many days each kind of data is kept.
+  - click: { role: button, name: Edit }
+    caption: Edit turns each value into a field.
+  - click: { role: textbox, name: metric_days, exact: true }
+    caption: metric_days is how long a metric sample, such as a round-trip time, is kept. The default is 14 days.
+  - press: Backspace
+    caption: Clear it.
+  - press: Backspace
+    caption: The field checks a whole number of days, from 1 to 36,500, as it is typed.
+  - type: { target: { role: textbox, name: metric_days, exact: true }, text: '7' }
+    caption: Keep a week instead.
+  - click: { role: button, name: Save }
+    caption: Save it. The server's next retention pass prunes by the new window.
+  - click: { role: button, name: Done }
+    caption: Done returns the page to reading.
+  - wait: { text: Set in console }
+    caption: The window now comes from the console rather than the default. Every series still keeps its latest value, however old.
+    poster: true

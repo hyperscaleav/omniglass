@@ -21,8 +21,10 @@ once while `metric` / `property` carry no uniqueness key of their own
 ([ADR-0311](/architecture/decisions/#adr-0311-a-telemetry-batch-lands-once-in-one-transaction-under-its-receipt)). Current values are derived
 from the series (latest row per series); the maintained latest-value cache retired
 ([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)),
-and the provenance-aware retention floor is built as `PruneSamples`
-([ADR-0080](/architecture/decisions/#adr-0080-retention-is-provenance-aware-never-declared-never-the-latest-row-per-series)).
+and the server prunes `metric` and `property` samples to their retention windows above the
+provenance-aware floor
+([ADR-0080](/architecture/decisions/#adr-0080-retention-is-provenance-aware-never-declared-never-the-latest-row-per-series),
+[ADR-0417](/architecture/decisions/#adr-0417-the-server-prunes-each-sample-lane-to-a-window-in-bounded-chunks)).
 See [implementation status](/architecture/status/).
 :::
 
@@ -280,25 +282,56 @@ type, instance, provenance)?
 
 ::::
 
-## Retention: the provenance-aware floor
+## Retention: what is kept, and for how long
 
-Retention as a feature is unbuilt, but its one non-negotiable rule shipped first, as the
-**`PruneSamples`** gateway primitive ([ADR-0080](/architecture/decisions/#adr-0080-retention-is-provenance-aware-never-declared-never-the-latest-row-per-series)):
-a prune deletes series rows older than a cutoff from both sample tables, **except** any
-`declared` row (an operator's assertion is the whole truth however old, not a sample) and
-**except** the latest row of every series (a prune must not erase a current value). No caller
-wires it yet; any future retention feature calls this primitive rather than writing its own
-`DELETE`, so the first purge cannot silently destroy a declared value or a current reading.
+The server prunes the two sample tables to a window each
+([ADR-0417](/architecture/decisions/#adr-0417-the-server-prunes-each-sample-lane-to-a-window-in-bounded-chunks)):
+`metric` to `retention.metric_days` (14 by default) and `property` to `retention.property_days`
+(90), install-wide settings an admin changes on the console's Settings page (a platform-domain
+namespace that any signed-in caller reads). `retention.trend_days` (730) waits for the hourly
+trends of #1276. Each window is whole days from 1 to 36,500. The pass runs at server start, beside
+the receipt prune, and again an hour later, or a minute later while a lane is behind.
+
+Every prune goes through the **`PruneSamples`** gateway primitive, which carries the one
+non-negotiable rule ([ADR-0080](/architecture/decisions/#adr-0080-retention-is-provenance-aware-never-declared-never-the-latest-row-per-series)):
+it deletes series rows older than a cutoff **except** any `declared` row (an operator's
+assertion is the whole truth however old, not a sample) and **except** the latest row of every
+series (a prune must not erase a current value). Two refinements keep every reader whole:
+- a row is the series' latest unless some row of its series has both a later-or-equal `ts` and a
+  higher id, since the latest-value reads order by `ts` then id and the health reads by id, and a
+  clock that stepped back (#801) makes the two disagree;
+- a command's intended row (`command_id` set) is kept with the command, which is never pruned
+  and reads its intended value back from that row.
+
 Retiring a row the writer ruling refuses ([above](#every-key-has-one-writer)) is not a prune: it moves
 the row out of service into `retired_sample` and keeps it, so nothing true is lost, which is the floor's
 reason.
+
+It is bounded so a large backlog never holds the database. A call deletes at most a chunk of
+rows, one owner arc per statement and each its own short transaction. The cutoff applies first.
+Each old row's check for a newer row of its series is a scalar subquery limited to one row, which
+stays a per-row index search (an `EXISTS` can be flattened into a hash over the whole table). That
+search goes through `metric_owner_idx` and `property_series_idx` for a component, the property
+owner indexes for a system or a location, and `metric_arc_owner_idx` for a metric a system or a
+location owns. A pass removes at most 40 chunks of 5,000 rows a lane and names any lane it left
+behind, and the next pass comes a minute later.
+
+Finding the old rows reads every page the `ts` BRIN cannot rule out. Pruned pages are reused by
+new rows, which widens their ranges for good, so over time a pass's last chunk reads much of the
+table: hence the hourly steady state, until `ts` partitioning (#420) drops whole partitions instead.
+
+Not yet:
+- **Log lines and node logs** age out per severity in the next slice of #417.
+- **A window per metric or property type** is the slice after it.
+- **The floor's amendment** to "the latest row within retention" waits for `ts` partitioning
+  (#420), which a dropped partition needs.
 
 ::::design[Target design: partitioning is tracked in #420, retention in #417, and the `raw_sample` buffer in #430]
 
 ## Partitioning and retention
 
 - **Append-only tables are range-partitioned by `ts`** (native declarative partitioning; `pg_partman` where the provider permits, else a documented manual roll). The firehose (`metric`) is the partitioning-critical one.
-- **Retention is per table**, set by policy: `metric` short, `property` longer, `audit_log` longest (compliance), `internal_log` short, and `log_line` / `node_log` keyed on their own axes (`severity` / `facility` are indexed precisely so retention and routing can discriminate). On-row lineage ages out with its sample, and a `log_line` aged out from under an event leaves `event.source_log_line_id` null (`on delete set null`), never deleting the event. Per-table defaults are **cascade-resolved** ([cascade](/architecture/cascade/)) with an install-wide `platform` binding. Every path obeys the `PruneSamples` floor above.
+- **Retention is per table**, set by policy: `metric` short, `property` longer, `audit_log` longest (compliance), `internal_log` short, and `log_line` / `node_log` keyed on their own axes (`severity` / `facility` are indexed precisely so retention and routing can discriminate). On-row lineage ages out with its sample, and a `log_line` aged out from under an event leaves `event.source_log_line_id` null (`on delete set null`), never deleting the event. Per-table defaults are **cascade-resolved** ([cascade](/architecture/cascade/)) with an install-wide `platform` binding. Every path obeys the `PruneSamples` floor above. (Built for the sample lanes as one install-wide window per lane in the platform-domain `retention` namespace, not cascade-resolved: [ADR-0417](/architecture/decisions/#adr-0417-the-server-prunes-each-sample-lane-to-a-window-in-bounded-chunks).)
 - **The `raw_sample` buffer** ([collection](/architecture/collection/)) is range-partitioned by `ts` and cold-tierable like the metric partitions, on a short retention: bounded, sampled, short-lived, not a telemetry table.
 - **Views are not partitioned** (bounded by fleet size, not time), computed from the underlying tables, never the source of truth.
 

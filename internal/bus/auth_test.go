@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/internal/settings"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/nats-io/nats-server/v2/server"
 )
@@ -61,6 +62,12 @@ func (f fakeStore) RecordOrphanedBatches(context.Context, string, int64, time.Ti
 
 func (f fakeStore) LandBatch(context.Context, storage.IngestBatch) (bool, error) {
 	return true, nil
+}
+func (f fakeStore) RetentionWindows(context.Context) (settings.RetentionSettings, error) {
+	return settings.RetentionSettings{MetricDays: 14, PropertyDays: 90, TrendDays: 730}, nil
+}
+func (f fakeStore) PruneSamples(context.Context, string, time.Time, int) (int64, error) {
+	return 0, nil
 }
 func (f fakeStore) PruneTelemetryReceipts(context.Context, time.Time, int) (int64, error) {
 	return 0, nil

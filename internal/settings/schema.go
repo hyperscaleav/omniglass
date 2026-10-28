@@ -11,9 +11,10 @@ import "reflect"
 // settings tag is "<domain>[,client]": domain is "profile" or "platform", and the
 // client token marks a client-visible namespace (fed to /settings/me).
 type Settings struct {
-	UI          UISettings    `json:"ui" settings:"profile,client"`
-	Keybindings Keybindings   `json:"keybindings" settings:"profile,client"`
-	Label       LabelSettings `json:"label" settings:"platform,client"`
+	UI          UISettings        `json:"ui" settings:"profile,client"`
+	Keybindings Keybindings       `json:"keybindings" settings:"profile,client"`
+	Label       LabelSettings     `json:"label" settings:"platform,client"`
+	Retention   RetentionSettings `json:"retention" settings:"platform,client"`
 }
 
 // UISettings is the ui namespace.
@@ -56,6 +57,27 @@ type LabelSettings struct {
 	// something else entirely.
 	Acronyms []string `json:"acronyms" nullable:"false" default:"AV,BYOD,DSP,EDID,HDBaseT,HDCP,HDMI,IP,IR,KVM,LAN,LCD,LED,MTR,NDI,NVR,OLED,PC,PoE,PTZ,RF,SDI,SIP,TV,UC,USB,VC,VLAN,4K,8K" doc:"Words a generated label title-cases to a fixed form, whole-word and case-insensitive"`
 }
+
+// RetentionSettings is the retention namespace (#417): how long each sample
+// lane is kept before the server's retention pass removes it. Platform domain,
+// because a window is a fact about the install's storage; client-visible,
+// because a window is no secret and a chart of a series' history can say how
+// far back it reaches.
+//
+// A window is whole days, from 1 to RetentionMaxDays: a prune keeps every
+// declared row and the latest row of every series however old (ADR-0080), so a
+// window bounds history, not current values. The ceiling is a century; a cutoff
+// much further back overflows the timestamp encoding and reaches the database as
+// a date in the far future, which every row is older than. One default per lane;
+// a per-type override is a later slice of #417.
+type RetentionSettings struct {
+	MetricDays   int `json:"metric_days" minimum:"1" maximum:"36500" default:"14" doc:"Days a metric sample is kept"`
+	PropertyDays int `json:"property_days" minimum:"1" maximum:"36500" default:"90" doc:"Days a property transition is kept"`
+	TrendDays    int `json:"trend_days" minimum:"1" maximum:"36500" default:"730" doc:"Days an hourly metric trend is kept, once trends exist (#1276)"`
+}
+
+// RetentionMaxDays is the longest retention window, the schema's maximum above.
+const RetentionMaxDays = 36500
 
 // namespaceType indexes each namespace's json name to its sub-struct type, for the
 // write validator (validate.go). Built once by reflecting Settings.

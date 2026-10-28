@@ -256,6 +256,7 @@ async function play(page, base, step, total, cursor, phase) {
       const el = locate(page, step.target).filter({ visible: true }).first();
       at('visible', step.timeout);
       await el.waitFor({ state: 'visible', timeout: step.timeout });
+      await clearOfCaption(el);
       await point(page, el, cursor);
       return;
     }
@@ -266,6 +267,7 @@ async function play(page, base, step, total, cursor, phase) {
   await el.waitFor({ state: 'visible', timeout: ACT_TIMEOUT });
   at('scroll', ACT_TIMEOUT);
   await el.scrollIntoViewIfNeeded({ timeout: ACT_TIMEOUT });
+  await clearOfCaption(el);
   const box = await el.boundingBox();
   if (!box) throw new Error(`${describeTarget(step.target)} has no box on screen`);
   const to = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
@@ -291,6 +293,19 @@ async function play(page, base, step, total, cursor, phase) {
     await el.selectOption(step.value, { timeout: ACT_TIMEOUT });
   }
   await overlay(page, 'ring', null);
+}
+
+// The caption bar is fixed over the bottom of the viewport (.cap, 28px up, up
+// to two lines), and a target scrolled only just into view can sit under it,
+// hidden behind the very caption explaining it. Such a target is scrolled to
+// the middle of the view, through whichever container scrolls it; one already
+// clear of the bar does not move.
+const CAPTION_CLEARANCE = 160;
+async function clearOfCaption(el) {
+  const box = await el.boundingBox();
+  if (box && box.y + box.height > VIEWPORT.height - CAPTION_CLEARANCE) {
+    await el.evaluate((e) => e.scrollIntoView({ block: 'center' }));
+  }
 }
 
 // A result a wait found: ringed, and the cursor glides to its right edge (the

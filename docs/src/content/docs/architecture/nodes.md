@@ -189,7 +189,8 @@ the spool above, its caps (count, bytes, age) fixed in code and a drop told in t
 :::design[Target design: the buffer knobs, tracked in #430; retention is #417]
 Both the **buffer** (size, shed policy) and **retention** are **cascade-resolved**
 ([cascade](/architecture/cascade/)) with an install-wide `platform` binding, overridable down the
-tree. A full buffer **sheds oldest metrics first and surfaces it** as a
+tree. (Retention is built as one install-wide window per sample lane, not cascade-resolved:
+[ADR-0417](/architecture/decisions/#adr-0417-the-server-prunes-each-sample-lane-to-a-window-in-bounded-chunks).) A full buffer **sheds oldest metrics first and surfaces it** as a
 `node.buffer` sample (depth, drops): visible, never silent.
 :::
 
