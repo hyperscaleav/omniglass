@@ -3,8 +3,11 @@ package storage_test
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/seed"
@@ -92,6 +95,14 @@ func TestPropertiesCarryEveryKeyAndItsReconciliation(t *testing.T) {
 		t.Fatalf("serial-number: want want=null is=SN-42 from panel-ip, no drift; got %+v", r)
 	}
 
+	// A native probe key is the node's verdict on an endpoint, read on the
+	// reachability read where a gated rung's frozen fact is withheld; it is
+	// not a property the owner has (ADR-0161's reserved family).
+	land(storage.NodeWriter(comp.ID, "panel-ip"), "tls-certificate-expiry", "panel-ip", "2027-01-01T00:00:00Z", 4*time.Second)
+	props = byName(mustResolveOwner(t, gw, "component", "panel-1", all))
+	if p, ok := props["tls-certificate-expiry"]; ok {
+		t.Fatalf("a native probe key is listed among the properties: %+v", p)
+	}
 	if mac, ok := props["mac-address"]; ok {
 		t.Fatalf("mac-address, observed only by a retired endpoint, is listed: %+v", mac)
 	}
@@ -166,4 +177,56 @@ func reconOf(t *testing.T, gw *storage.PG, kind, owner, key string) storage.Prop
 	}
 	t.Fatalf("%s is not among %s's properties", key, owner)
 	return storage.PropertyReconciliation{}
+}
+
+// The properties read's key discovery and its told read reach an index on
+// every owner arc a properties route reads (component, system, location), never a sequential scan of
+// command (which is never pruned) or of property: a system's or a location's
+// properties read probes them once per read and once per declared key.
+func TestPropertiesReadReachesAnIndexOnEveryArc(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	conn := connectDSN(t, dsn)
+	// Seqscan is off because the fixture's tables are tiny, as
+	// TestLatestPerInstanceIsAnIndexWalk does.
+	mustExec(t, conn, "set enable_seqscan = off")
+	for _, tc := range []struct{ kind, col string }{
+		{"component", "component_id"}, {"system", "system_id"}, {"location", "location_id"},
+	} {
+		for name, sql := range map[string]string{
+			"key discovery": storage.ExportSeriesKeysSQL(tc.col),
+			"told":          storage.ExportToldSQLFor(tc.col),
+		} {
+			args := []any{tc.kind, uuid.NewString()}
+			if name == "told" {
+				args = append(args, "video-input")
+			} else {
+				args = append(args, []string{"health"})
+			}
+			rows, err := conn.Query(ctx, "explain "+sql, args...)
+			if err != nil {
+				t.Fatalf("explain %s on %s: %v", name, tc.kind, err)
+			}
+			var plan string
+			for rows.Next() {
+				var line string
+				if err := rows.Scan(&line); err != nil {
+					t.Fatal(err)
+				}
+				plan += line + "\n"
+			}
+			rows.Close()
+			if strings.Contains(plan, "Seq Scan on command") || strings.Contains(plan, "Seq Scan on property ") {
+				t.Errorf("the %s read on a %s scans a whole table:\n%s", name, tc.kind, plan)
+			}
+		}
+	}
 }

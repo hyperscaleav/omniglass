@@ -13,7 +13,12 @@ refs: [1297]
   calc rule outputs, keys with a live observed instance, and keys a command targeted; each carries a
   `reconciliation` block (`want`, `told`, `is`, `is_instance`, `drift`), absent on a calculated row,
   `want` null and `drift` false where nothing is declared. A place's rows carry the block with no `is`
-  (it owns no observed sample). The component reconciliation route and its generated command are
+  (it owns no observed sample). Two keys are not rows of their own: the reserved family (a native
+  probe key, `health`, a command lifecycle key) stays on its own surfaces, since a probe key is the
+  node's verdict on an endpoint, which the reachability read gates (a held certificate's expiry is
+  frozen there); and a key a calc rule writes reads as its calculated row with no block, so a
+  command or an observation on that same key shows on its sample routes, not here. The component
+  reconciliation route and its generated command are
   removed in the same change rather than kept one release as a deprecated alias.
 - **Context:** The reconciliation read walked the declared properties alone, so a key the owner only
   observed never appeared anywhere a client could read it with its standing, and the console fetched

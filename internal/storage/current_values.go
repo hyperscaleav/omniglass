@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
+	"github.com/hyperscaleav/omniglass/internal/writerclass"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -121,25 +122,31 @@ func (p *PG) reconcileKey(ctx context.Context, q querier, ownerKind, col, arc, k
 
 // seriesKeysSQL lists the catalog rows of every property key an owner arc ($1
 // owner kind, $2 arc) has an observed row of or a command targeted: the keys
-// beyond the declared cascade that the properties read can carry. One probe per
-// catalog key, each an index prefix (the component series index leads with
-// component and type; the system and location owner indexes with type and
-// owner), stopping at the first row. Whether the observation is live, and
+// beyond the declared cascade that the properties read can carry. The reserved
+// family ($3, writerclass.ReservedNames: a native probe key, health, a command
+// lifecycle key) is left out: a probe key is the node's verdict on an
+// endpoint, whose own surface is the reachability read (which withholds a
+// gated rung's frozen fact), and health is the rollup's, not a property an
+// operator could ask for. One probe per catalog key, each an index prefix
+// (the component series index leads with component and type; the system and
+// location owner indexes with type and owner; the command owner indexes with
+// the arc), stopping at the first row. Whether the observation is live, and
 // whether the command left an intended value, is the per-key reconcileKey's to
 // judge.
 func seriesKeysSQL(col string) string {
 	return fmt.Sprintf(`select pt.name, pt.id::text, pt.label, pt.data_type from property_type pt
-		where exists (select 1 from property s
+		where (exists (select 1 from property s
 				where s.owner_kind = $1 and s.%[1]s = $2 and s.property_type_id = pt.id and s.provenance = 'observed')
 		   or exists (select 1 from command c join command_type ct on ct.id = c.command_type_id
-				where c.owner_kind = $1 and c.%[1]s = $2 and ct.target_property_type_id = pt.id)
+				where c.owner_kind = $1 and c.%[1]s = $2 and ct.target_property_type_id = pt.id))
+		  and not (pt.name = any($3::text[]))
 		order by pt.name`, col)
 }
 
 // seriesKeys reads seriesKeysSQL into catalog-only rows: no contract, no
 // declared value, nothing set.
 func (p *PG) seriesKeys(ctx context.Context, q querier, ownerKind, col, arc string) ([]EffectiveProperty, error) {
-	rows, err := q.Query(ctx, seriesKeysSQL(col), ownerKind, arc)
+	rows, err := q.Query(ctx, seriesKeysSQL(col), ownerKind, arc, writerclass.ReservedNames())
 	if err != nil {
 		return nil, fmt.Errorf("storage: series keys %s/%s: %w", ownerKind, arc, err)
 	}
