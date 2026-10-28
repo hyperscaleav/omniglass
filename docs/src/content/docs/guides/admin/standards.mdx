@@ -1,6 +1,6 @@
 ---
 title: Standards
-description: "The Standards catalog: the blueprint a system conforms to, its variants, the properties it declares, and the roles a conforming system must staff; a standard is forked from a template into a row you own outright."
+description: "The Standards catalog: the blueprint a system conforms to, its variants, the properties it declares, and the roles a conforming system must staff; a standard is created from a template into a row you own outright."
 ---
 
 import SeededSet from '../../../../components/SeededSet.astro';
@@ -53,30 +53,36 @@ The same operations are `omniglass standard list/get/create/update/delete` from 
 ## Start from a template
 
 A fresh install holds **no standards**. Omniglass ships a catalog of **standard templates** instead,
-examples you fork into a standard of your own
+examples you create a standard of your own from
 ([templates](/architecture/templates/)). The ones this release ships, rendered from the catalog:
 
 <SeededSet kind="templates" of="standard_template" />
 
-Forking one (with `standard:create`) writes one standard, **not official and not read-only**, carrying
-the template's roles, choices, property and metric contract lines and map, in one write:
+In the console, the **New standard** drawer offers **From scratch** (the form above) or **From a
+template**: pick one of the standard templates, read the roles and choices it would write, give the
+standard a name if you want one of your own, and **Create standard** lands on your new standard's panel
+with a note that it is yours now ([starting from a template](/guides/operator/templates/)). Creating one from a template (with
+`standard:create`, `POST /standards:createFromTemplate`) writes one
+standard, **not official and not read-only**, carrying the template's roles, choices, property and
+metric contract lines and map, in one write:
 
 ```sh
-omniglass standard fork --template meeting-room
-omniglass standard fork --template meeting-room --name hq-meeting --label "HQ Meeting"
+omniglass standard createFromTemplate --template meeting-room
+omniglass standard createFromTemplate --template meeting-room --name hq-meeting --label "HQ Meeting"
 ```
 
 - **The name is the template's** unless you give one, and a taken name is refused (409), so the same
-  template forks twice only under two names. Each fork is independent of the other.
-- **A variant forks once you hold its parent.** `mr55` hangs off `meeting-room`: fork `meeting-room`
-  first (or name the standard it should hang off with `--parent`), or the fork is refused (422) naming
-  the template to fork first. Chains do not fork in one call.
-- **Nothing points back at the template.** The fork is audited once, naming the template it came from,
+  template makes two standards only under two names. Each is independent of the other.
+- **A variant needs its parent first.** `mr55` hangs off `meeting-room`: create a standard from
+  `meeting-room` first (or name the standard it should hang off with `--parent`), or the create is
+  refused (422) naming the template to create from first. Chains are not created in one call.
+- **Nothing points back at the template.** The standard is audited once as a create, its
+  `from_template` naming the template it came from,
   and that audit row is the only trace. A later release can rework the template in any way without
   touching your standard, and your standard renames, edits and deletes like any you created. Nothing
   plants it again on the next boot.
 
-This is the fork model of
+This is the clone model of
 [ADR-0071](/architecture/decisions/#adr-0071-a-template-is-a-clonable-example-not-a-versioned-shape-an-instance-pins):
 the thing the vendor updates (the template) and the thing you own (the standard) are two different
 objects, which is the whole point. A fleet that booted an older release holds the standards that
@@ -86,7 +92,7 @@ return.
 The exception is the **canonical vocabulary**: the [property catalog](/guides/admin/properties/) (and
 later commands and event types) is the shared namespace a driver maps onto, so it must read the same on
 every install. Those entries stay **official** and read-only, and a release can correct them. See
-[the seed model](/architecture/core-entities/#the-seed-model-forked-templates-versus-canonical-catalogs)
+[the seed model](/architecture/core-entities/#the-seed-model-templates-versus-canonical-catalogs)
 for the full reasoning.
 
 ## Declared properties: the standard's contract
@@ -102,7 +108,7 @@ defaults to. It is the same editor as a product's contract, on the system side.
   property already on the contract revises that line in place.
 - **The default is typed by the catalog, not here.** Type and validation live on the property, so a
   standard cannot redefine what `room-capacity` means, only what a system conforming to it starts with.
-- **Conformance is live, not a copy.** A system does **not** fork its standard. Change a contract
+- **Conformance is live, not a copy.** A system does **not** copy its standard. Change a contract
   default and every conforming system that has not overridden that property picks up the new value
   immediately. Only a system's own override survives the change.
 - **Required** means a conforming system must resolve the property to a value; the system's Properties
@@ -165,9 +171,9 @@ every assignment conforming systems made to it, so withdraw only when the slot i
 one room's component changed. Changing a quorum or an impact **re-evaluates every conforming system
 immediately**, so a retune shows up in the fleet's health without waiting for anything to poll.
 
-A standard forked from a template arrives with the template's roles, and they are the worked example:
+A standard created from a template arrives with the template's roles, and they are the worked example:
 `meeting-room`'s **Video Bar** (accepts `video-bar`) and **Main Display** (accepts `display`), among
-others. Like the standard itself they are yours once forked, so retuning a quorum to what your rooms
+others. Like the standard itself they are yours once created, so retuning a quorum to what your rooms
 actually run is never reverted by a restart or a release.
 
 From the CLI: `omniglass standard role list meeting-room`,

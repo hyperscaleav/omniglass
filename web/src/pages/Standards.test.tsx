@@ -2,6 +2,7 @@ import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, fireEvent, screen, waitFor, within } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
+import { Router, Route } from "@solidjs/router";
 import Standards from "./Standards";
 import { STANDARDS_KEY, type Standard } from "../lib/standards";
 import { classifierPropertiesKey, type ClassifierProperty } from "../lib/classifier_properties";
@@ -13,6 +14,7 @@ import { COMPONENT_TYPES_KEY, type ComponentType } from "../lib/component_types"
 import { PRODUCTS_KEY, type Product } from "../lib/products";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
+import { TEMPLATES_KEY } from "../lib/templates";
 
 // Standards is the catalog of blueprints a system conforms to, on the flat
 // FlatList surface beside Products. An official row is read-only (no
@@ -42,7 +44,7 @@ const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { userna
 
 const asides = () => document.querySelectorAll("aside[data-blade]");
 
-function mount(me: Me = admin) {
+function mount(me: Me = admin, path = "/standards") {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...STANDARDS_KEY], seed);
   qc.setQueryData([...PROPERTIES_KEY], catalog);
@@ -59,9 +61,17 @@ function mount(me: Me = admin) {
   qc.setQueryData([...standardRolesKey(uuidFor("std-huddle-space"))], roles);
   qc.setQueryData([...standardRolesKey(uuidFor("std-meeting-room"))], []);
   qc.setQueryData([...ME_KEY], me);
+  qc.setQueryData([...TEMPLATES_KEY], [
+    { kind: "standard_template", name: "huddle", label: "Huddle space template", standard: { roles: [{ name: "bar", label: "Bar", quorum: 1 }] } },
+    { kind: "system_template", name: "huddle-system", label: "Huddle system", system: { standard: "huddle", roles: {} } },
+  ]);
+  window.history.pushState({}, "", path);
   return render(() => (
     <QueryClientProvider client={qc}>
-      <Standards />
+      <Router>
+        <Route path="/standards" component={Standards} />
+        <Route path="/templates" component={() => <div data-testid="templates-page" />} />
+      </Router>
     </QueryClientProvider>
   ));
 }
@@ -190,6 +200,51 @@ describe("Standards page", () => {
     await waitFor(() => expect(sent).toBeTruthy());
     // Clearing the picker drops the parent from the patch (a standalone standard).
     expect(sent).toEqual({ label: "Huddle" });
+  });
+
+  // The other way to a standard (#1329): the New standard drawer offers a
+  // template beside from scratch, lists only standard templates, posts
+  // :createFromTemplate, and lands on the new standard's blade with the notice.
+  it("creates a standard from a template inside the New standard drawer", async () => {
+    let sent: unknown;
+    let url = "";
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "POST") {
+        url = req.url;
+        sent = JSON.parse(await req.clone().text());
+        return new Response(JSON.stringify({ id: uuidFor("std-huddle-2"), name: "huddle-space", label: "Huddle space", official: false }), { status: 201, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ standards: seed }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: /new standard/i }));
+    expect(await screen.findByRole("button", { name: "From scratch" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: "From a template" }));
+    const picker = (await screen.findByLabelText("Template")) as HTMLSelectElement;
+    // Only this kind's templates.
+    expect(Array.from(picker.options).map((o) => o.value)).toEqual(["", "huddle"]);
+    fireEvent.change(picker, { target: { value: "huddle" } });
+    expect(await screen.findByTestId("template-create-preview")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Create standard" }));
+    await waitFor(() => expect(url).toMatch(/\/standards:createFromTemplate$/));
+    expect(sent).toEqual({ template: "huddle" });
+    await waitFor(() => expect(window.location.search).toBe("?open=huddle-space&from=huddle"));
+  });
+
+  it("hides the template choice from a caller who may not read templates", async () => {
+    mount({ ...admin, permissions: ["standard:read", "standard:create"] });
+    fireEvent.click(screen.getByRole("button", { name: /new standard/i }));
+    expect(await screen.findByText("Create standard")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "From a template" })).toBeNull();
+  });
+
+  // A standard created from a template lands here (#1329): ?open= opens its blade and
+  // ?from= says above the list that it is the operator's own now.
+  it("opens the created standard's blade and says it is the operator's own", async () => {
+    mount(admin, "/standards?open=huddle-space&from=huddle");
+    await waitFor(() => expect(asides()).toHaveLength(1));
+    expect(screen.getByTestId("template-notice")).toHaveTextContent("Started from the template Huddle space template.");
   });
 
   it("hides New standard from a caller without standard:create", () => {

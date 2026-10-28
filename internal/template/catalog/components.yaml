@@ -1,6 +1,6 @@
 # The component templates (kind component_template): a product, the attach
-# preset for its driver, and declared property values. Instantiating one
-# (POST /components:instantiate) creates an ordinary component the operator
+# preset for its driver, and declared property values. Creating from one
+# (POST /components:createFromTemplate) creates an ordinary component the operator
 # owns; nothing points back here (ADR-0071, ADR-0827).
 #
 # The attach preset carries every driver input except the address (host),

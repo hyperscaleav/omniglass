@@ -50,7 +50,7 @@ func TestSimulatedSystemAPI(t *testing.T) {
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatal(err)
 	}
-	storagetest.ForkShippedStandards(t, gw)
+	storagetest.CreateShippedStandards(t, gw)
 	ownerTok, hash, prefix, err := auth.NewBearerToken()
 	if err != nil {
 		t.Fatal(err)

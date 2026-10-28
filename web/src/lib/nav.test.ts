@@ -282,7 +282,7 @@ describe("Catalog single entry", () => {
       "/calc-rules": ["rule", "read"],
       "/severity-levels": ["severity_level", "read"],
       "/notifications": ["notification_type", "read"],
-      "/templates": null,
+      "/templates": ["template", "read"],
       "/log-types": null,
       // The re-homed index routes (#798): off the rail, gates unchanged.
       "/components": ["component", "read"],
@@ -303,10 +303,13 @@ describe("nav paths bind to routes (#608)", () => {
     for (const path of unlive) expect(STUBS, `${path} has a rail entry but no stub route`).toContain(path);
   });
 
-  it("keeps the off-rail /templates stub its identity", () => {
-    expect(STUBS).toContain("/templates");
+  it("keeps the off-rail /templates page its identity, live and gated on template:read (#1329)", () => {
+    expect(STUBS).not.toContain("/templates");
     expect(lookupNav("/web/templates").label).toBe("Templates");
     expect(sectionLabel("/web/templates")).toBe("Templates");
+    expect(routeTokens("/web/templates")).toEqual(["template", "read"]);
+    // A location type is not a template kind: the hint never said so again.
+    expect(lookupNav("/web/templates").hint).not.toMatch(/location type/);
   });
 });
 

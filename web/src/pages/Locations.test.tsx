@@ -131,6 +131,21 @@ describe("Locations create-as-route", () => {
     expect(await screen.findByTestId("explore-page")).toBeTruthy();
   });
 
+  // The other way in (#1329): the create page itself offers a template beside
+  // from scratch (the flow is pinned in components/CreatePage.test.tsx).
+  it("offers From a template beside From scratch, scratch the default", async () => {
+    mount(`/locations/create?under=${hq.id}`);
+    await screen.findByText("New location");
+    expect(screen.getByRole("button", { name: "From scratch" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "From a template" })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("hides the template choice from a caller who may not read templates", async () => {
+    mount("/locations/create", [], { ...me, permissions: ["location:read", "location:create", "location_type:read"] });
+    await screen.findByText("New location");
+    expect(screen.queryByRole("button", { name: "From a template" })).toBeNull();
+  });
+
   it("posts the location_type handle, never the uuid, on create (#466)", async () => {
     let captured: unknown;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {

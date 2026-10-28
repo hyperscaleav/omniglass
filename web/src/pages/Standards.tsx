@@ -1,5 +1,7 @@
 import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
+import { useNavigate, useSearchParams } from "@solidjs/router";
+import TemplateNotice from "../components/TemplateNotice";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import BladeTitle from "../components/BladeTitle";
 import FieldRow from "../components/FieldRow";
@@ -11,6 +13,7 @@ import { bindSelectValue } from "../lib/selectvalue";
 import ContractEditor from "../components/ContractEditor";
 import RoleEditor from "../components/RoleEditor";
 import { Plus } from "../components/icons";
+import TemplateCreate, { CreateModeChoice, useTemplateChoice } from "../components/TemplateCreate";
 import {
   type Standard,
   STANDARDS_KEY,
@@ -56,36 +59,47 @@ const columns: FlatColumn<Standard>[] = [
 
 export default function Standards() {
   const me = useMe();
+  const [params] = useSearchParams();
   const standards = useQuery(() => ({ queryKey: STANDARDS_KEY, queryFn: listStandards }));
 
   const rows = createMemo(() =>
     [...(standards.data ?? [])].sort(byLabel),
   );
+  // ?open=<name> opens a standard's blade: a standard created from a template lands here
+  // (#1329), its ?from= carried to the notice above the list.
+  const openId = () => {
+    const v = params.open;
+    return (Array.isArray(v) ? v[0] : v) || undefined;
+  };
 
   return (
-    <FlatList<Standard>
-      config={{
-        entity: { name: "standard", plural: "standards" },
-        rows,
-        loading: () => standards.isPending,
-        error: () => standards.error,
-        filterKeys: [
-          { key: "name", type: "string", hint: "substring", get: (s) => `${entityLabel(s)} ${s.name}`, values: () => [] },
-          { key: "parent", type: "string", hint: "exact", get: (s) => s.parent_standard ?? "", values: () => [] },
-          { key: "official", type: "string", hint: "exact", get: (s) => (s.official ? "official" : "custom"), values: () => ["official", "custom"] },
-        ],
-        filterPlaceholder: "filter standards by name…",
-        columns,
-        empty: "No standards yet.",
-        // Address a row by its kebab name: globally unique, and what the API
-        // and CLI accept (the write paths resolve either form).
-        rowId: (s) => s.name,
-        blades: { registry: { standard: standardBlade }, rootKind: "standard" },
-        create: can(me.data, "standard", "create")
-          ? { label: "New standard", can: () => can(me.data, "standard", "create"), body: (ctx) => <CreateStandardForm onCreated={ctx.select} /> }
-          : undefined,
-      }}
-    />
+    <div class="og-stack flex flex-col">
+      <TemplateNotice />
+      <FlatList<Standard>
+        config={{
+          entity: { name: "standard", plural: "standards" },
+          rows,
+          loading: () => standards.isPending,
+          error: () => standards.error,
+          filterKeys: [
+            { key: "name", type: "string", hint: "substring", get: (s) => `${entityLabel(s)} ${s.name}`, values: () => [] },
+            { key: "parent", type: "string", hint: "exact", get: (s) => s.parent_standard ?? "", values: () => [] },
+            { key: "official", type: "string", hint: "exact", get: (s) => (s.official ? "official" : "custom"), values: () => ["official", "custom"] },
+          ],
+          filterPlaceholder: "filter standards by name…",
+          columns,
+          empty: "No standards yet.",
+          // Address a row by its kebab name: globally unique, and what the API
+          // and CLI accept (the write paths resolve either form).
+          rowId: (s) => s.name,
+          openId,
+          blades: { registry: { standard: standardBlade }, rootKind: "standard" },
+          create: can(me.data, "standard", "create")
+            ? { label: "New standard", can: () => can(me.data, "standard", "create"), body: (ctx) => <CreateStandardBody onCreated={ctx.select} close={ctx.close} /> }
+            : undefined,
+        }}
+      />
+    </div>
   );
 }
 
@@ -196,6 +210,25 @@ function StandardBladeBody(p: { id: string }): JSX.Element {
         </div>
       )}
     </Show>
+  );
+}
+
+// CreateStandardBody is the New standard drawer (#1329): from scratch (the form
+// below, the default) or from a standard template, the choice offered only to a
+// caller who may read templates. Created from a template, the drawer closes and
+// the page opens the new standard's blade with the notice (?open=, ?from=).
+function CreateStandardBody(p: { onCreated: (s: Standard) => void; close: () => void }): JSX.Element {
+  const navigate = useNavigate();
+  const choice = useTemplateChoice();
+  return (
+    <div class="flex flex-col gap-4">
+      <Show when={choice.offered()}>
+        <CreateModeChoice mode={choice.mode()} onChange={choice.setMode} />
+      </Show>
+      <Show when={choice.mode() === "template"} fallback={<CreateStandardForm onCreated={p.onCreated} />}>
+        <TemplateCreate kind="standard_template" onDone={(href) => { p.close(); navigate(href); }} />
+      </Show>
+    </div>
   );
 }
 

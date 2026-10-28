@@ -135,7 +135,7 @@ func TestRegistryRenameAPI(t *testing.T) {
 
 	// A standard forked from a template renames like any of the operator's own:
 	// nothing plants it again by name (ADR-0827).
-	c.do(adminTok, http.MethodPost, "/standards:fork", map[string]any{"template": "meeting-room"}, http.StatusCreated)
+	c.do(adminTok, http.MethodPost, "/standards:createFromTemplate", map[string]any{"template": "meeting-room"}, http.StatusCreated)
 	c.do(adminTok, http.MethodPost, "/standards/meeting-room:rename", map[string]any{"name": "conference-room"}, http.StatusOK)
 	c.do(adminTok, http.MethodGet, "/standards/conference-room", nil, http.StatusOK)
 	c.do(adminTok, http.MethodGet, "/standards/meeting-room", nil, http.StatusNotFound)

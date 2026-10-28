@@ -90,13 +90,13 @@ func TestTemplatesAPI(t *testing.T) {
 	c.do(viewer, http.MethodGet, "/templates/no-such-template", nil, http.StatusNotFound)
 }
 
-// TestForkStandardAPI drives POST /standards:fork: a viewer is refused and
+// TestCreateStandardFromTemplateAPI drives POST /standards:createFromTemplate: a viewer is refused and
 // nothing is written, an admin forks a template into a standard of their own
 // with one audit row naming the template, the same name again is a 409, a
 // second name forks an independent standard, a variant whose parent is not
 // held is a 422 naming the template to fork first, and an unknown template is
 // a 404. A fresh install holds no standard until one is forked.
-func TestForkStandardAPI(t *testing.T) {
+func TestCreateStandardFromTemplateAPI(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
@@ -134,13 +134,13 @@ func TestForkStandardAPI(t *testing.T) {
 		t.Fatalf("a fresh install holds %d standards, want none", n)
 	}
 
-	c.do(viewer, http.MethodPost, "/standards:fork", map[string]any{"template": "meeting-room"}, http.StatusForbidden)
+	c.do(viewer, http.MethodPost, "/standards:createFromTemplate", map[string]any{"template": "meeting-room"}, http.StatusForbidden)
 	if n := count(); n != 0 {
 		t.Fatalf("a refused fork wrote %d standards", n)
 	}
 
 	var forked std
-	if err := json.Unmarshal(c.do(owner, http.MethodPost, "/standards:fork", map[string]any{"template": "meeting-room"}, http.StatusCreated), &forked); err != nil {
+	if err := json.Unmarshal(c.do(owner, http.MethodPost, "/standards:createFromTemplate", map[string]any{"template": "meeting-room"}, http.StatusCreated), &forked); err != nil {
 		t.Fatalf("decode fork: %v", err)
 	}
 	if forked.Name != "meeting-room" || forked.Official {
@@ -152,16 +152,16 @@ func TestForkStandardAPI(t *testing.T) {
 			New        json.RawMessage `json:"new"`
 		} `json:"events"`
 	}
-	if err := json.Unmarshal(c.do(owner, http.MethodGet, "/audit-log?resource=standard&verb=fork", nil, http.StatusOK), &audit); err != nil {
+	if err := json.Unmarshal(c.do(owner, http.MethodGet, "/audit-log?resource=standard&verb=create", nil, http.StatusOK), &audit); err != nil {
 		t.Fatalf("decode audit: %v", err)
 	}
-	if len(audit.Events) != 1 || audit.Events[0].ResourceID != forked.ID || !strings.Contains(string(audit.Events[0].New), `"template":"meeting-room"`) {
+	if len(audit.Events) != 1 || audit.Events[0].ResourceID != forked.ID || !strings.Contains(string(audit.Events[0].New), `"from_template":"meeting-room"`) {
 		t.Fatalf("fork audit = %+v, want one row naming the template", audit.Events)
 	}
 
-	c.do(owner, http.MethodPost, "/standards:fork", map[string]any{"template": "meeting-room"}, http.StatusConflict)
+	c.do(owner, http.MethodPost, "/standards:createFromTemplate", map[string]any{"template": "meeting-room"}, http.StatusConflict)
 	var second std
-	if err := json.Unmarshal(c.do(owner, http.MethodPost, "/standards:fork",
+	if err := json.Unmarshal(c.do(owner, http.MethodPost, "/standards:createFromTemplate",
 		map[string]any{"template": "meeting-room", "name": "hq-meeting", "label": "HQ Meeting"}, http.StatusCreated), &second); err != nil {
 		t.Fatalf("decode second fork: %v", err)
 	}
@@ -169,20 +169,20 @@ func TestForkStandardAPI(t *testing.T) {
 		t.Fatalf("second fork = %+v, want an independent standard", second)
 	}
 
-	detail := string(c.do(owner, http.MethodPost, "/standards:fork", map[string]any{"template": "ds55"}, http.StatusUnprocessableEntity))
-	if !strings.Contains(detail, "fork digital-sign first") {
+	detail := string(c.do(owner, http.MethodPost, "/standards:createFromTemplate", map[string]any{"template": "ds55"}, http.StatusUnprocessableEntity))
+	if !strings.Contains(detail, "create a standard from digital-sign first") {
 		t.Fatalf("variant refusal = %s, want it to name the template to fork first", detail)
 	}
 	var variant std
-	if err := json.Unmarshal(c.do(owner, http.MethodPost, "/standards:fork",
+	if err := json.Unmarshal(c.do(owner, http.MethodPost, "/standards:createFromTemplate",
 		map[string]any{"template": "mr55", "parent": "hq-meeting"}, http.StatusCreated), &variant); err != nil {
 		t.Fatalf("decode variant: %v", err)
 	}
 	if variant.Parent != "hq-meeting" {
 		t.Fatalf("variant parent = %q, want the one named", variant.Parent)
 	}
-	c.do(owner, http.MethodPost, "/standards:fork", map[string]any{"template": "mr55-system"}, http.StatusNotFound)
-	c.do(owner, http.MethodPost, "/standards:fork", map[string]any{"template": "boardroom"}, http.StatusNotFound)
+	c.do(owner, http.MethodPost, "/standards:createFromTemplate", map[string]any{"template": "mr55-system"}, http.StatusNotFound)
+	c.do(owner, http.MethodPost, "/standards:createFromTemplate", map[string]any{"template": "boardroom"}, http.StatusNotFound)
 	if n := count(); n != 3 {
 		t.Fatalf("after the forks: %d standards, want 3", n)
 	}

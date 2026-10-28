@@ -1,9 +1,9 @@
 ---
 title: "The template layer owns the clone model, and the ComponentTemplate authoring model is superseded by the driver spec"
 date: 2026-10-28
-status: Accepted
+status: "Accepted, amended 2026-10-28 (one verb, createFromTemplate)"
 summary: "#827 owns only ADR-0071's clone model: standard, component, system and place templates shipped in the binary, read over `GET /templates` (`template:read`) and created through `POST /standards:fork` and `:instantiate` custom methods gated by each resource's own create permission and scope, provenance in the audit detail only. The ComponentTemplate collection-authoring model (functions, a step DAG, `inputs`, `:apply`) is superseded by the driver spec; its remainders move to #1331 and #318, the registry scope ladder's template rung retires, and `:apply` retires."
-refs: [827, 1322, 1331, 318, 1330]
+refs: [827, 1322, 1331, 318, 1330, 1348]
 ---
 
 - **Date:** 2026-10-28 | **Status:** Accepted | **Pages:** [templates](/architecture/templates/), [data collection](/architecture/collection/), [glossary](/architecture/glossary/), [expressions](/architecture/expressions/), [nodes](/architecture/nodes/), [metrics and properties](/architecture/properties/#key-scope-org-and-official), [cascade](/architecture/cascade/), [config and variables](/architecture/variables/), [the spine](/architecture/), [roadmap](/architecture/roadmap/), [identity and access](/architecture/identity-access/), [health](/architecture/health/), [API](/architecture/api/)
@@ -46,3 +46,15 @@ refs: [827, 1322, 1331, 318, 1330]
   template rung of the scope ladder presupposed a template row that ADR-0071 already ruled out. The
   architect approved the definition with every open decision resolved as recommended; this entry
   records those resolutions so the pages can say what is true now.
+- **Amendment (2026-10-28, on [PR #1348](https://github.com/hyperscaleav/omniglass/pull/1348)):** the
+  four methods that create from a template take **one name**, `:createFromTemplate`, on all four
+  collections: `POST /standards:createFromTemplate`, `/components:createFromTemplate`,
+  `/systems:createFromTemplate` and `/locations:createFromTemplate`. A custom method names what differs
+  from Create, and the difference here is the template input, the same on all four, so one verb means
+  one thing across the kinds. The day-old `:fork` (standards) and `:instantiate` (components, systems,
+  places) are retired terms: the vocabulary lint refuses them, and prose says "create from a template".
+  Provenance takes **one audit key**, `from_template`, on every row a template creates (a standard
+  created from a template is audited as a `create`, no longer a `fork`), replacing both the plan's
+  `instantiated_from` and the fork image's `template` field. The registry fork of a shipped row
+  ([ADR-0095](#adr-0095-an-operator-forks-a-shipped-registry-row-instead-of-the-platform-writing-it))
+  is a different operation and keeps its word.

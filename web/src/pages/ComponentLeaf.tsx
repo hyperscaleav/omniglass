@@ -15,6 +15,7 @@ import HealthBadge from "../components/HealthBadge";
 import Eyebrow from "../components/Eyebrow";
 import DetailGate from "../components/DetailGate";
 import PlaceCard from "../components/PlaceCard";
+import TemplateNotice from "../components/TemplateNotice";
 import AcknowledgeButton from "../components/AcknowledgeButton";
 import AlarmTimeline, { createTimelineToggles } from "../components/AlarmTimeline";
 import SeverityBadge from "../components/SeverityBadge";
@@ -229,6 +230,8 @@ export default function ComponentLeaf() {
   return (
     <BladesContext.Provider value={blades}>
     <Page title={component() ? entityLabel(component()!) : "Component"} breadcrumb={<Breadcrumb crumbs={crumbs()} />}>
+      {/* A create from a template lands here with ?from= (#1329). */}
+      <TemplateNotice />
       <DetailGate
         noun="component"
         missing={missing()}

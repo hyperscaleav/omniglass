@@ -9,77 +9,91 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// The standard fork (#827, ADR-0827): a standard written whole from a
+// A standard created from a template (#827, ADR-0827): a standard written whole from a
 // template, in one transaction. What it writes is an ordinary operator-owned
 // standard (official false) with its choices, roles, contract lines and map,
 // exactly what the standard's own routes would write piece by piece, and
 // nothing that points back at the template: the template's name is recorded
 // in the one audit row and nowhere else, so a release can rewrite the
-// template without touching the fork.
+// template without touching the standard.
 
-// ErrForkParentMissing is a variant forked before its parent: the standard
-// it would hang off does not exist. Chains do not fork in one call, so the
-// parent is forked first.
-var ErrForkParentMissing = errors.New("storage: the standard a variant hangs off does not exist")
+// ErrTemplateParentMissing is a variant created before its parent: the standard
+// it would hang off does not exist. Chains are not created in one call, so the
+// parent is created first.
+var ErrTemplateParentMissing = errors.New("storage: the standard a variant hangs off does not exist")
 
-// StandardFork is a whole standard to write. It names everything by value
+// StandardFromTemplate is a whole standard to write. It names everything by value
 // (types, products, properties and metrics by name, a role's alternate by
 // choice and alternate name), so the caller resolves nothing.
-type StandardFork struct {
-	// Template is the template this fork is from, recorded in the audit
+type StandardFromTemplate struct {
+	// Template is the template this standard is created from, recorded in the audit
 	// detail only.
 	Template string
 	Name     string
 	Label    string
 	// Parent is the standard a variant hangs off, by name or uuid; empty for
-	// none. It must exist (ErrForkParentMissing).
+	// none. It must exist (ErrTemplateParentMissing).
 	Parent     string
 	Choices    []RoleChoiceSpec
-	Roles      []ForkRole
+	Roles      []TemplateRole
 	Properties []StandardPropertySpec
 	Metrics    []StandardMetricSpec
 	// Map is the layout declaration, nil for none.
 	Map json.RawMessage
 }
 
-// ForkRole is one role of a fork. Choice and Alternate name the alternate a
+// TemplateRole is one role of a standard created from a template. Choice and Alternate name the alternate a
 // role joins, both or neither; the spec's AlternateID is ignored.
-type ForkRole struct {
+type TemplateRole struct {
 	SystemRoleSpec
 	Choice    string
 	Alternate string
 }
 
-// standardForkAudit is the fork's audit image: the standard as written, the
-// template it came from, and what the fork declared on it.
-type standardForkAudit struct {
+// standardFromTemplateAudit is the audit image of a standard created from a template: the standard as written, the
+// template it came from, and what the template declared on it.
+type standardFromTemplateAudit struct {
 	*Standard
-	Template   string   `json:"template"`
+	Template   string   `json:"from_template"`
 	Choices    []string `json:"choices,omitempty"`
 	Roles      []string `json:"roles"`
 	Properties []string `json:"properties,omitempty"`
 	Metrics    []string `json:"metrics,omitempty"`
 }
 
-// ForkStandard writes f as one standard, audited once as a fork naming the
+// CreateStandardFromTemplate writes f as one standard, audited once as a create carrying from_template, the
 // template. Refusals: an illegal name is the name rule's error; a taken name
-// is ErrTypeExists; a missing parent is ErrForkParentMissing; a role, type,
+// is ErrTypeExists; a missing parent is ErrTemplateParentMissing; a role, type,
 // product, property or metric that does not resolve is the error its own
 // route would give (ErrRoleRefNotFound, ErrPropertyTypeNotFound,
 // ErrMetricTypeNotFound); an invalid map is ErrStandardMapInvalid. Nothing
 // lands on a refusal.
-func (p *PG) ForkStandard(ctx context.Context, actorID string, f StandardFork) (*Standard, error) {
+func (p *PG) CreateStandardFromTemplate(ctx context.Context, actorID string, f StandardFromTemplate) (*Standard, error) {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: begin create standard from template: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	created, err := p.createStandardFromTemplateTx(ctx, tx, actorID, f)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit create standard from template: %w", err)
+	}
+	return created, nil
+}
+
+// createStandardFromTemplateTx is CreateStandardFromTemplate inside the caller's transaction: the write a
+// standard route and a system created from a template (CreatePlan)
+// share.
+func (p *PG) createStandardFromTemplateTx(ctx context.Context, tx pgx.Tx, actorID string, f StandardFromTemplate) (*Standard, error) {
 	if err := ValidateName("standard", f.Name); err != nil {
 		return nil, err
 	}
 	if err := validateStandardMap(f.Map); err != nil {
 		return nil, err
 	}
-	tx, err := p.pool.Begin(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("storage: begin fork standard: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
 	// First, before any other lock: see roleNameLockKey. The roles below are
 	// written on a standard no system conforms to yet, so no name can
 	// collide, but the lock order is every role write's.
@@ -92,10 +106,10 @@ func (p *PG) ForkStandard(ctx context.Context, actorID string, f StandardFork) (
 		var id string
 		err := tx.QueryRow(ctx, `select id from standard where `+registryRefCol(f.Parent)+` = $1`, f.Parent).Scan(&id)
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("%w: %q", ErrForkParentMissing, f.Parent)
+			return nil, fmt.Errorf("%w: %q", ErrTemplateParentMissing, f.Parent)
 		}
 		if err != nil {
-			return nil, fmt.Errorf("storage: resolve fork parent %q: %w", f.Parent, err)
+			return nil, fmt.Errorf("storage: resolve the template parent %q: %w", f.Parent, err)
 		}
 		parent = &id
 	}
@@ -112,10 +126,10 @@ func (p *PG) ForkStandard(ctx context.Context, actorID string, f StandardFork) (
 		return nil, mapStandardWriteErr(err)
 	}
 
-	audit := standardForkAudit{Standard: created, Template: f.Template, Roles: []string{}}
+	audit := standardFromTemplateAudit{Standard: created, Template: f.Template, Roles: []string{}}
 	alts := map[string]string{}
 	for _, c := range f.Choices {
-		ids, err := forkChoice(ctx, tx, created.ID, c)
+		ids, err := templateChoice(ctx, tx, created.ID, c)
 		if err != nil {
 			return nil, err
 		}
@@ -125,7 +139,7 @@ func (p *PG) ForkStandard(ctx context.Context, actorID string, f StandardFork) (
 		audit.Choices = append(audit.Choices, c.Name)
 	}
 	for _, r := range f.Roles {
-		if err := forkRole(ctx, tx, created.ID, r, alts); err != nil {
+		if err := templateRole(ctx, tx, created.ID, r, alts); err != nil {
 			return nil, err
 		}
 		audit.Roles = append(audit.Roles, r.Name)
@@ -142,18 +156,15 @@ func (p *PG) ForkStandard(ctx context.Context, actorID string, f StandardFork) (
 		}
 		audit.Metrics = append(audit.Metrics, l.MetricTypeName)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "fork", "standard", created.ID, nil, audit); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "create", "standard", created.ID, nil, audit); err != nil {
 		return nil, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("storage: commit fork standard: %w", err)
 	}
 	return created, nil
 }
 
-// forkChoice writes one choice and its alternates on a fresh standard,
+// templateChoice writes one choice and its alternates on a fresh standard,
 // positions in declaration order, and returns the alternate ids by name.
-func forkChoice(ctx context.Context, tx pgx.Tx, standardID string, c RoleChoiceSpec) (map[string]string, error) {
+func templateChoice(ctx context.Context, tx pgx.Tx, standardID string, c RoleChoiceSpec) (map[string]string, error) {
 	if err := ValidateName("role_choice", c.Name); err != nil {
 		return nil, err
 	}
@@ -182,9 +193,9 @@ func forkChoice(ctx context.Context, tx pgx.Tx, standardID string, c RoleChoiceS
 	return out, nil
 }
 
-// forkRole writes one role and its typed slot on a fresh standard. A type or
+// templateRole writes one role and its typed slot on a fresh standard. A type or
 // product the catalogs lack is ErrRoleRefNotFound, as SetSystemRole gives.
-func forkRole(ctx context.Context, tx pgx.Tx, standardID string, r ForkRole, alts map[string]string) error {
+func templateRole(ctx context.Context, tx pgx.Tx, standardID string, r TemplateRole, alts map[string]string) error {
 	if err := ValidateName("system_role", r.Name); err != nil {
 		return err
 	}
@@ -199,7 +210,7 @@ func forkRole(ctx context.Context, tx pgx.Tx, standardID string, r ForkRole, alt
 	if r.Choice != "" || r.Alternate != "" {
 		altID = alts[r.Choice+"/"+r.Alternate]
 		if altID == "" {
-			return fmt.Errorf("%w: role %s names choice/alternate %s/%s, which the fork does not declare",
+			return fmt.Errorf("%w: role %s names choice/alternate %s/%s, which the template does not declare",
 				ErrRoleRefNotFound, r.Name, r.Choice, r.Alternate)
 		}
 	}

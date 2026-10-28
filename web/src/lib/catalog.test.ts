@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { CATALOG_GROUPS, CATALOG_STUB_PATHS, OFFICIAL_LOCK, registryLock, registryOrigin, visibleGroups } from "./catalog";
+import { CATALOG_GROUPS, CATALOG_STUB_PATHS, OFFICIAL_LOCK, entryActive, entryCount, entryHref, registryLock, registryOrigin, visibleGroups } from "./catalog";
 import { type Me } from "./auth";
 import { navByPath, routeTokens, STUBS } from "./nav";
 
@@ -9,10 +9,9 @@ const entry = (header: string, label: string) =>
 // The catalog group table is data; these pin the facts the shell and the
 // Overview render from it, and the no-bare-TODO rule on its pending slots.
 describe("the catalog table's soon slots", () => {
-  it("names each pending registry's tracking issue in the table", () => {
-    expect(entry("Components", "Templates").issue).toBe(615);
-    expect(entry("Systems", "Templates").issue).toBe(616);
-    expect(entry("Locations", "Templates").issue).toBe(617);
+  it("holds no pending slot: every one went live", () => {
+    // None is pending any more: every slot went live (#921, #618, #1329).
+    for (const g of CATALOG_GROUPS) for (const e of g.entries) expect(e.soon, e.label).toBeFalsy();
   });
 
   it("mirrors nav.ts on every routed soon slot, so the stub page shows the number the table names", () => {
@@ -28,13 +27,41 @@ describe("the catalog table's soon slots", () => {
   });
 });
 
+// The Templates slots (#1329, closing #615, #616, #617): one page, three
+// filtered doors, one shared list each slot counts its own kinds of.
+describe("the catalog table's Templates slots", () => {
+  const rows = [
+    { kind: "component_template" }, { kind: "component_template" },
+    { kind: "standard_template" }, { kind: "system_template" }, { kind: "place_template" },
+  ];
+
+  it("opens /templates filtered to each group's kinds, the Systems slot reaching standard templates too", () => {
+    expect(entryHref(entry("Components", "Templates"))).toBe("/templates?kind=component_template");
+    expect(entryHref(entry("Systems", "Templates"))).toBe("/templates?kind=standard_template,system_template");
+    expect(entryHref(entry("Locations", "Templates"))).toBe("/templates?kind=place_template");
+    for (const g of ["Components", "Systems", "Locations"]) expect(entry(g, "Templates").soon).toBeFalsy();
+  });
+
+  it("counts each slot's own kinds of the one shared list", () => {
+    expect(entryCount(entry("Components", "Templates"), rows)).toBe(2);
+    expect(entryCount(entry("Systems", "Templates"), rows)).toBe(2);
+    expect(entryCount(entry("Locations", "Templates"), rows)).toBe(1);
+    expect(new Set(["Components", "Systems", "Locations"].map((g) => entry(g, "Templates").key!.join("/")))).toEqual(new Set(["templates"]));
+  });
+
+  it("lights a slot only on its own kinds, and an unfiltered entry on its route alone", () => {
+    const sys = entry("Systems", "Templates");
+    expect(entryActive(sys, "/web/templates", "?kind=standard_template,system_template")).toBe(true);
+    expect(entryActive(sys, "/web/templates", "?kind=place_template")).toBe(false);
+    expect(entryActive(sys, "/web/standards", "")).toBe(false);
+    expect(entryActive(entry("Systems", "Standards"), "/web/standards", "?open=mr55")).toBe(true);
+  });
+});
+
 describe("visibleGroups", () => {
-  it("keeps the shell for a caller who may read nothing: soon slots and their groups survive", () => {
+  it("leaves a caller who may read nothing no group: no soon slot remains to hold one", () => {
     const groups = visibleGroups(() => false);
-    expect(groups.map((g) => g.header)).toEqual(["Components", "Systems", "Locations"]);
-    expect(groups.flatMap((g) => g.entries.map((e) => e.label))).toEqual([
-      "Templates", "Templates", "Templates",
-    ]);
+    expect(groups.map((g) => g.header)).toEqual([]);
   });
 
   it("keeps every entry for a caller who may read everything", () => {
@@ -71,7 +98,7 @@ describe("shell route nesting", () => {
     const paths = [
       "/catalog", "/metrics", "/properties", "/event-types", "/command-types",
       "/vendors", "/products", "/drivers", "/standards",
-      "/location-types", "/secret-types", "/tags",
+      "/location-types", "/secret-types", "/tags", "/templates",
     ];
     for (const p of paths) expect(shellOf.get(p), `${p} escaped the catalog shell`).toBe("catalog");
     for (const p of CATALOG_STUB_PATHS) expect(shellOf.get(p), `${p} escaped the catalog shell`).toBe("catalog");

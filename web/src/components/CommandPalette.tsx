@@ -2,7 +2,7 @@ import { For, Show, createMemo, createSignal, createEffect, createUniqueId } fro
 import { Dialog } from "@kobalte/core/dialog";
 import { useNavigate } from "@solidjs/router";
 import { navItems, filterNav } from "../lib/nav";
-import { visibleGroups } from "../lib/catalog";
+import { entryHref, visibleGroups } from "../lib/catalog";
 import { useMe, can } from "../lib/auth";
 import { Search, ArrowRight } from "./icons";
 
@@ -42,7 +42,7 @@ export function buildCommands(allow: (tokens: string[]) => boolean): Command[] {
   const catalog: Command[] = visibleGroups(allow).flatMap((g) =>
     g.entries
       .filter((e) => e.path)
-      .map((e) => ({ label: e.label, path: e.path!, group: `Catalog · ${g.header}`, section: g.header })),
+      .map((e) => ({ label: e.label, path: entryHref(e), group: `Catalog · ${g.header}`, section: g.header })),
   );
   return [...rail, ...catalog];
 }

@@ -26,7 +26,7 @@ refs: [508, 504]
      (the adversarial review reproduced exactly that).
   3. **An edit still wins.** A set holding any rows is never touched, and a role an operator
      declared or revised is never touched at all, so retuning a shipped role survives every restart as before
-     ([the seed model](/architecture/core-entities/#the-seed-model-forked-templates-versus-canonical-catalogs)).
+     ([the seed model](/architecture/core-entities/#the-seed-model-templates-versus-canonical-catalogs)).
      The accepted edge: a later release that adds a requirement to a shipped role that shipped
      with none fills it in on an install nobody has edited, which is what a fresh install of that
      release carries anyway.

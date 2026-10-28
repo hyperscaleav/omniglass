@@ -1,7 +1,7 @@
 # The system templates (kind system_template): a whole system, built to a
-# standard, a component for each role. Instantiating one
-# (POST /systems:instantiate) lands the system, its standard (the operator's
-# of that name, else forked from the standard template in the same
+# standard, a component for each role. Creating from one
+# (POST /systems:createFromTemplate) lands the system, its standard (the operator's
+# of that name, else created from the standard template in the same
 # transaction), a component per role filled to quorum and assigned, and the
 # declared values, together or not at all (ADR-0827).
 #

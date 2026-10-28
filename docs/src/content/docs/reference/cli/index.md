@@ -866,6 +866,31 @@ Example:
 omniglass component create
 ```
 
+### `omniglass component createFromTemplate`
+
+Start a component from a template
+
+```
+omniglass component createFromTemplate [flags]
+```
+
+Creates one component from a component template at a place: its product and the template's declared values, and, when the inputs carry an address (host), its endpoint attached through the driver with the template's preset under your inputs. A secret input names a secret you may read, resolved as an attach resolves it. One transaction, every piece in your own scope with its own audit row carrying from_template; nothing points back at the template. Gated by component:create; declared values also need component:update and an attach endpoint:create. A place outside your location scope is a 404, an unknown template a 404, inputs with no address or an attach with no node a 422.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--inputs` | string | (none) | Driver inputs laid over the template's preset: the address (host) attaches the endpoint, a secret input names a secret you may read |
+| `--label` | string | (none) | The component's label |
+| `--location` | string | (none) | The place the component sits in, by name or dotted path |
+| `--name` | string | (none) | The component's name; minted as an unnamed create mints it when empty |
+| `--node` | string | (none) | The node the endpoint is placed on; needed when inputs carry an address |
+| `--template` | string | (none) | The component template, by name |
+
+Example:
+
+```sh
+omniglass component createFromTemplate --template template
+```
+
 ### `omniglass component delete`
 
 Delete a component
@@ -2385,6 +2410,29 @@ Example:
 
 ```sh
 omniglass location create --location-type location_type
+```
+
+### `omniglass location createFromTemplate`
+
+Start a subtree of places from a template
+
+```
+omniglass location createFromTemplate [flags]
+```
+
+Creates a subtree of places from a place template under a parent place (or as a new top), each place's type checked against its parent type's allowed parents as this fleet has them (your fork of a shipped type included), each named by the template, the request (the root) or its type's name rule, and the systems the template places in them, staffed as a system template is, unattached. One transaction: all of it or none, every piece in your own scope with its own audit row carrying from_template. Gated by location:create; when the subtree carries systems it also needs system:create, system:read, system:update, component:create and component:update, and standard:create when a standard is created from its template. A type this fleet does not hold, or a placement its types refuse, is a 422 naming the type or the pair.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--label` | string | (none) | The subtree root's label |
+| `--name` | string | (none) | The subtree root's name; omitted takes the template's, else its type's name rule mints one |
+| `--parent` | string | (none) | The place the subtree sits under, by name or dotted path; omitted makes it a new top |
+| `--template` | string | (none) | The place template, by name |
+
+Example:
+
+```sh
+omniglass location createFromTemplate --template template
 ```
 
 ### `omniglass location delete`
@@ -5214,6 +5262,29 @@ Example:
 omniglass standard create --label label --name name
 ```
 
+### `omniglass standard createFromTemplate`
+
+Create a standard from a template
+
+```
+omniglass standard createFromTemplate [flags]
+```
+
+Writes one standard of your own (official false) from a standard template in the catalog: its roles, choices, property and metric contract lines and map, in one transaction, audited once as a create carrying the template it came from (from_template). Nothing points back at the template, so a later release can change the template without touching your standard, and your standard renames, edits and deletes like any you created. The name is the template's unless you give one; a taken name is a 409, so creating from the same template again needs a second name. A variant is created only once you hold the standard it hangs off (the parent you name, or yours named for the template's parent), else a 422 naming the template to create from first. An unknown template is a 404. Gated by standard:create.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--label` | string | (none) | The standard's label; omitted takes the template's |
+| `--name` | string | (none) | The name the standard takes; omitted takes the template's |
+| `--parent` | string | (none) | For a variant, the standard it hangs off, by name or uuid; omitted takes your standard named for the template's parent |
+| `--template` | string | (none) | The standard template to create from, by name |
+
+Example:
+
+```sh
+omniglass standard createFromTemplate --template template
+```
+
 ### `omniglass standard delete`
 
 Delete a standard
@@ -5228,29 +5299,6 @@ Example:
 
 ```sh
 omniglass standard delete meeting-room
-```
-
-### `omniglass standard fork`
-
-Fork a standard from a template
-
-```
-omniglass standard fork [flags]
-```
-
-Writes one standard of your own (official false) from a standard template in the catalog: its roles, choices, property and metric contract lines and map, in one transaction, audited once as a fork naming the template. Nothing points back at the template, so a later release can change the template without touching your standard, and your standard renames, edits and deletes like any you created. The name is the template's unless you give one; a taken name is a 409, so forking the same template again needs a second name. A variant forks only once you hold the standard it hangs off (the parent you name, or yours named for the template's parent), else a 422 naming the template to fork first. An unknown template is a 404. Gated by standard:create.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--label` | string | (none) | The standard's label; omitted takes the template's |
-| `--name` | string | (none) | The name the standard takes; omitted takes the template's |
-| `--parent` | string | (none) | For a variant, the standard it hangs off, by name or uuid; omitted takes your standard named for the template's parent |
-| `--template` | string | (none) | The standard template to fork, by name |
-
-Example:
-
-```sh
-omniglass standard fork --template template
 ```
 
 ### `omniglass standard get`
@@ -5575,6 +5623,32 @@ Example:
 
 ```sh
 omniglass system create
+```
+
+### `omniglass system createFromTemplate`
+
+Start a whole system from a template
+
+```
+omniglass system createFromTemplate [flags]
+```
+
+Creates a system from a system template at a place, built to the standard you name or the template's own (yours of that name when you hold one, else created from its standard template, with any parent it hangs off, in the same write), with a component for each role filled to its quorum and assigned, and the declared values. A component whose role you give an address in attach lands attached; the rest land unattached and are listed in to_attach. One transaction: it lands whole or not at all, every piece in your own scope with its own audit row carrying from_template. Gated by system:create, and also needs system:read, system:update, component:create and component:update; endpoint:create when anything attaches, standard:create when a standard is created from its template. A place outside your location scope is a 404, an unknown template or standard a 404, a standard the template cannot staff a 422 naming the roles.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--attach` | string | (none) | Driver inputs per role, one object per component of the role in order; an object with an address (host) attaches that component, the rest land unattached |
+| `--label` | string | (none) | The system's label |
+| `--location` | string | (none) | The place the system and its components sit in, by name or dotted path |
+| `--name` | string | (none) | The system's name; minted from its type when empty |
+| `--node` | string | (none) | The node the endpoints are placed on; needed when any component attaches |
+| `--standard` | string | (none) | A standard of your own to build to, by name; omitted takes the template's, created from its template in the same write when you hold none of that name |
+| `--template` | string | (none) | The system template, by name |
+
+Example:
+
+```sh
+omniglass system createFromTemplate --template template
 ```
 
 ### `omniglass system delete`
@@ -6524,7 +6598,7 @@ List templates
 omniglass template list [flags]
 ```
 
-Lists the template catalog this binary ships, ordered by kind then name, optionally one kind. A template is an example an operator clones: forking a standard template (POST /standards:fork) writes an ordinary standard the operator owns, and nothing points back at the template. Gated by template:read.
+Lists the template catalog this binary ships, ordered by kind then name, optionally one kind. A template is an example an operator clones: creating from one (POST /standards:createFromTemplate, and the same method on components, systems and locations) writes ordinary rows the operator owns, and nothing points back at the template. Gated by template:read.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|

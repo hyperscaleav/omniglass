@@ -1595,7 +1595,7 @@
    "kind": "standard_template",
    "name": "ds55",
    "label": "Digital Sign 55",
-   "description": "Digital Sign with its panel pinned to a 55-inch display. Fork Digital Sign first.",
+   "description": "Digital Sign with its panel pinned to a 55-inch display. Create Digital Sign from its template first.",
    "standard": {
     "parent": "digital-sign",
     "roles": [
@@ -1640,7 +1640,7 @@
    "kind": "standard_template",
    "name": "ds75",
    "label": "Digital Sign 75",
-   "description": "Digital Sign with its panel pinned to a 75-inch display. Fork Digital Sign first.",
+   "description": "Digital Sign with its panel pinned to a 75-inch display. Create Digital Sign from its template first.",
    "standard": {
     "parent": "digital-sign",
     "roles": [
@@ -1857,7 +1857,7 @@
    "kind": "standard_template",
    "name": "mr55",
    "label": "Meeting Room 55",
-   "description": "Meeting Room with its main display pinned to a 55-inch panel. Fork Meeting Room first.",
+   "description": "Meeting Room with its main display pinned to a 55-inch panel. Create Meeting Room from its template first.",
    "standard": {
     "parent": "meeting-room",
     "roles": [
@@ -1936,7 +1936,7 @@
    "kind": "standard_template",
    "name": "mr65",
    "label": "Meeting Room 65",
-   "description": "Meeting Room with its main display pinned to a 65-inch panel. Fork Meeting Room first.",
+   "description": "Meeting Room with its main display pinned to a 65-inch panel. Create Meeting Room from its template first.",
    "standard": {
     "parent": "meeting-room",
     "roles": [
@@ -1986,7 +1986,7 @@
    "kind": "standard_template",
    "name": "mr75",
    "label": "Meeting Room 75",
-   "description": "Meeting Room with its main display pinned to a 75-inch panel. Fork Meeting Room first.",
+   "description": "Meeting Room with its main display pinned to a 75-inch panel. Create Meeting Room from its template first.",
    "standard": {
     "parent": "meeting-room",
     "roles": [
@@ -2036,7 +2036,7 @@
    "kind": "standard_template",
    "name": "mr86",
    "label": "Meeting Room 86",
-   "description": "Meeting Room with its main display pinned to an 86-inch panel. Fork Meeting Room first.",
+   "description": "Meeting Room with its main display pinned to an 86-inch panel. Create Meeting Room from its template first.",
    "standard": {
     "parent": "meeting-room",
     "roles": [
@@ -2086,7 +2086,7 @@
    "kind": "standard_template",
    "name": "mr98",
    "label": "Meeting Room 98",
-   "description": "Meeting Room with its main display pinned to a 98-inch panel. Fork Meeting Room first.",
+   "description": "Meeting Room with its main display pinned to a 98-inch panel. Create Meeting Room from its template first.",
    "standard": {
     "parent": "meeting-room",
     "roles": [

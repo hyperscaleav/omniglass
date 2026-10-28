@@ -43,7 +43,7 @@ func TestEffectiveMetrics(t *testing.T) {
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	storagetest.ForkShippedStandards(t, gw)
+	storagetest.CreateShippedStandards(t, gw)
 	all := scope.Set{All: true}
 
 	// A custom product with a two-metric contract: one with a default, one

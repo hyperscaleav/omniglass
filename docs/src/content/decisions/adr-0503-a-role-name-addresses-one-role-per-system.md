@@ -23,7 +23,7 @@ refs: [503, 504, 443]
      #443: a name present in both is a collision, and a collision resolves to nothing. An operator
      who needs a second slot names it.
   3. **The boot seed defers.** Shipped roles are seed-if-absent example content the operator owns
-     ([the seed model](/architecture/core-entities/#the-seed-model-forked-templates-versus-canonical-catalogs)),
+     ([the seed model](/architecture/core-entities/#the-seed-model-templates-versus-canonical-catalogs)),
      so a shipped role that a conforming system already declares itself is not installed, rather
      than failing the boot or shadowing the operator's role.
   4. **A collision written before this rule is refused, never resolved silently.** The resolver

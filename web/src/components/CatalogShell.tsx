@@ -1,9 +1,9 @@
 import { For, Show, createMemo, type ParentComponent } from "solid-js";
-import { A } from "@solidjs/router";
+import { A, useHref, useLocation, useNavigate } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
 import { Soon } from "./Sidebar";
 import { useMe, can } from "../lib/auth";
-import { OVERVIEW_PATH, visibleGroups, type CatalogEntry } from "../lib/catalog";
+import { OVERVIEW_PATH, entryActive, entryCount, entryHref, visibleGroups, type CatalogEntry } from "../lib/catalog";
 
 // The Catalog shell: a layout route (index.tsx wraps the catalog routes in
 // <Route component={CatalogShell}>) drawing the two-column chrome around every
@@ -64,9 +64,14 @@ export default CatalogShell;
 
 // One subrail entry. A live registry links to its page with its live count; a
 // soon slot wears the rail's SOON treatment, linking when its stub page is
-// routed (Rules, Notifications) and rendering disabled when no page exists yet
-// (the Templates slots).
+// routed (Notifications) and rendering disabled when no page exists yet. A
+// filtered slot (the three Templates slots, one page) lights by its query too,
+// so only the slot whose kinds are showing reads active.
 function Entry(props: { entry: CatalogEntry }) {
+  const location = useLocation();
+  const active = () => entryActive(props.entry, location.pathname, location.search);
+  const navigate = useNavigate();
+  const href = useHref(() => entryHref(props.entry));
   return (
     <Show
       when={!props.entry.soon}
@@ -87,10 +92,31 @@ function Entry(props: { entry: CatalogEntry }) {
         </Show>
       }
     >
-      <A href={props.entry.path!} activeClass="menu-active">
-        <span class="flex-1 truncate">{props.entry.label}</span>
-        <EntryCount entry={props.entry} />
-      </A>
+      <Show
+        when={props.entry.query}
+        fallback={
+          <A href={props.entry.path!} activeClass="menu-active">
+            <span class="flex-1 truncate">{props.entry.label}</span>
+            <EntryCount entry={props.entry} />
+          </A>
+        }
+      >
+        {/* A router link marks every query of its path current, so a filtered
+            slot is its own anchor: active, and aria-current, on its query. */}
+        <a
+          href={href()}
+          classList={{ "menu-active": active() }}
+          aria-current={active() ? "page" : undefined}
+          onClick={(e) => {
+            if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+            e.preventDefault();
+            navigate(entryHref(props.entry));
+          }}
+        >
+          <span class="flex-1 truncate">{props.entry.label}</span>
+          <EntryCount entry={props.entry} />
+        </a>
+      </Show>
     </Show>
   );
 }
@@ -103,7 +129,7 @@ function EntryCount(props: { entry: CatalogEntry }) {
   const q = useQuery(() => ({ queryKey: [...props.entry.key!], queryFn: props.entry.list! }));
   return (
     <Show when={q.data}>
-      {(rows) => <span class="ml-auto font-data tnum text-xs text-base-content/45">{rows().length}</span>}
+      {(rows) => <span class="ml-auto font-data tnum text-xs text-base-content/45">{entryCount(props.entry, rows())}</span>}
     </Show>
   );
 }

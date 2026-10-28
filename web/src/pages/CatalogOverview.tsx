@@ -3,7 +3,7 @@ import { A } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
 import Page from "../components/Page";
 import { useMe, can } from "../lib/auth";
-import { visibleGroups, type CatalogEntry, type CatalogGroup } from "../lib/catalog";
+import { entryCount, entryHref, visibleGroups, type CatalogEntry, type CatalogGroup } from "../lib/catalog";
 
 // The Catalog overview (/catalog): the landing the shell's Overview entry
 // opens, inside the shell's pane. One card per catalog group, DERIVED from the
@@ -15,7 +15,8 @@ import { visibleGroups, type CatalogEntry, type CatalogGroup } from "../lib/cata
 // registries live through the list pages' own query keys (learning-tool
 // doctrine: the numbers are this fleet's real rows, not decoration); a soon
 // entry reads soon without a count, linking when its stub page is routed
-// (Rules, Notifications) and inert when none exists (the Templates slots). One
+// (Notifications) and inert when none exists. A filtered slot (the Templates
+// slots) links with its query and counts its own kinds of the shared list. One
 // query per registry, so a failing fetch marks its own row and nothing else
 // (the #598 lesson).
 
@@ -83,7 +84,7 @@ function EntryRow(props: { entry: CatalogEntry; registryName: string }) {
         </div>
       }
     >
-      <A href={props.entry.path!} class={`${rowClass} hover:bg-base-300`} data-entry={props.entry.label}>
+      <A href={entryHref(props.entry)} class={`${rowClass} hover:bg-base-300`} data-entry={props.entry.label}>
         {inner()}
       </A>
     </Show>
@@ -109,7 +110,7 @@ function Count(props: { entry: CatalogEntry; name: string }) {
       }
     >
       <Show when={q.data} fallback={<span class="skeleton h-4 w-7" aria-hidden="true" />}>
-        {(rows) => <span class="tnum badge badge-ghost badge-sm">{rows().length}</span>}
+        {(rows) => <span class="tnum badge badge-ghost badge-sm">{entryCount(props.entry, rows())}</span>}
       </Show>
     </Show>
   );

@@ -90,7 +90,7 @@ each role carrying an **impact**. See [implementation status](/architecture/stat
   how support and inventory go and find a box on site. It ties systems and components to a place, classified by `location_type`, its
   only shape-definer (no template). A starter type set ships seeded and platform-owned, an
   operator's change to one held as a fork over it
-  ([the seed model](#the-seed-model-forked-templates-versus-canonical-catalogs)), read at
+  ([the seed model](#the-seed-model-templates-versus-canonical-catalogs)), read at
   `GET /location-types` to feed the location form's type picker. Each type carries an `icon` (a glyph
   key like `building`; unknown keys fall back to `map-pin`) rendered in the tree, and
   `allowed_parent_types` (a set of `location_type` ids and/or the reserved `root` sentinel): empty is
@@ -499,18 +499,18 @@ redundancy knob** beneath it. Staffing stays readable **without** health (a role
 assigned is under-staffed today); health adds whether the assigned components can currently do the job
 ([ADR-0050](/architecture/decisions/#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain)).
 
-### The seed model: forked templates versus canonical catalogs
+### The seed model: templates versus canonical catalogs
 
 Shipped content is two kinds, never conflated:
 
-- **Example content** (a `standard`) is created by **forking a template** from the catalog the
-  binary ships ([templates](/architecture/templates/), `POST /standards:fork`). The fork is
+- **Example content** (a `standard`) is **created from a template** in the catalog the binary ships
+  ([templates](/architecture/templates/), `POST /standards:createFromTemplate`). The copy is
   **one-time, no inheritance**: nothing points back at the template, so it can improve per release
   without touching a tenant. What lands is an **operator-owned** row (`official: false`) with the
   template's roles, choices and contract lines, written whole in one transaction and audited once as a
-  fork naming the template. The boot seed plants **no** standard: a fresh install holds none until an
-  operator forks one, and a standard an older release planted is an ordinary operator row, renameable
-  and deletable, that no boot brings back
+  create whose detail carries `from_template`. The boot seed plants **no** standard: a fresh install
+  holds none until an operator creates one, and a standard an older release planted is an ordinary
+  operator row, renameable and deletable, that no boot brings back
   ([ADR-0827](/architecture/decisions/#adr-0827-the-template-layer-owns-the-clone-model-and-the-componenttemplate-authoring-model-is-superseded-by-the-driver-spec)).
 - **Canonical vocabulary** (the [`metric_type` and `property_type` catalogs](/architecture/properties/),
   the `event_type`
@@ -523,8 +523,8 @@ Shipped content is two kinds, never conflated:
   [registry fork](/architecture/decisions/#adr-0095-an-operator-forks-a-shipped-registry-row-instead-of-the-platform-writing-it)
   rather than by owning the row, which is what lets a release WITHDRAW a shipped value.
 
-**Forking applies to template -> row, never to classifier -> instance**: a system conforms, never
-forks.
+**Copying applies to template -> row, never to classifier -> instance**: a system conforms, never
+copies.
 
 #### An operator forks a shipped row instead of the platform writing it
 

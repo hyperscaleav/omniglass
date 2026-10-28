@@ -574,7 +574,7 @@ func (p *PG) DeleteSystemRole(ctx context.Context, actorID, ownerKind, ownerID, 
 // SeedSystemRole installs one declared role on the insert-if-absent seed lane:
 // inserted when absent, never reasserted. Deliberately unaudited. No boot
 // plants a standard any more (ADR-0827), so it has no production caller; a
-// standard's roles arrive through the audited fork (ForkStandard), and this
+// standard's roles arrive through the audited create (CreateStandardFromTemplate), and this
 // lane's retirement is #1332.
 //
 // It is one transaction (#508, ADR-0508): the role and its typed-slot sets land

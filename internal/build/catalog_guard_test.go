@@ -36,6 +36,10 @@ func TestTestsDoNotBorrowTheSeedCatalog(t *testing.T) {
 		// The template dry-run holds the catalog's templates to the seeded
 		// catalogs, so naming a seeded SKU is what it tests (#1323).
 		"internal/template/check_test.go": true,
+		// Instantiating the shipped templates is what these drive, and a
+		// shipped template names shipped products (#1326 to #1328).
+		"internal/template/from_template_test.go": true,
+		"internal/api/from_template_e2e_test.go":  true,
 	}
 
 	raw, err := seed.FactsJSON()

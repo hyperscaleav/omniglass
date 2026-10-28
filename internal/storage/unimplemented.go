@@ -234,7 +234,7 @@ func (UnimplementedGateway) DeleteLocation(context.Context, string, string, scop
 	return nil
 }
 func (UnimplementedGateway) UpsertStandard(context.Context, Standard) error { return nil }
-func (UnimplementedGateway) ForkStandard(context.Context, string, StandardFork) (*Standard, error) {
+func (UnimplementedGateway) CreateStandardFromTemplate(context.Context, string, StandardFromTemplate) (*Standard, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) ListStandards(context.Context) ([]Standard, error) {
@@ -518,6 +518,9 @@ func (UnimplementedGateway) SimAddressesInUse(context.Context) (map[string]bool,
 }
 func (UnimplementedGateway) AuditSimOperation(context.Context, string, string, any) error { return nil }
 func (UnimplementedGateway) CreateSimSystem(context.Context, string, SimSystemSpec, SimSystemScopes) (*SimSystem, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) CreatePlan(context.Context, string, Plan, PlanScopes) (*Planned, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) WithSimAddressLock(_ context.Context, fn func() error) error {

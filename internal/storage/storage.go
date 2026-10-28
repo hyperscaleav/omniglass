@@ -273,9 +273,9 @@ type Gateway interface {
 	// The system tier: the standard catalog (the blueprint a system conforms to,
 	// the system-side counterpart of product) and scoped CRUD, mirroring locations.
 	UpsertStandard(ctx context.Context, st Standard) error
-	// ForkStandard writes a whole standard from a template in one
-	// transaction, audited once as a fork naming the template (#827).
-	ForkStandard(ctx context.Context, actorID string, f StandardFork) (*Standard, error)
+	// CreateStandardFromTemplate writes a whole standard from a template in one
+	// transaction, audited once as a create carrying from_template, the template (#827).
+	CreateStandardFromTemplate(ctx context.Context, actorID string, f StandardFromTemplate) (*Standard, error)
 	ListStandards(ctx context.Context) ([]Standard, error)
 	GetStandard(ctx context.Context, id string) (*Standard, error)
 	CreateStandard(ctx context.Context, actorID string, st Standard) (*Standard, error)
@@ -739,6 +739,10 @@ type Gateway interface {
 	// CreateSimSystem creates a simulated system whole (the system, its
 	// components, their endpoints and role assignments) in one transaction.
 	CreateSimSystem(ctx context.Context, actorID string, spec SimSystemSpec, sc SimSystemScopes) (*SimSystem, error)
+	// CreatePlan lands a planned set of places, systems and components whole,
+	// in one transaction, each piece the ordinary create in the caller's
+	// scope with its own audit row (#827).
+	CreatePlan(ctx context.Context, actorID string, plan Plan, sc PlanScopes) (*Planned, error)
 	// ResolveTaskOwner binds a task's owner component and confines the node to its
 	// own tasks, for the telemetry ingest consumer.
 	ResolveTaskOwner(ctx context.Context, taskID, nodeName string) (TaskOwner, bool, error)

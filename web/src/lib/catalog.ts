@@ -14,6 +14,7 @@ import { CALC_RULES_KEY, listCalcRules } from "./calc_rules";
 import { EVENT_RULES_KEY, listEventRules } from "./event_rules";
 import { severityLevelsKey, listSeverityLevels } from "./severity";
 import { TAGS_KEY, listTags } from "./tags";
+import { TEMPLATES_KEY, type Template, type TemplateKind, listTemplates, ofKinds, templatesHref } from "./templates";
 import { type Me, can } from "./auth";
 import { type BladeLock } from "./blades";
 
@@ -50,7 +51,51 @@ export type CatalogEntry = {
   // page uses (one cache, one failure domain per registry).
   key?: readonly string[];
   list?: () => Promise<readonly unknown[]>;
+  // A slot that opens its page filtered (the Templates slots, #1329): the
+  // query string the link carries, and the rows of the shared list it counts.
+  // The page and every slot still share the one list key; only the count
+  // filters.
+  query?: string;
+  count?: (rows: readonly unknown[]) => number;
 };
+
+// A Templates slot over the one catalog list, opening /templates filtered to
+// its kinds and counting only those.
+function templatesSlot(kinds: TemplateKind[]): CatalogEntry {
+  return {
+    label: "Templates",
+    path: "/templates",
+    query: templatesHref(kinds).slice("/templates".length),
+    gate: ["template", "read"],
+    key: TEMPLATES_KEY,
+    list: listTemplates,
+    count: (rows) => ofKinds(rows as Template[], kinds).length,
+  };
+}
+
+// entryHref is where an entry's link goes: its route plus any filter it opens.
+export function entryHref(e: CatalogEntry): string {
+  return `${e.path ?? ""}${e.query ?? ""}`;
+}
+
+// entryActive says whether the current address is this entry's: the route
+// matches, and for a filtered slot so does its query, so the three Templates
+// slots each light only for their own kinds.
+export function entryActive(e: CatalogEntry, pathname: string, search: string): boolean {
+  if (!e.path) return false;
+  const path = pathname.replace(/^\/web/, "") || "/";
+  if (path !== e.path && !path.startsWith(`${e.path}/`)) return false;
+  if (!e.query) return true;
+  const want = new URLSearchParams(e.query);
+  const have = new URLSearchParams(search);
+  for (const [k, v] of want) if (have.get(k) !== v) return false;
+  return true;
+}
+
+// entryCount is the number an entry shows over its loaded list.
+export function entryCount(e: CatalogEntry, rows: readonly unknown[]): number {
+  return e.count ? e.count(rows) : rows.length;
+}
 
 export type CatalogGroup = {
   header: string;
@@ -59,9 +104,12 @@ export type CatalogGroup = {
   entries: CatalogEntry[];
 };
 
-// Each soon slot names its tracking issue (the no-bare-TODO rule): the
-// template registries are #615 (component), #616 (system), #617 (location);
-// Rules went live with the event rules (#921), notifications with #618. Group copy follows the direction axis: Telemetry is what you
+// Each soon slot names its tracking issue (the no-bare-TODO rule). None is
+// left: Rules went live with the event rules (#921), notifications with #618,
+// and the three Templates slots with the template catalog (#1329, closing #615,
+// #616 and #617): each opens /templates filtered, and the Systems slot reaches
+// standard templates too, since a standard is the system-side blueprint a
+// system template is built to. Group copy follows the direction axis: Telemetry is what you
 // receive, Actions is what you send or run.
 export const CATALOG_GROUPS: CatalogGroup[] = [
   {
@@ -98,7 +146,7 @@ export const CATALOG_GROUPS: CatalogGroup[] = [
       // Locations' own Types entry below). The device-class genus registry
       // (ADR-0085): a product is classified under one of its nodes.
       { label: "Types", path: "/component-types", gate: ["component_type", "read"], key: COMPONENT_TYPES_KEY, list: listComponentTypes },
-      { label: "Templates", soon: true, issue: 615 },
+      templatesSlot(["component_template"]),
     ],
   },
   {
@@ -110,7 +158,7 @@ export const CATALOG_GROUPS: CatalogGroup[] = [
       // Components and Locations groups). The coarse space taxonomy
       // (ADR-0096): a system is classified as one of its nodes.
       { label: "Types", path: "/system-types", gate: ["system_type", "read"], key: SYSTEM_TYPES_KEY, list: listSystemTypes },
-      { label: "Templates", soon: true, issue: 616 },
+      templatesSlot(["standard_template", "system_template"]),
     ],
   },
   {
@@ -119,7 +167,7 @@ export const CATALOG_GROUPS: CatalogGroup[] = [
     entries: [
       // "Types": the Locations header already says where it lives.
       { label: "Types", path: "/location-types", gate: ["location_type", "read"], key: LOCATION_TYPES_KEY, list: listLocationTypes },
-      { label: "Templates", soon: true, issue: 617 },
+      templatesSlot(["place_template"]),
     ],
   },
   {
