@@ -2998,6 +2998,8 @@ Apply embedded database migrations (dbmate)
 omniglass migrate
 ```
 
+Applies every embedded migration the database has not run. Migrations only move forward, so a database a newer release migrated is refused, naming its newest migration and the newest this binary knows: run that release or a later one.
+
 ## `omniglass node`
 
 Commands for the node resource
