@@ -9,7 +9,9 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/collection"
 )
 
-// registryCache keeps the ingest sample registry between batches (#1279).
+// registryCache keeps the ingest sample registry between batches (#1279),
+// and beside it the property type names some command type targets (#1299),
+// which every batch hands LandBatch so the property lane need not read them.
 // Building it reads all three catalogs; a batch instead reads the catalogs'
 // fingerprint (storage.CatalogFingerprint, one short value) and reuses the
 // registry while the fingerprint holds, so a catalog change is honored by the
@@ -30,6 +32,7 @@ type registryCache struct {
 	mu          sync.Mutex
 	fingerprint string
 	reg         collection.Registry
+	targeted    map[string]bool
 	// warnedAt is when the registry's collisions were last logged; zero
 	// until a registry with one is built.
 	warnedAt time.Time
@@ -41,34 +44,39 @@ type registryCache struct {
 // collisionReminder is how often a collision that persists is logged again.
 const collisionReminder = time.Hour
 
-func (c *registryCache) get(ctx context.Context, store Store) (collection.Registry, error) {
+func (c *registryCache) get(ctx context.Context, store Store) (collection.Registry, map[string]bool, error) {
 	fp, err := store.CatalogFingerprint(ctx)
 	if err != nil {
-		return collection.Registry{}, err
+		return collection.Registry{}, nil, err
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if fp != "" && fp == c.fingerprint {
 		c.warnCollisions()
-		return c.reg, nil
+		return c.reg, c.targeted, nil
 	}
 	metricTypes, err := store.ListMetricTypes(ctx)
 	if err != nil {
-		return collection.Registry{}, err
+		return collection.Registry{}, nil, err
 	}
 	properties, err := store.ListPropertyTypes(ctx)
 	if err != nil {
-		return collection.Registry{}, err
+		return collection.Registry{}, nil, err
 	}
 	eventTypes, err := store.ListEventTypes(ctx)
 	if err != nil {
-		return collection.Registry{}, err
+		return collection.Registry{}, nil, err
+	}
+	targeted, err := store.CommandTargetedProperties(ctx)
+	if err != nil {
+		return collection.Registry{}, nil, err
 	}
 	c.reg = collection.NewRegistry(metricTypes, properties, eventTypes)
+	c.targeted = targeted
 	c.fingerprint = fp
 	c.warnedAt = time.Time{}
 	c.warnCollisions()
-	return c.reg, nil
+	return c.reg, c.targeted, nil
 }
 
 // warnCollisions logs the registry's collisions if it has any and they were

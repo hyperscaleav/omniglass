@@ -393,9 +393,13 @@ func (p *PG) sweepSeries(ctx context.Context, ownerKind, arc, commandType, insta
 }
 
 // commandTargetedProperties is the set of property types some command type
-// targets: the observations settlement has to look at.
+// targets: the observations settlement has to look at. A batch that carries
+// the set (IngestBatch.CommandTargeted, #1299) answers from it.
 func commandTargetedProperties(ctx context.Context, q querier) (map[string]bool, error) {
-	rows, err := q.Query(ctx, `select distinct pt.name from command_type ct join property_type pt on pt.id = ct.target_property_type_id`)
+	if b, ok := q.(*batchTx); ok && b.targeted != nil {
+		return b.targeted, nil
+	}
+	rows, err := q.Query(ctx, commandTargetedSQL)
 	if err != nil {
 		return nil, fmt.Errorf("storage: command-targeted properties: %w", err)
 	}

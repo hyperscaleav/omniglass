@@ -376,10 +376,12 @@ func (s *Server) land(ctx context.Context, id string, ev *ogv1.TelemetryBatch, b
 	if bind.SampleOwner != nil && sampleCount(ev) > 0 {
 		// The registry is kept between batches and rebuilt only when the
 		// catalogs change (#1279): one fingerprint read, not three catalogs.
-		reg, err := s.registry.get(ctx, s.store)
+		// The command-targeted property names ride with it (#1299).
+		reg, targeted, err := s.registry.get(ctx, s.store)
 		if err != nil {
 			return err
 		}
+		batch.CommandTargeted = targeted
 		// Each lane derives against its own catalog (#594): the array the sample rode
 		// says which table it lands in, and the catalog row says what a valid value
 		// looks like. All three survive the SAME owner binding and reject-not-project;
