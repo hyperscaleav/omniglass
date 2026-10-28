@@ -252,6 +252,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/me/action-rules:testDraft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test a draft alarm subscription against your recent alarms
+         * @description Judges a draft's on (default raised) and when (default always) against your most recent alarms on components you can read, before it is saved: for each transition, whether it would have told you. Writes and sends nothing. Gated by notification:subscribe.
+         */
+        post: operations["test-auth-me-action-rules-draft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/me/avatar": {
         parameters: {
             query?: never;
@@ -11475,6 +11495,23 @@ export interface components {
             /** @description The system type the system is classified as */
             system_type?: string;
         };
+        TestDraftInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/TestDraftInputBody.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: int64
+             * @description How many of your most recent alarms to judge (default 20)
+             */
+            limit?: number;
+            /** @description The transitions to judge (default raised) */
+            on?: string[];
+            /** @description The predicate to judge (default always) */
+            when?: string;
+        };
         TestNotificationTargetOutputBody: {
             /**
              * Format: uri
@@ -12801,6 +12838,39 @@ export interface operations {
         requestBody?: {
             content: {
                 "application/json": components["schemas"]["TestPersonalRuleInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestPersonalRuleOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "test-auth-me-action-rules-draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["TestDraftInputBody"];
             };
         };
         responses: {

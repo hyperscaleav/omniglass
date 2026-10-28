@@ -295,12 +295,21 @@ type RuleMatch struct {
 // every transition the rule fires on that the alarm has had, whether the
 // when holds over that transition's facts. It writes nothing and sends
 // nothing: the teaching surface of a subscription.
+//
+// An empty ref judges the draft alone (a subscription not yet saved): its on
+// defaults to raised, its when to always.
 func (p *PG) TestPersonalRule(ctx context.Context, ownerID, ref string, draft RuleDraft, read scope.Set, limit int) ([]RuleMatch, error) {
-	r, err := p.GetPersonalRule(ctx, ownerID, ref)
-	if err != nil {
-		return nil, err
+	on, src := []string{TransitionRaised}, ""
+	if ref != "" {
+		r, err := p.GetPersonalRule(ctx, ownerID, ref)
+		if err != nil {
+			return nil, err
+		}
+		on, src = r.On, r.When
+	} else if !isUUID(ownerID) {
+		return nil, ErrActionRuleNotFound
 	}
-	on, src := r.On, r.When
+	var err error
 	if draft.On != nil {
 		if on, err = checkTransitions(*draft.On); err != nil {
 			return nil, err

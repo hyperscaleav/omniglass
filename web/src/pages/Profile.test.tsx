@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, fireEvent, screen, waitFor } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
+import { Router, Route } from "@solidjs/router";
 import Profile from "./Profile";
 import { ME_KEY, type Me } from "../lib/auth";
 
@@ -25,7 +26,9 @@ function mount(hasAvatar: boolean) {
   qc.setQueryData([...ME_KEY], meWith(hasAvatar));
   return render(() => (
     <QueryClientProvider client={qc}>
-      <Profile />
+      <Router>
+        <Route path="*" component={Profile} />
+      </Router>
     </QueryClientProvider>
   ));
 }

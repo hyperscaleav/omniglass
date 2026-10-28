@@ -1062,6 +1062,18 @@ component exactly as the alarm reads are) and `POST /notifications/{id}:retry` (
 the component tier). An alarm's `:timeline` carries each notification after the edge that queued it
 ([alarms and actions](/architecture/alarms-actions/#notifications)).
 
+People are recipients too (#1341). A target's kind may be `email` (a shared mailbox) or name people,
+`principal_group` or `principal`, on the channels `inbox` and `email`; binding people takes the
+directory's admin-tier read. The caller's own inbox is `GET /auth/me/notifications` with
+`POST /auth/me/notifications/{id}:markRead` and `POST /auth/me/notifications:markAllRead`
+(`notification:read`, the caller's rows alone, scoped at read). A person's own subscriptions are
+`/auth/me/action-rules` (list, get, create, patch, delete, and `:test` against their recent alarms, on
+a saved rule or, `POST /auth/me/action-rules:testDraft`, on a draft not yet saved),
+under `notification:subscribe`, which `viewer` carries; another user's rule is a 404. A member of a
+group a rule targets opts out with `POST /action-rules/{name}:optOut` and back in with `:optIn`, where
+the rule allows it. A person-addressed row names its `recipient` only to that person and to the
+principal directory's readers.
+
 - `GET /components/{name}/alarms/{id}:timeline` (**`alarm:read`**, the component's read scope
   injected, a non-disclosing **404** outside it or for an alarm not on the component) returns the
   alarm's history oldest first: `entries` of `{at, kind (event|audit), what, actor?, rule?, instance?,

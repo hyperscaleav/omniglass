@@ -402,6 +402,28 @@ Example:
 omniglass auth me action-rule test <name>
 ```
 
+##### `omniglass auth me action-rule testDraft`
+
+Test a draft alarm subscription against your recent alarms
+
+```
+omniglass auth me action-rule testDraft [flags]
+```
+
+Judges a draft's on (default raised) and when (default always) against your most recent alarms on components you can read, before it is saved: for each transition, whether it would have told you. Writes and sends nothing. Gated by notification:subscribe.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--limit` | int | `0` | How many of your most recent alarms to judge (default 20) |
+| `--on` | string | (none) | The transitions to judge (default raised) |
+| `--when` | string | (none) | The predicate to judge (default always) |
+
+Example:
+
+```sh
+omniglass auth me action-rule testDraft
+```
+
 ##### `omniglass auth me action-rule update`
 
 Change or pause one of your alarm subscriptions

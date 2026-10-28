@@ -1,9 +1,11 @@
 import { hostPlatform, shortcutModifier, shortcutHint } from "../lib/platform";
 import { Search } from "./icons";
 import Button from "./Button";
+import InboxIndicator from "./InboxIndicator";
 
-// The sticky top bar (daisyUI navbar): the current section label and the
-// command-palette trigger (a global jump, distinct from a page's own filter).
+// The sticky top bar (daisyUI navbar): the current section label, the
+// command-palette trigger (a global jump, distinct from a page's own filter),
+// and the inbox bell with its unread count.
 export default function TopBar(props: { section: string; onOpenPalette: () => void }) {
   // Label the palette shortcut with the host-native modifier (⌘ on mac, Ctrl else).
   const mod = shortcutModifier(hostPlatform());
@@ -25,6 +27,7 @@ export default function TopBar(props: { section: string; onOpenPalette: () => vo
         </span>
       </button>
       <Button square icon={Search} onClick={props.onOpenPalette} title="Search and jump" label="Search and jump" class="sm:hidden" />
+      <InboxIndicator />
     </header>
   );
 }

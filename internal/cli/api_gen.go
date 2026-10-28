@@ -578,6 +578,39 @@ func generatedCommands() []*cobra.Command {
 				}())
 				parent.AddCommand(func() *cobra.Command {
 					cmd := func() *cobra.Command {
+						var fLimit int
+						var fOn string
+						var fWhen string
+						cmd := &cobra.Command{
+							Use:     "testDraft",
+							Short:   "Test a draft alarm subscription against your recent alarms",
+							Long:    "Judges a draft's on (default raised) and when (default always) against your most recent alarms on components you can read, before it is saved: for each transition, whether it would have told you. Writes and sends nothing. Gated by notification:subscribe.",
+							Example: "  omniglass auth me action-rule testDraft",
+							Args:    pathArgs(0),
+							RunE: func(cmd *cobra.Command, args []string) error {
+								path := fmt.Sprintf("/api/v1/auth/me/action-rules:testDraft")
+								body := map[string]any{}
+								if cmd.Flags().Changed("limit") {
+									body["limit"] = fLimit
+								}
+								if cmd.Flags().Changed("on") {
+									body["on"] = jsonOrString(fOn)
+								}
+								if cmd.Flags().Changed("when") {
+									body["when"] = fWhen
+								}
+								return runAPICommand(cmd, "POST", path, body)
+							},
+						}
+						cmd.Flags().IntVar(&fLimit, "limit", 0, "How many of your most recent alarms to judge (default 20)")
+						cmd.Flags().StringVar(&fOn, "on", "", "The transitions to judge (default raised)")
+						cmd.Flags().StringVar(&fWhen, "when", "", "The predicate to judge (default always)")
+						return cmd
+					}()
+					return cmd
+				}())
+				parent.AddCommand(func() *cobra.Command {
+					cmd := func() *cobra.Command {
 						var fChannels string
 						var fDescription string
 						var fEnabled bool

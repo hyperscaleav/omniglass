@@ -14663,6 +14663,39 @@
         ],
         "type": "object"
       },
+      "TestDraftInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/TestDraftInputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "limit": {
+            "description": "How many of your most recent alarms to judge (default 20)",
+            "format": "int64",
+            "maximum": 50,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "on": {
+            "description": "The transitions to judge (default raised)",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "when": {
+            "description": "The predicate to judge (default always)",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "TestNotificationTargetOutputBody": {
         "additionalProperties": false,
         "properties": {
@@ -16990,6 +17023,45 @@
           }
         },
         "summary": "Test one of your alarm subscriptions against your recent alarms",
+        "x-omniglass-permission": "notification:subscribe"
+      }
+    },
+    "/auth/me/action-rules:testDraft": {
+      "post": {
+        "description": "Judges a draft's on (default raised) and when (default always) against your most recent alarms on components you can read, before it is saved: for each transition, whether it would have told you. Writes and sends nothing. Gated by notification:subscribe.",
+        "operationId": "test-auth-me-action-rules-draft",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestDraftInputBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestPersonalRuleOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Test a draft alarm subscription against your recent alarms",
         "x-omniglass-permission": "notification:subscribe"
       }
     },

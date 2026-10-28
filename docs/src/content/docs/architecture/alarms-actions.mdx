@@ -626,7 +626,7 @@ skipped before the rule's `when` runs, so neither a delivery nor the `when`'s ow
 is a row too) can tell them anything about it
 ([ADR-1341](/architecture/decisions/#adr-1341-a-person-is-told-about-an-alarm-only-while-they-can-read-it-groups-expand-at-queue-time-scope-is-checked-there-and-again-at-delivery),
 decision 4). Its email rows are judged again at send like any person's. `:test` judges the rule, or a
-draft of its `on` and `when`, against the owner's most recent alarms on components they can read and
+draft of its `on` and `when` (`POST /auth/me/action-rules:testDraft` judges a draft not yet saved), against the owner's most recent alarms on components they can read and
 says which it would have told them about; it writes and sends nothing. A personal rule's row is read
 like any person-addressed row, and its rule name, which can say whose it is, is withheld with the
 recipient, as is any person-addressed row's failure reason (a relay's refusal can quote the address).

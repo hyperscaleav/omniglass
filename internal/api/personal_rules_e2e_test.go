@@ -87,3 +87,21 @@ func TestAMemberOptsOutOfAGroupPageOnlyWhereAllowed(t *testing.T) {
 		t.Fatalf("after opting back in alice has %d, want 1", len(a.Notifications))
 	}
 }
+
+// A draft is tested before it is ever saved, by a person who owns no rule.
+func TestADraftSubscriptionIsTestedBeforeItIsSaved(t *testing.T) {
+	p := newPeople(t)
+	p.human("bob", "viewer", "component", p.comps["display-2"])
+	p.c.do(p.owner, http.MethodPost, "/components/display-1/alarms", map[string]any{"severity": "high", "message": "no video"}, http.StatusCreated)
+	p.c.do(p.owner, http.MethodPost, "/components/display-2/alarms", map[string]any{"severity": "high", "message": "no audio"}, http.StatusCreated)
+	var tested struct {
+		Matches []struct {
+			Component string `json:"component"`
+			Matched   bool   `json:"matched"`
+		} `json:"matches"`
+	}
+	_ = json.Unmarshal(p.c.do(p.toks["bob"], http.MethodPost, "/auth/me/action-rules:testDraft", map[string]any{"when": "severity_rank >= 40"}, http.StatusOK), &tested)
+	if len(tested.Matches) != 1 || tested.Matches[0].Component != "display-2" || !tested.Matches[0].Matched {
+		t.Fatalf("bob's draft :test = %+v, want his display-2 alarm, matched", tested)
+	}
+}

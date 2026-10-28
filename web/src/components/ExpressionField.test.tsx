@@ -269,6 +269,16 @@ describe("ExpressionField", () => {
     expect(calls.length).toBe(0);
     expect(screen.getByText(/Choose what the rule reads/)).toBeTruthy();
   });
+
+  // The action site (an action rule's when, #1355) is typed by the alarm's
+  // fixed facts, not by a sample key: a keyless field checks with no key sent.
+  it("checks a keyless site with no key at all", async () => {
+    const { calls, checks } = mount("value > 40", "", false, { keyless: true, site: "action" });
+    await waitFor(() => expect(calls.some((c) => c.source === "value > 40")).toBe(true));
+    expect(calls.every((c) => !("key" in c))).toBe(true);
+    await waitFor(() => expect(checks.at(-1)).toBe(true));
+    expect(screen.queryByText(/Choose what the rule reads/)).toBeNull();
+  });
 });
 
 describe("ExpressionField's verdict", () => {

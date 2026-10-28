@@ -58,6 +58,11 @@ export const ROUTE_MANIFEST: RouteEntry[] = [
   { path: "/files", shell: "protected", page: "Files", smoke: "/files" },
   { path: "/files/:id", shell: "protected", page: "Files", smoke: `/files/${UNKNOWN_UUID}` },
   { path: "/profile", shell: "protected", page: "Profile", smoke: "/profile" },
+  // A person's own alarm subscriptions (#1355), in the profile area like the
+  // account they belong to; the page gates its writes on notification:subscribe.
+  { path: "/profile/subscriptions", shell: "protected", page: "Subscriptions", smoke: "/profile/subscriptions" },
+  // The console inbox (#1355): the bell in the top bar opens it.
+  { path: "/inbox", shell: "protected", page: "Inbox", smoke: "/inbox" },
   { path: "/users", shell: "protected", page: "Users", smoke: "/users" },
   { path: "/roles", shell: "protected", page: "Roles", smoke: "/roles" },
   { path: "/groups", shell: "protected", page: "Groups", smoke: "/groups" },

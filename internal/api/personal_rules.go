@@ -220,6 +220,49 @@ func registerPersonalRuleRoutes(api huma.API, a *authenticator, gw storage.Gatew
 	})
 }
 
+// registerDraftTestRoute wires :test on the collection: a draft judged
+// before it is ever saved, the way a person learns a predicate against their
+// own alarms while writing their first subscription.
+func registerDraftTestRoute(api huma.API, a *authenticator, gw storage.Gateway) {
+	huma.Register(api, a.gated(huma.Operation{
+		OperationID: "test-auth-me-action-rules-draft",
+		Method:      http.MethodPost,
+		Path:        "/auth/me/action-rules:testDraft",
+		Summary:     "Test a draft alarm subscription against your recent alarms",
+		Description: "Judges a draft's on (default raised) and when (default always) against your most recent alarms on components you can read, before it is saved: for each transition, whether it would have told you. Writes and sends nothing. Gated by notification:subscribe.",
+	}, "notification", "subscribe"), func(ctx context.Context, in *testDraftInput) (*testPersonalRuleOutput, error) {
+		var draft storage.RuleDraft
+		limit := 0
+		if in.Body != nil {
+			draft = storage.RuleDraft{On: in.Body.On, When: in.Body.When}
+			limit = in.Body.Limit
+		}
+		ms, err := gw.TestPersonalRule(ctx, callerID(ctx), "", draft, a.scopeFor(ctx, "component", "read"), limit)
+		if err != nil {
+			return nil, mapPersonalRuleErr(err)
+		}
+		return toMatches(ms), nil
+	})
+}
+
+type testDraftInput struct {
+	Body *struct {
+		On    *[]string `json:"on,omitempty" required:"false" doc:"The transitions to judge (default raised)"`
+		When  *string   `json:"when,omitempty" required:"false" doc:"The predicate to judge (default always)"`
+		Limit int       `json:"limit,omitempty" required:"false" minimum:"0" maximum:"50" doc:"How many of your most recent alarms to judge (default 20)"`
+	} `required:"false"`
+}
+
+func toMatches(ms []storage.RuleMatch) *testPersonalRuleOutput {
+	out := &testPersonalRuleOutput{}
+	out.Body.Matches = make([]ruleMatchBody, 0, len(ms))
+	for _, m := range ms {
+		out.Body.Matches = append(out.Body.Matches, ruleMatchBody{Alarm: m.AlarmID, Component: m.ComponentName, Severity: m.Severity,
+			Message: m.Message, Transition: m.Transition, At: m.At, Matched: m.Matched, Error: m.Error})
+	}
+	return out
+}
+
 func mapPersonalRuleErr(err error) error {
 	if errors.Is(err, storage.ErrPersonalRuleCap) {
 		return huma.Error409Conflict("you own the most personal rules a person may (50); delete one first")
