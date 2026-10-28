@@ -70,4 +70,24 @@ else
   warn "node not installed (CI pins major $NODE_MAJOR_PIN): web tests and make gen's client regeneration will fail."
 fi
 
+# Agent identity (#1281): on a worker wired for the omniglass-agent App, prove
+# gh and git act as the App before any work is authored. Unset, the session is
+# the architect's own and there is nothing to check.
+if [ -n "${AGENT_APP_ID:-}" ]; then
+  root="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
+  if ! who="$(bash "$root/scripts/agent-token.sh" whoami 2>&1)"; then
+    warn "AGENT_APP_ID is set but no App token mints ($who): gh and git would act as whoever is logged in. See docs/contributing/autopilot.md#who-acts-as-whom."
+  else
+    case "$(command -v gh)" in
+      */scripts/agent-bin/gh) ;;
+      *) warn "gh resolves to $(command -v gh), not scripts/agent-bin/gh: gh calls act as the logged-in user, not the App. Put $root/scripts/agent-bin first on PATH." ;;
+    esac
+    author="$(git -C "$root" config user.name 2>/dev/null || true)"
+    case "$author" in
+      *"[bot]") ;;
+      *) warn "git author is '$author', not the App's bot: run scripts/agent-token.sh setup in $root." ;;
+    esac
+  fi
+fi
+
 exit 0

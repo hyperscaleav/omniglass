@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# gh, as the omniglass-agent App (#1281). Put scripts/agent-bin first on PATH in
+# an agent worker's environment and every gh call, the skills' and board.sh's
+# included, runs the real gh with a fresh installation token instead of the
+# architect's login. A token is minted (or read from cache) per call, so a long
+# session never holds a stale one.
+set -euo pipefail
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+real=""
+IFS=: read -ra dirs <<<"${PATH:-}"
+for d in "${dirs[@]}"; do
+  [ -n "$d" ] || continue
+  [ "$(cd "$d" 2>/dev/null && pwd)" = "$here" ] && continue
+  if [ -x "$d/gh" ]; then
+    real="$d/gh"
+    break
+  fi
+done
+[ -n "$real" ] || {
+  printf 'agent gh: no gh on PATH besides this shim\n' >&2
+  exit 127
+}
+
+GH_TOKEN="$("$here/../agent-token.sh" token)"
+export GH_TOKEN
+unset GITHUB_TOKEN
+exec "$real" "$@"

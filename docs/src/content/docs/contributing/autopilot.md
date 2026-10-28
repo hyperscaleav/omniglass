@@ -94,9 +94,10 @@ on a host the architect provisions once, and the session works in the machine's 
 clone of the repo. The worker has to be up, with the bridge connected, when the Routine
 fires; a day it is not is a day the autopilot does not wake.
 
-The worker needs, beyond Go, Node, and Docker: an authenticated `gh` with the `gh image`
-extension (a bridge session reaches GitHub through `gh`, not the cloud sandbox's MCP
-tools), the `d2` binary for any docs diagram, and the Playwright Chromium
+The worker needs, beyond Go, Node, and Docker: `gh` with the `gh image` extension (a
+bridge session reaches GitHub through `gh`, not the cloud sandbox's MCP tools), wired to
+act as the agent App (below), plus `openssl`, `curl` and `jq` for the token script, the
+`d2` binary for any docs diagram, and the Playwright Chromium
 (`cd web && npx playwright install chromium`).
 
 The prompt is intentionally thin, so the behavior lives in the versioned skill rather
@@ -116,3 +117,60 @@ architect approves PRs.
 Changing what the autopilot does is a PR against the skill; changing when it runs is a
 Routine edit. That split is deliberate: the contract is reviewable history, the schedule
 is a dial.
+
+## Who acts as whom
+
+Agent work is authored by its own GitHub identity, the `omniglass-agent` GitHub App, never
+by the architect's account
+([#1281](https://github.com/hyperscaleav/omniglass/issues/1281)). Its commits, pushes, PRs,
+comments and board moves read as `omniglass-agent[bot]`, so the architect reviews and
+approves agent PRs as a real second party, and a leaked agent credential reaches this one
+repo for an hour instead of everything an org owner can touch.
+
+| Surface | Acts as | Why |
+|---|---|---|
+| Autopilot, TPM and implementer sessions on the worker | `omniglass-agent[bot]` | The worker reaches GitHub directly, so the App's token is the one GitHub sees. |
+| Interactive sessions in the cloud sandbox | the architect | The sandbox's egress proxy replaces any GitHub credential with the connected account's (tested on #1281), so an App token there is silently swapped. The architect is driving, so the attribution is honest. |
+| The claude.ai GitHub connector | the architect | It is the architect's approval channel, not an agent. |
+
+So any work that must not act as the architect runs on the worker, never in the sandbox.
+
+The App is installed on this repo only, with contents, pull requests and issues write,
+metadata, actions and checks read, and organization projects write (for
+`scripts/board.sh`); never administration, members, secrets or workflows. The architect
+creates it and keeps its private key on the worker only.
+
+[`scripts/agent-token.sh`](https://github.com/hyperscaleav/omniglass/blob/main/scripts/agent-token.sh)
+is the one place the identity is minted. It signs a JWT with the App's key, trades it for an
+installation token narrowed to this repo, and caches the token privately until ten minutes
+before its hour is up. Two pieces of wiring put it to use:
+
+- **git**: `scripts/agent-token.sh setup`, run once in the worker's standing clone, makes
+  the bot the commit author and the script the only credential helper for github.com (the
+  architect's inherited helper is cleared, not merely outranked). Worktrees share the
+  clone's config, so every slice's worktree inherits it.
+- **gh**: `scripts/agent-bin` goes first on `PATH`. Its `gh` shim runs the real `gh` with a
+  fresh token on every call, so the skills and `board.sh` need no change and a long session
+  never holds a stale token.
+
+The worker's environment (the one the Remote Control bridge starts sessions in) carries:
+
+```bash
+export AGENT_APP_ID=<the App's id>
+export AGENT_APP_KEY=$HOME/.config/omniglass-agent/app.pem   # mode 600
+export PATH=<clone>/scripts/agent-bin:$PATH
+```
+
+With `AGENT_APP_ID` set, the SessionStart check proves at minute zero that a token mints,
+that `gh` resolves to the shim, and that the clone's author is the bot, and says which piece
+is missing if not. Two paths still carry the architect's identity on the worker and stay
+out of agent hands: the claude.ai connectors a signed-in session can reach (disable them
+for the bridge environment), and `gh image`, which uploads with the browser's session
+cookie (the PR that embeds the image is still the bot's, but prefer committing captures
+under `.github/screenshots/`).
+
+The architect merges agent PRs. With a separate author, the `main` ruleset can require one
+approving review from the code owners, and the architect stays on the bypass list (pull
+requests only) to merge their own work; the bot never is. That tightening lands after the
+first bot-authored PR proves the wiring, and whether auto-merge returns is a new decision,
+not this one ([ADR-0859](/architecture/decisions/#adr-0859-the-autopilot-never-arms-auto-merge-the-architects-merge-is-the-approval)).
