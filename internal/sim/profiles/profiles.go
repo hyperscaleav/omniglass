@@ -4,7 +4,10 @@ package profiles
 
 import (
 	"embed"
+	"fmt"
 	"io/fs"
+
+	"gopkg.in/yaml.v3"
 )
 
 //go:embed devices/*.yaml devices/schema.json systems/*.yaml fleets/*.yaml coverage.yaml all:templates
@@ -23,4 +26,30 @@ func sub(dir string) fs.FS {
 		panic(err) // dir is a compile-time constant inside the embed
 	}
 	return f
+}
+
+// Coverage is the catalog's coverage.yaml: the seeded products the simulator
+// does not serve, and why.
+//   - Unsimulated: products on the network that no profile serves yet, each
+//     with the issue that adds one.
+//   - Passive: products with no network interface (so no driver), with
+//     nothing to collect from, each with how the fleet watches them instead.
+type Coverage struct {
+	Unsimulated map[string]string `yaml:"unsimulated"`
+	Passive     map[string]string `yaml:"passive"`
+}
+
+// LoadCoverage reads coverage.yaml. The catalog test (internal/sim) holds the
+// seed's products to it, and the dev fleet's coverage test
+// (internal/devseed) holds every component the lab places to it.
+func LoadCoverage() (Coverage, error) {
+	var c Coverage
+	b, err := fs.ReadFile(FS, "coverage.yaml")
+	if err != nil {
+		return c, fmt.Errorf("profiles: read coverage.yaml: %w", err)
+	}
+	if err := yaml.Unmarshal(b, &c); err != nil {
+		return c, fmt.Errorf("profiles: parse coverage.yaml: %w", err)
+	}
+	return c, nil
 }
