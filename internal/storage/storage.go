@@ -858,6 +858,11 @@ type Gateway interface {
 	// RetentionWindows is the effective retention namespace, the windows the
 	// server's retention pass prunes by (#417).
 	RetentionWindows(ctx context.Context) (settings.RetentionSettings, error)
+	// RecordWebhookCounts lands a window's webhook counts on their endpoints'
+	// components, written by the process (#1369).
+	RecordWebhookCounts(ctx context.Context, counts []WebhookCount) error
+	// CollectionSettings is the effective collection namespace (#1369).
+	CollectionSettings(ctx context.Context) (settings.CollectionSettings, error)
 
 	// Membership: the binding a role attaches to. Many-valued on purpose, since a
 	// shared device belongs to every system it serves, which a single pointer on

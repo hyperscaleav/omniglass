@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
 	"github.com/hyperscaleav/omniglass/internal/collection/rejection"
 	"github.com/hyperscaleav/omniglass/internal/driver"
 )
@@ -379,6 +380,30 @@ func TestAUDPEndpointArmsAtOpenAndOnRecovery(t *testing.T) {
 		}
 		return false
 	})
+}
+
+// A udp endpoint's pushes count into the collection report as a held
+// session's do (#1369), and a socket closed before the window is taken keeps
+// its counts.
+func TestAUDPEndpointReportsItsListenersPushes(t *testing.T) {
+	peer := newComponent(t, nvpAnswers)
+	c := newCapture()
+	m := newDatagramManager(t, c)
+	task := udpListenTask("l1", "ep-1", udpParams(peer.addr()))
+	m.reconcile([]collection.TaskSpec{task})
+	held := m.datagrams["ep-1"]
+	if held == nil {
+		t.Fatal("no socket held for the endpoint")
+	}
+	held.router.Claim(driver.LineMessage("EVT INPUT dp1"))
+	held.router.Unclaimed(driver.LineMessage("NOISE"))
+	m.closeDatagram("ep-1", held, "rebinding")
+	report := newCollectionReport(time.Minute, t0)
+	m.reportPushes(report)
+	got := reportValues(t, report.take(t0.Add(time.Minute), publishTasks([]collection.TaskSpec{task})))["l1"]
+	if got[probekeys.PushMessageCount] != 1 || got[probekeys.PushUnclaimedCount] != 1 {
+		t.Fatalf("window = %v, want 1 claimed and 1 unclaimed after the socket closed", got)
+	}
 }
 
 func TestAUDPEndpointDropsAndLogsAnotherSourcesDatagramsOncePerTick(t *testing.T) {

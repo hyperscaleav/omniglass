@@ -144,3 +144,15 @@ func TestTheTLSKeysAreNodeOnly(t *testing.T) {
 		}
 	}
 }
+
+// The collection telemetry keys (#1369) are the node's account of its own
+// collection: how long its polls took, how many failed, and how many pushed
+// messages its listeners did or did not claim. Only the collecting node
+// observes them, so a push may not forge them.
+func TestTheCollectionTelemetryKeysAreNodeOnly(t *testing.T) {
+	for _, key := range []string{PollDuration, PollFailureCount, PushMessageCount, PushUnclaimedCount} {
+		if !IsNodeOnly(key) {
+			t.Errorf("IsNodeOnly(%q) = false: a push could forge the node's account of its own collection", key)
+		}
+	}
+}

@@ -280,7 +280,8 @@ the API, the two permissions, the two seeded `profile` namespaces, and the Admin
 **Fast-follow (not this slice):** the group and user override rungs and the Profile preferences tab
 (editable, user-scoped Gateway reads), the `settings:lock` permission split for group-admins, the
 remaining `platform`-domain namespaces (`integrations`) with their features (`label` has since
-landed with the acronym dictionary, and `retention` with sample retention, #417), a GitOps read-only mode, and live file reload (SIGHUP)
+landed with the acronym dictionary, `retention` with sample retention, #417, and `collection` with
+each endpoint's report window, #1369), a GitOps read-only mode, and live file reload (SIGHUP)
 instead of restart-to-reload.
 :::
 

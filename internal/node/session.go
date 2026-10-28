@@ -364,6 +364,10 @@ type listenerRouter struct {
 	// clamped counts the claimed messages whose payload time was past the
 	// clamp window ahead of arrival since the last drain (#1145).
 	clamped int
+	// windowClaimed and windowUnclaimed count the messages claimed and not
+	// since the collection report last drained them (#1369), apart from the
+	// per-tick unclaimed count the self-log drains.
+	windowClaimed, windowUnclaimed int
 }
 
 func newListenerRouter(hooks sessionHooks) *listenerRouter {
@@ -393,6 +397,9 @@ func (r *listenerRouter) Claim(msg driver.Message) bool {
 			claimer = &r.listeners[i]
 			break
 		}
+	}
+	if claimer != nil {
+		r.windowClaimed++
 	}
 	r.mu.Unlock()
 	if claimer == nil {
@@ -436,6 +443,7 @@ func (r *listenerRouter) Unclaimed(msg driver.Message) {
 	}
 	r.mu.Lock()
 	r.unclaimed++
+	r.windowUnclaimed++
 	r.last = last
 	policy, task := r.policy, r.logTask
 	r.mu.Unlock()
@@ -459,6 +467,17 @@ func unclaimedLogLine(msg driver.Message, at time.Time) collection.Sample {
 // maxUnclaimedShown bounds the unclaimed message a log line or a fault names:
 // an event's data may be a whole document.
 const maxUnclaimedShown = 256
+
+// drainWindow returns and resets the messages claimed and not since the
+// collection report last asked (#1369), and whether any listener is armed:
+// an endpoint with none receives no pushes to count.
+func (r *listenerRouter) drainWindow() (claimed, unclaimed int, listening bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	claimed, unclaimed, listening = r.windowClaimed, r.windowUnclaimed, len(r.listeners) > 0
+	r.windowClaimed, r.windowUnclaimed = 0, 0
+	return claimed, unclaimed, listening
+}
 
 // drain returns and resets the unclaimed count since the last drain, with
 // the last such line and the policy that decides what becomes of them.
@@ -545,6 +564,10 @@ type sessionManager struct {
 	// once. Touched on the run loop only.
 	datagrams       map[string]*heldDatagram
 	datagramRefused map[string]string
+	// leftPushes is the claimed and unclaimed counts of the routers torn
+	// down since the collection report last drained them (#1369), by
+	// endpoint. Touched on the run loop only.
+	leftPushes map[string][2]int
 	// httpEndpoints is each http or https endpoint's credential and trust,
 	// read off its worklist tasks (#902): what an http command, which the
 	// delivery carries without either, actuates with. Touched on the run
@@ -1074,6 +1097,7 @@ func (m *sessionManager) start(id string, w sessionWant) {
 func (m *sessionManager) teardown(id string, h *heldSession, why string) {
 	h.sess.Close()
 	delete(m.held, id)
+	m.keepPushes(id, h.router)
 	taskID, endpoint := h.publishTo()
 	slog.Info("session torn down", "facility", "session", "task", taskID, "endpoint", endpoint, "target", h.conn.target, "reason", why)
 }
@@ -1101,6 +1125,56 @@ func (m *sessionManager) flushUnclaimed() {
 			m.hooks.fault(taskID, fmt.Errorf("%d inbound lines no listener claimed since the last tick, last: %q", n, last))
 		}
 	}
+}
+
+// reportPushes hands the collection report each held session's and udp
+// socket's messages since the last call (#1369): what its listeners claimed
+// and did not. An endpoint with no listener armed and nothing unclaimed
+// receives no pushes, so it reports none rather than a zero.
+func (m *sessionManager) reportPushes(report *collectionReport) {
+	if m == nil || report == nil {
+		return
+	}
+	add := func(endpointID string, router *listenerRouter) {
+		if router == nil {
+			return
+		}
+		claimed, unclaimed, listening := router.drainWindow()
+		if !listening && claimed == 0 && unclaimed == 0 {
+			return
+		}
+		report.pushes(endpointID, claimed, unclaimed)
+	}
+	for id, h := range m.held {
+		add(id, h.router)
+	}
+	for id, h := range m.datagrams {
+		add(id, h.router)
+	}
+	for id, n := range m.leftPushes {
+		report.pushes(id, n[0], n[1])
+	}
+	clear(m.leftPushes)
+}
+
+// keepPushes holds what a router counted that the report has not drained,
+// when its session or socket goes (a recycle, a rebind, a removal), so the
+// next report still counts it: the counts are the endpoint's, not the
+// connection's. A removed endpoint's are dropped when the report finds no
+// task for it.
+func (m *sessionManager) keepPushes(endpointID string, router *listenerRouter) {
+	if router == nil {
+		return
+	}
+	claimed, unclaimed, _ := router.drainWindow()
+	if claimed == 0 && unclaimed == 0 {
+		return
+	}
+	if m.leftPushes == nil {
+		m.leftPushes = map[string][2]int{}
+	}
+	n := m.leftPushes[endpointID]
+	m.leftPushes[endpointID] = [2]int{n[0] + claimed, n[1] + unclaimed}
 }
 
 // streamPending reports an http endpoint whose held stream has made its

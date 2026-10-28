@@ -415,6 +415,43 @@
    "description": "Time to establish the TCP connection; absent when the port is closed."
   },
   {
+   "name": "poll-duration",
+   "data_type": "float",
+   "unit": "ms",
+   "label": "Poll Duration",
+   "description": "Mean time of the endpoint's driver poll runs over the report window, scheduled or run now, answered or failed; absent when no poll ran."
+  },
+  {
+   "name": "poll-failure-count",
+   "data_type": "int",
+   "label": "Poll Failures",
+   "description": "The endpoint's driver polls that failed in the report window (faulted and landed nothing, or refused by the endpoint's gate); reported only when nonzero."
+  },
+  {
+   "name": "push-message-count",
+   "data_type": "int",
+   "label": "Pushed Messages",
+   "description": "Messages the endpoint's held session or udp socket delivered that a listener claimed in the report window; zero when quiet."
+  },
+  {
+   "name": "push-unclaimed-count",
+   "data_type": "int",
+   "label": "Unclaimed Messages",
+   "description": "Messages the endpoint delivered that no listener claimed in the report window; reported only when nonzero."
+  },
+  {
+   "name": "webhook-post-count",
+   "data_type": "int",
+   "label": "Webhook Posts",
+   "description": "Webhook posts to the endpoint the server accepted in the report window; one zero follows a window with posts, then none while quiet."
+  },
+  {
+   "name": "webhook-refusal-count",
+   "data_type": "int",
+   "label": "Webhook Refusals",
+   "description": "Webhook posts to the endpoint the server refused (a bad signature, a missing credential) in the report window; reported only when nonzero."
+  },
+  {
    "name": "room-temperature",
    "data_type": "float",
    "unit": "C",

@@ -71,7 +71,7 @@ func TestPreviewRunRefusesWhatOnlyAnEndpointHolds(t *testing.T) {
 func TestRunNowRefusesANonPoll(t *testing.T) {
 	probe := snmpPreviewTask()
 	probe.Mode = "probe"
-	if r := runNowTask(t.Context(), nil, "edge", &collection.Runner{}, nil, newPollSchedule(time.Second), probe, time.Now().Add(time.Second)); r.Error == "" {
+	if r := runNowTask(t.Context(), nil, "edge", &collection.Runner{}, nil, newPollSchedule(time.Second), nil, probe, time.Now().Add(time.Second)); r.Error == "" {
 		t.Errorf("a non-poll run = %+v, want a refusal", r)
 	}
 }
