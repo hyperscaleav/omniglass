@@ -58,8 +58,12 @@ examples you fork into a standard of your own
 
 <SeededSet kind="templates" of="standard_template" />
 
-Forking one (with `standard:create`) writes one standard, **not official and not read-only**, carrying
-the template's roles, choices, property and metric contract lines and map, in one write:
+In the console, **New standard** carries **Start from a template**, which opens
+[the Templates page](/guides/operator/templates/) filtered to standard templates: a template's panel
+shows the roles and choices it would write, and **Start from this template** forks it, landing on your
+new standard's panel with a note that it is yours now. Forking one (with `standard:create`) writes one
+standard, **not official and not read-only**, carrying the template's roles, choices, property and
+metric contract lines and map, in one write:
 
 ```sh
 omniglass standard fork --template meeting-room

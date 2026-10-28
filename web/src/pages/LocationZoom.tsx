@@ -3,6 +3,7 @@ import { Dynamic } from "solid-js/web";
 import { useLocation, useNavigate, useParams, useSearchParams } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
 import Page from "../components/Page";
+import TemplateNotice from "../components/TemplateNotice";
 import Breadcrumb from "../components/Breadcrumb";
 import Eyebrow from "../components/Eyebrow";
 import TagPills from "../components/TagPills";
@@ -115,6 +116,8 @@ export default function LocationZoom() {
   return (
     <BladesContext.Provider value={blades}>
       <Page title={place() ? entityLabel(place()!) : "Location"} breadcrumb={<Breadcrumb crumbs={crumbs()} />}>
+        {/* A fork or an instantiate lands here with ?from= (#1329). */}
+        <TemplateNotice />
         <DetailGate
           noun="location"
           missing={missing()}

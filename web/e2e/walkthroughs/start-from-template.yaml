@@ -1,0 +1,24 @@
+# Start a whole system from a template (#1329): open the template catalog, read
+# what a system template creates from its own body, start it at a place, and
+# land on the system, which is the operator's own from that moment.
+title: Start a system from a template
+description: Open the template catalog, read what a system template creates, start it at a place, and land on a system that is yours, with nothing pointing back at the template.
+steps:
+  - goto: /templates
+    caption: Templates are examples Omniglass ships. Each says what it creates; starting from one writes ordinary rows of yours.
+  - click: 'nav[aria-label="Catalog sections"] a[href*="kind=standard_template"]'
+    caption: The Systems group's Templates shows the standards and the whole systems you can start from.
+  - click: 'text=Meeting Room 55, staffed'
+    caption: Open a system template to read what it creates.
+  - wait: { selector: '[data-testid="preview-system"]' }
+    caption: Read straight from the template, a component for each role of the Meeting Room 55 standard.
+  - click: { role: button, name: Start from this template }
+    caption: Start one. The form asks where it goes and, optionally, the addresses to attach at.
+  - select: { target: 'role=combobox[name="Place"]', value: hq.west.level-2 }
+    caption: Choose the place it sits in, Level 2 of the West Building.
+  - click: { role: button, name: Start system }
+    caption: Start it. The system, a component per role and their assignments land together, or not at all.
+  - wait: { selector: '[data-testid="template-notice"]' }
+    caption: The new system, with its components filled. It is yours now; a release that changes the template never touches it.
+    hold: 1500
+    poster: true

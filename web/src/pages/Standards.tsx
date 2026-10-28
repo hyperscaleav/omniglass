@@ -1,5 +1,7 @@
 import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
+import { useNavigate, useSearchParams } from "@solidjs/router";
+import TemplateNotice from "../components/TemplateNotice";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import BladeTitle from "../components/BladeTitle";
 import FieldRow from "../components/FieldRow";
@@ -10,7 +12,8 @@ import { useFormActions } from "../lib/formactions";
 import { bindSelectValue } from "../lib/selectvalue";
 import ContractEditor from "../components/ContractEditor";
 import RoleEditor from "../components/RoleEditor";
-import { Plus } from "../components/icons";
+import { Copy, Plus } from "../components/icons";
+import { templatesHref } from "../lib/templates";
 import {
   type Standard,
   STANDARDS_KEY,
@@ -56,36 +59,47 @@ const columns: FlatColumn<Standard>[] = [
 
 export default function Standards() {
   const me = useMe();
+  const [params] = useSearchParams();
   const standards = useQuery(() => ({ queryKey: STANDARDS_KEY, queryFn: listStandards }));
 
   const rows = createMemo(() =>
     [...(standards.data ?? [])].sort(byLabel),
   );
+  // ?open=<name> opens a standard's blade: a fork from a template lands here
+  // (#1329), its ?from= carried to the notice above the list.
+  const openId = () => {
+    const v = params.open;
+    return (Array.isArray(v) ? v[0] : v) || undefined;
+  };
 
   return (
-    <FlatList<Standard>
-      config={{
-        entity: { name: "standard", plural: "standards" },
-        rows,
-        loading: () => standards.isPending,
-        error: () => standards.error,
-        filterKeys: [
-          { key: "name", type: "string", hint: "substring", get: (s) => `${entityLabel(s)} ${s.name}`, values: () => [] },
-          { key: "parent", type: "string", hint: "exact", get: (s) => s.parent_standard ?? "", values: () => [] },
-          { key: "official", type: "string", hint: "exact", get: (s) => (s.official ? "official" : "custom"), values: () => ["official", "custom"] },
-        ],
-        filterPlaceholder: "filter standards by name…",
-        columns,
-        empty: "No standards yet.",
-        // Address a row by its kebab name: globally unique, and what the API
-        // and CLI accept (the write paths resolve either form).
-        rowId: (s) => s.name,
-        blades: { registry: { standard: standardBlade }, rootKind: "standard" },
-        create: can(me.data, "standard", "create")
-          ? { label: "New standard", can: () => can(me.data, "standard", "create"), body: (ctx) => <CreateStandardForm onCreated={ctx.select} /> }
-          : undefined,
-      }}
-    />
+    <div class="og-stack flex flex-col">
+      <TemplateNotice />
+      <FlatList<Standard>
+        config={{
+          entity: { name: "standard", plural: "standards" },
+          rows,
+          loading: () => standards.isPending,
+          error: () => standards.error,
+          filterKeys: [
+            { key: "name", type: "string", hint: "substring", get: (s) => `${entityLabel(s)} ${s.name}`, values: () => [] },
+            { key: "parent", type: "string", hint: "exact", get: (s) => s.parent_standard ?? "", values: () => [] },
+            { key: "official", type: "string", hint: "exact", get: (s) => (s.official ? "official" : "custom"), values: () => ["official", "custom"] },
+          ],
+          filterPlaceholder: "filter standards by name…",
+          columns,
+          empty: "No standards yet.",
+          // Address a row by its kebab name: globally unique, and what the API
+          // and CLI accept (the write paths resolve either form).
+          rowId: (s) => s.name,
+          openId,
+          blades: { registry: { standard: standardBlade }, rootKind: "standard" },
+          create: can(me.data, "standard", "create")
+            ? { label: "New standard", can: () => can(me.data, "standard", "create"), body: (ctx) => <CreateStandardForm onCreated={ctx.select} /> }
+            : undefined,
+        }}
+      />
+    </div>
   );
 }
 
@@ -204,6 +218,7 @@ function StandardBladeBody(p: { id: string }): JSX.Element {
 // the parent standard is optional (a variant of an existing one).
 export function CreateStandardForm(p: { onCreated: (s: Standard) => void }): JSX.Element {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   // Label leads and the handle follows it, stopping the moment the
   // operator edits the handle by hand (lib/entities).
   const { display, setDisplay, name, setName, nameDerived } = createIdentity();
@@ -217,6 +232,8 @@ export function CreateStandardForm(p: { onCreated: (s: Standard) => void }): JSX
     submit: () => void submit(),
     busy,
     disabled: () => !name().trim() || !display().trim(),
+    // The other way to a standard (#1329): fork one of the shipped examples.
+    secondary: () => ({ label: "Start from a template", icon: Copy, onClick: () => navigate(templatesHref(["standard_template"])) }),
   });
 
   async function submit() {

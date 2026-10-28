@@ -131,6 +131,20 @@ describe("Locations create-as-route", () => {
     expect(await screen.findByTestId("explore-page")).toBeTruthy();
   });
 
+  // The other way in (#1329): the Templates page filtered to place templates,
+  // carrying where the operator stands as the start form's default parent.
+  it("offers Start from a template, filtered to place templates and carrying the place", async () => {
+    mount(`/locations/create?under=${hq.id}`);
+    fireEvent.click(await screen.findByRole("button", { name: /Start from a template/ }));
+    await waitFor(() => expect(`${window.location.pathname}${window.location.search}`).toBe(`/templates?kind=place_template&place=${hq.id}`));
+  });
+
+  it("hides Start from a template from a caller who may not read templates", async () => {
+    mount("/locations/create", [], { ...me, permissions: ["location:read", "location:create", "location_type:read"] });
+    await screen.findByText("New location");
+    expect(screen.queryByRole("button", { name: /Start from a template/ })).toBeNull();
+  });
+
   it("posts the location_type handle, never the uuid, on create (#466)", async () => {
     let captured: unknown;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {

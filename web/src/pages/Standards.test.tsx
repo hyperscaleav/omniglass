@@ -2,6 +2,7 @@ import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, fireEvent, screen, waitFor, within } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
+import { Router, Route } from "@solidjs/router";
 import Standards from "./Standards";
 import { STANDARDS_KEY, type Standard } from "../lib/standards";
 import { classifierPropertiesKey, type ClassifierProperty } from "../lib/classifier_properties";
@@ -13,6 +14,7 @@ import { COMPONENT_TYPES_KEY, type ComponentType } from "../lib/component_types"
 import { PRODUCTS_KEY, type Product } from "../lib/products";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
+import { TEMPLATES_KEY } from "../lib/templates";
 
 // Standards is the catalog of blueprints a system conforms to, on the flat
 // FlatList surface beside Products. An official row is read-only (no
@@ -42,7 +44,7 @@ const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { userna
 
 const asides = () => document.querySelectorAll("aside[data-blade]");
 
-function mount(me: Me = admin) {
+function mount(me: Me = admin, path = "/standards") {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...STANDARDS_KEY], seed);
   qc.setQueryData([...PROPERTIES_KEY], catalog);
@@ -59,9 +61,14 @@ function mount(me: Me = admin) {
   qc.setQueryData([...standardRolesKey(uuidFor("std-huddle-space"))], roles);
   qc.setQueryData([...standardRolesKey(uuidFor("std-meeting-room"))], []);
   qc.setQueryData([...ME_KEY], me);
+  qc.setQueryData([...TEMPLATES_KEY], [{ kind: "standard_template", name: "huddle", label: "Huddle space template" }]);
+  window.history.pushState({}, "", path);
   return render(() => (
     <QueryClientProvider client={qc}>
-      <Standards />
+      <Router>
+        <Route path="/standards" component={Standards} />
+        <Route path="/templates" component={() => <div data-testid="templates-page" />} />
+      </Router>
     </QueryClientProvider>
   ));
 }
@@ -190,6 +197,23 @@ describe("Standards page", () => {
     await waitFor(() => expect(sent).toBeTruthy());
     // Clearing the picker drops the parent from the patch (a standalone standard).
     expect(sent).toEqual({ label: "Huddle" });
+  });
+
+  // The other way to a standard (#1329): fork one of the shipped examples.
+  it("offers Start from a template in the create drawer, landing on standard templates", async () => {
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: /new standard/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /start from a template/i }));
+    expect(await screen.findByTestId("templates-page")).toBeInTheDocument();
+    expect(`${window.location.pathname}${window.location.search}`).toBe("/templates?kind=standard_template");
+  });
+
+  // A fork lands here (#1329): ?open= opens the forked standard's blade and
+  // ?from= says above the list that it is the operator's own now.
+  it("opens the forked standard's blade and says it is the operator's own", async () => {
+    mount(admin, "/standards?open=huddle-space&from=huddle");
+    await waitFor(() => expect(asides()).toHaveLength(1));
+    expect(screen.getByTestId("template-notice")).toHaveTextContent("Started from the template Huddle space template.");
   });
 
   it("hides New standard from a caller without standard:create", () => {

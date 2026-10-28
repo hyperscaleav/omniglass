@@ -18,6 +18,7 @@ import { COMMAND_TYPES_KEY } from "../lib/command_types";
 import { EVENT_RULES_KEY } from "../lib/event_rules";
 import { severityLevelsKey } from "../lib/severity";
 import { TAGS_KEY } from "../lib/tags";
+import { TEMPLATES_KEY } from "../lib/templates";
 
 // The Catalog overview (/catalog): the landing the shell's Overview entry
 // opens. One card per catalog group, DERIVED from the SAME CATALOG_GROUPS table
@@ -27,7 +28,8 @@ import { TAGS_KEY } from "../lib/tags";
 // query keys (learning-tool doctrine: real rows, not decoration); each registry
 // is its own query, so one failing fetch marks its own row and nothing else
 // (#598). A soon entry reads soon without a count; a routed soon entry
-// (Notifications) links to its stub, a pageless one (Templates) does not link.
+// (Notifications) links to its stub. The Templates slots link to the one
+// Templates page filtered to their kinds, each counting its own (#1329).
 
 const owner: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
 const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "view" }, permissions: ["*:read"], grants: [] };
@@ -60,6 +62,12 @@ function mount(me: Me = owner, opts: { skip?: (readonly string[])[] } = {}) {
     if (opts.skip?.some((s) => s.join("/") === key.join("/"))) continue;
     qc.setQueryData([...key], rows(n));
   }
+  qc.setQueryData([...TEMPLATES_KEY], [
+    { name: "c-0", kind: "component_template" },
+    { name: "c-1", kind: "component_template" },
+    { name: "sy-0", kind: "system_template" },
+    { name: "p-0", kind: "place_template" },
+  ]);
   const result = render(() => (
     <QueryClientProvider client={qc}>
       <Router>
@@ -129,10 +137,13 @@ describe("CatalogOverview page", () => {
     expect(notifications.textContent).toContain("soon");
     expect(notifications.textContent).not.toMatch(/\d/);
     expect(notifications.getAttribute("href")).toBe("/notifications");
-    // A pageless soon slot (Templates) reads soon and is not an anchor.
+    // The Templates slots went live (#1329): filtered links, their own counts.
     const templates = entry(card("Components")!, "Templates");
-    expect(templates.textContent).toContain("soon");
-    expect(templates.tagName).not.toBe("A");
+    expect(templates.tagName).toBe("A");
+    expect(templates.getAttribute("href")).toBe("/templates?kind=component_template");
+    expect(templates.textContent).toContain("2");
+    expect(templates.textContent).not.toContain("soon");
+    expect(entry(card("Systems")!, "Templates").textContent).toContain("1");
   });
 
   it("keeps every card for a *:read floor viewer", () => {

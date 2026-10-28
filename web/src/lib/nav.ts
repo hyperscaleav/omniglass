@@ -179,7 +179,9 @@ export const OFF_RAIL: { path: string; label: string; hint: string; resource?: s
   { path: "/severity-levels", label: "Severity", resource: "severity_level", hint: "The severity levels: how bad an alarm is, ranked, each with its color and whether it takes its component out." },
   { path: "/log-types", label: "Logs", hint: "The log shape catalog. The log lane arrives untyped today; typing what a line can be is still to come." },
   { path: "/notifications", label: "Notifications", hint: "The outbound notification shapes: how a firing event reaches an operator, still to come.", issue: 618 },
-  { path: "/templates", label: "Templates", hint: "Example configurations you clone: start a location type, a standard, or a whole system from one, then own what you get." },
+  // The template catalog (#1329), live inside the catalog shell: the
+  // Components, Systems and Locations groups' Templates slots open it filtered.
+  { path: "/templates", label: "Templates", resource: "template", hint: "Examples you clone: start a standard, a component, a whole system, or a subtree of places from one, then own what you get." },
 ];
 
 // Flattened title + hint (+ icon + tracking issue) lookup by base-relative path,
@@ -201,14 +203,13 @@ export const navByPath: Record<string, NavMeta> = (() => {
 })();
 
 // Stubbed sections: backends not built yet, each rendering SectionStub in the
-// router. /templates keeps its stub page though its rail entry is gone (#608).
-// /notifications mounts INSIDE the CatalogShell (its stub renders in the
+// router. /notifications mounts INSIDE the CatalogShell (its stub renders in the
 // catalog pane). The router renders from the route manifest (#760), and
 // route-manifest-guard.test.ts pins the manifest's stub entries to this list,
 // so every unlive rail entry resolves to a registered stub rather than NotFound.
 export const STUBS = [
   "/dashboards", "/alarms",
-  "/templates", "/learn",
+  "/learn",
   "/config", "/log-types", "/notifications",
 ];
 

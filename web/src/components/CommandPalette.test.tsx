@@ -37,10 +37,14 @@ describe("command palette source", () => {
     expect(commands.filter((c) => ["/locations", "/systems", "/components"].includes(c.path))).toEqual([]);
   });
 
-  it("lists a routed soon registry, and no pathless slot", () => {
+  it("lists a routed registry, and each Templates slot filtered to its kinds (#1329)", () => {
     const commands = buildCommands(allowAll);
     expect(commands).toContainEqual(expect.objectContaining({ label: "Rules", path: "/rules", group: "Catalog · Actions" }));
-    expect(commands.filter((c) => c.label === "Templates")).toEqual([]);
+    expect(commands.filter((c) => c.label === "Templates").map((c) => [c.group, c.path])).toEqual([
+      ["Catalog · Components", "/templates?kind=component_template"],
+      ["Catalog · Systems", "/templates?kind=standard_template,system_template"],
+      ["Catalog · Locations", "/templates?kind=place_template"],
+    ]);
     expect(commands.every((c) => c.path)).toBe(true);
   });
 

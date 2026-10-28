@@ -1,0 +1,100 @@
+---
+title: Start from a template
+description: "The Templates page: the examples Omniglass ships, what each one creates read from the template itself, and starting a standard, a component, a whole system or a subtree of places from one."
+screenshots:
+  - id: templates
+    path: /web/templates?kind=standard_template,system_template
+    alt: "The Templates page filtered to the Systems group's kinds: every standard and system template, each row naming its kind and what it creates, with the rail's note that a template is an example you clone, then own."
+  - id: templates-system
+    path: /web/templates?kind=system_template
+    steps:
+      - action: click
+        selector: "text=Meeting Room 55, staffed"
+    alt: "A system template's panel: the standard it is built to, its system type, and a component for each role with the component template that fills it, above the Start from this template action."
+---
+
+import SeededSet from '../../../../components/SeededSet.astro';
+
+A **template** is an example Omniglass ships that you clone. Starting from one writes ordinary rows
+that are **yours from that moment**: nothing points back at the template, so a later release can change
+it without touching your fleet. The model is [templates](/architecture/templates/).
+
+## The Templates page
+
+**Catalog: Templates** (`/templates`, with `template:read`, on every viewer's read floor) lists the
+whole catalog across its four kinds. Each group of the Catalog that has templates opens the page
+filtered to its own:
+
+- **Components: Templates** opens the **component templates**: a product, the attach preset for its
+  driver, and any declared values.
+- **Systems: Templates** opens the **standard templates** and the **system templates** together, since
+  a system template is built to a standard and a standard is the blueprint every system conforms to.
+- **Locations: Templates** opens the **place templates**: a subtree of places, each naming a location
+  type, with the system templates that land in them.
+
+The filter is the `kind` facet in the filter bar, and it lives in the address (`?kind=`), so a link
+carries it. Each row names its **kind** and, under **Creates**, what it writes.
+
+::screenshot{#templates}
+
+Pick a row to open its panel, which renders what the template creates **from the template itself**,
+exactly what starting from it writes:
+
+- a **standard** template shows its **roles**, each with its quorum, the component types it accepts and
+  any products it is pinned to, then its **choices** (the first alternate is the template's default)
+  and the property and metric lines it declares;
+- a **system** template shows the **standard** it is built to, its **system type**, and a component
+  for each role with the component template that fills it;
+- a **place** template shows its subtree as an **indented tree**, each place with its location type and
+  the systems that land in it;
+- a **component** template shows its **product**, its **preset inputs** and its declared values.
+
+::screenshot{#templates-system}
+
+## Start from one
+
+**Start from this template** in the panel's footer opens the kind's form. It needs the permission to
+create what the template makes: `standard:create` for a standard template, `component:create`,
+`system:create` or `location:create` for the others. A panel shown to someone without it names the
+permission instead.
+
+- **A standard template forks.** Give it a **name** (empty takes the template's) and a **label**; a
+  variant also asks for the standard it hangs off, by default yours named for the template's parent.
+  A taken name or a missing parent is refused, and the form shows the refusal as the API words it.
+- **A component template** asks for its **place**, an optional **name** (empty mints one from its type,
+  as any component's name is) and **label**, and, to attach it now, the **node** its endpoint is placed
+  on and the **address** its driver reaches it at. A driver input that reads a secret asks for one of
+  your secrets by name. Without an address the component lands unattached, to attach later.
+- **A system template** asks for its **place**, a **name** and **label**, the **standard** to build to
+  (the template's by default: yours of that name when you hold one, else forked from its template in
+  the same write), a **node**, and an **address per component** by role. The system, a component for
+  each role filled to its quorum and their assignments land together, or not at all.
+- **A place template** asks for the **parent place** the subtree sits under (or none, for a new top) and
+  the root's **name** and **label**. Each place's type must be allowed under its parent's, as your
+  fleet has the location types; a placement your types refuse is refused, naming the pair.
+
+An address with no node is caught before you submit. On success the console lands on what you
+created, the forked standard's panel or the new component, system or root place, with a note that
+names the template and says it is yours now. The note rides the address you landed on, not the row:
+dismiss it and it is gone, and the row's page never shows it otherwise, because nothing about the row
+remembers the template.
+
+The create flows lead here too: **New system**, **New location** and **New component** carry **Start
+from a template**, which opens this page filtered to the matching kind with the place you were creating
+in as the form's default, and the **New standard** drawer carries the same action for standard templates.
+
+The same operations are `omniglass standard fork`, `omniglass component instantiate`,
+`omniglass system instantiate` and `omniglass location instantiate` from the
+[CLI](/reference/cli/).
+
+## What ships
+
+The system, place and component templates this release ships, rendered from the catalog:
+
+<SeededSet kind="templates" of="system_template" />
+
+<SeededSet kind="templates" of="place_template" />
+
+<SeededSet kind="templates" of="component_template" />
+
+The standard templates are listed on [Standards](/guides/admin/standards/#start-from-a-template).

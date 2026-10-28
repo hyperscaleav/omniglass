@@ -28,6 +28,7 @@ import ComponentTypes from "./pages/ComponentTypes";
 import SystemTypes from "./pages/SystemTypes";
 import SecretTypes from "./pages/SecretTypes";
 import Standards from "./pages/Standards";
+import Templates from "./pages/Templates";
 import Vendors from "./pages/Vendors";
 import Drivers from "./pages/Drivers";
 import Products from "./pages/Products";
@@ -72,6 +73,7 @@ export const PAGES: Record<string, Component> = {
   SystemTypes,
   SecretTypes,
   Standards,
+  Templates,
   Vendors,
   Drivers,
   Products,

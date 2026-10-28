@@ -8,6 +8,7 @@ import HealthHistory from "../components/HealthHistory";
 import Eyebrow from "../components/Eyebrow";
 import DetailGate from "../components/DetailGate";
 import PlaceCard from "../components/PlaceCard";
+import TemplateNotice from "../components/TemplateNotice";
 import MemberRows from "../components/MemberRows";
 import OutlineWorkspace from "../components/OutlineWorkspace";
 import { FLEET_VIEW_KEY, fleetView, childrenIndex } from "../lib/fleet";
@@ -308,6 +309,8 @@ export default function SystemZoom() {
   return (
     <BladesContext.Provider value={blades}>
     <Page title={title()} breadcrumb={<Breadcrumb crumbs={crumbs()} />}>
+      {/* A fork or an instantiate lands here with ?from= (#1329). */}
+      <TemplateNotice />
       <DetailGate
         noun="system"
         missing={missing()}

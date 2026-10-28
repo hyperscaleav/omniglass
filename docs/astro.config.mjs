@@ -182,6 +182,7 @@ export default defineConfig({
             { label: 'Sign in and your profile', slug: 'guides/operator/sign-in' },
             { label: 'Explore your fleet', slug: 'guides/operator/fleet' },
             { label: 'Work with an entity', slug: 'guides/operator/entities' },
+            { label: 'Start from a template', slug: 'guides/operator/templates' },
             { label: 'Nodes and reachability', slug: 'guides/operator/collection' },
             { label: 'Simulate a fleet', slug: 'guides/operator/simulation' },
             { label: 'The CLI', slug: 'guides/cli' },

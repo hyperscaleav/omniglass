@@ -70,7 +70,6 @@ export const ROUTE_MANIFEST: RouteEntry[] = [
   // added there without a row here fails the suite.
   { path: "/dashboards", shell: "protected", page: "SectionStub", smoke: "/dashboards" },
   { path: "/alarms", shell: "protected", page: "SectionStub", smoke: "/alarms" },
-  { path: "/templates", shell: "protected", page: "SectionStub", smoke: "/templates" },
   { path: "/learn", shell: "protected", page: "SectionStub", smoke: "/learn" },
   { path: "/config", shell: "protected", page: "SectionStub", smoke: "/config" },
   { path: "/log-types", shell: "protected", page: "SectionStub", smoke: "/log-types" },
@@ -97,6 +96,9 @@ export const ROUTE_MANIFEST: RouteEntry[] = [
   { path: "/location-types", shell: "catalog", page: "LocationTypes", smoke: "/location-types" },
   { path: "/secret-types", shell: "catalog", page: "SecretTypes", smoke: "/secret-types" },
   { path: "/tags", shell: "catalog", page: "Tags", smoke: "/tags" },
+  // The template catalog (#1329): one page across the four kinds, which the
+  // Components, Systems and Locations groups' Templates slots open filtered.
+  { path: "/templates", shell: "catalog", page: "Templates", smoke: "/templates" },
   // The catalog's routed soon slots (catalog.ts's CATALOG_STUB_PATHS), rendering
   // their stub inside the pane.
   { path: "/notifications", shell: "catalog", page: "SectionStub", smoke: "/notifications" },
