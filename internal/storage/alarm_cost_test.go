@@ -44,10 +44,12 @@ import (
 //
 //	raise = clear = 12 + 5*S + 4*L
 //
-// Amended (#618): every raise and clear now reads the enabled action rules on
-// its transition, one statement whatever the fleet's shape (a rule that
-// fires costs its notification's writes on top), so the constant is 13 and
-// the table's counts are one higher each.
+// Amended (#618): every raise and clear now runs its notification queue under
+// a savepoint (the savepoint, the read of the enabled action rules on its
+// transition, the release), three statements whatever the fleet's shape (a
+// rule that fires costs its notification's writes on top), so the constant
+// is 15 and the table's counts are three higher each. The savepoint is what
+// keeps a notification from ever failing the transition.
 //
 // So the first candidate is FALSE and the second is TRUE. The count is flat in
 // the number of alarms, because activeAlarmSeverities folds a component's open
@@ -173,7 +175,7 @@ func measureRaiseClear(t *testing.T, gw storage.Gateway, c *querycount.Counter, 
 // compared, because a fixture that quietly deduplicated its alarms would report a
 // beautifully flat number while varying nothing at all.
 func TestAlarmRecomputeCostIsFlatInAlarmCount(t *testing.T) {
-	const ceiling = 30 // 29 in #674, plus #618's one read of the action rules
+	const ceiling = 32 // 29 in #674, plus #618's savepointed read of the action rules
 
 	quiet, qc := alarmProbe(t, 1, 1)
 	lonelyRaise, lonelyClear, lonelyOpen := measureRaiseClear(t, quiet, qc, 0)
@@ -198,7 +200,7 @@ func TestAlarmRecomputeCostIsFlatInAlarmCount(t *testing.T) {
 // TestAlarmRecomputeCostGrowsWithTheOwnersItTouches PINS A DEFECT, not a target,
 // and the name says so the way #671's pin did.
 //
-// The alarm write path is NOT constant. It costs 13 + 5*S + 4*L statements per
+// The alarm write path is NOT constant. It costs 15 + 5*S + 4*L statements per
 // raise and the same per clear, where S is the number of slots the component
 // fills and L the number of distinct locations above the systems holding them.
 // Every staffed system pays an advisory lock, a role resolution and a recorded
@@ -220,9 +222,9 @@ func TestAlarmRecomputeCostGrowsWithTheOwnersItTouches(t *testing.T) {
 		t.Run(fmt.Sprintf("%d-slots-%d-rooms", tc.staffs, tc.rooms), func(t *testing.T) {
 			gw, counter := alarmProbe(t, tc.staffs, tc.rooms)
 			raise, clear, _ := measureRaiseClear(t, gw, counter, 0)
-			want := 13 + 5*tc.staffs + 4*(tc.rooms+2)
+			want := 15 + 5*tc.staffs + 4*(tc.rooms+2)
 			if raise != want || clear != want {
-				t.Errorf("the alarm recompute cost %d statements to raise and %d to clear with %d slots filled over %d ancestor locations, want %d each (13 + 5*slots + 4*locations, #674 and #618's action rule read).\n"+
+				t.Errorf("the alarm recompute cost %d statements to raise and %d to clear with %d slots filled over %d ancestor locations, want %d each (15 + 5*slots + 4*locations, #674 and #618's savepointed action rule read).\n"+
 					"If this failed because the write path was REDUCED, that is a fix and this pin should move with it, stating the new equation. If a term grew, the write path got worse in a dimension nothing else measures.",
 					raise, clear, tc.staffs, tc.rooms+2, want)
 			}
