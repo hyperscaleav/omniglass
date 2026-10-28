@@ -1,7 +1,7 @@
 ---
 title: "a template is a clonable example, not a versioned shape an instance pins"
 date: 2026-07-31
-status: "Accepted"
+status: "Accepted, amended by ADR-0827"
 summary: "A template is an example configuration an operator **clones**: creating from one is a one-time fork with no inheritance and no back-pointer, so templates stay **upgrade-safe because nothing remains connected to them**. The versioned-shape model retires (`component_template`, `system_template`, `*_version`, channels, the frozen BOM, instance pinning); a component's shape is its `product`, a system's is its `standard`, and a system **conforms** to that standard with live inheritance. Reverses ADR-0045's deferral and ADR-0049's \"templates stay `Design`\""
 ---
 

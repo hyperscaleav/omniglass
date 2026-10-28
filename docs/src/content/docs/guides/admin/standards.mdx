@@ -1,6 +1,6 @@
 ---
 title: Standards
-description: "The Standards catalog: the blueprint a system conforms to, its variants, the properties it declares, and the roles a conforming system must staff; shipped standards are yours to edit, not read-only seed content."
+description: "The Standards catalog: the blueprint a system conforms to, its variants, the properties it declares, and the roles a conforming system must staff; a standard is forked from a template into a row you own outright."
 ---
 
 import SeededSet from '../../../../components/SeededSet.astro';
@@ -41,7 +41,7 @@ classifier is its own registry rather than a use of a standard's own parent-vari
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with `standard:update`) edits the
   label and parent. The blade does not edit the **name**: rename a standard you created with
   `omniglass standard rename <name> --name <new>` (`standard:rename`), which keeps every system that
-  conforms to it; a shipped one keeps its name (below). **Delete** (with
+  conforms to it. **Delete** (with
   `standard:delete`) removes the row, behind
   a confirm.
 - **Delete is refused (409) while a system still conforms to it.** Repoint or remove those systems
@@ -50,27 +50,38 @@ classifier is its own registry rather than a use of a standard's own parent-vari
 The same operations are `omniglass standard list/get/create/update/delete` from the CLI (see the
 [CLI reference](/reference/cli/)).
 
-## The shipped standards are yours
+## Start from a template
 
-Omniglass ships a starter set, and unlike a seeded [vendor](/guides/admin/vendors/) or
-[product](/guides/admin/products/) those rows are **not official and not read-only**. They arrive as
-ordinary **operator-owned** rows: edit them, re-parent them, add to their contract. The shipped set,
-rendered from the seed itself:
+A fresh install holds **no standards**. Omniglass ships a catalog of **standard templates** instead,
+examples you fork into a standard of your own
+([templates](/architecture/templates/)). The ones this release ships, rendered from the catalog:
 
-<SeededSet kind="standards" />
+<SeededSet kind="templates" of="standard_template" />
 
-This is deliberate. A standard is **forked from a template that lives in the code**, once, with **no
-inheritance**: nothing in your fleet points back at that template afterwards. So Omniglass can improve
-its templates in any release without ever touching your rows, and your edits are never reverted by a
-restart, because the boot seed installs a standard **only if it is absent**. The thing the vendor
-updates and the thing you own are two different objects, which is the whole point.
+Forking one (with `standard:create`) writes one standard, **not official and not read-only**, carrying
+the template's roles, choices, property and metric contract lines and map, in one write:
 
-One consequence of installing by **name**: a shipped standard keeps its name. Renaming one is refused
-(409), because the next boot would find the shipped name absent and plant it again beside your renamed
-row, roles and all; for the same reason a shipped standard you delete returns on the next boot. Until
-standards are forked from templates on request
-([#827](https://github.com/hyperscaleav/omniglass/issues/827)), create a standard of your own under the
-name you want and point your systems at it.
+```sh
+omniglass standard fork --template meeting-room
+omniglass standard fork --template meeting-room --name hq-meeting --label "HQ Meeting"
+```
+
+- **The name is the template's** unless you give one, and a taken name is refused (409), so the same
+  template forks twice only under two names. Each fork is independent of the other.
+- **A variant forks once you hold its parent.** `mr55` hangs off `meeting-room`: fork `meeting-room`
+  first (or name the standard it should hang off with `--parent`), or the fork is refused (422) naming
+  the template to fork first. Chains do not fork in one call.
+- **Nothing points back at the template.** The fork is audited once, naming the template it came from,
+  and that audit row is the only trace. A later release can rework the template in any way without
+  touching your standard, and your standard renames, edits and deletes like any you created. Nothing
+  plants it again on the next boot.
+
+This is the fork model of
+[ADR-0071](/architecture/decisions/#adr-0071-a-template-is-a-clonable-example-not-a-versioned-shape-an-instance-pins):
+the thing the vendor updates (the template) and the thing you own (the standard) are two different
+objects, which is the whole point. A fleet that booted an older release holds the standards that
+release planted; they are ordinary rows of yours now, renameable and deletable, and they do not
+return.
 
 The exception is the **canonical vocabulary**: the [property catalog](/guides/admin/properties/) (and
 later commands and event types) is the shared namespace a driver maps onto, so it must read the same on
@@ -154,10 +165,10 @@ every assignment conforming systems made to it, so withdraw only when the slot i
 one room's component changed. Changing a quorum or an impact **re-evaluates every conforming system
 immediately**, so a retune shows up in the fleet's health without waiting for anything to poll.
 
-Two shipped roles come with **Meeting Room**, and they are the worked example: **Room Microphone**
-(accepts `video-bar`, quorum **2**) and **Main Display** (accepts `display`). Like the standards
-themselves they are **seeded only if absent**, so retuning quorum to what your rooms actually run
-survives the next restart.
+A standard forked from a template arrives with the template's roles, and they are the worked example:
+`meeting-room`'s **Video Bar** (accepts `video-bar`) and **Main Display** (accepts `display`), among
+others. Like the standard itself they are yours once forked, so retuning a quorum to what your rooms
+actually run is never reverted by a restart or a release.
 
 From the CLI: `omniglass standard role list meeting-room`,
 `omniglass standard role update meeting-room <role> --label <label> --quorum <n> --accepted-types <types>

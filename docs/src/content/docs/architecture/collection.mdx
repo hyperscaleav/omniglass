@@ -1,6 +1,6 @@
 ---
 title: Data collection
-description: "Data collection is built from functions: a versioned component template declares endpoints and a set of functions, each a trigger plus a DAG of steps that runs at the edge and parses on the spot."
+description: "Data collection is built from drivers: a declarative spec of inputs, polls, listeners and command bindings, attached to a component's endpoint and run at the edge, which parses on the spot."
 sidebar:
   badge:
     text: Partial
@@ -97,39 +97,26 @@ does not claim as raw log lines ([below](#an-emit-lands-on-any-lane),
 and [ADR-0040](/architecture/decisions/#adr-0040-the-task-is-derived-read-only-plumbing-projected-from-its-endpoint).
 :::
 
-:::design[The template authoring model, tracked in #827]
+:::design[Historical: the ComponentTemplate authoring model, superseded by the driver spec (ADR-0827)]
+What shipped is [the driver spec](#drivers-the-declarative-menu) ([ADR-0135](/architecture/decisions/#adr-0135-a-drivers-spec-is-data-one-engine-interprets-it)): typed inputs, poll functions, listeners and command bindings, attached per
+endpoint and re-derived when the spec changes. The record below is the authoring model it replaced
+([ADR-0827](/architecture/decisions/#adr-0827-the-template-layer-owns-the-clone-model-and-the-componenttemplate-authoring-model-is-superseded-by-the-driver-spec)).
 
-Collection is built from **functions**. A versioned `ComponentTemplate` declares how to reach a
-class of device (its endpoints) and a set of **functions**, each a discrete unit of device logic
-that runs on the edge node and parses the answer on the spot into samples; one authoring schema
-covers everything from a single SNMP read to a multi-step branching procedure.
-
-## Model overview
-
-The shape:
+A versioned `ComponentTemplate` (`apiVersion: collection.omniglass.dev/v1alpha1`) was to declare
+how to reach a class of device and a set of **functions**, compiled into a per-node runtime unit:
 
 ```text
 ComponentTemplate (apiVersion, kind, metadata.labels)
-  inputs       typed parameters; required = the :apply gate
-  endpoints   connections, declared once, may be persistent/stateful, own liveness
+  inputs       typed parameters; required = the apply gate
+  endpoints    connections, declared once, may be persistent/stateful, own liveness
   functions    each = one trigger + a DAG of steps
     steps      typed operations (kind), gated by an endpoint, schema-validated
 ```
 
-- **Authoring compiles to a runtime unit**: the compiler resolves inputs and variables, validates
-  the DAG, and bakes each sample's lane into the per-node unit (no runtime catalog lookup); the
-  unit is internal, never hand-authored.
-- **Edge-local execution**: a function runs per component on the node, in one tick, zero server
-  round trips; a step can branch on a value a prior step just collected.
-- **Two data planes**: append-heavy timeseries [samples](/architecture/properties/) versus
-  point-lookup [config and credentials](/architecture/variables/), config keyed to a sample as its
-  observed side.
-- **Kubernetes-style versioning**: `apiVersion: collection.omniglass.dev/v1alpha1` plus `kind`
-  (`ComponentTemplate`; `SystemTemplate` / `LocationTemplate` reserved); the parser gates on
-  `apiVersion`, converting older versions forward.
-
-A **function** is the device-level unit; the platform workflow that responds to data is a
-[flow](/architecture/alarms-actions/), which can call a function.
+The driver spec kept the compile step (each emit's lane baked at attach, no runtime catalog lookup)
+and edge-local parsing, and dropped the versioned template kind, the step DAG and the apply gate. A
+**function** is the device-level unit; the platform workflow that responds to data is a
+[flow](/architecture/alarms-actions/).
 :::
 
 ## Endpoints: the device's APIs, declared once
@@ -158,23 +145,17 @@ endpoints:
 - **Codec and framing**: raw-TCP AV control planes wrap payloads (line terminators, length prefixes, NUL framing, JSON-RPC or TTP envelopes); the endpoint's codec frames outbound and parses inbound to the declared envelope, so a step sees structure, not wire bytes.
 - **Node placement is not declared here**; it is server-assigned from the component's location.
 
-:::design[Functions: a trigger plus a step DAG, tracked in #827]
+:::design[Historical: functions as a trigger plus a step DAG, superseded by the driver spec (ADR-0827)]
+What shipped is [the driver spec](#drivers-the-declarative-menu) ([ADR-0135](/architecture/decisions/#adr-0135-a-drivers-spec-is-data-one-engine-interprets-it)): its three function families, poll functions on a `schedule`, listeners that
+claim pushed data, and command bindings that actuate a `command_type`, are the units this section
+proposed. The record below is the model it replaced ([ADR-0827](/architecture/decisions/#adr-0827-the-template-layer-owns-the-clone-model-and-the-componenttemplate-authoring-model-is-superseded-by-the-driver-spec)).
 
 ## Functions: a trigger plus a step DAG
 
-A top-level `functions` array: each **function** is one trigger plus a DAG of steps. The trigger
-unifies what used to be a poller, a listener, and a command:
-
-| Kind | Fires when | This is |
-|---|---|---|
-| `schedule` | an interval elapses, or `onStart` once when the endpoint comes up | a poll (and `onStart` arms subscriptions) |
-| `listen` | inbound data arrives on a `source` (`webhook` / `trap` / `syslog`, or `subscribe` / `stderr` / `session-line` on a persistent endpoint) | a listener for pushed data |
-| `command` | invoked on demand, by an operator or by a [flow](/architecture/alarms-actions/) | an action you run against the device (`reboot`, `set-input`) |
-
-A `command` function takes typed `args`: the imperative path, and how a reconcile pushes declared
-config back (the **set** function, [config](/architecture/variables/)). Exactly one trigger per
-function; `triggers` is a list only to admit a scheduled function that is also command-invocable
-for a targeted refetch.
+A top-level `functions` array: each **function** one trigger plus a DAG of steps, the trigger a
+`schedule` (a poll, `onStart` arming subscriptions), a `listen` on an inbound source, or a `command`
+invoked by an operator or a [flow](/architecture/alarms-actions/) with typed `args` (the **set**
+function a reconcile would push declared config through).
 :::
 
 ### Two axes: task mode and endpoint transport
@@ -1114,89 +1095,50 @@ server-hosted syslog where the source address survives, are later.
 
 :::
 
-:::design[The step DAG and extractors, tracked in #827]
+:::design[Historical: the step DAG and Expr extractors, superseded by the driver spec (ADR-0827)]
+What shipped is [the driver spec](#drivers-the-declarative-menu) ([ADR-0135](/architecture/decisions/#adr-0135-a-drivers-spec-is-data-one-engine-interprets-it)): one extraction primitive per emit, a selector per format, and a declared
+`cast` / `scale` / enum `map` transform. An Expr transform on an extractor, a step guard, and shared
+Omniglass functions are still wanted, on
+[#1331](https://github.com/hyperscaleav/omniglass/issues/1331). The record below is the model the
+driver spec replaced ([ADR-0827](/architecture/decisions/#adr-0827-the-template-layer-owns-the-clone-model-and-the-componenttemplate-authoring-model-is-superseded-by-the-driver-spec)).
 
 ## Steps: the DAG
 
-A step is a typed **operation**: a `kind` that runs on a referenced `endpoint` and, for a read,
-produces samples through a typed extractor.
-
-```yaml
-steps:
-  - id: poll
-    endpoint: snmp
-    kind: snmp-get                  # gated by the endpoint type; schema-validated
-    when: "$dp.power-state == 'on'" # optional guard = explicit branch
-    samples:
-      oid:
-        - { key: cpu-utilization, oid: 1.3.6.1.4.1.55540.2.1.0, value: "raw / 100.0" }
-```
-
-- **Dependencies are data references, not array order**: a step reads `$steps.<id>.*` (ephemeral
-  scratch, never emitted) or `$dp.<key>` (a real measurement, readable for branching); the
-  reference set *is* the DAG, array order cosmetic, so an editor can round-trip the graph.
-- **`when`**: an expression guard, the explicit branch; false skips the step and its dependents.
-- **`forEach`**: step-level fan-out (element bound as `$steps.<id>.item`), downstream steps running
-  per element; distinct from an extractor's `each`, which fans one response's array into many
-  samples in one step.
-- **`kind` is endpoint-gated and registry-driven** (`snmp-get`, `snmp-walk`, `http-request`,
-  `ssh-send`, `ssh-subscribe`, the endpoint-agnostic `extract` and `blend`), each kind's param
-  schema in the registry.
-
-In-scope namespaces: `$var:<name>` (config and secrets via the [cascade](/architecture/cascade/)),
-`$dp.<key>` (samples), `$steps.<id>.*` (scratch), `$event` (a `listen` function's inbound payload),
-and the extractor-local `raw`, `groups`, `node`, `item`.
+A step was a typed **operation** (`snmp-get`, `http-request`, `ssh-send`) on a referenced
+`endpoint`, its dependencies the data references it read (`$steps.<id>.*` scratch, `$dp.<key>`
+samples) rather than array order, with an optional **`when`** guard (false skips the step and its
+dependents) and a **`forEach`** fan-out.
 
 ### Extractors: locate, then optionally transform
 
-An extractor locates a raw value with its protocol-specific field, then optionally transforms it
-with one [Expr](/architecture/expressions/) expression in `value` (default identity). **One
-interpolation convention**: `${...}` is interpolated, a bare string is literal; `value` is always an
-Expr expression by definition, so it needs no wrapper.
+An extractor located a raw value with its protocol field, then optionally transformed it with one
+[Expr](/architecture/expressions/) expression in `value`:
 
 ```yaml
 samples:
   oid:
-    - { key: device-uptime, oid: 1.3.6.1.2.1.1.3.0, value: "raw / 100.0" }  # centiseconds to seconds
+    - { key: device-uptime, oid: 1.3.6.1.2.1.1.3.0, value: "raw / 100.0" }
   regex:
     - { key: fan-speed, match: 'fan \(rpm\)\s*:\s*(\d+)', value: "int(groups[1])" }
-  jsonpath:
-    - { key: channel-gain, each: $.channels[*], value: "node.gain",
-        labels: { channel: ${node.index}, name: ${node.name}, role: "main-display" } }
 ```
 
-The extractor names a `key`; what it *means* lives on
-[the lane's catalog](/architecture/properties/#the-two-catalogs) at some
-[scope](/architecture/properties/#key-scope-template-org-official): a template declares its own keys
-at **template** scope (no registry friction) or references an **org** / **official** key.
-Compile-time validation resolves every key to a reachable scope; an unresolved key is
-reject-not-project at ingest, so a template never silently collects a measurement no scope knows.
+A template could declare its own keys at a **template** scope; that rung retired with this model,
+and every metric, property and event emit names a catalog row
+([key scope](/architecture/properties/#key-scope-org-and-official)).
 :::
 
-:::design[Template inputs, tracked in #827]
+:::design[Historical: template inputs bound at apply, superseded by the driver spec (ADR-0827)]
+What shipped is [the driver spec](#drivers-the-declarative-menu) ([ADR-0135](/architecture/decisions/#adr-0135-a-drivers-spec-is-data-one-engine-interprets-it)): a driver declares typed inputs (`string`, `number`, `secret`), required or
+defaulted, supplied when a driver is attached to an endpoint and edited in place on it. A secret
+input is a reference resolved under the caller's own secret scope. The record below is the model it
+replaced ([ADR-0827](/architecture/decisions/#adr-0827-the-template-layer-owns-the-clone-model-and-the-componenttemplate-authoring-model-is-superseded-by-the-driver-spec)).
 
 ## Inputs: the template's typed parameters
 
-A template takes typed `inputs`, never a hardcoded `$var:`: it needs a `basic-auth`, not
-specifically `$var:crestron-ssh`. At `:apply` each input binds to a literal or a
-[variable](/architecture/variables/) reference (`$var:<name>`), with an optional shipped default;
-required inputs are the apply gate, and the UI renders the form.
-
-```yaml
-inputs:
-  - group: connectivity
-    fields:
-      - { key: ip,   type: ipv4,           required: true, label: "IPv4 address" }
-  - group: auth
-    fields:
-      - { key: snmp, type: snmp-community, required: true, label: "SNMP community" }
-      - { key: ssh,  type: basic-auth,     default: $var:crestron-ssh, label: "SSH login" }
-```
-
-The body references `${input.snmp}` / `${input.ssh}`; bindings resolve at apply, overridable per
-component, so `$var:` lives only at the binding layer and the template stays reusable with any value
-of the right shape. Each input `type` is a `variable_type`, so per-field secrecy comes from the
-shape.
+A template was to take typed `inputs` grouped for a form, never a hardcoded `$var:`, each bound at a
+`:apply` step to a literal or a [variable](/architecture/variables/) reference (`$var:<name>`), with
+required inputs as the apply gate. Nothing applies now: an attach validates the inputs and derives
+the endpoint's tasks in the same write.
 :::
 
 ## Execution: parse at the edge
@@ -1207,11 +1149,11 @@ A function runs the parse at the **edge**, not server-side:
 - **Raw payloads are not stored**: a dev raw-mode taps the wire live, a failed parse emits a `collection.failed` event carrying the raw, and there is no telemetry table.
 - **Owner attribution:** a single-owner function stamps identity at the edge; a many-device function publishes for multiple owners, resolved server-side from identity labels (below).
 - **Placement-scoped writes.** A node publishes only the owners in its **placement visible_set** (the owners of its assigned tasks), expressed as **NATS subject permissions** (the `node` gateway mode, [identity and access](/architecture/identity-access/)). An owner label outside the set is never an authoritative write, only an **orphan / discovery candidate** for the `discovery_rule` stream, so a compromised node cannot manufacture writes for owners it was never placed on; the perspectives / `disagree` model backstops a legitimately-placed node reporting bad values.
-- **No separately authored transform rule**: routing is the template's fan-out, cross-entity rollups are [calc](/architecture/calculations/) samples on system and location templates; the server-side remainder is shared-endpoint owner-binding and untemplated raw ingress.
+- **No separately authored transform rule**: routing is the driver's emit mapping, cross-entity rollups are [calc](/architecture/calculations/) samples; the server-side remainder is shared-endpoint owner-binding and raw ingress no driver claims.
 
 ### Raw sampling: an opt-in re-parsable window
 
-An opt-in **`raw_sample`** policy keeps a bounded window of raw frames so a corrected extractor can re-derive its samples over that window, without reintroducing a telemetry table. It is **cascade-resolved** (settable on an endpoint, task, or template) to **`off`** (default, no raw retained), **`all`** (every frame buffered), or **`1-in-N`** (sampled, bounding a high-cadence source). Kept frames carry the **immutable function version** that parsed them, so the window re-parses against that exact version and corrects retroactively; outside it, a wrong-but-conforming parse is **forward-fixable only**, the raw being gone. A short-TTL holding pen, range-partitioned and cold-tierable ([storage](/architecture/storage/)), not a parallel history of record.
+An opt-in **`raw_sample`** policy keeps a bounded window of raw frames so a corrected extractor can re-derive its samples over that window, without reintroducing a telemetry table. It is **cascade-resolved** (settable on an endpoint or task) to **`off`** (default, no raw retained), **`all`** (every frame buffered), or **`1-in-N`** (sampled, bounding a high-cadence source). Kept frames carry the **immutable function version** that parsed them, so the window re-parses against that exact version and corrects retroactively; outside it, a wrong-but-conforming parse is **forward-fixable only**, the raw being gone. A short-TTL holding pen, range-partitioned and cold-tierable ([storage](/architecture/storage/)), not a parallel history of record.
 
 ### On demand: validate, preview, and run a poll now
 

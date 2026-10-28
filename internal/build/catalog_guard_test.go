@@ -33,6 +33,9 @@ func TestTestsDoNotBorrowTheSeedCatalog(t *testing.T) {
 		"internal/seed/facts_test.go":       true,
 		"internal/devseed/devseed_test.go":  true,
 		"internal/devseed/identity_test.go": true,
+		// The template dry-run holds the catalog's templates to the seeded
+		// catalogs, so naming a seeded SKU is what it tests (#1323).
+		"internal/template/check_test.go": true,
 	}
 
 	raw, err := seed.FactsJSON()

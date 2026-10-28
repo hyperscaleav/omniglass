@@ -44,8 +44,8 @@ node serving its own simulated components, `omniglass node run --simulate` (#119
 [below](#serving-its-own-simulated-components)). Still `Design`: the
 durable JetStream command queue, the session pool knobs and the held transports beyond these
 (#1036 (mqtt), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip), [ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)),
-config-generation-driven cache invalidation, node self-telemetry, the node-down sweep, the
-cascade-resolved buffer knobs, tick scheduling and concurrency knobs, and config apply (the `:apply` flow). The credential is a shared
+node self-telemetry, the node-down sweep, the
+cascade-resolved buffer knobs, and tick scheduling and concurrency knobs. The credential is a shared
 secret (the enrollment token doubles as the NATS password); the decentralized nkey/JWT model is
 deferred. See [implementation status](/architecture/status/) and
 [decision log](/architecture/decisions/) (ADR-0036).
@@ -81,29 +81,31 @@ block and resolved ladder, its inputs defaulted at attach, and the secrets that 
 component ([ADR-0135](/architecture/decisions/#adr-0135-a-drivers-spec-is-data-one-engine-interprets-it)); the node never
 sees a driver spec, only resolved task and command instances.
 
-:::design[Target design: templates, `$var:` values and placement in the worklist, tracked in #827 and #296]
-The server, not the template, decides placement (next; today an endpoint names its node) and
+:::design[Target design: `$var:` values and placement in the worklist, tracked in #296]
+The server, not the driver spec, decides placement (next; today an endpoint names its node) and
 resolves the rest of the cascade (`$var:` values, an effective `interval` overriding the driver's
-schedule) before handing the node concrete work. The node never sees a template, only
+schedule) before handing the node concrete work. The node never sees a driver spec, only
 materialized, resolved task and command instances.
 :::
 
 ### Config propagation (declared change to running node)
 
-:::design[Target design: config propagation to a running node (`:apply` and the generation-driven cache), tracked in #827]
-An endpoint's connection config (endpoint, snmp community, http auth header) is a **projection** of
-the component's declared config through its template. The node re-pulls the worklist every tick but
-**caches endpoint config for its process lifetime**, so a changed input must propagate:
-**reconcile on the server** (a changed declared input, via `/components/{name}:apply` or a direct
-config write, re-renders the affected endpoints from the *current* declared config and upserts
-them, preserving placement) and **invalidate on the node** (the worklist reply carries a per-node
-**`config_generation`**, the max `updated_at` across the endpoints the node polls; an advance drops
-the node's endpoint cache and re-fetches this tick, a steady value serves from cache: a real change
-lands within one tick, no restart). The generation moves at **operator-config pace, not telemetry
-pace**: the sample-write path never touches `endpoint.updated_at` and a no-op re-apply does not
-advance it, so nodes are never woken for nothing.
+:::note[Built: a declared change reaches a running node on its next tick]
+The node keeps no endpoint config apart from its worklist: it **re-pulls the whole worklist every
+tick** and runs what that pull carries (a failed pull keeps the last one and retries next tick), so a change the server has written is running within one heartbeat, with
+no restart and nothing to apply. The server side is the re-derive: an endpoint edit
+(`PATCH /endpoints/{endpoint}`, its driver inputs included) and a driver spec change (#823) rewrite
+the affected tasks in the same transaction, and a held session whose
+[connection fingerprint](/architecture/collection/#the-connection-fingerprint-and-the-layered-gate)
+moved is recycled on the pull that carries it. The worklist reply also carries a per-node
+**`config_generation`**, the max `updated_at` across the endpoints placed on the node (epoch seconds,
+`0` when none). It moves at **operator-config pace, not
+telemetry pace**: the sample-write path never touches `endpoint.updated_at`. The node does not
+gate on it today, since a full pull each tick leaves nothing to invalidate. An earlier design cached
+endpoint config on the node and added a `:apply` custom method to re-render it from declared config;
+neither was built, and `:apply` retired with the template authoring model
+([ADR-0827](/architecture/decisions/#adr-0827-the-template-layer-owns-the-clone-model-and-the-componenttemplate-authoring-model-is-superseded-by-the-driver-spec)).
 :::
-
 ## The node-server protocol
 
 The edge is **outbound-only**: a node sits behind NAT, so the server never dials it. A node is a **NATS client over the WAN**, one authenticated outbound connection (an nkey/JWT credential bound to `node.name`); everything server-to-node arrives on subjects the node is permitted to consume. Three flows share the connection:

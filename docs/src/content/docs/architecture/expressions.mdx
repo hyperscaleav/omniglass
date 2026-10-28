@@ -154,7 +154,7 @@ holds the rule to each. Built today:
 
 <ExpressionDiagnostics />
 
-:::design[Omniglass functions, with the driver step and extractor sites, tracked in #827]
+:::design[Omniglass functions, with the driver transform and guard sites, tracked in #1331]
 
 ## Extended with Omniglass functions
 
@@ -182,30 +182,38 @@ celsius. A function rather than a per-unit method: data-driven, general, availab
 expressions run.
 :::
 
-:::design[The remaining expression sites, tracked in #1023 and #827 per row]
+:::design[The remaining expression sites, tracked in #1023 and #1331 per row]
 
 ## Where expressions will be used
 
 | Site | Leaf | What it evaluates | Tracked in |
 |---|---|---|---|
-| extractor | `value` | reshape a located raw value into the typed sample value | #827 |
-| step | `when` | the explicit branch guard (a false guard skips the step and dependents) | #827 |
+| driver emit | transform | reshape a located raw value into the typed sample value, beyond the built `cast` / `scale` / enum `map` | #1331 |
+| driver function | guard | a branch guard (a false guard skips the poll or the step it gates) | #1331 |
 | `calc_rule` | `filter` | per-input filters, `worst` (once property types declare an order) and windowed `time_in_state` for SLIs, beside the built calc site's list functions | #1023 |
 | rule | `scope` | which instances a rule fires for (the Expr scope escape) | #1023 |
 | views / list | `filter` | the structured-query predicate operators compose | #1023 |
 | dynamic group | membership `filter` | recomputed membership | #1023 |
 :::
 
-:::design[Function-run bindings and configuration values, tracked in #827]
+:::note[Built: a driver's inputs are data, never expression text]
+No driver site evaluates an expression today: a [driver spec](/architecture/collection/#drivers-the-declarative-menu)
+locates and transforms with declared selectors and a `cast` / `scale` / enum `map`, and the expression
+engine is not its dependency. Its configuration values are typed **inputs** supplied at attach, a
+secret input a reference resolved under the caller's own secret scope and delivered to the node
+unsealed in its worklist, so an operator value is always data the interpreter reads, never text it
+runs.
+:::
+
+:::design[Function-run bindings, tracked in #1331]
 
 ## In-scope bindings
 
-Within a function run the engine environment exposes: `$var:<name>` (config/secret through the
-cascade), `$prop.<key>` (properties, emitted and readable for branching; was `$dp.<key>`,
-renamed with the ADR-0065 vocabulary), `$steps.<id>.*` (ephemeral scratch), `$event` (a listen
-payload), and the
-extractor-local inputs a step prepares for its `value` leaf (`raw`, `groups`, `node`, `item`).
-Rule and view contexts bind their own documented environments (the candidate entity, the
+When a driver site gains an expression ([#1331](https://github.com/hyperscaleav/omniglass/issues/1331)),
+its environment exposes: `$var:<name>` (a variable through the cascade), `$prop.<key>` (properties,
+readable for branching; was `$dp.<key>`, renamed with the ADR-0065 vocabulary), `$event` (a
+listener's payload), and the extractor-local inputs a transform reads (`raw`, `groups`, `node`,
+`item`). Rule and view contexts bind their own documented environments (the candidate entity, the
 property, the resource row).
 
 ## Configuration values and secrets

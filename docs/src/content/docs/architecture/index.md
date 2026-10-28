@@ -61,9 +61,11 @@ Sometimes the component **pushes** it to Omniglass; usually Omniglass **polls** 
 component over an **[endpoint](/architecture/collection/)** (whatever the device speaks: SNMP, HTTP,
 SSH, a control processor's own command language) and reads.
 
-How to reach a class of device, and what to read from it, is declared once in the component's
-**[template](/architecture/templates/)**, the reusable device shape. The node runs that and
-**parses the answer at the edge**, turning a vendor's raw response into a normalized reading on
+How to reach a class of component, and what to read from it, is declared once in its
+**[driver](/architecture/collection/#drivers-the-declarative-menu)**: a declarative spec of the
+inputs an attachment supplies, the polls to run, the pushes to listen for, and the commands it can
+send. Attaching a driver to a component's endpoint derives the node's work from that spec. The node
+runs it and **parses the answer at the edge**, turning a vendor's raw response into a normalized reading on
 the spot.
 
 That normalized reading is a **sample**.
@@ -81,7 +83,7 @@ from the device, **[calculated](/architecture/calculations/)** by Omniglass, **i
 (which sensor or path told us).
 
 The meaning of each signal (its value type, its unit, its validation) lives in a governed
-**catalog** per lane (`metric_type`, `property_type`), and a template *references* a registered
+**catalog** per lane (`metric_type`, `property_type`), and a driver *references* a registered
 signal rather than inventing one, so two displays from
 different manufacturers answer the same question the same way: the **measurement** is named, not
 the device.

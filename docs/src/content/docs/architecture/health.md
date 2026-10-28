@@ -396,7 +396,7 @@ The full default KPI set and each one's exact reducers and windows.
 
 :::caution[Open question]
 The `occupancy-*` and `booking-*` canonical signals, and the occupancy-sensor and booking-system
-component templates that feed the utilization KPIs.
+drivers that feed the utilization KPIs.
 :::
 
 ::::

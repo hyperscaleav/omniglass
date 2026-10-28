@@ -503,22 +503,15 @@ assigned is under-staffed today); health adds whether the assigned components ca
 
 Shipped content is two kinds, never conflated:
 
-- **Example content** (a `standard`) is created by **forking an in-code template**
-  ([#827](https://github.com/hyperscaleav/omniglass/issues/827); shipped boot seeds stand in today).
-  The fork is **one-time, no inheritance**: nothing points back at the template, so it can improve
-  per release without touching a tenant. What lands is an **operator-owned** row (`official: false`),
-  installed **only if absent** (`ON CONFLICT DO NOTHING`) so re-seeding never reverts an edit; a
-  shipped standard's **roles** ride the same lane. Installing by name is why a shipped standard keeps
-  its name: the seed marks what it plants (`seeded`) and a rename refuses it, since the next boot would
-  plant the shipped name again
-  ([ADR-0555](/architecture/decisions/#adr-0555-a-registry-row-renames-through-its-own-rename-custom-method)).
-  A shipped role lands **whole** (the role and its accepted types and pinned products in one
-  transaction), and a later boot fills a set that a role the seed wrote, and nobody has since
-  declared or revised, is entirely missing, which is what an interrupted install could leave
-  ([ADR-0508](/architecture/decisions/#adr-0508-the-boot-seed-installs-a-shipped-role-whole-and-repairs-a-set-an-unrevised-role-is-missing)).
-  A shipped role that a conforming system already declares itself is not installed, since the name
-  would then mean two roles there
-  ([ADR-0503](/architecture/decisions/#adr-0503-a-role-name-addresses-one-role-per-system)).
+- **Example content** (a `standard`) is created by **forking a template** from the catalog the
+  binary ships ([templates](/architecture/templates/), `POST /standards:fork`). The fork is
+  **one-time, no inheritance**: nothing points back at the template, so it can improve per release
+  without touching a tenant. What lands is an **operator-owned** row (`official: false`) with the
+  template's roles, choices and contract lines, written whole in one transaction and audited once as a
+  fork naming the template. The boot seed plants **no** standard: a fresh install holds none until an
+  operator forks one, and a standard an older release planted is an ordinary operator row, renameable
+  and deletable, that no boot brings back
+  ([ADR-0827](/architecture/decisions/#adr-0827-the-template-layer-owns-the-clone-model-and-the-componenttemplate-authoring-model-is-superseded-by-the-driver-spec)).
 - **Canonical vocabulary** (the [`metric_type` and `property_type` catalogs](/architecture/properties/),
   the `event_type`
   and `command_type` registries) is the shared namespace a driver maps onto, identical install to
@@ -693,7 +686,7 @@ suppress four consequences:
 
 - **action dispatch is held**: an alarm may open, but no `action_rule` pages or opens a ticket
   ([alarms and actions](/architecture/alarms-actions/));
-- **drift is observed, not enforced**: the set function never fires, so a tech mid-swap is not fought
+- **drift is observed, not enforced**: no command is sent to make the device match its declared value, so a tech mid-swap is not fought
   ([config](/architecture/variables/));
 - **health rolls up no impact**: the member does not sink its parent's
   [health](/architecture/health/); it surfaces as "outage (maintenance)", the truth plus the mode;

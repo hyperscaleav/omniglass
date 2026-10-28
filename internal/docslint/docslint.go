@@ -225,18 +225,20 @@ var Banned = []BannedTerm{
 		Origin:      "ADR-0072",
 	},
 
-	// The template retirement (ADR-0071). Scoped to the snake_case IDENTIFIERS and
-	// their _version rows on purpose: the word "template" is not retired, it is
-	// redefined. A clonable example is exactly what an operator means by "start
-	// from a template", so prose like "system templates you can import" is correct
-	// and must not trip the lint. What died is the versioned shape an instance pins.
+	// The template retirement (ADR-0071). Scoped to the versioned-shape TABLES on
+	// purpose: the word "template" is not retired, it is redefined. A clonable
+	// example is exactly what an operator means by "start from a template", so
+	// prose like "system templates you can import" is correct and must not trip
+	// the lint. What died is the versioned shape an instance pins, its _version
+	// rows and its member table; the bare kind names component_template and
+	// system_template are the catalog's kinds again (ADR-0827).
 	{
-		Pattern:     regexp.MustCompile(`\bcomponent_template(_version)?\b`),
+		Pattern:     regexp.MustCompile(`\bcomponent_template_version\b`),
 		Replacement: "product (the device shape) with its product_property contract",
 		Origin:      "ADR-0071",
 	},
 	{
-		Pattern:     regexp.MustCompile(`\bsystem_template(_version|_member)?\b`),
+		Pattern:     regexp.MustCompile(`\bsystem_template_(version|member)\b`),
 		Replacement: "standard (the composition shape) and system_role (the slots)",
 		Origin:      "ADR-0071",
 	},
