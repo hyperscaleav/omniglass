@@ -15,11 +15,13 @@ they own outright. **Nothing points back at the template**: forking is one-time,
 back-pointer, so a template can be rewritten in any release without migrating a single install.
 
 :::note[Partial]
-Built: the catalog in the binary, its four kinds, the build's dry-run of every template, the read
-routes (#1323), forking a standard from a template, which retired the standards boot seed (#1324),
-the planned-system primitive (#1325), and instantiating a component, a system or a subtree of places
-(#1326, #1327, #1328). Still design: the console's Templates page and "Start from a template"
-(#1329).
+Built, the whole of #827: the catalog in the binary, its four kinds, the build's dry-run of every template, the read routes
+(#1323), forking a standard from a template, which retired the standards boot seed (#1324), the
+planned-system primitive (#1325), instantiating a component, a system or a subtree of places (#1326,
+#1327, #1328), and the console's Templates page with "Start from a template" in every create flow
+(#1329). Still design: the trust surface a catalog accepting templates from outside the binary needs
+(below, #318). Operator-authored templates are later
+([#1330](https://github.com/hyperscaleav/omniglass/issues/1330)).
 :::
 
 ## Fork, not pin
@@ -153,6 +155,16 @@ A place outside the caller's location read scope is a non-disclosing 404, and an
 carries the template's name as `instantiated_from`. No column and no back-pointer, which keeps the copy
 severed while still answering "where did this come from"; removing a template from the catalog leaves
 every row created from it reading identically.
+
+## In the console
+
+**Catalog > Templates** lists the catalog by kind; each template's blade renders what it creates from
+the template itself (a standard's roles and choices, a system's role fills, a place subtree with its
+systems, a component's preset), and **Start from this template** opens the form that calls the
+matching route. The standard, system, place and component create flows each carry **Start from a
+template**, and the row a template created opens with a notice that it is the operator's own and
+nothing follows the template. The walk-through is the
+[Start from a template](/guides/operator/templates/) guide.
 
 ## One primitive lands a plan
 
