@@ -120,6 +120,20 @@ func TestPropertiesCarryEveryKeyAndItsReconciliation(t *testing.T) {
 		t.Fatalf("video-input: want told=dp1 and nothing declared or observed, got %+v", r)
 	}
 
+	// A system: a property a push observed on it, nothing declaring it, is one
+	// of its properties (#422).
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "huddle-1"}, all, all); err != nil {
+		t.Fatalf("create system: %v", err)
+	}
+	if err := gw.InsertPropertySamples(ctx, storage.PushWriter(), []storage.PropertySampleWrite{{
+		OwnerKind: "system", OwnerID: "huddle-1", Key: "video-input", Value: "hdmi2", Source: "room-booking-cloud", TS: base,
+	}}); err != nil {
+		t.Fatalf("push on system: %v", err)
+	}
+	if r := reconOf(t, gw, "system", "huddle-1", "video-input"); r.Want != nil || string(r.Is) != `"hdmi2"` || r.IsInstance != "" || r.Drift {
+		t.Fatalf("a pushed system property: want want=null is=hdmi2, owner-level, no drift; got %+v", r)
+	}
+
 	// A place: its rows carry the block, never an observed value.
 	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq-campus", LocationType: "campus"}, all); err != nil {
 		t.Fatalf("create campus: %v", err)

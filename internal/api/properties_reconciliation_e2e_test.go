@@ -52,7 +52,8 @@ func readProps(t *testing.T, c *apiClient, tok, path string) map[string]propRow 
 // TestPropertiesCarryReconciliationAPI drives the one properties read over HTTP
 // (#1297): a declared property a live observer disagrees with reads drift,
 // naming the instance; a property only observed appears with want null and no
-// drift; a system's declared row carries the same block; an out-of-scope
+// drift; a system's declared row and a property pushed on it carry the same
+// block; an out-of-scope
 // component is the non-disclosing 404, a principal without component:read is
 // refused, and the retired reconciliation route is gone. Skipped under -short.
 func TestPropertiesCarryReconciliationAPI(t *testing.T) {
@@ -123,10 +124,28 @@ func TestPropertiesCarryReconciliationAPI(t *testing.T) {
 	if _, err := gw.SetProperty(ctx, "", "system", "huddle-1", "serial-number", "", json.RawMessage(`"S-1"`), all, all); err != nil {
 		t.Fatalf("set on system: %v", err)
 	}
+	// A property a push observed on the system, nothing declaring it (#422):
+	// one of the system's rows, want null, its is, no drift.
+	if err := gw.InsertPropertySamples(ctx, storage.PushWriter(), []storage.PropertySampleWrite{
+		{OwnerKind: "system", OwnerID: "huddle-1", Key: "video-input", Value: "hdmi2", Source: "room-booking-cloud", TS: now},
+	}); err != nil {
+		t.Fatalf("push on system: %v", err)
+	}
 	sys := readProps(t, c, ownerTok, "/systems/huddle-1/properties")
 	if r := sys["serial-number"].Reconciliation; r == nil || string(r.Want) != `"S-1"` || string(r.Is) != "null" || r.Drift {
 		t.Fatalf("system serial-number: want want=S-1, nothing observed, no drift; got %+v", r)
 	}
+	if r := sys["video-input"].Reconciliation; r == nil || string(r.Want) != "null" || string(r.Is) != `"hdmi2"` || r.Drift {
+		t.Fatalf("system video-input, pushed: want want=null is=hdmi2, no drift; got %+v", sys["video-input"])
+	}
+	// A viewer scoped to another system is the non-disclosing 404 on this one.
+	otherSys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "huddle-2"}, all, all)
+	if err != nil {
+		t.Fatalf("create other system: %v", err)
+	}
+	sysViewerTok := setupScopedViewer(t, ctx, dsn, "viewer-sys", "viewer", "system", otherSys.ID)
+	c.do(sysViewerTok, http.MethodGet, "/systems/huddle-1/properties", nil, http.StatusNotFound)
+	c.do(sysViewerTok, http.MethodGet, "/systems/huddle-2/properties", nil, http.StatusOK)
 
 	// A viewer scoped to a different component gets a non-disclosing 404 on
 	// disp-1 and reads its own component; a principal holding no component:read
