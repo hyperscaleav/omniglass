@@ -362,13 +362,17 @@ recent transitions the availability strip draws):
 omniglass component reachability list disp-1                              # needs component:read
 ```
 
-Read a component's property reconciliation, the want/told/is pivot (the current declared
-value with the contract default coalesced in, the newest intended value a command set, and the
-observed value read across every endpoint that reports it, naming the one it shows, all series
-reads) with drift computed on read:
+Read where each of a component's properties stands with its property list: every property it
+has (declared, calculated, observed or told) comes back as a row, and every row but a calculated
+one carries its `reconciliation`, the want/told/is pivot (the current declared value with the
+contract default coalesced in, the newest intended value a command set, and the observed value
+read across every endpoint that reports it, naming the one it shows in `is_instance`, all series
+reads) with drift computed on read. A property only observed reads `want: null` and never drifts.
+A system's list carries the same block:
 
 ```sh
-omniglass component reconciliation list disp-1                                       # needs component:read
+omniglass component property list disp-1 | jq -c '.properties[] | {property_type_name, reconciliation}'   # needs component:read
+omniglass system property list boardroom                                     # needs system:read
 ```
 
 ## Secrets
@@ -636,7 +640,7 @@ omniglass location-type property list room                             # a locat
 omniglass standard property update huddle-room room-capacity --default-value 6 --required=true
 omniglass standard property delete huddle-room room-capacity        # systems keep any value they set
 
-omniglass component property list dsp-boardroom-3                      # the effective read
+omniglass component property list dsp-boardroom-3                      # every property, reconciled
 omniglass system property list boardroom                               # same shape, system side
 omniglass location property list east-campus                           # same shape, location side
 omniglass system property update boardroom room-capacity --value 12    # idempotent

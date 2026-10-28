@@ -361,6 +361,15 @@ var Banned = []BannedTerm{
 		Pattern:     regexp.MustCompile(`/capabilities\b`),
 		Replacement: "no replacement: the routes are gone, not renamed",
 		Origin:      "#626",
+	}, {
+		// The component reconciliation route and its generated command
+		// (#1297): the want/told/is pivot is a block on every row of the
+		// owner's properties read now. "Reconciliation" stays ordinary
+		// vocabulary (the concept, the console panel); only the route's path
+		// and the command are named.
+		Pattern:     regexp.MustCompile(`/reconciliation\b|\breconciliation list\b`),
+		Replacement: "the properties read (GET /components/{name}/properties, omniglass component property list), whose rows carry reconciliation",
+		Origin:      "ADR-1297",
 	},
 }
 

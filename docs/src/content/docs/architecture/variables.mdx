@@ -10,7 +10,7 @@ sidebar:
 import SchemaTable from '../../../components/SchemaTable.astro';
 
 :::caution[Direction: ADR-0079 folds declared values into the series]
-The separate value store retired: a declared value is a **series row** (`provenance='declared'`) in the `property` sample table, an edit appends, an unset is a tombstone row, and every current value is the latest series row per `(owner, type, instance, provenance)` ([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)). The **reconciliation** read is built: a per-component pivot of want/told/is over series reads, with **drift computed on read**; `intended` rows are opened by the [command pillar](/architecture/commands/) and name their command.
+The separate value store retired: a declared value is a **series row** (`provenance='declared'`) in the `property` sample table, an edit appends, an unset is a tombstone row, and every current value is the latest series row per `(owner, type, instance, provenance)` ([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)). **Reconciliation** is built: every row of an owner's properties read carries its want/told/is pivot over series reads, with **drift computed on read**; `intended` rows are opened by the [command pillar](/architecture/commands/) and name their command.
 :::
 
 :::note[Partial: the secret and variable members are built; config is Design]
@@ -71,7 +71,7 @@ Each piece of a config item has one home, joined by the canonical key:
 | get / set binding | how this device class reads and writes the signal | the component's **product** |
 | declared value | the intent (`HDMI1`), plus the per-item `reconcile` policy | a `property` series row, `provenance='declared'` (built, [ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)); the policy is #1248 |
 | observed value | what the device reports (`HDMI2`) | `property` rows (observed) |
-| drift | declared ≠ observed | **computed on read**, not stored (built: the reconciliation read) |
+| drift | declared ≠ observed | **computed on read**, not stored (built: each properties-read row's reconciliation) |
 
 ### Drift and reconcile
 
@@ -328,7 +328,7 @@ synonyms) so `Prod`, `prod `, and `PROD` resolve to one value.
 There is no observed-side worker for config. A design once kept a cached observed value per config
 item, refreshed by a worker as `property` samples landed; [ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)
 retired every maintained current-value cache, so the observed side is the latest `observed` series
-row, read on demand, and the reconciliation read pivots it against the declared row (want, told, is),
+row, read on demand, and the properties read pivots it against the declared row (want, told, is),
 with drift computed on read.
 
 ## How this changes provenance

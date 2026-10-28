@@ -1,10 +1,12 @@
-# Reconciliation resolves every instance of a property
+# The properties read reconciles every instance of a property
 #
 # A display declared to show HDMI 1 is observed through two of its endpoints, each reporting the
 # input it sees and naming itself as the instance; a push naming an instance that is no endpoint
-# of the display is refused. The reconciliation read resolves every observed instance, worst
-# case: drift while any endpoint disagrees with the declaration, the value shown naming the
-# instance it came from, and no drift once every endpoint agrees (#456, ADR-0456).
+# of the display is refused. The display's properties read carries each property's
+# reconciliation, resolving every observed instance worst case: drift while any endpoint
+# disagrees with the declaration, the value shown naming the instance it came from, and no drift
+# once every endpoint agrees (#456, ADR-0456). A property only observed is listed too, with
+# nothing wanted and nothing to drift from (#1297).
 
 Type "# A display of this demo's own in Suite B4, declared to show HDMI 1"
 Enter
@@ -47,14 +49,14 @@ Type `omniglass telemetry push --owner "{\"kind\":\"component\",\"ref\":\"$d\"}"
 Enter
 Wait
 Hide
-Type `demo_until 15 'omniglass component reconciliation list "$d" | jq -e ".properties[] | select(.property == \"video-input\") | .is == \"hdmi3\""'`
+Type `demo_until 15 'omniglass component property list "$d" | jq -e ".properties[] | select(.property_type_name == \"video-input\") | .reconciliation.is == \"hdmi3\""'`
 Enter
 Wait@30s
 Show
 Type "# want and is disagree: drift, and is names the instance it came from"
 Enter
 Wait
-Type `omniglass component reconciliation list "$d" | jq -c '.properties[] | select(.property == "video-input") | {want, is, is_instance, drift}'`
+Type `omniglass component property list "$d" | jq -c '.properties[] | select(.property_type_name == "video-input") | .reconciliation | {want, is, is_instance, drift}'`
 Enter
 Wait
 
@@ -74,7 +76,7 @@ Type `demo_until 15 '[ "$(omniglass component property sample list "$d" video-in
 Enter
 Wait@30s
 Show
-Type `omniglass component reconciliation list "$d" | jq -c '.properties[] | select(.property == "video-input") | {want, is, is_instance, drift}'`
+Type `omniglass component property list "$d" | jq -c '.properties[] | select(.property_type_name == "video-input") | .reconciliation | {want, is, is_instance, drift}'`
 Enter
 Wait
 Type "# The webhook reports HDMI 1 too: every instance agrees, and drift clears"
@@ -84,10 +86,30 @@ Type `omniglass telemetry push --owner "{\"kind\":\"component\",\"ref\":\"$d\"}"
 Enter
 Wait
 Hide
-Type `demo_until 15 'omniglass component reconciliation list "$d" | jq -e ".properties[] | select(.property == \"video-input\") | .drift == false"'`
+Type `demo_until 15 'omniglass component property list "$d" | jq -e ".properties[] | select(.property_type_name == \"video-input\") | .reconciliation.drift == false"'`
 Enter
 Wait@30s
 Show
-Type `omniglass component reconciliation list "$d" | jq -c '.properties[] | select(.property == "video-input") | {want, is, is_instance, drift}'`
+Type `omniglass component property list "$d" | jq -c '.properties[] | select(.property_type_name == "video-input") | .reconciliation | {want, is, is_instance, drift}'`
+Enter
+Wait
+
+Hide
+Type "clear"
+Enter
+Wait
+Show
+Type "# A property nothing declares is listed once it is observed: nothing wanted, so nothing drifts"
+Enter
+Wait
+Type `omniglass telemetry push --owner "{\"kind\":\"component\",\"ref\":\"$d\"}" --properties '[{"name":"serial-number","value":"SN-4471","instance":"webhook"}]' | jq -c .accepted`
+Enter
+Wait
+Hide
+Type `demo_until 15 'omniglass component property list "$d" | jq -e ".properties[] | select(.property_type_name == \"serial-number\") | .reconciliation.is == \"SN-4471\""'`
+Enter
+Wait@30s
+Show
+Type `omniglass component property list "$d" | jq -c '.properties[] | select(.property_type_name == "serial-number") | {property: .property_type_name, value, reconciliation}'`
 Enter
 Wait

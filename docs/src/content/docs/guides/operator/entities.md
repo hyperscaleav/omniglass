@@ -59,7 +59,7 @@ in place. Each fact is said once: the blade's title is the label (the Label fiel
 while editing), a room's only system is the room (its card names no place and offers no second
 blade for it, only **Configure place**), and the standard is in Classification, not repeated
 above it. Configuration (a
-system's roles, the properties and their cascade, a component's reconciliation and
+system's roles, the properties and their cascade, the reconciliation, a component's
 endpoints) is the detail view's **Configure** tab, one **Expand** away, along with the
 components, the history and the vitals. Delete sits on the left of the footer behind a confirm, gated by your
 permissions on that row.
@@ -285,6 +285,16 @@ property their classifier declares, resolved to the value set here or the classi
 Overrides are staged with the rest of the edit and committed by the same **Save changes**. It is one
 surface over one resolver, so the panel reads the same on all three; the full walkthrough is in the
 [Properties guide](/guides/admin/properties/#set-a-property-on-an-instance).
+
+A component and a system also carry a **Reconciliation** panel above it, reading the same rows: for
+every property the owner has it shows **want** (what was declared, the value set here or the
+classifier's default), **told** (what a command last asked for) and **is** (what the gear reports,
+worst case across every endpoint that observes it, naming the endpoint), with a **drift** badge when
+an observation disagrees with want. A property nothing declares appears here once it is observed or
+commanded, with nothing wanted and so nothing to drift from; it stays out of the Properties panel,
+which holds only what is declared or calculated. A calculated property is not reconciled (nobody
+asked for its value), so it shows in Properties alone. A location has no Reconciliation panel: a
+place owns no observed value.
 
 ## Roles on a system
 

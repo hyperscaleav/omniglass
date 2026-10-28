@@ -322,7 +322,7 @@ method is the front door; **dispatch is over NATS**: the action fans out through
 The [collection](/architecture/collection/) authoring routes are the first concrete resources that
 exercise every convention above at once: the standard family per resource (`/nodes`, `/endpoints`,
 `/tasks`) plus the `:verb` custom methods, the per-component reads (`reachability`,
-`reconciliation`, `events`), all `component:read`-gated, and the read-only `GET /transports`
+`events`), all `component:read`-gated, and the read-only `GET /transports`
 (the code registry the endpoint picker consumes, `endpoint:read`-gated, #811). An endpoint
 create takes either a `transport` (a bare probe endpoint) or a `driver` plus `inputs` (an
 attach, #813: the driver's spec derives the transport, params, and tasks), and the `/drivers`
@@ -577,14 +577,10 @@ out-of-scope component is a non-disclosing 404 (a deliberate early exception to
   /systems/{name}/logs` merges the members' lines the same way, each naming its component. Both are
   `component:read` and `system:read` gated, scope cascading through the owner (out of scope, a
   non-disclosing 404).
-- `GET /components/{name}/reconciliation` pivots want/told/is over the series: per declared
-  property, the **want** (the current declared value, with the contract default coalesced in), the
-  **told** (the newest `intended` value a command set, on any instance), and the **is** (the
-  `observed` value, resolved across every live instance worst-case, a deleted endpoint's frozen
-  reading left out, and named by `is_instance`), all
-  three [latest-series-row reads](/architecture/properties/#current-value-is-the-latest-series-row),
-  with **drift** (any observed instance disagreeing with declared) computed on read
-  ([how an instance resolves](/architecture/properties/#the-instance-dimension-many-values-of-one-name-on-one-owner)).
+- Where each property stands is not a route of its own: every row of the owner's properties read
+  (below) carries its `reconciliation`, the want/told/is pivot. The separate
+  component reconciliation route retired into it
+  ([ADR-1297](/architecture/decisions/#adr-1297-the-properties-read-carries-reconciliation-and-the-reconciliation-route-retires)).
 
 **Three registries ride the `/property-types` shape** (fleet-wide reference data, no scope injection;
 official types are read-only, a 409). The **metric_type catalog is the numeric keyspace**:
@@ -844,12 +840,23 @@ every write is audited. Three owners are addressable
 by its own entity's permission (`component:read` / `component:update` and friends): the catalog governs
 the vocabulary, the owning entity its values, the same rule tag bindings follow.
 
-The `GET` is the **effective read**: every property the instance's classifier declares (its `product`,
-its `standard`, its `location_type`), resolved to `coalesce(the instance's own value, the contract
-default)`, plus every property set directly on the instance off contract, each row carrying the
-catalog's display fields plus the value, the default, `is_set` (the override marker), `from_contract`,
-`required`, and the `value_id` the surface clears. An instance with **no classifier** returns only its
-off-contract values. `PUT .../{property}` sets the instance's value from `{value}`, idempotently; the
+The `GET` is the **properties read**, one row per property the owner has: every property the
+instance's classifier declares (its `product`, its `standard`, its `location_type`), resolved to
+`coalesce(the instance's own value, a calc rule's value, the contract default)`; every property set
+directly on the instance off contract; every property a calc rule writes on it (`source_rule`); and
+every property it only observes (collected or pushed, on a live instance) or was told by a command.
+Each row carries the catalog's display fields plus the value (omitted on a row nothing declares or
+calculates), the default, `is_set` (the override marker), `from_contract`, `required`, and the
+`value_id` the surface clears. Every row but a calculated one carries its **`reconciliation`**
+(#1297): the **want** (the declared value, the contract default coalesced in, `null` when nothing
+declares it), the **told** (the newest `intended` value a command set, on any instance), and the
+**is** (the `observed` value, resolved across every live instance worst-case, a deleted endpoint's
+frozen reading left out, and named by `is_instance`), all
+[latest-series-row reads](/architecture/properties/#current-value-is-the-latest-series-row), with
+**drift** (any observed instance disagreeing with want, so `false` with nothing declared) computed on
+read ([how an instance resolves](/architecture/properties/#the-instance-dimension-many-values-of-one-name-on-one-owner)).
+A place owns no observed sample, so a location's rows never carry `is`. An instance with **no
+classifier** returns only its off-contract, calculated, observed and told rows. `PUT .../{property}` sets the instance's value from `{value}`, idempotently; the
 property need **not** be on the contract, but must exist in the catalog (422 otherwise).
 `DELETE .../{property}` clears it (204), falling back to the contract default or leaving the effective
 read entirely when off contract; clearing a value the instance never set is a 404.
