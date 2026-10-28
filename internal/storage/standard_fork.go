@@ -69,17 +69,31 @@ type standardForkAudit struct {
 // ErrMetricTypeNotFound); an invalid map is ErrStandardMapInvalid. Nothing
 // lands on a refusal.
 func (p *PG) ForkStandard(ctx context.Context, actorID string, f StandardFork) (*Standard, error) {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: begin fork standard: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	created, err := p.forkStandardTx(ctx, tx, actorID, f)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit fork standard: %w", err)
+	}
+	return created, nil
+}
+
+// forkStandardTx is ForkStandard inside the caller's transaction: the fork a
+// standard route and a system instantiated from a template (CreatePlan)
+// share.
+func (p *PG) forkStandardTx(ctx context.Context, tx pgx.Tx, actorID string, f StandardFork) (*Standard, error) {
 	if err := ValidateName("standard", f.Name); err != nil {
 		return nil, err
 	}
 	if err := validateStandardMap(f.Map); err != nil {
 		return nil, err
 	}
-	tx, err := p.pool.Begin(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("storage: begin fork standard: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
 	// First, before any other lock: see roleNameLockKey. The roles below are
 	// written on a standard no system conforms to yet, so no name can
 	// collide, but the lock order is every role write's.
@@ -144,9 +158,6 @@ func (p *PG) ForkStandard(ctx context.Context, actorID string, f StandardFork) (
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "fork", "standard", created.ID, nil, audit); err != nil {
 		return nil, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("storage: commit fork standard: %w", err)
 	}
 	return created, nil
 }

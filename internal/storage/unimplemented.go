@@ -519,6 +519,9 @@ func (UnimplementedGateway) AuditSimOperation(context.Context, string, string, a
 func (UnimplementedGateway) CreateSimSystem(context.Context, string, SimSystemSpec, SimSystemScopes) (*SimSystem, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) CreatePlan(context.Context, string, Plan, PlanScopes) (*Planned, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) WithSimAddressLock(_ context.Context, fn func() error) error {
 	return fn()
 }

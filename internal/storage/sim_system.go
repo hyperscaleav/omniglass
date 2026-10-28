@@ -2,7 +2,6 @@ package storage
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
 )
@@ -43,61 +42,35 @@ type SimSystem struct {
 }
 
 // SimSystemError says which piece of a simulated system failed, so a caller
-// can map the cause the way that piece's own route maps it.
-type SimSystemError struct {
-	Stage string // system, component, endpoint, role
-	Role  string
-	Err   error
-}
-
-func (e *SimSystemError) Error() string {
-	if e.Role == "" {
-		return fmt.Sprintf("storage: sim system %s: %v", e.Stage, e.Err)
-	}
-	return fmt.Sprintf("storage: sim system %s for role %s: %v", e.Stage, e.Role, e.Err)
-}
-
-func (e *SimSystemError) Unwrap() error { return e.Err }
+// can map the cause the way that piece's own route maps it. It is the
+// planned create's own error (Stage system, component, endpoint or role).
+type SimSystemError = PlanError
 
 // CreateSimSystem creates a simulated system whole, in one transaction: the
 // system, then for each planned component the component, its endpoints on
-// the node, and its role assignment. Every piece is the ordinary create
-// with the caller's own scope and its own audit row, so the composite is
-// exactly the writes an operator could make one at a time, landing together
-// or not at all.
+// the node, and its role assignment. It is a consumer of the planned create
+// (CreatePlan): every piece is the ordinary create with the caller's own
+// scope and its own audit row, landing together or not at all.
 func (p *PG) CreateSimSystem(ctx context.Context, actorID string, spec SimSystemSpec, sc SimSystemScopes) (*SimSystem, error) {
-	tx, err := p.pool.Begin(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("storage: begin create sim system: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	sys, err := p.createSystemTx(ctx, tx, actorID, spec.System, sc.SystemCreate, sc.LocationRead)
-	if err != nil {
-		return nil, &SimSystemError{Stage: "system", Err: err}
-	}
-	out := &SimSystem{System: sys}
 	node := spec.Node
+	ps := PlannedSystem{System: spec.System}
 	for _, slot := range spec.Components {
 		product := slot.Product
-		c, err := p.createComponentTx(ctx, tx, actorID, ComponentSpec{ProductName: &product, LocationName: spec.System.LocationName},
-			sc.ComponentCreate, sc.LocationRead, sc.SystemRead, sc.SystemUpdate)
-		if err != nil {
-			return nil, &SimSystemError{Stage: "component", Role: slot.Role, Err: err}
-		}
+		pc := PlannedComponent{Role: slot.Role, Component: ComponentSpec{ProductName: &product}}
 		for _, e := range slot.Endpoints {
-			id := c.ID
-			e.Component, e.Node, e.SecretRead, e.CanAdmin = &id, &node, sc.SecretRead, sc.CanAdmin
-			if _, err := p.createEndpointTx(ctx, tx, actorID, e, sc.EndpointCreate); err != nil {
-				return nil, &SimSystemError{Stage: "endpoint", Role: slot.Role, Err: err}
-			}
+			n := node
+			e.Node = &n
+			pc.Endpoints = append(pc.Endpoints, e)
 		}
-		if err := p.assignRoleTx(ctx, tx, actorID, sys.ID, slot.Role, c.ID, sc.SystemRead, sc.SystemUpdate, sc.ComponentRead, sc.ComponentUpdate); err != nil {
-			return nil, &SimSystemError{Stage: "role", Role: slot.Role, Err: err}
-		}
-		out.Components = append(out.Components, c)
+		ps.Components = append(ps.Components, pc)
 	}
-	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("storage: commit create sim system: %w", err)
+	made, err := p.CreatePlan(ctx, actorID, Plan{Systems: []PlannedSystem{ps}}, PlanScopes{
+		LocationRead: sc.LocationRead, SystemCreate: sc.SystemCreate, SystemRead: sc.SystemRead, SystemUpdate: sc.SystemUpdate,
+		ComponentCreate: sc.ComponentCreate, ComponentRead: sc.ComponentRead, ComponentUpdate: sc.ComponentUpdate,
+		EndpointCreate: sc.EndpointCreate, SecretRead: sc.SecretRead, CanAdmin: sc.CanAdmin,
+	})
+	if err != nil {
+		return nil, err
 	}
-	return out, nil
+	return &SimSystem{System: made.Systems[0].System, Components: made.Systems[0].Components}, nil
 }

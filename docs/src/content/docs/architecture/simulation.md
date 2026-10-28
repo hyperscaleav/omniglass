@@ -395,7 +395,11 @@ short, with the reason: that list is what the simulator's catalog still lacks.
 create names it), each at its own free address with its planned endpoint on the node, and each role
 assignment, in one transaction under the address lock, so the system lands whole or not at all. Every
 piece is the ordinary create with the caller's own scope and audit row. The simulator serves the
-components from its next pull. The lab's room archetypes in the catalog (`profiles/systems`) remain
+components from its next pull. The plan and the write are the **planned-system primitive** a
+[system template](/architecture/templates/) also builds on: the pure planner
+(`internal/systemplan`) takes each role's candidate products as an input (here the products the
+simulator serves), and the planned create (`storage.CreatePlan`) lands places, systems, their
+components, endpoints, declared values and role assignments in one transaction. The lab's room archetypes in the catalog (`profiles/systems`) remain
 only as the input of the simulator's internal fleet compiler (#914); they are not how an operator
 adds a system ([ADR-0143](/architecture/decisions/#adr-0143-a-simulated-system-is-built-to-a-standard-with-platform-minted-names)).
 

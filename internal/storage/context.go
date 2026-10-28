@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -91,6 +92,49 @@ func SanitizeAuditClient(s string) string {
 	out := strings.TrimSpace(b.String())
 	if utf8.RuneCountInString(out) > auditClientMax {
 		out = string([]rune(out)[:auditClientMax])
+	}
+	return out
+}
+
+// templateKey carries the template a planned create came from (#827).
+type templateKey struct{}
+
+// WithTemplate marks every audit row written under ctx with the template the
+// rows came from: provenance lives in the audit detail and nowhere else (no
+// column, no back-pointer, ADR-0071), so this is the one trace a row
+// started from a template.
+func WithTemplate(ctx context.Context, name string) context.Context {
+	if name == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, templateKey{}, name)
+}
+
+func templateFrom(ctx context.Context) string {
+	name, _ := ctx.Value(templateKey{}).(string)
+	return name
+}
+
+// withTemplateDetail adds the template to an audit image (a JSON object), so
+// the detail names where the row came from. A nil image, or one that is not
+// an object, is left as it is.
+func withTemplateDetail(ctx context.Context, image any) any {
+	name := templateFrom(ctx)
+	b, ok := image.([]byte)
+	if name == "" || !ok || len(b) < 2 || b[0] != '{' {
+		return image
+	}
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(b, &m); err != nil {
+		return image
+	}
+	if _, has := m["template"]; has {
+		return image
+	}
+	m["template"], _ = json.Marshal(name)
+	out, err := json.Marshal(m)
+	if err != nil {
+		return image
 	}
 	return out
 }

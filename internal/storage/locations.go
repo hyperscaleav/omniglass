@@ -978,7 +978,19 @@ func (p *PG) CreateLocation(ctx context.Context, actorID string, spec LocationSp
 		return nil, fmt.Errorf("storage: begin create location: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	l, err := p.createLocationTx(ctx, tx, actorID, spec, create)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit create location: %w", err)
+	}
+	return l, nil
+}
 
+// createLocationTx is CreateLocation inside the caller's transaction: the
+// one create a location route and a planned subtree (CreatePlan) share.
+func (p *PG) createLocationTx(ctx context.Context, tx pgx.Tx, actorID string, spec LocationSpec, create scope.Set) (*Location, error) {
 	// An operator-typed name is validated now, before any other resolve, so a
 	// bad slug fails fast (the existing behavior). A generated one is validated
 	// too, but later, inside generateName, the one place every generation site
@@ -1052,9 +1064,6 @@ func (p *PG) CreateLocation(ctx context.Context, actorID string, spec LocationSp
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "create", "location", l.ID, nil, l); err != nil {
 		return nil, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("storage: commit create location: %w", err)
 	}
 	return l, nil
 }
@@ -1542,6 +1551,7 @@ func writeAuditRes(ctx context.Context, tx pgx.Tx, actorID, verb, resource, reso
 	if err != nil {
 		return err
 	}
+	newJSON = withTemplateDetail(ctx, newJSON)
 	// channel and client say how the action arrived (#1162): set on the context by
 	// the MCP dispatch, null for a direct API call.
 	channel, client := auditChannelFrom(ctx)

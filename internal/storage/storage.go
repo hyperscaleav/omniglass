@@ -738,6 +738,10 @@ type Gateway interface {
 	// CreateSimSystem creates a simulated system whole (the system, its
 	// components, their endpoints and role assignments) in one transaction.
 	CreateSimSystem(ctx context.Context, actorID string, spec SimSystemSpec, sc SimSystemScopes) (*SimSystem, error)
+	// CreatePlan lands a planned set of places, systems and components whole,
+	// in one transaction, each piece the ordinary create in the caller's
+	// scope with its own audit row (#827).
+	CreatePlan(ctx context.Context, actorID string, plan Plan, sc PlanScopes) (*Planned, error)
 	// ResolveTaskOwner binds a task's owner component and confines the node to its
 	// own tasks, for the telemetry ingest consumer.
 	ResolveTaskOwner(ctx context.Context, taskID, nodeName string) (TaskOwner, bool, error)

@@ -110,7 +110,7 @@ func scanProperty(row pgx.Row) (*Property, error) {
 // (a single-set owner guard for the check and ownerArcValueInScope for the arc),
 // because resolveTargetID returns the id the arc stores.
 func (p *PG) SetProperty(ctx context.Context, actorID, ownerKind, ownerID, propertyName, instance string, value json.RawMessage, read, action scope.Set) (*Property, error) {
-	col, err := ownerColumn(ownerKind)
+	_, err := ownerColumn(ownerKind)
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +124,24 @@ func (p *PG) SetProperty(ctx context.Context, actorID, ownerKind, ownerID, prope
 		return nil, fmt.Errorf("storage: begin set property value: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	pv, err := p.setPropertyTx(ctx, tx, actorID, ownerKind, ownerID, propertyName, instance, value, read, action)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit set property value: %w", err)
+	}
+	return pv, nil
+}
 
+// setPropertyTx is SetProperty inside the caller's transaction: the one
+// declared-value write the property route and a planned create
+// (CreatePlan) share.
+func (p *PG) setPropertyTx(ctx context.Context, tx pgx.Tx, actorID, ownerKind, ownerID, propertyName, instance string, value json.RawMessage, read, action scope.Set) (*Property, error) {
+	col, err := ownerColumn(ownerKind)
+	if err != nil {
+		return nil, err
+	}
 	// One scoped resolve, and its result IS the arc value: no second, scope-blind
 	// re-resolve of the same reference can follow it (ruling 2, #627), because
 	// there is no second resolve at all.
@@ -164,9 +181,6 @@ func (p *PG) SetProperty(ctx context.Context, actorID, ownerKind, ownerID, prope
 			return nil, err
 		}
 		pv.OwnerID = ownerID
-		if err := tx.Commit(ctx); err != nil {
-			return nil, fmt.Errorf("storage: commit set property value: %w", err)
-		}
 		return pv, nil
 	}
 	if err != nil {
@@ -175,9 +189,6 @@ func (p *PG) SetProperty(ctx context.Context, actorID, ownerKind, ownerID, prope
 	pv.OwnerID = ownerID
 	if err := writeAuditRes(ctx, tx, actorID, "update", "property", pv.ID, nil, pv); err != nil {
 		return nil, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("storage: commit set property value: %w", err)
 	}
 	return pv, nil
 }
