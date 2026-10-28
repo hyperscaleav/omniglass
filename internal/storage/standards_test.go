@@ -21,6 +21,7 @@ func TestStandardCRUD(t *testing.T) {
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
+	storagetest.ForkShippedStandards(t, gw)
 
 	st, err := gw.CreateStandard(ctx, "", storage.Standard{Name: "kiosk", Label: "Kiosk"})
 	if err != nil {
@@ -110,6 +111,7 @@ func TestSystemStandardOptional(t *testing.T) {
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
+	storagetest.ForkShippedStandards(t, gw)
 
 	oneOff, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "one-off"}, all, all)
 	if err != nil {

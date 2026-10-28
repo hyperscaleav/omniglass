@@ -49,8 +49,10 @@ func TestStandardsAPI(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	// A plain viewer (read everywhere, write nothing) reads the seeded official
-	// standards via the standard:read floor (*:read).
+	// A plain viewer (read everywhere, write nothing) reads the standards via
+	// the standard:read floor (*:read): one forked from a template here, since
+	// the boot seeds none.
+	c.do(ownerTok, http.MethodPost, "/standards:fork", map[string]any{"template": "classroom"}, http.StatusCreated)
 	viewerTok := principalWithGrants(t, ctx, dsn, "standard-viewer", []grant{{role: "viewer", scopeKind: "all"}})
 	var listed struct {
 		Standards []struct {
@@ -62,7 +64,7 @@ func TestStandardsAPI(t *testing.T) {
 		t.Fatalf("decode: %v", err)
 	}
 	if len(listed.Standards) == 0 {
-		t.Fatalf("standards empty, want seeded rows")
+		t.Fatalf("standards empty, want the forked row")
 	}
 
 	// The viewer cannot create (403, capability fast-reject).
@@ -115,12 +117,12 @@ func TestStandardsAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodDelete, "/systems/k1", nil, http.StatusNoContent)
 	c.do(ownerTok, http.MethodDelete, "/standards/kiosk", nil, http.StatusNoContent)
 
-	// A shipped standard is operator-owned example content (forked from an in-code
-	// template), so it is editable rather than read-only. The official read-only
+	// A standard forked from a template is the operator's own, so it is
+	// editable rather than read-only. The official read-only
 	// guard still exists for genuinely official rows; it is proven at the storage
 	// tier, where a test can mint one.
-	c.do(ownerTok, http.MethodPatch, "/standards/meeting-room",
-		map[string]any{"label": "Meeting Room"}, http.StatusOK)
+	c.do(ownerTok, http.MethodPatch, "/standards/classroom",
+		map[string]any{"label": "Our Classroom"}, http.StatusOK)
 
 	// Unknown id is a 404, on both read and delete.
 	c.do(ownerTok, http.MethodGet, "/standards/nope", nil, http.StatusNotFound)

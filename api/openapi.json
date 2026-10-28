@@ -5090,6 +5090,44 @@
         ],
         "type": "object"
       },
+      "ForkStandardInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/ForkStandardInputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "label": {
+            "description": "The standard's label; omitted takes the template's",
+            "type": "string"
+          },
+          "name": {
+            "description": "The name the standard takes; omitted takes the template's",
+            "type": "string"
+          },
+          "parent": {
+            "description": "For a variant, the standard it hangs off, by name or uuid; omitted takes your standard named for the template's parent",
+            "type": "string"
+          },
+          "template": {
+            "description": "The standard template to fork, by name",
+            "examples": [
+              "meeting-room"
+            ],
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "template"
+        ],
+        "type": "object"
+      },
       "GrantBody": {
         "additionalProperties": false,
         "properties": {
@@ -24953,7 +24991,7 @@
     },
     "/standards/{id}:rename": {
       "post": {
-        "description": "Moves a custom standard's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official standard keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. A shipped example standard keeps its name too (409): the boot seed plants it by name whenever it is absent, so a renamed one would come back on the next boot; forking a template into a standard of your own is #827. Audited as rename. Gated by standard:rename.",
+        "description": "Moves a custom standard's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official standard keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. Audited as rename. Gated by standard:rename.",
         "operationId": "rename-standard",
         "parameters": [
           {
@@ -25001,6 +25039,47 @@
         },
         "summary": "Rename a standard",
         "x-omniglass-permission": "standard:rename"
+      }
+    },
+    "/standards:fork": {
+      "post": {
+        "description": "Writes one standard of your own (official false) from a standard template in the catalog: its roles, choices, property and metric contract lines and map, in one transaction, audited once as a fork naming the template. Nothing points back at the template, so a later release can change the template without touching your standard, and your standard renames, edits and deletes like any you created. The name is the template's unless you give one; a taken name is a 409, so forking the same template again needs a second name. A variant forks only once you hold the standard it hangs off (the parent you name, or yours named for the template's parent), else a 422 naming the template to fork first. An unknown template is a 404. Gated by standard:create.",
+        "operationId": "fork-standard",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForkStandardInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardBody"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Fork a standard from a template",
+        "x-omniglass-mcp": {},
+        "x-omniglass-permission": "standard:create"
       }
     },
     "/system-types": {
@@ -27248,7 +27327,7 @@
     },
     "/templates": {
       "get": {
-        "description": "Lists the template catalog this binary ships, ordered by kind then name, optionally one kind. A template is an example an operator clones: forking or instantiating one writes ordinary rows the operator owns, and nothing points back at the template. Gated by template:read.",
+        "description": "Lists the template catalog this binary ships, ordered by kind then name, optionally one kind. A template is an example an operator clones: forking a standard template (POST /standards:fork) writes an ordinary standard the operator owns, and nothing points back at the template. Gated by template:read.",
         "operationId": "list-templates",
         "parameters": [
           {
@@ -27297,7 +27376,7 @@
     },
     "/templates/{template}": {
       "get": {
-        "description": "Reads one template from the catalog by name: what it creates, as the fork or instantiate method would write it. An unknown name is a 404. Gated by template:read.",
+        "description": "Reads one template from the catalog by name, whole: its kind and the body that kind carries. An unknown name is a 404. Gated by template:read.",
         "operationId": "get-template",
         "parameters": [
           {

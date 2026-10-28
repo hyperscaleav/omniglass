@@ -6,8 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 
 	"github.com/hyperscaleav/omniglass/internal/driver"
+	"github.com/hyperscaleav/omniglass/internal/key"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
@@ -103,14 +105,27 @@ func checkPreset(ctx context.Context, gw storage.Gateway, drv string, inputs map
 	if err := json.Unmarshal(d.Spec, &sp); err != nil {
 		return []error{fmt.Errorf("attaches driver %q: read its spec: %w", drv, err)}
 	}
-	declared := map[string]bool{}
+	declared := map[string]driver.Input{}
 	for _, in := range sp.Inputs {
-		declared[in.Name] = true
+		declared[in.Name] = in
 	}
 	var errs []error
 	for _, name := range sortedKeys(inputs) {
-		if !declared[name] {
+		in, ok := declared[name]
+		if !ok {
 			errs = append(errs, fmt.Errorf("presets input %q, which driver %q does not declare", name, drv))
+			continue
+		}
+		// The value checks the attach applies (resolveInputs), so a preset
+		// the attach would refuse never ships.
+		v := inputs[name]
+		if err := sp.CheckInputValue(name, v); err != nil {
+			errs = append(errs, fmt.Errorf("presets %v", err))
+		}
+		if in.Kind == "number" {
+			if _, err := strconv.ParseFloat(v, 64); err != nil {
+				errs = append(errs, fmt.Errorf("presets input %q as %q, which is not a number", name, v))
+			}
 		}
 	}
 	return errs
@@ -119,8 +134,13 @@ func checkPreset(ctx context.Context, gw storage.Gateway, drv string, inputs map
 func checkValues(ctx context.Context, gw storage.Gateway, v Values) []error {
 	var errs []error
 	for _, name := range v.Names() {
-		if _, err := gw.GetPropertyType(ctx, name); err != nil {
+		pt, err := gw.GetPropertyType(ctx, name)
+		if err != nil {
 			errs = append(errs, fmt.Errorf("declares a value for property %q: %w", name, err))
+			continue
+		}
+		if err := key.ValidateValue(pt.DataType, v[name], pt.Validation); err != nil {
+			errs = append(errs, fmt.Errorf("declares %s for property %q: %w", v[name], name, err))
 		}
 	}
 	return errs
@@ -133,11 +153,10 @@ func checkSystem(ctx context.Context, c *Catalog, gw storage.Gateway, s *System)
 			errs = append(errs, fmt.Errorf("names system type %q: %w", s.SystemType, err))
 		}
 	}
-	var pins map[string][]string
+	declared := map[string]Role{}
 	if st, err := c.GetKind(s.Standard, KindStandard); err == nil {
-		pins = map[string][]string{}
 		for _, r := range st.Standard.Roles {
-			pins[r.Name] = r.PinnedProducts
+			declared[r.Name] = r
 		}
 	}
 	for _, role := range sortedKeys(s.Roles) {
@@ -150,16 +169,44 @@ func checkSystem(ctx context.Context, c *Catalog, gw storage.Gateway, s *System)
 			}
 			product = ct.Component.Product
 		}
-		if _, err := gw.GetProduct(ctx, product); err != nil {
+		prod, err := gw.GetProduct(ctx, product)
+		if err != nil {
 			errs = append(errs, fmt.Errorf("role %s names product %q: %w", role, product, err))
 			continue
 		}
-		if p := pins[role]; len(p) > 0 && !slices.Contains(p, product) {
+		r := declared[role]
+		if p := r.PinnedProducts; len(p) > 0 && !slices.Contains(p, product) {
 			errs = append(errs, fmt.Errorf("role %s fills with product %q, but the standard pins %v", role, product, p))
+		}
+		if err := checkAccepts(ctx, gw, r, prod); err != nil {
+			errs = append(errs, fmt.Errorf("role %s fills with product %q: %w", role, product, err))
 		}
 	}
 	errs = append(errs, checkValues(ctx, gw, s.Properties)...)
 	return errs
+}
+
+// checkAccepts holds a fill to the role's typed slot, as an assignment does:
+// the product's component type must be one the role accepts or a subtype of
+// one. A role accepting no type takes any.
+func checkAccepts(ctx context.Context, gw storage.Gateway, r Role, prod *storage.Product) error {
+	if len(r.AcceptedTypes) == 0 {
+		return nil
+	}
+	have, err := gw.GetComponentType(ctx, prod.ComponentTypeID)
+	if err != nil {
+		return fmt.Errorf("read its component type: %w", err)
+	}
+	for _, at := range r.AcceptedTypes {
+		want, err := gw.GetComponentType(ctx, at)
+		if err != nil {
+			continue
+		}
+		if within, err := gw.TypeIsWithin(ctx, have.ID, want.ID); err == nil && within {
+			return nil
+		}
+	}
+	return fmt.Errorf("a %s, which the role (accepting %v) does not take", prod.ComponentType, r.AcceptedTypes)
 }
 
 // checkPlace holds each place's type to the shipped location types: the

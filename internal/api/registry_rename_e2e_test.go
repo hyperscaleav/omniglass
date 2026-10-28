@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
-	"strings"
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
@@ -134,14 +133,12 @@ func TestRegistryRenameAPI(t *testing.T) {
 	}
 	c.do(adminTok, http.MethodPost, "/location-types/wing:rename", map[string]any{"name": "root"}, http.StatusUnprocessableEntity)
 
-	// A seeded example standard keeps its name: the boot seed plants it by name
-	// when absent, so a rename would bring the shipped one back on the next boot.
-	// A 409 that says so, and the row is untouched.
-	refusal := string(c.do(adminTok, http.MethodPost, "/standards/meeting-room:rename", map[string]any{"name": "conference-room"}, http.StatusConflict))
-	if !strings.Contains(refusal, "shipped example") || !strings.Contains(refusal, "next boot") {
-		t.Errorf("seeded standard rename refusal = %s, want it to name the shipped example and the next boot", refusal)
-	}
-	c.do(adminTok, http.MethodGet, "/standards/meeting-room", nil, http.StatusOK)
+	// A standard forked from a template renames like any of the operator's own:
+	// nothing plants it again by name (ADR-0827).
+	c.do(adminTok, http.MethodPost, "/standards:fork", map[string]any{"template": "meeting-room"}, http.StatusCreated)
+	c.do(adminTok, http.MethodPost, "/standards/meeting-room:rename", map[string]any{"name": "conference-room"}, http.StatusOK)
+	c.do(adminTok, http.MethodGet, "/standards/conference-room", nil, http.StatusOK)
+	c.do(adminTok, http.MethodGet, "/standards/meeting-room", nil, http.StatusNotFound)
 
 	// vendor:update without vendor:rename edits the vendor and cannot rename it.
 	editorTok := principalWithGrants(t, ctx, dsn, "vendor-editor", []grant{{role: "vendor-editor", scopeKind: "all"}})

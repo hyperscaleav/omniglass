@@ -15,11 +15,10 @@ they own outright. **Nothing points back at the template**: forking is one-time,
 back-pointer, so a template can be rewritten in any release without migrating a single install.
 
 :::note[Partial]
-Built: the catalog in the binary, its four kinds, the build's dry-run of every template, and the
-read routes (#1323). Still design: forking a standard and instantiating a component, a system or a
-place subtree, tracked by [#827](https://github.com/hyperscaleav/omniglass/issues/827). Until the
-fork ships, the shipped standards still **seed as ordinary rows** (`official: false`, inserted only
-if absent) from the standard templates below.
+Built: the catalog in the binary, its four kinds, the build's dry-run of every template, the read
+routes (#1323), and forking a standard from a template, which retired the standards boot seed
+(#1324). Still design: instantiating a component, a system or a place subtree, tracked by
+[#827](https://github.com/hyperscaleav/omniglass/issues/827).
 :::
 
 ## Fork, not pin
@@ -83,8 +82,8 @@ build, naming the template and the row, rather than an operator.
 
 There is **no template versioning**: a template is addressed by its name and replaced by the next
 release. Only shipped templates exist; an operator authoring or saving a template of their own is
-[#1330](https://github.com/hyperscaleav/omniglass/issues/1330). Once the catalog ships, the stand-in
-standards seed retires: a fresh install starts with no standards, and the catalog offers them.
+[#1330](https://github.com/hyperscaleav/omniglass/issues/1330). The stand-in standards seed is retired:
+a fresh install starts with no standards, and the catalog offers them.
 
 ## The catalog
 
@@ -96,25 +95,35 @@ What this release ships, rendered from the catalog itself:
 
 **`GET /templates`** (optionally one `kind`) and **`GET /templates/{template}`**, gated
 `template:read`, which the viewer's `*:read` floor already grants. A catalog read is a registry read:
-no owner and no scope injection. The body is the template whole, as a fork or instantiate would write
-it. The CLI is `omniglass template list` and `omniglass template get <template>`.
+no owner and no scope injection. The body is the template whole: its kind and the body that kind
+carries. The CLI is `omniglass template list` and `omniglass template get <template>`.
 
-::::design[Starting from a template, tracked in #827]
+## Forking a standard
 
-## Starting from a template
+**`POST /standards:fork`** (`omniglass standard fork --template <template>`), gated `standard:create`,
+writes one operator-owned standard (`official: false`) with the template's roles, choices, property
+and metric contract lines and map, in one transaction, under a name the operator chooses (the
+template's by default). A taken name is a 409. A variant forks only once the operator holds the
+standard it hangs off (one they name, or theirs named for the template's parent), otherwise a 422
+names the template to fork first: chains do not fork in one call. The fork is audited once, as `fork`,
+with the template's name in its detail, which is the only trace of where the standard came from.
+Editing it, renaming it, deleting it, and booting a release whose template changed all leave the other
+untouched. The dev seed and the lab fork every standard template through the same primitive, so their
+fleets have the standards their systems conform to.
 
-- **`POST /standards:fork`**, gated `standard:create`: one operator-owned standard
-  (`official: false`) with its roles, choices and contract lines, under a name the operator chooses
-  (the template's by default).
+::::design[Instantiating from a template, tracked in #827]
+
+## Instantiating from a template
+
 - **`POST /components:instantiate`**, **`POST /systems:instantiate`** and
   **`POST /locations:instantiate`**, each gated by its resource's own create permission. Every piece
   a call creates (a component, its endpoint attach, a system and its standard, a place) is checked
   as its own route checks it, in the caller's own scope, audited, and landed in **one transaction**:
   all of it or none. A target place outside the caller's location scope is a non-disclosing 404.
 
-**Provenance lives in the audit trail only**: each created row's audit detail names the template it
-came from. No column and no back-pointer, which keeps the fork severed while still answering "where
-did this come from".
+**Provenance lives in the audit trail only**, as it does for a fork: each created row's audit detail
+names the template it came from. No column and no back-pointer, which keeps the copy severed while
+still answering "where did this come from".
 ::::
 
 ## Why this dissolves the shipped-defaults problem

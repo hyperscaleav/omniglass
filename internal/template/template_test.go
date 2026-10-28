@@ -122,6 +122,13 @@ func TestLoadAcceptsAWellFormedCatalog(t *testing.T) {
 	}
 }
 
+func TestLoadRefusesASecondDocument(t *testing.T) {
+	_, err := template.Load(map[string][]byte{"t.yaml": []byte("templates:\n" + stdOK + "---\ntemplates: []\n")})
+	if err == nil || !strings.Contains(err.Error(), "more than one YAML document") {
+		t.Fatalf("Load = %v, want the second document refused", err)
+	}
+}
+
 func TestLoadRefuses(t *testing.T) {
 	cases := []struct {
 		name, body, want string
@@ -223,6 +230,18 @@ func TestLoadRefuses(t *testing.T) {
     name: p
     label: P
     place: { type: floor, systems: [{ template: base }] }`, "is a standard_template, not a system_template"},
+		{"map places one position twice", `
+  - kind: standard_template
+    name: x
+    label: X
+    standard:
+      roles: [{ name: a, label: A }]
+      map: { aspect: 1, positions: [{ role: a, position: 1, x: 0.5, y: 0.5 }, { role: a, position: 1, x: 0.2, y: 0.2 }] }`, "duplicate position a/1"},
+		{"system builds to a standard the catalog lacks", `
+  - kind: system_template
+    name: s
+    label: S
+    system: { standard: mr-55, roles: { whatever: { product: p } } }`, `builds to template: not in the catalog: "mr-55"`},
 		{"place holds two places of one name", `
   - kind: place_template
     name: p

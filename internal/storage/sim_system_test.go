@@ -30,6 +30,7 @@ func TestCreateSimSystem(t *testing.T) {
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatal(err)
 	}
+	storagetest.ForkShippedStandards(t, gw)
 	all := scope.Set{All: true}
 	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge"}, all, all); err != nil {
 		t.Fatal(err)

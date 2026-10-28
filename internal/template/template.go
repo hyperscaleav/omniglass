@@ -29,6 +29,8 @@ import (
 	"sync"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
 // Kind is a template's kind, the tag every catalog entry carries.
@@ -356,6 +358,12 @@ func Load(files map[string][]byte) (*Catalog, error) {
 		if err := dec.Decode(&doc); err != nil && !errors.Is(err, io.EOF) {
 			return nil, fmt.Errorf("template: %s: %w", file, err)
 		}
+		// One document per file: a second would otherwise be dropped
+		// without a word, and its templates never ship.
+		var extra any
+		if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
+			return nil, fmt.Errorf("template: %s holds more than one YAML document; put every template under the one templates list", file)
+		}
 		for _, t := range doc.Templates {
 			if err := t.validate(); err != nil {
 				return nil, fmt.Errorf("template: %s: %w", file, err)
@@ -516,16 +524,19 @@ func (s *Standard) validate() error {
 		}
 	}
 	if s.Map != nil {
-		if s.Map.Aspect <= 0 {
-			return errors.New("the map needs a positive aspect")
-		}
 		for _, p := range s.Map.Positions {
 			if !roles[p.Role] {
 				return fmt.Errorf("the map places role %q, which the template does not declare", p.Role)
 			}
-			if p.Position < 1 || p.X < 0 || p.X > 1 || p.Y < 0 || p.Y > 1 {
-				return fmt.Errorf("the map places role %q out of bounds", p.Role)
-			}
+		}
+		// The rest of the map's rule is the write's own: one rule, held
+		// here so a shipped map a fork would refuse never loads.
+		b, err := json.Marshal(s.Map)
+		if err != nil {
+			return fmt.Errorf("the map: %w", err)
+		}
+		if err := storage.ValidateStandardMap(b); err != nil {
+			return fmt.Errorf("the map: %w", err)
 		}
 	}
 	return nil
@@ -646,15 +657,13 @@ func (c *Catalog) validateSystemRefs(s *System) error {
 			}
 		}
 	}
+	// A shipped system template builds to a standard the catalog ships, so
+	// its fills are checked against that standard's roles here, and a
+	// release withdrawing the standard template fails the load. (An
+	// instantiate may still name a standard of the operator's own.)
 	std, err := c.GetKind(s.Standard, KindStandard)
 	if err != nil {
-		// A system template may name a standard the catalog does not
-		// ship (an operator's own, by name); its roles are checked
-		// against that standard when it is instantiated.
-		if errors.Is(err, ErrNotFound) && c.byName[s.Standard] == nil {
-			return nil
-		}
-		return err
+		return fmt.Errorf("builds to %w", err)
 	}
 	_, err = StaffedRoles(std.Standard, s)
 	return err

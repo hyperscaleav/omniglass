@@ -21,7 +21,7 @@ Each tool says what a client may assume of it, from one rule over the route's me
 
 A tool that is not read-only and not destructive adds something (a create).
 
-52 tools.
+53 tools.
 
 | Tool | What it does | Gate | Assume |
 |---|---|---|---|
@@ -66,6 +66,7 @@ A tool that is not read-only and not destructive adds something (a create).
 | [`list-secret-types`](#list-secret-types) | List secret types | `secret:read` | read-only, idempotent |
 | [`list-secrets`](#list-secrets) | List secrets | `secret:read` | read-only, idempotent |
 | [`create-secret`](#create-secret) | Create a secret | `secret:create` | adds |
+| [`fork-standard`](#fork-standard) | Fork a standard from a template | `standard:create` | adds |
 | [`list-systems`](#list-systems) | List systems in scope | `system:read` | read-only, idempotent |
 | [`get-system`](#get-system) | Get a system | `system:read` | read-only, idempotent |
 | [`get-system-health`](#get-system-health) | Read a system's health | `system:read` | read-only, idempotent |
@@ -681,6 +682,23 @@ Seals a secret at an owner scope. Fields are validated and encrypted against the
 | `owner_kind` | string | yes | Which tier owns this secret (the system band is retired, ADR-0052) |
 | `secret_type` | string | yes | A secret_type id |
 
+## `fork-standard`
+
+Fork a standard from a template
+
+Writes one standard of your own (official false) from a standard template in the catalog: its roles, choices, property and metric contract lines and map, in one transaction, audited once as a fork naming the template. Nothing points back at the template, so a later release can change the template without touching your standard, and your standard renames, edits and deletes like any you created. The name is the template's unless you give one; a taken name is a 409, so forking the same template again needs a second name. A variant forks only once you hold the standard it hangs off (the parent you name, or yours named for the template's parent), else a 422 naming the template to fork first. An unknown template is a 404. Gated by standard:create.
+
+- Route: `POST /api/v1/standards:fork`
+- Gate: `standard:create`
+- Assume: adds
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `label` | string | no | The standard's label; omitted takes the template's |
+| `name` | string | no | The name the standard takes; omitted takes the template's |
+| `parent` | string | no | For a variant, the standard it hangs off, by name or uuid; omitted takes your standard named for the template's parent |
+| `template` | string | yes | The standard template to fork, by name |
+
 ## `list-systems`
 
 List systems in scope
@@ -769,7 +787,7 @@ Lists the tasks whose endpoint's owning component the caller may read (the compo
 
 List templates
 
-Lists the template catalog this binary ships, ordered by kind then name, optionally one kind. A template is an example an operator clones: forking or instantiating one writes ordinary rows the operator owns, and nothing points back at the template. Gated by template:read.
+Lists the template catalog this binary ships, ordered by kind then name, optionally one kind. A template is an example an operator clones: forking a standard template (POST /standards:fork) writes an ordinary standard the operator owns, and nothing points back at the template. Gated by template:read.
 
 - Route: `GET /api/v1/templates`
 - Gate: `template:read`
@@ -783,7 +801,7 @@ Lists the template catalog this binary ships, ordered by kind then name, optiona
 
 Get a template
 
-Reads one template from the catalog by name: what it creates, as the fork or instantiate method would write it. An unknown name is a 404. Gated by template:read.
+Reads one template from the catalog by name, whole: its kind and the body that kind carries. An unknown name is a 404. Gated by template:read.
 
 - Route: `GET /api/v1/templates/{template}`
 - Gate: `template:read`

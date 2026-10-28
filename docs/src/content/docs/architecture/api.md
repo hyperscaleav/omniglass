@@ -746,9 +746,8 @@ location type's name is also stored by value in `allowed_parent_types`, on every
 operator's fork, and the rename rewrites those in the same transaction. A driver's name is baked
 into every task it derives, so a driver rename re-derives its attached endpoints' tasks in the same
 transaction, as a version change does. An official row keeps its shipped name (422), since the boot
-seed owns it by name, and so does a shipped example standard (409): the seed plants one by name
-whenever it is absent, so a renamed one would return on the next boot
-([#827](https://github.com/hyperscaleav/omniglass/issues/827) forks templates instead). A taken name is
+seed owns it by name; a standard is never official and never seeded (it is forked from a template, below),
+so every standard renames. A taken name is
 a 409, an illegal or uuid-shaped one a 422, `root` is reserved for a location type (422), and the rename is audited as
 `rename` keyed on the uuid. The answer is the row as its `GET` reads it. The catalogs keyed by a
 telemetry name and the remaining type registries do not rename yet
@@ -764,6 +763,16 @@ inject since a template has no owner. The body is the template's own: a kind, a 
 description, and the one body its kind names (a standard template's roles, choices, contract lines and
 map; a component template's product, attach preset and declared values; a system template's standard
 and role fills; a place template's subtree).
+
+**`POST /standards:fork`** writes one standard from a standard template, gated `standard:create`, since
+it writes nothing the standard's own routes could not. The body names the `template` and optionally the
+`name` (the template's by default), the `label`, and for a variant the `parent` to hang it off (the
+caller's standard named for the template's parent by default). The standard, its choices, roles,
+contract lines and map land in one transaction, audited once as `fork` with the template's name in the
+detail, and the answer is the standard as its `GET` reads it (201). A taken name is a 409, a variant
+whose parent the caller does not hold is a 422 naming the template to fork first, a template the catalog
+does not hold (or one of another kind) is a 404, and a template naming a row the fleet's catalogs lack is
+a 422. The boot seed plants no standard, so this is how a fresh install gets one.
 
 What each catalog adds over the shared shape (bodies in the [reference](/reference/api/)):
 

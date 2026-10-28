@@ -460,6 +460,17 @@ var catalog = []tooldef.Def{
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"admin_sensitive\":{\"description\":\"Admin-only visibility; omit to use the type default. Setting true requires the admin tier\",\"type\":\"boolean\"},\"fields\":{\"additionalProperties\":{\"type\":\"string\"},\"description\":\"The operator field map, validated against the type shape\",\"type\":\"object\"},\"label\":{\"description\":\"What an operator reads in lists and pickers (Polling community); omit to fall back to the name\",\"maxLength\":200,\"type\":\"string\"},\"name\":{\"description\":\"The cascade name (lowercase letters, digits, and hyphens); unique per owner\",\"maxLength\":100,\"minLength\":1,\"pattern\":\"^[a-z0-9][a-z0-9-]*$\",\"type\":\"string\"},\"owner\":{\"description\":\"The owning entity's name; omit for a platform secret\",\"type\":\"string\"},\"owner_kind\":{\"description\":\"Which tier owns this secret (the system band is retired, ADR-0052)\",\"enum\":[\"platform\",\"location\",\"component\"],\"type\":\"string\"},\"secret_type\":{\"description\":\"A secret_type id\",\"minLength\":1,\"type\":\"string\"}},\"required\":[\"fields\",\"name\",\"owner_kind\",\"secret_type\"],\"type\":\"object\"}",
 	},
 	{
+		Name:        "fork-standard",
+		Title:       "Fork a standard from a template",
+		Description: "Writes one standard of your own (official false) from a standard template in the catalog: its roles, choices, property and metric contract lines and map, in one transaction, audited once as a fork naming the template. Nothing points back at the template, so a later release can change the template without touching your standard, and your standard renames, edits and deletes like any you created. The name is the template's unless you give one; a taken name is a 409, so forking the same template again needs a second name. A variant forks only once you hold the standard it hangs off (the parent you name, or yours named for the template's parent), else a 422 naming the template to fork first. An unknown template is a 404. Gated by standard:create.",
+		Method:      "POST",
+		Path:        "/standards:fork",
+		Permission:  "standard:create",
+		BodyParams:  []string{"label", "name", "parent", "template"},
+		Annotations: tooldef.Annotations{ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false},
+		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"label\":{\"description\":\"The standard's label; omitted takes the template's\",\"type\":\"string\"},\"name\":{\"description\":\"The name the standard takes; omitted takes the template's\",\"type\":\"string\"},\"parent\":{\"description\":\"For a variant, the standard it hangs off, by name or uuid; omitted takes your standard named for the template's parent\",\"type\":\"string\"},\"template\":{\"description\":\"The standard template to fork, by name\",\"examples\":[\"meeting-room\"],\"minLength\":1,\"type\":\"string\"}},\"required\":[\"template\"],\"type\":\"object\"}",
+	},
+	{
 		Name:        "list-systems",
 		Title:       "List systems in scope",
 		Description: "Lists the systems the caller may read, each filtered to its scope subtree. Gated by system:read.",
@@ -528,7 +539,7 @@ var catalog = []tooldef.Def{
 	{
 		Name:        "list-templates",
 		Title:       "List templates",
-		Description: "Lists the template catalog this binary ships, ordered by kind then name, optionally one kind. A template is an example an operator clones: forking or instantiating one writes ordinary rows the operator owns, and nothing points back at the template. Gated by template:read.",
+		Description: "Lists the template catalog this binary ships, ordered by kind then name, optionally one kind. A template is an example an operator clones: forking a standard template (POST /standards:fork) writes an ordinary standard the operator owns, and nothing points back at the template. Gated by template:read.",
 		Method:      "GET",
 		Path:        "/templates",
 		Permission:  "template:read",
@@ -539,7 +550,7 @@ var catalog = []tooldef.Def{
 	{
 		Name:        "get-template",
 		Title:       "Get a template",
-		Description: "Reads one template from the catalog by name: what it creates, as the fork or instantiate method would write it. An unknown name is a 404. Gated by template:read.",
+		Description: "Reads one template from the catalog by name, whole: its kind and the body that kind carries. An unknown name is a 404. Gated by template:read.",
 		Method:      "GET",
 		Path:        "/templates/{template}",
 		Permission:  "template:read",

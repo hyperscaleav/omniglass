@@ -194,6 +194,11 @@ func TestSimulatorEndToEnd(t *testing.T) {
 
 	// A whole simulated system to a standard, through the CLI: the system and
 	// a component per staffed role, served on the next pull with no restart.
+	// The boot seeds no standard, so the operator forks the one it builds to.
+	out, code = cli("standard", "fork", "--template", "meeting-room", "--server", server, "--token", ownerTok)
+	if code != 0 {
+		t.Fatalf("standard fork exit %d:\n%s", code, out)
+	}
 	out, code = cli("simulation", "add-system", "edge-e", "--standard", "meeting-room", "--system-type", "meeting",
 		"--server", server, "--token", ownerTok)
 	if code != 0 {

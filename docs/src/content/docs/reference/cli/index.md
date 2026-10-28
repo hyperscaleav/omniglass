@@ -4791,6 +4791,29 @@ Example:
 omniglass standard delete meeting-room
 ```
 
+### `omniglass standard fork`
+
+Fork a standard from a template
+
+```
+omniglass standard fork [flags]
+```
+
+Writes one standard of your own (official false) from a standard template in the catalog: its roles, choices, property and metric contract lines and map, in one transaction, audited once as a fork naming the template. Nothing points back at the template, so a later release can change the template without touching your standard, and your standard renames, edits and deletes like any you created. The name is the template's unless you give one; a taken name is a 409, so forking the same template again needs a second name. A variant forks only once you hold the standard it hangs off (the parent you name, or yours named for the template's parent), else a 422 naming the template to fork first. An unknown template is a 404. Gated by standard:create.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--label` | string | (none) | The standard's label; omitted takes the template's |
+| `--name` | string | (none) | The name the standard takes; omitted takes the template's |
+| `--parent` | string | (none) | For a variant, the standard it hangs off, by name or uuid; omitted takes your standard named for the template's parent |
+| `--template` | string | (none) | The standard template to fork, by name |
+
+Example:
+
+```sh
+omniglass standard fork --template template
+```
+
 ### `omniglass standard get`
 
 Get a standard
@@ -4945,7 +4968,7 @@ Rename a standard
 omniglass standard rename <id> [flags]
 ```
 
-Moves a custom standard's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official standard keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. A shipped example standard keeps its name too (409): the boot seed plants it by name whenever it is absent, so a renamed one would come back on the next boot; forking a template into a standard of your own is #827. Audited as rename. Gated by standard:rename.
+Moves a custom standard's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official standard keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. Audited as rename. Gated by standard:rename.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -6046,7 +6069,7 @@ Get a template
 omniglass template get <template>
 ```
 
-Reads one template from the catalog by name: what it creates, as the fork or instantiate method would write it. An unknown name is a 404. Gated by template:read.
+Reads one template from the catalog by name, whole: its kind and the body that kind carries. An unknown name is a 404. Gated by template:read.
 
 Example:
 
@@ -6062,7 +6085,7 @@ List templates
 omniglass template list [flags]
 ```
 
-Lists the template catalog this binary ships, ordered by kind then name, optionally one kind. A template is an example an operator clones: forking or instantiating one writes ordinary rows the operator owns, and nothing points back at the template. Gated by template:read.
+Lists the template catalog this binary ships, ordered by kind then name, optionally one kind. A template is an example an operator clones: forking a standard template (POST /standards:fork) writes an ordinary standard the operator owns, and nothing points back at the template. Gated by template:read.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|

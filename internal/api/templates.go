@@ -205,7 +205,7 @@ func registerTemplateRoutes(api huma.API, a *authenticator, cat *template.Catalo
 		Method:      http.MethodGet,
 		Path:        "/templates",
 		Summary:     "List templates",
-		Description: "Lists the template catalog this binary ships, ordered by kind then name, optionally one kind. A template is an example an operator clones: forking or instantiating one writes ordinary rows the operator owns, and nothing points back at the template. Gated by template:read.",
+		Description: "Lists the template catalog this binary ships, ordered by kind then name, optionally one kind. A template is an example an operator clones: forking a standard template (POST /standards:fork) writes an ordinary standard the operator owns, and nothing points back at the template. Gated by template:read.",
 	}, "template", "read"), func(_ context.Context, in *listTemplatesInput) (*listTemplatesOutput, error) {
 		out := &listTemplatesOutput{}
 		list := cat.List(template.Kind(in.Kind))
@@ -222,7 +222,7 @@ func registerTemplateRoutes(api huma.API, a *authenticator, cat *template.Catalo
 		Method:      http.MethodGet,
 		Path:        "/templates/{template}",
 		Summary:     "Get a template",
-		Description: "Reads one template from the catalog by name: what it creates, as the fork or instantiate method would write it. An unknown name is a 404. Gated by template:read.",
+		Description: "Reads one template from the catalog by name, whole: its kind and the body that kind carries. An unknown name is a 404. Gated by template:read.",
 	}, "template", "read"), func(_ context.Context, in *templatePathInput) (*templateOutput, error) {
 		t, err := cat.Get(in.Template)
 		if errors.Is(err, template.ErrNotFound) {

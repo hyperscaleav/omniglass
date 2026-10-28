@@ -232,7 +232,9 @@ func (UnimplementedGateway) DeleteLocation(context.Context, string, string, scop
 	return nil
 }
 func (UnimplementedGateway) UpsertStandard(context.Context, Standard) error { return nil }
-func (UnimplementedGateway) SeedStandard(context.Context, Standard) error   { return nil }
+func (UnimplementedGateway) ForkStandard(context.Context, string, StandardFork) (*Standard, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) ListStandards(context.Context) ([]Standard, error) {
 	return nil, nil
 }
