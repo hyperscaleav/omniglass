@@ -380,13 +380,6 @@ func (s *Server) land(ctx context.Context, id string, ev *ogv1.TelemetryBatch, b
 		if err != nil {
 			return err
 		}
-		// A name in both registries resolves to nothing, so every sample carrying it is
-		// refused. The fence at the create routes stops new ones, but an install that
-		// already has a collision would otherwise just lose data quietly. Say so.
-		if clashes := reg.Collisions(); len(clashes) > 0 {
-			slog.Warn("registry name collision: samples using these names are refused until one side is renamed",
-				"names", clashes)
-		}
 		// Each lane derives against its own catalog (#594): the array the sample rode
 		// says which table it lands in, and the catalog row says what a valid value
 		// looks like. All three survive the SAME owner binding and reject-not-project;
