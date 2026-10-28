@@ -48,6 +48,9 @@ type Store interface {
 	// a registered event_type name routes a natively-published occurrence (an xAPI
 	// event, a trap) to the event sink (kind "event") as a caught event (ADR-0066).
 	ListEventTypes(ctx context.Context) ([]storage.EventType, error)
+	// CatalogFingerprint digests the rows the registry is built from, so the
+	// consumer reuses its registry until a catalog changes (#1279).
+	CatalogFingerprint(ctx context.Context) (string, error)
 	// LandBatch writes one batch's every sink (the raw log lanes, ADR-0066 and
 	// #589, and the three typed sample lanes) in one transaction under the
 	// batch's receipt (#311): all or nothing, and an id that already landed

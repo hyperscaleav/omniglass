@@ -562,6 +562,9 @@ type Gateway interface {
 	DeleteSeverityLevel(ctx context.Context, actorID, name string, action scope.Set) error
 	UpsertEventType(ctx context.Context, et EventType) error
 	ListEventTypes(ctx context.Context) ([]EventType, error)
+	// CatalogFingerprint digests the rows the ingest sample registry is built
+	// from, so the consumer rebuilds its registry only when it changes (#1279).
+	CatalogFingerprint(ctx context.Context) (string, error)
 	GetEventType(ctx context.Context, name string) (*EventType, error)
 	CreateEventType(ctx context.Context, actorID string, spec EventTypeSpec) (*EventType, error)
 	UpdateEventType(ctx context.Context, actorID, name string, patch EventTypePatch) (*EventType, error)
