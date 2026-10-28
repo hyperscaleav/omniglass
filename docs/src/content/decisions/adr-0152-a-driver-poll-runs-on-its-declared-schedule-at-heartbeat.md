@@ -19,6 +19,10 @@ summary: "A driver poll runs on its declared `schedule.every` at heartbeat granu
   worklist runs at once; a task that leaves it is forgotten; a restart polls
   at its first tick. The gate covers driver polls only: reachability probes still run every tick, and a
   listener's pushes are never gated, since they ride the held session as they arrive.
+  **Amended (#1273):** reachability probes now run on the node's probe interval through this same
+  schedule (every tick when it is unset), and a task is due on the tick within half a heartbeat of its
+  due time rather than the first tick at or after it, so an interval equal to the heartbeat never skips
+  a jittered tick ([ADR-1273](/architecture/decisions/#adr-1273-a-reachability-probe-runs-on-the-nodes-probe-interval-not-every-heartbeat)).
 - **Context:** The schedule was validated and baked but unread, so `snmp-generic`'s `every: 60s` polled
   every 30s heartbeat and a `24h` poll would have asked a device 2880 times a day. The nodes page left
   per-task cadence within a tick as an open question; a per-task gate settles it for driver polls

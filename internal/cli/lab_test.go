@@ -61,3 +61,24 @@ func TestWalkthroughSetupCommandsAreRealCommands(t *testing.T) {
 		t.Fatal("no walkthrough has a setup to check (set-up-monitoring stages bay-2-display)")
 	}
 }
+
+// The lab's node runs a command this binary has, with every flag it names
+// (#1273 added --probe-every to both): a learner's lab and a script's.
+func TestLabNodeCommandIsARealCommand(t *testing.T) {
+	for _, ephemeral := range []bool{false, true} {
+		s, err := lab.Plan(lab.Options{Image: "omniglass:dev", Project: "check", Port: lab.DefaultPort,
+			NodeToken: "tok", NodeTokenHash: "abc", Ephemeral: ephemeral})
+		if err != nil {
+			t.Fatal(err)
+		}
+		cmd, rest, err := newRoot("test").Find(s.Node.Cmd)
+		if err != nil || cmd.CommandPath() != "omniglass node run" {
+			t.Fatalf("lab node %v is not node run: %v", s.Node.Cmd, err)
+		}
+		for _, word := range rest {
+			if name, ok := strings.CutPrefix(word, "--"); ok && cmd.Flags().Lookup(name) == nil {
+				t.Errorf("the lab's node passes --%s, which node run lacks", name)
+			}
+		}
+	}
+}

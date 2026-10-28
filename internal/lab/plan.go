@@ -51,6 +51,11 @@ const (
 	// The cadence every walkthrough is recorded at: a change in the console shows in the
 	// lab within seconds. The product defaults are unchanged.
 	labCadence = "2s"
+	// How often a learner's lab probes reachability (#1273). It may run for
+	// days, and a probe on every 2s check-in wrote most of its rows; a
+	// script's throwaway lab lives for minutes and probes on every check-in,
+	// so a walkthrough waiting on a probe's verdict keeps its recorded budget.
+	labProbeEvery = "10s"
 	// The unprivileged pinger needs the whole group range admitted.
 	pingGroupRange = "0 2147483647"
 )
@@ -309,10 +314,13 @@ func Plan(o Options) (Spec, error) {
 		Role: "The control plane and the console, in lab mode. Its console is the one published port; " +
 			"its bus listens on the lab network for the node.",
 	}
+	nodeCmd := []string{"node", "run", "--simulate", "--impairments", "--heartbeat", labCadence}
+	if !o.Ephemeral {
+		nodeCmd = append(nodeCmd, "--probe-every", labProbeEvery)
+	}
 	spec.Node = Service{
 		Name: "node", Container: o.Project + "-node-1", Image: o.Image,
-		Cmd: []string{"node", "run", "--simulate", "--impairments",
-			"--heartbeat", labCadence, "--poll", labCadence},
+		Cmd: append(nodeCmd, "--poll", labCadence),
 		Env: []string{
 			"OMNIGLASS_SERVER=http://server:" + strconv.Itoa(consolePort),
 			"OMNIGLASS_NODE_NAME=" + NodeName,

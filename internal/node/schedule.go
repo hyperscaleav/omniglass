@@ -12,13 +12,16 @@ import (
 // (schedule.every, baked into its task), and the node honors it rather than
 // polling on every heartbeat. pollSchedule remembers, per task id, when each
 // poll is next due; it lives for the run (a restart polls at its first tick).
-// It gates driver polls only: reachability probes run every tick, and a
-// listener's pushes are never gated, since they ride the held session as
-// they arrive.
+// It gates driver polls at their own interval and reachability probes at the
+// node's probe interval (#1273), every tick when that is unset; a listener's
+// pushes are never gated, since they ride the held session as they arrive.
 type pollSchedule struct {
 	heartbeat time.Duration
-	next      map[string]time.Time
-	backoff   map[string]time.Duration // the last retry wait of a failing poll
+	// probeEvery is how often each reachability probe runs (#1273). Zero is
+	// every tick: the heartbeat, as before the interval existed.
+	probeEvery time.Duration
+	next       map[string]time.Time
+	backoff    map[string]time.Duration // the last retry wait of a failing poll
 	// refused marks a poll whose last run met a terminal refusal (#1049): it
 	// waits its interval, unless its session reads up again first.
 	refused map[string]bool
@@ -128,13 +131,17 @@ func (s *pollSchedule) nextOf(taskID string) (time.Time, bool) {
 // task with no interval runs every tick. A task new to the schedule runs at
 // once. The next run is booked from the due time, not from now, so a tick's
 // jitter does not drift the cadence; a tick so late it missed whole
-// intervals runs once and books from now, never a catch-up burst.
+// intervals runs once and books from now, never a catch-up burst. A task is
+// due on the tick within half a heartbeat of its due time (#1273): ticks are
+// a heartbeat apart but judged after variable work, so a tick that reached
+// the task a few milliseconds sooner than the one that booked it would
+// otherwise skip it, and an interval equal to the heartbeat would double.
 func (s *pollSchedule) due(taskID string, every time.Duration, now time.Time) bool {
 	if every <= 0 {
 		return true
 	}
 	at, booked := s.next[taskID]
-	if booked && now.Before(at) {
+	if booked && now.Add(s.heartbeat/2).Before(at) {
 		return false
 	}
 	next := now.Add(every)
@@ -145,20 +152,23 @@ func (s *pollSchedule) due(taskID string, every time.Duration, now time.Time) bo
 	return true
 }
 
-// retain forgets tasks that left the worklist, so the map does not grow
-// for the life of the run and a task that returns runs at once.
+// retain forgets tasks that left the worklist, so no map grows for the life
+// of the run and a task that returns runs at once. Each map is swept by its
+// own keys: a task can be remembered without ever being booked (a probe at
+// the heartbeat, a poll with no schedule).
 func (s *pollSchedule) retain(ids map[string]bool) {
-	for id := range s.next {
+	forget(s.next, ids)
+	forget(s.backoff, ids)
+	forget(s.refused, ids)
+	forget(s.fingerprint, ids)
+	forget(s.occurred, ids)
+}
+
+// forget drops every task of m not in ids.
+func forget[V any](m map[string]V, ids map[string]bool) {
+	for id := range m {
 		if !ids[id] {
-			delete(s.next, id)
-			delete(s.backoff, id)
-			delete(s.refused, id)
-			delete(s.fingerprint, id)
-		}
-	}
-	for id := range s.occurred {
-		if !ids[id] {
-			delete(s.occurred, id)
+			delete(m, id)
 		}
 	}
 }

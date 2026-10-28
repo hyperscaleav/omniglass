@@ -95,6 +95,9 @@ func Settle(intended, observed *CurrentValue, windowSeconds int, now time.Time) 
 // who supplies it, which is the repo's own rule about the clock being an edge
 // concern pushed out of the core.
 func dbNow(ctx context.Context, q querier) (time.Time, error) {
+	if b, ok := q.(*batchTx); ok {
+		return b.clock(ctx)
+	}
 	var now time.Time
 	if err := q.QueryRow(ctx, `select now()`).Scan(&now); err != nil {
 		return time.Time{}, fmt.Errorf("storage: read database time: %w", err)

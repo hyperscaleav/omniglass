@@ -51,8 +51,11 @@ type IngestBatch struct {
 // takes. A deadlock abort retries the whole batch (sampleWrite).
 func (p *PG) LandBatch(ctx context.Context, b IngestBatch) (bool, error) {
 	landed := false
-	err := p.sampleWrite(ctx, "land batch", func(tx pgx.Tx) error {
+	err := p.sampleWrite(ctx, "land batch", func(attempt pgx.Tx) error {
 		landed = false
+		// Each attempt (a deadlock retries the whole batch) resolves its owners
+		// and reads its clock afresh, once, for every lane (#1274).
+		var tx pgx.Tx = newBatchTx(attempt)
 		if b.BatchID != "" {
 			tag, err := tx.Exec(ctx, `insert into telemetry_receipt (batch_id) values ($1) on conflict (batch_id) do nothing`, b.BatchID)
 			if err != nil {

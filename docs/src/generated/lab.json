@@ -37,7 +37,7 @@
     {
       "name": "node",
       "image": "omniglass",
-      "command": "node run --simulate --impairments --heartbeat 2s --poll 2s",
+      "command": "node run --simulate --impairments --heartbeat 2s --probe-every 10s --poll 2s",
       "user": "0:0",
       "caps": [
         "NET_ADMIN"

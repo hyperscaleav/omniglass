@@ -527,6 +527,9 @@ func (p *PG) declaredProperties(ctx context.Context, oc ownerContract, ownerKind
 // The reference itself may be either form, since scopedByName resolves a uuid or
 // a name; this is only about what gets written.
 func (p *PG) ownerArcValue(ctx context.Context, q querier, ownerKind, ownerRef string) (string, error) {
+	if b, ok := q.(*batchTx); ok {
+		return b.arc(ctx, p, ownerKind, ownerRef)
+	}
 	switch ownerKind {
 	case "component":
 		c, err := scopedByName(ctx, q, componentConfig, ownerRef)
