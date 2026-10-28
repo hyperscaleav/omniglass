@@ -303,6 +303,7 @@ export default function EntityForm(props: {
       return (
         <>
           <RolesPanel system={id} canUpdate={slot.editing() && canUpdate()} />
+          <ReconciliationPanel system={id} />
           <PropertiesPanel system={id} edit={slot} onOpen={(property) => blades.push({ kind: "property-resolution", id: ownerPropertyBladeId({ kind: "system", name: id }, property) })} />
         </>
       );
@@ -312,7 +313,7 @@ export default function EntityForm(props: {
     }
     return (
       <>
-        <ReconciliationPanel name={id} />
+        <ReconciliationPanel component={id} />
         <ResolutionPanel component={id} />
         <PropertiesPanel component={id} edit={slot} onOpen={(property) => blades.push({ kind: "property-resolution", id: propertyBladeId(id, property) })} />
         <ReachabilityPanel

@@ -141,7 +141,11 @@ export default function PropertiesPanel(
     // and discard an in-progress edit, so this panel does not refetch on focus.
     refetchOnWindowFocus: false,
   }));
-  const rows = createMemo<EffectiveProperty[]>(() => q.data ?? []);
+  // A key the owner only observes or was told (#1297) has no declared or
+  // calculated value: nothing here to show or edit, so it stands in the
+  // Reconciliation panel, which reads these same rows, and not in this one.
+  const resolves = (p: EffectiveProperty) => p.from_contract || p.is_set || !!p.source_rule_id;
+  const rows = createMemo<EffectiveProperty[]>(() => (q.data ?? []).filter(resolves));
   const contract = createMemo(() => rows().filter((p) => p.from_contract));
   // A property a calc rule writes that nothing declares (#999, #1018): the
   // owner's value as the rule derived it, not one it set, so it is shown
