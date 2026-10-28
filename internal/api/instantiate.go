@@ -107,10 +107,11 @@ func mapInstantiateErr(err error) error {
 }
 
 type instantiatedComponentBody struct {
-	Component string `json:"component" doc:"The component's name"`
-	Role      string `json:"role,omitempty" doc:"The role it fills in its system"`
-	Product   string `json:"product" doc:"Its product"`
-	Attached  bool   `json:"attached" doc:"Whether its endpoint attached from the inputs given; false lists it as still to attach"`
+	Component   string `json:"component" doc:"The component's name"`
+	ComponentID string `json:"component_id" doc:"The component's id, the stable address a link to it uses"`
+	Role        string `json:"role,omitempty" doc:"The role it fills in its system"`
+	Product     string `json:"product" doc:"Its product"`
+	Attached    bool   `json:"attached" doc:"Whether its endpoint attached from the inputs given; false lists it as still to attach"`
 }
 
 type instantiateComponentInput struct {
@@ -126,10 +127,11 @@ type instantiateComponentInput struct {
 
 type instantiateComponentOutput struct {
 	Body struct {
-		Template  string `json:"template" doc:"The template it came from; recorded in the audit detail only"`
-		Component string `json:"component" doc:"The component's name"`
-		Product   string `json:"product" doc:"Its product"`
-		Attached  bool   `json:"attached" doc:"Whether its endpoint attached from the inputs given; false means it is still to attach"`
+		Template    string `json:"template" doc:"The template it came from; recorded in the audit detail only"`
+		Component   string `json:"component" doc:"The component's name"`
+		ComponentID string `json:"component_id" doc:"The component's id, the stable address a link to it uses"`
+		Product     string `json:"product" doc:"Its product"`
+		Attached    bool   `json:"attached" doc:"Whether its endpoint attached from the inputs given; false means it is still to attach"`
 	}
 }
 
@@ -149,6 +151,7 @@ type instantiateSystemOutput struct {
 	Body struct {
 		Template       string                      `json:"template" doc:"The template it came from; recorded in the audit detail only"`
 		System         string                      `json:"system" doc:"The system's name"`
+		SystemID       string                      `json:"system_id" doc:"The system's id, the stable address a link to it uses"`
 		Standard       string                      `json:"standard" doc:"The standard it is built to"`
 		StandardForked []string                    `json:"standard_forked" doc:"The standards this write forked from their templates (parents first); empty when you held them"`
 		Components     []instantiatedComponentBody `json:"components" doc:"A component per role, filled to quorum and assigned"`
@@ -166,13 +169,15 @@ type instantiateLocationsInput struct {
 }
 
 type instantiatedPlaceBody struct {
-	Location string `json:"location" doc:"The place's name"`
-	Type     string `json:"type" doc:"Its location type"`
-	Parent   string `json:"parent,omitempty" doc:"The place it sits under, by name"`
+	Location   string `json:"location" doc:"The place's name"`
+	LocationID string `json:"location_id" doc:"The place's id, the stable address a link to it uses"`
+	Type       string `json:"type" doc:"Its location type"`
+	Parent     string `json:"parent,omitempty" doc:"The place it sits under, by name"`
 }
 
 type instantiatedSystemBody struct {
 	System   string `json:"system" doc:"The system's name"`
+	SystemID string `json:"system_id" doc:"The system's id, the stable address a link to it uses"`
 	Location string `json:"location" doc:"The place it sits in"`
 	Standard string `json:"standard" doc:"The standard it is built to"`
 }
@@ -236,7 +241,8 @@ func registerInstantiateRoutes(api huma.API, a *authenticator, gw storage.Gatewa
 		}
 		out := &instantiateComponentOutput{}
 		out.Body.Template = t.Name
-		out.Body.Component, out.Body.Product, out.Body.Attached = made.Components[0].Name, piece.Product, piece.Attached
+		out.Body.Component, out.Body.ComponentID = made.Components[0].Name, made.Components[0].ID
+		out.Body.Product, out.Body.Attached = piece.Product, piece.Attached
 		return out, nil
 	})
 
@@ -284,11 +290,11 @@ func registerInstantiateRoutes(api huma.API, a *authenticator, gw storage.Gatewa
 		}
 		out := &instantiateSystemOutput{}
 		out.Body.Template, out.Body.Standard, out.Body.StandardForked = t.Name, sp.Standard, forkedNames(made)
-		out.Body.System = made.Systems[0].System.Name
+		out.Body.System, out.Body.SystemID = made.Systems[0].System.Name, made.Systems[0].System.ID
 		out.Body.Components, out.Body.ToAttach = []instantiatedComponentBody{}, []string{}
 		for i, c := range made.Systems[0].Components {
 			p := sp.Pieces[i]
-			out.Body.Components = append(out.Body.Components, instantiatedComponentBody{Component: c.Name, Role: p.Role, Product: p.Product, Attached: p.Attached})
+			out.Body.Components = append(out.Body.Components, instantiatedComponentBody{Component: c.Name, ComponentID: c.ID, Role: p.Role, Product: p.Product, Attached: p.Attached})
 			if !p.Attached {
 				out.Body.ToAttach = append(out.Body.ToAttach, c.Name)
 			}
@@ -346,7 +352,7 @@ func registerInstantiateRoutes(api huma.API, a *authenticator, gw storage.Gatewa
 			names[l.ID] = l.Name
 		}
 		for _, l := range made.Places {
-			pb := instantiatedPlaceBody{Location: l.Name, Type: l.LocationType}
+			pb := instantiatedPlaceBody{Location: l.Name, LocationID: l.ID, Type: l.LocationType}
 			if l.ParentID != nil {
 				pb.Parent = names[*l.ParentID]
 				if pb.Parent == "" && parent != nil {
@@ -365,7 +371,7 @@ func registerInstantiateRoutes(api huma.API, a *authenticator, gw storage.Gatewa
 			if l := placeOfSystem(pp.Plan, made, si); l != nil {
 				loc = l.Name
 			}
-			out.Body.Systems = append(out.Body.Systems, instantiatedSystemBody{System: s.System.Name, Location: loc, Standard: std})
+			out.Body.Systems = append(out.Body.Systems, instantiatedSystemBody{System: s.System.Name, SystemID: s.System.ID, Location: loc, Standard: std})
 			for _, c := range s.Components {
 				if i < len(pp.Pieces) && !pp.Pieces[i].Attached {
 					out.Body.ToAttach = append(out.Body.ToAttach, c.Name)

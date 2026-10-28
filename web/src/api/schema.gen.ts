@@ -7380,6 +7380,8 @@ export interface components {
             attached: boolean;
             /** @description The component's name */
             component: string;
+            /** @description The component's id, the stable address a link to it uses */
+            component_id: string;
             /** @description Its product */
             product: string;
             /** @description The template it came from; recorded in the audit detail only */
@@ -7466,6 +7468,8 @@ export interface components {
             standard_forked: string[] | null;
             /** @description The system's name */
             system: string;
+            /** @description The system's id, the stable address a link to it uses */
+            system_id: string;
             /** @description The template it came from; recorded in the audit detail only */
             template: string;
             /** @description The components that landed with no endpoint, still to attach */
@@ -7476,6 +7480,8 @@ export interface components {
             attached: boolean;
             /** @description The component's name */
             component: string;
+            /** @description The component's id, the stable address a link to it uses */
+            component_id: string;
             /** @description Its product */
             product: string;
             /** @description The role it fills in its system */
@@ -7484,6 +7490,8 @@ export interface components {
         InstantiatedPlaceBody: {
             /** @description The place's name */
             location: string;
+            /** @description The place's id, the stable address a link to it uses */
+            location_id: string;
             /** @description The place it sits under, by name */
             parent?: string;
             /** @description Its location type */
@@ -7496,6 +7504,8 @@ export interface components {
             standard: string;
             /** @description The system's name */
             system: string;
+            /** @description The system's id, the stable address a link to it uses */
+            system_id: string;
         };
         IssueCommandInputBody: {
             /**

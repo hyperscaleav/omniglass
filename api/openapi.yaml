@@ -4224,6 +4224,9 @@ components:
         component:
           description: The component's name
           type: string
+        component_id:
+          description: The component's id, the stable address a link to it uses
+          type: string
         product:
           description: Its product
           type: string
@@ -4233,6 +4236,7 @@ components:
       required:
         - template
         - component
+        - component_id
         - product
         - attached
       type: object
@@ -4387,6 +4391,9 @@ components:
         system:
           description: The system's name
           type: string
+        system_id:
+          description: The system's id, the stable address a link to it uses
+          type: string
         template:
           description: The template it came from; recorded in the audit detail only
           type: string
@@ -4400,6 +4407,7 @@ components:
       required:
         - template
         - system
+        - system_id
         - standard
         - standard_forked
         - components
@@ -4414,6 +4422,9 @@ components:
         component:
           description: The component's name
           type: string
+        component_id:
+          description: The component's id, the stable address a link to it uses
+          type: string
         product:
           description: Its product
           type: string
@@ -4422,6 +4433,7 @@ components:
           type: string
       required:
         - component
+        - component_id
         - product
         - attached
       type: object
@@ -4431,6 +4443,9 @@ components:
         location:
           description: The place's name
           type: string
+        location_id:
+          description: The place's id, the stable address a link to it uses
+          type: string
         parent:
           description: The place it sits under, by name
           type: string
@@ -4439,6 +4454,7 @@ components:
           type: string
       required:
         - location
+        - location_id
         - type
       type: object
     InstantiatedSystemBody:
@@ -4453,8 +4469,12 @@ components:
         system:
           description: The system's name
           type: string
+        system_id:
+          description: The system's id, the stable address a link to it uses
+          type: string
       required:
         - system
+        - system_id
         - location
         - standard
       type: object

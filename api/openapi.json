@@ -5625,6 +5625,10 @@
             "description": "The component's name",
             "type": "string"
           },
+          "component_id": {
+            "description": "The component's id, the stable address a link to it uses",
+            "type": "string"
+          },
           "product": {
             "description": "Its product",
             "type": "string"
@@ -5637,6 +5641,7 @@
         "required": [
           "template",
           "component",
+          "component_id",
           "product",
           "attached"
         ],
@@ -5848,6 +5853,10 @@
             "description": "The system's name",
             "type": "string"
           },
+          "system_id": {
+            "description": "The system's id, the stable address a link to it uses",
+            "type": "string"
+          },
           "template": {
             "description": "The template it came from; recorded in the audit detail only",
             "type": "string"
@@ -5866,6 +5875,7 @@
         "required": [
           "template",
           "system",
+          "system_id",
           "standard",
           "standard_forked",
           "components",
@@ -5884,6 +5894,10 @@
             "description": "The component's name",
             "type": "string"
           },
+          "component_id": {
+            "description": "The component's id, the stable address a link to it uses",
+            "type": "string"
+          },
           "product": {
             "description": "Its product",
             "type": "string"
@@ -5895,6 +5909,7 @@
         },
         "required": [
           "component",
+          "component_id",
           "product",
           "attached"
         ],
@@ -5905,6 +5920,10 @@
         "properties": {
           "location": {
             "description": "The place's name",
+            "type": "string"
+          },
+          "location_id": {
+            "description": "The place's id, the stable address a link to it uses",
             "type": "string"
           },
           "parent": {
@@ -5918,6 +5937,7 @@
         },
         "required": [
           "location",
+          "location_id",
           "type"
         ],
         "type": "object"
@@ -5936,10 +5956,15 @@
           "system": {
             "description": "The system's name",
             "type": "string"
+          },
+          "system_id": {
+            "description": "The system's id, the stable address a link to it uses",
+            "type": "string"
           }
         },
         "required": [
           "system",
+          "system_id",
           "location",
           "standard"
         ],
