@@ -157,6 +157,10 @@ func TestNotificationTargetAPI(t *testing.T) {
 	if res.OK || res.Status != 0 || !strings.Contains(res.Reason, "internal address") || len(rcv.posts) != 0 {
 		t.Fatalf("test before the allow list = %+v, want refused before any request", res)
 	}
+	// An allow entry nothing can parse is refused where it is written, naming it.
+	if b := c.do(ownerTok, http.MethodPatch, "/settings/notification", map[string]any{"egress_allow": []string{"10.0.0.0/33"}}, http.StatusUnprocessableEntity); !strings.Contains(string(b), "10.0.0.0/33") {
+		t.Fatalf("a bad allow entry = %s, want it named", b)
+	}
 	c.do(ownerTok, http.MethodPatch, "/settings/notification", map[string]any{"egress_allow": []string{"127.0.0.1"}}, http.StatusOK)
 
 	// Sign with a platform hmac key; the inbound scheme verifies the bytes received.

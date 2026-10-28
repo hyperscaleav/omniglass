@@ -36,6 +36,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -131,8 +132,12 @@ func (p Policy) addrAllowed(a netip.Addr) bool {
 var metadata = []netip.Addr{
 	netip.MustParseAddr("169.254.169.254"), // AWS, GCP, Azure, OpenStack, DigitalOcean
 	netip.MustParseAddr("169.254.170.2"),   // AWS ECS task metadata
+	netip.MustParseAddr("169.254.170.23"),  // AWS EKS Pod Identity agent
+	netip.MustParseAddr("169.254.0.23"),    // Tencent Cloud
 	netip.MustParseAddr("100.100.100.200"), // Alibaba Cloud
+	netip.MustParseAddr("168.63.129.16"),   // Azure WireServer (a public-range address)
 	netip.MustParseAddr("fd00:ec2::254"),   // AWS IPv6
+	netip.MustParseAddr("fd00:ec2::23"),    // AWS EKS Pod Identity agent, IPv6
 }
 
 // internalRanges are refused unless allowed: everything that is not the
@@ -149,16 +154,42 @@ var internalRanges = []netip.Prefix{
 	netip.MustParsePrefix("198.18.0.0/15"),
 	netip.MustParsePrefix("224.0.0.0/4"),
 	netip.MustParsePrefix("240.0.0.0/4"),
-	netip.MustParsePrefix("::/128"),
-	netip.MustParsePrefix("::1/128"),
+	netip.MustParsePrefix("::/96"),     // the unspecified, loopback and IPv4-compatible forms
+	netip.MustParsePrefix("2001::/32"), // Teredo: carries an IPv4 address it reaches
+	netip.MustParsePrefix("2002::/16"), // 6to4: likewise
 	netip.MustParsePrefix("fc00::/7"),
 	netip.MustParsePrefix("fe80::/10"),
 	netip.MustParsePrefix("ff00::/8"),
 }
 
+// nat64 are the translation prefixes whose last 32 bits ARE an IPv4
+// destination: the well-known one, and the local-use one RFC 8215 defines to
+// carry non-global IPv4. An address in either is judged as the IPv4 address it
+// reaches. A network-specific NAT64 prefix cannot be recognized here; an
+// install that runs one names it in the allow list or not at all.
+var nat64 = []netip.Prefix{
+	netip.MustParsePrefix("64:ff9b::/96"),
+	netip.MustParsePrefix("64:ff9b:1::/48"),
+}
+
+// normalize is the address every judgment is made on: its zone dropped (a
+// zoned address matches no prefix, so it would otherwise pass every check),
+// an IPv4-mapped one unmapped, and a NAT64 one reduced to the IPv4 address it
+// translates to.
+func normalize(a netip.Addr) netip.Addr {
+	a = a.WithZone("").Unmap()
+	for _, p := range nat64 {
+		if p.Contains(a) {
+			b := a.As16()
+			return netip.AddrFrom4([4]byte{b[12], b[13], b[14], b[15]})
+		}
+	}
+	return a
+}
+
 // IsMetadata reports whether a is a cloud metadata address.
 func IsMetadata(a netip.Addr) bool {
-	a = a.Unmap()
+	a = normalize(a)
 	for _, m := range metadata {
 		if a == m {
 			return true
@@ -169,7 +200,7 @@ func IsMetadata(a netip.Addr) bool {
 
 // IsInternal reports whether a is outside the public internet.
 func IsInternal(a netip.Addr) bool {
-	a = a.Unmap()
+	a = normalize(a)
 	for _, pfx := range internalRanges {
 		if pfx.Contains(a) {
 			return true
@@ -182,7 +213,10 @@ func IsInternal(a netip.Addr) bool {
 // always refused; an internal address only when neither the address nor the
 // host is on the allow list.
 func (p Policy) CheckAddr(host string, a netip.Addr) error {
-	a = a.Unmap()
+	if a.Zone() != "" {
+		return fmt.Errorf("%w: a zoned address (%s) is never a destination", ErrRefused, a)
+	}
+	a = normalize(a)
 	if IsMetadata(a) {
 		return fmt.Errorf("%w: %s is a cloud metadata address, which is never reachable", ErrRefused, a)
 	}
@@ -206,6 +240,9 @@ func (p Policy) CheckURL(raw string) (*url.URL, error) {
 	if u.User != nil {
 		return nil, fmt.Errorf("%w: the URL carries credentials; bind a secret instead", ErrRefused)
 	}
+	if strings.Contains(u.Hostname(), "%") {
+		return nil, fmt.Errorf("%w: a zoned address is never a destination", ErrRefused)
+	}
 	switch u.Scheme {
 	case "https":
 		return u, nil
@@ -214,7 +251,7 @@ func (p Policy) CheckURL(raw string) (*url.URL, error) {
 		if p.hostAllowed(host) {
 			return u, nil
 		}
-		if a, err := netip.ParseAddr(host); err == nil && p.addrAllowed(a.Unmap()) && !IsMetadata(a) {
+		if a, err := netip.ParseAddr(host); err == nil && p.addrAllowed(normalize(a)) && !IsMetadata(a) {
 			return u, nil
 		}
 		return nil, fmt.Errorf("%w: plain http is only for a destination the egress allow list names; use https", ErrRefused)
@@ -323,8 +360,16 @@ func (c *Client) Post(ctx context.Context, r Request) Result {
 		return Result{Reason: reason(err)}
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, MaxReasonBytes))
+	// Read past the cut, scrub, then cut: a receiver that echoes the request
+	// (its path, its Authorization header) must not land the credential in
+	// the reason a delivery row and an audit row keep, and an echo straddling
+	// the cut is scrubbed whole before it is cut.
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, scrubWindow))
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<16))
+	body := []byte(scrub(string(raw), secretsOf(u, r.Header)))
+	if len(body) > MaxReasonBytes {
+		body = body[:MaxReasonBytes]
+	}
 	res := Result{Status: resp.StatusCode}
 	switch {
 	case resp.StatusCode >= 200 && resp.StatusCode < 300:
@@ -338,6 +383,48 @@ func (c *Client) Post(ctx context.Context, r Request) Result {
 		}
 	}
 	return res
+}
+
+// scrubWindow is how much of a response body is read to scrub before the
+// reason is cut to MaxReasonBytes.
+const scrubWindow = 16 << 10
+
+// secretsOf are the strings a receiver's echo must never carry into a
+// reason: the URL whole and its path and query (a chat incoming-webhook URL
+// carries its credential there), in raw and escaped forms, and every
+// credential header value the request sent.
+func secretsOf(u *url.URL, h http.Header) []string {
+	var out []string
+	add := func(s string) {
+		if len(s) >= 4 {
+			out = append(out, s, url.QueryEscape(s), url.PathEscape(s), strings.ReplaceAll(s, "/", `\/`))
+		}
+	}
+	add(u.String())
+	if u.Path != "/" {
+		add(u.Path)
+		add(u.EscapedPath())
+	}
+	add(u.RawQuery)
+	for _, k := range []string{"Authorization", "X-Omniglass-Signature"} {
+		for _, v := range h.Values(k) {
+			add(v)
+			if _, tok, ok := strings.Cut(v, " "); ok {
+				add(tok)
+			}
+		}
+	}
+	return out
+}
+
+// scrub replaces every occurrence of each secret, longest first so a URL is
+// replaced whole before its path is.
+func scrub(s string, secrets []string) string {
+	sort.Slice(secrets, func(i, j int) bool { return len(secrets[i]) > len(secrets[j]) })
+	for _, x := range secrets {
+		s = strings.ReplaceAll(s, x, "[redacted]")
+	}
+	return s
 }
 
 // reason words a transport error without the URL (which may itself be a

@@ -7,41 +7,7 @@
 # until it is revealed under an audit row (#618, #1320). No uuid is typed.
 
 Hide
-Type `cat > /tmp/rx.py <<'PY'`
-Enter
-Type `import hashlib, hmac, http.server, json, os`
-Enter
-Type `KEY = b"demo-618-signing-key"`
-Enter
-Type `class Rx(http.server.BaseHTTPRequestHandler):`
-Enter
-Type `    def do_POST(self):`
-Enter
-Type `        body = self.rfile.read(int(self.headers["Content-Length"]))`
-Enter
-Type `        ts = self.headers.get("X-Omniglass-Timestamp", "")`
-Enter
-Type `        want = "sha256=" + hmac.new(KEY, ts.encode() + b"." + body, hashlib.sha256).hexdigest()`
-Enter
-Type `        code = 503 if os.path.exists("/tmp/rx-fail") else 200`
-Enter
-Type `        env = json.loads(body)`
-Enter
-Type `        seen = {"subject": env["subject"], "transition": env["transition"], "verified": hmac.compare_digest(want, self.headers.get("X-Omniglass-Signature", "")), "answered": code, "key": self.headers.get("Idempotency-Key")}`
-Enter
-Type `        open("/tmp/rx.log", "a").write(json.dumps(seen) + "\n")`
-Enter
-Type `        self.send_response(code)`
-Enter
-Type `        self.end_headers()`
-Enter
-Type `    def log_message(self, *args):`
-Enter
-Type `        pass`
-Enter
-Type `http.server.ThreadingHTTPServer(("", 8618), Rx).serve_forever()`
-Enter
-Type `PY`
+Type `printf '%s\n' 'import hashlib, hmac, http.server, json, os' 'KEY = b"demo-618-signing-key"' 'class Rx(http.server.BaseHTTPRequestHandler):' '    def do_POST(self):' '        body = self.rfile.read(int(self.headers["Content-Length"]))' '        ts = self.headers.get("X-Omniglass-Timestamp", "")' '        want = "sha256=" + hmac.new(KEY, ts.encode() + b"." + body, hashlib.sha256).hexdigest()' '        code = 503 if os.path.exists("/tmp/rx-fail") else 200' '        env = json.loads(body)' '        seen = {"subject": env["subject"], "transition": env["transition"], "verified": hmac.compare_digest(want, self.headers.get("X-Omniglass-Signature", "")), "answered": code, "key": self.headers.get("Idempotency-Key")}' '        open("/tmp/rx.log", "a").write(json.dumps(seen) + "\n")' '        self.send_response(code)' '        self.end_headers()' '    def log_message(self, *args):' '        pass' 'http.server.ThreadingHTTPServer(("", 8618), Rx).serve_forever()' > /tmp/rx.py`
 Enter
 Wait
 Type `demo_hush 'nohup python3 /tmp/rx.py >/dev/null 2>&1 &'`

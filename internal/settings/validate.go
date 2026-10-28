@@ -3,6 +3,7 @@ package settings
 import (
 	"errors"
 	"fmt"
+	"github.com/hyperscaleav/omniglass/internal/egress"
 
 	"github.com/danielgtaylor/huma/v2"
 )
@@ -52,6 +53,32 @@ func Validate(namespace string, patch map[string]any) error {
 		if len(res.Errors) > 0 {
 			return &FieldError{Namespace: namespace, Key: key, Message: res.Errors[0].Error()}
 		}
+		if check, ok := valueChecks[namespace+"."+key]; ok {
+			if err := check(val); err != nil {
+				return &FieldError{Namespace: namespace, Key: key, Message: err.Error()}
+			}
+		}
 	}
 	return nil
+}
+
+// valueChecks are the settings whose values mean more than their schema type
+// says, checked where the value is accepted so a value nothing can use is
+// refused naming the entry, rather than stored and failing every later use.
+var valueChecks = map[string]func(any) error{
+	// The egress allow list (#618): every entry a CIDR, an address or a host
+	// name, parsed by the primitive that reads it.
+	"notification.egress_allow": func(v any) error {
+		list, ok := v.([]any)
+		if !ok {
+			return nil // the schema check above already refused a non-list
+		}
+		entries := make([]string, 0, len(list))
+		for _, e := range list {
+			s, _ := e.(string)
+			entries = append(entries, s)
+		}
+		_, err := egress.ParsePolicy(entries)
+		return err
+	},
 }

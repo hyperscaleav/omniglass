@@ -4,9 +4,11 @@ import (
 	"context"
 	"crypto/x509"
 	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -155,5 +157,71 @@ func TestPostReasonNeverCarriesTheURL(t *testing.T) {
 	res := post(egress.New(egress.Policy{}, egress.Options{}), "https://localhost:1/services/T000/B000/SECRETPATH")
 	if res.OK || strings.Contains(res.Reason, "SECRETPATH") {
 		t.Fatalf("reason = %q, want no URL in it", res.Reason)
+	}
+}
+
+// The security review's cases (#1320): a zoned IPv6 address matches no prefix,
+// so it has to be refused before any prefix is consulted; an address that
+// embeds an IPv4 destination is judged as that destination; the metadata set
+// covers the agents beside the instance metadata service.
+func TestCheckAddrJudgesTheAddressAZoneOrATranslationHides(t *testing.T) {
+	none := egress.Policy{}
+	for _, a := range []string{"::1%lo", "fe80::1%eth0", "fc00::1%lo", "fd00:ec2::254%eth0"} {
+		if err := none.CheckAddr("x", netip.MustParseAddr(a)); !errors.Is(err, egress.ErrRefused) {
+			t.Errorf("CheckAddr(%s) = %v, want refused", a, err)
+		}
+	}
+	for _, a := range []string{"64:ff9b::a9fe:a9fe", "64:ff9b::7f00:1", "64:ff9b:1::a00:1", "2002:a00:1::1", "2001:0:a00:1::1", "::a00:1"} {
+		if err := none.CheckAddr("x", netip.MustParseAddr(a)); !errors.Is(err, egress.ErrRefused) {
+			t.Errorf("CheckAddr(%s) = %v, want refused", a, err)
+		}
+	}
+	allowAll := mustPolicy(t, "0.0.0.0/0", "::/0")
+	for _, a := range []string{"169.254.170.23", "169.254.0.23", "168.63.129.16", "fd00:ec2::23", "64:ff9b::a9fe:a9fe"} {
+		if err := allowAll.CheckAddr("x", netip.MustParseAddr(a)); !errors.Is(err, egress.ErrRefused) {
+			t.Errorf("metadata %s under an allow-all list = %v, want refused", a, err)
+		}
+	}
+	if _, err := none.CheckURL("https://[::1%25lo]:443/x"); !errors.Is(err, egress.ErrRefused) {
+		t.Errorf("a zoned URL host = %v, want refused", err)
+	}
+}
+
+func TestPostRefusesAZonedLoopbackOnARealSocket(t *testing.T) {
+	ln, err := net.Listen("tcp", "[::1]:0")
+	if err != nil {
+		t.Skipf("no IPv6 loopback here: %v", err)
+	}
+	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	srv.Listener = ln
+	var handshakes int
+	srv.Config.ConnState = func(net.Conn, http.ConnState) { handshakes++ }
+	srv.StartTLS()
+	defer srv.Close()
+	port := ln.Addr().(*net.TCPAddr).Port
+	res := post(egress.New(egress.Policy{}, egress.Options{}), "https://[::1%25lo]:"+strconv.Itoa(port)+"/hooks/SECRETPATH")
+	if res.OK || !strings.Contains(res.Reason, "zoned") || handshakes != 0 {
+		t.Fatalf("zoned loopback = %+v (connections %d), want refused before any connection", res, handshakes)
+	}
+}
+
+func TestAReceiverEchoNeverCarriesTheURLOrTheToken(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		// Pad so the echo straddles the reason's cut.
+		_, _ = w.Write([]byte(strings.Repeat("p", egress.MaxReasonBytes-40) + "Cannot POST " + r.URL.Path + " with " + r.Header.Get("Authorization")))
+	}))
+	defer srv.Close()
+	res := egress.New(mustPolicy(t, "127.0.0.1"), egress.Options{}).Post(context.Background(), egress.Request{
+		URL: srv.URL + "/services/T000/B000/XXXXSECRET", Header: http.Header{"Authorization": {"Bearer TOKEN-1320"}}, Body: []byte("{}"),
+	})
+	if res.OK || res.Status != 404 || strings.Contains(res.Reason, "XXXX") || strings.Contains(res.Reason, "TOKEN") || strings.Contains(res.Reason, "B000") {
+		t.Fatalf("echo reason = %q, want no URL path and no token", res.Reason)
+	}
+	res = egress.New(mustPolicy(t, "127.0.0.1"), egress.Options{}).Post(context.Background(), egress.Request{
+		URL: srv.URL + "/a/LONGSECRETPATH-1320", Body: []byte("{}"),
+	})
+	if strings.Contains(res.Reason, "LONGSECR") {
+		t.Fatalf("straddling echo reason = %q, want the path scrubbed before the cut", res.Reason)
 	}
 }

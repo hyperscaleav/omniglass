@@ -502,10 +502,14 @@ sender, and Omniglass can verify its own notifications.
 **Egress safety is one primitive** (`internal/egress`), the server's only outbound HTTP client,
 which a later webhook action, ITSM sink or mail API consumes rather than rewrites. A loopback,
 private, link-local, unique-local or carrier-grade NAT destination is refused unless the
-`notification.egress_allow` setting (admin-only, CIDRs, addresses and host names) names it; a
-cloud metadata address is refused even when named. The check runs on the address actually
-dialed, after resolution, so a name that resolves somewhere else at send time is judged where it
-goes. https always, plain http only to a destination the allow list names; TLS verified; a
+`notification.egress_allow` setting (admin-only, CIDRs, addresses and host names, each parsed
+where it is written) names it; a cloud metadata address is refused even when named. The check
+runs on the address actually dialed, after resolution, so a name that resolves somewhere else at
+send time is judged where it goes; a zoned IPv6 address is refused outright, and one that embeds
+an IPv4 destination (the NAT64 prefixes, 6to4, Teredo) is judged as that destination. A
+network-specific NAT64 prefix cannot be recognized, so an install running one names it in the
+allow list or not at all. A failed send's reason keeps a bounded excerpt of the receiver's answer,
+scrubbed of the URL and every credential first. https always, plain http only to a destination the allow list names; TLS verified; a
 redirect is the receiver's answer, never followed; every phase bounded (dial, handshake, the
 response's headers, the whole exchange); no proxy from the environment.
 
