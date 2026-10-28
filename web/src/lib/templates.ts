@@ -5,8 +5,8 @@ import { entityLabel } from "./entities";
 
 // The template catalog's data layer (#827, #1329): the binary's shipped
 // templates, read-only, and the four routes that start something from one. A
-// template is an example an operator clones: forking a standard template or
-// instantiating a component, system or place template writes ordinary rows the
+// template is an example an operator clones: creating a standard, a component,
+// a system or a subtree of places from a template writes ordinary rows the
 // operator owns, and nothing points back at the template (ADR-0071). Shapes are
 // the generated client's; everything below the fetches is pure, so the page's
 // rules (which kinds a URL asks for, what a form posts, where a success lands)
@@ -17,13 +17,13 @@ export type TemplateKind = Template["kind"];
 export type TemplatePlace = components["schemas"]["TemplatePlaceBody"];
 export type TemplateRole = components["schemas"]["TemplateRoleBody"];
 
-export type ForkStandardBody = components["schemas"]["ForkStandardInputBody"];
-export type InstantiateComponentBody = components["schemas"]["InstantiateComponentInputBody"];
-export type InstantiateComponentResult = components["schemas"]["InstantiateComponentOutputBody"];
-export type InstantiateSystemBody = components["schemas"]["InstantiateSystemInputBody"];
-export type InstantiateSystemResult = components["schemas"]["InstantiateSystemOutputBody"];
-export type InstantiateLocationsBody = components["schemas"]["InstantiateLocationsInputBody"];
-export type InstantiateLocationsResult = components["schemas"]["InstantiateLocationsOutputBody"];
+export type StandardFromTemplateBody = components["schemas"]["CreateStandardFromTemplateInputBody"];
+export type ComponentFromTemplateBody = components["schemas"]["CreateComponentFromTemplateInputBody"];
+export type ComponentFromTemplateResult = components["schemas"]["CreateComponentFromTemplateOutputBody"];
+export type SystemFromTemplateBody = components["schemas"]["CreateSystemFromTemplateInputBody"];
+export type SystemFromTemplateResult = components["schemas"]["CreateSystemFromTemplateOutputBody"];
+export type LocationsFromTemplateBody = components["schemas"]["CreateLocationsFromTemplateInputBody"];
+export type LocationsFromTemplateResult = components["schemas"]["CreateLocationsFromTemplateOutputBody"];
 
 // The kinds in catalog order, and the one word an operator reads for each.
 export const TEMPLATE_KINDS: TemplateKind[] = ["standard_template", "system_template", "place_template", "component_template"];
@@ -44,28 +44,28 @@ export async function listTemplates(): Promise<Template[]> {
   return data?.templates ?? [];
 }
 
-export async function forkStandard(body: ForkStandardBody): Promise<{ name: string }> {
-  const { data, error } = await api.POST("/standards:fork", { body });
+export async function createStandardFromTemplate(body: StandardFromTemplateBody): Promise<{ name: string }> {
+  const { data, error } = await api.POST("/standards:createFromTemplate", { body });
   if (error) throw error;
   return data as { name: string };
 }
 
-export async function instantiateComponent(body: InstantiateComponentBody): Promise<InstantiateComponentResult> {
-  const { data, error } = await api.POST("/components:instantiate", { body });
+export async function createComponentFromTemplate(body: ComponentFromTemplateBody): Promise<ComponentFromTemplateResult> {
+  const { data, error } = await api.POST("/components:createFromTemplate", { body });
   if (error) throw error;
-  return data as InstantiateComponentResult;
+  return data as ComponentFromTemplateResult;
 }
 
-export async function instantiateSystem(body: InstantiateSystemBody): Promise<InstantiateSystemResult> {
-  const { data, error } = await api.POST("/systems:instantiate", { body });
+export async function createSystemFromTemplate(body: SystemFromTemplateBody): Promise<SystemFromTemplateResult> {
+  const { data, error } = await api.POST("/systems:createFromTemplate", { body });
   if (error) throw error;
-  return data as InstantiateSystemResult;
+  return data as SystemFromTemplateResult;
 }
 
-export async function instantiateLocations(body: InstantiateLocationsBody): Promise<InstantiateLocationsResult> {
-  const { data, error } = await api.POST("/locations:instantiate", { body });
+export async function createLocationsFromTemplate(body: LocationsFromTemplateBody): Promise<LocationsFromTemplateResult> {
+  const { data, error } = await api.POST("/locations:createFromTemplate", { body });
   if (error) throw error;
-  return data as InstantiateLocationsResult;
+  return data as LocationsFromTemplateResult;
 }
 
 // --- Which kinds, and where they are asked for ------------------------------
@@ -127,8 +127,8 @@ export function ofKinds(rows: Template[], kinds: TemplateKind[]): Template[] {
 
 // --- Who may start one ---------------------------------------------------------
 
-// The permission a kind's start route is gated by: a fork writes a standard, an
-// instantiate writes the collection it is a custom method on.
+// The permission a kind's start route is gated by: each :createFromTemplate
+// writes the collection it is a custom method on.
 export const START_RESOURCE: Record<TemplateKind, "standard" | "system" | "location" | "component"> = {
   standard_template: "standard",
   system_template: "system",
@@ -136,12 +136,12 @@ export const START_RESOURCE: Record<TemplateKind, "standard" | "system" | "locat
   component_template: "component",
 };
 
-// The full set a start needs, mirroring the routes (internal/api/instantiate.go):
+// The full set a start needs, mirroring the routes (internal/api/from_template.go):
 // each route is gated by one create permission and then requires the rest of
-// what its pieces write, and a plan that forks a standard needs standard:create
-// (the storage refuses the fork without it). The form's own choices move the
+// what its pieces write, and a plan that creates a standard from its template
+// needs standard:create (the storage refuses it without). The form's own choices move the
 // set: an address needs endpoint:create, and a system built to a standard the
-// fleet does not hold forks it. held answers whether the fleet holds a
+// fleet does not hold creates it from its template. held answers whether the fleet holds a
 // standard of that name.
 export type Perm = readonly [string, string];
 export type StartContext = {
@@ -243,7 +243,7 @@ export function placeTreeRows(p: TemplatePlace, depth = 0): PlaceTreeRow[] {
 // A role a system template staffs, with how many components fill it and what
 // fills it. The count is the quorum of the standard the plan builds to: the
 // fleet's own standard of that name when it holds one (its roles passed as
-// `held`, which is what the route reads), else the standard template it forks
+// `held`, which is what the route reads), else the standard template it creates the standard from
 // (one when the catalog does not hold that either).
 export type RoleSlot = { role: string; label: string; count: number; fill: string };
 type DeclaredLike = { name: string; label?: string; quorum: number };
@@ -288,9 +288,9 @@ export function valueText(v: unknown): string {
 
 const opt = (s: string | undefined): string | undefined => (s && s.trim() ? s.trim() : undefined);
 
-export type ForkDraft = { name: string; label: string; parent: string };
+export type StandardDraft = { name: string; label: string; parent: string };
 
-export function forkBody(template: string, d: ForkDraft): ForkStandardBody {
+export function standardBody(template: string, d: StandardDraft): StandardFromTemplateBody {
   return { template, name: opt(d.name), label: opt(d.label), parent: opt(d.parent) };
 }
 
@@ -307,7 +307,7 @@ export type ComponentDraft = {
 // The driver input an address rides on (template.AddressInput in Go).
 export const ADDRESS_INPUT = "host";
 
-export function componentBody(template: string, d: ComponentDraft): InstantiateComponentBody {
+export function componentBody(template: string, d: ComponentDraft): ComponentFromTemplateBody {
   const inputs: Record<string, string> = {};
   if (opt(d.address)) inputs[ADDRESS_INPUT] = d.address.trim();
   for (const [k, v] of Object.entries(d.secrets)) if (opt(v)) inputs[k] = v.trim();
@@ -332,7 +332,7 @@ export type SystemDraft = {
   addresses: Record<string, string[]>;
 };
 
-export function systemBody(template: string, d: SystemDraft): InstantiateSystemBody {
+export function systemBody(template: string, d: SystemDraft): SystemFromTemplateBody {
   const attach: Record<string, Record<string, string>[]> = {};
   for (const [role, list] of Object.entries(d.addresses)) {
     // Keep the slots in order up to the last address given, so the second
@@ -355,7 +355,7 @@ export function systemBody(template: string, d: SystemDraft): InstantiateSystemB
 
 export type PlacesDraft = { parent: string; name: string; label: string };
 
-export function placesBody(template: string, d: PlacesDraft): InstantiateLocationsBody {
+export function placesBody(template: string, d: PlacesDraft): LocationsFromTemplateBody {
   return { template, parent: opt(d.parent), name: opt(d.name), label: opt(d.label) };
 }
 

@@ -18,17 +18,17 @@ import (
 // transaction or none of it. Every piece is the ordinary create, under the
 // caller's own scope, writing its own audit row, so the composite is exactly
 // the writes an operator could make one at a time. The simulator's add
-// (CreateSimSystem) and the template instantiations are its consumers; the
+// (CreateSimSystem) and the creates from a template are its consumers; the
 // pure half that decides what a system's roles take is internal/systemplan.
 
 // Plan is what CreatePlan lands.
 type Plan struct {
 	// Template is the template the plan came from, written into every audit
-	// row the plan writes as instantiated_from (WithTemplate); empty for none.
+	// row the plan writes as from_template (WithTemplate); empty for none.
 	Template string
-	// Standards are forked, in order, unless a standard of the fork's name
+	// Standards are created from their templates, in order, unless a standard of that name
 	// already exists (then the existing one is used as it is).
-	Standards []StandardFork
+	Standards []StandardFromTemplate
 	// Places are created in order; a place's ParentKey names an earlier
 	// place of the plan, else its Location.ParentName is used as given.
 	Places     []PlannedPlace
@@ -81,14 +81,14 @@ type PlanScopes struct {
 	ComponentCreate, ComponentRead, ComponentUpdate scope.Set
 	EndpointCreate, SecretRead                      scope.Set
 	CanAdmin                                        bool
-	// CanForkStandard says the caller holds standard:create, which a fork
-	// the plan needs requires; without it a fork is ErrPlanForkForbidden.
-	CanForkStandard bool
+	// CanCreateStandard says the caller holds standard:create, which creating a
+	// standard the plan needs requires; without it that create is ErrPlanStandardForbidden.
+	CanCreateStandard bool
 }
 
-// ErrPlanForkForbidden is a plan whose standard must be forked, by a caller
+// ErrPlanStandardForbidden is a plan whose standard must be created from its template, by a caller
 // who may not create a standard.
-var ErrPlanForkForbidden = errors.New("storage: forking the standard needs standard:create")
+var ErrPlanStandardForbidden = errors.New("storage: creating the standard from its template needs standard:create")
 
 // PlanError says which piece of a plan failed, so a caller maps the cause
 // the way that piece's own route maps it. Stage is standard, place, system,
@@ -116,10 +116,10 @@ func (e *PlanError) Unwrap() error { return e.Err }
 
 // Planned is what CreatePlan made, in plan order.
 type Planned struct {
-	Forked     []*Standard
-	Places     []*Location
-	Systems    []PlannedSystemResult
-	Components []*Component
+	CreatedStandards []*Standard
+	Places           []*Location
+	Systems          []PlannedSystemResult
+	Components       []*Component
 }
 
 // PlannedSystemResult is one system CreatePlan made and its components, in
@@ -129,7 +129,7 @@ type PlannedSystemResult struct {
 	Components []*Component
 }
 
-// CreatePlan lands a plan whole, in one transaction: the standards it forks,
+// CreatePlan lands a plan whole, in one transaction: the standards it creates from templates,
 // its places parents first, each system then each of its components (with
 // their endpoints, their declared values and their role assignment) and the
 // system's declared values, then the standalone components. Every piece is
@@ -163,14 +163,14 @@ func (p *PG) createPlanTx(ctx context.Context, tx pgx.Tx, actorID string, plan P
 		if exists {
 			continue
 		}
-		if !sc.CanForkStandard {
-			return nil, &PlanError{Stage: "standard", Ref: f.Name, Err: ErrPlanForkForbidden}
+		if !sc.CanCreateStandard {
+			return nil, &PlanError{Stage: "standard", Ref: f.Name, Err: ErrPlanStandardForbidden}
 		}
-		st, err := p.forkStandardTx(ctx, tx, actorID, f)
+		st, err := p.createStandardFromTemplateTx(ctx, tx, actorID, f)
 		if err != nil {
 			return nil, &PlanError{Stage: "standard", Ref: f.Name, Err: err}
 		}
-		out.Forked = append(out.Forked, st)
+		out.CreatedStandards = append(out.CreatedStandards, st)
 	}
 
 	places := map[string]*Location{}

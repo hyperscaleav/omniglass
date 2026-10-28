@@ -58,11 +58,11 @@ func TestPlanPlacesRefusesWhatTheFleetCannotHold(t *testing.T) {
 	}
 }
 
-// TestPlanSystemFillsToQuorumAndForksTheChain: a system template on a fresh
+// TestPlanSystemFillsToQuorumAndCreatesTheChain: a system template on a fresh
 // fleet plans the fork of its standard with every ancestor, parents first,
 // and a component per role to quorum; a role filled with a product its type
 // refuses is refused naming the role.
-func TestPlanSystemFillsToQuorumAndForksTheChain(t *testing.T) {
+func TestPlanSystemFillsToQuorumAndCreatesTheChain(t *testing.T) {
 	gw := seeded(t)
 	ctx := context.Background()
 	sp, err := template.PlanSystem(ctx, gw, template.Shipped(), template.SystemRequest{Template: "mr55-system"})
@@ -73,7 +73,7 @@ func TestPlanSystemFillsToQuorumAndForksTheChain(t *testing.T) {
 	for _, f := range sp.Plan.Standards {
 		forks = append(forks, f.Name)
 	}
-	if strings.Join(forks, ",") != "meeting-room,mr55" || !sp.Forks || sp.Standard != "mr55" {
+	if strings.Join(forks, ",") != "meeting-room,mr55" || !sp.CreatesStandards || sp.Standard != "mr55" {
 		t.Fatalf("forks = %v, want meeting-room then mr55", forks)
 	}
 	if len(sp.Pieces) != 4 {

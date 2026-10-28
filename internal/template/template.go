@@ -3,7 +3,7 @@
 // YAML and embedded exactly like the seed files. The difference is the
 // loader. A seed inserts rows unasked; this package inserts nothing and never
 // touches the database. It parses, validates and serves a read-only catalog,
-// and the fork and instantiate primitives read a template from it and write
+// and the create-from-template primitives read a template from it and write
 // ordinary rows the operator owns outright, with nothing pointing back.
 //
 // Four kinds ship: a standard_template (a standard's attributes, roles,
@@ -76,10 +76,10 @@ type Template struct {
 	Place     *Place     `yaml:"place,omitempty" json:"place,omitempty"`
 }
 
-// Standard is a standard_template's body: what a fork writes.
+// Standard is a standard_template's body: what creating a standard from it writes.
 type Standard struct {
 	// Parent names the standard template a variant hangs off. A variant
-	// forks only once the operator holds a standard of that name.
+	// is created from only once the operator holds a standard of that name.
 	Parent  string         `yaml:"parent,omitempty" json:"parent,omitempty"`
 	Choices []Choice       `yaml:"choices,omitempty" json:"choices,omitempty"`
 	Roles   []Role         `yaml:"roles" json:"roles"`
@@ -185,7 +185,7 @@ type Attach struct {
 // System is a system_template's body.
 type System struct {
 	// Standard names the standard the system conforms to: a standard
-	// template's name, which is also the name its fork takes by default.
+	// template's name, which is also the name a standard created from it takes by default.
 	Standard   string `yaml:"standard" json:"standard"`
 	SystemType string `yaml:"system_type,omitempty" json:"system_type,omitempty"`
 	// Roles fills each role, by role name.
@@ -531,7 +531,7 @@ func (s *Standard) validate() error {
 			}
 		}
 		// The rest of the map's rule is the write's own: one rule, held
-		// here so a shipped map a fork would refuse never loads.
+		// here so a shipped map the create would refuse never loads.
 		b, err := json.Marshal(s.Map)
 		if err != nil {
 			return fmt.Errorf("the map: %w", err)
@@ -660,8 +660,8 @@ func (c *Catalog) validateSystemRefs(s *System) error {
 	}
 	// A shipped system template builds to a standard the catalog ships, so
 	// its fills are checked against that standard's roles here, and a
-	// release withdrawing the standard template fails the load. (An
-	// instantiate may still name a standard of the operator's own.)
+	// release withdrawing the standard template fails the load. (A create
+	// from it may still name a standard of the operator's own.)
 	std, err := c.GetKind(s.Standard, KindStandard)
 	if err != nil {
 		return fmt.Errorf("builds to %w", err)

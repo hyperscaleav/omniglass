@@ -124,7 +124,7 @@ function Contract(props: { label: string; lines?: NonNullable<Template["standard
   return (
     <Show when={(props.lines ?? []).length > 0}>
       <section class="flex flex-col gap-1.5">
-        <Eyebrow label={props.label} hint="The contract lines the fork declares: what every conforming system carries, with its default where the line sets one." />
+        <Eyebrow label={props.label} hint="The contract lines the standard declares: what every conforming system carries, with its default where the line sets one." />
         <ul class="flex flex-wrap gap-1.5">
           <For each={props.lines ?? []}>
             {(l) => (
@@ -147,7 +147,7 @@ function SystemPreview(props: { template: Template; all: Template[]; heldRoles?:
   return (
     <div class="flex flex-col gap-4" data-testid="preview-system">
       <div class="grid grid-cols-2 gap-3">
-        <KVStacked label="Standard" mono hint="The standard the system is built to: yours of that name when you hold one, else forked from its template in the same write." value={<span data-testid="preview-standard-source">{sys().standard} <span class="font-sans text-xs text-base-content/60">{props.heldRoles ? "(yours)" : "(forked from its template)"}</span></span>} />
+        <KVStacked label="Standard" mono hint="The standard the system is built to: yours of that name when you hold one, else created from its template in the same write." value={<span data-testid="preview-standard-source">{sys().standard} <span class="font-sans text-xs text-base-content/60">{props.heldRoles ? "(yours)" : "(created from its template)"}</span></span>} />
         <KVStacked label="System type" mono value={sys().system_type || "none"} />
       </div>
       <section class="flex flex-col gap-1.5">

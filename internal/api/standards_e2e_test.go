@@ -52,7 +52,7 @@ func TestStandardsAPI(t *testing.T) {
 	// A plain viewer (read everywhere, write nothing) reads the standards via
 	// the standard:read floor (*:read): one forked from a template here, since
 	// the boot seeds none.
-	c.do(ownerTok, http.MethodPost, "/standards:fork", map[string]any{"template": "classroom"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/standards:createFromTemplate", map[string]any{"template": "classroom"}, http.StatusCreated)
 	viewerTok := principalWithGrants(t, ctx, dsn, "standard-viewer", []grant{{role: "viewer", scopeKind: "all"}})
 	var listed struct {
 		Standards []struct {

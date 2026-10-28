@@ -308,11 +308,11 @@ func RunWith(ctx context.Context, gw storage.Gateway, actorID string, opts Optio
 func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, opts Options) error {
 	all := scope.Set{All: true}
 
-	// The standards the fleet's systems conform to, forked from the template
-	// catalog through the same primitive POST /standards:fork uses (ADR-0827):
+	// The standards the fleet\'s systems conform to, created from the template
+	// catalog through the same primitive POST /standards:createFromTemplate uses (ADR-0827):
 	// the boot seed plants none. A standard already held is left as it is.
-	if _, err := template.ForkAllStandards(ctx, gw, template.Shipped(), actorID); err != nil {
-		return fmt.Errorf("devseed: fork the standards: %w", err)
+	if _, err := template.CreateAllStandards(ctx, gw, template.Shipped(), actorID); err != nil {
+		return fmt.Errorf("devseed: create the standards from their templates: %w", err)
 	}
 
 	// Locations first, parents before children (the fixture is ordered so) so a
@@ -560,7 +560,7 @@ func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, op
 	}
 
 	// Systems: the thing in the room that either works or does not, conforming to a
-	// standard forked from a template (above) whose roles it inherits live. Locations must already be
+	// standard created from a template (above) whose roles it inherits live. Locations must already be
 	// seeded for the placement to resolve. Recognised the same way a component is,
 	// with the system_type as the classification whose stem is minted.
 	sysIDs := map[string]string{}

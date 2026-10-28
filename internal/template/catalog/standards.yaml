@@ -1,6 +1,6 @@
 # The standard templates (kind standard_template): example standards an
-# operator forks (POST /standards:fork, ADR-0071, ADR-0827). The binary
-# offers them and inserts nothing: a fork writes one standard the operator
+# operator creates from (POST /standards:createFromTemplate, ADR-0071, ADR-0827). The binary
+# offers them and inserts nothing: creating from one writes a standard the operator
 # owns outright, with these roles, choices and contract lines, and nothing
 # points back here, so a release can rewrite any of these without touching a
 # fleet.
@@ -8,8 +8,8 @@
 # The catalog is written the way an integrator writes space standards (#802):
 # a standard is a space type's full signal chain, and a size-serialized family
 # (mr55..mr98, ds55/ds75) pins the display SKU per variant while the chain
-# stays the parent's. A variant names its parent template, and forks only
-# once the operator holds a standard forked from it. Domain rules that shaped
+# stays the parent's. A variant names its parent template, and is created from only
+# once the operator holds a standard of the parent\'s name. Domain rules that shaped
 # it: a video bar is the ONE all-in-one conferencing appliance at the front of
 # a space, never a microphone and never shared; microphones are typed by form
 # factor; a divisible space shares its DSP and amplifier rack, which is what
@@ -44,7 +44,7 @@ templates:
     name: mr55
     label: Meeting Room 55
     description: >-
-      Meeting Room with its main display pinned to a 55-inch panel. Fork Meeting Room first.
+      Meeting Room with its main display pinned to a 55-inch panel. Create Meeting Room from its template first.
     standard:
       parent: meeting-room
       roles:
@@ -75,7 +75,7 @@ templates:
     name: mr65
     label: Meeting Room 65
     description: >-
-      Meeting Room with its main display pinned to a 65-inch panel. Fork Meeting Room first.
+      Meeting Room with its main display pinned to a 65-inch panel. Create Meeting Room from its template first.
     standard:
       parent: meeting-room
       roles:
@@ -99,7 +99,7 @@ templates:
     name: mr75
     label: Meeting Room 75
     description: >-
-      Meeting Room with its main display pinned to a 75-inch panel. Fork Meeting Room first.
+      Meeting Room with its main display pinned to a 75-inch panel. Create Meeting Room from its template first.
     standard:
       parent: meeting-room
       roles:
@@ -123,7 +123,7 @@ templates:
     name: mr86
     label: Meeting Room 86
     description: >-
-      Meeting Room with its main display pinned to an 86-inch panel. Fork Meeting Room first.
+      Meeting Room with its main display pinned to an 86-inch panel. Create Meeting Room from its template first.
     standard:
       parent: meeting-room
       roles:
@@ -147,7 +147,7 @@ templates:
     name: mr98
     label: Meeting Room 98
     description: >-
-      Meeting Room with its main display pinned to a 98-inch panel. Fork Meeting Room first.
+      Meeting Room with its main display pinned to a 98-inch panel. Create Meeting Room from its template first.
     standard:
       parent: meeting-room
       roles:
@@ -438,7 +438,7 @@ templates:
     name: ds55
     label: Digital Sign 55
     description: >-
-      Digital Sign with its panel pinned to a 55-inch display. Fork Digital Sign first.
+      Digital Sign with its panel pinned to a 55-inch display. Create Digital Sign from its template first.
     standard:
       parent: digital-sign
       roles:
@@ -458,7 +458,7 @@ templates:
     name: ds75
     label: Digital Sign 75
     description: >-
-      Digital Sign with its panel pinned to a 75-inch display. Fork Digital Sign first.
+      Digital Sign with its panel pinned to a 75-inch display. Create Digital Sign from its template first.
     standard:
       parent: digital-sign
       roles:

@@ -1,6 +1,6 @@
 ---
 title: Templates
-description: "Example configurations an operator clones. Forking is one-time and leaves no link back, which is exactly why a template can be improved in any release without migrating anyone."
+description: "Example configurations an operator clones. Creating from one is one-time and leaves no link back, which is exactly why a template can be improved in any release without migrating anyone."
 sidebar:
   badge:
     text: Partial
@@ -11,20 +11,20 @@ import SeededSet from '../../../components/SeededSet.astro';
 
 A template is an **example configuration an operator clones**. It ships inside the binary as a menu,
 never as data: nothing is inserted until somebody picks one, and what they pick lands as ordinary rows
-they own outright. **Nothing points back at the template**: forking is one-time, no inheritance, no
+they own outright. **Nothing points back at the template**: creating from one is one-time, no inheritance, no
 back-pointer, so a template can be rewritten in any release without migrating a single install.
 
 :::note[Partial]
 Built, the whole of #827: the catalog in the binary, its four kinds, the build's dry-run of every template, the read routes
-(#1323), forking a standard from a template, which retired the standards boot seed (#1324), the
-planned-system primitive (#1325), instantiating a component, a system or a subtree of places (#1326,
-#1327, #1328), and the console's Templates page with "Start from a template" in every create flow
+(#1323), creating a standard from a template, which retired the standards boot seed (#1324), the
+planned-system primitive (#1325), creating a component, a system or a subtree of places from a
+template (#1326, #1327, #1328), and the console's Templates page with "Start from a template" in every create flow
 (#1329). Still design: the trust surface a catalog accepting templates from outside the binary needs
 (below, #318). Operator-authored templates are later
 ([#1330](https://github.com/hyperscaleav/omniglass/issues/1330)).
 :::
 
-## Fork, not pin
+## Copy, not pin
 
 This page used to describe the opposite model, **immutable versioned shapes that instances pin**,
 retired by
@@ -39,7 +39,7 @@ What replaced the pinned shapes is not a template at all:
 | component | [`product`](/architecture/core-entities/), with its `product_property` contract, naming its [driver](/architecture/collection/#drivers-the-declarative-menu) | a pointer, `component.product_id` |
 | system | [`standard`](/architecture/core-entities/) | **conformance**, with live inheritance |
 
-**Forking applies template to row. Conformance applies row to instance.** Only the second is live:
+**Creating from a template applies template to row. Conformance applies row to instance.** Only the second is live:
 a standard's contract default resolves for every conforming system until that system overrides it.
 A template's link is severed at creation. How to reach and read a class of component is not a
 template's job either: that is the driver's spec
@@ -52,7 +52,7 @@ A template is one of four kinds, each naming what it creates:
 - **A standard template**: a [standard](/architecture/core-entities/)'s attributes, its
   [system roles](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled) (accepted
   types, pinned products, quorum, capacity, choices), and its property and metric contract lines.
-  Forking one scaffolds the contract and the roles in the same write, which answers what a template
+  Creating a standard from one scaffolds the contract and the roles in the same write, which answers what a template
   carries: everything the standard declares, so "start from a meeting room" yields the slots the
   space needs filled, not only a name.
 - **A component template**: a product, a driver attach preset (every driver input except the address,
@@ -101,60 +101,60 @@ What this release ships, rendered from the catalog itself:
 no owner and no scope injection. The body is the template whole: its kind and the body that kind
 carries. The CLI is `omniglass template list` and `omniglass template get <template>`.
 
-## Forking a standard
+## Creating from a template
 
-**`POST /standards:fork`** (`omniglass standard fork --template <template>`), gated `standard:create`,
-writes one operator-owned standard (`official: false`) with the template's roles, choices, property
-and metric contract lines and map, in one transaction, under a name the operator chooses (the
-template's by default). A taken name is a 409. A variant forks only once the operator holds the
-standard it hangs off (one they name, or theirs named for the template's parent), otherwise a 422
-names the template to fork first: chains do not fork in one call. The fork is audited once, as `fork`,
-with the template's name in its detail, which is the only trace of where the standard came from.
-Editing it, renaming it, deleting it, and booting a release whose template changed all leave the other
-untouched. The dev seed and the lab fork every standard template through the same primitive, so their
-fleets have the standards their systems conform to.
+One custom method, `:createFromTemplate`, creates from a template on each of the four collections a
+template can create in. A custom method names what differs from Create, and the difference is the
+template input, so the one verb means one thing on all four
+([ADR-0827](/architecture/decisions/#adr-0827-the-template-layer-owns-the-clone-model-and-the-componenttemplate-authoring-model-is-superseded-by-the-driver-spec)).
+Each is gated by that resource's own create permission and turns the template into one **plan**,
+landed through the planned-system primitive ([below](#one-primitive-lands-a-plan)): every piece is
+the ordinary create, checked as its own route checks it, in the caller's own scope, with its own audit
+row, in **one transaction**. A refused piece is answered as its own route answers it, and nothing
+lands.
 
-## Instantiating from a template
-
-Three custom methods start fleet entities from a template, each on the collection it creates in and
-gated by that resource's own create permission. Each turns the template into one **plan** and lands it
-through the planned-system primitive ([below](#one-primitive-lands-a-plan)): every piece is the
-ordinary create, checked as its own route checks it, in the caller's own scope, with its own audit row,
-in **one transaction**. A refused piece is answered as its own route answers it, and nothing lands.
-
-- **`POST /components:instantiate`** (`component:create`): one component from a component template at
-  a place, with its product and the template's declared values (which also need `component:update`).
-  When the request's `inputs` carry the address (`host`) and a `node`, its endpoint attaches through the
-  driver, the template's preset under the inputs given (which also needs `endpoint:create`). A secret
-  input names a secret the caller may read, resolved exactly as an attach resolves it, so one the caller
-  cannot use is refused indistinguishably from one that does not exist. Inputs with no address, or an
-  address with no node, are a 422.
-- **`POST /systems:instantiate`** (`system:create`, and `system:read`, `system:update`,
+- **`POST /standards:createFromTemplate`** (`standard:create`): one operator-owned standard
+  (`official: false`) with the template's roles, choices, property and metric contract lines and map,
+  under a name the operator chooses (the template's by default). A taken name is a 409. A variant is
+  created only once the operator holds the standard it hangs off (one they name, or theirs named for
+  the template's parent), otherwise a 422 names the template to create from first. Editing the
+  standard, renaming it, deleting it, and booting a release whose template changed all leave the other
+  untouched. The dev seed and the lab create every standard template's standard through the same
+  primitive, so their fleets have the standards their systems conform to.
+- **`POST /components:createFromTemplate`** (`component:create`): one component from a component
+  template at a place, with its product and the template's declared values (which also need
+  `component:update`). When the request's `inputs` carry the address (`host`) and a `node`, its endpoint
+  attaches through the driver, the template's preset under the inputs given (which also needs
+  `endpoint:create`). A secret input names a secret the caller may read, resolved exactly as an attach
+  resolves it, so one the caller cannot use is refused indistinguishably from one that does not exist.
+  Inputs with no address, or an address with no node, are a 422.
+- **`POST /systems:createFromTemplate`** (`system:create`, and `system:read`, `system:update`,
   `component:create`, `component:update`): a whole system from a system template at a place, built to
   the standard the caller names, else the template's own: the caller's standard of that name when they
-  hold one, otherwise forked from its standard template in the same write, with every ancestor of a
+  hold one, otherwise created from its standard template in the same write, with every ancestor of a
   variant the fleet does not hold, parents first (which needs `standard:create`). A component is
   created for each role, filled to its quorum with the product the template names, and assigned, so the
   system's staffing reads complete. A role given an address in `attach` (one object per component of
   the role) lands attached; the rest land unattached and are listed in `to_attach`. A standard the
   template cannot staff (a fill whose product is not a type its role accepts, or a role it does not
   fill) is a 422 naming the roles.
-- **`POST /locations:instantiate`** (`location:create`, and the system permissions above when the
-  subtree carries systems): a subtree of places from a place template under a parent place, or as a new
-  top. Each place's type must be one the fleet holds and must allow its parent's type, read from the
-  fleet's own effective `allowed_parent_types` (an operator's fork of a shipped type included), and each
-  is named by the template, the request (the root), or its type's name rule. The systems the template
-  places land staffed and unattached. A type the fleet lacks is a 422 naming the type; a placement its
-  types refuse is a 422 naming the pair. Nothing is keyed on any particular type.
+- **`POST /locations:createFromTemplate`** (`location:create`, and the system permissions above when
+  the subtree carries systems): a subtree of places from a place template under a parent place, or as
+  a new top. Each place's type must be one the fleet holds and must allow its parent's type, read from
+  the fleet's own effective `allowed_parent_types` (an operator's fork of a shipped type included), and
+  each is named by the template, the request (the root), or its type's name rule. The systems the
+  template places land staffed and unattached. A type the fleet lacks is a 422 naming the type; a
+  placement its types refuse is a 422 naming the pair. Nothing is keyed on any particular type.
 
 A place outside the caller's location read scope is a non-disclosing 404, and an unknown template a
-404. The CLI is `omniglass component instantiate`, `omniglass system instantiate` and
-`omniglass location instantiate`.
+404. The CLI is `omniglass standard createFromTemplate`, `omniglass component createFromTemplate`,
+`omniglass system createFromTemplate` and `omniglass location createFromTemplate`.
 
-**Provenance lives in the audit trail only**, as it does for a fork: every audit row a plan writes
-carries the template's name as `instantiated_from`. No column and no back-pointer, which keeps the copy
-severed while still answering "where did this come from"; removing a template from the catalog leaves
-every row created from it reading identically.
+**Provenance lives in the audit trail only**: every row created from a template is audited as a
+create whose detail carries the template's name as `from_template` (a standard created inside a
+system's plan names its own standard template there). No column and no back-pointer, which keeps the
+copy severed while still answering "where did this come from"; removing a template from the catalog
+leaves every row created from it reading identically.
 
 ## In the console
 
@@ -168,11 +168,11 @@ nothing follows the template. The walk-through is the
 
 ## One primitive lands a plan
 
-The simulator's "add a simulated system" and the three instantiations share one primitive in two
+The simulator's "add a simulated system" and the creates from a template share one primitive in two
 halves. The pure planner (`internal/systemplan`) staffs a standard's roles from each role's candidate
 products: the products the simulator serves, or the one product a template names for the role. It
 fills each role to its quorum (capped by its capacity) and takes one alternate per choice. The planned
-create (`storage.CreatePlan`) then lands the standards to fork, the places parents first, each system
+create (`storage.CreatePlan`) then lands the standards to create from their templates, the places parents first, each system
 with its components, their endpoints, declared values and role assignments, and any standalone
 components, in one transaction.
 
@@ -180,7 +180,7 @@ components, in one transaction.
 
 The thing the vendor updates and the thing the operator owns are **never the same object**, so a
 template change never needs a migration. Authoritative rows either overwrite operator edits or
-freeze the defaults; pinned versions mean persuading every install to re-point. Forking has nothing
+freeze the defaults; pinned versions mean persuading every install to re-point. A copy has nothing
 to reconcile.
 
 :::design[Trust: the signature and the capability manifest, tracked in #318]
@@ -191,6 +191,6 @@ marketplace path), which matters only once templates arrive from somewhere other
   authenticity, distinct from the content-hash integrity check. Verified on the hosted /
   marketplace path regardless of the self-host runtime stance.
 - **capability manifest**: which write-commands and credential shapes a template exercises, shown
-  and approved at fork time, so a device-mutating template never gains powers the operator did not
+  and approved when creating from it, so a device-mutating template never gains powers the operator did not
   see.
 :::

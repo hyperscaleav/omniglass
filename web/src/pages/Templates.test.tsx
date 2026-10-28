@@ -176,9 +176,9 @@ describe("Templates page", () => {
     let sent: unknown;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
-      if (req.method === "POST" && req.url.endsWith("/systems:instantiate")) {
+      if (req.method === "POST" && req.url.endsWith("/systems:createFromTemplate")) {
         sent = JSON.parse(await req.clone().text());
-        return json({ template: "mr55-system", system: "meeting-1", system_id: SYS_ID, standard: "mr55", standard_forked: ["meeting-room", "mr55"], components: [], to_attach: ["display-1"] }, 201);
+        return json({ template: "mr55-system", system: "meeting-1", system_id: SYS_ID, standard: "mr55", standards_created: ["meeting-room", "mr55"], components: [], to_attach: ["display-1"] }, 201);
       }
       return json({});
     });
@@ -192,26 +192,26 @@ describe("Templates page", () => {
     expect(screen.getByRole("button", { name: /start system/i })).toBeDisabled();
     fireEvent.change(within(form).getByLabelText("Node"), { target: { value: "lab-node" } });
     fireEvent.click(screen.getByRole("button", { name: /start system/i }));
-    // Lands on the id the answer carries, with what it forked and left to attach.
-    await waitFor(() => expect(landed).toBe(`/systems/${SYS_ID}?forked=meeting-room%2Cmr55&unattached=1&from=mr55-system`));
+    // Lands on the id the answer carries, with the standards it created and what it left to attach.
+    await waitFor(() => expect(landed).toBe(`/systems/${SYS_ID}?created_standards=meeting-room%2Cmr55&unattached=1&from=mr55-system`));
     expect(sent).toEqual({ template: "mr55-system", location: "hq.west", node: "lab-node", attach: { "video-bar": [{ host: "10.0.0.5" }] } });
   });
 
   it("shows the API's refusal and lands nowhere", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
-      json({ title: "Unprocessable Entity", status: 422, detail: "mr55 is a variant of meeting-room: fork meeting-room first, or name the standard it hangs off as parent" }, 422),
+      json({ title: "Unprocessable Entity", status: 422, detail: "mr55 is a variant of meeting-room: create a standard from meeting-room first, or name the standard it hangs off as parent" }, 422),
     );
     mount("/templates?kind=standard_template");
     const b = await blade("Meeting Room 55");
     fireEvent.click(within(b).getByRole("button", { name: /start from this template/i }));
     const form = await screen.findByTestId("start-form-standard");
     expect(within(form).getByLabelText("Variant of")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /fork standard/i }));
-    expect(await within(form).findByRole("alert")).toHaveTextContent("fork meeting-room first");
+    fireEvent.click(screen.getByRole("button", { name: /create standard/i }));
+    expect(await within(form).findByRole("alert")).toHaveTextContent("create a standard from meeting-room first");
     expect(landed).toBe("");
   });
 
-  it("forks a standard and lands on its blade with ?from=", async () => {
+  it("creates a standard from its template and lands on its blade with ?from=", async () => {
     let sent: unknown;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
@@ -223,7 +223,7 @@ describe("Templates page", () => {
     fireEvent.click(within(b).getByRole("button", { name: /start from this template/i }));
     const form = await screen.findByTestId("start-form-standard");
     fireEvent.input(within(form).getByPlaceholderText("mr55"), { target: { value: "mr55-east" } });
-    fireEvent.click(screen.getByRole("button", { name: /fork standard/i }));
+    fireEvent.click(screen.getByRole("button", { name: /create standard/i }));
     await waitFor(() => expect(landed).toBe("/standards?open=mr55-east&from=mr55"));
     expect(sent).toEqual({ template: "mr55", name: "mr55-east" });
   });
@@ -234,7 +234,7 @@ describe("Templates page", () => {
       const req = input as Request;
       if (req.method === "POST") {
         sent = JSON.parse(await req.clone().text());
-        return json({ template: "meeting-floor", places: [{ location: "level-9", location_id: LVL_ID, type: "floor", parent: "west" }], systems: [], standard_forked: [], to_attach: [] }, 201);
+        return json({ template: "meeting-floor", places: [{ location: "level-9", location_id: LVL_ID, type: "floor", parent: "west" }], systems: [], standards_created: [], to_attach: [] }, 201);
       }
       return json({});
     });
@@ -271,7 +271,7 @@ describe("Templates page", () => {
   });
 
   it("names everything a deploy-shaped caller lacks, and offers no Start", async () => {
-    // mr55 is not held, so starting would fork it: standard:create, which deploy lacks.
+    // mr55 is not held, so starting would create it from its template: standard:create, which deploy lacks.
     mount("/templates?kind=system_template", deploy);
     const b = await blade("Meeting Room 55, staffed");
     expect(within(b).queryByRole("button", { name: /start from this template/i })).toBeNull();
@@ -288,7 +288,7 @@ describe("Templates page", () => {
     expect(within(form).queryByTestId("start-missing")).toBeNull();
   });
 
-  it("refuses a fork deploy cannot write, naming the permission", async () => {
+  it("refuses a standard deploy cannot create, naming the permission", async () => {
     mount("/templates?kind=standard_template", deploy);
     const b = await blade("Meeting Room 55");
     expect(within(b).getByTestId("start-needs")).toHaveTextContent("needs standard:create");

@@ -65,7 +65,7 @@ export default function Standards() {
   const rows = createMemo(() =>
     [...(standards.data ?? [])].sort(byLabel),
   );
-  // ?open=<name> opens a standard's blade: a fork from a template lands here
+  // ?open=<name> opens a standard's blade: a standard created from a template lands here
   // (#1329), its ?from= carried to the notice above the list.
   const openId = () => {
     const v = params.open;
@@ -232,7 +232,7 @@ export function CreateStandardForm(p: { onCreated: (s: Standard) => void }): JSX
     submit: () => void submit(),
     busy,
     disabled: () => !name().trim() || !display().trim(),
-    // The other way to a standard (#1329): fork one of the shipped examples.
+    // The other way to a standard (#1329): create one from a shipped template.
     secondary: () => ({ label: "Start from a template", icon: Copy, onClick: () => navigate(templatesHref(["standard_template"])) }),
   });
 

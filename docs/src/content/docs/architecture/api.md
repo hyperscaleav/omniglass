@@ -746,7 +746,7 @@ location type's name is also stored by value in `allowed_parent_types`, on every
 operator's fork, and the rename rewrites those in the same transaction. A driver's name is baked
 into every task it derives, so a driver rename re-derives its attached endpoints' tasks in the same
 transaction, as a version change does. An official row keeps its shipped name (422), since the boot
-seed owns it by name; a standard is never official and never seeded (it is forked from a template, below),
+seed owns it by name; a standard is never official and never seeded (it is created from a template, below),
 so every standard renames. A taken name is
 a 409, an illegal or uuid-shaped one a 422, `root` is reserved for a location type (422), and the rename is audited as
 `rename` keyed on the uuid. The answer is the row as its `GET` reads it. The catalogs keyed by a
@@ -764,33 +764,37 @@ description, and the one body its kind names (a standard template's roles, choic
 map; a component template's product, attach preset and declared values; a system template's standard
 and role fills; a place template's subtree).
 
-**`POST /standards:fork`** writes one standard from a standard template, gated `standard:create`, since
-it writes nothing the standard's own routes could not. The body names the `template` and optionally the
-`name` (the template's by default), the `label`, and for a variant the `parent` to hang it off (the
-caller's standard named for the template's parent by default). The standard, its choices, roles,
-contract lines and map land in one transaction, audited once as `fork` with the template's name in the
-detail, and the answer is the standard as its `GET` reads it (201). A taken name is a 409, a variant
-whose parent the caller does not hold is a 422 naming the template to fork first, a template the catalog
-does not hold (or one of another kind) is a 404, and a template naming a row the fleet's catalogs lack is
-a 422. The boot seed plants no standard, so this is how a fresh install gets one.
+One custom method, **`:createFromTemplate`**, creates from a template on each of the four
+collections a template creates in: a custom method names what differs from Create, and here the
+difference is the template input. Each is gated by that resource's create permission, with the other
+permissions its pieces need checked up front (a 403 naming the one missing):
 
-Three custom methods **instantiate** fleet entities from a template, each on the collection it creates
-in and gated by that resource's create permission, with the other permissions its pieces need checked
-up front (a 403 naming the one missing): **`POST /components:instantiate`** (`component:create`; plus
-`component:update` for declared values and `endpoint:create` to attach), **`POST /systems:instantiate`**
-(`system:create`; plus `system:read`, `system:update`, `component:create`, `component:update`,
-`endpoint:create` to attach, and `standard:create` when the template's standard is forked), and
-**`POST /locations:instantiate`** (`location:create`; plus the system permissions when the subtree
-carries systems). Each names the `template` and where it lands (`location`, or `parent` for a subtree)
-and optionally the root's `name` and `label`; a component takes `inputs` and a `node` to attach, a
-system takes a `standard` to build to and `attach` (driver inputs per role, one object per component)
-with a `node`. The whole thing lands in one transaction, each piece the ordinary create in the caller's
-own scope with its own audit row carrying `instantiated_from`, and a refused piece is answered as its
+- **`POST /standards:createFromTemplate`** (`standard:create`): the body names the `template` and
+  optionally the `name` (the template's by default), the `label`, and for a variant the `parent` to
+  hang it off (the caller's standard named for the template's parent by default). The standard, its
+  choices, roles, contract lines and map land in one transaction, and the answer is the standard as its
+  `GET` reads it (201). A taken name is a 409, a variant whose parent the caller does not hold is a 422
+  naming the template to create from first, a template the catalog does not hold (or one of another
+  kind) is a 404, and a template naming a row the fleet's catalogs lack is a 422. The boot seed plants
+  no standard, so this is how a fresh install gets one.
+- **`POST /components:createFromTemplate`** (`component:create`; plus `component:update` for declared
+  values and `endpoint:create` to attach): a `location`, optionally `name` and `label`, and `inputs`
+  with a `node` to attach.
+- **`POST /systems:createFromTemplate`** (`system:create`; plus `system:read`, `system:update`,
+  `component:create`, `component:update`, `endpoint:create` to attach, and `standard:create` when the
+  template's standard is created from its template): a `location`, optionally `name`, `label`, a
+  `standard` to build to, and `attach` (driver inputs per role, one object per component) with a
+  `node`.
+- **`POST /locations:createFromTemplate`** (`location:create`; plus the system permissions when the
+  subtree carries systems): a `parent`, and optionally the root's `name` and `label`.
+
+Each lands in one transaction, every piece the ordinary create in the caller's own scope with its own
+audit row, each a create whose detail carries `from_template`, and a refused piece is answered as its
 own route answers it with nothing landed. A target place outside the caller's location read scope is a
 non-disclosing 404, an unknown template (or named standard) a 404, and a request the template cannot
-satisfy a 422 naming why. The answer names what was created by name, the standards forked, and
-`to_attach`, the components that landed without an endpoint
-([templates](/architecture/templates/#instantiating-from-a-template)).
+satisfy a 422 naming why. The answer names what was created, by name and id, the standards it created
+from their templates (`standards_created`), and `to_attach`, the components that landed without an
+endpoint ([templates](/architecture/templates/#creating-from-a-template)).
 
 What each catalog adds over the shared shape (bodies in the [reference](/reference/api/)):
 
@@ -817,7 +821,7 @@ What each catalog adds over the shared shape (bodies in the [reference](/referen
   optional `parent_standard_id` (an unknown parent a 422); a standard still referenced by a system is
   refused (409). The **shipped** standards are `official: false`, so unlike a seeded product they are
   fully editable
-  ([the seed model](/architecture/core-entities/#the-seed-model-forked-templates-versus-canonical-catalogs)).
+  ([the seed model](/architecture/core-entities/#the-seed-model-templates-versus-canonical-catalogs)).
 
 ### The install-wide tier permission
 

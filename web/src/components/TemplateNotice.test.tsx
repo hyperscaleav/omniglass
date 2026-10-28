@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import TemplateNotice from "./TemplateNotice";
 import { TEMPLATES_KEY } from "../lib/templates";
 
-// The notice a created row's page shows after a fork or an instantiate (#1329):
+// The notice a created row's page shows after a create from a template (#1329):
 // named by ?from=, saying the row is the operator's own and nothing follows the
 // template, and dismissed by dropping the param.
 
@@ -52,10 +52,10 @@ describe("TemplateNotice", () => {
     expect(screen.queryByTestId("template-notice")).toBeNull();
   });
 
-  it("says what the start forked and what is still to attach", () => {
-    mount("/systems/abc?from=mr55-system&forked=meeting-room,mr55&unattached=3");
+  it("says which standards the start created and what is still to attach", () => {
+    mount("/systems/abc?from=mr55-system&created_standards=meeting-room,mr55&unattached=3");
     const n = screen.getByTestId("template-notice");
-    expect(n).toHaveTextContent("It forked the standards meeting-room, mr55 to build to");
+    expect(n).toHaveTextContent("It created the standards meeting-room, mr55 from their templates to build to");
     expect(n).toHaveTextContent("3 components are still to attach.");
   });
 

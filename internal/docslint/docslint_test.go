@@ -89,6 +89,7 @@ func TestBannedPatternsStaySane(t *testing.T) {
 		"start from a template",
 		// ADR-0827 reclaims the bare kind names for the template catalog.
 		"component_template", "system_template", "standard_template", "place_template",
+		"POST /standards:createFromTemplate", "an operator forks a shipped row",
 	}
 	for _, s := range current {
 		for _, term := range Banned {
@@ -104,7 +105,7 @@ func TestBannedPatternsStaySane(t *testing.T) {
 // versioned-shape tables ADR-0071 retired still trip the lint, so a typo in
 // either pattern cannot silently switch the ban off.
 func TestTemplateRetirementStillBans(t *testing.T) {
-	for _, retired := range []string{"component_template_version", "system_template_version", "system_template_member"} {
+	for _, retired := range []string{"component_template_version", "system_template_version", "system_template_member", "POST /standards:fork", "POST /systems:instantiate"} {
 		hit := false
 		for _, term := range Banned {
 			if term.Pattern.FindString(retired) != "" {

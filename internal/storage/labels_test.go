@@ -1301,7 +1301,7 @@ func seededGatewayDSN(t *testing.T) (*storage.PG, context.Context, string) {
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	storagetest.ForkShippedStandards(t, gw)
+	storagetest.CreateShippedStandards(t, gw)
 	for _, p := range []storage.Product{
 		{Name: edge55, Label: "Labels Display", ComponentType: "display"},
 		{Name: labelsMic, Label: "Labels Mic", ComponentType: "ceiling-mic"},

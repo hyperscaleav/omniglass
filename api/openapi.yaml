@@ -1766,6 +1766,74 @@ components:
       required:
         - name
       type: object
+    CreateComponentFromTemplateInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateComponentFromTemplateInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        inputs:
+          additionalProperties:
+            type: string
+          description: "Driver inputs laid over the template's preset: the address (host) attaches the endpoint, a secret input names a secret you may read"
+          type: object
+        label:
+          description: The component's label
+          type: string
+        location:
+          description: The place the component sits in, by name or dotted path
+          type: string
+        name:
+          description: The component's name; minted as an unnamed create mints it when empty
+          type: string
+        node:
+          description: The node the endpoint is placed on; needed when inputs carry an address
+          type: string
+        template:
+          description: The component template, by name
+          examples:
+            - kestrel-vroom
+          minLength: 1
+          type: string
+      required:
+        - template
+      type: object
+    CreateComponentFromTemplateOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateComponentFromTemplateOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        attached:
+          description: Whether its endpoint attached from the inputs given; false means it is still to attach
+          type: boolean
+        component:
+          description: The component's name
+          type: string
+        component_id:
+          description: The component's id, the stable address a link to it uses
+          type: string
+        product:
+          description: Its product
+          type: string
+        template:
+          description: The template it came from; recorded in the audit detail only
+          type: string
+      required:
+        - template
+        - component
+        - component_id
+        - product
+        - attached
+      type: object
     CreateComponentInputBody:
       additionalProperties: false
       properties:
@@ -2205,6 +2273,82 @@ components:
         - name
         - label
       type: object
+    CreateLocationsFromTemplateInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateLocationsFromTemplateInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        label:
+          description: The subtree root's label
+          type: string
+        name:
+          description: The subtree root's name; omitted takes the template's, else its type's name rule mints one
+          type: string
+        parent:
+          description: The place the subtree sits under, by name or dotted path; omitted makes it a new top
+          type: string
+        template:
+          description: The place template, by name
+          examples:
+            - meeting-floor
+          minLength: 1
+          type: string
+      required:
+        - template
+      type: object
+    CreateLocationsFromTemplateOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateLocationsFromTemplateOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        places:
+          description: The places created, parents first
+          items:
+            $ref: "#/components/schemas/CreatedPlaceBody"
+          type:
+            - array
+            - "null"
+        standards_created:
+          description: The standards this write created from their templates
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        systems:
+          description: The systems created in them
+          items:
+            $ref: "#/components/schemas/CreatedSystemBody"
+          type:
+            - array
+            - "null"
+        template:
+          description: The template it came from; recorded in the audit detail only
+          type: string
+        to_attach:
+          description: The components that landed with no endpoint, still to attach
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+      required:
+        - template
+        - places
+        - systems
+        - standards_created
+        - to_attach
+      type: object
     CreateMeTokenInputBody:
       additionalProperties: false
       properties:
@@ -2585,6 +2729,34 @@ components:
         - color
         - rank
       type: object
+    CreateStandardFromTemplateInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateStandardFromTemplateInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        label:
+          description: The standard's label; omitted takes the template's
+          type: string
+        name:
+          description: The name the standard takes; omitted takes the template's
+          type: string
+        parent:
+          description: For a variant, the standard it hangs off, by name or uuid; omitted takes your standard named for the template's parent
+          type: string
+        template:
+          description: The standard template to create from, by name
+          examples:
+            - meeting-room
+          minLength: 1
+          type: string
+      required:
+        - template
+      type: object
     CreateStandardInputBody:
       additionalProperties: false
       properties:
@@ -2611,6 +2783,103 @@ components:
       required:
         - name
         - label
+      type: object
+    CreateSystemFromTemplateInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateSystemFromTemplateInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        attach:
+          additionalProperties:
+            items:
+              additionalProperties:
+                type: string
+              type: object
+            type:
+              - array
+              - "null"
+          description: Driver inputs per role, one object per component of the role in order; an object with an address (host) attaches that component, the rest land unattached
+          type: object
+        label:
+          description: The system's label
+          type: string
+        location:
+          description: The place the system and its components sit in, by name or dotted path
+          type: string
+        name:
+          description: The system's name; minted from its type when empty
+          type: string
+        node:
+          description: The node the endpoints are placed on; needed when any component attaches
+          type: string
+        standard:
+          description: A standard of your own to build to, by name; omitted takes the template's, created from its template in the same write when you hold none of that name
+          type: string
+        template:
+          description: The system template, by name
+          examples:
+            - mr55-system
+          minLength: 1
+          type: string
+      required:
+        - template
+      type: object
+    CreateSystemFromTemplateOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateSystemFromTemplateOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        components:
+          description: A component per role, filled to quorum and assigned
+          items:
+            $ref: "#/components/schemas/CreatedComponentBody"
+          type:
+            - array
+            - "null"
+        standard:
+          description: The standard it is built to
+          type: string
+        standards_created:
+          description: The standards this write created from their templates (parents first); empty when you held them
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        system:
+          description: The system's name
+          type: string
+        system_id:
+          description: The system's id, the stable address a link to it uses
+          type: string
+        template:
+          description: The template it came from; recorded in the audit detail only
+          type: string
+        to_attach:
+          description: The components that landed with no endpoint, still to attach
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+      required:
+        - template
+        - system
+        - system_id
+        - standard
+        - standards_created
+        - components
+        - to_attach
       type: object
     CreateSystemInputBody:
       additionalProperties: false
@@ -2820,6 +3089,71 @@ components:
       required:
         - name
         - label
+      type: object
+    CreatedComponentBody:
+      additionalProperties: false
+      properties:
+        attached:
+          description: Whether its endpoint attached from the inputs given; false lists it as still to attach
+          type: boolean
+        component:
+          description: The component's name
+          type: string
+        component_id:
+          description: The component's id, the stable address a link to it uses
+          type: string
+        product:
+          description: Its product
+          type: string
+        role:
+          description: The role it fills in its system
+          type: string
+      required:
+        - component
+        - component_id
+        - product
+        - attached
+      type: object
+    CreatedPlaceBody:
+      additionalProperties: false
+      properties:
+        location:
+          description: The place's name
+          type: string
+        location_id:
+          description: The place's id, the stable address a link to it uses
+          type: string
+        parent:
+          description: The place it sits under, by name
+          type: string
+        type:
+          description: Its location type
+          type: string
+      required:
+        - location
+        - location_id
+        - type
+      type: object
+    CreatedSystemBody:
+      additionalProperties: false
+      properties:
+        location:
+          description: The place it sits in
+          type: string
+        standard:
+          description: The standard it is built to
+          type: string
+        system:
+          description: The system's name
+          type: string
+        system_id:
+          description: The system's id, the stable address a link to it uses
+          type: string
+      required:
+        - system
+        - system_id
+        - location
+        - standard
       type: object
     CriteriaBody:
       additionalProperties: false
@@ -4037,34 +4371,6 @@ components:
         - locations
         - systems
       type: object
-    ForkStandardInputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/ForkStandardInputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        label:
-          description: The standard's label; omitted takes the template's
-          type: string
-        name:
-          description: The name the standard takes; omitted takes the template's
-          type: string
-        parent:
-          description: For a variant, the standard it hangs off, by name or uuid; omitted takes your standard named for the template's parent
-          type: string
-        template:
-          description: The standard template to fork, by name
-          examples:
-            - meeting-room
-          minLength: 1
-          type: string
-      required:
-        - template
-      type: object
     GrantBody:
       additionalProperties: false
       properties:
@@ -4383,312 +4689,6 @@ components:
         - mode
         - target_id
         - expires_at
-      type: object
-    InstantiateComponentInputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/InstantiateComponentInputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        inputs:
-          additionalProperties:
-            type: string
-          description: "Driver inputs laid over the template's preset: the address (host) attaches the endpoint, a secret input names a secret you may read"
-          type: object
-        label:
-          description: The component's label
-          type: string
-        location:
-          description: The place the component sits in, by name or dotted path
-          type: string
-        name:
-          description: The component's name; minted as an unnamed create mints it when empty
-          type: string
-        node:
-          description: The node the endpoint is placed on; needed when inputs carry an address
-          type: string
-        template:
-          description: The component template, by name
-          examples:
-            - kestrel-vroom
-          minLength: 1
-          type: string
-      required:
-        - template
-      type: object
-    InstantiateComponentOutputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/InstantiateComponentOutputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        attached:
-          description: Whether its endpoint attached from the inputs given; false means it is still to attach
-          type: boolean
-        component:
-          description: The component's name
-          type: string
-        component_id:
-          description: The component's id, the stable address a link to it uses
-          type: string
-        product:
-          description: Its product
-          type: string
-        template:
-          description: The template it came from; recorded in the audit detail only
-          type: string
-      required:
-        - template
-        - component
-        - component_id
-        - product
-        - attached
-      type: object
-    InstantiateLocationsInputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/InstantiateLocationsInputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        label:
-          description: The subtree root's label
-          type: string
-        name:
-          description: The subtree root's name; omitted takes the template's, else its type's name rule mints one
-          type: string
-        parent:
-          description: The place the subtree sits under, by name or dotted path; omitted makes it a new top
-          type: string
-        template:
-          description: The place template, by name
-          examples:
-            - meeting-floor
-          minLength: 1
-          type: string
-      required:
-        - template
-      type: object
-    InstantiateLocationsOutputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/InstantiateLocationsOutputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        places:
-          description: The places created, parents first
-          items:
-            $ref: "#/components/schemas/InstantiatedPlaceBody"
-          type:
-            - array
-            - "null"
-        standard_forked:
-          description: The standards this write forked from their templates
-          items:
-            type: string
-          type:
-            - array
-            - "null"
-        systems:
-          description: The systems created in them
-          items:
-            $ref: "#/components/schemas/InstantiatedSystemBody"
-          type:
-            - array
-            - "null"
-        template:
-          description: The template it came from; recorded in the audit detail only
-          type: string
-        to_attach:
-          description: The components that landed with no endpoint, still to attach
-          items:
-            type: string
-          type:
-            - array
-            - "null"
-      required:
-        - template
-        - places
-        - systems
-        - standard_forked
-        - to_attach
-      type: object
-    InstantiateSystemInputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/InstantiateSystemInputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        attach:
-          additionalProperties:
-            items:
-              additionalProperties:
-                type: string
-              type: object
-            type:
-              - array
-              - "null"
-          description: Driver inputs per role, one object per component of the role in order; an object with an address (host) attaches that component, the rest land unattached
-          type: object
-        label:
-          description: The system's label
-          type: string
-        location:
-          description: The place the system and its components sit in, by name or dotted path
-          type: string
-        name:
-          description: The system's name; minted from its type when empty
-          type: string
-        node:
-          description: The node the endpoints are placed on; needed when any component attaches
-          type: string
-        standard:
-          description: A standard of your own to build to, by name; omitted takes the template's, forked in the same write when you hold none of that name
-          type: string
-        template:
-          description: The system template, by name
-          examples:
-            - mr55-system
-          minLength: 1
-          type: string
-      required:
-        - template
-      type: object
-    InstantiateSystemOutputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/InstantiateSystemOutputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        components:
-          description: A component per role, filled to quorum and assigned
-          items:
-            $ref: "#/components/schemas/InstantiatedComponentBody"
-          type:
-            - array
-            - "null"
-        standard:
-          description: The standard it is built to
-          type: string
-        standard_forked:
-          description: The standards this write forked from their templates (parents first); empty when you held them
-          items:
-            type: string
-          type:
-            - array
-            - "null"
-        system:
-          description: The system's name
-          type: string
-        system_id:
-          description: The system's id, the stable address a link to it uses
-          type: string
-        template:
-          description: The template it came from; recorded in the audit detail only
-          type: string
-        to_attach:
-          description: The components that landed with no endpoint, still to attach
-          items:
-            type: string
-          type:
-            - array
-            - "null"
-      required:
-        - template
-        - system
-        - system_id
-        - standard
-        - standard_forked
-        - components
-        - to_attach
-      type: object
-    InstantiatedComponentBody:
-      additionalProperties: false
-      properties:
-        attached:
-          description: Whether its endpoint attached from the inputs given; false lists it as still to attach
-          type: boolean
-        component:
-          description: The component's name
-          type: string
-        component_id:
-          description: The component's id, the stable address a link to it uses
-          type: string
-        product:
-          description: Its product
-          type: string
-        role:
-          description: The role it fills in its system
-          type: string
-      required:
-        - component
-        - component_id
-        - product
-        - attached
-      type: object
-    InstantiatedPlaceBody:
-      additionalProperties: false
-      properties:
-        location:
-          description: The place's name
-          type: string
-        location_id:
-          description: The place's id, the stable address a link to it uses
-          type: string
-        parent:
-          description: The place it sits under, by name
-          type: string
-        type:
-          description: Its location type
-          type: string
-      required:
-        - location
-        - location_id
-        - type
-      type: object
-    InstantiatedSystemBody:
-      additionalProperties: false
-      properties:
-        location:
-          description: The place it sits in
-          type: string
-        standard:
-          description: The standard it is built to
-          type: string
-        system:
-          description: The system's name
-          type: string
-        system_id:
-          description: The system's id, the stable address a link to it uses
-          type: string
-      required:
-        - system
-        - system_id
-        - location
-        - standard
       type: object
     IssueCommandInputBody:
       additionalProperties: false
@@ -10220,7 +10220,7 @@ components:
           description: "A place template's body: the root of the subtree"
         standard:
           $ref: "#/components/schemas/TemplateStandardBody"
-          description: "A standard template's body: what a fork writes"
+          description: "A standard template's body: what creating a standard from it writes"
         system:
           $ref: "#/components/schemas/TemplateSystemBody"
           description: A system template's body
@@ -10437,17 +10437,17 @@ components:
           $ref: "#/components/schemas/TemplateMapBody"
           description: The layout a conforming system's Map tab draws
         metrics:
-          description: The metric contract lines a fork declares
+          description: The metric contract lines a standard created from it declares
           items:
             $ref: "#/components/schemas/TemplateContractBody"
           type:
             - array
             - "null"
         parent:
-          description: The standard template this variant hangs off; a variant forks once the operator holds a standard of that name
+          description: The standard template this variant hangs off; a variant is created from its template once the operator holds a standard of that name
           type: string
         properties:
-          description: The property contract lines a fork declares
+          description: The property contract lines a standard created from it declares
           items:
             $ref: "#/components/schemas/TemplateContractBody"
           type:
@@ -13761,22 +13761,22 @@ paths:
           description: Error
       summary: Check a component name
       x-omniglass-permission: component:update
-  /components:instantiate:
+  /components:createFromTemplate:
     post:
-      description: "Creates one component from a component template at a place: its product and the template's declared values, and, when the inputs carry an address (host), its endpoint attached through the driver with the template's preset under your inputs. A secret input names a secret you may read, resolved as an attach resolves it. One transaction, every piece in your own scope with its own audit row naming the template; nothing points back at the template. Gated by component:create; declared values also need component:update and an attach endpoint:create. A place outside your location scope is a 404, an unknown template a 404, inputs with no address or an attach with no node a 422."
-      operationId: instantiate-component
+      description: "Creates one component from a component template at a place: its product and the template's declared values, and, when the inputs carry an address (host), its endpoint attached through the driver with the template's preset under your inputs. A secret input names a secret you may read, resolved as an attach resolves it. One transaction, every piece in your own scope with its own audit row carrying from_template; nothing points back at the template. Gated by component:create; declared values also need component:update and an attach endpoint:create. A place outside your location scope is a 404, an unknown template a 404, inputs with no address or an attach with no node a 422."
+      operationId: create-component-from-template
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/InstantiateComponentInputBody"
+              $ref: "#/components/schemas/CreateComponentFromTemplateInputBody"
         required: true
       responses:
         "201":
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InstantiateComponentOutputBody"
+                $ref: "#/components/schemas/CreateComponentFromTemplateOutputBody"
           description: Created
         default:
           content:
@@ -15680,22 +15680,22 @@ paths:
           description: Error
       summary: Check a location name
       x-omniglass-permission: location:update
-  /locations:instantiate:
+  /locations:createFromTemplate:
     post:
-      description: "Creates a subtree of places from a place template under a parent place (or as a new top), each place's type checked against its parent type's allowed parents as this fleet has them (your fork of a shipped type included), each named by the template, the request (the root) or its type's name rule, and the systems the template places in them, staffed as a system template is, unattached. One transaction: all of it or none, every piece in your own scope with its own audit row naming the template. Gated by location:create; when the subtree carries systems it also needs system:create, system:read, system:update, component:create and component:update, and standard:create when a standard is forked. A type this fleet does not hold, or a placement its types refuse, is a 422 naming the type or the pair."
-      operationId: instantiate-locations
+      description: "Creates a subtree of places from a place template under a parent place (or as a new top), each place's type checked against its parent type's allowed parents as this fleet has them (your fork of a shipped type included), each named by the template, the request (the root) or its type's name rule, and the systems the template places in them, staffed as a system template is, unattached. One transaction: all of it or none, every piece in your own scope with its own audit row carrying from_template. Gated by location:create; when the subtree carries systems it also needs system:create, system:read, system:update, component:create and component:update, and standard:create when a standard is created from its template. A type this fleet does not hold, or a placement its types refuse, is a 422 naming the type or the pair."
+      operationId: create-locations-from-template
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/InstantiateLocationsInputBody"
+              $ref: "#/components/schemas/CreateLocationsFromTemplateInputBody"
         required: true
       responses:
         "201":
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InstantiateLocationsOutputBody"
+                $ref: "#/components/schemas/CreateLocationsFromTemplateOutputBody"
           description: Created
         default:
           content:
@@ -19191,15 +19191,15 @@ paths:
           description: Error
       summary: Rename a standard
       x-omniglass-permission: standard:rename
-  /standards:fork:
+  /standards:createFromTemplate:
     post:
-      description: "Writes one standard of your own (official false) from a standard template in the catalog: its roles, choices, property and metric contract lines and map, in one transaction, audited once as a fork naming the template. Nothing points back at the template, so a later release can change the template without touching your standard, and your standard renames, edits and deletes like any you created. The name is the template's unless you give one; a taken name is a 409, so forking the same template again needs a second name. A variant forks only once you hold the standard it hangs off (the parent you name, or yours named for the template's parent), else a 422 naming the template to fork first. An unknown template is a 404. Gated by standard:create."
-      operationId: fork-standard
+      description: "Writes one standard of your own (official false) from a standard template in the catalog: its roles, choices, property and metric contract lines and map, in one transaction, audited once as a create carrying the template it came from (from_template). Nothing points back at the template, so a later release can change the template without touching your standard, and your standard renames, edits and deletes like any you created. The name is the template's unless you give one; a taken name is a 409, so creating from the same template again needs a second name. A variant is created only once you hold the standard it hangs off (the parent you name, or yours named for the template's parent), else a 422 naming the template to create from first. An unknown template is a 404. Gated by standard:create."
+      operationId: create-standard-from-template
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ForkStandardInputBody"
+              $ref: "#/components/schemas/CreateStandardFromTemplateInputBody"
         required: true
       responses:
         "201":
@@ -19214,7 +19214,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: Fork a standard from a template
+      summary: Create a standard from a template
       x-omniglass-mcp: {}
       x-omniglass-permission: standard:create
   /system-types:
@@ -20344,6 +20344,32 @@ paths:
           description: Error
       summary: Check a system name
       x-omniglass-permission: system:update
+  /systems:createFromTemplate:
+    post:
+      description: "Creates a system from a system template at a place, built to the standard you name or the template's own (yours of that name when you hold one, else created from its standard template, with any parent it hangs off, in the same write), with a component for each role filled to its quorum and assigned, and the declared values. A component whose role you give an address in attach lands attached; the rest land unattached and are listed in to_attach. One transaction: it lands whole or not at all, every piece in your own scope with its own audit row carrying from_template. Gated by system:create, and also needs system:read, system:update, component:create and component:update; endpoint:create when anything attaches, standard:create when a standard is created from its template. A place outside your location scope is a 404, an unknown template or standard a 404, a standard the template cannot staff a 422 naming the roles."
+      operationId: create-system-from-template
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSystemFromTemplateInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateSystemFromTemplateOutputBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Start a whole system from a template
+      x-omniglass-mcp: {}
+      x-omniglass-permission: system:create
   /systems:health:
     get:
       description: "The current verdict for every system in the caller's read scope, in one call: the bulk counterpart of the per-system health read, carrying the one fact a list's health column renders and none of the explanation. A console painting a page of systems reads this once instead of resolving every role, occupant, alarm and transition per row. A system that has never been recomputed reads healthy. Gated by system:read; an empty scope is an empty list, not a 403."
@@ -20363,32 +20389,6 @@ paths:
           description: Error
       summary: Read every system's health verdict
       x-omniglass-permission: system:read
-  /systems:instantiate:
-    post:
-      description: "Creates a system from a system template at a place, built to the standard you name or the template's own (yours of that name when you hold one, else forked from its standard template, with any parent it hangs off, in the same write), with a component for each role filled to its quorum and assigned, and the declared values. A component whose role you give an address in attach lands attached; the rest land unattached and are listed in to_attach. One transaction: it lands whole or not at all, every piece in your own scope with its own audit row naming the template. Gated by system:create, and also needs system:read, system:update, component:create and component:update; endpoint:create when anything attaches, standard:create when a standard is forked. A place outside your location scope is a 404, an unknown template or standard a 404, a standard the template cannot staff a 422 naming the roles."
-      operationId: instantiate-system
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/InstantiateSystemInputBody"
-        required: true
-      responses:
-        "201":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InstantiateSystemOutputBody"
-          description: Created
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Start a whole system from a template
-      x-omniglass-mcp: {}
-      x-omniglass-permission: system:create
   /systems:previewLabels:
     post:
       description: "Lists exactly the rows a recompute would change, and leaves the fleet as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read and update scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. Bounded by the same two scopes the apply is, so it never lists a row the apply would then refuse to touch. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by system:update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it."
@@ -20709,7 +20709,7 @@ paths:
       x-omniglass-permission: telemetry:push
   /templates:
     get:
-      description: "Lists the template catalog this binary ships, ordered by kind then name, optionally one kind. A template is an example an operator clones: forking a standard template (POST /standards:fork) writes an ordinary standard the operator owns, and nothing points back at the template. Gated by template:read."
+      description: "Lists the template catalog this binary ships, ordered by kind then name, optionally one kind. A template is an example an operator clones: creating from one (POST /standards:createFromTemplate, and the same method on components, systems and locations) writes ordinary rows the operator owns, and nothing points back at the template. Gated by template:read."
       operationId: list-templates
       parameters:
         - description: Only templates of this kind; omitted lists every kind

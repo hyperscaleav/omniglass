@@ -199,7 +199,7 @@ describe("Standards page", () => {
     expect(sent).toEqual({ label: "Huddle" });
   });
 
-  // The other way to a standard (#1329): fork one of the shipped examples.
+  // The other way to a standard (#1329): create one from a shipped template.
   it("offers Start from a template in the create drawer, landing on standard templates", async () => {
     mount();
     fireEvent.click(screen.getByRole("button", { name: /new standard/i }));
@@ -208,9 +208,9 @@ describe("Standards page", () => {
     expect(`${window.location.pathname}${window.location.search}`).toBe("/templates?kind=standard_template");
   });
 
-  // A fork lands here (#1329): ?open= opens the forked standard's blade and
+  // A standard created from a template lands here (#1329): ?open= opens its blade and
   // ?from= says above the list that it is the operator's own now.
-  it("opens the forked standard's blade and says it is the operator's own", async () => {
+  it("opens the created standard's blade and says it is the operator's own", async () => {
     mount(admin, "/standards?open=huddle-space&from=huddle");
     await waitFor(() => expect(asides()).toHaveLength(1));
     expect(screen.getByTestId("template-notice")).toHaveTextContent("Started from the template Huddle space template.");

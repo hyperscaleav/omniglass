@@ -230,7 +230,7 @@ export default function ComponentLeaf() {
   return (
     <BladesContext.Provider value={blades}>
     <Page title={component() ? entityLabel(component()!) : "Component"} breadcrumb={<Breadcrumb crumbs={crumbs()} />}>
-      {/* A fork or an instantiate lands here with ?from= (#1329). */}
+      {/* A create from a template lands here with ?from= (#1329). */}
       <TemplateNotice />
       <DetailGate
         noun="component"

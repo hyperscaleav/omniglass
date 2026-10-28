@@ -21,16 +21,16 @@ import { SECRETS_KEY, listSecrets } from "../lib/secrets";
 import { FLEET_VIEW_KEY } from "../lib/fleet";
 import {
   type ComponentDraft,
-  type ForkDraft,
+  type StandardDraft,
   type PlacesDraft,
   type SystemDraft,
   type Template,
   componentBody,
-  forkBody,
-  forkStandard,
-  instantiateComponent,
-  instantiateLocations,
-  instantiateSystem,
+  createComponentFromTemplate,
+  createLocationsFromTemplate,
+  createStandardFromTemplate,
+  createSystemFromTemplate,
+  standardBody,
   landingHref,
   missingNeeds,
   needsNode,
@@ -46,8 +46,8 @@ import { standardRoles, standardRolesKey } from "../lib/system_roles";
 
 // StartFromTemplateForm (#1329): the "Start from this template" form a Drawer
 // hosts, one per kind, each posting to its own route: a standard template
-// forks (POST /standards:fork), the others instantiate (POST
-// /components:instantiate, /systems:instantiate, /locations:instantiate). What
+// posts POST /standards:createFromTemplate, the others the same custom method on
+// their own collection (/components, /systems, /locations). What
 // lands is ordinary rows the operator owns; a refusal shows the API's own
 // detail, and nothing lands. A success hands back the created row's address
 // with the template's name riding along as ?from=, so the row's page can say it
@@ -58,7 +58,7 @@ export type StartFormProps = { template: Template; all: Template[]; place?: stri
 export default function StartFromTemplateForm(props: StartFormProps): JSX.Element {
   return (
     <Switch>
-      <Match when={props.template.kind === "standard_template"}><ForkForm {...props} /></Match>
+      <Match when={props.template.kind === "standard_template"}><StandardForm {...props} /></Match>
       <Match when={props.template.kind === "component_template"}><ComponentForm {...props} /></Match>
       <Match when={props.template.kind === "system_template"}><SystemForm {...props} /></Match>
       <Match when={props.template.kind === "place_template"}><PlacesForm {...props} /></Match>
@@ -103,8 +103,8 @@ function usePlace(carried?: string) {
   return { items, value, set: (v: string) => setChosen(v) };
 }
 
-// The standards the fleet holds, by name: what decides whether a start forks
-// one (and so needs standard:create) and whose roles a system is staffed to.
+// The standards the fleet holds, by name: what decides whether a start creates
+// one from its template (and so needs standard:create) and whose roles a system is staffed to.
 export function useHeldStandards() {
   const standards = useQuery(() => ({ queryKey: STANDARDS_KEY, queryFn: listStandards }));
   const byName = (name: string) => (standards.data ?? []).find((s) => s.name === name);
@@ -113,7 +113,7 @@ export function useHeldStandards() {
 
 // The roles of the fleet's own standard of that name, when it holds one: a
 // system is staffed to those, not to the template's copy. Undefined while it
-// is not held (the plan forks the template's) or not yet read.
+// is not held (the plan creates it from the template's) or not yet read.
 export function useHeldRoles(byName: (name: string) => { id: string } | undefined, name: () => string) {
   const held = () => byName(name());
   const roles = useQuery(() => ({
@@ -141,11 +141,11 @@ function MissingAlert(props: { missing: readonly (readonly [string, string])[] }
   );
 }
 
-// The hand-off extras the notice reads: the standards a start forked and how
+// The hand-off extras the notice reads: the standards a start created and how
 // many components still wait to be attached.
-function extras(made: { standard_forked?: string[] | null; to_attach?: string[] | null }): Record<string, string> {
+function extras(made: { standards_created?: string[] | null; to_attach?: string[] | null }): Record<string, string> {
   const out: Record<string, string> = {};
-  if ((made.standard_forked ?? []).length) out.forked = made.standard_forked!.join(",");
+  if ((made.standards_created ?? []).length) out.created_standards = made.standards_created!.join(",");
   if ((made.to_attach ?? []).length) out.unattached = String(made.to_attach!.length);
   return out;
 }
@@ -185,23 +185,23 @@ function LabelField(props: { value: string; onInput: (v: string) => void; placeh
   );
 }
 
-// --- standard: fork --------------------------------------------------------------
+// --- standard --------------------------------------------------------------------
 
-function ForkForm(props: StartFormProps): JSX.Element {
+function StandardForm(props: StartFormProps): JSX.Element {
   const qc = useQueryClient();
   const { standards, held } = useHeldStandards();
   const missing = useMissing(props, held, () => ({}));
   const parentOf = () => props.template.standard?.parent ?? "";
-  const [d, setD] = createSignal<ForkDraft>({ name: "", label: "", parent: "" });
-  const set = (k: keyof ForkDraft, v: string) => setD({ ...d(), [k]: v });
+  const [d, setD] = createSignal<StandardDraft>({ name: "", label: "", parent: "" });
+  const set = (k: keyof StandardDraft, v: string) => setD({ ...d(), [k]: v });
   const options = createMemo(() => [...(standards.data ?? [])].sort(byLabel));
   const { busy, err, submit } = useSubmit(async () => {
-    const made = await forkStandard(forkBody(props.template.name, d()));
+    const made = await createStandardFromTemplate(standardBody(props.template.name, d()));
     await qc.invalidateQueries({ queryKey: STANDARDS_KEY });
     return landingHref("/standards", props.template.name, { open: made.name });
   }, props.onDone);
   useFormActions().bind({
-    submitLabel: "Fork standard",
+    submitLabel: "Create standard",
     submitIcon: Plus,
     submit: () => void submit(),
     busy,
@@ -211,7 +211,7 @@ function ForkForm(props: StartFormProps): JSX.Element {
     <form class="flex flex-col gap-4" data-testid="start-form-standard" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
       <ErrorAlert err={err()} />
       <MissingAlert missing={missing()} />
-      <NameField value={d().name} onInput={(v) => set("name", v)} placeholder={props.template.name} info="The standard's name. Empty takes the template's; a second fork of the same template needs a name of its own." />
+      <NameField value={d().name} onInput={(v) => set("name", v)} placeholder={props.template.name} info="The standard's name. Empty takes the template's; a second standard from the same template needs a name of its own." />
       <LabelField value={d().label} onInput={(v) => set("label", v)} placeholder={props.template.label} />
       <Show when={parentOf()}>
         <FieldRow label="Variant of" info="This template is a variant: it hangs off a standard you hold. The default is yours named for the template's parent.">
@@ -250,7 +250,7 @@ function ComponentForm(props: StartFormProps): JSX.Element {
   const missing = useMissing(props, held, () => ({ address: !!d().address.trim() }));
   const noNode = () => needsNode(d());
   const { busy, err, submit } = useSubmit(async () => {
-    const made = await instantiateComponent(componentBody(props.template.name, { ...d(), place: place.value() }));
+    const made = await createComponentFromTemplate(componentBody(props.template.name, { ...d(), place: place.value() }));
     await Promise.all([qc.invalidateQueries({ queryKey: COMPONENTS_KEY }), qc.invalidateQueries({ queryKey: FLEET_VIEW_KEY })]);
     return landingHref(`/components/${encodeURIComponent(made.component_id)}`, props.template.name, made.attached ? {} : { unattached: "1" });
   }, props.onDone);
@@ -311,7 +311,7 @@ function SystemForm(props: StartFormProps): JSX.Element {
   const { standards, held, byName } = useHeldStandards();
   const [d, setD] = createSignal<Omit<SystemDraft, "place">>({ name: "", label: "", standard: "", node: "", addresses: {} });
   // The standard the plan builds to: the form's choice, else the template's. When
-  // the fleet holds it the slots are its roles, else the template's it forks.
+  // the fleet holds it the slots are its roles, else the template's it creates.
   const planStandard = () => d().standard || props.template.system?.standard || "";
   const heldRoles = useHeldRoles(byName, planStandard);
   const slots = createMemo(() => systemRoleSlots(props.template, props.all, heldRoles()));
@@ -327,7 +327,7 @@ function SystemForm(props: StartFormProps): JSX.Element {
   const options = createMemo(() => [...(standards.data ?? [])].sort(byLabel));
   const noNode = () => needsNode(d());
   const { busy, err, submit } = useSubmit(async () => {
-    const made = await instantiateSystem(systemBody(props.template.name, { ...d(), place: place.value() }));
+    const made = await createSystemFromTemplate(systemBody(props.template.name, { ...d(), place: place.value() }));
     await Promise.all([
       qc.invalidateQueries({ queryKey: SYSTEMS_KEY }),
       qc.invalidateQueries({ queryKey: COMPONENTS_KEY }),
@@ -352,7 +352,7 @@ function SystemForm(props: StartFormProps): JSX.Element {
       </FieldRow>
       <NameField value={d().name} onInput={(v) => set("name", v)} placeholder="minted from its type" info="Optional. Empty mints one from its system type." />
       <LabelField value={d().label} onInput={(v) => set("label", v)} placeholder={props.template.label} />
-      <FieldRow label="Standard" info="What it is built to. The default is the template's: yours of that name when you hold one, else forked from its template in the same write. Or name one of your own.">
+      <FieldRow label="Standard" info="What it is built to. The default is the template's: yours of that name when you hold one, else created from its template in the same write. Or name one of your own.">
         <select class="select select-bordered w-full" aria-label="Standard" value={d().standard} onChange={(e) => set("standard", e.currentTarget.value)}>
           <option value="">The template's ({props.template.system?.standard})</option>
           <For each={options()}>{(s) => <option value={s.name}>{entityLabel(s)}</option>}</For>
@@ -395,7 +395,7 @@ function PlacesForm(props: StartFormProps): JSX.Element {
   const [d, setD] = createSignal<Omit<PlacesDraft, "parent">>({ name: "", label: "" });
   const set = (k: keyof Omit<PlacesDraft, "parent">, v: string) => setD({ ...d(), [k]: v });
   const { busy, err, submit } = useSubmit(async () => {
-    const made = await instantiateLocations(placesBody(props.template.name, { ...d(), parent: parent.value() }));
+    const made = await createLocationsFromTemplate(placesBody(props.template.name, { ...d(), parent: parent.value() }));
     await Promise.all([
       qc.invalidateQueries({ queryKey: LOCATIONS_KEY }),
       qc.invalidateQueries({ queryKey: SYSTEMS_KEY }),

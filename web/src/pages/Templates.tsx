@@ -161,7 +161,7 @@ function TemplateBladeBody(p: { name: string }): JSX.Element {
             <KVStacked bind="name" value={<span class="font-data">{t().name}</span>} />
             <KVStacked label="Kind" hint={TEMPLATE_HINT} value={kindCell(t())} />
             <Show when={t().standard?.parent}>
-              <KVStacked label="Variant of" mono hint="A variant forks once you hold the standard it hangs off." value={t().standard!.parent!} />
+              <KVStacked label="Variant of" mono hint="A variant is created only once you hold the standard it hangs off." value={t().standard!.parent!} />
             </Show>
             <Show when={!mayStart()}>
               <KVStacked label="To start one" hint="Starting one writes every piece as you, so it needs each permission those writes need." value={<span data-testid="start-needs" class="font-data text-xs text-base-content/60">needs {permText(missing())}</span>} />

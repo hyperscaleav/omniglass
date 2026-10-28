@@ -14,8 +14,8 @@ import (
 // The template catalog over the API (ADR-0071, ADR-0827): the binary's
 // shipped templates, read-only. A catalog read is a registry read with no
 // owner, so there is no scope to inject; template:read sits on the viewer
-// read floor. Nothing here writes: a template is never a row, and the fork
-// and instantiate methods live on the collections they create in.
+// read floor. Nothing here writes: a template is never a row, and the
+// createFromTemplate methods live on the collections they create in.
 
 type templateRoleBody struct {
 	Name           string   `json:"name" doc:"The role's name, unique within the standard"`
@@ -59,11 +59,11 @@ type templateMapBody struct {
 }
 
 type templateStandardBody struct {
-	Parent     string                 `json:"parent,omitempty" doc:"The standard template this variant hangs off; a variant forks once the operator holds a standard of that name"`
+	Parent     string                 `json:"parent,omitempty" doc:"The standard template this variant hangs off; a variant is created from its template once the operator holds a standard of that name"`
 	Choices    []templateChoiceBody   `json:"choices,omitempty" doc:"The exclusive-or groups of roles a conforming system answers one way"`
 	Roles      []templateRoleBody     `json:"roles" doc:"The roles a conforming system needs filled"`
-	Properties []templateContractBody `json:"properties,omitempty" doc:"The property contract lines a fork declares"`
-	Metrics    []templateContractBody `json:"metrics,omitempty" doc:"The metric contract lines a fork declares"`
+	Properties []templateContractBody `json:"properties,omitempty" doc:"The property contract lines a standard created from it declares"`
+	Metrics    []templateContractBody `json:"metrics,omitempty" doc:"The metric contract lines a standard created from it declares"`
 	Map        *templateMapBody       `json:"map,omitempty" doc:"The layout a conforming system's Map tab draws"`
 }
 
@@ -104,7 +104,7 @@ type templateBody struct {
 	Name        string                 `json:"name" doc:"The template's name, unique across the catalog"`
 	Label       string                 `json:"label" doc:"What an operator reads for the template"`
 	Description string                 `json:"description,omitempty" doc:"What the template is for"`
-	Standard    *templateStandardBody  `json:"standard,omitempty" doc:"A standard template's body: what a fork writes"`
+	Standard    *templateStandardBody  `json:"standard,omitempty" doc:"A standard template's body: what creating a standard from it writes"`
 	Component   *templateComponentBody `json:"component,omitempty" doc:"A component template's body"`
 	System      *templateSystemBody    `json:"system,omitempty" doc:"A system template's body"`
 	Place       *templatePlaceBody     `json:"place,omitempty" doc:"A place template's body: the root of the subtree"`
@@ -205,7 +205,7 @@ func registerTemplateRoutes(api huma.API, a *authenticator, cat *template.Catalo
 		Method:      http.MethodGet,
 		Path:        "/templates",
 		Summary:     "List templates",
-		Description: "Lists the template catalog this binary ships, ordered by kind then name, optionally one kind. A template is an example an operator clones: forking a standard template (POST /standards:fork) writes an ordinary standard the operator owns, and nothing points back at the template. Gated by template:read.",
+		Description: "Lists the template catalog this binary ships, ordered by kind then name, optionally one kind. A template is an example an operator clones: creating from one (POST /standards:createFromTemplate, and the same method on components, systems and locations) writes ordinary rows the operator owns, and nothing points back at the template. Gated by template:read.",
 	}, "template", "read"), func(_ context.Context, in *listTemplatesInput) (*listTemplatesOutput, error) {
 		out := &listTemplatesOutput{}
 		list := cat.List(template.Kind(in.Kind))

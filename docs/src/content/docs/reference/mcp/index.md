@@ -41,7 +41,7 @@ A tool that is not read-only and not destructive adds something (a create).
 | [`list-component-properties`](#list-component-properties) | List a component's properties and where each stands | `component:read` | read-only, idempotent |
 | [`list-component-property-series`](#list-component-property-series) | Read one property series' change history | `component:read` | read-only, idempotent |
 | [`get-component-reachability`](#get-component-reachability) | Read a component's per-endpoint reachability | `component:read` | read-only, idempotent |
-| [`instantiate-component`](#instantiate-component) | Start a component from a template | `component:create` | adds |
+| [`create-component-from-template`](#create-component-from-template) | Start a component from a template | `component:create` | adds |
 | [`list-drivers`](#list-drivers) | List drivers | `driver:read` | read-only, idempotent |
 | [`create-driver`](#create-driver) | Create a driver | `driver:create` | adds |
 | [`get-driver`](#get-driver) | Get a driver | `driver:read` | read-only, idempotent |
@@ -59,7 +59,7 @@ A tool that is not read-only and not destructive adds something (a create).
 | [`list-locations`](#list-locations) | List locations in scope | `location:read` | read-only, idempotent |
 | [`get-location`](#get-location) | Get a location | `location:read` | read-only, idempotent |
 | [`get-location-health`](#get-location-health) | Read a location's health | `location:read` | read-only, idempotent |
-| [`instantiate-locations`](#instantiate-locations) | Start a subtree of places from a template | `location:create` | adds |
+| [`create-locations-from-template`](#create-locations-from-template) | Start a subtree of places from a template | `location:create` | adds |
 | [`list-nodes`](#list-nodes) | List nodes | `node:read` | read-only, idempotent |
 | [`get-node`](#get-node) | Get a node | `node:read` | read-only, idempotent |
 | [`list-node-logs`](#list-node-logs) | List a node's recent self-logs | `node:read` | read-only, idempotent |
@@ -70,13 +70,13 @@ A tool that is not read-only and not destructive adds something (a create).
 | [`list-secret-types`](#list-secret-types) | List secret types | `secret:read` | read-only, idempotent |
 | [`list-secrets`](#list-secrets) | List secrets | `secret:read` | read-only, idempotent |
 | [`create-secret`](#create-secret) | Create a secret | `secret:create` | adds |
-| [`fork-standard`](#fork-standard) | Fork a standard from a template | `standard:create` | adds |
+| [`create-standard-from-template`](#create-standard-from-template) | Create a standard from a template | `standard:create` | adds |
 | [`list-systems`](#list-systems) | List systems in scope | `system:read` | read-only, idempotent |
 | [`get-system`](#get-system) | Get a system | `system:read` | read-only, idempotent |
 | [`get-system-health`](#get-system-health) | Read a system's health | `system:read` | read-only, idempotent |
 | [`list-system-metric-series`](#list-system-metric-series) | Read one metric series' raw samples | `system:read` | read-only, idempotent |
 | [`list-system-property-series`](#list-system-property-series) | Read one property series' change history | `system:read` | read-only, idempotent |
-| [`instantiate-system`](#instantiate-system) | Start a whole system from a template | `system:create` | adds |
+| [`create-system-from-template`](#create-system-from-template) | Start a whole system from a template | `system:create` | adds |
 | [`list-tasks`](#list-tasks) | List tasks in scope | `task:read` | read-only, idempotent |
 | [`list-templates`](#list-templates) | List templates | `template:read` | read-only, idempotent |
 | [`get-template`](#get-template) | Get a template | `template:read` | read-only, idempotent |
@@ -326,13 +326,13 @@ Composes, per endpoint, the latest reachability verdict, the probe-layer signals
 |---|---|---|---|
 | `name` | string | yes | The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
 
-## `instantiate-component`
+## `create-component-from-template`
 
 Start a component from a template
 
-Creates one component from a component template at a place: its product and the template's declared values, and, when the inputs carry an address (host), its endpoint attached through the driver with the template's preset under your inputs. A secret input names a secret you may read, resolved as an attach resolves it. One transaction, every piece in your own scope with its own audit row naming the template; nothing points back at the template. Gated by component:create; declared values also need component:update and an attach endpoint:create. A place outside your location scope is a 404, an unknown template a 404, inputs with no address or an attach with no node a 422.
+Creates one component from a component template at a place: its product and the template's declared values, and, when the inputs carry an address (host), its endpoint attached through the driver with the template's preset under your inputs. A secret input names a secret you may read, resolved as an attach resolves it. One transaction, every piece in your own scope with its own audit row carrying from_template; nothing points back at the template. Gated by component:create; declared values also need component:update and an attach endpoint:create. A place outside your location scope is a 404, an unknown template a 404, inputs with no address or an attach with no node a 422.
 
-- Route: `POST /api/v1/components:instantiate`
+- Route: `POST /api/v1/components:createFromTemplate`
 - Gate: `component:create`
 - Assume: adds
 
@@ -600,13 +600,13 @@ The location's current verdict, worst-wins over every system placed anywhere ben
 |---|---|---|---|
 | `name` | string | yes | The location's name, or a dotted address (e.g. boi.17c.415a) |
 
-## `instantiate-locations`
+## `create-locations-from-template`
 
 Start a subtree of places from a template
 
-Creates a subtree of places from a place template under a parent place (or as a new top), each place's type checked against its parent type's allowed parents as this fleet has them (your fork of a shipped type included), each named by the template, the request (the root) or its type's name rule, and the systems the template places in them, staffed as a system template is, unattached. One transaction: all of it or none, every piece in your own scope with its own audit row naming the template. Gated by location:create; when the subtree carries systems it also needs system:create, system:read, system:update, component:create and component:update, and standard:create when a standard is forked. A type this fleet does not hold, or a placement its types refuse, is a 422 naming the type or the pair.
+Creates a subtree of places from a place template under a parent place (or as a new top), each place's type checked against its parent type's allowed parents as this fleet has them (your fork of a shipped type included), each named by the template, the request (the root) or its type's name rule, and the systems the template places in them, staffed as a system template is, unattached. One transaction: all of it or none, every piece in your own scope with its own audit row carrying from_template. Gated by location:create; when the subtree carries systems it also needs system:create, system:read, system:update, component:create and component:update, and standard:create when a standard is created from its template. A type this fleet does not hold, or a placement its types refuse, is a 422 naming the type or the pair.
 
-- Route: `POST /api/v1/locations:instantiate`
+- Route: `POST /api/v1/locations:createFromTemplate`
 - Gate: `location:create`
 - Assume: adds
 
@@ -759,13 +759,13 @@ Seals a secret at an owner scope. Fields are validated and encrypted against the
 | `owner_kind` | string | yes | Which tier owns this secret (the system band is retired, ADR-0052) |
 | `secret_type` | string | yes | A secret_type id |
 
-## `fork-standard`
+## `create-standard-from-template`
 
-Fork a standard from a template
+Create a standard from a template
 
-Writes one standard of your own (official false) from a standard template in the catalog: its roles, choices, property and metric contract lines and map, in one transaction, audited once as a fork naming the template. Nothing points back at the template, so a later release can change the template without touching your standard, and your standard renames, edits and deletes like any you created. The name is the template's unless you give one; a taken name is a 409, so forking the same template again needs a second name. A variant forks only once you hold the standard it hangs off (the parent you name, or yours named for the template's parent), else a 422 naming the template to fork first. An unknown template is a 404. Gated by standard:create.
+Writes one standard of your own (official false) from a standard template in the catalog: its roles, choices, property and metric contract lines and map, in one transaction, audited once as a create carrying the template it came from (from_template). Nothing points back at the template, so a later release can change the template without touching your standard, and your standard renames, edits and deletes like any you created. The name is the template's unless you give one; a taken name is a 409, so creating from the same template again needs a second name. A variant is created only once you hold the standard it hangs off (the parent you name, or yours named for the template's parent), else a 422 naming the template to create from first. An unknown template is a 404. Gated by standard:create.
 
-- Route: `POST /api/v1/standards:fork`
+- Route: `POST /api/v1/standards:createFromTemplate`
 - Gate: `standard:create`
 - Assume: adds
 
@@ -774,7 +774,7 @@ Writes one standard of your own (official false) from a standard template in the
 | `label` | string | no | The standard's label; omitted takes the template's |
 | `name` | string | no | The name the standard takes; omitted takes the template's |
 | `parent` | string | no | For a variant, the standard it hangs off, by name or uuid; omitted takes your standard named for the template's parent |
-| `template` | string | yes | The standard template to fork, by name |
+| `template` | string | yes | The standard template to create from, by name |
 
 ## `list-systems`
 
@@ -849,13 +849,13 @@ The change history behind the effective value for one property series, newest fi
 | `name` | string | yes | The owner's name or uuid |
 | `property` | string | yes | The property_type name of the series |
 
-## `instantiate-system`
+## `create-system-from-template`
 
 Start a whole system from a template
 
-Creates a system from a system template at a place, built to the standard you name or the template's own (yours of that name when you hold one, else forked from its standard template, with any parent it hangs off, in the same write), with a component for each role filled to its quorum and assigned, and the declared values. A component whose role you give an address in attach lands attached; the rest land unattached and are listed in to_attach. One transaction: it lands whole or not at all, every piece in your own scope with its own audit row naming the template. Gated by system:create, and also needs system:read, system:update, component:create and component:update; endpoint:create when anything attaches, standard:create when a standard is forked. A place outside your location scope is a 404, an unknown template or standard a 404, a standard the template cannot staff a 422 naming the roles.
+Creates a system from a system template at a place, built to the standard you name or the template's own (yours of that name when you hold one, else created from its standard template, with any parent it hangs off, in the same write), with a component for each role filled to its quorum and assigned, and the declared values. A component whose role you give an address in attach lands attached; the rest land unattached and are listed in to_attach. One transaction: it lands whole or not at all, every piece in your own scope with its own audit row carrying from_template. Gated by system:create, and also needs system:read, system:update, component:create and component:update; endpoint:create when anything attaches, standard:create when a standard is created from its template. A place outside your location scope is a 404, an unknown template or standard a 404, a standard the template cannot staff a 422 naming the roles.
 
-- Route: `POST /api/v1/systems:instantiate`
+- Route: `POST /api/v1/systems:createFromTemplate`
 - Gate: `system:create`
 - Assume: adds
 
@@ -866,7 +866,7 @@ Creates a system from a system template at a place, built to the standard you na
 | `location` | string | no | The place the system and its components sit in, by name or dotted path |
 | `name` | string | no | The system's name; minted from its type when empty |
 | `node` | string | no | The node the endpoints are placed on; needed when any component attaches |
-| `standard` | string | no | A standard of your own to build to, by name; omitted takes the template's, forked in the same write when you hold none of that name |
+| `standard` | string | no | A standard of your own to build to, by name; omitted takes the template's, created from its template in the same write when you hold none of that name |
 | `template` | string | yes | The system template, by name |
 
 ## `list-tasks`
@@ -884,7 +884,7 @@ Lists the tasks whose endpoint's owning component the caller may read (the compo
 
 List templates
 
-Lists the template catalog this binary ships, ordered by kind then name, optionally one kind. A template is an example an operator clones: forking a standard template (POST /standards:fork) writes an ordinary standard the operator owns, and nothing points back at the template. Gated by template:read.
+Lists the template catalog this binary ships, ordered by kind then name, optionally one kind. A template is an example an operator clones: creating from one (POST /standards:createFromTemplate, and the same method on components, systems and locations) writes ordinary rows the operator owns, and nothing points back at the template. Gated by template:read.
 
 - Route: `GET /api/v1/templates`
 - Gate: `template:read`

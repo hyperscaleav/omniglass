@@ -579,31 +579,32 @@ omniglass standard delete lecture-hall                              # 409 if a s
 
 A fresh install holds **no standards**: start one from a template in the catalog the binary ships, or
 create one from nothing as above. `omniglass template list --kind standard_template` lists the
-templates, and a fork writes one standard of your own (`official: false`) with the template's roles,
+templates, and creating from one writes a standard of your own (`official: false`) with the template's roles,
 choices and contract lines:
 
 ```sh
-omniglass standard fork --template meeting-room                     # takes the template's name
-omniglass standard fork --template meeting-room --name hq-meeting   # a second, independent standard
-omniglass standard fork --template mr55 --parent hq-meeting         # a variant, under a parent you hold
+omniglass standard createFromTemplate --template meeting-room                     # takes the template's name
+omniglass standard createFromTemplate --template meeting-room --name hq-meeting   # a second, independent standard
+omniglass standard createFromTemplate --template mr55 --parent hq-meeting         # a variant, under a parent you hold
 ```
 
-A taken name is a 409, and a variant whose parent you do not hold is a 422 naming the template to fork
-first. Nothing points back at the template, so the standard is yours to rename, edit and delete. See
-[the seed model](/architecture/core-entities/#the-seed-model-forked-templates-versus-canonical-catalogs).
+A taken name is a 409, and a variant whose parent you do not hold is a 422 naming the template to
+create from first. Nothing points back at the template, so the standard is yours to rename, edit and delete. See
+[the seed model](/architecture/core-entities/#the-seed-model-templates-versus-canonical-catalogs).
 
-### Start fleet entities from a template
+### Create fleet entities from a template
 
-A component, a whole system, or a subtree of places starts from a template the same way: name the
+A component, a whole system, or a subtree of places is created from a template the same way, with the
+same `createFromTemplate` command: name the
 template and where it lands. Everything lands in one write or not at all, and nothing points back at the
 template. `inputs` and `attach` take JSON:
 
 ```sh
-omniglass component instantiate --template newtron-panel-7 --location hq \
+omniglass component createFromTemplate --template newtron-panel-7 --location hq \
   --node edge-hq --inputs '{"host":"10.20.0.7"}'                     # attached; without inputs it lands unattached
-omniglass system instantiate --template mr55-system --location hq.f3.mr-1 \
-  --node edge-hq --attach '{"touch-control":[{"host":"10.20.0.8"}]}' # forks mr55 (and meeting-room) if you hold neither
-omniglass location instantiate --template meeting-floor --parent hq --name f4
+omniglass system createFromTemplate --template mr55-system --location hq.f3.mr-1 \
+  --node edge-hq --attach '{"touch-control":[{"host":"10.20.0.8"}]}' # creates mr55 (and meeting-room) from their templates if you hold neither
+omniglass location createFromTemplate --template meeting-floor --parent hq --name f4
 ```
 
 A system's answer lists `to_attach`, the components that landed with no endpoint: attach each later

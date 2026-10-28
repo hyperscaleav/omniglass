@@ -9,28 +9,28 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// ForkOptions are a fork's choices beyond the template: the name the
+// StandardOptions are the choices beyond the template when creating a standard from it: the name the
 // standard takes (the template's by default), its label (the template's by
 // default) and, for a variant, the standard it hangs off (the operator's
 // standard named for the template's parent by default).
-type ForkOptions struct {
+type StandardOptions struct {
 	Name   string
 	Label  string
 	Parent string
 }
 
-// ErrNotAStandard is a fork of a template that is not a standard template.
-var ErrNotAStandard = errors.New("template: only a standard template forks into a standard")
+// ErrNotAStandard is a standard asked of a template that is not a standard template.
+var ErrNotAStandard = errors.New("template: only a standard template creates a standard")
 
-// StandardFork is what forking t writes: the storage spec naming everything
-// by value. It reads nothing; the fork resolves every name in its
+// StandardFromTemplate is what creating a standard from t writes: the storage spec naming everything
+// by value. It reads nothing; the create resolves every name in its
 // transaction.
-func StandardFork(t *Template, opt ForkOptions) (storage.StandardFork, error) {
+func StandardSpec(t *Template, opt StandardOptions) (storage.StandardFromTemplate, error) {
 	if t.Kind != KindStandard || t.Standard == nil {
-		return storage.StandardFork{}, fmt.Errorf("%w: %s is a %s", ErrNotAStandard, t.Name, t.Kind)
+		return storage.StandardFromTemplate{}, fmt.Errorf("%w: %s is a %s", ErrNotAStandard, t.Name, t.Kind)
 	}
 	s := t.Standard
-	f := storage.StandardFork{
+	f := storage.StandardFromTemplate{
 		Template: t.Name,
 		Name:     orDefault(opt.Name, t.Name),
 		Label:    orDefault(opt.Label, t.Label),
@@ -44,7 +44,7 @@ func StandardFork(t *Template, opt ForkOptions) (storage.StandardFork, error) {
 		f.Choices = append(f.Choices, spec)
 	}
 	for _, r := range s.Roles {
-		f.Roles = append(f.Roles, storage.ForkRole{
+		f.Roles = append(f.Roles, storage.TemplateRole{
 			SystemRoleSpec: storage.SystemRoleSpec{
 				Name: r.Name, Label: r.Label, Quorum: r.Quorum, Capacity: r.Capacity, Impact: r.Impact,
 				AcceptedTypes: r.AcceptedTypes, PinnedProducts: r.PinnedProducts,
@@ -61,35 +61,35 @@ func StandardFork(t *Template, opt ForkOptions) (storage.StandardFork, error) {
 	if s.Map != nil {
 		b, err := json.Marshal(s.Map)
 		if err != nil {
-			return storage.StandardFork{}, fmt.Errorf("template: %s map: %w", t.Name, err)
+			return storage.StandardFromTemplate{}, fmt.Errorf("template: %s map: %w", t.Name, err)
 		}
 		f.Map = b
 	}
 	return f, nil
 }
 
-// ForkStandard forks the named standard template through gw: the one path
+// CreateStandardFromTemplate creates a standard from the named standard template through gw: the one path
 // the API route, the dev seed and the lab share. A name the catalog lacks,
 // or names as another kind, is ErrNotFound.
-func ForkStandard(ctx context.Context, gw storage.Gateway, c *Catalog, actorID, template string, opt ForkOptions) (*storage.Standard, error) {
+func CreateStandardFromTemplate(ctx context.Context, gw storage.Gateway, c *Catalog, actorID, template string, opt StandardOptions) (*storage.Standard, error) {
 	t, err := c.GetKind(template, KindStandard)
 	if err != nil {
 		return nil, err
 	}
-	f, err := StandardFork(t, opt)
+	f, err := StandardSpec(t, opt)
 	if err != nil {
 		return nil, err
 	}
-	return gw.ForkStandard(ctx, actorID, f)
+	return gw.CreateStandardFromTemplate(ctx, actorID, f)
 }
 
-// ForkAllStandards forks every standard template the operator does not
+// CreateAllStandards creates a standard from every standard template the operator does not
 // already hold a standard of that name for, parents before variants, and
-// returns the names it forked. A standard already present is left exactly
-// as it is: the fork never writes over an operator's row. The dev seed and
+// returns the names it created. A standard already present is left exactly
+// as it is: creating from a template never writes over an operator's row. The dev seed and
 // the lab use it so their fleets have the standards they conform to.
-func ForkAllStandards(ctx context.Context, gw storage.Gateway, c *Catalog, actorID string) ([]string, error) {
-	var forked []string
+func CreateAllStandards(ctx context.Context, gw storage.Gateway, c *Catalog, actorID string) ([]string, error) {
+	var created []string
 	pending := c.List(KindStandard)
 	for len(pending) > 0 {
 		var next []Template
@@ -100,7 +100,7 @@ func ForkAllStandards(ctx context.Context, gw storage.Gateway, c *Catalog, actor
 				progressed = true
 				continue
 			} else if !errors.Is(err, storage.ErrTypeNotFound) {
-				return forked, fmt.Errorf("template: read standard %s: %w", t.Name, err)
+				return created, fmt.Errorf("template: read standard %s: %w", t.Name, err)
 			}
 			if p := t.Standard.Parent; p != "" {
 				if _, err := gw.GetStandard(ctx, p); errors.Is(err, storage.ErrTypeNotFound) {
@@ -108,18 +108,18 @@ func ForkAllStandards(ctx context.Context, gw storage.Gateway, c *Catalog, actor
 					continue
 				}
 			}
-			if _, err := ForkStandard(ctx, gw, c, actorID, t.Name, ForkOptions{}); err != nil {
-				return forked, fmt.Errorf("template: fork %s: %w", t.Name, err)
+			if _, err := CreateStandardFromTemplate(ctx, gw, c, actorID, t.Name, StandardOptions{}); err != nil {
+				return created, fmt.Errorf("template: create %s from its template: %w", t.Name, err)
 			}
-			forked = append(forked, t.Name)
+			created = append(created, t.Name)
 			progressed = true
 		}
 		if !progressed {
-			return forked, fmt.Errorf("template: %d standard templates wait on a parent nothing forks (first: %s)", len(next), next[0].Name)
+			return created, fmt.Errorf("template: %d standard templates wait on a parent nothing creates (first: %s)", len(next), next[0].Name)
 		}
 		pending = next
 	}
-	return forked, nil
+	return created, nil
 }
 
 func orDefault(v, def string) string {

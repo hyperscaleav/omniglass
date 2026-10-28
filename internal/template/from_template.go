@@ -10,17 +10,17 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/systemplan"
 )
 
-// Instantiation (#827, ADR-0827): a component, a system or a subtree of
+// Creating from a template (#827, ADR-0827): a component, a system or a subtree of
 // places written from a template, as one storage.Plan the planned create
 // lands whole. This file only reads (the catalog, and the fleet's own
 // standards, products, types and drivers) and turns a template plus the
 // caller's request into that plan; the write, the scope checks and the audit
 // rows are storage.CreatePlan's, each piece the ordinary create.
 
-// ErrInvalid is a request or a template the fleet cannot instantiate: a
+// ErrInvalid is a request or a template the fleet cannot create from: a
 // fill no product of the right type answers, a place type the fleet lacks or
 // refuses, an attach with no node. Its message names what to fix.
-var ErrInvalid = errors.New("template: cannot instantiate")
+var ErrInvalid = errors.New("template: cannot create from the template")
 
 func invalid(format string, args ...any) error {
 	return fmt.Errorf("%w: %s", ErrInvalid, fmt.Sprintf(format, args...))
@@ -31,7 +31,7 @@ func invalid(format string, args ...any) error {
 // template's preset.
 type Inputs map[string]string
 
-// ComponentRequest is POST /components:instantiate's input.
+// ComponentRequest is POST /components:createFromTemplate's input.
 type ComponentRequest struct {
 	Template string
 	Name     string
@@ -120,11 +120,11 @@ func PlanComponent(ctx context.Context, gw storage.Gateway, c *Catalog, req Comp
 	return storage.Plan{Template: t.Name, Components: []storage.PlannedComponent{pc}}, piece, nil
 }
 
-// SystemRequest is POST /systems:instantiate's input.
+// SystemRequest is POST /systems:createFromTemplate's input.
 type SystemRequest struct {
 	Template string
 	// Standard is the standard to build to, the caller's own by name;
-	// empty takes the template's, forked from its standard template in the
+	// empty takes the template's, created from its standard template in the
 	// same write when the fleet holds no standard of that name.
 	Standard string
 	Name     string
@@ -137,17 +137,17 @@ type SystemRequest struct {
 }
 
 // SystemPlan is a system template's plan: what CreatePlan lands, the
-// standard it builds to (and whether the plan forks it), and a piece per
+// standard it builds to (and whether the plan creates it from its template), and a piece per
 // component in the plan's order.
 type SystemPlan struct {
-	Plan     storage.Plan
-	Standard string
-	Forks    bool
-	Pieces   []PlannedPiece
+	Plan             storage.Plan
+	Standard         string
+	CreatesStandards bool
+	Pieces           []PlannedPiece
 }
 
 // PlanSystem turns a system template and a request into a plan of one
-// system, its standard (forked when absent) and a component per role, each
+// system, its standard (created from its template when absent) and a component per role, each
 // role filled to its quorum with the product the template names for it.
 func PlanSystem(ctx context.Context, gw storage.Gateway, c *Catalog, req SystemRequest) (SystemPlan, error) {
 	t, err := c.GetKind(req.Template, KindSystem)
@@ -170,7 +170,7 @@ func PlanSystem(ctx context.Context, gw storage.Gateway, c *Catalog, req SystemR
 }
 
 // plannedSystem plans one system from a system template: its standard
-// (resolving the fork), the planner's fill of each role, and the
+// (resolving whether it is created from its template), the planner's fill of each role, and the
 // components. It sets everything but the system's own name, label and
 // place.
 func plannedSystem(ctx context.Context, gw storage.Gateway, c *Catalog, t *Template, standard string, attach map[string][]Inputs, node string) (storage.PlannedSystem, SystemPlan, error) {
@@ -196,12 +196,12 @@ func plannedSystem(ctx context.Context, gw storage.Gateway, c *Catalog, t *Templ
 		if err != nil {
 			return storage.PlannedSystem{}, out, err
 		}
-		chain, err := forkChain(ctx, gw, c, st)
+		chain, err := standardChain(ctx, gw, c, st)
 		if err != nil {
 			return storage.PlannedSystem{}, out, err
 		}
 		out.Plan.Standards = chain
-		out.Forks = true
+		out.CreatesStandards = true
 		for _, r := range st.Standard.Roles {
 			alt := ""
 			if r.Choice != "" {
@@ -322,7 +322,7 @@ func planFills(ctx context.Context, gw storage.Gateway, roles []systemplan.Role,
 	}), nil
 }
 
-// PlaceRequest is POST /locations:instantiate's input.
+// PlaceRequest is POST /locations:createFromTemplate's input.
 type PlaceRequest struct {
 	Template string
 	// Parent is the place the subtree sits under; empty for a new top.
@@ -353,7 +353,7 @@ func PlanPlaces(ctx context.Context, gw storage.Gateway, c *Catalog, req PlaceRe
 		return PlacePlan{}, err
 	}
 	out := PlacePlan{Plan: storage.Plan{Template: t.Name}}
-	forks := map[string]bool{}
+	created := map[string]bool{}
 	var walk func(p *Place, key, parentKey, parentType string, root bool) error
 	walk = func(p *Place, key, parentKey, parentType string, root bool) error {
 		lt, err := gw.GetLocationType(ctx, p.Type)
@@ -394,8 +394,8 @@ func PlanPlaces(ctx context.Context, gw storage.Gateway, c *Catalog, req PlaceRe
 			}
 			ps.PlaceKey, ps.System.Label = key, s.Label
 			for _, f := range sp.Plan.Standards {
-				if !forks[f.Name] {
-					forks[f.Name] = true
+				if !created[f.Name] {
+					created[f.Name] = true
 					out.Plan.Standards = append(out.Plan.Standards, f)
 				}
 			}
@@ -424,18 +424,18 @@ func contains(xs []string, x string) bool {
 	return false
 }
 
-// forkChain is the forks a system template's own standard needs, parents
+// standardChain is the standards a system template's own standard needs, parents
 // first: the standard template, and each ancestor template the fleet holds
 // no standard of that name for. A variant's chain lands with it, since a
 // system cannot be built to half of one.
-func forkChain(ctx context.Context, gw storage.Gateway, c *Catalog, st *Template) ([]storage.StandardFork, error) {
-	var chain []storage.StandardFork
+func standardChain(ctx context.Context, gw storage.Gateway, c *Catalog, st *Template) ([]storage.StandardFromTemplate, error) {
+	var chain []storage.StandardFromTemplate
 	for cur := st; cur != nil; {
-		f, err := StandardFork(cur, ForkOptions{})
+		f, err := StandardSpec(cur, StandardOptions{})
 		if err != nil {
 			return nil, err
 		}
-		chain = append([]storage.StandardFork{f}, chain...)
+		chain = append([]storage.StandardFromTemplate{f}, chain...)
 		parent := cur.Standard.Parent
 		if parent == "" {
 			break

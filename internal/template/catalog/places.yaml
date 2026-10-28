@@ -1,6 +1,6 @@
 # The place templates (kind place_template): a subtree of places, each naming
-# a location type, and the system templates that land in it. Instantiating
-# one (POST /locations:instantiate) creates the whole subtree under a parent
+# a location type, and the system templates that land in it. Creating from
+# one (POST /locations:createFromTemplate) creates the whole subtree under a parent
 # place, each place's type checked against its parent type's
 # allowed_parent_types (the operator's effective row, a fork included), in
 # one transaction (ADR-0827).

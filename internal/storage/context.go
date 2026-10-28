@@ -116,9 +116,10 @@ func templateFrom(ctx context.Context) string {
 }
 
 // templateDetailKey is the audit image key the plan's template lands under:
-// its own key, never one a row's image carries (a fork's image names its own
-// standard template under "template").
-const templateDetailKey = "instantiated_from"
+// the one provenance key every row created from a template carries. A row
+// whose image already names its own template under it (a standard created
+// from a standard template inside a system's plan) keeps its own.
+const templateDetailKey = "from_template"
 
 // withTemplateDetail adds the template to an audit image (a JSON object), so
 // the detail names where the row came from. A nil image, or one that is not
@@ -131,6 +132,9 @@ func withTemplateDetail(ctx context.Context, image any) any {
 	}
 	var m map[string]json.RawMessage
 	if err := json.Unmarshal(b, &m); err != nil {
+		return image
+	}
+	if _, has := m[templateDetailKey]; has {
 		return image
 	}
 	m[templateDetailKey], _ = json.Marshal(name)

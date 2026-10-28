@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import {
   type Template,
   componentBody,
-  forkBody,
   kindChip,
   landingHref,
   needsNode,
@@ -16,6 +15,7 @@ import {
   missingNeeds,
   permText,
   splitKindChip,
+  standardBody,
   startNeeds,
   systemBody,
   systemRoleSlots,
@@ -138,7 +138,7 @@ describe("what a start needs, mirroring the routes", () => {
   const ctx = { all, held: holds("mr55", "ds55") };
   const sysSet = [["system", "create"], ["system", "read"], ["system", "update"], ["component", "create"], ["component", "update"]];
 
-  it("asks a fork for standard:create alone", () => {
+  it("asks a standard for standard:create alone", () => {
     expect(startNeeds(std, ctx)).toEqual([["standard", "create"]]);
   });
 
@@ -148,10 +148,10 @@ describe("what a start needs, mirroring the routes", () => {
     expect(startNeeds(valued, { ...ctx, address: true })).toEqual([["component", "create"], ["component", "update"], ["endpoint", "create"]]);
   });
 
-  it("asks a system for the system set, standard:create only when its standard would fork", () => {
+  it("asks a system for the system set, standard:create only when its standard would be created from its template", () => {
     expect(startNeeds(sys, ctx)).toEqual(sysSet);
     expect(startNeeds(sys, { ...ctx, held: holds() })).toEqual([...sysSet, ["standard", "create"]]);
-    // The form's own choice of a held standard forks nothing.
+    // The form's own choice of a held standard creates none.
     expect(startNeeds(sys, { ...ctx, held: holds("mine"), standard: "mine" })).toEqual(sysSet);
     expect(startNeeds(sys, { ...ctx, address: true })).toEqual([...sysSet, ["endpoint", "create"]]);
   });
@@ -174,9 +174,9 @@ describe("what a start needs, mirroring the routes", () => {
 });
 
 describe("what each start form posts", () => {
-  it("forks with only what the operator gave", () => {
-    expect(forkBody("mr55", { name: " ", label: "", parent: "" })).toEqual({ template: "mr55", name: undefined, label: undefined, parent: undefined });
-    expect(forkBody("mr55", { name: "mr55-east", label: "East rooms", parent: "meeting-room" })).toEqual({ template: "mr55", name: "mr55-east", label: "East rooms", parent: "meeting-room" });
+  it("creates a standard with only what the operator gave", () => {
+    expect(standardBody("mr55", { name: " ", label: "", parent: "" })).toEqual({ template: "mr55", name: undefined, label: undefined, parent: undefined });
+    expect(standardBody("mr55", { name: "mr55-east", label: "East rooms", parent: "meeting-room" })).toEqual({ template: "mr55", name: "mr55-east", label: "East rooms", parent: "meeting-room" });
   });
 
   it("puts the address on the host input and a secret by its input name", () => {

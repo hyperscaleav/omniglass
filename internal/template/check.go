@@ -212,7 +212,7 @@ func checkAccepts(ctx context.Context, gw storage.Gateway, r Role, prod *storage
 // checkPlace holds each place's type to the shipped location types: the
 // type must exist, and a nested place's type must allow its parent's. The
 // root's placement is the caller's to choose, so it is checked when the
-// template is instantiated.
+// template is created from.
 func checkPlace(ctx context.Context, gw storage.Gateway, p *Place, parentType string) []error {
 	var errs []error
 	lt, err := gw.GetLocationType(ctx, p.Type)

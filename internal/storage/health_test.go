@@ -40,7 +40,7 @@ func newHealthFixture(t *testing.T) *healthFixture {
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	storagetest.ForkShippedStandards(t, gw)
+	storagetest.CreateShippedStandards(t, gw)
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
 		t.Fatalf("connect: %v", err)

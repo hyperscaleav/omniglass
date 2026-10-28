@@ -4,7 +4,7 @@ date: 2026-10-28
 refs: [1328, 827]
 ---
 
-`POST /locations:instantiate` (`omniglass location instantiate`) creates a subtree of places from a
+`POST /locations:createFromTemplate` (`omniglass location createFromTemplate`) creates a subtree of places from a
 place template under a parent or as a new top, with the systems it carries staffed and unattached, in one
 transaction. Each place's type must be one the fleet holds and allow its parent's type, read from the
 fleet's effective `allowed_parent_types`, so an operator who forked a shipped type is checked against

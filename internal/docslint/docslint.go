@@ -243,6 +243,17 @@ var Banned = []BannedTerm{
 		Origin:      "ADR-0071",
 	},
 
+	// The template layer's custom methods were :fork (a standard) and
+	// :instantiate (a component, a system, a place subtree) for one day before
+	// the ruling that one verb names one thing across all four kinds: a custom
+	// method names what differs from Create, and the difference is the
+	// template input (ADR-0827).
+	{
+		Pattern:     regexp.MustCompile(`:(fork|instantiate)\b`),
+		Replacement: ":createFromTemplate (the template input is what differs from Create)",
+		Origin:      "ADR-0827",
+	},
+
 	// The ADR-0063 name foundation retired property_value for the store; the
 	// ADR-0079 fold then retired the store itself, so the replacement names the
 	// series model rather than the intermediate cache.

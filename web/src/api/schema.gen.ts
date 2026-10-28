@@ -1216,7 +1216,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/components:instantiate": {
+    "/components:createFromTemplate": {
         parameters: {
             query?: never;
             header?: never;
@@ -1227,9 +1227,9 @@ export interface paths {
         put?: never;
         /**
          * Start a component from a template
-         * @description Creates one component from a component template at a place: its product and the template's declared values, and, when the inputs carry an address (host), its endpoint attached through the driver with the template's preset under your inputs. A secret input names a secret you may read, resolved as an attach resolves it. One transaction, every piece in your own scope with its own audit row naming the template; nothing points back at the template. Gated by component:create; declared values also need component:update and an attach endpoint:create. A place outside your location scope is a 404, an unknown template a 404, inputs with no address or an attach with no node a 422.
+         * @description Creates one component from a component template at a place: its product and the template's declared values, and, when the inputs carry an address (host), its endpoint attached through the driver with the template's preset under your inputs. A secret input names a secret you may read, resolved as an attach resolves it. One transaction, every piece in your own scope with its own audit row carrying from_template; nothing points back at the template. Gated by component:create; declared values also need component:update and an attach endpoint:create. A place outside your location scope is a 404, an unknown template a 404, inputs with no address or an attach with no node a 422.
          */
-        post: operations["instantiate-component"];
+        post: operations["create-component-from-template"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2244,7 +2244,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/locations:instantiate": {
+    "/locations:createFromTemplate": {
         parameters: {
             query?: never;
             header?: never;
@@ -2255,9 +2255,9 @@ export interface paths {
         put?: never;
         /**
          * Start a subtree of places from a template
-         * @description Creates a subtree of places from a place template under a parent place (or as a new top), each place's type checked against its parent type's allowed parents as this fleet has them (your fork of a shipped type included), each named by the template, the request (the root) or its type's name rule, and the systems the template places in them, staffed as a system template is, unattached. One transaction: all of it or none, every piece in your own scope with its own audit row naming the template. Gated by location:create; when the subtree carries systems it also needs system:create, system:read, system:update, component:create and component:update, and standard:create when a standard is forked. A type this fleet does not hold, or a placement its types refuse, is a 422 naming the type or the pair.
+         * @description Creates a subtree of places from a place template under a parent place (or as a new top), each place's type checked against its parent type's allowed parents as this fleet has them (your fork of a shipped type included), each named by the template, the request (the root) or its type's name rule, and the systems the template places in them, staffed as a system template is, unattached. One transaction: all of it or none, every piece in your own scope with its own audit row carrying from_template. Gated by location:create; when the subtree carries systems it also needs system:create, system:read, system:update, component:create and component:update, and standard:create when a standard is created from its template. A type this fleet does not hold, or a placement its types refuse, is a 422 naming the type or the pair.
          */
-        post: operations["instantiate-locations"];
+        post: operations["create-locations-from-template"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4100,7 +4100,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/standards:fork": {
+    "/standards:createFromTemplate": {
         parameters: {
             query?: never;
             header?: never;
@@ -4110,10 +4110,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Fork a standard from a template
-         * @description Writes one standard of your own (official false) from a standard template in the catalog: its roles, choices, property and metric contract lines and map, in one transaction, audited once as a fork naming the template. Nothing points back at the template, so a later release can change the template without touching your standard, and your standard renames, edits and deletes like any you created. The name is the template's unless you give one; a taken name is a 409, so forking the same template again needs a second name. A variant forks only once you hold the standard it hangs off (the parent you name, or yours named for the template's parent), else a 422 naming the template to fork first. An unknown template is a 404. Gated by standard:create.
+         * Create a standard from a template
+         * @description Writes one standard of your own (official false) from a standard template in the catalog: its roles, choices, property and metric contract lines and map, in one transaction, audited once as a create carrying the template it came from (from_template). Nothing points back at the template, so a later release can change the template without touching your standard, and your standard renames, edits and deletes like any you created. The name is the template's unless you give one; a taken name is a 409, so creating from the same template again needs a second name. A variant is created only once you hold the standard it hangs off (the parent you name, or yours named for the template's parent), else a 422 naming the template to create from first. An unknown template is a 404. Gated by standard:create.
          */
-        post: operations["fork-standard"];
+        post: operations["create-standard-from-template"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4696,6 +4696,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/systems:createFromTemplate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a whole system from a template
+         * @description Creates a system from a system template at a place, built to the standard you name or the template's own (yours of that name when you hold one, else created from its standard template, with any parent it hangs off, in the same write), with a component for each role filled to its quorum and assigned, and the declared values. A component whose role you give an address in attach lands attached; the rest land unattached and are listed in to_attach. One transaction: it lands whole or not at all, every piece in your own scope with its own audit row carrying from_template. Gated by system:create, and also needs system:read, system:update, component:create and component:update; endpoint:create when anything attaches, standard:create when a standard is created from its template. A place outside your location scope is a 404, an unknown template or standard a 404, a standard the template cannot staff a 422 naming the roles.
+         */
+        post: operations["create-system-from-template"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/systems:health": {
         parameters: {
             query?: never;
@@ -4710,26 +4730,6 @@ export interface paths {
         get: operations["list-system-verdicts"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/systems:instantiate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Start a whole system from a template
-         * @description Creates a system from a system template at a place, built to the standard you name or the template's own (yours of that name when you hold one, else forked from its standard template, with any parent it hangs off, in the same write), with a component for each role filled to its quorum and assigned, and the declared values. A component whose role you give an address in attach lands attached; the rest land unattached and are listed in to_attach. One transaction: it lands whole or not at all, every piece in your own scope with its own audit row naming the template. Gated by system:create, and also needs system:read, system:update, component:create and component:update; endpoint:create when anything attaches, standard:create when a standard is forked. A place outside your location scope is a 404, an unknown template or standard a 404, a standard the template cannot staff a 422 naming the roles.
-         */
-        post: operations["instantiate-system"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4973,7 +4973,7 @@ export interface paths {
         };
         /**
          * List templates
-         * @description Lists the template catalog this binary ships, ordered by kind then name, optionally one kind. A template is an example an operator clones: forking a standard template (POST /standards:fork) writes an ordinary standard the operator owns, and nothing points back at the template. Gated by template:read.
+         * @description Lists the template catalog this binary ships, ordered by kind then name, optionally one kind. A template is an example an operator clones: creating from one (POST /standards:createFromTemplate, and the same method on components, systems and locations) writes ordinary rows the operator owns, and nothing points back at the template. Gated by template:read.
          */
         get: operations["list-templates"];
         put?: never;
@@ -6246,6 +6246,49 @@ export interface components {
             /** @description The property this command sets, for settlement (at most one target arm) */
             target_property_type?: string;
         };
+        CreateComponentFromTemplateInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateComponentFromTemplateInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Driver inputs laid over the template's preset: the address (host) attaches the endpoint, a secret input names a secret you may read */
+            inputs?: {
+                [key: string]: string;
+            };
+            /** @description The component's label */
+            label?: string;
+            /** @description The place the component sits in, by name or dotted path */
+            location?: string;
+            /** @description The component's name; minted as an unnamed create mints it when empty */
+            name?: string;
+            /** @description The node the endpoint is placed on; needed when inputs carry an address */
+            node?: string;
+            /**
+             * @description The component template, by name
+             * @example kestrel-vroom
+             */
+            template: string;
+        };
+        CreateComponentFromTemplateOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateComponentFromTemplateOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Whether its endpoint attached from the inputs given; false means it is still to attach */
+            attached: boolean;
+            /** @description The component's name */
+            component: string;
+            /** @description The component's id, the stable address a link to it uses */
+            component_id: string;
+            /** @description Its product */
+            product: string;
+            /** @description The template it came from; recorded in the audit detail only */
+            template: string;
+        };
         CreateComponentInputBody: {
             /**
              * Format: uri
@@ -6496,6 +6539,43 @@ export interface components {
             /** @description How the platform NAMES locations of this type; omit to have an operator name every one of them. Refused (422) if it cannot mint a legal name */
             name_rule?: components["schemas"]["NameRuleBody"];
         };
+        CreateLocationsFromTemplateInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateLocationsFromTemplateInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The subtree root's label */
+            label?: string;
+            /** @description The subtree root's name; omitted takes the template's, else its type's name rule mints one */
+            name?: string;
+            /** @description The place the subtree sits under, by name or dotted path; omitted makes it a new top */
+            parent?: string;
+            /**
+             * @description The place template, by name
+             * @example meeting-floor
+             */
+            template: string;
+        };
+        CreateLocationsFromTemplateOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateLocationsFromTemplateOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The places created, parents first */
+            places: components["schemas"]["CreatedPlaceBody"][] | null;
+            /** @description The standards this write created from their templates */
+            standards_created: string[] | null;
+            /** @description The systems created in them */
+            systems: components["schemas"]["CreatedSystemBody"][] | null;
+            /** @description The template it came from; recorded in the audit detail only */
+            template: string;
+            /** @description The components that landed with no endpoint, still to attach */
+            to_attach: string[] | null;
+        };
         CreateMeTokenInputBody: {
             /**
              * Format: uri
@@ -6725,6 +6805,25 @@ export interface components {
              */
             rank: number;
         };
+        CreateStandardFromTemplateInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateStandardFromTemplateInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The standard's label; omitted takes the template's */
+            label?: string;
+            /** @description The name the standard takes; omitted takes the template's */
+            name?: string;
+            /** @description For a variant, the standard it hangs off, by name or uuid; omitted takes your standard named for the template's parent */
+            parent?: string;
+            /**
+             * @description The standard template to create from, by name
+             * @example meeting-room
+             */
+            template: string;
+        };
         CreateStandardInputBody: {
             /**
              * Format: uri
@@ -6738,6 +6837,57 @@ export interface components {
             name: string;
             /** @description A standard this one is a variant of, by handle or uuid */
             parent_standard_id?: string;
+        };
+        CreateSystemFromTemplateInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateSystemFromTemplateInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Driver inputs per role, one object per component of the role in order; an object with an address (host) attaches that component, the rest land unattached */
+            attach?: {
+                [key: string]: {
+                    [key: string]: string;
+                }[] | null;
+            };
+            /** @description The system's label */
+            label?: string;
+            /** @description The place the system and its components sit in, by name or dotted path */
+            location?: string;
+            /** @description The system's name; minted from its type when empty */
+            name?: string;
+            /** @description The node the endpoints are placed on; needed when any component attaches */
+            node?: string;
+            /** @description A standard of your own to build to, by name; omitted takes the template's, created from its template in the same write when you hold none of that name */
+            standard?: string;
+            /**
+             * @description The system template, by name
+             * @example mr55-system
+             */
+            template: string;
+        };
+        CreateSystemFromTemplateOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateSystemFromTemplateOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description A component per role, filled to quorum and assigned */
+            components: components["schemas"]["CreatedComponentBody"][] | null;
+            /** @description The standard it is built to */
+            standard: string;
+            /** @description The standards this write created from their templates (parents first); empty when you held them */
+            standards_created: string[] | null;
+            /** @description The system's name */
+            system: string;
+            /** @description The system's id, the stable address a link to it uses */
+            system_id: string;
+            /** @description The template it came from; recorded in the audit detail only */
+            template: string;
+            /** @description The components that landed with no endpoint, still to attach */
+            to_attach: string[] | null;
         };
         CreateSystemInputBody: {
             /**
@@ -6850,6 +7000,38 @@ export interface components {
             support_phone?: string;
             /** @description The vendor's website (http or https) */
             website?: string;
+        };
+        CreatedComponentBody: {
+            /** @description Whether its endpoint attached from the inputs given; false lists it as still to attach */
+            attached: boolean;
+            /** @description The component's name */
+            component: string;
+            /** @description The component's id, the stable address a link to it uses */
+            component_id: string;
+            /** @description Its product */
+            product: string;
+            /** @description The role it fills in its system */
+            role?: string;
+        };
+        CreatedPlaceBody: {
+            /** @description The place's name */
+            location: string;
+            /** @description The place's id, the stable address a link to it uses */
+            location_id: string;
+            /** @description The place it sits under, by name */
+            parent?: string;
+            /** @description Its location type */
+            type: string;
+        };
+        CreatedSystemBody: {
+            /** @description The place it sits in */
+            location: string;
+            /** @description The standard it is built to */
+            standard: string;
+            /** @description The system's name */
+            system: string;
+            /** @description The system's id, the stable address a link to it uses */
+            system_id: string;
         };
         CriteriaBody: {
             /** @description The criterion, an expression over the sample (value, key, instance, component.name, component.type) that yields true or false, e.g. value > 80 && instance != "aux" */
@@ -7548,25 +7730,6 @@ export interface components {
             /** @description Every system the caller may read, each carrying its dots */
             systems: components["schemas"]["FleetSystemBody"][] | null;
         };
-        ForkStandardInputBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/ForkStandardInputBody.json
-             */
-            readonly $schema?: string;
-            /** @description The standard's label; omitted takes the template's */
-            label?: string;
-            /** @description The name the standard takes; omitted takes the template's */
-            name?: string;
-            /** @description For a variant, the standard it hangs off, by name or uuid; omitted takes your standard named for the template's parent */
-            parent?: string;
-            /**
-             * @description The standard template to fork, by name
-             * @example meeting-room
-             */
-            template: string;
-        };
         GrantBody: {
             /**
              * Format: uri
@@ -7753,169 +7916,6 @@ export interface components {
             target_id: string;
             /** @description The bearer token to send while impersonating; shown once */
             token: string;
-        };
-        InstantiateComponentInputBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/InstantiateComponentInputBody.json
-             */
-            readonly $schema?: string;
-            /** @description Driver inputs laid over the template's preset: the address (host) attaches the endpoint, a secret input names a secret you may read */
-            inputs?: {
-                [key: string]: string;
-            };
-            /** @description The component's label */
-            label?: string;
-            /** @description The place the component sits in, by name or dotted path */
-            location?: string;
-            /** @description The component's name; minted as an unnamed create mints it when empty */
-            name?: string;
-            /** @description The node the endpoint is placed on; needed when inputs carry an address */
-            node?: string;
-            /**
-             * @description The component template, by name
-             * @example kestrel-vroom
-             */
-            template: string;
-        };
-        InstantiateComponentOutputBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/InstantiateComponentOutputBody.json
-             */
-            readonly $schema?: string;
-            /** @description Whether its endpoint attached from the inputs given; false means it is still to attach */
-            attached: boolean;
-            /** @description The component's name */
-            component: string;
-            /** @description The component's id, the stable address a link to it uses */
-            component_id: string;
-            /** @description Its product */
-            product: string;
-            /** @description The template it came from; recorded in the audit detail only */
-            template: string;
-        };
-        InstantiateLocationsInputBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/InstantiateLocationsInputBody.json
-             */
-            readonly $schema?: string;
-            /** @description The subtree root's label */
-            label?: string;
-            /** @description The subtree root's name; omitted takes the template's, else its type's name rule mints one */
-            name?: string;
-            /** @description The place the subtree sits under, by name or dotted path; omitted makes it a new top */
-            parent?: string;
-            /**
-             * @description The place template, by name
-             * @example meeting-floor
-             */
-            template: string;
-        };
-        InstantiateLocationsOutputBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/InstantiateLocationsOutputBody.json
-             */
-            readonly $schema?: string;
-            /** @description The places created, parents first */
-            places: components["schemas"]["InstantiatedPlaceBody"][] | null;
-            /** @description The standards this write forked from their templates */
-            standard_forked: string[] | null;
-            /** @description The systems created in them */
-            systems: components["schemas"]["InstantiatedSystemBody"][] | null;
-            /** @description The template it came from; recorded in the audit detail only */
-            template: string;
-            /** @description The components that landed with no endpoint, still to attach */
-            to_attach: string[] | null;
-        };
-        InstantiateSystemInputBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/InstantiateSystemInputBody.json
-             */
-            readonly $schema?: string;
-            /** @description Driver inputs per role, one object per component of the role in order; an object with an address (host) attaches that component, the rest land unattached */
-            attach?: {
-                [key: string]: {
-                    [key: string]: string;
-                }[] | null;
-            };
-            /** @description The system's label */
-            label?: string;
-            /** @description The place the system and its components sit in, by name or dotted path */
-            location?: string;
-            /** @description The system's name; minted from its type when empty */
-            name?: string;
-            /** @description The node the endpoints are placed on; needed when any component attaches */
-            node?: string;
-            /** @description A standard of your own to build to, by name; omitted takes the template's, forked in the same write when you hold none of that name */
-            standard?: string;
-            /**
-             * @description The system template, by name
-             * @example mr55-system
-             */
-            template: string;
-        };
-        InstantiateSystemOutputBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/InstantiateSystemOutputBody.json
-             */
-            readonly $schema?: string;
-            /** @description A component per role, filled to quorum and assigned */
-            components: components["schemas"]["InstantiatedComponentBody"][] | null;
-            /** @description The standard it is built to */
-            standard: string;
-            /** @description The standards this write forked from their templates (parents first); empty when you held them */
-            standard_forked: string[] | null;
-            /** @description The system's name */
-            system: string;
-            /** @description The system's id, the stable address a link to it uses */
-            system_id: string;
-            /** @description The template it came from; recorded in the audit detail only */
-            template: string;
-            /** @description The components that landed with no endpoint, still to attach */
-            to_attach: string[] | null;
-        };
-        InstantiatedComponentBody: {
-            /** @description Whether its endpoint attached from the inputs given; false lists it as still to attach */
-            attached: boolean;
-            /** @description The component's name */
-            component: string;
-            /** @description The component's id, the stable address a link to it uses */
-            component_id: string;
-            /** @description Its product */
-            product: string;
-            /** @description The role it fills in its system */
-            role?: string;
-        };
-        InstantiatedPlaceBody: {
-            /** @description The place's name */
-            location: string;
-            /** @description The place's id, the stable address a link to it uses */
-            location_id: string;
-            /** @description The place it sits under, by name */
-            parent?: string;
-            /** @description Its location type */
-            type: string;
-        };
-        InstantiatedSystemBody: {
-            /** @description The place it sits in */
-            location: string;
-            /** @description The standard it is built to */
-            standard: string;
-            /** @description The system's name */
-            system: string;
-            /** @description The system's id, the stable address a link to it uses */
-            system_id: string;
         };
         IssueCommandInputBody: {
             /**
@@ -10953,7 +10953,7 @@ export interface components {
             name: string;
             /** @description A place template's body: the root of the subtree */
             place?: components["schemas"]["TemplatePlaceBody"];
-            /** @description A standard template's body: what a fork writes */
+            /** @description A standard template's body: what creating a standard from it writes */
             standard?: components["schemas"]["TemplateStandardBody"];
             /** @description A system template's body */
             system?: components["schemas"]["TemplateSystemBody"];
@@ -11071,11 +11071,11 @@ export interface components {
             choices?: components["schemas"]["TemplateChoiceBody"][] | null;
             /** @description The layout a conforming system's Map tab draws */
             map?: components["schemas"]["TemplateMapBody"];
-            /** @description The metric contract lines a fork declares */
+            /** @description The metric contract lines a standard created from it declares */
             metrics?: components["schemas"]["TemplateContractBody"][] | null;
-            /** @description The standard template this variant hangs off; a variant forks once the operator holds a standard of that name */
+            /** @description The standard template this variant hangs off; a variant is created from its template once the operator holds a standard of that name */
             parent?: string;
-            /** @description The property contract lines a fork declares */
+            /** @description The property contract lines a standard created from it declares */
             properties?: components["schemas"]["TemplateContractBody"][] | null;
             /** @description The roles a conforming system needs filled */
             roles: components["schemas"]["TemplateRoleBody"][] | null;
@@ -14306,7 +14306,7 @@ export interface operations {
             };
         };
     };
-    "instantiate-component": {
+    "create-component-from-template": {
         parameters: {
             query?: never;
             header?: never;
@@ -14315,7 +14315,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["InstantiateComponentInputBody"];
+                "application/json": components["schemas"]["CreateComponentFromTemplateInputBody"];
             };
         };
         responses: {
@@ -14325,7 +14325,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["InstantiateComponentOutputBody"];
+                    "application/json": components["schemas"]["CreateComponentFromTemplateOutputBody"];
                 };
             };
             /** @description Error */
@@ -16561,7 +16561,7 @@ export interface operations {
             };
         };
     };
-    "instantiate-locations": {
+    "create-locations-from-template": {
         parameters: {
             query?: never;
             header?: never;
@@ -16570,7 +16570,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["InstantiateLocationsInputBody"];
+                "application/json": components["schemas"]["CreateLocationsFromTemplateInputBody"];
             };
         };
         responses: {
@@ -16580,7 +16580,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["InstantiateLocationsOutputBody"];
+                    "application/json": components["schemas"]["CreateLocationsFromTemplateOutputBody"];
                 };
             };
             /** @description Error */
@@ -20719,7 +20719,7 @@ export interface operations {
             };
         };
     };
-    "fork-standard": {
+    "create-standard-from-template": {
         parameters: {
             query?: never;
             header?: never;
@@ -20728,7 +20728,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ForkStandardInputBody"];
+                "application/json": components["schemas"]["CreateStandardFromTemplateInputBody"];
             };
         };
         responses: {
@@ -21958,6 +21958,39 @@ export interface operations {
             };
         };
     };
+    "create-system-from-template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSystemFromTemplateInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateSystemFromTemplateOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "list-system-verdicts": {
         parameters: {
             query?: never;
@@ -21974,39 +22007,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SystemVerdictsOutputBody"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "instantiate-system": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["InstantiateSystemInputBody"];
-            };
-        };
-        responses: {
-            /** @description Created */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["InstantiateSystemOutputBody"];
                 };
             };
             /** @description Error */

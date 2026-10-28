@@ -47,7 +47,7 @@ func allScopes() storage.PlanScopes {
 	all := scope.Set{All: true}
 	return storage.PlanScopes{LocationCreate: all, LocationRead: all, SystemCreate: all, SystemRead: all, SystemUpdate: all,
 		ComponentCreate: all, ComponentRead: all, ComponentUpdate: all, EndpointCreate: all, SecretRead: all,
-		CanAdmin: true, CanForkStandard: true}
+		CanAdmin: true, CanCreateStandard: true}
 }
 
 // TestCreatePlanLandsWhole: a plan with a fork, a subtree of places, a system
@@ -64,7 +64,7 @@ func TestCreatePlanLandsWhole(t *testing.T) {
 	plan := func(lastProduct string) storage.Plan {
 		return storage.Plan{
 			Template: "plan-fixture",
-			Standards: []storage.StandardFork{{Template: "plan-room-template", Name: std, Label: "Plan Room", Roles: []storage.ForkRole{
+			Standards: []storage.StandardFromTemplate{{Template: "plan-room-template", Name: std, Label: "Plan Room", Roles: []storage.TemplateRole{
 				{SystemRoleSpec: storage.SystemRoleSpec{Name: "bar", AcceptedTypes: []string{"video-bar"}}},
 				{SystemRoleSpec: storage.SystemRoleSpec{Name: "screen", AcceptedTypes: []string{"display"}}},
 			}}},
@@ -97,7 +97,7 @@ func TestCreatePlanLandsWhole(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create plan: %v", err)
 	}
-	if len(made.Forked) != 1 || len(made.Places) != 2 || len(made.Systems) != 1 || len(made.Systems[0].Components) != 2 || len(made.Components) != 1 {
+	if len(made.CreatedStandards) != 1 || len(made.Places) != 2 || len(made.Systems) != 1 || len(made.Systems[0].Components) != 2 || len(made.Components) != 1 {
 		t.Fatalf("made = %+v, want one fork, two places, one system of two, one standalone", made)
 	}
 	if made.Places[1].ParentID == nil || *made.Places[1].ParentID != made.Places[0].ID {
@@ -109,18 +109,20 @@ func TestCreatePlanLandsWhole(t *testing.T) {
 	if got := count(`select count(*) from property where provenance = 'declared' and component_id is not null`); got != 1 {
 		t.Fatalf("declared component values = %d, want 1", got)
 	}
-	// Every audit row the plan wrote names the template.
+	// Every audit row the plan wrote names a template under from_template: the
+	// standard its own standard template, every other row the plan's.
 	wrote := count(`select count(*) from audit_log`) - before
-	named := count(`select count(*) from audit_log where new->>'instantiated_from' = 'plan-fixture'`)
-	if wrote == 0 || named != wrote {
-		t.Fatalf("the plan wrote %d audit rows and %d name the template, want all", wrote, named)
+	named := count(`select count(*) from audit_log where new->>'from_template' = 'plan-fixture'`)
+	own := count(`select count(*) from audit_log where resource = 'standard' and new->>'from_template' = 'plan-room-template'`)
+	if wrote == 0 || own != 1 || named+own != wrote {
+		t.Fatalf("the plan wrote %d audit rows: %d name the plan's template and %d the standard's own, want all", wrote, named, own)
 	}
 
 	// A second plan naming the standard uses it as it is: no second fork.
 	again := plan(disp.Name)
 	again.Places = []storage.PlannedPlace{{Key: "b", Location: storage.LocationSpec{Name: "plan-annex", LocationType: "building"}},
 		{Key: "f", ParentKey: "b", Location: storage.LocationSpec{Name: "f1", LocationType: "floor"}}}
-	if made, err := gw.CreatePlan(ctx, "", again, allScopes()); err != nil || len(made.Forked) != 0 {
+	if made, err := gw.CreatePlan(ctx, "", again, allScopes()); err != nil || len(made.CreatedStandards) != 0 {
 		t.Fatalf("a plan on a held standard forked %v (%v), want none", made, err)
 	}
 }
@@ -135,14 +137,14 @@ func TestCreatePlanChecksEveryPieceInScope(t *testing.T) {
 	sysType := "meeting"
 	std := "scoped-room"
 	plan := storage.Plan{
-		Standards: []storage.StandardFork{{Name: std, Roles: []storage.ForkRole{{SystemRoleSpec: storage.SystemRoleSpec{Name: "screen", AcceptedTypes: []string{"display"}}}}}},
+		Standards: []storage.StandardFromTemplate{{Name: std, Roles: []storage.TemplateRole{{SystemRoleSpec: storage.SystemRoleSpec{Name: "screen", AcceptedTypes: []string{"display"}}}}}},
 		Places:    []storage.PlannedPlace{{Key: "b", Location: storage.LocationSpec{Name: "scoped-hq", LocationType: "building"}}},
 		Systems: []storage.PlannedSystem{{PlaceKey: "b", System: storage.SystemSpec{SystemTypeID: &sysType, StandardID: &std},
 			Components: []storage.PlannedComponent{{Role: "screen", Component: storage.ComponentSpec{ProductName: &disp.Name}}}}},
 	}
 
 	noFork := allScopes()
-	noFork.CanForkStandard = false
+	noFork.CanCreateStandard = false
 	if _, err := gw.CreatePlan(ctx, "", plan, noFork); !isStage(err, "standard") {
 		t.Fatalf("a plan needing a fork without standard:create = %v, want a standard-stage refusal", err)
 	}

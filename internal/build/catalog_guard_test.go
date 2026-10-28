@@ -38,8 +38,8 @@ func TestTestsDoNotBorrowTheSeedCatalog(t *testing.T) {
 		"internal/template/check_test.go": true,
 		// Instantiating the shipped templates is what these drive, and a
 		// shipped template names shipped products (#1326 to #1328).
-		"internal/template/instantiate_test.go": true,
-		"internal/api/instantiate_e2e_test.go":  true,
+		"internal/template/from_template_test.go": true,
+		"internal/api/from_template_e2e_test.go":  true,
 	}
 
 	raw, err := seed.FactsJSON()

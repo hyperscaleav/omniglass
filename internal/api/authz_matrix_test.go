@@ -421,7 +421,7 @@ func runAuthzMatrix(t *testing.T, e scopedEntity) {
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	storagetest.ForkShippedStandards(t, gw)
+	storagetest.CreateShippedStandards(t, gw)
 
 	// A custom write-only role for this entity (create/update/delete, no
 	// inherit), plus whatever its action routes are separately gated on. Its

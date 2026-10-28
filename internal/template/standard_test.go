@@ -73,12 +73,12 @@ func auditRows(t *testing.T, gw storage.Gateway, verb, resourceID string) []stor
 	return out
 }
 
-func TestForkWritesTheTemplateWhole(t *testing.T) {
+func TestCreateFromTemplateWritesTheStandardWhole(t *testing.T) {
 	gw := seeded(t)
 	ctx := context.Background()
 	cat := fixture(t)
 
-	st, err := template.ForkStandard(ctx, gw, cat, "", "base-room", template.ForkOptions{})
+	st, err := template.CreateStandardFromTemplate(ctx, gw, cat, "", "base-room", template.StandardOptions{})
 	if err != nil {
 		t.Fatalf("fork: %v", err)
 	}
@@ -121,20 +121,20 @@ func TestForkWritesTheTemplateWhole(t *testing.T) {
 	}
 
 	// One audit row, a fork naming the template.
-	rows := auditRows(t, gw, "fork", st.ID)
+	rows := auditRows(t, gw, "create", st.ID)
 	if len(rows) != 1 {
 		t.Fatalf("fork audit rows = %d, want 1", len(rows))
 	}
-	if !jsonHas(rows[0].New, "template", "base-room") {
+	if !jsonHas(rows[0].New, "from_template", "base-room") {
 		t.Errorf("the fork's audit detail does not name the template: %s", rows[0].New)
 	}
 
 	// Again under the same name is taken; under a second name it is a
 	// standard of its own.
-	if _, err := template.ForkStandard(ctx, gw, cat, "", "base-room", template.ForkOptions{}); !errors.Is(err, storage.ErrTypeExists) {
+	if _, err := template.CreateStandardFromTemplate(ctx, gw, cat, "", "base-room", template.StandardOptions{}); !errors.Is(err, storage.ErrTypeExists) {
 		t.Fatalf("fork again under the same name: %v, want ErrTypeExists", err)
 	}
-	second, err := template.ForkStandard(ctx, gw, cat, "", "base-room", template.ForkOptions{Name: "hq-room", Label: "HQ Room"})
+	second, err := template.CreateStandardFromTemplate(ctx, gw, cat, "", "base-room", template.StandardOptions{Name: "hq-room", Label: "HQ Room"})
 	if err != nil {
 		t.Fatalf("fork under a second name: %v", err)
 	}
@@ -149,25 +149,25 @@ func TestForkWritesTheTemplateWhole(t *testing.T) {
 	}
 }
 
-func TestAVariantForksOnlyOnceItsParentIsHeld(t *testing.T) {
+func TestAVariantIsCreatedOnlyOnceItsParentIsHeld(t *testing.T) {
 	gw := seeded(t)
 	ctx := context.Background()
 	cat := fixture(t)
 
-	if _, err := template.ForkStandard(ctx, gw, cat, "", "base-room-wide", template.ForkOptions{}); !errors.Is(err, storage.ErrForkParentMissing) {
-		t.Fatalf("fork a variant first: %v, want ErrForkParentMissing", err)
+	if _, err := template.CreateStandardFromTemplate(ctx, gw, cat, "", "base-room-wide", template.StandardOptions{}); !errors.Is(err, storage.ErrTemplateParentMissing) {
+		t.Fatalf("fork a variant first: %v, want ErrTemplateParentMissing", err)
 	}
 	if _, err := gw.GetStandard(ctx, "base-room-wide"); !errors.Is(err, storage.ErrTypeNotFound) {
 		t.Fatalf("a refused variant fork landed: %v", err)
 	}
-	if _, err := template.ForkStandard(ctx, gw, cat, "", "base-room", template.ForkOptions{Name: "our-room"}); err != nil {
+	if _, err := template.CreateStandardFromTemplate(ctx, gw, cat, "", "base-room", template.StandardOptions{Name: "our-room"}); err != nil {
 		t.Fatalf("fork the parent under a name of our own: %v", err)
 	}
 	// The template's parent name resolves to nothing we hold; naming ours does.
-	if _, err := template.ForkStandard(ctx, gw, cat, "", "base-room-wide", template.ForkOptions{}); !errors.Is(err, storage.ErrForkParentMissing) {
+	if _, err := template.CreateStandardFromTemplate(ctx, gw, cat, "", "base-room-wide", template.StandardOptions{}); !errors.Is(err, storage.ErrTemplateParentMissing) {
 		t.Fatalf("fork a variant whose template parent we hold under another name: %v", err)
 	}
-	v, err := template.ForkStandard(ctx, gw, cat, "", "base-room-wide", template.ForkOptions{Parent: "our-room"})
+	v, err := template.CreateStandardFromTemplate(ctx, gw, cat, "", "base-room-wide", template.StandardOptions{Parent: "our-room"})
 	if err != nil {
 		t.Fatalf("fork the variant under our parent: %v", err)
 	}
@@ -176,14 +176,14 @@ func TestAVariantForksOnlyOnceItsParentIsHeld(t *testing.T) {
 	}
 }
 
-// TestShippedStandardTemplatesForkWhole is the build's real-write half of
+// TestShippedStandardTemplatesCreateWhole is the build's real-write half of
 // the dry run: every shipped standard template forks into the seeded
 // catalogs, parents before variants, and each fork holds exactly the roles
 // its template declares. A second pass forks nothing.
-func TestShippedStandardTemplatesForkWhole(t *testing.T) {
+func TestShippedStandardTemplatesCreateWhole(t *testing.T) {
 	gw := seeded(t)
 	ctx := context.Background()
-	forked, err := template.ForkAllStandards(ctx, gw, template.Shipped(), "")
+	forked, err := template.CreateAllStandards(ctx, gw, template.Shipped(), "")
 	if err != nil {
 		t.Fatalf("fork all: %v", err)
 	}
@@ -194,19 +194,19 @@ func TestShippedStandardTemplatesForkWhole(t *testing.T) {
 	for _, tm := range want {
 		checkForkMatches(t, gw, tm)
 	}
-	again, err := template.ForkAllStandards(ctx, gw, template.Shipped(), "")
+	again, err := template.CreateAllStandards(ctx, gw, template.Shipped(), "")
 	if err != nil || len(again) != 0 {
 		t.Fatalf("a second pass forked %v (%v), want nothing", again, err)
 	}
 }
 
-// TestAForkedStandardIgnoresTheNextRelease: editing a fork, then booting a
+// TestAStandardFromATemplateIgnoresTheNextRelease: editing a fork, then booting a
 // binary whose template changed, changes nothing in the fleet. The boot seed
 // plants no standard and the fork pass leaves a held standard alone.
-func TestAForkedStandardIgnoresTheNextRelease(t *testing.T) {
+func TestAStandardFromATemplateIgnoresTheNextRelease(t *testing.T) {
 	gw := seeded(t)
 	ctx := context.Background()
-	if _, err := template.ForkStandard(ctx, gw, fixture(t), "", "base-room", template.ForkOptions{}); err != nil {
+	if _, err := template.CreateStandardFromTemplate(ctx, gw, fixture(t), "", "base-room", template.StandardOptions{}); err != nil {
 		t.Fatalf("fork: %v", err)
 	}
 	label := "Our Room"
@@ -229,7 +229,7 @@ func TestAForkedStandardIgnoresTheNextRelease(t *testing.T) {
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatalf("reboot seed: %v", err)
 	}
-	if forked, err := template.ForkAllStandards(ctx, gw, next, ""); err != nil || len(forked) != 0 {
+	if forked, err := template.CreateAllStandards(ctx, gw, next, ""); err != nil || len(forked) != 0 {
 		t.Fatalf("the next release's fork pass forked %v (%v), want nothing", forked, err)
 	}
 	st, err := gw.GetStandard(ctx, "base-room")
