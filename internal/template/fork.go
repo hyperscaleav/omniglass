@@ -17,7 +17,6 @@ type ForkOptions struct {
 	Name   string
 	Label  string
 	Parent string
-	DryRun bool
 }
 
 // ErrNotAStandard is a fork of a template that is not a standard template.
@@ -36,7 +35,6 @@ func StandardFork(t *Template, opt ForkOptions) (storage.StandardFork, error) {
 		Name:     orDefault(opt.Name, t.Name),
 		Label:    orDefault(opt.Label, t.Label),
 		Parent:   orDefault(opt.Parent, s.Parent),
-		DryRun:   opt.DryRun,
 	}
 	for _, c := range s.Choices {
 		spec := storage.RoleChoiceSpec{Name: c.Name, Label: c.Label}

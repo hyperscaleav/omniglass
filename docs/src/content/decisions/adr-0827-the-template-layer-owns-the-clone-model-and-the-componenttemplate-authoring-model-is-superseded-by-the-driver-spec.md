@@ -35,7 +35,10 @@ refs: [827, 1322, 1331, 318, 1330]
   not when a template binds a set function. The kind names `component_template` and
   `system_template` are reclaimed for the catalog: the ADR-0071 vocabulary lint narrows to the
   versioned-shape tables it retired (`component_template_version`, `system_template_version`,
-  `system_template_member`).
+  `system_template_member`). With the standards seed retired, the boot plants no standard, so
+  [ADR-0555](#adr-0555-a-registry-row-renames-through-its-own-rename-custom-method)'s refusal to rename
+  a seeded example standard (and the `standard.seeded` mark behind it) goes too: every standard is an
+  operator row, and renames.
 - **Context:** The definition of #827 found that every fence citing it for collection authoring
   described a model the driver spec had already replaced in the tree: typed inputs, poll functions,
   listeners and command bindings, attached per endpoint, re-derived on change. Keeping the step DAG

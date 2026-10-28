@@ -112,9 +112,11 @@ func (p *PG) ResolveAlternate(ctx context.Context, ownerKind, ownerID, ref strin
 	return id, nil
 }
 
-// SeedRoleChoice installs one choice and its alternates for the boot-seed
-// phase. DISPLAY_NAME is the one field that stays truly insert-if-absent,
-// the same lane SeedSystemRole and SeedStandard use: an operator's edit to
+// SeedRoleChoice installs one choice and its alternates on the insert-if-
+// absent seed lane. No boot plants a standard any more (ADR-0827), so it has
+// no production caller; its retirement is #1332. DISPLAY_NAME is the one
+// field that stays truly insert-if-absent, the same lane SeedSystemRole
+// uses: an operator's edit to
 // it survives a re-run, never reasserted. NAME (membership: which
 // alternates exist at all) and POSITION are NOT operator-owned, and both
 // reconcile to the declared set every boot, existing alternates included.
@@ -160,8 +162,8 @@ func (p *PG) SeedRoleChoice(ctx context.Context, ownerKind, ownerID string, spec
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	// Resolved once, inside this transaction (see role_declarations.go's
-	// roleOwnerArg): SeedRoleChoice's only non-test caller passes
-	// ownerKind="standard" today (a registry, unaffected), but this is a
+	// roleOwnerArg): SeedRoleChoice's callers pass ownerKind="standard"
+	// (a registry, unaffected), but this is a
 	// published gateway method whose ownerID is documented name-or-uuid, and
 	// a future system-owned seed must not raise SQLSTATE 21000 on server
 	// boot the moment two systems share a name (#627).

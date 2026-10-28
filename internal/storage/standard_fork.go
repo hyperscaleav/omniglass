@@ -40,10 +40,6 @@ type StandardFork struct {
 	Metrics    []StandardMetricSpec
 	// Map is the layout declaration, nil for none.
 	Map json.RawMessage
-	// DryRun writes everything and then rolls it back: the answer is what a
-	// fork would write, and nothing lands. The build's template test uses it
-	// to hold every shipped template to the seeded catalogs.
-	DryRun bool
 }
 
 // ForkRole is one role of a fork. Choice and Alternate name the alternate a
@@ -148,9 +144,6 @@ func (p *PG) ForkStandard(ctx context.Context, actorID string, f StandardFork) (
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "fork", "standard", created.ID, nil, audit); err != nil {
 		return nil, err
-	}
-	if f.DryRun {
-		return created, nil
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("storage: commit fork standard: %w", err)

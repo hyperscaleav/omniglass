@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"reflect"
+	"slices"
 	"sort"
 	"testing"
 
@@ -173,21 +176,6 @@ func TestAVariantForksOnlyOnceItsParentIsHeld(t *testing.T) {
 	}
 }
 
-func TestADryRunForkLandsNothing(t *testing.T) {
-	gw := seeded(t)
-	ctx := context.Background()
-	st, err := template.ForkStandard(ctx, gw, fixture(t), "", "base-room", template.ForkOptions{DryRun: true})
-	if err != nil {
-		t.Fatalf("dry-run fork: %v", err)
-	}
-	if _, err := gw.GetStandard(ctx, "base-room"); !errors.Is(err, storage.ErrTypeNotFound) {
-		t.Fatalf("a dry-run fork landed a standard: %v", err)
-	}
-	if rows := auditRows(t, gw, "fork", st.ID); len(rows) != 0 {
-		t.Fatalf("a dry-run fork landed %d audit rows", len(rows))
-	}
-}
-
 // TestShippedStandardTemplatesForkWhole is the build's real-write half of
 // the dry run: every shipped standard template forks into the seeded
 // catalogs, parents before variants, and each fork holds exactly the roles
@@ -204,22 +192,7 @@ func TestShippedStandardTemplatesForkWhole(t *testing.T) {
 		t.Fatalf("forked %d standards, want %d", len(forked), len(want))
 	}
 	for _, tm := range want {
-		roles, err := gw.ListSystemRoles(ctx, "standard", tm.Name)
-		if err != nil {
-			t.Fatalf("roles of %s: %v", tm.Name, err)
-		}
-		var got, exp []string
-		for _, r := range roles {
-			got = append(got, r.Name)
-		}
-		for _, r := range tm.Standard.Roles {
-			exp = append(exp, r.Name)
-		}
-		sort.Strings(got)
-		sort.Strings(exp)
-		if len(got) != len(exp) {
-			t.Errorf("%s forked roles %v, want %v", tm.Name, got, exp)
-		}
+		checkForkMatches(t, gw, tm)
 	}
 	again, err := template.ForkAllStandards(ctx, gw, template.Shipped(), "")
 	if err != nil || len(again) != 0 {
@@ -278,4 +251,80 @@ func jsonHas(raw []byte, key, want string) bool {
 	}
 	got, ok := m[key].(string)
 	return ok && got == want
+}
+
+// checkForkMatches holds a forked standard to its template: the same roles
+// (name, quorum, accepted types, pins, the alternate each joins), the same
+// metric contract, and the same map. What the dev fleet's Map tab and KPI
+// tiles read moved from the old seed into the templates, so this is their
+// pin.
+func checkForkMatches(t *testing.T, gw storage.Gateway, tm template.Template) {
+	t.Helper()
+	ctx := context.Background()
+	st, err := gw.GetStandard(ctx, tm.Name)
+	if err != nil {
+		t.Fatalf("read %s: %v", tm.Name, err)
+	}
+	roles, err := gw.ListSystemRoles(ctx, "standard", tm.Name)
+	if err != nil {
+		t.Fatalf("roles of %s: %v", tm.Name, err)
+	}
+	got := map[string]string{}
+	for _, r := range roles {
+		got[r.Name] = roleKey(r.Quorum, r.AcceptedTypes, r.PinnedProducts, r.Alternate)
+	}
+	want := map[string]string{}
+	for _, r := range tm.Standard.Roles {
+		alt := ""
+		if r.Choice != "" {
+			alt = r.Choice + "/" + r.Alternate
+		}
+		want[r.Name] = roleKey(r.Quorate(), r.AcceptedTypes, r.PinnedProducts, alt)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("%s roles = %v, want %v", tm.Name, got, want)
+	}
+	var metrics, wantMetrics []string
+	ms, err := gw.ListStandardMetrics(ctx, tm.Name)
+	if err != nil {
+		t.Fatalf("metrics of %s: %v", tm.Name, err)
+	}
+	for _, m := range ms {
+		metrics = append(metrics, m.MetricTypeName)
+	}
+	for _, l := range tm.Standard.Metrics {
+		wantMetrics = append(wantMetrics, l.Name)
+	}
+	sort.Strings(metrics)
+	sort.Strings(wantMetrics)
+	if !slices.Equal(metrics, wantMetrics) {
+		t.Errorf("%s metric contract = %v, want %v", tm.Name, metrics, wantMetrics)
+	}
+	var wantMap []byte
+	if tm.Standard.Map != nil {
+		wantMap, _ = json.Marshal(tm.Standard.Map)
+	}
+	if !jsonEqual(st.Map, wantMap) {
+		t.Errorf("%s map = %s, want %s", tm.Name, st.Map, wantMap)
+	}
+}
+
+// roleKey renders the parts of a role a fork must carry, sets sorted.
+func roleKey(quorum int, types, pins []string, alt string) string {
+	ts := append([]string{}, types...)
+	ps := append([]string{}, pins...)
+	sort.Strings(ts)
+	sort.Strings(ps)
+	return fmt.Sprintf("quorum %d accepts %v pins %v alternate %q", quorum, ts, ps, alt)
+}
+
+func jsonEqual(a, b []byte) bool {
+	if len(a) == 0 || len(b) == 0 {
+		return len(a) == len(b)
+	}
+	var x, y any
+	if json.Unmarshal(a, &x) != nil || json.Unmarshal(b, &y) != nil {
+		return false
+	}
+	return reflect.DeepEqual(x, y)
 }

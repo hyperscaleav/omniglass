@@ -560,7 +560,7 @@ func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, op
 	}
 
 	// Systems: the thing in the room that either works or does not, conforming to a
-	// boot-seeded standard whose roles it inherits live. Locations must already be
+	// standard forked from a template (above) whose roles it inherits live. Locations must already be
 	// seeded for the placement to resolve. Recognised the same way a component is,
 	// with the system_type as the classification whose stem is minted.
 	sysIDs := map[string]string{}
