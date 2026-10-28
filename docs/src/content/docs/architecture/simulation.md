@@ -57,8 +57,15 @@ profile's defaults: the Boreal Edge displays in every size share one profile. A 
 device never stands in, even on the same driver: a touch panel's surface is a subset of a control
 processor's, so each has its own. Every
 seeded product on the network is served by a profile or listed, with its issue, in the catalog's
-`coverage.yaml`, and a test holds the two catalogs to that. Products with no driver (a passive speaker,
-an analog microphone) are not on the network and are not simulated.
+`coverage.yaml`, and a test holds the two catalogs to that. Products with no network interface (a
+passive speaker, an analog microphone) have nothing to collect from and are not simulated:
+`coverage.yaml` lists them as `passive`, each with how the fleet watches it instead (an amplifier
+channel's load, a DSP input's level), and a test refuses a passive product that has a driver. A service
+can be on the network with no driver, so the converse does not hold. A second test holds the lab's own
+fleet to the same accounting: every component the dev seed places (its simulator-only ones included) is
+simulated, listed with its issue, passive, or one of the fleet's few productless components (#1359).
+The lab then reaches "every seeded component is collected" one profile at a time, and the list of what
+is left is always current.
 
 The catalog names only fictional vendors (Kestrel, Polaris, Newtron, Boreal, Tessellate, Shinra Cloud), the same
 rule the boot seed follows, and a test holds it to that.

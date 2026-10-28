@@ -2,10 +2,7 @@ package sim
 
 import (
 	"encoding/json"
-	"io/fs"
 	"testing"
-
-	"gopkg.in/yaml.v3"
 
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/sim/profile"
@@ -71,16 +68,10 @@ func TestEveryDeviceProfileNamesASeededProduct(t *testing.T) {
 		t.Fatal("checked no device profiles")
 	}
 
-	// Coverage: every seeded product on the network (it has a driver) is
-	// simulated, or listed as not yet with its issue.
-	var cov struct {
-		Unsimulated map[string]string `yaml:"unsimulated"`
-	}
-	b, err := fs.ReadFile(profiles.FS, "coverage.yaml")
+	// Coverage: every seeded product with a driver is simulated, or listed as
+	// not yet with its issue.
+	cov, err := profiles.LoadCoverage()
 	if err != nil {
-		t.Fatal(err)
-	}
-	if err := yaml.Unmarshal(b, &cov); err != nil {
 		t.Fatal(err)
 	}
 	for _, p := range facts.Products {
@@ -99,6 +90,26 @@ func TestEveryDeviceProfileNamesASeededProduct(t *testing.T) {
 	for id := range cov.Unsimulated {
 		if !seeded[id] {
 			t.Errorf("coverage.yaml lists %q, which the seed does not ship", id)
+		}
+		// Whatever its driver: a service on the network can have none.
+		if _, _, simulated := store.ForProduct(id); simulated {
+			t.Errorf("%s is simulated now; drop it from coverage.yaml", id)
+		}
+	}
+	// A passive product has no network interface: no driver, and no profile.
+	drivers := map[string]string{}
+	for _, p := range facts.Products {
+		drivers[p.ID] = p.DriverID
+	}
+	for id := range cov.Passive {
+		_, _, simulated := store.ForProduct(id)
+		switch {
+		case !seeded[id]:
+			t.Errorf("coverage.yaml lists %q as passive, which the seed does not ship", id)
+		case drivers[id] != "":
+			t.Errorf("coverage.yaml lists %q as passive, but it has a driver (%s): it is on the network", id, drivers[id])
+		case simulated:
+			t.Errorf("coverage.yaml lists %q as passive, but a simulator profile serves it", id)
 		}
 	}
 }
