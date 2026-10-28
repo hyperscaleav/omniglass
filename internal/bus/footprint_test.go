@@ -58,8 +58,9 @@ const (
 	// wantStatementsPerBatch is every statement one batch costs, from the
 	// owner resolution to the endpoint's seen stamp. Exact. 31 until #1279,
 	// which replaced the three catalog reads with one fingerprint read and a
-	// registry kept between batches.
-	wantStatementsPerBatch = 29
+	// registry kept between batches (29); #1274 resolves each owner and reads
+	// the clock once per batch and lands the metric lane in one statement (19).
+	wantStatementsPerBatch = 19
 	// wantMetricRowsPerPage is how many of the window's metric rows fill one
 	// 8 KiB heap page (about 126 bytes a row). Exact on every full page. Density
 	// rather than a page count, so a fleet that grows by a few endpoints moves

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -145,9 +146,11 @@ func (l *sampleLineage) rule() string {
 // transaction: the ingest's observed batch, or a calc rule's calculated
 // output (a calc rule's writer, its lineage set). Every row is held to its
 // key's writer class first (ADR-0161). The event rules reading the batch's
-// keys judge each sample as it lands (#919), and the calc rules reading them
-// are marked pending on each owner (#996), never the rule that produced the
-// batch.
+// keys judge every sample, in the batch's order (#919), after it lands: a
+// series the batch carries once lands with the others in one statement, a
+// series it carries more than once one row at a time (ADR-1274). The calc
+// rules reading the keys are marked pending on each owner (#996), never the
+// rule that produced the batch.
 func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs []MetricSampleWrite) error {
 	evs = cleanMetricWrites(evs)
 	arcs := make([]string, len(evs))
@@ -184,19 +187,84 @@ func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs
 	}
 	provenance, sourceRule, sourceVersion, sourceRuleID := w.provenanceArgs()
 	clock := sampleClock{q: tx}
+	stamps := make([]time.Time, len(evs))
 	for i, ev := range evs {
-		col, _ := ownerColumn(ev.OwnerKind)
 		ts := ev.TS
 		if ts.IsZero() {
 			ts = time.Now().UTC()
 		}
-		if ts, err = clock.cap(ctx, ev.Key, ts); err != nil {
+		if stamps[i], err = clock.cap(ctx, ev.Key, ts); err != nil {
 			return err
 		}
-		sql := fmt.Sprintf(`insert into metric (ts, owner_kind, %s, metric_type_id, instance, value, provenance, source, source_rule, source_rule_version, source_rule_id)
-			values ($1, $2, $3, (select id from metric_type where name = $4), $5, $6, $7, $8, $9, $10, $11::uuid)`, col)
-		if _, err := tx.Exec(ctx, sql, ts, ev.OwnerKind, arcs[i], ev.Key, ev.Instance, ev.Value, provenance, ev.Source, sourceRule, sourceVersion, sourceRuleID); err != nil {
-			return fmt.Errorf("storage: insert sample %s/%s: %w", ev.OwnerID, ev.Key, err)
+	}
+	// A series the batch carries once lands with every other such series in
+	// one statement (#1274). A series it carries more than once keeps the
+	// per-sample order below, insert then judge, so judging a sample never
+	// sees a later sample of its own series from the same batch.
+	carried := make(map[string]int, len(evs))
+	for i, ev := range evs {
+		carried[metricSeriesKey(ev, arcs[i])]++
+	}
+	once := make([]int, 0, len(evs))
+	for i, ev := range evs {
+		if carried[metricSeriesKey(ev, arcs[i])] == 1 {
+			once = append(once, i)
+		}
+	}
+	// insertOnce lands the samples at idx in one statement, in their order, so
+	// the rows take ids in the order the batch carried them. The type joins by
+	// name and an unknown name keeps a null id, failing the insert on the
+	// column's NOT NULL exactly as the per-sample insert's subselect does. A
+	// closure, so the write stays inside this admitted write path.
+	insertOnce := func(idx []int) error {
+		if len(idx) == 0 {
+			return nil
+		}
+		ts := make([]time.Time, len(idx))
+		kinds := make([]string, len(idx))
+		owners := make([]string, len(idx))
+		keys := make([]string, len(idx))
+		instances := make([]string, len(idx))
+		values := make([]float64, len(idx))
+		sources := make([]string, len(idx))
+		for j, i := range idx {
+			ts[j], kinds[j], owners[j], keys[j] = stamps[i], evs[i].OwnerKind, arcs[i], evs[i].Key
+			instances[j], values[j], sources[j] = evs[i].Instance, evs[i].Value, evs[i].Source
+		}
+		_, err := tx.Exec(ctx, `insert into metric (ts, owner_kind, component_id, system_id, location_id, node_id,
+				metric_type_id, instance, value, provenance, source, source_rule, source_rule_version, source_rule_id)
+			select u.ts, u.owner_kind,
+				case when u.owner_kind = 'component' then u.owner::uuid end,
+				case when u.owner_kind = 'system' then u.owner::uuid end,
+				case when u.owner_kind = 'location' then u.owner::uuid end,
+				case when u.owner_kind = 'node' then u.owner::uuid end,
+				mt.id, u.instance, u.value, $8, u.source, $9, $10, $11::uuid
+			from unnest($1::timestamptz[], $2::text[], $3::text[], $4::text[], $5::text[], $6::float8[], $7::text[])
+				with ordinality as u(ts, owner_kind, owner, key, instance, value, source, ord)
+			left join metric_type mt on mt.name = u.key
+			order by u.ord`,
+			ts, kinds, owners, keys, instances, values, sources, provenance, sourceRule, sourceVersion, sourceRuleID)
+		if err != nil {
+			named := make([]string, 0, len(idx))
+			for _, i := range idx {
+				named = append(named, evs[i].OwnerID+"/"+evs[i].Key)
+			}
+			return fmt.Errorf("storage: insert samples %s: %w", strings.Join(named, ", "), err)
+		}
+		return nil
+	}
+	if err := insertOnce(once); err != nil {
+		return err
+	}
+	for i, ev := range evs {
+		ts := stamps[i]
+		if carried[metricSeriesKey(ev, arcs[i])] > 1 {
+			col, _ := ownerColumn(ev.OwnerKind)
+			sql := fmt.Sprintf(`insert into metric (ts, owner_kind, %s, metric_type_id, instance, value, provenance, source, source_rule, source_rule_version, source_rule_id)
+				values ($1, $2, $3, (select id from metric_type where name = $4), $5, $6, $7, $8, $9, $10, $11::uuid)`, col)
+			if _, err := tx.Exec(ctx, sql, ts, ev.OwnerKind, arcs[i], ev.Key, ev.Instance, ev.Value, provenance, ev.Source, sourceRule, sourceVersion, sourceRuleID); err != nil {
+				return fmt.Errorf("storage: insert sample %s/%s: %w", ev.OwnerID, ev.Key, err)
+			}
 		}
 		if err := eval.observe(ctx, tx, rules.LaneMetric, ev.OwnerKind, arcs[i], ev.Key, ev.Instance, ts, ev.Value); err != nil {
 			return err
@@ -313,4 +381,10 @@ func (p *PG) ListMetricSeries(ctx context.Context, ownerKind, ownerRef, key stri
 		out = append(out, dp)
 	}
 	return out, rows.Err()
+}
+
+// metricSeriesKey names a sample's series within one batch: its owner, key and
+// instance (the batch's writer fixes the provenance).
+func metricSeriesKey(ev MetricSampleWrite, arc string) string {
+	return ev.OwnerKind + "\x00" + arc + "\x00" + ev.Key + "\x00" + ev.Instance
 }

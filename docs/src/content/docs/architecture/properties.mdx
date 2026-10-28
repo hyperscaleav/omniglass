@@ -30,7 +30,7 @@ Storage Gateway ([below](#who-writes-a-key-the-writer-class)). A push publishes 
 lane, not Postgres, so pushed samples reach the stream consumers; both lanes call one `land()` and
 share its semantics (reject-not-project per lane, the transition-only property guard, held in the
 insert itself, and one transaction per batch under its receipt, so a redelivered batch lands once:
-[ADR-0311](/architecture/decisions/#adr-0311-a-telemetry-batch-lands-once-in-one-transaction-under-its-receipt)). The wire is
+[ADR-0311](/architecture/decisions/#adr-0311-a-telemetry-batch-lands-once-in-one-transaction-under-its-receipt)). Inside that transaction a batch resolves each owner and reads the clock once, lands every metric series it carries once in one statement (a series it carries more than once, one row at a time), and judges every observation in the order it arrived ([ADR-1274](/architecture/decisions/#adr-1274-a-batch-lands-its-metric-lane-in-one-statement-except-a-series-it-carries-twice)). The wire is
 the protobuf `TelemetryBatch` with **per-lane arrays** (`metrics`, `properties`, `events`, `logs`).
 Declared values are series rows and current values are derived from the series
 ([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)).
