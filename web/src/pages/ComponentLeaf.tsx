@@ -34,9 +34,12 @@ import { CalcRuleLink } from "../components/RuleLink";
 import { durationText } from "../lib/timeline";
 import { getNode, nodeKey } from "../lib/nodes";
 import { PRODUCTS_KEY, listProducts } from "../lib/products";
-import { LEAF_NODE_POLL_MS, LEAF_POLL_MS, collectionState, dotVerdict, identityRows, leafAlarmSince, membershipRows, vitalRows } from "../lib/component_leaf";
+import { LEAF_NODE_POLL_MS, LEAF_POLL_MS, collectionState, dotVerdict, identityRows, instanceName, leafAlarmSince, membershipRows, spreadSummary, vitalRows } from "../lib/component_leaf";
 import { entityLabel } from "../lib/entities";
 import { CLOCK_TICK_MS, createClock } from "../lib/clock";
+import { createToggles } from "../lib/toggles";
+import InfoTip from "../components/InfoTip";
+import { ChevronRight } from "../components/icons";
 import { systemRoles, systemRolesKey } from "../lib/system_roles";
 import { componentCrumbs, isRoomOf, rolesOf } from "../lib/detail";
 import { can, useMe } from "../lib/auth";
@@ -157,6 +160,14 @@ export default function ComponentLeaf() {
   const verdict = createMemo(() => alarmsQ.data?.verdict ?? (view.data ? dotVerdict(view.data, component()?.id ?? "") : null));
   const identity = createMemo(() => identityRows(propsQ.data ?? []));
   const vitals = createMemo(() => vitalRows(metricsQ.data ?? []));
+  // The vitals rows are kept by metric name, never by the objects a poll
+  // hands back (each poll is fresh), so an opened row and its tooltip survive
+  // the next poll, the rule the collection rows below follow (#1059).
+  const vitalKeys = createMemo(() => vitals().map((v) => v.name), undefined, {
+    equals: (a, b) => a.length === b.length && a.every((x, i) => x === b[i]),
+  });
+  const vitalByKey = createMemo(() => new Map(vitals().map((v) => [v.name, v])));
+  const vitalSpreads = createToggles("vital-instances");
 
   const product = createMemo(() => (products.data ?? []).find((p) => p.name === component()?.product));
   const rows = createMemo(() => (view.data && memberships.data ? membershipRows(memberships.data, view.data) : []));
@@ -352,22 +363,66 @@ export default function ComponentLeaf() {
                 </div>
             <Show when={vitals().length > 0}>
               <section data-testid="leaf-vitals" class="rounded-box border border-base-300 bg-base-100 p-3.5 text-sm">
-                <Eyebrow label="Vitals" hint="The latest sample per series; a dot marks the component speaking, not a contract default standing in." />
+                <Eyebrow label="Vitals" hint="The latest sample per series; a dot marks the component speaking, not a contract default standing in. A metric several endpoints collect shows the newest of them and says which." />
                 <dl class="mt-2 grid grid-cols-[minmax(7rem,max-content)_1fr] gap-x-3 gap-y-1">
-                  <For each={vitals()}>
-                    {(row) => (
-                      <>
-                        <dt class="text-base-content/50">{row.label}</dt>
-                        <dd class="flex items-baseline gap-1.5 font-mono text-xs">
-                          <span>{String(row.value)}</span>
-                          <Show when={row.sampled} fallback={<span class="text-[10px] text-base-content/40">contract default</span>}>
-                            <span class="h-1.5 w-1.5 flex-none self-center rounded-full bg-success" title="live series" />
-                          </Show>
-                          <Show when={row.sourceRuleId}>
-                            <CalcRuleLink name={row.sourceRule!} id={row.sourceRuleId!} />
-                          </Show>
-                        </dd>
-                      </>
+                  <For each={vitalKeys()}>
+                    {(key) => (
+                      <Show when={vitalByKey().get(key)}>
+                        {(row) => (
+                          <>
+                            <dt class="text-base-content/50">{row().label}</dt>
+                            <dd data-testid={`vital-${key}`} class="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 font-mono text-xs">
+                              <span>{String(row().value)}</span>
+                              <Show when={row().sampled} fallback={<span class="text-[10px] text-base-content/40">contract default</span>}>
+                                <span class="h-1.5 w-1.5 flex-none self-center rounded-full bg-success" title="live series" />
+                              </Show>
+                              <Show when={row().sourceRuleId}>
+                                <CalcRuleLink name={row().sourceRule!} id={row().sourceRuleId!} />
+                              </Show>
+                              {/* Several endpoints collect it (#1020): the row
+                                  shows the newest, says which and of how many,
+                                  and opens to each one's latest. */}
+                              <Show when={row().spread}>
+                                {(sp) => (
+                                  <span class="inline-flex items-center gap-1 self-center font-sans text-[11px] text-base-content/55">
+                                    <button
+                                      type="button"
+                                      class="inline-flex cursor-pointer items-center gap-0.5 hover:text-base-content"
+                                      aria-expanded={vitalSpreads.isOpen(key)}
+                                      aria-controls={vitalSpreads.panelId(key)}
+                                      onClick={() => vitalSpreads.toggle(key)}
+                                    >
+                                      <span class={`text-base-content/40 transition-transform ${vitalSpreads.isOpen(key) ? "rotate-90" : ""}`}><ChevronRight size={11} /></span>
+                                      {spreadSummary(sp())}
+                                    </button>
+                                    <InfoTip
+                                      label={`which endpoint ${row().label} shows`}
+                                      text="This metric is collected through more than one endpoint, each its own series. The row shows the newest sample across the endpoints and names the one it came from; open it for each endpoint's latest. An endpoint since deleted is left out."
+                                    />
+                                  </span>
+                                )}
+                              </Show>
+                            </dd>
+                            <Show when={row().spread && vitalSpreads.isOpen(key) ? row().spread : undefined}>
+                              {(sp) => (
+                                <dd class="col-start-2 mb-1">
+                                  <ul id={vitalSpreads.panelId(key)} data-testid={`vital-instances-${key}`} class="flex flex-col gap-0.5 border-l border-base-300 pl-2.5 text-xs">
+                                    <For each={sp().instances}>
+                                      {(it) => (
+                                        <li class="flex items-baseline gap-2">
+                                          <span class="min-w-14 text-base-content/60" classList={{ "font-medium text-base-content/85": it.instance === sp().shown }}>{instanceName(it.instance)}</span>
+                                          <span class="font-data">{String(it.value)}</span>
+                                          <span class="text-[11px] text-base-content/45">{ageWords(it.ts, pageNow())}</span>
+                                        </li>
+                                      )}
+                                    </For>
+                                  </ul>
+                                </dd>
+                              )}
+                            </Show>
+                          </>
+                        )}
+                      </Show>
                     )}
                   </For>
                 </dl>
