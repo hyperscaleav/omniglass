@@ -32,6 +32,9 @@ type Config struct {
 	Name           string
 	Token          string
 	HeartbeatEvery time.Duration
+	// ProbeEvery is how often each reachability probe runs (#1273). Zero
+	// probes every heartbeat tick, the behavior before it existed.
+	ProbeEvery time.Duration
 	// Once runs a single claim + pull + heartbeat cycle and returns, for tests
 	// and one-shot invocations.
 	Once bool
@@ -302,6 +305,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 		heartbeat = 30 * time.Second
 	}
 	sched := newPollSchedule(heartbeat)
+	sched.probeEvery = cfg.ProbeEvery
 
 	wl, err := pullWorklist(nc, cfg.Name)
 	if err != nil {
@@ -314,7 +318,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	// lives here (the report repeats, the device is not touched twice). It is
 	// pruned past the redelivery window so it does not grow for the life of the run.
 	executedCommands := map[int64]commandOutcome{}
-	if err := runTasks(ctx, spool, cfg.Name, wl, runner, sessions, sched, verdicts, faultseen); err != nil {
+	if err := runTasks(ctx, spool, cfg.Name, wl, runner, sessions, sched, verdicts, faultseen, time.Now()); err != nil {
 		return wl, err
 	}
 	runCommands(ctx, nc, cfg.Name, runner, sessions, executedCommands)
@@ -391,7 +395,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 			sessions.reconcile(wl.Tasks)
 			// Run the worklist's tcp tasks and publish their telemetry. A publish
 			// failure is non-fatal (retry next tick).
-			_ = runTasks(ctx, spool, cfg.Name, wl, runner, sessions, sched, verdicts, faultseen)
+			_ = runTasks(ctx, spool, cfg.Name, wl, runner, sessions, sched, verdicts, faultseen, time.Now())
 			// Pull and actuate the pending command queue (#815).
 			runCommands(ctx, nc, cfg.Name, runner, sessions, executedCommands)
 			// Report the inbound lines no listener claimed this tick.

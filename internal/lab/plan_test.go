@@ -173,3 +173,39 @@ func TestPlanVolumes(t *testing.T) {
 		t.Fatalf("seed mounts %v, server mounts %v: want the one data volume at one path", s.Seed.Mounts, s.Server.Mounts)
 	}
 }
+
+// A learner's lab probes every 10s (#1273): it checks in every 2s so a change
+// in the console shows within seconds, but it may run for days, and a probe
+// on every check-in writes most of its rows. A script's throwaway lab sets no
+// probe interval, so it probes on every 2s check-in: it lives for minutes, and
+// a walkthrough that waits on a probe's verdict is recorded against a budget.
+func TestPlanProbesALearnersLabEvery10s(t *testing.T) {
+	flag := func(cmd []string, name string) string {
+		i := slices.Index(cmd, name)
+		if i < 0 || i+1 >= len(cmd) {
+			return ""
+		}
+		return cmd[i+1]
+	}
+	s, err := Plan(testOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := flag(s.Node.Cmd, "--probe-every"); got != "10s" {
+		t.Fatalf("a learner's lab: --probe-every %q in %v, want 10s", got, s.Node.Cmd)
+	}
+	if got := flag(s.Node.Cmd, "--heartbeat"); got != "2s" {
+		t.Fatalf("a learner's lab: --heartbeat %q, want 2s", got)
+	}
+	o := testOptions()
+	o.Project, o.Ephemeral = "demo-1", true
+	if s, err = Plan(o); err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(s.Node.Cmd, "--probe-every") {
+		t.Fatalf("a throwaway lab: %v sets a probe interval, want none (every check-in)", s.Node.Cmd)
+	}
+	if got := flag(s.Node.Cmd, "--heartbeat"); got != "2s" {
+		t.Fatalf("a throwaway lab: --heartbeat %q, want 2s", got)
+	}
+}

@@ -407,7 +407,7 @@ their AND.
 
 | Layer | Check | Sample | Notes |
 |---|---|---|---|
-| L3 network | ICMP ping, **batched once per host** per tick | `icmp-reachable` / `icmp-rtt-avg` | **informational** (see verdict below); shared by every endpoint on the host |
+| L3 network | ICMP ping, **batched once per host** per probe run | `icmp-reachable` / `icmp-rtt-avg` | **informational** (see verdict below); shared by every endpoint on the host |
 | L4 transport | TCP connect (tcp-family) | `tcp-open`/`tcp-connect-time` | udp has no presence check: an open udp port cannot be detected, so its transport rung is the driver's request answered (built, [ADR-0163](/architecture/decisions/#adr-0163-a-udp-endpoint-binds-its-own-socket-and-its-rung-is-a-request-answered)), and the host's port-unreachable report reads `refused` |
 | L7 app | protocol handshake: SNMP `sysUpTime` get (built as snmp's transport rung, [ADR-0821](/architecture/decisions/#adr-0821-snmps-rung-is-a-standard-get-answered-and-only-an-authorizationerror-reads-as-auth)) · SSH handshake+auth · telnet login chain · an HTTP response drawn, after the TLS handshake for https (built, [ADR-0902](/architecture/decisions/#adr-0902-http-polls-and-commands-send-real-requests-read-through-one-extraction-authenticated-by-a-declared-scheme)) | (verdict) | the SNMP get is the SNMP liveness (ICMP-independent); SSH/telnet log in only where the driver's ladder declares a session rung, because their liveness credential can differ from the component's; the http probe never carries a credential, so an http endpoint's session rung is proven by its credentialed polls and commands |
 
@@ -434,10 +434,10 @@ failure alone cannot separate down from wrong-community; the rung reads not resp
 retryable, never rejected. Only an agent that answers `authorizationError` refuses a community
 detectably, and that is a terminal `auth` refusal at the session rung. Cross-referencing the ping
 narrows it: host pings + get silent = "reachable, SNMP not answering this community, or stopped";
-with ICMP fully blocked even that is lost. The ssh probe still tries a params credential every tick
+with ICMP fully blocked even that is lost. The ssh probe still tries a params credential on every probe
 (#1060); the built telnet probe never logs in (it
 reads the first negotiation or banner bytes; the login is the held session's auth step, so a probe
-cannot retry a bad credential every tick, [ADR-0157](/architecture/decisions/#adr-0157-telnet-and-ssh-are-held-line-transports-their-login-is-the-drivers-and-the-ssh-host-key-is-pinned-on-first-use)). A driver's `ladder.transport.request.get` overrides the probe OID.
+cannot retry a bad credential on every run, [ADR-0157](/architecture/decisions/#adr-0157-telnet-and-ssh-are-held-line-transports-their-login-is-the-drivers-and-the-ssh-host-key-is-pinned-on-first-use)). A driver's `ladder.transport.request.get` overrides the probe OID.
 
 **Poller** tasks run only if the verdict is up; **listener** (`mode=listen`) tasks run ungated,
 never pinged; **inline probes** (`icmp`/`tcp` with the host on the task) *are* the check, ungated. A
@@ -493,12 +493,22 @@ dead targets is bounded by concurrency, not the serial sum of probe timeouts (a 
 `timeout * (retries+1)`, via `--snmp-timeout` / `--snmp-retries`, default 3s x2). Each poll task gets
 a per-task deadline (`--task-deadline`, default 30s).
 
-:::note[Settled for driver polls (#822)]
+:::note[Settled for driver polls (#822) and probes (#1273)]
 A driver poll runs on its declared `schedule.every`, at heartbeat granularity: the node keeps each
-poll's next due time and runs it on the first tick at or after it (a task new to the worklist runs at
-once, a restart polls at its first tick, and a run whose fetch failed retries on a backoff from the
-heartbeat, doubling, capped at the interval). Reachability probes still run every tick, and a listener's
-pushes are never gated ([ADR-0152](/architecture/decisions/#adr-0152-a-driver-poll-runs-on-its-declared-schedule-at-heartbeat-granularity)).
+poll's next due time and runs it on the first tick that reaches it, within half a heartbeat (a task
+new to the worklist runs at once, a restart polls at its first tick, and a run whose fetch failed
+retries on a backoff from the heartbeat, doubling, capped at the interval). The half heartbeat is
+there because a tick is judged after its own work, which varies by milliseconds: without it, an
+interval equal to the heartbeat would skip a tick now and then. A reachability probe runs on the
+node's probe interval (`--probe-every`) the same way, and on every tick when the interval is unset. A
+probe new to the worklist runs at once, and so does one whose endpoint was edited in place or retried
+(its connection fingerprint moved), so an operator's fix reads its verdict on the next tick. The
+interval lets a node check in often, so a change reaches it within seconds, while probing less often,
+since each probe writes its observations. Keep it under the console's 150s staleness window: an
+endpoint only a probe watches reads stale once its last probe is older than that (#1304). A listener's
+pushes are never gated
+([ADR-0152](/architecture/decisions/#adr-0152-a-driver-poll-runs-on-its-declared-schedule-at-heartbeat-granularity),
+[ADR-1273](/architecture/decisions/#adr-1273-a-reachability-probe-runs-on-the-nodes-probe-interval-not-every-heartbeat)).
 :::
 
 The loop is **overrun-aware**: it reschedules relative to each tick's finish, not a fixed ticker; a

@@ -39,8 +39,7 @@ type endpointParams struct {
 // never stalls the rest of the worklist. tcp and icmp are the wired probe types;
 // their samples ride the same pipeline (the ingest consumer does not branch
 // on probe type).
-func runTasks(ctx context.Context, out *telemetrySpool, node string, wl collection.WorklistReply, runner *collection.Runner, sessions *sessionManager, sched *pollSchedule, verdicts map[string]string, faultseen map[string]string) error {
-	now := time.Now()
+func runTasks(ctx context.Context, out *telemetrySpool, node string, wl collection.WorklistReply, runner *collection.Runner, sessions *sessionManager, sched *pollSchedule, verdicts map[string]string, faultseen map[string]string, now time.Time) error {
 	present := make(map[string]bool, len(wl.Tasks))
 	for _, task := range wl.Tasks {
 		present[task.ID] = true
@@ -129,6 +128,15 @@ func runTasks(ctx context.Context, out *telemetrySpool, node string, wl collecti
 				return err
 			}
 			sched.commitChanged(task.ID, dps)
+			continue
+		}
+		// A reachability probe runs at the node's probe interval (#1273),
+		// every tick when none is set, and at once when its endpoint's
+		// fingerprint moved, as a driver poll does.
+		if sched.probeEvery > 0 {
+			sched.rebook(task.ID, task.Fingerprint)
+		}
+		if !sched.due(task.ID, sched.probeEvery, now) {
 			continue
 		}
 		// The ladder's informational ping runs beside the probe, bounded,
