@@ -200,6 +200,7 @@ export function PreviewPanel(p: { type: string; drafts: () => { subject?: string
   const [result, setResult] = createSignal<NotificationPreview | null>(null);
   const [err, setErr] = createSignal<string | null>(null);
   const [busy, setBusy] = createSignal(false);
+  let resultEl: HTMLDivElement | undefined;
 
   async function run() {
     if (!component()) return;
@@ -207,6 +208,9 @@ export function PreviewPanel(p: { type: string; drafts: () => { subject?: string
     setErr(null);
     try {
       setResult(await previewNotificationType(p.type, { component: component(), transition: transition() || undefined, ...p.drafts() }));
+      // The result renders below the controls, often below the blade's fold
+      // while editing: bring it into view, since it is what was asked for.
+      requestAnimationFrame(() => resultEl?.scrollIntoView?.({ block: "nearest", behavior: "smooth" }));
     } catch (e) {
       setResult(null);
       setErr(describeError(e));
@@ -246,7 +250,7 @@ export function PreviewPanel(p: { type: string; drafts: () => { subject?: string
       </Show>
       <Show when={result()}>
         {(res) => (
-          <div class="flex flex-col gap-3">
+          <div ref={resultEl} class="flex flex-col gap-3">
             <KVStacked label="Rendered subject" value={<span class="font-data text-[12px]">{res().subject}</span>} />
             <KVStacked label="Rendered text" value={<pre class="whitespace-pre-wrap font-data text-[12px]">{res().text}</pre>} />
             <div class="flex flex-col gap-1">
