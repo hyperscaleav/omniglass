@@ -21,6 +21,9 @@ type batchTx struct {
 	pgx.Tx
 	arcs map[string]string
 	now  time.Time
+	// targeted is the batch's command-targeted property names when its caller
+	// carried them (#1299); nil reads them in the transaction.
+	targeted map[string]bool
 }
 
 func newBatchTx(tx pgx.Tx) *batchTx {

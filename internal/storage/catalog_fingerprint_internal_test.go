@@ -15,7 +15,7 @@ import (
 // blind to a change that alters the registry.
 func TestCatalogFingerprintCoversTheRegistryReads(t *testing.T) {
 	tableRef := regexp.MustCompile(`(?i)\b(?:from|join)\s+([a-z_][a-z0-9_]*)`)
-	for _, q := range []string{metricTypeListSQL, propertyTypeListSQL, eventTypeListSQL} {
+	for _, q := range registryListSQL {
 		refs := tableRef.FindAllStringSubmatch(q, -1)
 		if len(refs) == 0 {
 			t.Fatalf("no table found in %q: the guard would pass vacuously", q)
