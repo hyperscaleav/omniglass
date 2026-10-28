@@ -2,7 +2,7 @@
 title: "The server prunes each sample lane to a window, in bounded chunks"
 date: 2026-10-28
 status: "Accepted"
-summary: "The server prunes metric and property samples to a window per lane. The windows are install-wide settings in a platform-domain, client-visible retention namespace (metric 14 days, property 90, trend 730 for #1276; 1 to 36,500 days), not cascade-resolved. A pass runs at start in bus.Server beside the receipt prune, then hourly, or a minute later while a lane is behind. It deletes in chunks, each owner arc its own statement. Beyond ADR-0080's floor (never declared, never a series' latest) it keeps a command's lineage rows, and it treats a row as latest under both reader orders (ts then id, and id). The newer-row check is a limited scalar subquery, so it stays a per-row index search on every arc; that adds metric_arc_owner_idx. PruneSamples is rewritten from a whole-table ranking to cutoff-first"
+summary: "The server prunes metric and property samples, and log lines by severity band, to a window each. The windows are install-wide settings in a platform-domain, client-visible retention namespace (metric 14 days, property 90, trend 730 for #1276; 1 to 36,500 days), not cascade-resolved. A pass runs at start in bus.Server beside the receipt prune, then hourly, or a minute later while a lane is behind. It deletes in chunks, each owner arc its own statement. Beyond ADR-0080's floor (never declared, never a series' latest) it keeps a command's lineage rows, and it treats a row as latest under both reader orders (ts then id, and id). The newer-row check is a limited scalar subquery, so it stays a per-row index search on every arc; that adds metric_arc_owner_idx. PruneSamples is rewritten from a whole-table ranking to cutoff-first"
 refs: [417, 1265, 591, 419, 420, 1276, 801]
 ---
 
@@ -34,6 +34,22 @@ refs: [417, 1265, 591, 419, 420, 1276, 801]
        - a new partial `metric_arc_owner_idx` for a metric a system or a location owns (a calc rule's output).
      - `TestPruneSamplesReachesAnIndexOnEveryArc` holds each search with the accesspath instrument: the right index, with a condition bound to the candidate row. The new index is partial on `component_id is null`, so a component's sample (every node probe and driver poll) pays nothing for it.
   6. **The floor's amendment waits.** "The latest row within retention" waits for `ts` partitioning (#420), where dropping a partition could otherwise remove a quiet series' only row, and for declared rows moving to a table of their own (#1265).
+  7. **Log lines by severity band (#417, the second PR).**
+     - The same pass keeps `log_line` and `node_log` by four bands rather than eight levels (`logline.RetentionBands`):
+       - debug, 3 days;
+       - info and notice, 14 days, and a line with no severity is kept with info;
+       - warning, 30 days;
+       - error, critical, alert and emergency, 90 days.
+
+       These are `retention.log_debug_days`, `log_info_days`, `log_warning_days` and `log_error_days`, shared by both tables.
+     - A log line has no floor: it is not a series' value, and an event that named one as its source keeps itself and drops the link (`on delete set null`).
+     - Each band's prune is searched, not walked:
+       - a new `(severity, ts)` index per table, which on `log_line` replaces the severity-only one it covers;
+       - a partial `(ts)` index for lines with no severity.
+
+       Each statement orders by its index's columns. A `LIMIT` with no `ORDER BY` let the planner prefer a sequential scan once retention made severity and time correlate: 2.4M rows read for a chunk that found none (the 2026-10-28 review). So the BRIN limit above does not apply to logs. Every prune, sample or log, takes its chosen ids as an array (`id = any(array(...))`), so the outer delete probes the primary key rather than a small table's planner hash-joining an `IN` over a sequential scan. `TestPruneLogsReachesItsIndex` holds the index search; `TestPruneStatementsKeepTheirShape` holds the order and the array, which a plan test with sequential scans priced out cannot see.
+     - `event.source_log_line_id` gets the index its `on delete set null` needs. The action runs once per deleted line, and without the index each one scanned the never-pruned event table: 27.7 s for a 2,000-line chunk over 200k events, 8.8 ms with it.
+     - A one-time backfill mapped every stored severity onto RFC 5424's canonical set, trimming whitespace as Go's `strings.TrimSpace` does, with its alias list held to `internal/logline`'s by a test. `node_log` writes are now normalized at the gateway, as `log_line` writes have been since #1145. A band never meets a stray word.
 - **Context:** Nothing pruned the sample tables. At the lab's cadence the metric table grows by millions of rows a day, and a hosted instance has to stay bounded. `PruneSamples` shipped ahead of any caller (#591) to fix the floor first; this is its first caller.
 - **Known limit:** finding the old rows walks every page the `ts` BRIN cannot rule out. Once vacuum frees pruned pages and ingest reuses them, a range holding both old and new rows matches every cutoff, and BRIN ranges widen and never narrow. Over time a pass's last, short chunk reads much of the table. Hence the hourly steady state; `ts` partitioning (#420) ends it by dropping whole partitions.
 - **Not chosen:**

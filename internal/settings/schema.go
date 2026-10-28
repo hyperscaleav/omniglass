@@ -89,10 +89,33 @@ type NotificationSettings struct {
 // much further back overflows the timestamp encoding and reaches the database as
 // a date in the far future, which every row is older than. One default per lane;
 // a per-type override is a later slice of #417.
+//
+// A log line (a component's log_line, a node's node_log) is kept by its
+// severity's band (logline.RetentionBands): four windows rather than eight, and
+// a line with no severity is kept as long as info.
 type RetentionSettings struct {
-	MetricDays   int `json:"metric_days" minimum:"1" maximum:"36500" default:"14" doc:"Days a metric sample is kept"`
-	PropertyDays int `json:"property_days" minimum:"1" maximum:"36500" default:"90" doc:"Days a property transition is kept"`
-	TrendDays    int `json:"trend_days" minimum:"1" maximum:"36500" default:"730" doc:"Days an hourly metric trend is kept, once trends exist (#1276)"`
+	MetricDays     int `json:"metric_days" minimum:"1" maximum:"36500" default:"14" doc:"Days a metric sample is kept"`
+	PropertyDays   int `json:"property_days" minimum:"1" maximum:"36500" default:"90" doc:"Days a property transition is kept"`
+	TrendDays      int `json:"trend_days" minimum:"1" maximum:"36500" default:"730" doc:"Days an hourly metric trend is kept, once trends exist (#1276)"`
+	DebugLogDays   int `json:"log_debug_days" minimum:"1" maximum:"36500" default:"3" doc:"Days a debug log line is kept"`
+	InfoLogDays    int `json:"log_info_days" minimum:"1" maximum:"36500" default:"14" doc:"Days an info or notice log line, or one with no severity, is kept"`
+	WarningLogDays int `json:"log_warning_days" minimum:"1" maximum:"36500" default:"30" doc:"Days a warning log line is kept"`
+	ErrorLogDays   int `json:"log_error_days" minimum:"1" maximum:"36500" default:"90" doc:"Days an error, critical, alert or emergency log line is kept"`
+}
+
+// LogDays is the window for one log retention band; 0 for an unknown band.
+func (r RetentionSettings) LogDays(band string) int {
+	switch band {
+	case "debug":
+		return r.DebugLogDays
+	case "info":
+		return r.InfoLogDays
+	case "warning":
+		return r.WarningLogDays
+	case "error":
+		return r.ErrorLogDays
+	}
+	return 0
 }
 
 // RetentionMaxDays is the longest retention window, the schema's maximum above.

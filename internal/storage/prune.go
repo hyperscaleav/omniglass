@@ -56,11 +56,14 @@ func pruneProbe(lane, arc string) string {
 // flattens an EXISTS into a semi join, which it may run as a hash over every row
 // of the table (measured on PG18 at 2.5M rows: 1.5s a chunk, against 61ms for
 // the per-row probe). A limited scalar subquery stays a per-row index search,
-// which TestPruneSamplesReachesAnIndexOnEveryArc holds.
+// which TestPruneSamplesReachesAnIndexOnEveryArc holds. The outer delete takes
+// the chosen ids as an array, so it finds them by primary key rather than a
+// small table's planner hash-joining an IN over a sequential scan
+// (TestPruneStatementsKeepTheirShape).
 func pruneSamplesSQL(lane, arc string) string {
 	typeCol := sampleLanes[lane]
 	return fmt.Sprintf(`
-		delete from %[1]s where id in (
+		delete from %[1]s where id = any(array(
 			select c.id from %[1]s c
 			where c.ts < $1 and c.provenance <> 'declared' and c.command_id is null
 			  and c.%[2]s_id is not null
@@ -72,7 +75,7 @@ func pruneSamplesSQL(lane, arc string) string {
 				  and n.ts >= c.ts and n.id > c.id
 				order by n.ts
 				limit 1) is not null
-			limit $2)`, lane, arc, pruneProbe(lane, arc), typeCol)
+			limit $2))`, lane, arc, pruneProbe(lane, arc), typeCol)
 }
 
 // PruneSamples deletes up to limit rows of one sample lane (metric or property)

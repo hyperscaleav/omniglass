@@ -42,6 +42,16 @@ func Severity(word string) (string, bool) {
 	return l, ok
 }
 
+// Aliases is every accepted spelling (lower case) and the canonical level it
+// maps to, a copy: the one-time severity backfill holds its own list to it.
+func Aliases() map[string]string {
+	out := make(map[string]string, len(aliases))
+	for w, l := range aliases {
+		out[w] = l
+	}
+	return out
+}
+
 // Levels is the canonical set, most severe first.
 func Levels() []string { return append([]string(nil), levels...) }
 
@@ -64,6 +74,41 @@ func AtLeast(threshold string) ([]string, bool) {
 		return nil, false
 	}
 	return append([]string(nil), levels[:r+1]...), true
+}
+
+// The retention bands (#417): a log line is kept for its band's window, and
+// the eight levels fall into four bands, so an admin sets four windows rather
+// than eight. A line with no severity is kept as long as an info line.
+var bands = []struct {
+	name   string
+	levels []string
+}{
+	{"debug", []string{"debug"}},
+	{"info", []string{"info", "notice"}},
+	{"warning", []string{"warning"}},
+	{"error", []string{"error", "critical", "alert", "emergency"}},
+}
+
+// UnratedBand is the band a line with no severity is kept in.
+const UnratedBand = "info"
+
+// RetentionBands is the bands' names, least severe first.
+func RetentionBands() []string {
+	out := make([]string, len(bands))
+	for i, b := range bands {
+		out[i] = b.name
+	}
+	return out
+}
+
+// BandLevels is one band's canonical levels; nil for an unknown band.
+func BandLevels(band string) []string {
+	for _, b := range bands {
+		if b.name == band {
+			return append([]string(nil), b.levels...)
+		}
+	}
+	return nil
 }
 
 // Normalize maps a line's severity onto the canonical set. A word the table
