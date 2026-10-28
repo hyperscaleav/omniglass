@@ -14,7 +14,7 @@ import (
 // nothing can simulate (the simulator serves products), each with why the fleet
 // keeps it. A product's own coverage is the catalog's coverage.yaml.
 var productlessComponents = map[string]string{
-	"power": "the fleet's example of a component with no catalog product",
+	"power": "the fleet's example of a component with no catalog product, until #1368 makes it a networked power conditioner",
 }
 
 // TestEverySeededComponentIsSimulatedOrAccountedFor holds the lab to "every
@@ -47,6 +47,7 @@ func TestEverySeededComponentIsSimulatedOrAccountedFor(t *testing.T) {
 	}
 
 	byProduct := map[string][]string{}
+	productless := map[string]bool{}
 	keys := map[string]bool{}
 	// The components the seed places, and the ones it places only with the
 	// simulator on (sim_components: the UCC service, which only a simulator can
@@ -54,6 +55,7 @@ func TestEverySeededComponentIsSimulatedOrAccountedFor(t *testing.T) {
 	for _, c := range append(append([]devseed.Component(nil), doc.Components...), doc.SimComponents...) {
 		keys[c.Key] = true
 		if c.Product == "" {
+			productless[c.Key] = true
 			if _, ok := productlessComponents[c.Key]; !ok {
 				t.Errorf("component %s has no product, so nothing can simulate it: give it a product, or list it in productlessComponents with why", c.Key)
 			}
@@ -62,8 +64,11 @@ func TestEverySeededComponentIsSimulatedOrAccountedFor(t *testing.T) {
 		byProduct[c.Product] = append(byProduct[c.Product], c.Key)
 	}
 	for k := range productlessComponents {
-		if !keys[k] {
+		switch {
+		case !keys[k]:
 			t.Errorf("productlessComponents lists %s, which the dev seed no longer places: delete its line", k)
+		case !productless[k]:
+			t.Errorf("productlessComponents lists %s, which has a product now: delete its line", k)
 		}
 	}
 

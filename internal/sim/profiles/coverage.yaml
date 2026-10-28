@@ -22,5 +22,5 @@ unsimulated:
 # coverage test holds each to that; the converse does not hold, since a
 # service on the network can have no driver (generic-service, ucc-service).
 passive:
-  lyra-gn-12: "an analog gooseneck microphone; the DSP input it is wired to reports its level and mute"
-  polaris-sky-c6: "a passive loudspeaker; the amplifier channel driving it reports its load (#898)"
+  lyra-gn-12: "an analog gooseneck microphone; the DSP input it is wired to reports its level and mute (#1367)"
+  polaris-sky-c6: "a passive loudspeaker; the amplifier channel driving it reports its load (#898, #1367)"
