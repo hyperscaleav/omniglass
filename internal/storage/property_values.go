@@ -30,9 +30,11 @@ type Property struct {
 	TS               time.Time
 }
 
-// EffectiveProperty is one property resolved for a component: the set value when
-// present, otherwise the product contract's default (Value = coalesce(set,
-// default), IsSet marking the override). FromContract distinguishes a property the
+// EffectiveProperty is one property an owner has: the set value when present,
+// otherwise a calc rule's value, otherwise the contract default (Value =
+// coalesce(set, calculated, default), IsSet marking the override), or no value
+// at all for a key the owner only observes or was told (#1297), whose standing
+// is its Reconciliation. FromContract distinguishes a property the
 // component's product declares from an ad-hoc one set directly on the component
 // (including every property on a productless component), so the surface can show
 // the contract and the off-contract additions differently.
@@ -54,6 +56,10 @@ type EffectiveProperty struct {
 	// calculated sample where nothing declares a value.
 	SourceRule   string
 	SourceRuleID string
+	// Reconciliation is the row's want/told/is pivot (#1297), nil on a row a
+	// calc rule writes that nothing declares: a calculated value is not what
+	// anyone asked for, so there is nothing to reconcile it against.
+	Reconciliation *PropertyReconciliation
 }
 
 // Property-value sentinels. Clearing a value the owner never set is the explicit
@@ -297,18 +303,12 @@ func contractDefaultSQL(typeAlias string) string {
 	return `case when ` + typeAlias + `.name = any($2::text[]) then null else c.default_value end`
 }
 
-// EffectiveProperties resolves an instance's declared properties: every property
-// its classifier's contract declares (value = coalesce(the instance's set value,
-// a calc rule's calculated value, the contract default)), plus any ad-hoc
-// property the instance sets directly that the contract does not declare, and
-// any a calc rule writes on it that nothing declares (#999, #1018), naming the
-// rule. An instance with no classifier (a productless
-// component, a one-off system) has only the ad-hoc set. The instance must be within
-// the read scope; an out-of-scope instance is its non-disclosing not-found.
-//
-// The two arms are one UNION so the merge stays in SQL: the contract arm is a left
-// join from the contract table, the ad-hoc arm is the instance's values with no
-// matching contract row.
+// EffectiveProperties is the owner's properties read (#1297): one row per
+// property key the owner has, the union of the declared cascade and calc rule
+// outputs (declaredProperties) with every key a live observer reports or a
+// command set, each row carrying its reconciliation where one applies
+// (reconcileProperties). The owner must be within the read scope; an
+// out-of-scope owner is its kind's non-disclosing not-found.
 func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string, read scope.Set) ([]EffectiveProperty, error) {
 	oc, ok := ownerContracts[ownerKind]
 	if !ok {
@@ -338,7 +338,26 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 	if err != nil {
 		return nil, err
 	}
+	effs, err := p.declaredProperties(ctx, oc, ownerKind, ownerID, arc)
+	if err != nil {
+		return nil, err
+	}
+	return p.reconcileProperties(ctx, p.pool, ownerKind, arc, effs)
+}
 
+// declaredProperties resolves an instance's declared properties: every property
+// its classifier's contract declares (value = coalesce(the instance's set value,
+// a calc rule's calculated value, the contract default)), plus any ad-hoc
+// property the instance sets directly that the contract does not declare, and
+// any a calc rule writes on it that nothing declares (#999, #1018), naming the
+// rule. An instance with no classifier (a productless
+// component, a one-off system) has only the ad-hoc set. The caller has scope-checked
+// the instance and resolved arc within the read scope.
+//
+// The two arms are one UNION so the merge stays in SQL: the contract arm is a left
+// join from the contract table, the ad-hoc arm is the instance's values with no
+// matching contract row.
+func (p *PG) declaredProperties(ctx context.Context, oc ownerContract, ownerKind, ownerID, arc string) ([]EffectiveProperty, error) {
 	// The current declared value per property: the latest series row of each
 	// (property, instance='') declared series on this owner's arc, a tombstone
 	// (JSON-null value) resolving to no value. Shared by every arm.

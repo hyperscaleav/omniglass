@@ -33,6 +33,9 @@ refs: [422, 1282, 1297, 752, 456, 430]
      withdrawn in review: every property, declared, calculated, observed or told, is to be read
      through one `/properties` read for components and systems alike, carrying want, told, is and
      drift on the rows that have them (the unified properties read, #1297).
+     **Amended (#1297):** that read landed: an observed system property is a row of
+     `GET /systems/{name}/properties`, with its reconciliation
+     ([ADR-1297](#adr-1297-the-properties-read-carries-reconciliation-and-the-reconciliation-route-retires)).
   5. **Node-collected system telemetry is a fan-out, not a system-owned endpoint.** A component that
      speaks for many owners (a cloud or SaaS service modeled as a component) collects once, and each
      value lands on the owner its identity names through the value-to-owner index, one primitive for

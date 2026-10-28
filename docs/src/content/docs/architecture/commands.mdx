@@ -103,7 +103,7 @@ A command's effect is judged as a pure function of the intended value, the obser
   from observed is not yet drift.
 - **failed**: past the window, observed does not match (or is absent).
 
-This is the windowed form of the `told` versus `is` comparison the [reconciliation read](/architecture/variables/) opens.
+This is the windowed form of the `told` versus `is` comparison each row of the [properties read](/architecture/properties/#reconciliation-want-told-is) carries.
 The window bounds how long a command waits for its evidence, not when it may settle
 ([ADR-0141](/architecture/decisions/#adr-0141-a-command-settles-when-its-evidence-arrives-from-its-reply-first-and-observation-second)).
 

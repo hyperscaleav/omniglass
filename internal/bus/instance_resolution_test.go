@@ -98,25 +98,26 @@ func TestInstanceResolvesTheSameWayInIngestReconciliationAndSettlement(t *testin
 	})
 	waitProperty(t, ctx, gw, "panel-1", "video-input", "panel-ip", func(d *storage.PropertySample) bool { return d != nil && d.Value == "hdmi2" })
 
-	// Reconciliation reads that row as is, names its endpoint, and judges it
-	// against want.
-	recs, err := gw.Reconciliation(ctx, "component", "panel-1", all)
+	// The properties read's reconciliation reads that row as is, names its
+	// endpoint, and judges it against want (#1297).
+	props, err := gw.EffectiveProperties(ctx, "component", "panel-1", all)
 	if err != nil {
-		t.Fatalf("reconciliation: %v", err)
+		t.Fatalf("properties: %v", err)
 	}
 	var found bool
-	for _, r := range recs {
-		if r.PropertyTypeName != "video-input" {
+	for _, p := range props {
+		if p.PropertyTypeName != "video-input" || p.Reconciliation == nil {
 			continue
 		}
 		found = true
+		r := p.Reconciliation
 		if string(r.Is) != `"hdmi2"` || r.IsInstance != "panel-ip" || !r.Drift || string(r.Told) != `"hdmi2"` {
 			t.Fatalf("video-input pivot: want is=hdmi2 from panel-ip, told=hdmi2, drift; got is=%s from %q told=%s drift=%v",
 				r.Is, r.IsInstance, r.Told, r.Drift)
 		}
 	}
 	if !found {
-		t.Fatalf("video-input not in the reconciliation: %+v", recs)
+		t.Fatalf("video-input carries no reconciliation: %+v", props)
 	}
 
 	// Settlement resolved the same row: the landing settled the command, and

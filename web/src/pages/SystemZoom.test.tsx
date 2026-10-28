@@ -134,7 +134,8 @@ function mount(path = `/web/systems/${uuidFor("szp-sys")}`, healthOverride: Flee
   qc.setQueryData([...systemMetricsKey(uuidFor("szp-sys"))], metrics);
   qc.setQueryData(["system-properties", uuidFor("szp-sys")], [
     { property_type_name: "room-owner", label: "Room owner", value: "\"facilities\"", from_contract: true, source: "default" },
-    { property_type_name: "asset-tag", label: "Asset tag", value: "\"A-100\"", from_contract: false, source: "self" },
+    // An off-contract value is one the system set: is_set, as the read returns it.
+    { property_type_name: "asset-tag", label: "Asset tag", value: "\"A-100\"", set_value: "\"A-100\"", is_set: true, from_contract: false, source: "self" },
   ]);
   qc.setQueryData([...STANDARDS_KEY], standards);
   qc.setQueryData([...SYSTEM_TYPES_KEY], []);

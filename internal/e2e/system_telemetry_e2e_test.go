@@ -21,8 +21,8 @@ import (
 // system-owned sample: a calc rule over the system's members (the primary
 // path), and a push naming the system as its owner (telemetry about the room
 // as a whole, from a cloud service). Both read back on the system's own
-// surfaces: its effective metrics and properties, and a property's change
-// history.
+// surfaces: its effective metrics, its properties read (the pushed property a
+// row with its reconciliation, #1297), and a property's change history.
 func TestASystemOwnsItsMetricsAndProperties(t *testing.T) {
 	if testing.Short() {
 		t.Skip("system telemetry e2e: skipped under -short (Postgres testcontainer + go build)")
@@ -128,6 +128,35 @@ func TestASystemOwnsItsMetricsAndProperties(t *testing.T) {
 		p := read("system", "property", "list", "huddle-1")
 		return string(p["room-comfort"].Value) == `"warm"` && p["room-comfort"].SourceRule == "huddle-comfort"
 	})
+	// The pushed property is one of the system's properties (#1297): nothing
+	// declares it, so it reads want null, its observed is, and no drift; the
+	// calc rule's verdict carries no reconciliation at all.
+	type reconciled struct {
+		Property       string `json:"property_type_name"`
+		Reconciliation *struct {
+			Want       json.RawMessage `json:"want"`
+			Is         json.RawMessage `json:"is"`
+			IsInstance string          `json:"is_instance"`
+			Drift      bool            `json:"drift"`
+		} `json:"reconciliation"`
+	}
+	var props struct {
+		Properties []reconciled `json:"properties"`
+	}
+	if err := json.Unmarshal([]byte(run("system", "property", "list", "huddle-1")), &props); err != nil {
+		t.Fatalf("decode the system's properties: %v", err)
+	}
+	rows := map[string]reconciled{}
+	for _, p := range props.Properties {
+		rows[p.Property] = p
+	}
+	if r := rows["video-input"].Reconciliation; r == nil || string(r.Want) != "null" || string(r.Is) != `"hdmi2"` || r.IsInstance != "" || r.Drift {
+		t.Fatalf("the pushed video-input on the system's properties: want want=null is=hdmi2, owner-level, no drift; got %+v", rows["video-input"])
+	}
+	if r := rows["room-comfort"].Reconciliation; r != nil {
+		t.Fatalf("the calc rule's room-comfort carries a reconciliation: %+v", r)
+	}
+
 	history := run("system", "property", "sample", "list", "huddle-1", "video-input")
 	if !strings.Contains(history, `"value": "hdmi2"`) || !strings.Contains(history, `"provenance": "observed"`) ||
 		!strings.Contains(history, `"source": "room-booking-cloud"`) {

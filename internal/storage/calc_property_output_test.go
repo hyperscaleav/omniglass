@@ -11,7 +11,7 @@ import (
 // A property a calc rule writes is the owner's effective value where nothing
 // declares one, naming the rule by name and id, as the effective metric read
 // does (#999's review): the console links the value to its rule. It is not a
-// value anyone asked for, so reconciliation leaves it out, and a declared
+// value anyone asked for, so its row carries no reconciliation, and a declared
 // value still wins.
 func TestCalcPropertyOutputIsEffective(t *testing.T) {
 	r := newEvalRig(t)
@@ -39,14 +39,8 @@ func TestCalcPropertyOutputIsEffective(t *testing.T) {
 	if got == nil || string(got.Value) != "true" || got.SourceRule != "busy" || got.SourceRuleID != rule.ID || got.IsSet || got.FromContract {
 		t.Fatalf("busy-flag resolves %+v, want true from the calc rule busy (%s), not set", got, rule.ID)
 	}
-	recs, err := r.gw.Reconciliation(r.ctx, "component", r.comp, r.all)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, rec := range recs {
-		if rec.PropertyTypeName == "busy-flag" {
-			t.Fatalf("reconciliation lists the calculated busy-flag: %+v", rec)
-		}
+	if got.Reconciliation != nil {
+		t.Fatalf("the calculated busy-flag carries a reconciliation: %+v", got.Reconciliation)
 	}
 	// The rollup's health is calculated too, by no calc rule: never listed.
 	effs, err := r.gw.EffectiveProperties(r.ctx, "component", r.comp, r.all)

@@ -1,4 +1,4 @@
-## frozen-fact-served-as-current (fixed; found by the #1035 review, regressed and fixed in the #821 and #456 reviews)
+## frozen-fact-served-as-current (fixed; found by the #1035 review, regressed and fixed in the #821, #456 and #1297 reviews)
 
 - **Cue:** a read that serves a latest-ever sample (a certificate's days left, a handshake's
   result) beside a gate or state that stops the probe from refreshing it.
@@ -22,3 +22,10 @@
   internal/storage/instance_values.go). Age is no test on a transition-only property, where a
   live, unchanged value carries an old ts. Residual, open as #1217: an endpoint that still exists
   but whose driver no longer emits the key keeps its last reading live.
+- **Fourth instance (#1297):** a generic read that lists every observed key. The properties read
+  first listed every key an owner has an observed row of, so the native probe keys came with it:
+  under a certificate gate `tls-certificate-expiry` read as the component's current value, the
+  fact `composeTLS` withholds, and `ssh-host-key` kept the first-use key after a `:retry`. Fix:
+  leave the reserved family (`writerclass.ReservedNames`) out of a read that is not their own
+  surface (`seriesKeysSQL`, internal/storage/current_values.go); the reachability read stays the
+  one place a probe key reads, gated.

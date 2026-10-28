@@ -16,7 +16,7 @@ import (
 )
 
 // ADR-0456: an observed row's instance is the endpoint that observed it, and
-// the owner-level question reconciliation asks resolves across every instance
+// the owner-level question the properties read's reconciliation asks resolves across every instance
 // of the key: `is` is present when any endpoint reported the key, drift is
 // worst-case (any instance disagreeing with want), and the answer names the
 // instance it came from. `told` is the newest intended row across instances.
@@ -64,17 +64,7 @@ func TestReconciliationResolvesEveryObservedInstance(t *testing.T) {
 	}
 	pivot := func() storage.PropertyReconciliation {
 		t.Helper()
-		recs, err := gw.Reconciliation(ctx, "component", "panel-1", all)
-		if err != nil {
-			t.Fatalf("reconciliation: %v", err)
-		}
-		for _, r := range recs {
-			if r.PropertyTypeName == "video-input" {
-				return r
-			}
-		}
-		t.Fatalf("video-input not in the reconciliation: %+v", recs)
-		return storage.PropertyReconciliation{}
+		return reconOf(t, gw, "component", "panel-1", "video-input")
 	}
 
 	// One endpoint agrees: is is its value, named, and there is no drift.
@@ -121,7 +111,7 @@ func TestReconciliationResolvesEveryObservedInstance(t *testing.T) {
 // An endpoint deleted after it observed a property is a retired observer:
 // its last reading is frozen (nothing prunes a series' latest row, and an
 // endpoint's name is its transport, so a changed transport is a delete and a
-// new endpoint), and reconciliation leaves it out rather than holding the
+// new endpoint), and the properties read leaves it out rather than holding the
 // owner in drift on what a removed connection once saw. An instance a push
 // sender names is the sender's own and keeps counting (ADR-0456).
 func TestReconciliationLeavesOutARetiredObserver(t *testing.T) {
@@ -164,17 +154,7 @@ func TestReconciliationLeavesOutARetiredObserver(t *testing.T) {
 	}
 	pivot := func() storage.PropertyReconciliation {
 		t.Helper()
-		recs, err := gw.Reconciliation(ctx, "component", "panel-1", all)
-		if err != nil {
-			t.Fatalf("reconciliation: %v", err)
-		}
-		for _, r := range recs {
-			if r.PropertyTypeName == "video-input" {
-				return r
-			}
-		}
-		t.Fatalf("video-input not in the reconciliation: %+v", recs)
-		return storage.PropertyReconciliation{}
+		return reconOf(t, gw, "component", "panel-1", "video-input")
 	}
 
 	land(storage.NodeWriter(comp.ID, "telnet"), "telnet", "hdmi4", time.Second)
@@ -260,14 +240,8 @@ func TestToldReadsOnlyTheInstancesCommandsNamed(t *testing.T) {
 		t.Fatalf("the told read filtered %d observed rows to find the intended ones:\n%s", removed, plan)
 	}
 
-	recs, err := gw.Reconciliation(ctx, "component", "panel-1", all)
-	if err != nil {
-		t.Fatalf("reconciliation: %v", err)
-	}
-	for _, r := range recs {
-		if r.PropertyTypeName == "video-input" && string(r.Told) != `"hdmi3"` {
-			t.Fatalf("told = %s, want hdmi3, the newest intended on any instance", r.Told)
-		}
+	if r := reconOf(t, gw, "component", "panel-1", "video-input"); string(r.Told) != `"hdmi3"` {
+		t.Fatalf("told = %s, want hdmi3, the newest intended on any instance", r.Told)
 	}
 }
 

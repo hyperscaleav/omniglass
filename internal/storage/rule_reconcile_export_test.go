@@ -46,3 +46,10 @@ func ExportLatestPerInstanceSQL(lane string) string {
 // ExportToldSQL is reconciliation's told read on the component arc ($1 owner
 // kind, $2 arc, $3 key), for its plan test.
 func ExportToldSQL() string { return latestIntendedSQL("component_id") }
+
+// ExportSeriesKeysSQL exposes the properties read's key discovery for an arc
+// column, so a test can explain it.
+func ExportSeriesKeysSQL(col string) string { return seriesKeysSQL(col) }
+
+// ExportToldSQLFor is ExportToldSQL on any arc column.
+func ExportToldSQLFor(col string) string { return latestIntendedSQL(col) }

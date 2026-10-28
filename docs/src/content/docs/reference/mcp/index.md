@@ -21,7 +21,7 @@ Each tool says what a client may assume of it, from one rule over the route's me
 
 A tool that is not read-only and not destructive adds something (a create).
 
-51 tools.
+50 tools.
 
 | Tool | What it does | Gate | Assume |
 |---|---|---|---|
@@ -38,10 +38,9 @@ A tool that is not read-only and not destructive adds something (a create).
 | [`list-component-logs`](#list-component-logs) | List a component's recent log lines | `component:read` | read-only, idempotent |
 | [`list-component-metrics`](#list-component-metrics) | List a component's effective metrics | `component:read` | read-only, idempotent |
 | [`list-component-metric-series`](#list-component-metric-series) | Read one metric series' raw samples | `component:read` | read-only, idempotent |
-| [`list-component-properties`](#list-component-properties) | List a component's effective properties | `component:read` | read-only, idempotent |
+| [`list-component-properties`](#list-component-properties) | List a component's properties and where each stands | `component:read` | read-only, idempotent |
 | [`list-component-property-series`](#list-component-property-series) | Read one property series' change history | `component:read` | read-only, idempotent |
 | [`get-component-reachability`](#get-component-reachability) | Read a component's per-endpoint reachability | `component:read` | read-only, idempotent |
-| [`get-component-reconciliation`](#get-component-reconciliation) | Read a component's property reconciliation (want/told/is) | `component:read` | read-only, idempotent |
 | [`list-drivers`](#list-drivers) | List drivers | `driver:read` | read-only, idempotent |
 | [`create-driver`](#create-driver) | Create a driver | `driver:create` | adds |
 | [`get-driver`](#get-driver) | Get a driver | `driver:read` | read-only, idempotent |
@@ -276,9 +275,9 @@ The samples behind the effective read's latest value for one series, newest firs
 
 ## `list-component-properties`
 
-List a component's effective properties
+List a component's properties and where each stands
 
-Every property the component's product declares, resolved to the component's own value or the contract default (is_set marks the override), plus any property set directly on the component (from_contract false). Gated by component:read; an out-of-scope component is a non-disclosing 404.
+Every property the component has: each its product declares, resolved to the component's own value or the contract default (is_set marks the override), each set directly on the component (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by component:read; an out-of-scope component is a non-disclosing 404.
 
 - Route: `GET /api/v1/components/{name}/properties`
 - Gate: `component:read`
@@ -312,20 +311,6 @@ Read a component's per-endpoint reachability
 Composes, per endpoint, the latest reachability verdict, the probe-layer signals that compose it, and the recent verdict transitions for the availability strip. Gated by component:read; an out-of-scope component is a non-disclosing 404.
 
 - Route: `GET /api/v1/components/{name}/reachability`
-- Gate: `component:read`
-- Assume: read-only, idempotent
-
-| Argument | Type | Required | Description |
-|---|---|---|---|
-| `name` | string | yes | The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
-
-## `get-component-reconciliation`
-
-Read a component's property reconciliation (want/told/is)
-
-Pivots, per declared property, the declared value (want, resolved live from the cascade), the intended value (told), and the observed value (is, resolved across every live instance of the property and naming the instance it came from; a deleted endpoint's frozen reading is left out), with config-drift computed on read: drift when any live observed instance differs from want. Gated by component:read; an out-of-scope component is a non-disclosing 404.
-
-- Route: `GET /api/v1/components/{name}/reconciliation`
 - Gate: `component:read`
 - Assume: read-only, idempotent
 

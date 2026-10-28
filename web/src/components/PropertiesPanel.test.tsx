@@ -117,6 +117,24 @@ describe("PropertiesPanel", () => {
     expect(within(contractRow).getByRole("link", { name: "room-state" })).toBeTruthy();
   });
 
+  // A key the component only observes or was told (#1297) has no declared or
+  // calculated value to edit: it stands in the Reconciliation panel, which reads
+  // the same rows, and stays out of this one, so it is not offered as an empty
+  // off-contract override, and an owner with only such keys reads as empty here.
+  it("leaves out a property that is only observed or told", () => {
+    const observed: EffectiveProperty = {
+      property_type_name: "serial-number", property_type_id: "serial-number-id", label: "Serial number", data_type: "string",
+      required: false, is_set: false, from_contract: false,
+      reconciliation: { want: null, told: null, is: "SN-42", is_instance: "panel-ip", drift: false },
+    };
+    const { queryByText, getByRole, unmount } = mount([...seed, observed]);
+    expect(queryByText("Serial number")).toBeNull();
+    expect(getByRole("group", { name: /off contract/i })).toBeTruthy();
+    unmount();
+    const empty = mount([observed]);
+    expect(empty.getByText(/come from the product it is an instance of/i)).toBeTruthy();
+  });
+
   // The empty state teaches where properties come from without asserting WHY none
   // resolved: the panel only sees an empty list, so it cannot tell a productless
   // component from a product that declares nothing, and must not claim either.
