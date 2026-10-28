@@ -11,7 +11,7 @@ This page describes **how storage works**: the patterns every other leaf's entit
 
 :::note[Partial]
 Built today: the Storage Gateway as the only door to the database, dbmate migrations (run-once,
-embedded, idempotent), the per-action scope predicate and the in-transaction `audit_log` write, the
+embedded, idempotent, and refused by an older binary), the per-action scope predicate and the in-transaction `audit_log` write, the
 writer-class check on every sample and event write, with legacy rows held to it
 ([below](#every-key-has-one-writer)), and the
 shared scoped-tree and scoped-CRUD primitives. Scope arrives at the gateway as an explicit
@@ -91,6 +91,13 @@ version is the identity, nobody picks it by hand: `make migration NAME=<snake_ca
 `dbmate new`, which stamps the current UTC time. `make test` fails when two files share a version,
 and the `migrations` CI workflow (locally, `make migration-check`) fails a change whose added
 migration is not newer than the newest on `main`, the branch cut before another migration landed.
+
+Migrations only move forward, so a binary refuses a schema newer than it knows. Before applying
+anything, the `migrate` run mode, the server's boot and every direct-database command compare the
+database's newest applied migration with the newest the binary embeds. A database a later build
+migrated stops an older image with an error naming both versions (`ErrSchemaAhead`), rather than
+booting on columns it does not know. An applied version below the binary's head that it no longer
+embeds (a chain collapsed into one init, #388) is history, not a newer schema, and passes.
 
 A change that both reshapes the schema and needs default rows for the shape to be usable never mixes
 the two in one migration. Three buckets, never conflated:

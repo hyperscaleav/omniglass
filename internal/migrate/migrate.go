@@ -13,9 +13,16 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/redact"
 )
 
-// Run applies all pending migrations against dsn.
+// Run applies all pending migrations against dsn. It first refuses a database
+// a newer build migrated (ErrSchemaAhead), so an older image never boots, or
+// applies its own migrations, on a schema it does not know (#1289).
 func Run(dsn string) error {
-	return withDBMate(dsn, func(mate *dbmate.DB) error { return mate.Migrate() })
+	return withDBMate(dsn, func(mate *dbmate.DB) error {
+		if err := guardHead(mate); err != nil {
+			return err
+		}
+		return mate.Migrate()
+	})
 }
 
 // RollbackAll rolls every applied migration back, leaving an empty schema. It

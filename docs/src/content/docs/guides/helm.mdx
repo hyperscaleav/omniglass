@@ -49,9 +49,16 @@ during the pre-install phase:
 
 1. `wait-for-db` (only when `postgres.enabled`) blocks until Postgres answers.
 2. `migrate` applies the schema (idempotent: dbmate runs each migration once).
+   It refuses a database a newer release migrated, naming the database's newest
+   migration and the newest the image knows, so the pod fails here rather than
+   serving on a schema it does not know.
 3. `bootstrap` (only when `bootstrap.enabled`) creates the first owner and mints
    its bearer token, printed once to this container's logs. Idempotent: a
    restart mints no second token.
+
+Migrations only move forward: a `helm rollback` to an image older than the
+newest migration the schema carries stops at `migrate`. Roll back the image only
+together with the database backup taken before the upgrade, or roll forward.
 
 Both `migrate` and `bootstrap` are safe to re-run on every rollout. At
 `server.replicas` > 1 in production, run `migrate` as a separate one-shot Job
