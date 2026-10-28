@@ -843,6 +843,15 @@ type Gateway interface {
 	// lane (metric or property): delete up to limit samples older than before,
 	// never a declared row and never the latest row of a series (#591, #417).
 	PruneSamples(ctx context.Context, lane string, before time.Time, limit int) (int64, error)
+	// PruneSamplesOfType is PruneSamples for one type with a window of its
+	// own, which the lane's prune skips (#417).
+	PruneSamplesOfType(ctx context.Context, lane, typeID string, days int, before time.Time, limit int) (int64, error)
+	// RetentionOverrides is every type with a retention window of its own.
+	RetentionOverrides(ctx context.Context) ([]TypeRetention, error)
+	// SetMetricTypeRetention and SetPropertyTypeRetention set or clear a type's
+	// own retention window, official types included; audited (#417).
+	SetMetricTypeRetention(ctx context.Context, actorID, name string, days *int) (*MetricType, error)
+	SetPropertyTypeRetention(ctx context.Context, actorID, name string, days *int) (*PropertyType, error)
 	// PruneLogs deletes up to limit lines of one log table in one severity band
 	// older than before (#417).
 	PruneLogs(ctx context.Context, table, band string, before time.Time, limit int) (int64, error)

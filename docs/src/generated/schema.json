@@ -4741,12 +4741,21 @@
       "nullable": false,
       "default": "uuidv7()",
       "pk": true
+     },
+     {
+      "name": "retention_days",
+      "type": "integer",
+      "nullable": true
      }
     ],
     "checks": [
      {
       "name": "metric_type_data_type_check",
       "expr": "CHECK ((data_type = ANY (ARRAY['int'::text, 'float'::text])))"
+     },
+     {
+      "name": "metric_type_retention_days_check",
+      "expr": "CHECK (((retention_days IS NULL) OR ((retention_days \u003e= 1) AND (retention_days \u003c= 36500))))"
      }
     ],
     "uniques": [
@@ -5197,12 +5206,21 @@
       "nullable": false,
       "default": "uuidv7()",
       "pk": true
+     },
+     {
+      "name": "retention_days",
+      "type": "integer",
+      "nullable": true
      }
     ],
     "checks": [
      {
       "name": "property_type_data_type_check",
       "expr": "CHECK ((data_type = ANY (ARRAY['string'::text, 'bool'::text, 'json'::text])))"
+     },
+     {
+      "name": "property_type_retention_days_check",
+      "expr": "CHECK (((retention_days IS NULL) OR ((retention_days \u003e= 1) AND (retention_days \u003c= 36500))))"
      }
     ],
     "uniques": [

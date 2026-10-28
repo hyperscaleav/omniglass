@@ -9,6 +9,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/logline"
 	"github.com/hyperscaleav/omniglass/internal/settings"
+	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
 // The sample retention pass (#417): how often it runs, how long one pass may
@@ -46,6 +47,8 @@ type retentionStore interface {
 	RetentionWindows(ctx context.Context) (settings.RetentionSettings, error)
 	PruneSamples(ctx context.Context, lane string, before time.Time, limit int) (int64, error)
 	PruneLogs(ctx context.Context, table, band string, before time.Time, limit int) (int64, error)
+	RetentionOverrides(ctx context.Context) ([]storage.TypeRetention, error)
+	PruneSamplesOfType(ctx context.Context, lane, typeID string, days int, before time.Time, limit int) (int64, error)
 }
 
 // retentionLane is one thing a pass prunes to one window: a sample lane, or a
@@ -57,9 +60,10 @@ type retentionLane struct {
 }
 
 // retentionLanes is every lane a pass prunes, in order: the metric and property
-// samples, then each log table's bands (logline.RetentionBands), least severe
-// first.
-func retentionLanes(store retentionStore, w settings.RetentionSettings) []retentionLane {
+// samples, each type with a window of its own (#417, named <lane>/<type>; the
+// lane's own prune skips it), then each log table's bands
+// (logline.RetentionBands), least severe first.
+func retentionLanes(store retentionStore, w settings.RetentionSettings, overrides []storage.TypeRetention) []retentionLane {
 	lanes := []retentionLane{}
 	for _, l := range []struct {
 		name string
@@ -67,6 +71,11 @@ func retentionLanes(store retentionStore, w settings.RetentionSettings) []retent
 	}{{"metric", w.MetricDays}, {"property", w.PropertyDays}} {
 		lanes = append(lanes, retentionLane{l.name, l.days, func(ctx context.Context, before time.Time, limit int) (int64, error) {
 			return store.PruneSamples(ctx, l.name, before, limit)
+		}})
+	}
+	for _, o := range overrides {
+		lanes = append(lanes, retentionLane{o.Lane + "/" + o.TypeName, o.Days, func(ctx context.Context, before time.Time, limit int) (int64, error) {
+			return store.PruneSamplesOfType(ctx, o.Lane, o.TypeID, o.Days, before, limit)
 		}})
 	}
 	for _, table := range []string{"log_line", "node_log"} {
@@ -113,7 +122,15 @@ func retentionPass(ctx context.Context, store retentionStore, now time.Time, chu
 		return rep, err
 	}
 	var errs []error
-	for _, lane := range retentionLanes(store, w) {
+	// The types with windows of their own. A failed read loses only their own
+	// lanes this pass: the lane prunes skip them regardless (storage holds that).
+	octx, odone := bounded()
+	overrides, err := store.RetentionOverrides(octx)
+	odone()
+	if err != nil {
+		errs = append(errs, fmt.Errorf("read type retention overrides: %w", err))
+	}
+	for _, lane := range retentionLanes(store, w, overrides) {
 		if lane.days <= 0 || lane.days > settings.RetentionMaxDays {
 			errs = append(errs, fmt.Errorf("prune %s: a window of %d days is outside 1 to %d; not pruned", lane.name, lane.days, settings.RetentionMaxDays))
 			continue

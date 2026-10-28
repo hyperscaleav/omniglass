@@ -90,8 +90,20 @@ Three things are never removed, however old:
 - the latest row of every series, so a quiet device still shows its current value;
 - the value a command set out to write, which its history reads back.
 A change to a window takes effect at the next pass. Events and alarms are not removed yet (#1159,
-#1339), and neither is the audit log (#1340); a window per metric or property type is the last slice
-of #417. See
+#1339), and neither is the audit log (#1340).
+
+A metric or property type can keep its own window, overriding its lane's: keep a busy probe metric
+for three days, say, or a property that matters for a year. Shipped types included, though they are
+otherwise read-only, since this is your install's choice and an upgrade never resets it:
+
+```sh
+omniglass metric-type setRetention tcp-connect-time --days 3
+omniglass property-type setRetention endpoint-reachable --days 365
+omniglass metric-type setRetention tcp-connect-time --days null    # back to metric_days
+```
+
+The type's window shows as `retention_days` on `omniglass metric-type get`. The same floor holds: its
+latest value per series is never removed. See
 [storage](/architecture/storage/#retention-what-is-kept-and-for-how-long) for how it works.
 
 The model behind all of this is [identity and access](/architecture/identity-access/) and

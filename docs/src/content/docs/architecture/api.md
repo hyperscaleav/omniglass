@@ -75,6 +75,12 @@ Everything lives under `/api/v1`. The path shape is derivable, not special-cased
   exactly as its old combined `PATCH` did, and a location's `parent`, which carries its whole
   subtree's contribution between two ancestor chains and recomputes both
   ([ADR-0092](/architecture/decisions/#adr-0092-a-location-move-recomputes-both-ancestor-chains)).
+- **A type's retention window is a custom method**
+  ([ADR-0417](/architecture/decisions/#adr-0417-the-server-prunes-each-sample-lane-to-a-window-in-bounded-chunks)). `POST /metric-types/{name}:setRetention`
+  and `/property-types/{name}:setRetention` take `{days}` (1 to 36,500) or `{days: null}` to return the
+  type to its lane's window. It works on an official type, which `PATCH` refuses as read-only: the
+  type's definition is the seed's, its retention the install's. It is gated by `<type>:update` and
+  `platform:update`, like the retention settings, and writes its own audit verb, `set_retention`.
 - **Custom methods carry a colon**, `:verb` not `/verb`, for anything that is not CRUD:
   `/components/{name}/commands:issue`, `/auth/me/sessions/{id}:revoke`, `/nodes:claim`. The verb
   is also the **permission**: `:issue` is gated by `command:issue`, so the route and the
@@ -827,7 +833,8 @@ What each catalog adds over the shared shape (bodies in the [reference](/referen
 
 The cascade's least-specific tier is **`platform`** ([cascade](/architecture/cascade/)), and a write that
 lands there needs **two** permissions: the resource's own (`secret:create`, `variable:update`,
-`tag:update`, `settings:update`) **and** `platform:<action>`, because fleet **scope** and install-wide
+`tag:update`, `settings:update`, and `metric_type:update` or `property_type:update` for a type's
+`:setRetention`) **and** `platform:<action>`, because fleet **scope** and install-wide
 **authority** are different questions
 ([identity and access](/architecture/identity-access/#install-wide-authority-is-not-fleet-scope)).
 `platform:*` is seeded to `admin` (and to `owner` through `>`); `operator` and `deploy` do not hold it.

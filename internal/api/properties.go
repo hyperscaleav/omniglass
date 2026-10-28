@@ -15,21 +15,23 @@ import (
 // /metric-types, which carries unit and precision). validation is a JSON Schema
 // fragment; official marks a seed-owned, read-only property.
 type propertyBody struct {
-	ID          string          `json:"id" doc:"The property's uuid, the stable form the contract and telemetry keys store"`
-	Name        string          `json:"name"`
-	DataType    string          `json:"data_type"`
-	Label       string          `json:"label,omitempty"`
-	Description string          `json:"description,omitempty"`
-	Validation  json.RawMessage `json:"validation,omitempty" doc:"A JSON Schema fragment constraining the value"`
-	Official    bool            `json:"official"`
-	WrittenBy   *calcWriterBody `json:"written_by,omitempty" required:"false" doc:"The calc rule that writes this property, absent when none does (one enabled rule writes a key; a disabled writer is named when no rule is enabled)"`
-	WriterClass string          `json:"writer_class" enum:"node-probe,platform,calc,collected" doc:"Who may write this key (ADR-0161): node-probe (a node's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit"`
+	ID            string          `json:"id" doc:"The property's uuid, the stable form the contract and telemetry keys store"`
+	Name          string          `json:"name"`
+	DataType      string          `json:"data_type"`
+	Label         string          `json:"label,omitempty"`
+	Description   string          `json:"description,omitempty"`
+	Validation    json.RawMessage `json:"validation,omitempty" doc:"A JSON Schema fragment constraining the value"`
+	Official      bool            `json:"official"`
+	RetentionDays *int            `json:"retention_days,omitempty" required:"false" doc:"The type's own retention window in days, overriding its lane's; absent when the lane's applies (#417)"`
+	WrittenBy     *calcWriterBody `json:"written_by,omitempty" required:"false" doc:"The calc rule that writes this property, absent when none does (one enabled rule writes a key; a disabled writer is named when no rule is enabled)"`
+	WriterClass   string          `json:"writer_class" enum:"node-probe,platform,calc,collected" doc:"Who may write this key (ADR-0161): node-probe (a node's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit"`
 }
 
 func toPropertyBody(p *storage.PropertyType) propertyBody {
 	b := propertyBody{
 		ID: p.ID, Name: p.Name, DataType: p.DataType, Label: p.Label,
-		Description: p.Description, Official: p.Official, WrittenBy: toCalcWriterBody(p.WrittenBy),
+		RetentionDays: p.RetentionDays,
+		Description:   p.Description, Official: p.Official, WrittenBy: toCalcWriterBody(p.WrittenBy),
 		WriterClass: string(p.WriterClass),
 	}
 	if len(p.Validation) > 0 {
@@ -56,6 +58,11 @@ type createPropertyInput struct {
 		Description string `json:"description,omitempty" doc:"What the property means"`
 		Validation  any    `json:"validation,omitempty" doc:"A JSON Schema fragment constraining the value"`
 	}
+}
+
+type setPropertyTypeRetentionInput struct {
+	Name string `path:"name" doc:"The property type's name"`
+	Body setTypeRetentionBody
 }
 
 type propertyNameInput struct {
@@ -168,6 +175,25 @@ func registerPropertyRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 			return nil, mapPropertyErr(err)
 		}
 		return nil, nil
+	})
+
+	huma.Register(api, a.platformGated(a.gated(huma.Operation{
+		OperationID: "set-property-type-retention",
+		Method:      http.MethodPost,
+		Path:        "/property-types/{name}:setRetention",
+		Summary:     "Set a property type's retention window",
+		Description: "Sets how many days this type's transitions are kept, overriding the property lane's window (retention.property_days), or with null returns it to the lane's. Works on an official type: a shipped type's definition is read-only, but how long an install keeps its samples is the install's, and the boot seed never resets it. The retention floor still holds: a declared value and a series' latest value are never removed. 1 to 36,500 days. Audited as set_retention. Gated by property_type:update and platform:update.",
+	}, "property_type", "update"), "update"), func(ctx context.Context, in *setPropertyTypeRetentionInput) (*propertyOutput, error) {
+		// platformGated only publishes the second permission; the handler
+		// enforces it, as every platform-tier write does.
+		if err := a.requirePlatform(ctx, "update"); err != nil {
+			return nil, err
+		}
+		pt, err := gw.SetPropertyTypeRetention(ctx, actorID(ctx), in.Name, in.Body.Days)
+		if err != nil {
+			return nil, mapPropertyErr(err)
+		}
+		return &propertyOutput{Body: toPropertyBody(pt)}, nil
 	})
 }
 

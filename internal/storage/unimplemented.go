@@ -729,6 +729,18 @@ func (UnimplementedGateway) LatestValue(context.Context, string, string, string,
 func (UnimplementedGateway) PruneSamples(context.Context, string, time.Time, int) (int64, error) {
 	return 0, nil
 }
+func (UnimplementedGateway) PruneSamplesOfType(context.Context, string, string, int, time.Time, int) (int64, error) {
+	return 0, nil
+}
+func (UnimplementedGateway) RetentionOverrides(context.Context) ([]TypeRetention, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) SetMetricTypeRetention(context.Context, string, string, *int) (*MetricType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) SetPropertyTypeRetention(context.Context, string, string, *int) (*PropertyType, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) PruneLogs(context.Context, string, string, time.Time, int) (int64, error) {
 	return 0, nil
 }

@@ -274,6 +274,8 @@ secret:create   + platform:create    <- seal a secret at the platform tier
 variable:update + platform:update    <- change the install-wide value of a variable
 tag:update      + platform:update    <- POST /tags/{name}:setPlatform
 settings:update + platform:update    <- every settings write, which is install-wide by definition
+metric_type:update   + platform:update <- POST /metric-types/{name}:setRetention (a type's retention)
+property_type:update + platform:update <- POST /property-types/{name}:setRetention
 ```
 
 A **scope** says *how much of the fleet* a grant reaches; `platform:<action>` says whether the principal may
