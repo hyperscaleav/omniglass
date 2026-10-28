@@ -10,10 +10,10 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// The component property surface: the effective read (every property the
-// component's product declares, resolved against the component's own value, plus
-// any off-contract property set directly on it) and the two writes that set and
-// clear one declared override. Gated by component:read / component:update and
+// The component property surface: the properties read (every property the
+// component has, declared, calculated, observed or told, each row carrying its
+// want/told/is reconciliation, #1297) and the two writes that set and clear one
+// declared override. Gated by component:read / component:update and
 // scope-injected on the component arc, so an out-of-scope component is a
 // non-disclosing 404 rather than a forbidden.
 
@@ -23,23 +23,40 @@ import (
 const componentPropertyInstance = ""
 
 type effectivePropertyBody struct {
-	PropertyTypeName string          `json:"property_type_name" doc:"The catalog property name"`
-	PropertyTypeID   string          `json:"property_type_id" doc:"The catalog property's uuid, the stable form of property_type_name"`
-	Label            string          `json:"label,omitempty" doc:"The property's human label; omitted when unset"`
-	DataType         string          `json:"data_type" doc:"The declared value type, from the property catalog"`
-	Required         bool            `json:"required" doc:"Whether the product contract requires a value; always false off-contract"`
-	IsSet            bool            `json:"is_set" doc:"True when the component overrides the contract default"`
-	FromContract     bool            `json:"from_contract" doc:"True when the component's product declares the property; false for one set directly on the component"`
-	DefaultValue     json.RawMessage `json:"default_value,omitempty" doc:"The contract default; omitted when the contract sets none"`
-	SetValue         json.RawMessage `json:"set_value,omitempty" doc:"The component's override; omitted when the property is unset"`
-	Value            json.RawMessage `json:"value,omitempty" doc:"The effective value: the override, else a calc rule's calculated value, else the contract default"`
-	ValueID          string          `json:"value_id,omitempty" doc:"The stored value's id when set; omitted when the property is unset"`
-	SourceRule       string          `json:"source_rule,omitempty" required:"false" doc:"The calc rule whose calculated sample is the value, by the name it was written under; absent when the value is a declared one or a default"`
-	SourceRuleID     string          `json:"source_rule_id,omitempty" required:"false" doc:"That calc rule's uuid, the stable form of source_rule"`
+	PropertyTypeName string              `json:"property_type_name" doc:"The catalog property name"`
+	PropertyTypeID   string              `json:"property_type_id" doc:"The catalog property's uuid, the stable form of property_type_name"`
+	Label            string              `json:"label,omitempty" doc:"The property's human label; omitted when unset"`
+	DataType         string              `json:"data_type" doc:"The declared value type, from the property catalog"`
+	Required         bool                `json:"required" doc:"Whether the product contract requires a value; always false off-contract"`
+	IsSet            bool                `json:"is_set" doc:"True when the component overrides the contract default"`
+	FromContract     bool                `json:"from_contract" doc:"True when the component's product declares the property; false for one set directly on the component"`
+	DefaultValue     json.RawMessage     `json:"default_value,omitempty" doc:"The contract default; omitted when the contract sets none"`
+	SetValue         json.RawMessage     `json:"set_value,omitempty" doc:"The component's override; omitted when the property is unset"`
+	Value            json.RawMessage     `json:"value,omitempty" doc:"The effective value: the override, else a calc rule's calculated value, else the contract default; omitted for a property nothing declares or calculates (one only observed or told), whose standing is its reconciliation"`
+	ValueID          string              `json:"value_id,omitempty" doc:"The stored value's id when set; omitted when the property is unset"`
+	SourceRule       string              `json:"source_rule,omitempty" required:"false" doc:"The calc rule whose calculated sample is the value, by the name it was written under; absent when the value is a declared one or a default"`
+	SourceRuleID     string              `json:"source_rule_id,omitempty" required:"false" doc:"That calc rule's uuid, the stable form of source_rule"`
+	Reconciliation   *reconciliationBody `json:"reconciliation,omitempty" required:"false" doc:"Where the property stands: what was declared (want), what a command told the owner (told) and what is observed (is), with drift computed on read. Absent on a property only a calc rule writes, since a calculated value is not what anyone asked for"`
+}
+
+// reconciliationBody is a property row's want/told/is pivot (#1297): the read
+// side of the provenance axis, resolved across every live instance of the key
+// (ADR-0456) and computed on read so it cannot go stale.
+type reconciliationBody struct {
+	Want       json.RawMessage `json:"want" doc:"The declared value, resolved live from the cascade (the owner's set value, else the contract default); null when nothing declares the property"`
+	Told       json.RawMessage `json:"told" doc:"The newest intended value a command set, on any instance; null until commanded"`
+	Is         json.RawMessage `json:"is" doc:"The observed value, resolved across every live instance of the property (a deleted endpoint's frozen reading left out): an instance that disagrees with want if any does (the newest such), else the newest observed; null when nothing observes it"`
+	IsInstance string          `json:"is_instance" doc:"The instance the observed value came from: the endpoint that observed it or the instance its sender named, empty for the owner-level series (and when is is null)"`
+	Drift      bool            `json:"drift" doc:"True when any live observed instance differs from want; false when nothing is declared, since there is nothing to drift from"`
 }
 
 func toEffectivePropertyBody(e *storage.EffectiveProperty) effectivePropertyBody {
+	var rec *reconciliationBody
+	if r := e.Reconciliation; r != nil {
+		rec = &reconciliationBody{Want: r.Want, Told: r.Told, Is: r.Is, IsInstance: r.IsInstance, Drift: r.Drift}
+	}
 	return effectivePropertyBody{
+		Reconciliation:   rec,
 		PropertyTypeName: e.PropertyTypeName,
 		PropertyTypeID:   e.PropertyTypeID,
 		Label:            e.Label,
@@ -101,8 +118,8 @@ func registerComponentPropertyRoutes(api huma.API, a *authenticator, gw storage.
 		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/components/{name}/properties",
-		Summary:     "List a component's effective properties",
-		Description: "Every property the component's product declares, resolved to the component's own value or the contract default (is_set marks the override), plus any property set directly on the component (from_contract false). Gated by component:read; an out-of-scope component is a non-disclosing 404.",
+		Summary:     "List a component's properties and where each stands",
+		Description: "Every property the component has: each its product declares, resolved to the component's own value or the contract default (is_set marks the override), each set directly on the component (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
 	}, "component", "read"), func(ctx context.Context, in *componentPathInput) (*componentPropertiesOutput, error) {
 		eff, err := gw.EffectiveProperties(ctx, "component", in.Name, a.scopeFor(ctx, "component", "read"))
 		if err != nil {

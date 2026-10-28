@@ -68,7 +68,7 @@ func registerLocationPropertyRoutes(api huma.API, a *authenticator, gw storage.G
 		Method:      http.MethodGet,
 		Path:        "/locations/{name}/properties",
 		Summary:     "List a location's effective properties",
-		Description: "Every property the location's type declares, resolved to the location's own value or the contract default (is_set marks the override), plus any property set directly on the location (from_contract false). Gated by location:read; an out-of-scope location is a non-disclosing 404.",
+		Description: "Every property the location's type declares, resolved to the location's own value or the contract default (is_set marks the override), plus any property set directly on the location (from_contract false), in the component and system properties read's shape. A place owns no observed sample, so a row's reconciliation carries want and never is. Gated by location:read; an out-of-scope location is a non-disclosing 404.",
 	}, "location", "read"), func(ctx context.Context, in *locationPathInput) (*locationPropertiesOutput, error) {
 		eff, err := gw.EffectiveProperties(ctx, "location", in.Name, a.scopeFor(ctx, "location", "read"))
 		if err != nil {

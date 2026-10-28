@@ -908,8 +908,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List a component's effective properties
-         * @description Every property the component's product declares, resolved to the component's own value or the contract default (is_set marks the override), plus any property set directly on the component (from_contract false). Gated by component:read; an out-of-scope component is a non-disclosing 404.
+         * List a component's properties and where each stands
+         * @description Every property the component has: each its product declares, resolved to the component's own value or the contract default (is_set marks the override), each set directly on the component (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by component:read; an out-of-scope component is a non-disclosing 404.
          */
         get: operations["list-component-properties"];
         put?: never;
@@ -976,26 +976,6 @@ export interface paths {
          * @description Composes, per endpoint, the latest reachability verdict, the probe-layer signals that compose it, and the recent verdict transitions for the availability strip. Gated by component:read; an out-of-scope component is a non-disclosing 404.
          */
         get: operations["get-component-reachability"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/components/{name}/reconciliation": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Read a component's property reconciliation (want/told/is)
-         * @description Pivots, per declared property, the declared value (want, resolved live from the cascade), the intended value (told), and the observed value (is, resolved across every live instance of the property and naming the instance it came from; a deleted endpoint's frozen reading is left out), with config-drift computed on read: drift when any live observed instance differs from want. Gated by component:read; an out-of-scope component is a non-disclosing 404.
-         */
-        get: operations["get-component-reconciliation"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2017,7 +1997,7 @@ export interface paths {
         };
         /**
          * List a location's effective properties
-         * @description Every property the location's type declares, resolved to the location's own value or the contract default (is_set marks the override), plus any property set directly on the location (from_contract false). Gated by location:read; an out-of-scope location is a non-disclosing 404.
+         * @description Every property the location's type declares, resolved to the location's own value or the contract default (is_set marks the override), plus any property set directly on the location (from_contract false), in the component and system properties read's shape. A place owns no observed sample, so a row's reconciliation carries want and never is. Gated by location:read; an out-of-scope location is a non-disclosing 404.
          */
         get: operations["list-location-properties"];
         put?: never;
@@ -4076,8 +4056,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List a system's effective properties
-         * @description Every property the system's standard declares, resolved to the system's own value or the contract default (is_set marks the override), plus any property set directly on the system (from_contract false). Gated by system:read; an out-of-scope system is a non-disclosing 404.
+         * List a system's properties and where each stands
+         * @description Every property the system has: each its standard declares, resolved to the system's own value or the contract default (is_set marks the override), each set directly on the system (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by system:read; an out-of-scope system is a non-disclosing 404.
          */
         get: operations["list-system-properties"];
         put?: never;
@@ -6465,6 +6445,8 @@ export interface components {
             property_type_id: string;
             /** @description The catalog property name */
             property_type_name: string;
+            /** @description Where the property stands: what was declared (want), what a command told the owner (told) and what is observed (is), with drift computed on read. Absent on a property only a calc rule writes, since a calculated value is not what anyone asked for */
+            reconciliation?: components["schemas"]["ReconciliationBody"];
             /** @description Whether the product contract requires a value; always false off-contract */
             required: boolean;
             /** @description The component's override; omitted when the property is unset */
@@ -6473,7 +6455,7 @@ export interface components {
             source_rule?: string;
             /** @description That calc rule's uuid, the stable form of source_rule */
             source_rule_id?: string;
-            /** @description The effective value: the override, else a calc rule's calculated value, else the contract default */
+            /** @description The effective value: the override, else a calc rule's calculated value, else the contract default; omitted for a property nothing declares or calculates (one only observed or told), whose standing is its reconciliation */
             value?: unknown;
             /** @description The stored value's id when set; omitted when the property is unset */
             value_id?: string;
@@ -8650,29 +8632,17 @@ export interface components {
             component: string;
             endpoints: components["schemas"]["ReachEndpointBody"][] | null;
         };
-        ReconPropertyBody: {
-            /** @description True when any live observed instance differs from the declared value */
+        ReconciliationBody: {
+            /** @description True when any live observed instance differs from want; false when nothing is declared, since there is nothing to drift from */
             drift: boolean;
-            /** @description The observed value, resolved across every live instance of the property (a deleted endpoint's frozen reading left out): an instance that disagrees with the declared value if any does (the newest such), else the newest observed (null if none) */
+            /** @description The observed value, resolved across every live instance of the property (a deleted endpoint's frozen reading left out): an instance that disagrees with want if any does (the newest such), else the newest observed; null when nothing observes it */
             is: unknown;
             /** @description The instance the observed value came from: the endpoint that observed it or the instance its sender named, empty for the owner-level series (and when is is null) */
             is_instance: string;
-            /** @description The property_type key */
-            property: string;
-            /** @description The newest intended value a command set, on any instance (null until commanded) */
+            /** @description The newest intended value a command set, on any instance; null until commanded */
             told: unknown;
-            /** @description The declared value, resolved live from the cascade (null if none) */
+            /** @description The declared value, resolved live from the cascade (the owner's set value, else the contract default); null when nothing declares the property */
             want: unknown;
-        };
-        ReconciliationOutputBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/ReconciliationOutputBody.json
-             */
-            readonly $schema?: string;
-            component: string;
-            properties: components["schemas"]["ReconPropertyBody"][] | null;
         };
         RenameCalcRuleInputBody: {
             /**
@@ -12640,38 +12610,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReachabilityOutputBody"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "get-component-reconciliation": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
-                name: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReconciliationOutputBody"];
                 };
             };
             /** @description Error */

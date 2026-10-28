@@ -797,6 +797,9 @@ type Gateway interface {
 	// forbidden.
 	SetProperty(ctx context.Context, actorID, ownerKind, ownerID, propertyName, instance string, value json.RawMessage, read, action scope.Set) (*Property, error)
 	ClearProperty(ctx context.Context, actorID, ownerKind, ownerID, propertyName, instance string, read, action scope.Set) error
+	// EffectiveProperties is the owner's properties read (#1297): every property
+	// key the owner has (declared, calculated, observed or told), each row
+	// carrying its want/told/is reconciliation where one applies.
 	EffectiveProperties(ctx context.Context, ownerKind, ownerID string, read scope.Set) ([]EffectiveProperty, error)
 
 	// The declared-metric contracts (#600): the metric siblings of the three
@@ -823,10 +826,6 @@ type Gateway interface {
 	// instance, provenance); there is no maintained cache (#591). LatestValue is
 	// that read, scope-guarded per owner kind.
 	LatestValue(ctx context.Context, ownerKind, ownerID, key, instance, provenance string, read scope.Set) (*CurrentValue, error)
-	// Reconciliation pivots want (declared, resolved live) / told (intended) / is
-	// (observed) per declared property of an owner, with config-drift computed on
-	// read. It backs the reconciliation read surface.
-	Reconciliation(ctx context.Context, ownerKind, ownerID string, read scope.Set) ([]PropertyReconciliation, error)
 	// PruneSamples is the provenance-aware retention primitive over both series
 	// tables: delete samples older than before, never a declared row and never
 	// the latest row of a series. The retention feature that will call it is a

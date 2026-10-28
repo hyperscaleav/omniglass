@@ -103,10 +103,10 @@ func TestCurrentValueReads(t *testing.T) {
 	}
 }
 
-// TestReconciliation proves the want/told/is pivot: the declared value is
-// resolved live from the cascade (want), the observed value is the series'
-// latest row (is), and drift is computed on read (want present, is present,
-// differ). Declared equal to observed is no drift.
+// TestReconciliation proves the want/told/is pivot the properties read carries
+// (#1297): the declared value is resolved live from the cascade (want), the
+// observed value is the series' latest row (is), and drift is computed on read
+// (want present, is present, differ). Declared equal to observed is no drift.
 func TestReconciliation(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -125,14 +125,6 @@ func TestReconciliation(t *testing.T) {
 		t.Fatalf("create component: %v", err)
 	}
 
-	byName := func(recs []storage.PropertyReconciliation) map[string]storage.PropertyReconciliation {
-		m := make(map[string]storage.PropertyReconciliation, len(recs))
-		for _, r := range recs {
-			m[r.PropertyTypeName] = r
-		}
-		return m
-	}
-
 	// want: an ad-hoc declared value on the component (a productless component's
 	// declared values are all ad-hoc).
 	if _, err := gw.SetProperty(ctx, "", "component", "disp-r", "firmware-version", "", json.RawMessage(`"1.0.0"`), all, all); err != nil {
@@ -146,11 +138,7 @@ func TestReconciliation(t *testing.T) {
 		t.Fatalf("insert observed firmware-version: %v", err)
 	}
 
-	recs, err := gw.Reconciliation(ctx, "component", "disp-r", all)
-	if err != nil {
-		t.Fatalf("reconciliation: %v", err)
-	}
-	fw := byName(recs)["firmware-version"]
+	fw := reconOf(t, gw, "component", "disp-r", "firmware-version")
 	if string(fw.Want) != `"1.0.0"` || string(fw.Is) != `"2.0.0"` || fw.Told != nil || !fw.Drift {
 		t.Fatalf("drift pivot: want want=1.0.0 is=2.0.0 told=nil drift=true, got %+v", fw)
 	}
@@ -162,16 +150,12 @@ func TestReconciliation(t *testing.T) {
 	}}); err != nil {
 		t.Fatalf("insert observed match: %v", err)
 	}
-	recs, err = gw.Reconciliation(ctx, "component", "disp-r", all)
-	if err != nil {
-		t.Fatalf("reconciliation after match: %v", err)
-	}
-	if fw := byName(recs)["firmware-version"]; fw.Drift || string(fw.Is) != `"1.0.0"` {
+	if fw := reconOf(t, gw, "component", "disp-r", "firmware-version"); fw.Drift || string(fw.Is) != `"1.0.0"` {
 		t.Fatalf("no-drift pivot: want is=1.0.0 drift=false, got %+v", fw)
 	}
 
-	// An out-of-scope owner is the non-disclosing not-found.
-	if _, err := gw.Reconciliation(ctx, "component", "ghost", all); err == nil {
-		t.Fatal("reconciliation for unknown component: want not-found error, got nil")
+	// An unknown owner is the non-disclosing not-found.
+	if _, err := gw.EffectiveProperties(ctx, "component", "ghost", all); err == nil {
+		t.Fatal("properties for unknown component: want not-found error, got nil")
 	}
 }

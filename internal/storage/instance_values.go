@@ -114,22 +114,6 @@ func (p *PG) latestObservedValues(ctx context.Context, q querier, ownerKind, own
 	return readPropertyValues(ctx, q, ownerID, key, latestObservedPerInstanceSQL("property", declaredCurrentExpr, col), ownerKind, arc, key, transportNames())
 }
 
-// latestIntendedValues reads told's candidates on an owner (latestIntendedSQL),
-// newest first, scope-guarded like latestObservedValues.
-func (p *PG) latestIntendedValues(ctx context.Context, q querier, ownerKind, ownerID, key string, s scope.Set) ([]CurrentValue, error) {
-	col, err := ownerColumn(ownerKind)
-	if err != nil {
-		return nil, err
-	}
-	arc, err := p.ownerArcValueInScope(ctx, q, ownerKind, ownerID, s)
-	if isOwnerNotFound(err) {
-		return nil, nil
-	} else if err != nil {
-		return nil, err
-	}
-	return readPropertyValues(ctx, q, ownerID, key, latestIntendedSQL(col), ownerKind, arc, key)
-}
-
 // readPropertyValues runs a per-instance property read whose rows are
 // (value, ts, provenance, instance), newest first.
 func readPropertyValues(ctx context.Context, q querier, ownerID, key, sql string, args ...any) ([]CurrentValue, error) {

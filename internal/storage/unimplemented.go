@@ -715,9 +715,6 @@ func (UnimplementedGateway) LatestValue(context.Context, string, string, string,
 func (UnimplementedGateway) PruneSamples(context.Context, time.Time) (int64, error) {
 	return 0, nil
 }
-func (UnimplementedGateway) Reconciliation(context.Context, string, string, scope.Set) ([]PropertyReconciliation, error) {
-	return nil, nil
-}
 func (UnimplementedGateway) ListTags(context.Context) ([]Tag, error) {
 	return nil, nil
 }
