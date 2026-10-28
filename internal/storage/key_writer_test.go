@@ -362,7 +362,7 @@ func TestWriterMismatchRefused(t *testing.T) {
 			{"a reply observing the verdict", func() error { return f.gw.WriteReplyObservation(f.ctx, comp.ID, "endpoint-reachable", "ssh", "up") }},
 			{"a reply observing a calc output", func() error { return f.gw.WriteReplyObservation(f.ctx, comp.ID, "health", "", "healthy") }},
 		},
-		"SetProperty": {
+		"setPropertyTx": {
 			{"a declared gate", func() error {
 				_, err := f.gw.SetProperty(f.ctx, f.actor, "component", comp.ID, "endpoint-rejection", "ssh", json.RawMessage(`"none"`), all, all)
 				return err

@@ -24,7 +24,7 @@ var SampleWritePaths = map[string][]writerclass.Writer{
 	"IssueCommand":          {writerclass.Command},
 	"writeReplyObservation": {writerclass.CommandReply},
 	"writeLifecycleEvent":   {writerclass.Command},
-	"SetProperty":           {writerclass.Operator},
+	"setPropertyTx":         {writerclass.Operator},
 	"ClearProperty":         {writerclass.Operator},
 	"RetryEndpoint":         {writerclass.KeyPin},
 	"writeRuleEvent":        {writerclass.EventRule},
