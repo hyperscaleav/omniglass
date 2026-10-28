@@ -142,6 +142,11 @@ func (p *PG) setPropertyTx(ctx context.Context, tx pgx.Tx, actorID, ownerKind, o
 	if err != nil {
 		return nil, err
 	}
+	// The tombstone (ClearProperty) is the only no-value declared row: an
+	// empty value, or a JSON null, would land a row that reads back unset.
+	if len(value) == 0 || string(value) == "null" {
+		return nil, fmt.Errorf("storage: set property value %s/%s: a declared value requires a value", ownerID, propertyName)
+	}
 	// One scoped resolve, and its result IS the arc value: no second, scope-blind
 	// re-resolve of the same reference can follow it (ruling 2, #627), because
 	// there is no second resolve at all.

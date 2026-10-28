@@ -115,6 +115,11 @@ func templateFrom(ctx context.Context) string {
 	return name
 }
 
+// templateDetailKey is the audit image key the plan's template lands under:
+// its own key, never one a row's image carries (a fork's image names its own
+// standard template under "template").
+const templateDetailKey = "instantiated_from"
+
 // withTemplateDetail adds the template to an audit image (a JSON object), so
 // the detail names where the row came from. A nil image, or one that is not
 // an object, is left as it is.
@@ -128,10 +133,7 @@ func withTemplateDetail(ctx context.Context, image any) any {
 	if err := json.Unmarshal(b, &m); err != nil {
 		return image
 	}
-	if _, has := m["template"]; has {
-		return image
-	}
-	m["template"], _ = json.Marshal(name)
+	m[templateDetailKey], _ = json.Marshal(name)
 	out, err := json.Marshal(m)
 	if err != nil {
 		return image

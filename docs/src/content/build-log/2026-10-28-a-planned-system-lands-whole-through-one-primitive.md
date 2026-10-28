@@ -12,6 +12,6 @@ system template will pass the product it names per role. The transactional half 
 the components that fill their roles (each with its endpoints and declared values), and standalone
 components, all in one transaction, each piece the ordinary create in the caller's scope with its own
 audit row. A plan's template, when it has one, is written into the detail of every audit row it
-writes, the only trace of where a row came from. `CreateSimSystem` is now a consumer, and the
+writes as `instantiated_from`, the only trace of where a row came from. `CreateSimSystem` is now a consumer, and the
 simulation route's tests pass unchanged; the location, declared-value and standard-fork writes gained
 the in-transaction forms the plan shares with their own routes.

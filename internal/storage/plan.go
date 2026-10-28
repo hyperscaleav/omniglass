@@ -24,7 +24,7 @@ import (
 // Plan is what CreatePlan lands.
 type Plan struct {
 	// Template is the template the plan came from, written into every audit
-	// row the plan writes (WithTemplate); empty for none.
+	// row the plan writes as instantiated_from (WithTemplate); empty for none.
 	Template string
 	// Standards are forked, in order, unless a standard of the fork's name
 	// already exists (then the existing one is used as it is).
@@ -92,7 +92,8 @@ var ErrPlanForkForbidden = errors.New("storage: forking the standard needs stand
 
 // PlanError says which piece of a plan failed, so a caller maps the cause
 // the way that piece's own route maps it. Stage is standard, place, system,
-// component, endpoint, role or property; Ref names the piece (a role, a
+// component, endpoint, role, property (a component's declared value) or
+// system-property; Ref names the piece (a role, a
 // place key, a standard, a property).
 type PlanError struct {
 	Stage string
@@ -230,7 +231,7 @@ func (p *PG) createPlanTx(ctx context.Context, tx pgx.Tx, actorID string, plan P
 		}
 		for _, v := range ps.Properties {
 			if _, err := p.setPropertyTx(ctx, tx, actorID, "system", sys.ID, v.Name, "", v.Value, sc.SystemRead, sc.SystemUpdate); err != nil {
-				return nil, &PlanError{Stage: "property", Ref: v.Name, Err: err}
+				return nil, &PlanError{Stage: "system-property", Ref: v.Name, Err: err}
 			}
 		}
 		out.Systems = append(out.Systems, res)

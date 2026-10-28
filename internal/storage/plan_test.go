@@ -64,7 +64,7 @@ func TestCreatePlanLandsWhole(t *testing.T) {
 	plan := func(lastProduct string) storage.Plan {
 		return storage.Plan{
 			Template: "plan-fixture",
-			Standards: []storage.StandardFork{{Template: "plan-fixture", Name: std, Label: "Plan Room", Roles: []storage.ForkRole{
+			Standards: []storage.StandardFork{{Template: "plan-room-template", Name: std, Label: "Plan Room", Roles: []storage.ForkRole{
 				{SystemRoleSpec: storage.SystemRoleSpec{Name: "bar", AcceptedTypes: []string{"video-bar"}}},
 				{SystemRoleSpec: storage.SystemRoleSpec{Name: "screen", AcceptedTypes: []string{"display"}}},
 			}}},
@@ -111,7 +111,7 @@ func TestCreatePlanLandsWhole(t *testing.T) {
 	}
 	// Every audit row the plan wrote names the template.
 	wrote := count(`select count(*) from audit_log`) - before
-	named := count(`select count(*) from audit_log where new->>'template' = 'plan-fixture'`)
+	named := count(`select count(*) from audit_log where new->>'instantiated_from' = 'plan-fixture'`)
 	if wrote == 0 || named != wrote {
 		t.Fatalf("the plan wrote %d audit rows and %d name the template, want all", wrote, named)
 	}
