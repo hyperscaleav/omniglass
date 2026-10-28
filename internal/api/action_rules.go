@@ -65,7 +65,7 @@ type createActionRuleInput struct {
 		When             string   `json:"when,omitempty" required:"false" doc:"A predicate over the alarm facts at the action expression site (component, place, severity, severity_rank, message, transition, rule, ...; see /expressions:validate with site action); absent always holds. A refusal is a 422 with its line and column"`
 		NotificationType string   `json:"notification_type,omitempty" required:"false" doc:"The notification type to send, by name or uuid; absent sends the official one for the transition"`
 		Targets          []string `json:"targets" minItems:"1" doc:"The notification targets to send to, by name or uuid"`
-		Enabled          *bool    `json:"enabled,omitempty" required:"false" doc:"Whether it fires (default true)"`
+		Enabled          *bool    `json:"enabled,omitempty" required:"false" doc:"Whether it fires (default true): a disabled rule queues nothing on a transition, and what it queued before still delivers"`
 	}
 }
 
@@ -78,7 +78,7 @@ type updateActionRuleInput struct {
 		When             *string   `json:"when,omitempty" required:"false" doc:"The predicate (empty always holds)"`
 		NotificationType *string   `json:"notification_type,omitempty" required:"false" doc:"The type to send (empty returns to the official one per transition)"`
 		Targets          *[]string `json:"targets,omitempty" required:"false" doc:"The targets (replaces the set)"`
-		Enabled          *bool     `json:"enabled,omitempty" required:"false" doc:"Whether it fires"`
+		Enabled          *bool     `json:"enabled,omitempty" required:"false" doc:"Whether it fires: a disabled rule queues nothing on a transition, and what it queued before still delivers; re-enabled, it acts on the next transition"`
 	}
 }
 

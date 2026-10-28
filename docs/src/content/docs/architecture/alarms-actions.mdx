@@ -525,7 +525,9 @@ transition to a notification: **on** one or both of an alarm's transitions (`rai
 one for the transition) **to** its targets. Single-step and multi-step actions are one model,
 distinguished only by the length of the step list, so in #618 the rule has the one step `notify`
 and flows extend the same row (#618, decision 1). It is a rule, so it
-rides `rule:*`: reads registry-shaped, writes all-scope like an event rule's.
+rides `rule:*`: reads registry-shaped, writes all-scope like an event rule's. Its `enabled` flag
+(default true, set on create or patch) pauses it: a disabled rule queues nothing on a transition,
+what it queued before still delivers, and re-enabled it acts on the next transition.
 
 ```bash
 omniglass action-rule create --name page-ops --on '["raised","cleared"]' \

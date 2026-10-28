@@ -6057,7 +6057,7 @@ export interface components {
             readonly $schema?: string;
             /** @description What it is for */
             description?: string;
-            /** @description Whether it fires (default true) */
+            /** @description Whether it fires (default true): a disabled rule queues nothing on a transition, and what it queued before still delivers */
             enabled?: boolean;
             /** @description A human label */
             label?: string;
@@ -10687,7 +10687,7 @@ export interface components {
             readonly $schema?: string;
             /** @description What it is for */
             description?: string;
-            /** @description Whether it fires */
+            /** @description Whether it fires: a disabled rule queues nothing on a transition, and what it queued before still delivers; re-enabled, it acts on the next transition */
             enabled?: boolean;
             /** @description A human label (empty clears it) */
             label?: string;

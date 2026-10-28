@@ -70,7 +70,9 @@ omniglass action-rule create --name page-ops --on '["raised","cleared"]' \
   --when 'severity_rank >= 40' --targets '["ops-chat"]'
 ```
 
-Without a `--notification-type`, a raise sends the official `alarm-raised` message and a clear the
+`omniglass action-rule update page-ops --enabled=false` pauses the rule (nothing queues while it
+is off; what it already queued still delivers), and `--enabled=true` resumes it from the next
+transition. Without a `--notification-type`, a raise sends the official `alarm-raised` message and a clear the
 official `alarm-cleared` one. Acknowledging an alarm never sends anything; clearing one does,
 whoever clears it.
 

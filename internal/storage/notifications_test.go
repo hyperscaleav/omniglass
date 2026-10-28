@@ -386,3 +386,43 @@ func TestARenderTheDatabaseWouldRefuseFailsTheRowNotTheTransition(t *testing.T) 
 		t.Fatalf("retrying a row never attempted = %v, want not retryable", err)
 	}
 }
+
+// An action rule's enabled flag (#618, architect-approved scope): a disabled
+// rule queues nothing on a matching transition, a notification it queued
+// before still delivers, and re-enabling it makes the next transition queue
+// one again.
+func TestADisabledActionRuleQueuesNothing(t *testing.T) {
+	f := newNotifyFixture(t)
+	before, err := f.gw.RaiseAlarm(f.ctx, "", "display-1", storage.AlarmSpec{Severity: "high", Message: "queued while enabled"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	off, on := false, true
+	if r, err := f.gw.UpdateActionRule(f.ctx, "", "page-high", storage.ActionRulePatch{Enabled: &off}, f.all); err != nil || r.Enabled {
+		t.Fatalf("disable = %+v, %v", r, err)
+	}
+	a, err := f.gw.RaiseAlarm(f.ctx, "", "display-2", storage.AlarmSpec{Severity: "high", Message: "while disabled"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ns := f.list(t, storage.NotificationFilter{AlarmID: a.ID}); len(ns) != 0 {
+		t.Fatalf("a disabled rule queued %+v", ns)
+	}
+	// What it queued while enabled still delivers.
+	s := &sender{sent: map[string]int{}, answer: func(int) storage.SendResult { return storage.SendResult{OK: true, Status: 200} }}
+	drainAll(t, f, s)
+	for _, n := range f.list(t, storage.NotificationFilter{AlarmID: before.ID}) {
+		if n.Status != storage.NotificationSent {
+			t.Fatalf("a notification queued before the disable = %+v, want sent", n)
+		}
+	}
+	if _, err := f.gw.UpdateActionRule(f.ctx, "", "page-high", storage.ActionRulePatch{Enabled: &on}, f.all); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.gw.ClearAlarm(f.ctx, "", "display-2", a.ID); err != nil {
+		t.Fatal(err)
+	}
+	if ns := f.list(t, storage.NotificationFilter{AlarmID: a.ID}); len(ns) != 2 || ns[0].Transition != "cleared" {
+		t.Fatalf("after re-enabling, the next transition queued %+v, want one per target", ns)
+	}
+}

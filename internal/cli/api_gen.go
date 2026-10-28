@@ -66,7 +66,7 @@ func generatedCommands() []*cobra.Command {
 					},
 				}
 				cmd.Flags().StringVar(&fDescription, "description", "", "What it is for")
-				cmd.Flags().BoolVar(&fEnabled, "enabled", false, "Whether it fires (default true)")
+				cmd.Flags().BoolVar(&fEnabled, "enabled", false, "Whether it fires (default true): a disabled rule queues nothing on a transition, and what it queued before still delivers")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
 				cmd.Flags().StringVar(&fName, "name", "", "The rule's name (lowercase kebab)")
 				_ = cmd.MarkFlagRequired("name")
@@ -174,7 +174,7 @@ func generatedCommands() []*cobra.Command {
 					},
 				}
 				cmd.Flags().StringVar(&fDescription, "description", "", "What it is for")
-				cmd.Flags().BoolVar(&fEnabled, "enabled", false, "Whether it fires")
+				cmd.Flags().BoolVar(&fEnabled, "enabled", false, "Whether it fires: a disabled rule queues nothing on a transition, and what it queued before still delivers; re-enabled, it acts on the next transition")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label (empty clears it)")
 				cmd.Flags().StringVar(&fNotificationType, "notification-type", "", "The type to send (empty returns to the official one per transition)")
 				cmd.Flags().StringVar(&fOn, "on", "", "The transitions it fires on (replaces the set)")

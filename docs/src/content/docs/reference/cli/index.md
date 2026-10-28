@@ -36,7 +36,7 @@ Adds a rule that, on an alarm's raise or clear, when its predicate holds over th
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--description` | string | (none) | What it is for |
-| `--enabled` | bool | `false` | Whether it fires (default true) |
+| `--enabled` | bool | `false` | Whether it fires (default true): a disabled rule queues nothing on a transition, and what it queued before still delivers |
 | `--label` | string | (none) | A human label |
 | `--name` | string | (none) | The rule's name (lowercase kebab) |
 | `--notification-type` | string | (none) | The notification type to send, by name or uuid; absent sends the official one for the transition |
@@ -111,7 +111,7 @@ Patches a rule (an absent field is unchanged; on and targets replace their sets)
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--description` | string | (none) | What it is for |
-| `--enabled` | bool | `false` | Whether it fires |
+| `--enabled` | bool | `false` | Whether it fires: a disabled rule queues nothing on a transition, and what it queued before still delivers; re-enabled, it acts on the next transition |
 | `--label` | string | (none) | A human label (empty clears it) |
 | `--notification-type` | string | (none) | The type to send (empty returns to the official one per transition) |
 | `--on` | string | (none) | The transitions it fires on (replaces the set) |
