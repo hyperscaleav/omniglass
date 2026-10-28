@@ -246,7 +246,7 @@ Returns the component's recent raw log lines (the ingest lane of ADR-0066, disti
 
 List a component's effective metrics
 
-Every metric the component's product declares, resolved to the series' latest observed or calculated sample or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the component (from_contract false). Gated by component:read; an out-of-scope component is a non-disclosing 404.
+Every metric the component's product declares, resolved to the newest observed or calculated sample across its live instances (instance names the one shown, instance_count counts them) or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the component (from_contract false). Gated by component:read; an out-of-scope component is a non-disclosing 404.
 
 - Route: `GET /api/v1/components/{name}/metrics`
 - Gate: `component:read`

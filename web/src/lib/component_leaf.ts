@@ -130,8 +130,16 @@ export function identityRows(props: components["schemas"]["EffectivePropertyBody
 }
 
 // sourceRule and sourceRuleId name the calc rule that derived the value, when
-// one did (#999).
-export type VitalRow = { name: string; label: string; value: unknown; sampled: boolean; sourceRule?: string; sourceRuleId?: string };
+// one did (#999). spread is present only when the metric has more than one
+// live instance (#1020): the row shows the newest, and says which and of how
+// many; a single-instance metric carries none and reads as it always did.
+export type VitalRow = { name: string; label: string; value: unknown; sampled: boolean; sourceRule?: string; sourceRuleId?: string; spread?: VitalSpread };
+
+// One live instance's latest sample, and the spread a multi-instance row
+// carries: the instance shown, how many there are, and each one's latest,
+// newest first (the server's order).
+export type VitalInstance = { instance: string; value: unknown; ts: string; endpoint: boolean };
+export type VitalSpread = { shown: string; count: number; instances: VitalInstance[] };
 
 // vitalRows is the same rule over the metric lane, with the live-series
 // marker: a sampled row is the component speaking, an unsampled one is the
@@ -142,8 +150,27 @@ export function vitalRows(metrics: components["schemas"]["EffectiveMetricBody"][
     .map((m) => {
       const row: VitalRow = { name: m.metric_type_name, label: entityLabel({ name: m.metric_type_name, label: m.label }), value: m.value, sampled: m.is_sampled };
       if (m.source_rule && m.source_rule_id) Object.assign(row, { sourceRule: m.source_rule, sourceRuleId: m.source_rule_id });
+      if ((m.instance_count ?? 0) > 1 && m.instances?.length) {
+        row.spread = { shown: m.instance ?? "", count: m.instance_count, instances: m.instances.map((i) => ({ instance: i.instance, value: i.value, ts: i.ts, endpoint: i.endpoint })) };
+      }
       return row;
     });
+}
+
+// instanceName is how an instance reads on the console: its name, or
+// "owner-level" for the empty instance (a calculated sample, or a push that
+// named no endpoint), which is no endpoint at all.
+export function instanceName(instance: string): string {
+  return instance || "owner-level";
+}
+
+// spreadSummary is a multi-instance row's caption: "latest of 2 endpoints
+// (tcp)". It counts endpoints when every instance names one the component
+// has (the server says which), and instances otherwise: the owner-level
+// series, or an instance a push named, is no endpoint.
+export function spreadSummary(spread: VitalSpread): string {
+  const noun = spread.instances.every((i) => i.endpoint) ? "endpoints" : "instances";
+  return `latest of ${spread.count} ${noun} (${instanceName(spread.shown)})`;
 }
 
 // leafAlarmSince: the component has no transitions read, so since-when comes

@@ -2754,6 +2754,20 @@ components:
         from_contract:
           description: True when the owner's classifier declares the metric; false for a series landing directly on the owner
           type: boolean
+        instance:
+          description: "The instance the shown sample came from (ADR-0456): for an observed sample the endpoint that collected it, empty for the owner-level series (a calculated sample, or a push naming no endpoint) and when nothing is sampled"
+          type: string
+        instance_count:
+          description: How many live instances of the metric hold a sample on this owner (a deleted endpoint's frozen reading is not counted); the shown sample is the newest of them. 0 when nothing is sampled
+          format: int64
+          type: integer
+        instances:
+          description: Each live instance's latest sample, newest first; present only when instance_count is above 1, so a single-instance metric carries none
+          items:
+            $ref: "#/components/schemas/MetricInstanceBody"
+          type:
+            - array
+            - "null"
         is_sampled:
           description: True when the series holds an observed or calculated sample
           type: boolean
@@ -2786,6 +2800,8 @@ components:
         - required
         - is_sampled
         - from_contract
+        - instance
+        - instance_count
       type: object
     EffectivePropertyBody:
       additionalProperties: false
@@ -5529,6 +5545,27 @@ components:
       required:
         - principal_id
         - kind
+      type: object
+    MetricInstanceBody:
+      additionalProperties: false
+      properties:
+        endpoint:
+          description: True when the instance names an endpoint the owner has; false for the owner-level series and an instance a push named
+          type: boolean
+        instance:
+          description: "The instance: the endpoint that collected the sample, or empty for the owner-level series"
+          type: string
+        ts:
+          description: When that sample was taken
+          format: date-time
+          type: string
+        value:
+          description: That instance's latest sample
+      required:
+        - instance
+        - value
+        - ts
+        - endpoint
       type: object
     MetricSampleBody:
       additionalProperties: false
@@ -11687,7 +11724,7 @@ paths:
       x-omniglass-permission: component:read
   /components/{name}/metrics:
     get:
-      description: Every metric the component's product declares, resolved to the series' latest observed or calculated sample or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the component (from_contract false). Gated by component:read; an out-of-scope component is a non-disclosing 404.
+      description: Every metric the component's product declares, resolved to the newest observed or calculated sample across its live instances (instance names the one shown, instance_count counts them) or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the component (from_contract false). Gated by component:read; an out-of-scope component is a non-disclosing 404.
       operationId: list-component-metrics
       parameters:
         - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
@@ -13780,7 +13817,7 @@ paths:
       x-omniglass-permission: location:read
   /locations/{name}/metrics:
     get:
-      description: Every metric the location's type declares, resolved to the series' latest observed or calculated sample or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the location (from_contract false). Gated by location:read; an out-of-scope location is a non-disclosing 404.
+      description: Every metric the location's type declares, resolved to the newest observed or calculated sample across its live instances (instance names the one shown, instance_count counts them) or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the location (from_contract false). Gated by location:read; an out-of-scope location is a non-disclosing 404.
       operationId: list-location-metrics
       parameters:
         - description: The location's name, or a dotted address (e.g. boi.17c.415a)
@@ -17595,7 +17632,7 @@ paths:
       x-omniglass-permission: system:update
   /systems/{name}/metrics:
     get:
-      description: Every metric the system's standard declares, resolved to the series' latest observed or calculated sample or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the system (from_contract false). Gated by system:read; an out-of-scope system is a non-disclosing 404.
+      description: Every metric the system's standard declares, resolved to the newest observed or calculated sample across its live instances (instance names the one shown, instance_count counts them) or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the system (from_contract false). Gated by system:read; an out-of-scope system is a non-disclosing 404.
       operationId: list-system-metrics
       parameters:
         - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)

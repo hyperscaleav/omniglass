@@ -864,6 +864,16 @@ property need **not** be on the contract, but must exist in the catalog (422 oth
 `DELETE .../{property}` clears it (204), falling back to the contract default or leaving the effective
 read entirely when off contract; clearing a value the instance never set is a 404.
 
+The **metrics read** is its numeric twin, read-only since a sample is telemetry, not an override:
+`GET /{components,systems,locations}/{name}/metrics`, gated and scoped like the properties read. Each
+row is a metric the classifier declares or the series holds off contract, resolved to the newest
+`observed` or `calculated` sample across the metric's live instances, else the contract default
+(`is_sampled` marks a live series). The row names the instance its sample came from (`instance`: the
+endpoint that collected it, empty for the owner-level series), counts the live instances holding a
+sample (`instance_count`), and, when there is more than one, lists each one's latest with its time
+(`instances`, newest first, each marked `endpoint` when it names an endpoint the owner has), a deleted endpoint's frozen reading left out of all three
+([ADR-0456](/architecture/decisions/#adr-0456-an-instance-names-which-value-of-one-key-on-one-owner-a-row-is-and-an-owner-level-read-reduces-across-every-instance), #1020).
+
 ## Roles: a system declares a slot, a component fills it
 
 A **[system role](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled)** is a slot a

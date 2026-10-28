@@ -82,9 +82,12 @@ these tables when the catalog divided, and the classifier blades edit both lanes
 metrics** panel sits beside the declared-properties one on the product, standard, and location
 type blades, over the contract's own routes (`/products/{id}/metrics` and its standard and
 location-type siblings, mirrored in the generated CLI). An instance **resolves** a declared
-metric to its series' latest observed or calculated sample, falling back to the contract default
-until one arrives; the per-owner reads (`/components/{name}/metrics` and its system and location
-siblings) answer that resolution beside any off-contract series the owner holds.
+metric to the newest observed or calculated sample across its live instances (a deleted
+endpoint's frozen reading left out), falling back to the contract default until one arrives; the
+per-owner reads (`/components/{name}/metrics` and its system and location siblings) answer that
+resolution beside any off-contract series the owner holds, naming the instance each value came from
+and, where several endpoints collect a metric, each one's latest
+([how an instance resolves](/architecture/properties/#the-instance-dimension-many-values-of-one-name-on-one-owner)).
 
 ## Where a metric's values come from
 

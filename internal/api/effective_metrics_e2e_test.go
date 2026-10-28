@@ -6,8 +6,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
+	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
@@ -25,6 +27,13 @@ type effectiveMetricWire struct {
 	DefaultValue   json.RawMessage `json:"default_value"`
 	SampleValue    json.RawMessage `json:"sample_value"`
 	Value          json.RawMessage `json:"value"`
+	Instance       *string         `json:"instance"`
+	InstanceCount  int             `json:"instance_count"`
+	Instances      []struct {
+		Instance string          `json:"instance"`
+		Value    json.RawMessage `json:"value"`
+		TS       time.Time       `json:"ts"`
+	} `json:"instances"`
 }
 
 type componentMetricsWire struct {
@@ -135,5 +144,84 @@ func TestComponentMetricsAPI(t *testing.T) {
 	}
 	if loc.Location != "hq-campus" {
 		t.Fatalf("location read = %+v, want hq-campus", loc)
+	}
+}
+
+// TestComponentMetricsNameTheShownEndpoint drives the read a component's
+// vitals row renders (#1020) over HTTP: a metric two endpoints collect shows
+// the newest sample, names the endpoint it came from, counts both, and lists
+// each endpoint's latest; a metric one endpoint collects names it and carries
+// no list. Skipped under -short.
+func TestComponentMetricsNameTheShownEndpoint(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	ownerTok := bootstrapOwnerTok(t, ctx, gw)
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	all := scope.Set{All: true}
+	comp, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dsp-1"}, all, all, all, all)
+	if err != nil {
+		t.Fatalf("create component: %v", err)
+	}
+	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge"}, all, all); err != nil {
+		t.Fatalf("create node: %v", err)
+	}
+	node := "edge"
+	for _, ep := range []struct{ transport, target string }{{"http", "10.0.0.1:80"}, {"tcp", "10.0.0.1:1710"}} {
+		if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
+			Transport: ep.transport, Component: &comp.ID, Node: &node,
+			Params: []byte(`{"target":"` + ep.target + `"}`),
+		}, all); err != nil {
+			t.Fatalf("create %s endpoint: %v", ep.transport, err)
+		}
+	}
+	base := time.Now().UTC().Truncate(time.Microsecond).Add(-time.Minute)
+	for _, s := range []struct {
+		ep, key string
+		v       float64
+		at      time.Duration
+	}{
+		{"http", "tcp-connect-time", 2.2, time.Second},
+		{"tcp", "tcp-connect-time", 4.8, 2 * time.Second},
+		{"tcp", "tcp-open", 1, time.Second},
+	} {
+		if err := gw.InsertMetricSamples(ctx, storage.NodeWriter(comp.ID, s.ep), []storage.MetricSampleWrite{{
+			OwnerKind: "component", OwnerID: comp.ID, Key: s.key, Instance: s.ep, Value: s.v, Source: "test", TS: base.Add(s.at),
+		}}); err != nil {
+			t.Fatalf("observe %s on %s: %v", s.key, s.ep, err)
+		}
+	}
+
+	var got componentMetricsWire
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/components/dsp-1/metrics", nil, http.StatusOK), &got); err != nil {
+		t.Fatalf("decode metrics: %v", err)
+	}
+	byName := map[string]effectiveMetricWire{}
+	for _, m := range got.Metrics {
+		byName[m.MetricTypeName] = m
+	}
+	two := byName["tcp-connect-time"]
+	if string(two.Value) != `4.8` || two.Instance == nil || *two.Instance != "tcp" || two.InstanceCount != 2 {
+		t.Fatalf("two endpoints: want 4.8 from tcp of 2, got %+v", two)
+	}
+	if len(two.Instances) != 2 || two.Instances[0].Instance != "tcp" || two.Instances[1].Instance != "http" || string(two.Instances[1].Value) != `2.2` {
+		t.Fatalf("two endpoints: want [tcp 4.8, http 2.2], got %+v", two.Instances)
+	}
+	one := byName["tcp-open"]
+	if string(one.Value) != `1` || one.Instance == nil || *one.Instance != "tcp" || one.InstanceCount != 1 || one.Instances != nil {
+		t.Fatalf("one endpoint: want 1 from tcp, count 1, no list, got %+v", one)
 	}
 }

@@ -370,7 +370,11 @@ cleared alarm is history, not a state), **what it is** (product, vendor, driver,
 property the contract resolved to a value: model, serial, firmware, the RMA facts), and the
 **systems it serves**, each with the role it fills there and the primary marked when there
 is more than one. **Vitals** lists the effective metrics that carry a value, a dot marking
-the component speaking rather than a contract default standing in. Each section's explainer is
+the component speaking rather than a contract default standing in. A metric collected through more
+than one endpoint (a connect time both the http and the tcp endpoint measure) shows the newest
+sample and says so, **latest of 2 endpoints (tcp)**: click it for each endpoint's latest value and
+its age. An endpoint you deleted is left out, so its last reading never stands in for the
+component. Each section's explainer is
 on its label's tooltip.
 
 ::screenshot{#fleet-component}

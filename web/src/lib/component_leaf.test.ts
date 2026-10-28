@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { collectionState, dotVerdict, identityRows, leafAlarmSince, membershipRows, vitalRows } from "./component_leaf";
+import { collectionState, dotVerdict, identityRows, instanceName, leafAlarmSince, membershipRows, spreadSummary, vitalRows } from "./component_leaf";
 import type { FleetView } from "./fleet";
 import type { Node } from "./nodes";
 import type { ReachEndpoint } from "./reachability";
@@ -225,6 +225,37 @@ describe("the leaf's dispatch facts (#786)", () => {
       { name: "target-volume", label: "target-volume", value: 0.8, sampled: false },
       { name: "temp-mean", label: "temp-mean", value: 21, sampled: true, sourceRule: "room-mean", sourceRuleId: "11111111-1111-7111-8111-111111111111" },
     ]);
+  });
+
+  // #1020: a metric two endpoints collect shows the newest and says which and
+  // of how many; a single-instance metric carries no spread and reads as it
+  // always did (the test above).
+  it("vitalRows carries a multi-instance metric's spread, and none for a single instance", () => {
+    const rows = vitalRows([
+      {
+        metric_type_name: "tcp-connect-time", data_type: "float", value: 4.8, is_sampled: true, from_contract: false, required: false,
+        instance: "tcp", instance_count: 2,
+        instances: [{ instance: "tcp", value: 4.8, ts: "2026-10-28T10:00:02Z", endpoint: true }, { instance: "http", value: 2.2, ts: "2026-10-28T10:00:01Z", endpoint: true }],
+      },
+      { metric_type_name: "tcp-open", data_type: "float", value: 1, is_sampled: true, from_contract: false, required: false, instance: "tcp", instance_count: 1 },
+    ] as never);
+    expect(rows[0].spread).toEqual({
+      shown: "tcp", count: 2,
+      instances: [{ instance: "tcp", value: 4.8, ts: "2026-10-28T10:00:02Z", endpoint: true }, { instance: "http", value: 2.2, ts: "2026-10-28T10:00:01Z", endpoint: true }],
+    });
+    expect(rows[1]).toEqual({ name: "tcp-open", label: "tcp-open", value: 1, sampled: true });
+  });
+
+  it("spreadSummary names the instance shown and counts endpoints, or instances when one is no endpoint", () => {
+    const two = [{ instance: "tcp", value: 4.8, ts: "", endpoint: true }, { instance: "http", value: 2.2, ts: "", endpoint: true }];
+    expect(spreadSummary({ shown: "tcp", count: 2, instances: two })).toBe("latest of 2 endpoints (tcp)");
+    const mixed = [{ instance: "", value: 9, ts: "", endpoint: false }, { instance: "tcp", value: 4.8, ts: "", endpoint: true }];
+    expect(spreadSummary({ shown: "", count: 2, instances: mixed })).toBe("latest of 2 instances (owner-level)");
+    // A push-named instance is live but no endpoint, so the row counts instances.
+    const pushed = [{ instance: "port-1", value: 1, ts: "", endpoint: false }, { instance: "port-2", value: 2, ts: "", endpoint: false }];
+    expect(spreadSummary({ shown: "port-1", count: 2, instances: pushed })).toBe("latest of 2 instances (port-1)");
+    expect(instanceName("http")).toBe("http");
+    expect(instanceName("")).toBe("owner-level");
   });
 
   it("leafAlarmSince answers since-when from the worst ACTIVE alarm, and null when nothing is wrong", () => {

@@ -31,14 +31,7 @@ import (
 // a provenance the walked instances rarely hold (intended) would filter their
 // every row (latestIntendedSQL reads told instead).
 //
-// A live instance is the owner-level one, one naming an endpoint the owner
-// has now, or one that names no transport (an instance a push sender named,
-// its own to keep or move). One naming a transport the owner has no endpoint
-// of is a retired observer: an endpoint's name is its transport (ADR-1133),
-// so it names an endpoint since deleted (a changed transport is a delete and
-// a new endpoint), whose last reading is frozen, since nothing prunes a
-// series' latest row. Age cannot tell it apart, because a property is
-// transition-only and a live, unchanged value carries an old ts.
+// Which instances are live is liveInstanceSQL's to say.
 // lane is property or metric; value is the column expression read as value.
 func latestObservedPerInstanceSQL(lane, value, col string) string {
 	return fmt.Sprintf(`with recursive inst(instance) as (
@@ -57,9 +50,28 @@ func latestObservedPerInstanceSQL(lane, value, col string) string {
 				  and instance = i.instance and provenance = 'observed'
 				order by ts desc, id desc limit 1) n
 		where i.instance is not null and n.value is not null
-		  and (i.instance = '' or not (i.instance = any($4::text[]))
-		       or exists (select 1 from endpoint e where $1 = 'component' and e.component = $2 and e.name = i.instance))
-		order by n.ts desc, n.id desc`, lane, value, col)
+		  and %[4]s
+		order by n.ts desc, n.id desc`, lane, value, col, liveInstanceSQL("i.instance", "$1", "$2", "$4"))
+}
+
+// liveInstanceSQL is the one test of whether an observed instance is live
+// (ADR-0456), the predicate every owner-level read that reduces across
+// instances applies, so no reader can draw the line elsewhere. A live instance
+// is the owner-level one, one naming an endpoint the owner has now, or one
+// that names no transport (an instance a push sender named, its own to keep or
+// move). One naming a transport the owner has no endpoint of is a retired
+// observer: an endpoint's name is its transport (ADR-1133), so it names an
+// endpoint since deleted (a changed transport is a delete and a new endpoint),
+// whose last reading is frozen, since nothing prunes a series' latest row. Age
+// cannot tell it apart, because a property is transition-only and a live,
+// unchanged value carries an old ts. Only a component has endpoints, so on any
+// other owner an instance naming a transport is never live. Each argument is a
+// SQL expression: the instance, the owner kind, the owner's arc (its uuid),
+// and the transport names as a text array (transportNames).
+func liveInstanceSQL(instance, ownerKind, arc, transports string) string {
+	return fmt.Sprintf(`(%[1]s = '' or not (%[1]s = any(%[4]s::text[]))
+		       or exists (select 1 from endpoint e where %[2]s = 'component' and e.component = %[3]s and e.name = %[1]s))`,
+		instance, ownerKind, arc, transports)
 }
 
 // transportNames is every registered transport's name, the vocabulary an

@@ -1,9 +1,10 @@
-import { For, Show, createMemo, createSignal, createUniqueId, type JSX } from "solid-js";
+import { For, Show, createMemo, type JSX } from "solid-js";
 import { useQuery } from "@tanstack/solid-query";
 import Button from "./Button";
 import { Clock } from "./icons";
 import { ALARM_TIMELINE_POLL_MS, ageWords, alarmTimeline, alarmTimelineKey, timelineWhat, timelineWho } from "../lib/alarms";
 import { describeError, fmtTime } from "../lib/format";
+import { createToggles } from "../lib/toggles";
 
 // AlarmTimeline is one alarm's history, opened in place under its row (#950):
 // the events that carry the alarm (an event rule's fire event, which opened
@@ -77,16 +78,7 @@ export default function AlarmTimeline(props: { component: string; alarmId: strin
 // history is read where the row is. The toggle is named by what the alarm
 // says (its message), and points at the panel it opens (aria-controls).
 export function createTimelineToggles() {
-  const prefix = createUniqueId();
-  const [opened, setOpened] = createSignal<ReadonlySet<string>>(new Set());
-  const isOpen = (id: string) => opened().has(id);
-  const toggle = (id: string) =>
-    setOpened((prev) => {
-      const next = new Set(prev);
-      if (!next.delete(id)) next.add(id);
-      return next;
-    });
-  const panelId = (id: string) => `alarm-timeline-${prefix}-${id}`;
+  const { isOpen, toggle, panelId } = createToggles("alarm-timeline");
   const label = (what: string) => `Timeline of ${what || "this alarm"}`;
   const button = (id: string, what: string) => (
     <Button

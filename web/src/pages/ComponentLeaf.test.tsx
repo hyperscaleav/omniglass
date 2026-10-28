@@ -77,7 +77,7 @@ const nodes: Node[] = [{ name: "edge-1", enrolled: true, last_heartbeat_at: iso(
 // The cache the last mount rendered from, so a test can land a poll on it.
 let leafClient: QueryClient | undefined;
 
-function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: unknown[], component: Component = bar, meOverride: Me = me, alarms?: unknown[], seed?: { reach?: Reachability; nodes?: Node[]; commands?: Command[] }) {
+function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: unknown[], component: Component = bar, meOverride: Me = me, alarms?: unknown[], seed?: { reach?: Reachability; nodes?: Node[]; commands?: Command[]; metrics?: unknown[] }) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   leafClient = qc;
   seedSeverityLevels(qc);
@@ -105,7 +105,7 @@ function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: un
     { property_type_name: "firmware-version", value: "2.1.4", is_set: false, from_contract: true },
     { property_type_name: "mac-address", value: null, is_set: false, from_contract: true },
   ]);
-  qc.setQueryData([...effectiveMetricsKey(uuidFor("cf-c-bar"))], [
+  qc.setQueryData([...effectiveMetricsKey(uuidFor("cf-c-bar"))], seed?.metrics ?? [
     { metric_type_name: "icmp-rtt-avg", label: "RTT avg", data_type: "float", value: 6.1, is_sampled: true, from_contract: false, required: false },
   ]);
   qc.setQueryData([...componentCommandsKey(uuidFor("cf-c-bar"))], seed?.commands ?? []);
@@ -257,6 +257,58 @@ describe("the leaf's dispatch facts (#786)", () => {
     const card = screen.getByTestId("leaf-vitals");
     expect(within(card).getByText("RTT avg")).toBeTruthy();
     expect(within(card).getByText("6.1")).toBeTruthy();
+  });
+
+  // #1020: a metric two endpoints collect shows the newest sample, and its
+  // row says which endpoint that is and of how many, with a tooltip saying
+  // why, and opens to each endpoint's latest. A single-instance metric reads
+  // as it always did.
+  const spreadMetrics = (connect: number) => [
+    {
+      metric_type_name: "tcp-connect-time", label: "TCP Connect Time", data_type: "float", value: connect, is_sampled: true, from_contract: false, required: false,
+      instance: "tcp", instance_count: 2,
+      instances: [{ instance: "tcp", value: connect, ts: iso(30), endpoint: true }, { instance: "http", value: 2.2, ts: iso(45), endpoint: true }],
+    },
+    { metric_type_name: "tcp-open", label: "TCP Open", data_type: "float", value: 1, is_sampled: true, from_contract: false, required: false, instance: "tcp", instance_count: 1 },
+  ];
+
+  it("a metric two endpoints collect names the endpoint it shows and the count, and opens to each", () => {
+    mount(undefined, undefined, bar, me, undefined, { metrics: spreadMetrics(4.8) });
+    const card = screen.getByTestId("leaf-vitals");
+    const toggle = within(card).getByRole("button", { name: /latest of 2 endpoints \(tcp\)/ });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    // The single-instance metric carries no caption.
+    expect(within(screen.getByTestId("vital-spread-tcp-open")).queryByText(/latest of/)).toBeNull();
+    expect(within(card).getAllByText(/latest of/)).toHaveLength(1);
+    expect(screen.queryByTestId("vital-instances-tcp-connect-time")).toBeNull();
+
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    const list = screen.getByTestId("vital-instances-tcp-connect-time");
+    expect(toggle.getAttribute("aria-controls")).toBe(list.id);
+    const lines = within(list).getAllByRole("listitem").map((li) => li.textContent ?? "");
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toContain("tcp");
+    expect(lines[0]).toContain("4.8");
+    expect(lines[1]).toContain("http");
+    expect(lines[1]).toContain("2.2");
+  });
+
+  it("the open row survives a poll that brings new values", async () => {
+    mount(undefined, undefined, bar, me, undefined, { metrics: spreadMetrics(4.8) });
+    fireEvent.click(within(screen.getByTestId("leaf-vitals")).getByRole("button", { name: /latest of 2 endpoints/ }));
+    leafClient!.setQueryData([...effectiveMetricsKey(uuidFor("cf-c-bar"))], spreadMetrics(5.1));
+    await waitFor(() => expect(screen.getByTestId("vital-tcp-connect-time").textContent).toContain("5.1"));
+    const list = screen.getByTestId("vital-instances-tcp-connect-time");
+    expect(list.textContent).toContain("5.1");
+  });
+
+  it("the caption's tooltip says why the row shows one endpoint's value", async () => {
+    mount(undefined, undefined, bar, me, undefined, { metrics: spreadMetrics(4.8) });
+    const tip = within(screen.getByTestId("vital-spread-tcp-connect-time")).getByRole("button", { name: /More about/ });
+    fireEvent.keyDown(document.body, { key: "Tab" });
+    tip.focus();
+    expect(await screen.findByText(/newest sample across them/)).toBeTruthy();
   });
 
   it("the collection card shows each endpoint's ladder, bottom up", () => {

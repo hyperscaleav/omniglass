@@ -1,0 +1,18 @@
+# A metric two endpoints collect (#1020): Boardroom A's DSP is collected over
+# http and over tcp, and both endpoints measure its connect time and its ping.
+# The Vitals row shows the newest of the two, names the endpoint it came from
+# and how many there are, and opens to each endpoint's latest.
+title: Read a vital two endpoints collect
+description: Open the Boardroom DSP, read which endpoint its TCP connect time comes from and of how many, and open the row for each endpoint's latest value.
+steps:
+  - goto: /components/dsp
+    caption: The Boardroom DSP. Two endpoints collect it, http and tcp, and both measure its TCP connect time.
+  - wait: { selector: '[data-testid=vital-tcp-connect-time]' }
+    caption: Its Vitals row shows the newest sample and says which endpoint it came from, and of how many.
+    hold: 1500
+  - click: '[data-testid=vital-spread-tcp-connect-time] button[aria-expanded]'
+    caption: Open the row to compare the endpoints.
+  - wait: { selector: '[data-testid=vital-instances-tcp-connect-time] li >> nth=1' }
+    caption: Each endpoint's latest value and its age. The row shows the newest; a deleted endpoint is never counted.
+    poster: true
+    hold: 2000
