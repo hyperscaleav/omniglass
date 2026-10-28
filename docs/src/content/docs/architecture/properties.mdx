@@ -38,7 +38,10 @@ The `instance` column has one meaning, stamped per provenance, and reconciliatio
 settlement resolve an owner-level question across every instance of a key
 ([ADR-0456](/architecture/decisions/#adr-0456-an-instance-names-which-value-of-one-key-on-one-owner-a-row-is-and-an-owner-level-read-reduces-across-every-instance),
 [below](#the-instance-dimension-many-values-of-one-name-on-one-owner)); the authored
-`name[instance]` form is design. Owner kinds beyond `component` on ingest are directional (#422). The `calculated` producer is built for
+`name[instance]` form is design. A push may name a **system** as its owner: its metrics, properties
+and events land on the system's own arc at the owner level, and a system owns no log line
+([ADR-0422](/architecture/decisions/#adr-0422-a-system-owns-its-own-telemetry-and-a-location-owns-no-observed-sample); node-collected system telemetry is the shared-API fan-out, design
+under #1282). The `calculated` producer is built for
 component- and system-owned calc rules (#996, #997; a system's output is not yet judged by event rules,
 #1002): a calc rule's output is written through the same sample-write path
 as an observed sample, with `provenance = calculated`, `source_rule` and `source_rule_version`, on a
@@ -71,7 +74,7 @@ A log line is **not** a third sample lane: it is untyped raw arrival on its own 
 
 ### Ownership: the exclusive-arc
 
-The owner is the **exclusive-arc**: an `owner_kind` enum (`component` / `system` / `location` / `node`) plus the matching typed FK, a CHECK enforcing exactly one set. No platform or fleet-root arm (a fleet-wide series is a design question). The same arc owns `event` and `command` rows and is the design for `alarm` (component-local today). System-, location-, and node-level samples are first-class ([health](/architecture/health/) is a `property` owned by a component, system, or location today), fixing Zabbix's inability to put a verdict on a group of hosts. See Ownership on the spine and the storage DDL.
+The owner is the **exclusive-arc**: an `owner_kind` enum (`component` / `system` / `location` / `node`) plus the matching typed FK, a CHECK enforcing exactly one set. No platform or fleet-root arm (a fleet-wide series is a design question). The same arc owns `event` and `command` rows and is the design for `alarm` (component-local today). System- and node-level samples are first-class, fixing Zabbix's inability to put a verdict on a group of hosts: a system owns its [health](/architecture/health/), what a [calc rule](/architecture/calculations/) derives from its members, and what a push reports for it as a whole (a cloud service's account of the room it serves; `owner.kind: system`, read back on the system's own metrics, properties, events and a property's change history), and a node owns its self-health. A **location owns no observed sample**: nothing collects or pushes telemetry for a place, so its arm of the arc holds only an operator's declared properties and its calculated health ([ADR-0422](/architecture/decisions/#adr-0422-a-system-owns-its-own-telemetry-and-a-location-owns-no-observed-sample)). See Ownership on the spine and the storage DDL.
 
 ### The instance dimension: many values of one name on one owner
 

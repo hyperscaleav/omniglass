@@ -234,13 +234,13 @@ func TestTelemetryPushAPI(t *testing.T) {
 		t.Fatalf("all-rejected batch = %+v, want 0 accepted and 1 rejected", allRejected)
 	}
 
-	// Validation: an empty batch and an unsupported owner arc are refused up front,
-	// the arc because the lane derivations still hardcode component (#422).
+	// Validation: an empty batch and an owner arc no push names (a location;
+	// a component or a system is pushed, ADR-0422) are refused up front.
 	c.do(ownerTok, http.MethodPost, "/telemetry:push", map[string]any{
 		"owner": map[string]any{"kind": "component", "ref": "bar-1"},
 	}, http.StatusUnprocessableEntity)
 	c.do(ownerTok, http.MethodPost, "/telemetry:push", map[string]any{
-		"owner":      map[string]any{"kind": "system", "ref": "boardroom-a"},
+		"owner":      map[string]any{"kind": "location", "ref": "hq-west"},
 		"properties": []map[string]any{{"name": "video-input", "value": "hdmi2"}},
 	}, http.StatusUnprocessableEntity)
 

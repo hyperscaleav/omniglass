@@ -371,6 +371,28 @@ reads) with drift computed on read:
 omniglass component reconciliation list disp-1                                       # needs component:read
 ```
 
+Push telemetry an integration observed, for a component or for a system as a whole (a cloud
+service's account of the room it serves). The owner's kind and name ride `--owner`; each lane is a
+JSON array checked against its own catalog, and an unregistered name comes back under `rejected`.
+A system's observations are owner-level (a system has no endpoints, so they name no instance), and a
+system batch carries no log lines, since a log line is a component's:
+
+```sh
+omniglass telemetry push --owner '{"kind":"system","ref":"huddle-1"}' --source room-booking-cloud \
+  --metrics '[{"name":"occupancy-count","value":4}]' \
+  --properties '[{"name":"video-input","value":"hdmi2"}]'                          # needs telemetry:push
+```
+
+A system's samples read on its own surfaces: its metrics (an observed or a calculated series), its
+properties (declared, or a calc rule's), and one series' history, which is where a pushed property
+reads today (the system's property list shows declared and calculated values; #1297 brings observed
+values into it):
+
+```sh
+omniglass system metric list huddle-1                                                  # needs system:read
+omniglass system property sample list huddle-1 video-input                             # needs system:read
+```
+
 ## Secrets
 
 The [secret](/architecture/variables/) commands are generated like every other resource. `secret`

@@ -220,6 +220,7 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 			// The node's writer is bound to the task's endpoint: the only
 			// instance a node-probe key lands under (ADR-0161).
 			bind.SampleOwner = &owner
+			bind.Arc = componentArc(owner)
 			bind.Writer = storage.NodeWriter(owner.ComponentID, owner.EndpointName)
 		} else {
 			// The fence drops these by design, but never silently (#1200): a
@@ -238,15 +239,18 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 }
 
 // apiBinding builds the binding for a batch that arrived on the API push lane. The
-// route already authorized the caller against this owner, so both the samples and
-// the log lines land on it: unlike the node lane, a push has one owner, not two.
+// route already authorized the caller against this owner, so the batch lands on
+// it: unlike the node lane, a push has one owner, not two.
 //
 // It returns false for a batch whose owner is missing or not addressable, which the
 // caller terminates rather than redelivers: a malformed owner will never resolve.
-// Only component owners are accepted: log_line is component-only (#589, a log
-// line comes off a component), and the lane derivations hardcode
-// owner_kind=component downstream (widening the sample arms is #422). Refusing
-// here with a named error beats writing either row to the wrong home.
+// A push names a component or a system (ADR-0422); a location or a node owner is
+// refused, since no route pushes for one and nothing authorized that arc. A
+// system batch carries no log lines: log_line is component-only (#589, a log line
+// comes off a component), so a system batch with one is refused whole rather
+// than landing half of it; the route refuses the same batch with a 422 before it
+// is ever published. Refusing here with a named error beats writing a row to the
+// wrong home.
 //
 // o.GetRef() is copied through as-is, dual-accept per ADR-0062 (the push
 // route's own input is documented "by name or id"): the route that publishes
@@ -260,17 +264,46 @@ func apiBinding(ev *ogv1.TelemetryBatch) (ingestBinding, bool) {
 	if o == nil || o.GetKind() == "" || o.GetRef() == "" {
 		return ingestBinding{}, false
 	}
-	if o.GetKind() != "component" {
-		slog.Warn("push batch refused: samples and log lines are component-owned, batch dropped",
-			"kind", o.GetKind(), "ref", o.GetRef())
-		return ingestBinding{}, false
+	switch o.GetKind() {
+	case "component":
+		owner := storage.TaskOwner{ComponentID: o.GetRef()}
+		return ingestBinding{
+			LogComponent: o.GetRef(),
+			SampleOwner:  &owner,
+			Arc:          componentArc(owner),
+			Writer:       storage.PushWriter(),
+		}, true
+	case "system":
+		if len(ev.GetLogs()) > 0 {
+			slog.Warn("push batch refused: a system owns no log lines (log_line is component-owned), batch dropped",
+				"ref", o.GetRef(), "logs", len(ev.GetLogs()))
+			return ingestBinding{}, false
+		}
+		// No component and no endpoint: a system's samples are owner-level,
+		// and nothing about this batch is a task's.
+		return ingestBinding{
+			SampleOwner: &storage.TaskOwner{},
+			Arc:         sampleArc{Kind: "system", ID: o.GetRef()},
+			Writer:      storage.PushWriter(),
+		}, true
 	}
-	owner := storage.TaskOwner{ComponentID: o.GetRef()}
-	return ingestBinding{
-		LogComponent: o.GetRef(),
-		SampleOwner:  &owner,
-		Writer:       storage.PushWriter(),
-	}, true
+	slog.Warn("push batch refused: a push names a component or a system, batch dropped",
+		"kind", o.GetKind(), "ref", o.GetRef())
+	return ingestBinding{}, false
+}
+
+// sampleArc is the owner arc a batch's samples land on: an owner_kind and
+// the owner's id (or a name ADR-0062 resolves). It is the binding's, never a
+// lane derivation's own guess (#422).
+type sampleArc struct {
+	Kind string
+	ID   string
+}
+
+// componentArc is the arc of a task's (or a component push's) samples: the
+// component the owner names.
+func componentArc(owner storage.TaskOwner) sampleArc {
+	return sampleArc{Kind: "component", ID: owner.ComponentID}
 }
 
 // ingestBinding is the resolved destination for one batch: where its log lines
@@ -278,15 +311,18 @@ func apiBinding(ev *ogv1.TelemetryBatch) (ingestBinding, bool) {
 // reason this is explicit rather than a single owner. On the node lane, log
 // lines are the node's self-logs (node_log) while samples are owned by the
 // task's component. On the push lane, both land under the component the API
-// authorized. Exactly one of LogNode / LogComponent is set per lane; a nil
-// SampleOwner means the batch's samples must not be written (no samples, or an
-// orphan task). Writer is who the samples speak for, which the Storage Gateway
-// holds every key to (ADR-0161): the node bound to its task's endpoint, or the
-// push lane.
+// authorized, or the samples alone under the system it authorized. At most one
+// of LogNode / LogComponent is set per lane; a nil SampleOwner means the
+// batch's samples must not be written (no samples, or an orphan task). Arc is
+// the owner arc the samples land on, set with SampleOwner; SampleOwner itself
+// carries the observing endpoint, if any. Writer is who the samples speak
+// for, which the Storage Gateway holds every key to (ADR-0161): the node bound
+// to its task's endpoint, or the push lane.
 type ingestBinding struct {
 	LogComponent string
 	LogNode      string
 	SampleOwner  *storage.TaskOwner
+	Arc          sampleArc
 	Writer       storage.KeyWriter
 }
 
@@ -327,7 +363,7 @@ func (s *Server) land(ctx context.Context, id string, ev *ogv1.TelemetryBatch, b
 	// other binding, so a future lane cannot quietly widen the log owner.
 	if bind.LogNode != "" {
 		batch.NodeLogs = nodeLogWrites(ev, bind.LogNode)
-	} else {
+	} else if bind.LogComponent != "" {
 		batch.LogLines = logLineWrites(ev, bind.LogComponent)
 	}
 	// A task's collected log lines (#1145), on the node lane alone: they land
@@ -365,9 +401,9 @@ func (s *Server) land(ctx context.Context, id string, ev *ogv1.TelemetryBatch, b
 		// is transition-only: a value equal to its series' latest is not written, the
 		// guard held in the insert itself (LandBatch), so a restart that re-emits an
 		// unchanged verdict adds no row, under any dispatch (#455).
-		batch.Metrics = deriveMetrics(ev, *bind.SampleOwner, reg, bind.Writer)
-		batch.Properties = deriveProperties(ev, *bind.SampleOwner, reg, bind.Writer)
-		batch.Events = deriveEvents(ev, *bind.SampleOwner, reg, bind.Writer)
+		batch.Metrics = deriveMetrics(ev, bind.Arc, *bind.SampleOwner, reg, bind.Writer)
+		batch.Properties = deriveProperties(ev, bind.Arc, *bind.SampleOwner, reg, bind.Writer)
+		batch.Events = deriveEvents(ev, bind.Arc, *bind.SampleOwner, reg, bind.Writer)
 	}
 	if _, err := s.store.LandBatch(ctx, batch); err != nil {
 		return err
@@ -540,8 +576,10 @@ func lineSource(ev *ogv1.TelemetryBatch, l *ogv1.LogLine) string {
 // TelemetryBatch + its resolved owner into the rows to persist. Pure: no I/O.
 // reject-not-project is per lane: a sample whose name is not registered in the
 // lane's OWN catalog is dropped, even when another catalog knows the name. The
-// owner is stamped identically on every lane from the task's interface:
-// owner_kind=component, source=interface type, instance=interface name;
+// owner is stamped identically on every lane from the binding: the arc it
+// resolved (the task's component on the node lane, the authorized component or
+// system on the push lane), source=the endpoint's transport, instance=the
+// endpoint's name where the sample names none;
 // provenance is observed (the insert path fixes that). A sample whose type's
 // writer class does not admit the batch's writer is dropped too (ADR-0161; the
 // gateway refuses it again, so this keeps one stray row from failing a whole
@@ -552,7 +590,7 @@ func lineSource(ev *ogv1.TelemetryBatch, l *ogv1.LogLine) string {
 // deriveMetrics maps the metric lane to metric rows: the name must be a
 // registered metric_type. The value is a double by wire type, so there is no
 // shape to validate beyond the name.
-func deriveMetrics(ev *ogv1.TelemetryBatch, owner storage.TaskOwner, reg collection.Registry, w storage.KeyWriter) []storage.MetricSampleWrite {
+func deriveMetrics(ev *ogv1.TelemetryBatch, arc sampleArc, owner storage.TaskOwner, reg collection.Registry, w storage.KeyWriter) []storage.MetricSampleWrite {
 	var out []storage.MetricSampleWrite
 	for _, dp := range ev.GetMetrics() {
 		mt, ok := reg.Metric(dp.GetName())
@@ -564,8 +602,8 @@ func deriveMetrics(ev *ogv1.TelemetryBatch, owner storage.TaskOwner, reg collect
 			continue
 		}
 		out = append(out, storage.MetricSampleWrite{
-			OwnerKind: "component",
-			OwnerID:   owner.ComponentID,
+			OwnerKind: arc.Kind,
+			OwnerID:   arc.ID,
 			Key:       dp.GetName(),
 			Instance:  instance,
 			Value:     dp.GetValue(),
@@ -580,7 +618,7 @@ func deriveMetrics(ev *ogv1.TelemetryBatch, owner storage.TaskOwner, reg collect
 // registered property_type, the value must be canonical JSON of the type's
 // data_type, and when the type declares a validation schema the value must
 // satisfy it (key.ValidateValue, the same validator every registered key obeys).
-func deriveProperties(ev *ogv1.TelemetryBatch, owner storage.TaskOwner, reg collection.Registry, w storage.KeyWriter) []storage.PropertySampleWrite {
+func deriveProperties(ev *ogv1.TelemetryBatch, arc sampleArc, owner storage.TaskOwner, reg collection.Registry, w storage.KeyWriter) []storage.PropertySampleWrite {
 	var out []storage.PropertySampleWrite
 	for _, dp := range ev.GetProperties() {
 		pt, ok := reg.Property(dp.GetName())
@@ -598,8 +636,8 @@ func deriveProperties(ev *ogv1.TelemetryBatch, owner storage.TaskOwner, reg coll
 			continue
 		}
 		out = append(out, storage.PropertySampleWrite{
-			OwnerKind: "component",
-			OwnerID:   owner.ComponentID,
+			OwnerKind: arc.Kind,
+			OwnerID:   arc.ID,
 			Key:       dp.GetName(),
 			Instance:  instance,
 			Value:     propertyText(raw),
@@ -617,7 +655,7 @@ func deriveProperties(ev *ogv1.TelemetryBatch, owner storage.TaskOwner, reg coll
 // sample). A component published the occurrence natively (an xAPI event, an
 // SNMP trap): origin caught, the platform did not derive it. Raw log lines are
 // a separate ingest lane, not this path (ADR-0066).
-func deriveEvents(ev *ogv1.TelemetryBatch, owner storage.TaskOwner, reg collection.Registry, w storage.KeyWriter) []storage.EventWrite {
+func deriveEvents(ev *ogv1.TelemetryBatch, arc sampleArc, owner storage.TaskOwner, reg collection.Registry, w storage.KeyWriter) []storage.EventWrite {
 	var out []storage.EventWrite
 	for _, dp := range ev.GetEvents() {
 		et, ok := reg.Event(dp.GetName())
@@ -642,8 +680,8 @@ func deriveEvents(ev *ogv1.TelemetryBatch, owner storage.TaskOwner, reg collecti
 			}
 		}
 		out = append(out, storage.EventWrite{
-			OwnerKind:  "component",
-			OwnerID:    owner.ComponentID,
+			OwnerKind:  arc.Kind,
+			OwnerID:    arc.ID,
 			Key:        dp.GetName(),
 			Instance:   instance,
 			Origin:     "caught",

@@ -65,4 +65,31 @@ func TestPushCostsOneScopeCheckPerBatch(t *testing.T) {
 		t.Fatalf("a batch of 45 observations issued %d statements, a batch of 3 issued %d: the push route does work per sample\n--- 3:\n%s\n--- 45:\n%s",
 			many, one, strings.Join(oneSQL, "\n"), strings.Join(manySQL, "\n"))
 	}
+	// A system owner (ADR-0422) costs the same shape: one fence per batch,
+	// resolved on the system tier, and no endpoint read, since a system's
+	// observations name no instance.
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "huddle-1"}, all, all); err != nil {
+		t.Fatalf("create system: %v", err)
+	}
+	sysBatch := func(n int) map[string]any {
+		var metrics, properties, events []map[string]any
+		for i := 0; i < n; i++ {
+			metrics = append(metrics, map[string]any{"name": "room-temperature", "value": 20 + i})
+			properties = append(properties, map[string]any{"name": "firmware-version", "value": fmt.Sprintf("1.%d", i)})
+			events = append(events, map[string]any{"name": "input-changed", "message": fmt.Sprintf("hdmi%d", i)})
+		}
+		return map[string]any{"owner": map[string]any{"kind": "system", "ref": "huddle-1"},
+			"metrics": metrics, "properties": properties, "events": events}
+	}
+	sysPush := func(n int) (int, []string) {
+		counter.Reset()
+		c.do(tok, http.MethodPost, "/telemetry:push", sysBatch(n), http.StatusAccepted)
+		return counter.N(), counter.Summary()
+	}
+	sysOne, sysOneSQL := sysPush(1)
+	sysMany, sysManySQL := sysPush(15)
+	if sysMany != sysOne {
+		t.Fatalf("a system batch of 45 observations issued %d statements, a batch of 3 issued %d\n--- 3:\n%s\n--- 45:\n%s",
+			sysMany, sysOne, strings.Join(sysOneSQL, "\n"), strings.Join(sysManySQL, "\n"))
+	}
 }
