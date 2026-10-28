@@ -79,6 +79,7 @@ const (
 // wantMetricIndexes is every index on the metric table, by definition. An
 // added, dropped or re-keyed index changes this list.
 var wantMetricIndexes = []string{
+	"CREATE INDEX metric_arc_owner_idx ON public.metric USING btree (metric_type_id, COALESCE(system_id, location_id, node_id), instance, ts DESC) WHERE (component_id IS NULL)",
 	"CREATE INDEX metric_owner_idx ON public.metric USING btree (component_id, metric_type_id, instance, ts DESC) WHERE (component_id IS NOT NULL)",
 	"CREATE UNIQUE INDEX metric_pkey ON public.metric USING btree (id)",
 	"CREATE INDEX metric_ts_brin ON public.metric USING brin (ts)",

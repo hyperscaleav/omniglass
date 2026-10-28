@@ -10,7 +10,7 @@ import {
   useRestoreNamespace,
   useRestoreAllDefaults,
 } from "../lib/settings";
-import { constraintFor, isList, listText, textList, validateField } from "../lib/settingsValidation";
+import { constraintFor, isList, listText, validateField, wireValue } from "../lib/settingsValidation";
 
 // Settings is the Admin platform-settings surface (issue #271). It resolves the
 // effective settings document from the cascade (the declared defaults, the operator
@@ -236,8 +236,7 @@ function SettingRow(props: {
   async function save() {
     setBusy(true);
     setRowErr(null);
-    const value = isList(constraint()) ? textList(draft()) : draft();
-    const r = await props.onPatch(props.namespace, { [props.settingKey]: value });
+    const r = await props.onPatch(props.namespace, { [props.settingKey]: wireValue(constraint(), draft()) });
     if (!r.ok) setRowErr(r.message);
     setBusy(false);
   }
@@ -271,6 +270,7 @@ function SettingRow(props: {
             fallback={
               <input
                 type="text"
+                aria-label={props.settingKey}
                 class="input input-bordered input-sm join-item min-w-0 grow font-data"
                 classList={{ "input-error": !!fieldErr() }}
                 value={draft()}
@@ -279,6 +279,7 @@ function SettingRow(props: {
             }
           >
             <select
+              aria-label={props.settingKey}
               class="select select-bordered select-sm join-item min-w-0 grow"
               classList={{ "select-error": !!fieldErr() }}
               value={draft()}

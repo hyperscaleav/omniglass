@@ -7752,6 +7752,35 @@ components:
         - winner
         - value
       type: object
+    RetentionSettings:
+      additionalProperties: false
+      properties:
+        metric_days:
+          default: 14
+          description: Days a metric sample is kept
+          format: int64
+          maximum: 36500
+          minimum: 1
+          type: integer
+        property_days:
+          default: 90
+          description: Days a property transition is kept
+          format: int64
+          maximum: 36500
+          minimum: 1
+          type: integer
+        trend_days:
+          default: 730
+          description: Days an hourly metric trend is kept, once trends exist (#1276)
+          format: int64
+          maximum: 36500
+          minimum: 1
+          type: integer
+      required:
+        - metric_days
+        - property_days
+        - trend_days
+      type: object
     RetryEndpointInputBody:
       additionalProperties: false
       properties:
@@ -8519,12 +8548,15 @@ components:
           $ref: "#/components/schemas/LabelSettings"
         notification:
           $ref: "#/components/schemas/NotificationSettings"
+        retention:
+          $ref: "#/components/schemas/RetentionSettings"
         ui:
           $ref: "#/components/schemas/UISettings"
       required:
         - ui
         - keybindings
         - label
+        - retention
         - notification
       type: object
     SettingsMeOutputBody:

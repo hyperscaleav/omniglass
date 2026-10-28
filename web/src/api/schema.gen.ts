@@ -9483,6 +9483,26 @@ export interface components {
             /** @description True for the resolved value; false for a shadowed candidate */
             winner: boolean;
         };
+        RetentionSettings: {
+            /**
+             * Format: int64
+             * @description Days a metric sample is kept
+             * @default 14
+             */
+            metric_days: number;
+            /**
+             * Format: int64
+             * @description Days a property transition is kept
+             * @default 90
+             */
+            property_days: number;
+            /**
+             * Format: int64
+             * @description Days an hourly metric trend is kept, once trends exist (#1276)
+             * @default 730
+             */
+            trend_days: number;
+        };
         RetryEndpointInputBody: {
             /**
              * Format: uri
@@ -9920,6 +9940,7 @@ export interface components {
             keybindings: components["schemas"]["Keybindings"];
             label: components["schemas"]["LabelSettings"];
             notification: components["schemas"]["NotificationSettings"];
+            retention: components["schemas"]["RetentionSettings"];
             ui: components["schemas"]["UISettings"];
         };
         SettingsMeOutputBody: {

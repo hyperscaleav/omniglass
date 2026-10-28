@@ -106,6 +106,12 @@
       "setup": []
     },
     {
+      "id": "keep-data-for-a-week",
+      "title": "Keep data for a week",
+      "description": "Shorten how long metric samples are kept, from the default 14 days to 7, on the Settings page, and see the new window take the place of the default.",
+      "setup": []
+    },
+    {
       "id": "preview-a-notification",
       "title": "Preview a notification",
       "description": "Open an operator's notification type, preview it against Touch Panel 2's open alarm, and try a draft subject before saving it.",

@@ -8,6 +8,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/internal/settings"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/nats-io/nats-server/v2/server"
 )
@@ -63,6 +64,10 @@ type Store interface {
 	// PruneTelemetryReceipts deletes the receipts of batches landed before
 	// before, past the horizon a copy of the batch could still arrive in.
 	PruneTelemetryReceipts(ctx context.Context, before time.Time, batch int) (int64, error)
+	// RetentionWindows and PruneSamples are the sample retention pass's (#417):
+	// the windows from the settings store, and one bounded chunk of one lane.
+	RetentionWindows(ctx context.Context) (settings.RetentionSettings, error)
+	PruneSamples(ctx context.Context, lane string, before time.Time, limit int) (int64, error)
 	// StampEndpointsSeen records that a batch an endpoint's task delivered
 	// landed, whatever it carried: an endpoint's freshness (#933).
 	StampEndpointsSeen(ctx context.Context, endpointIDs []string) error

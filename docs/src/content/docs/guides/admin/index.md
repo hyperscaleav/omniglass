@@ -68,6 +68,26 @@ Every task on these pages has two front doors, and they call the same API with t
   webhook target, the action rule that sends to it, the message it carries, and how a delivery
   reads on the alarm's timeline.
 
+## How long data is kept
+
+The server keeps each sample lane for a window of days and removes what is older, a little at a
+time, every hour (every minute while it is catching up). The windows are the **retention** settings
+on **Admin > Settings**, each from 1 to 36,500 days:
+
+- `metric_days`, 14 by default: how long a metric sample (a reading such as a round-trip time) is
+  kept.
+- `property_days`, 90 by default: how long a property transition (a change such as a power state
+  going from on to off) is kept.
+- `trend_days`, 730 by default: how long hourly trends will be kept, once they exist (#1276).
+
+Three things are never removed, however old:
+- a declared value (an operator's assertion is the truth, not a sample);
+- the latest row of every series, so a quiet device still shows its current value;
+- the value a command set out to write, which its history reads back.
+A change to a window takes effect at the next pass. Log lines and events are not removed yet. Neither
+is a window per metric or property type yet (#417). See
+[storage](/architecture/storage/#retention-what-is-kept-and-for-how-long) for how it works.
+
 The model behind all of this is [identity and access](/architecture/identity-access/) and
 [config and credentials](/architecture/variables/); those pages say how it is built, these say
 how to run it.
