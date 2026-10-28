@@ -51,7 +51,7 @@ func TestACollisionIsLoggedOnRebuildAndHourlyNotPerBatch(t *testing.T) {
 	batch := func(after time.Duration) {
 		t.Helper()
 		now = now.Add(after)
-		if _, err := cache.get(context.Background(), store); err != nil {
+		if _, _, err := cache.get(context.Background(), store); err != nil {
 			t.Fatal(err)
 		}
 	}

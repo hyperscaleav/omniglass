@@ -51,6 +51,9 @@ type Store interface {
 	// CatalogFingerprint digests the rows the registry is built from, so the
 	// consumer reuses its registry until a catalog changes (#1279).
 	CatalogFingerprint(ctx context.Context) (string, error)
+	// CommandTargetedProperties is the property type names some command type
+	// targets, kept beside the registry and carried on each batch (#1299).
+	CommandTargetedProperties(ctx context.Context) (map[string]bool, error)
 	// LandBatch writes one batch's every sink (the raw log lanes, ADR-0066 and
 	// #589, and the three typed sample lanes) in one transaction under the
 	// batch's receipt (#311): all or nothing, and an id that already landed
