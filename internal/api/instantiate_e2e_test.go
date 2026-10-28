@@ -20,6 +20,8 @@ import (
 // instRoles are the custom roles these tests grant, inserted before the
 // server reads its role index (it reads it once, on the first request).
 var instRoles = map[string][]string{
+	"annex-places":         {"system:create,read,update", "component:create,update,read", "standard:create"},
+	"annex-places-placed":  {"location:create,read"},
 	"sys-only":             []string{"system:create,read,update", "component:update,read", "location:read", "standard:create"},
 	"no-fork":              []string{"system:create,read,update", "component:create,update,read", "location:read"},
 	"loc-only":             []string{"location:create,read"},
@@ -313,6 +315,10 @@ func TestInstantiateLocationsAPI(t *testing.T) {
 	if n := f.count(`select count(*) from location`); n != before+3 {
 		t.Fatalf("after the fork the subtree landed %d places, want 3", n-before)
 	}
+	// A parent the caller cannot read is a 404 whether it exists or not.
+	annexPlacer := f.split("annex-places", "annex")
+	f.c.do(annexPlacer, http.MethodPost, "/locations:instantiate", map[string]any{"template": "meeting-floor", "parent": "hq", "name": "f1"}, http.StatusNotFound)
+	f.c.do(annexPlacer, http.MethodPost, "/locations:instantiate", map[string]any{"template": "meeting-floor", "parent": "nowhere", "name": "f1"}, http.StatusNotFound)
 	// The root needs a name: no shipped type mints one.
 	f.c.do(f.owner, http.MethodPost, "/locations:instantiate", map[string]any{"template": "meeting-floor", "parent": "annex"}, http.StatusUnprocessableEntity)
 	// A location-only caller cannot land the systems the subtree carries.

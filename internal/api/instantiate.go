@@ -52,17 +52,18 @@ func requireAlso(ctx context.Context, a *authenticator, what string, needs [][2]
 // targetPlace resolves the place a component or a system lands in under the
 // caller's location:read scope: a place outside it reads exactly as one that
 // does not exist (a non-disclosing 404), before any plan is made.
-func targetPlace(ctx context.Context, a *authenticator, gw storage.Gateway, ref *string) error {
+func targetPlace(ctx context.Context, a *authenticator, gw storage.Gateway, ref *string) (*storage.Location, error) {
 	if ref == nil || *ref == "" {
-		return nil
+		return nil, nil
 	}
-	if _, err := gw.GetLocation(ctx, *ref, a.scopeFor(ctx, "location", "read")); err != nil {
+	l, err := gw.GetLocation(ctx, *ref, a.scopeFor(ctx, "location", "read"))
+	if err != nil {
 		if errors.Is(err, storage.ErrLocationNotFound) || errors.Is(err, storage.ErrLocationForbidden) {
-			return huma.Error404NotFound(fmt.Sprintf("location %s not found", *ref))
+			return nil, huma.Error404NotFound(fmt.Sprintf("location %s not found", *ref))
 		}
-		return mapLocationErr(err)
+		return nil, mapLocationErr(err)
 	}
-	return nil
+	return l, nil
 }
 
 // mapInstantiateErr maps a planning or a planned-create failure: a template
@@ -220,7 +221,7 @@ func registerInstantiateRoutes(api huma.API, a *authenticator, gw storage.Gatewa
 			return nil, err
 		}
 		loc := ptrOrNil(in.Body.Location)
-		if err := targetPlace(ctx, a, gw, loc); err != nil {
+		if _, err := targetPlace(ctx, a, gw, loc); err != nil {
 			return nil, err
 		}
 		plan, piece, err := template.PlanComponent(ctx, gw, cat, template.ComponentRequest{
@@ -267,7 +268,7 @@ func registerInstantiateRoutes(api huma.API, a *authenticator, gw storage.Gatewa
 			return nil, err
 		}
 		loc := ptrOrNil(in.Body.Location)
-		if err := targetPlace(ctx, a, gw, loc); err != nil {
+		if _, err := targetPlace(ctx, a, gw, loc); err != nil {
 			return nil, err
 		}
 		sp, err := template.PlanSystem(ctx, gw, cat, template.SystemRequest{
@@ -314,8 +315,21 @@ func registerInstantiateRoutes(api huma.API, a *authenticator, gw storage.Gatewa
 				return nil, err
 			}
 		}
+		// The parent is resolved under location:read first, as the other two
+		// routes resolve their target: a parent the caller cannot read is a
+		// non-disclosing 404, never a 403 that says it exists. The plan
+		// addresses it by its id from here on.
+		parent, err := targetPlace(ctx, a, gw, ptrOrNil(in.Body.Parent))
+		if err != nil {
+			return nil, err
+		}
+		var parentRef *string
+		if parent != nil {
+			id := parent.ID
+			parentRef = &id
+		}
 		pp, err := template.PlanPlaces(ctx, gw, cat, template.PlaceRequest{
-			Template: t.Name, Parent: ptrOrNil(in.Body.Parent), Name: in.Body.Name, Label: in.Body.Label,
+			Template: t.Name, Parent: parentRef, Name: in.Body.Name, Label: in.Body.Label,
 		})
 		if err != nil {
 			return nil, mapInstantiateErr(err)
@@ -335,8 +349,8 @@ func registerInstantiateRoutes(api huma.API, a *authenticator, gw storage.Gatewa
 			pb := instantiatedPlaceBody{Location: l.Name, Type: l.LocationType}
 			if l.ParentID != nil {
 				pb.Parent = names[*l.ParentID]
-				if pb.Parent == "" && in.Body.Parent != "" {
-					pb.Parent = in.Body.Parent
+				if pb.Parent == "" && parent != nil {
+					pb.Parent = parent.Name
 				}
 			}
 			out.Body.Places = append(out.Body.Places, pb)

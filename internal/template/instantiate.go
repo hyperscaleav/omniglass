@@ -81,8 +81,11 @@ func componentPiece(ctx context.Context, gw storage.Gateway, c *Catalog, compTem
 	}
 	if driver == "" {
 		prod, err := gw.GetProduct(ctx, product)
+		if errors.Is(err, storage.ErrTypeNotFound) {
+			return pc, piece, invalid("product %s is not in this fleet's catalog", product)
+		}
 		if err != nil {
-			return pc, piece, invalid("product %s: %v", product, err)
+			return pc, piece, fmt.Errorf("template: read product %s: %w", product, err)
 		}
 		if prod.DriverName == nil {
 			return pc, piece, invalid("product %s names no driver to attach", product)
