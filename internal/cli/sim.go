@@ -84,14 +84,20 @@ func newSimMailCmd() *cobra.Command {
 			"(from, to, subject, text, message_id) to --out (standard output by default). It sends nothing on. " +
 			"Point the notification settings' mail_relay at it with mail_security none and name its address in " +
 			"egress_allow. While --down-file holds the word down, it refuses every message with a temporary error.",
-		RunE: func(cmd *cobra.Command, _ []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) (retErr error) {
 			w := cmd.OutOrStdout()
 			if out != "" {
 				f, err := os.OpenFile(out, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 				if err != nil {
 					return err
 				}
-				defer f.Close()
+				// A failed close can lose kept messages, so it is the command's
+				// error unless an earlier one already is.
+				defer func() {
+					if cerr := f.Close(); cerr != nil && retErr == nil {
+						retErr = cerr
+					}
+				}()
 				w = f
 			}
 			opts := mailsim.Options{Out: w}
