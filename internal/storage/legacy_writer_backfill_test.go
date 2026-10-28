@@ -48,6 +48,12 @@ var bornUnderTheRuling = map[string]bool{
 	"snmp-response-time": true,
 	// Why a gate holds (#1110), declared after the backfill.
 	"endpoint-rejection-reason": true,
+	// Each endpoint's collection telemetry (#1369), declared after the
+	// backfill.
+	"poll-duration":        true,
+	"poll-failure-count":   true,
+	"push-message-count":   true,
+	"push-unclaimed-count": true,
 }
 
 // TestLegacyBackfillNamesTheRuling: the key lists the backfill holds rows to
