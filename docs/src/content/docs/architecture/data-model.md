@@ -354,6 +354,11 @@ telemetry: {
     shape: sql_table
     id: uuid {constraint: primary_key}
   }
+  notification_target: {
+    shape: sql_table
+    id: uuid {constraint: primary_key}
+    secret_id: uuid {constraint: foreign_key}
+  }
   notification_type: {
     shape: sql_table
     id: uuid {constraint: primary_key}
@@ -625,6 +630,7 @@ telemetry.metric.location_id -> fleet.location.id
 telemetry.metric.metric_type_id -> telemetry.metric_type.id
 telemetry.metric.node_id -> collection.node.principal_id
 telemetry.metric.system_id -> fleet.system.id
+telemetry.notification_target.secret_id -> config.secret.id
 telemetry.property.command_id -> telemetry.command.id
 telemetry.property.component_id -> fleet.component.id
 telemetry.property.event_id -> telemetry.event.id

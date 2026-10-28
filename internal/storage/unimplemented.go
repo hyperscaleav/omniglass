@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/hyperscaleav/omniglass/internal/driver"
+	"github.com/hyperscaleav/omniglass/internal/egress"
 	"time"
 
 	"github.com/google/uuid"
@@ -1037,4 +1038,32 @@ func (UnimplementedGateway) UpdateNotificationType(context.Context, string, stri
 func (UnimplementedGateway) DeleteNotificationType(context.Context, string, string) error { return nil }
 func (UnimplementedGateway) PreviewNotificationType(context.Context, string, string, string, string, *string, *string) (*NotificationPreview, error) {
 	return nil, ErrNotificationTypeNotFound
+}
+
+func (UnimplementedGateway) ListNotificationTargets(context.Context, scope.Set) ([]NotificationTarget, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) GetNotificationTarget(context.Context, string, scope.Set) (*NotificationTarget, error) {
+	return nil, ErrNotificationTargetNotFound
+}
+func (UnimplementedGateway) CreateNotificationTarget(context.Context, string, NotificationTargetSpec, scope.Set) (*NotificationTarget, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpdateNotificationTarget(context.Context, string, string, NotificationTargetPatch, scope.Set) (*NotificationTarget, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteNotificationTarget(context.Context, string, string, scope.Set) error {
+	return nil
+}
+func (UnimplementedGateway) RevealNotificationTargetURL(context.Context, string, string, scope.Set) (string, error) {
+	return "", ErrNotificationTargetNotFound
+}
+func (UnimplementedGateway) TargetForTest(context.Context, string, scope.Set) (*TargetSend, error) {
+	return nil, ErrNotificationTargetNotFound
+}
+func (UnimplementedGateway) AuditTargetTest(context.Context, string, string, int, bool, string) error {
+	return nil
+}
+func (UnimplementedGateway) EgressPolicy(context.Context) (egress.Policy, error) {
+	return egress.Policy{}, nil
 }

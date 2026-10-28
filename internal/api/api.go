@@ -11,6 +11,7 @@ package api
 
 import (
 	"context"
+	"github.com/hyperscaleav/omniglass/internal/egress"
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -36,6 +37,10 @@ type healthOutput struct {
 // options are the handler's tunables, set with the Option functions.
 type options struct {
 	secureCookies bool
+	// egressOpts tunes the outbound client a notification send uses (#618):
+	// a test hands it its receiver's certificate roots. The zero value is the
+	// production client.
+	egressOpts egress.Options
 	// natsURL is the address the node-claim reply hands back, so a node needs only
 	// the server URL to reach both the API and the bus.
 	natsURL     string
@@ -76,6 +81,10 @@ type Option func(*options)
 // WithLab marks the handler as a lab's (#1195): /auth/status reports lab, so
 // the console says so on every screen.
 func WithLab(b bool) Option { return func(o *options) { o.lab = b } }
+
+// WithEgressOptions tunes the outbound client a notification target's :test
+// send uses (a test's certificate roots).
+func WithEgressOptions(e egress.Options) Option { return func(o *options) { o.egressOpts = e } }
 
 // WithSecureCookies marks the session cookie Secure (set behind TLS).
 func WithSecureCookies(b bool) Option { return func(o *options) { o.secureCookies = b } }
@@ -351,6 +360,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 	registerExpressionRoutes(api, a, gw)
 	registerCommandTypeRoutes(api, a, gw)
 	registerNotificationTypeRoutes(api, a, gw)
+	registerNotificationTargetRoutes(api, a, gw, o.egressOpts)
 	registerCommandRoutes(api, a, gw, newWaitLimiter(o.commandWaiters, o.commandWaitersPerPrincipal))
 	registerNodeRunRoutes(api, a, gw, o.nodeRunner, newRunLimiter(o.nodeRuns, o.nodeRunsPerPrincipal))
 	registerProductPropertyRoutes(api, a, gw)

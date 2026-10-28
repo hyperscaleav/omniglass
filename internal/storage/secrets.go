@@ -26,6 +26,9 @@ var (
 	ErrSecretOwnerNotFound = errors.New("storage: secret owner not found")
 	ErrSecretFieldInvalid  = errors.New("storage: secret field invalid for its type")
 	ErrNoSecretProvider    = errors.New("storage: no encryption key provider configured")
+	// ErrSecretInUse is a delete of a secret a notification target signs
+	// with (#618): refused rather than leaving the send unsigned.
+	ErrSecretInUse = errors.New("storage: a notification target binds this secret")
 )
 
 // SecretType is a registry row: the named, per-field-typed shape a secret takes
@@ -345,6 +348,9 @@ func (p *PG) DeleteSecret(ctx context.Context, actorID, ref string, read, action
 		return err
 	}
 	if _, err := tx.Exec(ctx, `delete from secret where id = $1`, before.ID); err != nil {
+		if isForeignKeyViolation(err) {
+			return ErrSecretInUse
+		}
 		return fmt.Errorf("storage: delete secret: %w", err)
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "delete", "secret", before.ID, auditSecret(before), nil); err != nil {

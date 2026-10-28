@@ -10,6 +10,7 @@ sidebar:
 import SchemaTable from '../../../components/SchemaTable.astro';
 import SeededSet from '../../../components/SeededSet.astro';
 import NotificationFacts from '../../../components/NotificationFacts.astro';
+import NotificationEnvelope from '../../../components/NotificationEnvelope.astro';
 
 An **alarm** detects a condition and holds it; an **action** does something about it. A simple
 action is a single step (a `notify`); a multi-step action is a **flow**. Both are **stateful
@@ -466,6 +467,43 @@ a real alarm on a component the caller can read, exactly as a delivery of that t
 carry it, and returns the facts beside the result; it writes nothing. The console's
 **Catalog > Actions > Notifications** page edits the templates and previews them through that
 route, so an author sees what a receiver gets and what a template can read.
+
+### Notification targets: where a message goes
+
+A `notification_target` names a **channel kind**, a destination and, optionally, the credential it
+proves itself with. The kinds are a code-declared enum published through the API; `webhook` is
+the first, and it reaches people through the tools they already watch (a chat incoming webhook, a
+paging service) without a mail relay. Email (#1317) and other channel kinds are later. A target
+is **platform-owned and admin-only**: an egress destination holding a credential reference, so
+`notification_target` is a sensitive resource off the viewer floor, every route takes an
+all-scope `notification_target:*` grant, and nothing below admin holds one.
+
+The URL is treated as sensitive, since a chat incoming-webhook URL is itself a credential: every
+read masks it to its scheme and host, the audit log records it masked (and an edit to it as
+changed), and `:reveal` returns it whole under an audit row of its own. The bound credential is a
+**platform secret** of the `hmac-key` type (the send signs each body) or the `bearer-token` type
+(the send presents it); a secret a target binds cannot be deleted from under it.
+`POST /notification-targets/{name}:test` sends one synthetic message (transition `test`, about no
+alarm) exactly as a delivery would be sent, answers what the receiver said, and records only its
+audit row.
+
+**The send pipeline is render, then sign, then send.** The body is a fixed, versioned JSON
+envelope: the templates render strings, never the JSON itself, so an operator's template cannot
+produce an invalid body. The signature is over the exact bytes sent and is the scheme the inbound
+`hmac` webhook verifies ([ADR-1024](/architecture/decisions/)), so a receiver can prove the
+sender, and Omniglass can verify its own notifications.
+
+<NotificationEnvelope />
+
+**Egress safety is one primitive** (`internal/egress`), the server's only outbound HTTP client,
+which a later webhook action, ITSM sink or mail API consumes rather than rewrites. A loopback,
+private, link-local, unique-local or carrier-grade NAT destination is refused unless the
+`notification.egress_allow` setting (admin-only, CIDRs, addresses and host names) names it; a
+cloud metadata address is refused even when named. The check runs on the address actually
+dialed, after resolution, so a name that resolves somewhere else at send time is judged where it
+goes. https always, plain http only to a destination the allow list names; TLS verified; a
+redirect is the receiver's answer, never followed; every phase bounded (dial, handshake, the
+response's headers, the whole exchange); no proxy from the environment.
 
 :::design[The `action` entity (ADR-0050)]
 

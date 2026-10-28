@@ -202,6 +202,12 @@
       "labelled": false
     },
     {
+      "table": "notification_target",
+      "shape": "key-bearing",
+      "reason": "ops-chat, a destination an action rule sends to",
+      "labelled": true
+    },
+    {
       "table": "notification_type",
       "shape": "key-bearing",
       "reason": "alarm-raised, a message shape an action rule sends",

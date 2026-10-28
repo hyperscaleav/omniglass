@@ -22,6 +22,9 @@ export const settingsSchema = {
   "notification": {
     "console_url": {
       "type": "string"
+    },
+    "egress_allow": {
+      "type": "array"
     }
   },
   "ui": {

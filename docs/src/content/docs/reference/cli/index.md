@@ -3252,6 +3252,138 @@ Example:
 omniglass node update <name>
 ```
 
+## `omniglass notification-target`
+
+Commands for the notification-target resource
+
+### `omniglass notification-target create`
+
+Create a notification target
+
+```
+omniglass notification-target create [flags]
+```
+
+Adds a destination a notification can be sent to: a channel kind (webhook), its URL and, optionally, the platform secret it signs or authenticates with. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--enabled` | bool | `false` | Whether deliveries go to it (default true) |
+| `--kind` | string | (none) | The channel kind |
+| `--label` | string | (none) | A human label |
+| `--name` | string | (none) | The target's name (lowercase kebab) |
+| `--secret` | string | (none) | A platform secret, by name or uuid, of type hmac-key (signs each body) or bearer-token (sent as Authorization: Bearer) |
+| `--url` | string | (none) | The destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is |
+
+Example:
+
+```sh
+omniglass notification-target create --kind kind --name name --url url
+```
+
+### `omniglass notification-target delete`
+
+Delete a notification target
+
+```
+omniglass notification-target delete <name>
+```
+
+Removes a target. One an action rule still sends to is a 409. Audited. Gated by notification_target:delete with an all-scope grant.
+
+Example:
+
+```sh
+omniglass notification-target delete <name>
+```
+
+### `omniglass notification-target get`
+
+Get a notification target
+
+```
+omniglass notification-target get <name>
+```
+
+Returns one notification target by name or uuid, its URL masked. Gated by notification_target:read with an all-scope grant.
+
+Example:
+
+```sh
+omniglass notification-target get <name>
+```
+
+### `omniglass notification-target list`
+
+List notification targets
+
+```
+omniglass notification-target list
+```
+
+Lists every notification target, by name, each URL masked to its scheme and host. An all-scope directory: gated by notification_target:read with an all-scope grant (admin), and off the viewer floor, since a target is an egress destination holding a credential.
+
+Example:
+
+```sh
+omniglass notification-target list
+```
+
+### `omniglass notification-target reveal`
+
+Reveal a notification target's URL
+
+```
+omniglass notification-target reveal <name>
+```
+
+Returns the target's URL whole. Audited as reveal (the URL is not in the audit row). Gated by notification_target:reveal with an all-scope grant.
+
+Example:
+
+```sh
+omniglass notification-target reveal <name>
+```
+
+### `omniglass notification-target test`
+
+Send a test notification to a target
+
+```
+omniglass notification-target test <name>
+```
+
+Sends one synthetic message (transition test, about no alarm) to the target through the egress contract, signed or authenticated as a delivery would be, and answers what the receiver said. Records nothing but its audit row (the result, never the URL). A disabled target is still tested. Gated by notification_target:test with an all-scope grant.
+
+Example:
+
+```sh
+omniglass notification-target test <name>
+```
+
+### `omniglass notification-target update`
+
+Update a notification target
+
+```
+omniglass notification-target update <name> [flags]
+```
+
+Patches a target's label, URL, secret or enabled flag (an absent field is unchanged; an empty secret unbinds it). Audited, the URL masked and a change to it recorded as changed. Gated by notification_target:update with an all-scope grant.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--enabled` | bool | `false` | Whether deliveries go to it |
+| `--label` | string | (none) | A human label (empty clears it) |
+| `--secret` | string | (none) | A platform secret by name or uuid; empty unbinds it |
+| `--url` | string | (none) | The destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is |
+
+Example:
+
+```sh
+omniglass notification-target update <name>
+```
+
 ## `omniglass notification-type`
 
 Commands for the notification-type resource
@@ -3264,7 +3396,7 @@ Create a notification type
 omniglass notification-type create [flags]
 ```
 
-Registers an operator notification type (official=false). A template in the sandboxed template language a label rule uses (title, upper, lower, slug, words; if, and, or, not, eq and the comparisons), reading the alarm facts Component, ComponentLabel, ComponentType, Place, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and a refused construct (printf, call, index, range, a variable) is a 422, and is never stored. A taken name is a 409. Audited. Gated by notification_type:create.
+Registers an operator notification type (official=false). A template in the sandboxed language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Place, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422, and is never stored. A taken name is a 409. Audited. Gated by notification_type:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -3380,7 +3512,7 @@ Update a notification type
 omniglass notification-type update <name> [flags]
 ```
 
-Patches an operator type's label, description or templates (an absent field is unchanged). A template in the sandboxed template language a label rule uses (title, upper, lower, slug, words; if, and, or, not, eq and the comparisons), reading the alarm facts Component, ComponentLabel, ComponentType, Place, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and a refused construct (printf, call, index, range, a variable) is a 422. An official type is read-only (409). The name moves only through :rename. Audited. Gated by notification_type:update.
+Patches an operator type's label, description or templates (an absent field is unchanged). A template in the sandboxed language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Place, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422. An official type is read-only (409). The name moves only through :rename. Audited. Gated by notification_type:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|

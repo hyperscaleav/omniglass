@@ -68,6 +68,12 @@ type NotificationSettings struct {
 	// (a component's page). Empty leaves Link empty: the server cannot know the
 	// name it is reached by behind a proxy.
 	ConsoleURL string `json:"console_url" default:"" doc:"The console's base URL as a receiver of a notification reaches it (https://omniglass.example.com); the prefix of the Link a template reads. Empty leaves Link empty"`
+	// EgressAllow opens internal destinations to the outbound client
+	// (internal/egress): each entry a CIDR, an address, or a host name. A
+	// private, loopback or link-local destination is refused unless named
+	// here; a cloud metadata address is refused even when it is. Plain http
+	// is admitted only to a destination named here.
+	EgressAllow []string `json:"egress_allow" nullable:"false" default:"" doc:"The internal destinations a notification may reach, each a CIDR (10.20.0.0/16), an address, or a host name (chat.corp.example). Everything private, loopback or link-local is refused unless named here; a cloud metadata address is refused even when it is; plain http is admitted only to a destination named here"`
 }
 
 // namespaceType indexes each namespace's json name to its sub-struct type, for the

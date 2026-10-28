@@ -162,6 +162,10 @@ var sensitiveResources = map[string]bool{
 	// point of the second gate), and a bare resource wildcard is reach, so it does
 	// not name the tier. Only a literal grant, a `platform:*`, or owner's `>` does.
 	"platform": true,
+	// notification_target is an egress destination holding a credential
+	// reference, and its URL is often itself a credential (#618): admin-only,
+	// so the viewer floor must not list it.
+	"notification_target": true,
 }
 
 // match reports whether a grant pattern matches a required permission path (both

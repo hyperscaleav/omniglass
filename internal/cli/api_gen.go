@@ -4402,6 +4402,187 @@ func generatedCommands() []*cobra.Command {
 	}())
 	roots = append(roots, func() *cobra.Command {
 		parent := &cobra.Command{
+			Use:   "notification-target",
+			Short: "Commands for the notification-target resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fEnabled bool
+				var fKind string
+				var fLabel string
+				var fName string
+				var fSecret string
+				var fUrl string
+				cmd := &cobra.Command{
+					Use:     "create",
+					Short:   "Create a notification target",
+					Long:    "Adds a destination a notification can be sent to: a channel kind (webhook), its URL and, optionally, the platform secret it signs or authenticates with. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.",
+					Example: "  omniglass notification-target create --kind kind --name name --url url",
+					Args:    pathArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/notification-targets")
+						body := map[string]any{}
+						if cmd.Flags().Changed("enabled") {
+							body["enabled"] = fEnabled
+						}
+						if cmd.Flags().Changed("kind") {
+							body["kind"] = fKind
+						}
+						if cmd.Flags().Changed("label") {
+							body["label"] = fLabel
+						}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						if cmd.Flags().Changed("secret") {
+							body["secret"] = fSecret
+						}
+						if cmd.Flags().Changed("url") {
+							body["url"] = fUrl
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().BoolVar(&fEnabled, "enabled", false, "Whether deliveries go to it (default true)")
+				cmd.Flags().StringVar(&fKind, "kind", "", "The channel kind")
+				_ = cmd.MarkFlagRequired("kind")
+				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
+				cmd.Flags().StringVar(&fName, "name", "", "The target's name (lowercase kebab)")
+				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().StringVar(&fSecret, "secret", "", "A platform secret, by name or uuid, of type hmac-key (signs each body) or bearer-token (sent as Authorization: Bearer)")
+				cmd.Flags().StringVar(&fUrl, "url", "", "The destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is")
+				_ = cmd.MarkFlagRequired("url")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "delete <name>",
+					Short:   "Delete a notification target",
+					Long:    "Removes a target. One an action rule still sends to is a 409. Audited. Gated by notification_target:delete with an all-scope grant.",
+					Example: "  omniglass notification-target delete <name>",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/notification-targets/%s", pathSegment(args[0]))
+						return runAPICommand(cmd, "DELETE", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "get <name>",
+					Short:   "Get a notification target",
+					Long:    "Returns one notification target by name or uuid, its URL masked. Gated by notification_target:read with an all-scope grant.",
+					Example: "  omniglass notification-target get <name>",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/notification-targets/%s", pathSegment(args[0]))
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "list",
+					Short:   "List notification targets",
+					Long:    "Lists every notification target, by name, each URL masked to its scheme and host. An all-scope directory: gated by notification_target:read with an all-scope grant (admin), and off the viewer floor, since a target is an egress destination holding a credential.",
+					Example: "  omniglass notification-target list",
+					Args:    pathArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/notification-targets")
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "reveal <name>",
+					Short:   "Reveal a notification target's URL",
+					Long:    "Returns the target's URL whole. Audited as reveal (the URL is not in the audit row). Gated by notification_target:reveal with an all-scope grant.",
+					Example: "  omniglass notification-target reveal <name>",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/notification-targets/%s:reveal", pathSegment(args[0]))
+						return runAPICommand(cmd, "POST", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "test <name>",
+					Short:   "Send a test notification to a target",
+					Long:    "Sends one synthetic message (transition test, about no alarm) to the target through the egress contract, signed or authenticated as a delivery would be, and answers what the receiver said. Records nothing but its audit row (the result, never the URL). A disabled target is still tested. Gated by notification_target:test with an all-scope grant.",
+					Example: "  omniglass notification-target test <name>",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/notification-targets/%s:test", pathSegment(args[0]))
+						return runAPICommand(cmd, "POST", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fEnabled bool
+				var fLabel string
+				var fSecret string
+				var fUrl string
+				cmd := &cobra.Command{
+					Use:     "update <name>",
+					Short:   "Update a notification target",
+					Long:    "Patches a target's label, URL, secret or enabled flag (an absent field is unchanged; an empty secret unbinds it). Audited, the URL masked and a change to it recorded as changed. Gated by notification_target:update with an all-scope grant.",
+					Example: "  omniglass notification-target update <name>",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/notification-targets/%s", pathSegment(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("enabled") {
+							body["enabled"] = fEnabled
+						}
+						if cmd.Flags().Changed("label") {
+							body["label"] = fLabel
+						}
+						if cmd.Flags().Changed("secret") {
+							body["secret"] = fSecret
+						}
+						if cmd.Flags().Changed("url") {
+							body["url"] = fUrl
+						}
+						return runAPICommand(cmd, "PATCH", path, body)
+					},
+				}
+				cmd.Flags().BoolVar(&fEnabled, "enabled", false, "Whether deliveries go to it")
+				cmd.Flags().StringVar(&fLabel, "label", "", "A human label (empty clears it)")
+				cmd.Flags().StringVar(&fSecret, "secret", "", "A platform secret by name or uuid; empty unbinds it")
+				cmd.Flags().StringVar(&fUrl, "url", "", "The destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is")
+				return cmd
+			}()
+			return cmd
+		}())
+		return parent
+	}())
+	roots = append(roots, func() *cobra.Command {
+		parent := &cobra.Command{
 			Use:   "notification-type",
 			Short: "Commands for the notification-type resource",
 		}
@@ -4415,7 +4596,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create a notification type",
-					Long:    "Registers an operator notification type (official=false). A template in the sandboxed template language a label rule uses (title, upper, lower, slug, words; if, and, or, not, eq and the comparisons), reading the alarm facts Component, ComponentLabel, ComponentType, Place, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and a refused construct (printf, call, index, range, a variable) is a 422, and is never stored. A taken name is a 409. Audited. Gated by notification_type:create.",
+					Long:    "Registers an operator notification type (official=false). A template in the sandboxed language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Place, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422, and is never stored. A taken name is a 409. Audited. Gated by notification_type:create.",
 					Example: "  omniglass notification-type create --name name --subject subject --text text",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -4579,7 +4760,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "update <name>",
 					Short:   "Update a notification type",
-					Long:    "Patches an operator type's label, description or templates (an absent field is unchanged). A template in the sandboxed template language a label rule uses (title, upper, lower, slug, words; if, and, or, not, eq and the comparisons), reading the alarm facts Component, ComponentLabel, ComponentType, Place, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and a refused construct (printf, call, index, range, a variable) is a 422. An official type is read-only (409). The name moves only through :rename. Audited. Gated by notification_type:update.",
+					Long:    "Patches an operator type's label, description or templates (an absent field is unchanged). A template in the sandboxed language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Place, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422. An official type is read-only (409). The name moves only through :rename. Audited. Gated by notification_type:update.",
 					Example: "  omniglass notification-type update <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {

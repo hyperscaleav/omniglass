@@ -2516,6 +2516,98 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/notification-targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List notification targets
+         * @description Lists every notification target, by name, each URL masked to its scheme and host. An all-scope directory: gated by notification_target:read with an all-scope grant (admin), and off the viewer floor, since a target is an egress destination holding a credential.
+         */
+        get: operations["list-notification-target"];
+        put?: never;
+        /**
+         * Create a notification target
+         * @description Adds a destination a notification can be sent to: a channel kind (webhook), its URL and, optionally, the platform secret it signs or authenticates with. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.
+         */
+        post: operations["create-notification-target"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notification-targets/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a notification target
+         * @description Returns one notification target by name or uuid, its URL masked. Gated by notification_target:read with an all-scope grant.
+         */
+        get: operations["get-notification-target"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a notification target
+         * @description Removes a target. One an action rule still sends to is a 409. Audited. Gated by notification_target:delete with an all-scope grant.
+         */
+        delete: operations["delete-notification-target"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a notification target
+         * @description Patches a target's label, URL, secret or enabled flag (an absent field is unchanged; an empty secret unbinds it). Audited, the URL masked and a change to it recorded as changed. Gated by notification_target:update with an all-scope grant.
+         */
+        patch: operations["update-notification-target"];
+        trace?: never;
+    };
+    "/notification-targets/{name}:reveal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reveal a notification target's URL
+         * @description Returns the target's URL whole. Audited as reveal (the URL is not in the audit row). Gated by notification_target:reveal with an all-scope grant.
+         */
+        post: operations["reveal-notification-target"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notification-targets/{name}:test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send a test notification to a target
+         * @description Sends one synthetic message (transition test, about no alarm) to the target through the egress contract, signed or authenticated as a delivery would be, and answers what the receiver said. Records nothing but its audit row (the result, never the URL). A disabled target is still tested. Gated by notification_target:test with an all-scope grant.
+         */
+        post: operations["test-notification-target"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/notification-types": {
         parameters: {
             query?: never;
@@ -2531,7 +2623,7 @@ export interface paths {
         put?: never;
         /**
          * Create a notification type
-         * @description Registers an operator notification type (official=false). A template in the sandboxed template language a label rule uses (title, upper, lower, slug, words; if, and, or, not, eq and the comparisons), reading the alarm facts Component, ComponentLabel, ComponentType, Place, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and a refused construct (printf, call, index, range, a variable) is a 422, and is never stored. A taken name is a 409. Audited. Gated by notification_type:create.
+         * @description Registers an operator notification type (official=false). A template in the sandboxed language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Place, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422, and is never stored. A taken name is a 409. Audited. Gated by notification_type:create.
          */
         post: operations["create-notification-type"];
         delete?: never;
@@ -2583,7 +2675,7 @@ export interface paths {
         head?: never;
         /**
          * Update a notification type
-         * @description Patches an operator type's label, description or templates (an absent field is unchanged). A template in the sandboxed template language a label rule uses (title, upper, lower, slug, words; if, and, or, not, eq and the comparisons), reading the alarm facts Component, ComponentLabel, ComponentType, Place, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and a refused construct (printf, call, index, range, a variable) is a 422. An official type is read-only (409). The name moves only through :rename. Audited. Gated by notification_type:update.
+         * @description Patches an operator type's label, description or templates (an absent field is unchanged). A template in the sandboxed language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Place, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422. An official type is read-only (409). The name moves only through :rename. Audited. Gated by notification_type:update.
          */
         patch: operations["update-notification-type"];
         trace?: never;
@@ -6177,6 +6269,29 @@ export interface components {
             /** @description Globally unique node name (lowercase letters, digits, and hyphens); it is also the node's NATS subject token, which is why the rule forbids a dot */
             name: string;
         };
+        CreateNotificationTargetInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateNotificationTargetInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Whether deliveries go to it (default true) */
+            enabled?: boolean;
+            /**
+             * @description The channel kind
+             * @enum {string}
+             */
+            kind: "webhook";
+            /** @description A human label */
+            label?: string;
+            /** @description The target's name (lowercase kebab) */
+            name: string;
+            /** @description A platform secret, by name or uuid, of type hmac-key (signs each body) or bearer-token (sent as Authorization: Bearer) */
+            secret?: string;
+            /** @description The destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is */
+            url: string;
+        };
         CreateNotificationTypeInputBody: {
             /**
              * Format: uri
@@ -7629,6 +7744,15 @@ export interface components {
             readonly $schema?: string;
             nodes: components["schemas"]["NodeBody"][] | null;
         };
+        ListNotificationTargetsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListNotificationTargetsOutputBody.json
+             */
+            readonly $schema?: string;
+            notification_targets: components["schemas"]["NotificationTargetBody"][] | null;
+        };
         ListNotificationTypesOutputBody: {
             /**
              * Format: uri
@@ -8213,6 +8337,42 @@ export interface components {
         NotificationSettings: {
             /** @description The console's base URL as a receiver of a notification reaches it (https://omniglass.example.com); the prefix of the Link a template reads. Empty leaves Link empty */
             console_url: string;
+            /** @description The internal destinations a notification may reach, each a CIDR (10.20.0.0/16), an address, or a host name (chat.corp.example). Everything private, loopback or link-local is refused unless named here; a cloud metadata address is refused even when it is; plain http is admitted only to a destination named here */
+            egress_allow: string[];
+        };
+        NotificationTargetBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/NotificationTargetBody.json
+             */
+            readonly $schema?: string;
+            /**
+             * @description How a send proves itself: hmac signs each body with the bound hmac-key (X-Omniglass-Signature), bearer presents the bound bearer-token, none sends unsigned
+             * @enum {string}
+             */
+            auth: "none" | "hmac" | "bearer";
+            /** Format: date-time */
+            created_at: string;
+            /** @description Whether deliveries go to it; a disabled target is skipped */
+            enabled: boolean;
+            /** @description The target's uuid, the stable form of name */
+            id: string;
+            /**
+             * @description The channel kind: webhook posts a signed JSON envelope to the URL
+             * @enum {string}
+             */
+            kind: "webhook";
+            label?: string;
+            name: string;
+            /** @description The platform secret the send signs (an hmac-key) or authenticates (a bearer-token) with, by name; absent sends unsigned */
+            secret?: string;
+            /** @description The bound secret's uuid, the stable form of secret */
+            secret_id?: string;
+            /** Format: date-time */
+            updated_at: string;
+            /** @description The destination, masked to its scheme and host (the path and query often carry a credential); :reveal returns it whole */
+            url: string;
         };
         NotificationTypeBody: {
             /**
@@ -9076,6 +9236,17 @@ export interface components {
             certificate?: string;
             /** @description The SHA256 fingerprint of a changed key the operator now trusts, the key the endpoint's transport pins (the offered_key a key refusal names on the component's reachability read): an ssh endpoint's host key, which becomes its declared ssh-host-key, or a tls or https endpoint's certificate public key, which becomes its declared tls-certificate. The session redials onto it. While a key refusal holds, it must be that exact offered key: any other is a 409 that changes nothing (the refusal on record is the node's last word, so to trust a key the component presents since, retry without a key first). With no key refusal held it declares a pin ahead of time. Omit to retry with the pin unchanged */
             host_key?: string;
+        };
+        RevealNotificationTargetOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/RevealNotificationTargetOutputBody.json
+             */
+            readonly $schema?: string;
+            name: string;
+            /** @description The destination URL, whole */
+            url: string;
         };
         RevealSecretOutputBody: {
             /**
@@ -10163,6 +10334,23 @@ export interface components {
             /** @description The inline probe settings (jsonb) */
             spec?: unknown;
         };
+        TestNotificationTargetOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/TestNotificationTargetOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Whether the receiver answered 2xx */
+            ok: boolean;
+            /** @description Why it failed, as a delivery would record it; never the URL or a credential */
+            reason?: string;
+            /**
+             * Format: int64
+             * @description The receiver's HTTP status; 0 when no answer came (refused, unreachable, TLS, timeout)
+             */
+            status: number;
+        };
         Transport: {
             built: boolean;
             description: string;
@@ -10458,6 +10646,22 @@ export interface components {
             label?: string;
             /** @description Set the node's location by name or id, or "" to clear it */
             location?: string;
+        };
+        UpdateNotificationTargetInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateNotificationTargetInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Whether deliveries go to it */
+            enabled?: boolean;
+            /** @description A human label (empty clears it) */
+            label?: string;
+            /** @description A platform secret by name or uuid; empty unbinds it */
+            secret?: string;
+            /** @description The destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is */
+            url?: string;
         };
         UpdateNotificationTypeInputBody: {
             /**
@@ -16104,6 +16308,230 @@ export interface operations {
             };
             /** @description Internal Server Error */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-notification-target": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListNotificationTargetsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-notification-target": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateNotificationTargetInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationTargetBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-notification-target": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The target's name or uuid */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationTargetBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-notification-target": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The target's name or uuid */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-notification-target": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The target's name or uuid */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateNotificationTargetInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationTargetBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "reveal-notification-target": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The target's name or uuid */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevealNotificationTargetOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "test-notification-target": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The target's name or uuid */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestNotificationTargetOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
                 headers: {
                     [name: string]: unknown;
                 };

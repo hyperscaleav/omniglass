@@ -50,6 +50,10 @@ func provedByCreate(ctx context.Context, gw *storage.PG) map[string]func(key str
 				OutputKey: "occupancy-count"}, scope.Set{All: true})
 			return err
 		},
+		"notification_target": func(s string) error {
+			_, err := gw.CreateNotificationTarget(ctx, "", storage.NotificationTargetSpec{Name: s, Kind: storage.ChannelWebhook, URL: "https://hooks.example.com/x"}, all)
+			return err
+		},
 		"notification_type": func(s string) error {
 			_, err := gw.CreateNotificationType(ctx, "", storage.NotificationTypeSpec{Name: s, Subject: "x", Text: "y"})
 			return err

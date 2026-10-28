@@ -4661,6 +4661,68 @@
      }
     ]
    },
+   "notification_target": {
+    "columns": [
+     {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false,
+      "default": "uuidv7()",
+      "pk": true
+     },
+     {
+      "name": "name",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "label",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "kind",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "url",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "secret_id",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "secret.id"
+     },
+     {
+      "name": "enabled",
+      "type": "boolean",
+      "nullable": false,
+      "default": "true"
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     }
+    ],
+    "uniques": [
+     {
+      "name": "notification_target_name_key",
+      "definition": "CREATE UNIQUE INDEX notification_target_name_key ON public.notification_target USING btree (name)"
+     }
+    ]
+   },
    "notification_type": {
     "columns": [
      {

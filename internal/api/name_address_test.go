@@ -50,6 +50,8 @@ var referenceFields = map[string]string{
 	"event_type_id":      "event_type_name",
 	"location_type_id":   "location_type",
 	"secret_type_id":     "secret_type",
+	// A notification target's bound credential (#618), by name beside its uuid.
+	"secret_id": "secret",
 	// A calc rule's input names the property or metric it reads as `key`, the
 	// sample-key vocabulary, beside the uuid the rule holds it by (#1018).
 	"key_id": "key",

@@ -2914,6 +2914,55 @@
         ],
         "type": "object"
       },
+      "CreateNotificationTargetInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/CreateNotificationTargetInputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "enabled": {
+            "description": "Whether deliveries go to it (default true)",
+            "type": "boolean"
+          },
+          "kind": {
+            "description": "The channel kind",
+            "enum": [
+              "webhook"
+            ],
+            "type": "string"
+          },
+          "label": {
+            "description": "A human label",
+            "type": "string"
+          },
+          "name": {
+            "description": "The target's name (lowercase kebab)",
+            "minLength": 1,
+            "type": "string"
+          },
+          "secret": {
+            "description": "A platform secret, by name or uuid, of type hmac-key (signs each body) or bearer-token (sent as Authorization: Bearer)",
+            "type": "string"
+          },
+          "url": {
+            "description": "The destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is",
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "url"
+        ],
+        "type": "object"
+      },
       "CreateNotificationTypeInputBody": {
         "additionalProperties": false,
         "properties": {
@@ -6370,6 +6419,33 @@
         ],
         "type": "object"
       },
+      "ListNotificationTargetsOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/ListNotificationTargetsOutputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "notification_targets": {
+            "items": {
+              "$ref": "#/components/schemas/NotificationTargetBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "notification_targets"
+        ],
+        "type": "object"
+      },
       "ListNotificationTypesOutputBody": {
         "additionalProperties": false,
         "properties": {
@@ -7927,10 +8003,93 @@
           "console_url": {
             "description": "The console's base URL as a receiver of a notification reaches it (https://omniglass.example.com); the prefix of the Link a template reads. Empty leaves Link empty",
             "type": "string"
+          },
+          "egress_allow": {
+            "description": "The internal destinations a notification may reach, each a CIDR (10.20.0.0/16), an address, or a host name (chat.corp.example). Everything private, loopback or link-local is refused unless named here; a cloud metadata address is refused even when it is; plain http is admitted only to a destination named here",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "required": [
-          "console_url"
+          "console_url",
+          "egress_allow"
+        ],
+        "type": "object"
+      },
+      "NotificationTargetBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/NotificationTargetBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "auth": {
+            "description": "How a send proves itself: hmac signs each body with the bound hmac-key (X-Omniglass-Signature), bearer presents the bound bearer-token, none sends unsigned",
+            "enum": [
+              "none",
+              "hmac",
+              "bearer"
+            ],
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "enabled": {
+            "description": "Whether deliveries go to it; a disabled target is skipped",
+            "type": "boolean"
+          },
+          "id": {
+            "description": "The target's uuid, the stable form of name",
+            "type": "string"
+          },
+          "kind": {
+            "description": "The channel kind: webhook posts a signed JSON envelope to the URL",
+            "enum": [
+              "webhook"
+            ],
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "secret": {
+            "description": "The platform secret the send signs (an hmac-key) or authenticates (a bearer-token) with, by name; absent sends unsigned",
+            "type": "string"
+          },
+          "secret_id": {
+            "description": "The bound secret's uuid, the stable form of secret",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "url": {
+            "description": "The destination, masked to its scheme and host (the path and query often carry a credential); :reveal returns it whole",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "url",
+          "auth",
+          "enabled",
+          "created_at",
+          "updated_at"
         ],
         "type": "object"
       },
@@ -9957,6 +10116,32 @@
             "type": "string"
           }
         },
+        "type": "object"
+      },
+      "RevealNotificationTargetOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/RevealNotificationTargetOutputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "url": {
+            "description": "The destination URL, whole",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "url"
+        ],
         "type": "object"
       },
       "RevealSecretOutputBody": {
@@ -12689,6 +12874,38 @@
         ],
         "type": "object"
       },
+      "TestNotificationTargetOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/TestNotificationTargetOutputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the receiver answered 2xx",
+            "type": "boolean"
+          },
+          "reason": {
+            "description": "Why it failed, as a delivery would record it; never the URL or a credential",
+            "type": "string"
+          },
+          "status": {
+            "description": "The receiver's HTTP status; 0 when no answer came (refused, unreachable, TLS, timeout)",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ok",
+          "status"
+        ],
+        "type": "object"
+      },
       "Transport": {
         "additionalProperties": false,
         "properties": {
@@ -13283,6 +13500,37 @@
           },
           "location": {
             "description": "Set the node's location by name or id, or \"\" to clear it",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateNotificationTargetInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/UpdateNotificationTargetInputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "enabled": {
+            "description": "Whether deliveries go to it",
+            "type": "boolean"
+          },
+          "label": {
+            "description": "A human label (empty clears it)",
+            "type": "string"
+          },
+          "secret": {
+            "description": "A platform secret by name or uuid; empty unbinds it",
+            "type": "string"
+          },
+          "url": {
+            "description": "The destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is",
             "type": "string"
           }
         },
@@ -21079,6 +21327,283 @@
         "summary": "Claim a node identity in exchange for its NATS credential"
       }
     },
+    "/notification-targets": {
+      "get": {
+        "description": "Lists every notification target, by name, each URL masked to its scheme and host. An all-scope directory: gated by notification_target:read with an all-scope grant (admin), and off the viewer floor, since a target is an egress destination holding a credential.",
+        "operationId": "list-notification-target",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListNotificationTargetsOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List notification targets",
+        "x-omniglass-permission": "notification_target:read"
+      },
+      "post": {
+        "description": "Adds a destination a notification can be sent to: a channel kind (webhook), its URL and, optionally, the platform secret it signs or authenticates with. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.",
+        "operationId": "create-notification-target",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateNotificationTargetInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationTargetBody"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Create a notification target",
+        "x-omniglass-permission": "notification_target:create"
+      }
+    },
+    "/notification-targets/{name}": {
+      "delete": {
+        "description": "Removes a target. One an action rule still sends to is a 409. Audited. Gated by notification_target:delete with an all-scope grant.",
+        "operationId": "delete-notification-target",
+        "parameters": [
+          {
+            "description": "The target's name or uuid",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "description": "The target's name or uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Delete a notification target",
+        "x-omniglass-permission": "notification_target:delete"
+      },
+      "get": {
+        "description": "Returns one notification target by name or uuid, its URL masked. Gated by notification_target:read with an all-scope grant.",
+        "operationId": "get-notification-target",
+        "parameters": [
+          {
+            "description": "The target's name or uuid",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "description": "The target's name or uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationTargetBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Get a notification target",
+        "x-omniglass-permission": "notification_target:read"
+      },
+      "patch": {
+        "description": "Patches a target's label, URL, secret or enabled flag (an absent field is unchanged; an empty secret unbinds it). Audited, the URL masked and a change to it recorded as changed. Gated by notification_target:update with an all-scope grant.",
+        "operationId": "update-notification-target",
+        "parameters": [
+          {
+            "description": "The target's name or uuid",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "description": "The target's name or uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateNotificationTargetInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationTargetBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Update a notification target",
+        "x-omniglass-permission": "notification_target:update"
+      }
+    },
+    "/notification-targets/{name}:reveal": {
+      "post": {
+        "description": "Returns the target's URL whole. Audited as reveal (the URL is not in the audit row). Gated by notification_target:reveal with an all-scope grant.",
+        "operationId": "reveal-notification-target",
+        "parameters": [
+          {
+            "description": "The target's name or uuid",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "description": "The target's name or uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevealNotificationTargetOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Reveal a notification target's URL",
+        "x-omniglass-permission": "notification_target:reveal"
+      }
+    },
+    "/notification-targets/{name}:test": {
+      "post": {
+        "description": "Sends one synthetic message (transition test, about no alarm) to the target through the egress contract, signed or authenticated as a delivery would be, and answers what the receiver said. Records nothing but its audit row (the result, never the URL). A disabled target is still tested. Gated by notification_target:test with an all-scope grant.",
+        "operationId": "test-notification-target",
+        "parameters": [
+          {
+            "description": "The target's name or uuid",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "description": "The target's name or uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestNotificationTargetOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Send a test notification to a target",
+        "x-omniglass-permission": "notification_target:test"
+      }
+    },
     "/notification-types": {
       "get": {
         "description": "Lists every notification type (official and operator), by name: what a message about an alarm says. Fleet-wide reference data. Gated by notification_type:read.",
@@ -21109,7 +21634,7 @@
         "x-omniglass-permission": "notification_type:read"
       },
       "post": {
-        "description": "Registers an operator notification type (official=false). A template in the sandboxed template language a label rule uses (title, upper, lower, slug, words; if, and, or, not, eq and the comparisons), reading the alarm facts Component, ComponentLabel, ComponentType, Place, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and a refused construct (printf, call, index, range, a variable) is a 422, and is never stored. A taken name is a 409. Audited. Gated by notification_type:create.",
+        "description": "Registers an operator notification type (official=false). A template in the sandboxed language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Place, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422, and is never stored. A taken name is a 409. Audited. Gated by notification_type:create.",
         "operationId": "create-notification-type",
         "requestBody": {
           "content": {
@@ -21274,7 +21799,7 @@
         "x-omniglass-permission": "notification_type:read"
       },
       "patch": {
-        "description": "Patches an operator type's label, description or templates (an absent field is unchanged). A template in the sandboxed template language a label rule uses (title, upper, lower, slug, words; if, and, or, not, eq and the comparisons), reading the alarm facts Component, ComponentLabel, ComponentType, Place, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and a refused construct (printf, call, index, range, a variable) is a 422. An official type is read-only (409). The name moves only through :rename. Audited. Gated by notification_type:update.",
+        "description": "Patches an operator type's label, description or templates (an absent field is unchanged). A template in the sandboxed language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Place, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422. An official type is read-only (409). The name moves only through :rename. Audited. Gated by notification_type:update.",
         "operationId": "update-notification-type",
         "parameters": [
           {

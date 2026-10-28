@@ -16,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/hyperscaleav/omniglass/internal/driver"
+	"github.com/hyperscaleav/omniglass/internal/egress"
 	"strings"
 	"sync"
 	"time"
@@ -980,6 +981,21 @@ type Gateway interface {
 	UpdateNotificationType(ctx context.Context, actorID, ref string, patch NotificationTypePatch) (*NotificationType, error)
 	DeleteNotificationType(ctx context.Context, actorID, ref string) error
 	PreviewNotificationType(ctx context.Context, ref, componentID, alarmID, transition string, subject, text *string) (*NotificationPreview, error)
+	// The notification_target (#618): admin-only, every operation an
+	// all-scope grant (else ErrNotificationTargetForbidden). The URL is
+	// sensitive: reads carry it for the API to mask, the reveal audits it.
+	ListNotificationTargets(ctx context.Context, read scope.Set) ([]NotificationTarget, error)
+	GetNotificationTarget(ctx context.Context, ref string, read scope.Set) (*NotificationTarget, error)
+	CreateNotificationTarget(ctx context.Context, actorID string, spec NotificationTargetSpec, create scope.Set) (*NotificationTarget, error)
+	UpdateNotificationTarget(ctx context.Context, actorID, ref string, patch NotificationTargetPatch, action scope.Set) (*NotificationTarget, error)
+	DeleteNotificationTarget(ctx context.Context, actorID, ref string, action scope.Set) error
+	RevealNotificationTargetURL(ctx context.Context, actorID, ref string, action scope.Set) (string, error)
+	// TargetForTest unseals a target's credential for the :test send, and
+	// AuditTargetTest records that send's result.
+	TargetForTest(ctx context.Context, ref string, action scope.Set) (*TargetSend, error)
+	AuditTargetTest(ctx context.Context, actorID, targetID string, status int, ok bool, reason string) error
+	// EgressPolicy reads the install's egress allow list.
+	EgressPolicy(ctx context.Context) (egress.Policy, error)
 
 	// Close releases the underlying connection pool. Idempotent at the pool
 	// level; call once on shutdown.

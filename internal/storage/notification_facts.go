@@ -253,7 +253,10 @@ func NotificationFactsJSON() ([]byte, error) {
 	return append(out, '\n'), nil
 }
 
+// isForeignKeyViolation reports a delete or write a foreign key refused: a
+// foreign_key_violation (23503), or a restrict_violation (23001), which is
+// what an ON DELETE RESTRICT raises.
 func isForeignKeyViolation(err error) bool {
 	var pgErr interface{ SQLState() string }
-	return errors.As(err, &pgErr) && pgErr.SQLState() == "23503"
+	return errors.As(err, &pgErr) && (pgErr.SQLState() == "23503" || pgErr.SQLState() == "23001")
 }

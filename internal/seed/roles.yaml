@@ -135,6 +135,10 @@ roles:
       - "rule:*"
       - "command_type:*"
       - "notification_type:*"
+      # notification_target is admin-only (#618): a destination the server
+      # sends to, holding a credential, so it is a sensitive resource off the
+      # viewer floor and nothing below admin holds it.
+      - "notification_target:*"
       - "command:*"
       # rename moves a registry row's handle (#555): its own action, as on the
       # fleet tiers, because it breaks a script or a bookmark that typed the old
