@@ -278,7 +278,7 @@ describe("the leaf's dispatch facts (#786)", () => {
     const toggle = within(card).getByRole("button", { name: /latest of 2 endpoints \(tcp\)/ });
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     // The single-instance metric carries no caption.
-    expect(within(screen.getByTestId("vital-tcp-open")).queryByText(/latest of/)).toBeNull();
+    expect(within(screen.getByTestId("vital-spread-tcp-open")).queryByText(/latest of/)).toBeNull();
     expect(within(card).getAllByText(/latest of/)).toHaveLength(1);
     expect(screen.queryByTestId("vital-instances-tcp-connect-time")).toBeNull();
 
@@ -305,7 +305,7 @@ describe("the leaf's dispatch facts (#786)", () => {
 
   it("the caption's tooltip says why the row shows one endpoint's value", async () => {
     mount(undefined, undefined, bar, me, undefined, { metrics: spreadMetrics(4.8) });
-    const tip = within(screen.getByTestId("vital-tcp-connect-time")).getByRole("button", { name: /More about/ });
+    const tip = within(screen.getByTestId("vital-spread-tcp-connect-time")).getByRole("button", { name: /More about/ });
     fireEvent.keyDown(document.body, { key: "Tab" });
     tip.focus();
     expect(await screen.findByText(/newest sample across the endpoints/)).toBeTruthy();

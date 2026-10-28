@@ -364,7 +364,7 @@ export default function ComponentLeaf() {
             <Show when={vitals().length > 0}>
               <section data-testid="leaf-vitals" class="rounded-box border border-base-300 bg-base-100 p-3.5 text-sm">
                 <Eyebrow label="Vitals" hint="The latest sample per series; a dot marks the component speaking, not a contract default standing in. A metric several endpoints collect shows the newest of them and says which." />
-                <dl class="mt-2 grid grid-cols-[minmax(7rem,max-content)_1fr] gap-x-3 gap-y-1">
+                <dl class="mt-2 grid grid-cols-[minmax(7rem,max-content)_minmax(5rem,max-content)_1fr] gap-x-3 gap-y-1">
                   <For each={vitalKeys()}>
                     {(key) => (
                       <Show when={vitalByKey().get(key)}>
@@ -379,12 +379,15 @@ export default function ComponentLeaf() {
                               <Show when={row().sourceRuleId}>
                                 <CalcRuleLink name={row().sourceRule!} id={row().sourceRuleId!} />
                               </Show>
-                              {/* Several endpoints collect it (#1020): the row
-                                  shows the newest, says which and of how many,
-                                  and opens to each one's latest. */}
+                            </dd>
+                            {/* Several endpoints collect it (#1020): the row
+                                shows the newest, says which and of how many,
+                                and opens to each one's latest. Its own column,
+                                so the captions align whatever the values' widths. */}
+                            <dd data-testid={`vital-spread-${key}`} class="flex items-baseline">
                               <Show when={row().spread}>
                                 {(sp) => (
-                                  <span class="inline-flex items-center gap-1 self-center font-sans text-[11px] text-base-content/55">
+                                  <span class="inline-flex items-center gap-1 self-center text-[11px] text-base-content/55">
                                     <button
                                       type="button"
                                       class="inline-flex cursor-pointer items-center gap-0.5 hover:text-base-content"
@@ -405,7 +408,7 @@ export default function ComponentLeaf() {
                             </dd>
                             <Show when={row().spread && vitalSpreads.isOpen(key) ? row().spread : undefined}>
                               {(sp) => (
-                                <dd class="col-start-2 mb-1">
+                                <dd class="col-span-2 col-start-2 mb-1">
                                   <ul id={vitalSpreads.panelId(key)} data-testid={`vital-instances-${key}`} class="flex flex-col gap-0.5 border-l border-base-300 pl-2.5 text-xs">
                                     <For each={sp().instances}>
                                       {(it) => (
