@@ -3362,6 +3362,12 @@
       "type": "ARRAY",
       "nullable": false,
       "default": "'{}'::text[]"
+     },
+     {
+      "name": "opt_out_allowed",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
      }
     ],
     "checks": [
@@ -5368,6 +5374,34 @@
      },
      {
       "name": "landed_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     }
+    ]
+   }
+  },
+  "unclustered": {
+   "action_rule_opt_out": {
+    "columns": [
+     {
+      "name": "rule_id",
+      "type": "uuid",
+      "nullable": false,
+      "pk": true,
+      "fk": true,
+      "fk_target": "action_rule.id"
+     },
+     {
+      "name": "principal_id",
+      "type": "uuid",
+      "nullable": false,
+      "pk": true,
+      "fk": true,
+      "fk_target": "principal.id"
+     },
+     {
+      "name": "created_at",
       "type": "timestamp with time zone",
       "nullable": false,
       "default": "now()"

@@ -59,3 +59,31 @@ func TestAViewerSubscribesThemselvesToWhatTheyCanSee(t *testing.T) {
 	p.c.do(p.toks["bob"], http.MethodPatch, "/auth/me/action-rules/my-displays", map[string]any{"enabled": false}, http.StatusOK)
 	p.c.do(p.toks["bob"], http.MethodDelete, "/auth/me/action-rules/my-displays", nil, http.StatusNoContent)
 }
+
+// TestAMemberOptsOutOfAGroupPageOnlyWhereAllowed drives group opt-out over
+// HTTP (#1354).
+func TestAMemberOptsOutOfAGroupPageOnlyWhereAllowed(t *testing.T) {
+	p := newPeople(t)
+	p.human("alice", "viewer", "all", "")
+	p.human("bob", "viewer", "all", "")
+	p.c.do(p.owner, http.MethodPost, "/principal-groups", map[string]any{"name": "on-call"}, http.StatusCreated)
+	for _, u := range []string{"alice", "bob"} {
+		p.c.do(p.owner, http.MethodPost, "/principal-groups/on-call/members", map[string]any{"principal_id": u}, http.StatusNoContent)
+	}
+	p.c.do(p.owner, http.MethodPost, "/notification-targets", map[string]any{"name": "on-call-page", "kind": "principal_group",
+		"principal_group": "on-call", "channels": []string{"inbox"}}, http.StatusCreated)
+	p.c.do(p.owner, http.MethodPost, "/action-rules", map[string]any{"name": "page-on-call", "on": []string{"raised"},
+		"targets": []string{"on-call-page"}}, http.StatusCreated)
+	p.c.do(p.toks["alice"], http.MethodPost, "/action-rules/page-on-call:optOut", nil, http.StatusConflict)
+	p.c.do(p.owner, http.MethodPatch, "/action-rules/page-on-call", map[string]any{"opt_out_allowed": true}, http.StatusOK)
+	p.c.do(p.toks["alice"], http.MethodPost, "/action-rules/page-on-call:optOut", nil, http.StatusOK)
+	p.c.do(p.owner, http.MethodPost, "/components/display-1/alarms", map[string]any{"severity": "high", "message": "no video"}, http.StatusCreated)
+	if a, b := p.inbox("alice"), p.inbox("bob"); len(a.Notifications) != 0 || len(b.Notifications) != 1 {
+		t.Fatalf("with alice opted out: alice %d, bob %d; want 0 and 1", len(a.Notifications), len(b.Notifications))
+	}
+	p.c.do(p.toks["alice"], http.MethodPost, "/action-rules/page-on-call:optIn", nil, http.StatusOK)
+	p.c.do(p.owner, http.MethodPost, "/components/display-2/alarms", map[string]any{"severity": "high", "message": "no audio"}, http.StatusCreated)
+	if a := p.inbox("alice"); len(a.Notifications) != 1 {
+		t.Fatalf("after opting back in alice has %d, want 1", len(a.Notifications))
+	}
+}

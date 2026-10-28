@@ -1032,6 +1032,9 @@ type Gateway interface {
 	UpdatePersonalRule(ctx context.Context, actorID, ownerID, ref string, patch PersonalRulePatch) (*ActionRule, error)
 	DeletePersonalRule(ctx context.Context, actorID, ownerID, ref string) error
 	TestPersonalRule(ctx context.Context, ownerID, ref string, draft RuleDraft, read scope.Set, limit int) ([]RuleMatch, error)
+	// Group opt-out (#1354): a person opts out of a platform rule that
+	// allows it, or back in.
+	SetRuleOptOut(ctx context.Context, actorID, principalID, ref string, out bool) (*ActionRule, error)
 	// The notification delivery rows (#618): every read scoped by the
 	// alarm's component; the drain takes one due row per call.
 	// A person-addressed row's recipient is withheld as view says (#1341).

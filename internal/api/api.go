@@ -369,6 +369,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 	registerNotificationRoutes(api, a, gw)
 	registerInboxRoutes(api, a, gw)
 	registerPersonalRuleRoutes(api, a, gw)
+	registerOptOutRoutes(api, a, gw)
 	registerCommandRoutes(api, a, gw, newWaitLimiter(o.commandWaiters, o.commandWaitersPerPrincipal))
 	registerNodeRunRoutes(api, a, gw, o.nodeRunner, newRunLimiter(o.nodeRuns, o.nodeRunsPerPrincipal))
 	registerProductPropertyRoutes(api, a, gw)

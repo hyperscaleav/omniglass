@@ -261,3 +261,37 @@ func TestTheRelaysSecretIsJudgedOnTheResultingSettings(t *testing.T) {
 		t.Fatalf("the relay = %+v, %q, %v", relay, refused, err)
 	}
 }
+
+// A paused personal rule's queued email does not send, and a relay's
+// refusal, which can quote the person's address, is withheld with the name.
+func TestAPausedSubscriptionsEmailDoesNotSend(t *testing.T) {
+	f := newPeopleFixture(t)
+	f.relay(t)
+	alice := f.ids["alice"]
+	if _, err := f.gw.CreatePersonalRule(f.ctx, alice, alice, storage.PersonalRuleSpec{Name: "mine", On: []string{"raised"},
+		Channels: []string{storage.DeliveryEmail}}); err != nil {
+		t.Fatal(err)
+	}
+	a, err := f.gw.RaiseAlarm(f.ctx, "", "display-1", storage.AlarmSpec{Severity: "high", Message: "no video"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	off := false
+	if _, err := f.gw.UpdatePersonalRule(f.ctx, alice, alice, "mine", storage.PersonalRulePatch{Enabled: &off}); err != nil {
+		t.Fatal(err)
+	}
+	m := &mailbox{}
+	f.drain(t, m)
+	if len(m.to()) != 0 || !strings.Contains(f.failures(t, a.ID)["alice"], "paused") {
+		t.Fatalf("a paused subscription's email: sent %v, failures %v", m.to(), f.failures(t, a.ID))
+	}
+	others, err := f.gw.ListNotifications(f.ctx, storage.NotificationFilter{AlarmID: a.ID}, f.all, storage.RecipientView{Self: f.ids["bob"]})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range others {
+		if strings.Contains(n.LastError, "paused") || n.Recipient != "" || n.Rule != "" {
+			t.Fatalf("bob read alice's row as %+v", n)
+		}
+	}
+}

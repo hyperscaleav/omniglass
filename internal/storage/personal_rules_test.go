@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
@@ -144,5 +146,59 @@ func TestATestJudgesTheOwnersRecentAlarmsInScope(t *testing.T) {
 	ms, err = f.gw.TestPersonalRule(f.ctx, f.ids["bob"], "loud", storage.RuleDraft{When: &w}, bobRead, 0)
 	if err != nil || len(ms) != 2 || !ms[0].Matched || !ms[1].Matched {
 		t.Fatalf("a draft :test = %+v, %v", ms, err)
+	}
+}
+
+// The bounds and the reach of a person's rules (#1353 review): a person owns
+// at most PersonalRuleCap; a type an admin deletes releases a personal rule
+// rather than being held by it; an owner who loses notification:subscribe is
+// told nothing more; a paused rule's queued email does not send.
+func TestAPersonsRulesAreBoundedAndReleaseWhatAnAdminDeletes(t *testing.T) {
+	f := newPeopleFixture(t)
+	bob := f.ids["bob"]
+	for i := range storage.PersonalRuleCap {
+		f.personal(t, "bob", fmt.Sprintf("r-%d", i), "false")
+	}
+	if _, err := f.gw.CreatePersonalRule(f.ctx, bob, bob, storage.PersonalRuleSpec{Name: "one-more", On: []string{"raised"},
+		Channels: []string{"inbox"}}); !errors.Is(err, storage.ErrPersonalRuleCap) {
+		t.Fatalf("a rule past the cap = %v", err)
+	}
+	alice := f.ids["alice"]
+	if _, err := f.gw.CreateNotificationType(f.ctx, "", storage.NotificationTypeSpec{Name: "terse", Subject: "{{.Severity}}", Text: "{{.Message}}"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.gw.CreatePersonalRule(f.ctx, alice, alice, storage.PersonalRuleSpec{Name: "terse-mine", On: []string{"raised"},
+		NotificationType: "terse", Channels: []string{"inbox"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.gw.DeleteNotificationType(f.ctx, "", "terse"); err != nil {
+		t.Fatalf("a personal rule held a type the admin deleted: %v", err)
+	}
+	if r, err := f.gw.GetPersonalRule(f.ctx, alice, "terse-mine"); err != nil || r.NotificationType != "" {
+		t.Fatalf("alice's rule after the type went = %+v, %v; want the official type", r, err)
+	}
+}
+
+func TestAnOwnerWithoutSubscribeIsToldNothing(t *testing.T) {
+	f := newPeopleFixture(t)
+	f.personal(t, "alice", "everything", "true")
+	conn, err := pgx.Connect(f.ctx, f.dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(f.ctx)
+	// alice's role loses notification:subscribe (a custom role without it).
+	if _, err := conn.Exec(f.ctx, `insert into role (name, permissions, inherits) values ('reader', '{"*:read"}', '{}')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(f.ctx, `update principal_grant set role_id = (select id from role where name = 'reader') where principal_id = $1`, f.ids["alice"]); err != nil {
+		t.Fatal(err)
+	}
+	a, err := f.gw.RaiseAlarm(f.ctx, "", "display-1", storage.AlarmSpec{Severity: "high", Message: "no video"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := f.rows(t, a.ID); len(got) != 0 {
+		t.Fatalf("an owner without notification:subscribe was told %v", recipients(got))
 	}
 }

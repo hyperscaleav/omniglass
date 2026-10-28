@@ -255,6 +255,13 @@ func (p *PG) DeleteNotificationType(ctx context.Context, actorID, ref string) er
 	if err != nil {
 		return err
 	}
+	// A personal rule (#1353) never pins a type an admin deletes: it falls
+	// back to the official type for the transition, as a rule naming none
+	// sends. Only a platform rule, which an admin can see and edit, holds it.
+	if _, err := tx.Exec(ctx, `update action_rule set notification_type_id = null, updated_at = now()
+		where notification_type_id = $1 and owner_principal_id is not null`, before.ID); err != nil {
+		return fmt.Errorf("storage: release personal rules from notification type %q: %w", ref, err)
+	}
 	if _, err := tx.Exec(ctx, `delete from notification_type where id = $1`, before.ID); err != nil {
 		if isForeignKeyViolation(err) {
 			return ErrNotificationTypeInUse

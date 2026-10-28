@@ -41,6 +41,7 @@ Adds a rule that, on an alarm's raise or clear, when its predicate holds over th
 | `--name` | string | (none) | The rule's name (lowercase kebab) |
 | `--notification-type` | string | (none) | The notification type to send, by name or uuid; absent sends the official one for the transition |
 | `--on` | string | (none) | The alarm transitions it fires on: raised, cleared, or both. Acknowledging an alarm is never one |
+| `--opt-out-allowed` | bool | `false` | Let a member of a group it targets opt out of it for themselves (default false) |
 | `--targets` | string | (none) | The notification targets to send to, by name or uuid |
 | `--when` | string | (none) | A predicate over the alarm facts at the action expression site (component, place, severity, severity_rank, message, transition, rule, ...; see /expressions:validate with site action); absent always holds. A refusal is a 422 with its line and column |
 
@@ -98,6 +99,38 @@ Example:
 omniglass action-rule list
 ```
 
+### `omniglass action-rule optIn`
+
+Opt yourself back in to a group notification
+
+```
+omniglass action-rule optIn <name>
+```
+
+Undoes your opt-out of a platform action rule; always allowed. Idempotent and audited. Gated by notification:subscribe.
+
+Example:
+
+```sh
+omniglass action-rule optIn <name>
+```
+
+### `omniglass action-rule optOut`
+
+Opt yourself out of a group notification
+
+```
+omniglass action-rule optOut <name>
+```
+
+Stops a platform action rule telling you through a group it targets, for you alone. Only a rule an admin marked opt_out_allowed (a 409 otherwise); a rule that names you directly still tells you. Idempotent and audited. Gated by notification:subscribe.
+
+Example:
+
+```sh
+omniglass action-rule optOut <name>
+```
+
 ### `omniglass action-rule update`
 
 Update an action rule
@@ -115,6 +148,7 @@ Patches a rule (an absent field is unchanged; on and targets replace their sets)
 | `--label` | string | (none) | A human label (empty clears it) |
 | `--notification-type` | string | (none) | The type to send (empty returns to the official one per transition) |
 | `--on` | string | (none) | The transitions it fires on (replaces the set) |
+| `--opt-out-allowed` | bool | `false` | Let a member of a group it targets opt out of it; false withdraws every opt-out from the next transition |
 | `--targets` | string | (none) | The targets (replaces the set) |
 | `--when` | string | (none) | The predicate (empty always holds) |
 
@@ -278,7 +312,7 @@ Subscribe yourself to alarms
 omniglass auth me action-rule create [flags]
 ```
 
-Creates a personal action rule: on which alarm transitions, when, what to send, and on which of your channels (inbox, email). It tells you alone and names no target (targets is a 422), and it only ever matches an alarm on a component you can read at that moment, judged before its when runs. A taken name among your rules is a 409. Audited. Gated by notification:subscribe.
+Creates a personal action rule: on which alarm transitions, when, what to send, and on which of your channels (inbox, email). It tells you alone and names no target (targets is a 422), and it only ever matches an alarm on a component you can read at that moment, judged before its when runs. A taken name among your rules, or a 51st rule, is a 409. Audited. Gated by notification:subscribe.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|

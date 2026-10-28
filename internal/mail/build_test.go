@@ -3,9 +3,9 @@ package mail_test
 import (
 	"bytes"
 	"io"
-	netmail "net/mail"
 	"mime"
 	"mime/quotedprintable"
+	netmail "net/mail"
 	"strings"
 	"testing"
 	"time"

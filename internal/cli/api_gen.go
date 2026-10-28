@@ -27,6 +27,7 @@ func generatedCommands() []*cobra.Command {
 				var fName string
 				var fNotificationType string
 				var fOn string
+				var fOptOutAllowed bool
 				var fTargets string
 				var fWhen string
 				cmd := &cobra.Command{
@@ -56,6 +57,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("on") {
 							body["on"] = jsonOrString(fOn)
 						}
+						if cmd.Flags().Changed("opt-out-allowed") {
+							body["opt_out_allowed"] = fOptOutAllowed
+						}
 						if cmd.Flags().Changed("targets") {
 							body["targets"] = jsonOrString(fTargets)
 						}
@@ -73,6 +77,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fNotificationType, "notification-type", "", "The notification type to send, by name or uuid; absent sends the official one for the transition")
 				cmd.Flags().StringVar(&fOn, "on", "", "The alarm transitions it fires on: raised, cleared, or both. Acknowledging an alarm is never one")
 				_ = cmd.MarkFlagRequired("on")
+				cmd.Flags().BoolVar(&fOptOutAllowed, "opt-out-allowed", false, "Let a member of a group it targets opt out of it for themselves (default false)")
 				cmd.Flags().StringVar(&fTargets, "targets", "", "The notification targets to send to, by name or uuid")
 				_ = cmd.MarkFlagRequired("targets")
 				cmd.Flags().StringVar(&fWhen, "when", "", "A predicate over the alarm facts at the action expression site (component, place, severity, severity_rank, message, transition, rule, ...; see /expressions:validate with site action); absent always holds. A refusal is a 422 with its line and column")
@@ -133,11 +138,46 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "optIn <name>",
+					Short:   "Opt yourself back in to a group notification",
+					Long:    "Undoes your opt-out of a platform action rule; always allowed. Idempotent and audited. Gated by notification:subscribe.",
+					Example: "  omniglass action-rule optIn <name>",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/action-rules/%s:optIn", pathSegment(args[0]))
+						return runAPICommand(cmd, "POST", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "optOut <name>",
+					Short:   "Opt yourself out of a group notification",
+					Long:    "Stops a platform action rule telling you through a group it targets, for you alone. Only a rule an admin marked opt_out_allowed (a 409 otherwise); a rule that names you directly still tells you. Idempotent and audited. Gated by notification:subscribe.",
+					Example: "  omniglass action-rule optOut <name>",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/action-rules/%s:optOut", pathSegment(args[0]))
+						return runAPICommand(cmd, "POST", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
 				var fDescription string
 				var fEnabled bool
 				var fLabel string
 				var fNotificationType string
 				var fOn string
+				var fOptOutAllowed bool
 				var fTargets string
 				var fWhen string
 				cmd := &cobra.Command{
@@ -164,6 +204,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("on") {
 							body["on"] = jsonOrString(fOn)
 						}
+						if cmd.Flags().Changed("opt-out-allowed") {
+							body["opt_out_allowed"] = fOptOutAllowed
+						}
 						if cmd.Flags().Changed("targets") {
 							body["targets"] = jsonOrString(fTargets)
 						}
@@ -178,6 +221,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label (empty clears it)")
 				cmd.Flags().StringVar(&fNotificationType, "notification-type", "", "The type to send (empty returns to the official one per transition)")
 				cmd.Flags().StringVar(&fOn, "on", "", "The transitions it fires on (replaces the set)")
+				cmd.Flags().BoolVar(&fOptOutAllowed, "opt-out-allowed", false, "Let a member of a group it targets opt out of it; false withdraws every opt-out from the next transition")
 				cmd.Flags().StringVar(&fTargets, "targets", "", "The targets (replaces the set)")
 				cmd.Flags().StringVar(&fWhen, "when", "", "The predicate (empty always holds)")
 				return cmd
@@ -396,7 +440,7 @@ func generatedCommands() []*cobra.Command {
 						cmd := &cobra.Command{
 							Use:     "create",
 							Short:   "Subscribe yourself to alarms",
-							Long:    "Creates a personal action rule: on which alarm transitions, when, what to send, and on which of your channels (inbox, email). It tells you alone and names no target (targets is a 422), and it only ever matches an alarm on a component you can read at that moment, judged before its when runs. A taken name among your rules is a 409. Audited. Gated by notification:subscribe.",
+							Long:    "Creates a personal action rule: on which alarm transitions, when, what to send, and on which of your channels (inbox, email). It tells you alone and names no target (targets is a 422), and it only ever matches an alarm on a component you can read at that moment, judged before its when runs. A taken name among your rules, or a 51st rule, is a 409. Audited. Gated by notification:subscribe.",
 							Example: "  omniglass auth me action-rule create --channels <json> --name name --on <json>",
 							Args:    pathArgs(0),
 							RunE: func(cmd *cobra.Command, args []string) error {

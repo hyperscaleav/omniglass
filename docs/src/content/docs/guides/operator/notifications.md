@@ -46,3 +46,16 @@ omniglass auth me action-rule test my-boardroom --when 'severity_rank >= 50'
 component you can read at the moment it is raised or cleared, so it can never tell you about
 something your grants do not show you, even with a `when` of `true`. Subscribing takes
 `notification:subscribe`, which every viewer has unless an admin's custom role withholds it.
+
+## Opt out of a group page
+
+If an admin allows it on a rule (`opt_out_allowed`), you can stop that rule telling you through a group
+you are in, and start it again:
+
+```bash
+omniglass action-rule optOut weekly-digest
+omniglass action-rule optIn weekly-digest
+```
+
+A rule that does not allow it refuses (an on-call page usually should not be opted out of), and a
+rule that names you directly still tells you.

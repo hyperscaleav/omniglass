@@ -519,6 +519,14 @@ audit: {
   }
 }
 
+unclustered: {
+  action_rule_opt_out: {
+    shape: sql_table
+    principal_id: uuid {constraint: primary_key}
+    rule_id: uuid {constraint: primary_key}
+  }
+}
+
 audit.audit_log.actor_principal_id -> identity.principal.id
 audit.audit_log.real_actor_principal_id -> identity.principal.id
 catalog.component_type.parent_id -> catalog.component_type.id
@@ -673,6 +681,8 @@ telemetry.property.location_id -> fleet.location.id
 telemetry.property.node_id -> collection.node.principal_id
 telemetry.property.property_type_id -> telemetry.property_type.id
 telemetry.property.system_id -> fleet.system.id
+unclustered.action_rule_opt_out.principal_id -> identity.principal.id
+unclustered.action_rule_opt_out.rule_id -> telemetry.action_rule.id
 ```
 
 <!-- erd:end -->

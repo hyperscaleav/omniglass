@@ -82,6 +82,10 @@
               "null"
             ]
           },
+          "opt_out_allowed": {
+            "description": "Whether a member of a group it targets may opt out of it for themselves (:optOut); false by default, so an on-call page cannot be opted out of unless an admin allows it",
+            "type": "boolean"
+          },
           "targets": {
             "description": "The notification targets it sends to, by name",
             "items": {
@@ -106,6 +110,7 @@
           "name",
           "on",
           "targets",
+          "opt_out_allowed",
           "enabled",
           "official",
           "created_at",
@@ -2233,6 +2238,10 @@
               "array",
               "null"
             ]
+          },
+          "opt_out_allowed": {
+            "description": "Let a member of a group it targets opt out of it for themselves (default false)",
+            "type": "boolean"
           },
           "targets": {
             "description": "The notification targets to send to, by name or uuid",
@@ -9266,6 +9275,33 @@
         ],
         "type": "object"
       },
+      "OptOutOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/OptOutOutputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "action_rule": {
+            "description": "The rule, by name",
+            "type": "string"
+          },
+          "opted_out": {
+            "description": "Whether you are now opted out of it",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "action_rule",
+          "opted_out"
+        ],
+        "type": "object"
+      },
       "OwnerStruct": {
         "additionalProperties": false,
         "properties": {
@@ -14674,7 +14710,7 @@
           "limit": {
             "description": "How many of your most recent alarms to judge (default 20)",
             "format": "int64",
-            "maximum": 100,
+            "maximum": 50,
             "minimum": 0,
             "type": "integer"
           },
@@ -14862,6 +14898,10 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "opt_out_allowed": {
+            "description": "Let a member of a group it targets opt out of it; false withdraws every opt-out from the next transition",
+            "type": "boolean"
           },
           "targets": {
             "description": "The targets (replaces the set)",
@@ -16378,6 +16418,90 @@
         "x-omniglass-permission": "rule:update"
       }
     },
+    "/action-rules/{name}:optIn": {
+      "post": {
+        "description": "Undoes your opt-out of a platform action rule; always allowed. Idempotent and audited. Gated by notification:subscribe.",
+        "operationId": "opt-in-action-rule",
+        "parameters": [
+          {
+            "description": "The rule's name or uuid",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "description": "The rule's name or uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OptOutOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Opt yourself back in to a group notification",
+        "x-omniglass-permission": "notification:subscribe"
+      }
+    },
+    "/action-rules/{name}:optOut": {
+      "post": {
+        "description": "Stops a platform action rule telling you through a group it targets, for you alone. Only a rule an admin marked opt_out_allowed (a 409 otherwise); a rule that names you directly still tells you. Idempotent and audited. Gated by notification:subscribe.",
+        "operationId": "opt-out-action-rule",
+        "parameters": [
+          {
+            "description": "The rule's name or uuid",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "description": "The rule's name or uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OptOutOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Opt yourself out of a group notification",
+        "x-omniglass-permission": "notification:subscribe"
+      }
+    },
     "/audit-log": {
       "get": {
         "description": "Recent audit-trail events, newest first, each with the actor and, for an impersonated action, the real actor behind it. Read-only; gated by audit:read:admin (admin/owner only, since the audit trail is admin-sensitive).",
@@ -16655,7 +16779,7 @@
         "x-omniglass-permission": "notification:subscribe"
       },
       "post": {
-        "description": "Creates a personal action rule: on which alarm transitions, when, what to send, and on which of your channels (inbox, email). It tells you alone and names no target (targets is a 422), and it only ever matches an alarm on a component you can read at that moment, judged before its when runs. A taken name among your rules is a 409. Audited. Gated by notification:subscribe.",
+        "description": "Creates a personal action rule: on which alarm transitions, when, what to send, and on which of your channels (inbox, email). It tells you alone and names no target (targets is a 422), and it only ever matches an alarm on a component you can read at that moment, judged before its when runs. A taken name among your rules, or a 51st rule, is a 409. Audited. Gated by notification:subscribe.",
         "operationId": "create-auth-me-action-rule",
         "requestBody": {
           "content": {

@@ -91,7 +91,7 @@ type NotificationTarget struct {
 	Addresses []string
 	Enabled   bool
 	CreatedAt time.Time
-	UpdatedAt        time.Time
+	UpdatedAt time.Time
 }
 
 // NotificationTargetSpec is the create input; Secret names a platform secret
@@ -692,11 +692,11 @@ func (p *PG) RevealNotificationTargetURL(ctx context.Context, actorID, ref strin
 type TargetSend struct {
 	TargetID, Name, URL string
 	// Kind is webhook or email; Addresses an email target's recipients.
-	Kind      string
-	Addresses []string
-	Enabled   bool
-	HMACKey             string
-	BearerToken         string
+	Kind        string
+	Addresses   []string
+	Enabled     bool
+	HMACKey     string
+	BearerToken string
 	// CredentialMissing is a bound secret that no longer unseals.
 	CredentialMissing bool
 }

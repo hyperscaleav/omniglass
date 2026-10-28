@@ -89,7 +89,7 @@ type testPersonalRuleInput struct {
 	Body *struct {
 		On    *[]string `json:"on,omitempty" required:"false" doc:"A draft of the transitions to judge with, in place of the rule's own"`
 		When  *string   `json:"when,omitempty" required:"false" doc:"A draft of the predicate to judge with, in place of the rule's own"`
-		Limit int       `json:"limit,omitempty" required:"false" minimum:"0" maximum:"100" doc:"How many of your most recent alarms to judge (default 20)"`
+		Limit int       `json:"limit,omitempty" required:"false" minimum:"0" maximum:"50" doc:"How many of your most recent alarms to judge (default 20)"`
 	} `required:"false"`
 }
 
@@ -150,7 +150,7 @@ func registerPersonalRuleRoutes(api huma.API, a *authenticator, gw storage.Gatew
 		Path:          "/auth/me/action-rules",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Subscribe yourself to alarms",
-		Description:   "Creates a personal action rule: on which alarm transitions, when, what to send, and on which of your channels (inbox, email). It tells you alone and names no target (targets is a 422), and it only ever matches an alarm on a component you can read at that moment, judged before its when runs. A taken name among your rules is a 409. Audited. Gated by notification:subscribe.",
+		Description:   "Creates a personal action rule: on which alarm transitions, when, what to send, and on which of your channels (inbox, email). It tells you alone and names no target (targets is a 422), and it only ever matches an alarm on a component you can read at that moment, judged before its when runs. A taken name among your rules, or a 51st rule, is a 409. Audited. Gated by notification:subscribe.",
 	}, "notification", "subscribe"), func(ctx context.Context, in *createPersonalRuleInput) (*personalRuleOutput, error) {
 		r, err := gw.CreatePersonalRule(ctx, actorID(ctx), callerID(ctx), storage.PersonalRuleSpec{
 			Name: in.Body.Name, Label: in.Body.Label, Description: in.Body.Description, On: in.Body.On, When: in.Body.When,
@@ -221,8 +221,52 @@ func registerPersonalRuleRoutes(api huma.API, a *authenticator, gw storage.Gatew
 }
 
 func mapPersonalRuleErr(err error) error {
+	if errors.Is(err, storage.ErrPersonalRuleCap) {
+		return huma.Error409Conflict("you own the most personal rules a person may (50); delete one first")
+	}
 	if errors.Is(err, storage.ErrPersonalRuleOwner) {
 		return huma.Error422UnprocessableEntity("a personal rule belongs to a person: a service account or a node is no one to tell")
 	}
 	return mapActionRuleErr(err)
+}
+
+type optOutOutput struct {
+	Body struct {
+		ActionRule string `json:"action_rule" doc:"The rule, by name"`
+		OptedOut   bool   `json:"opted_out" doc:"Whether you are now opted out of it"`
+	}
+}
+
+// registerOptOutRoutes wires group opt-out (#1354): a person opts out of a
+// platform rule an admin marked opt_out_allowed, for themselves, and back
+// in. Gated by notification:subscribe; self-scoped.
+func registerOptOutRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
+	set := func(out bool) func(context.Context, *actionRuleRefInput) (*optOutOutput, error) {
+		return func(ctx context.Context, in *actionRuleRefInput) (*optOutOutput, error) {
+			r, err := gw.SetRuleOptOut(ctx, actorID(ctx), callerID(ctx), in.Name, out)
+			if err != nil {
+				if errors.Is(err, storage.ErrOptOutNotAllowed) {
+					return nil, huma.Error409Conflict("this action rule does not allow opting out; an admin sets opt_out_allowed on it")
+				}
+				return nil, mapActionRuleErr(err)
+			}
+			o := &optOutOutput{}
+			o.Body.ActionRule, o.Body.OptedOut = r.Name, out
+			return o, nil
+		}
+	}
+	huma.Register(api, a.gated(huma.Operation{
+		OperationID: "opt-out-action-rule",
+		Method:      http.MethodPost,
+		Path:        "/action-rules/{name}:optOut",
+		Summary:     "Opt yourself out of a group notification",
+		Description: "Stops a platform action rule telling you through a group it targets, for you alone. Only a rule an admin marked opt_out_allowed (a 409 otherwise); a rule that names you directly still tells you. Idempotent and audited. Gated by notification:subscribe.",
+	}, "notification", "subscribe"), set(true))
+	huma.Register(api, a.gated(huma.Operation{
+		OperationID: "opt-in-action-rule",
+		Method:      http.MethodPost,
+		Path:        "/action-rules/{name}:optIn",
+		Summary:     "Opt yourself back in to a group notification",
+		Description: "Undoes your opt-out of a platform action rule; always allowed. Idempotent and audited. Gated by notification:subscribe.",
+	}, "notification", "subscribe"), set(false))
 }

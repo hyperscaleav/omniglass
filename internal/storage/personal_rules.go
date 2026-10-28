@@ -47,6 +47,14 @@ type PersonalRulePatch struct {
 	Enabled          *bool
 }
 
+// PersonalRuleCap is the most personal rules one person may own: every rule
+// is judged inside every alarm transition, so a viewer must not be able to
+// grow that work without bound.
+const PersonalRuleCap = 50
+
+// ErrPersonalRuleCap is a personal rule past PersonalRuleCap.
+var ErrPersonalRuleCap = errors.New("storage: a person may own at most 50 personal rules")
+
 // ErrPersonalRuleOwner is a personal rule for a principal that is not a
 // person: a service or a node is no one to tell.
 var ErrPersonalRuleOwner = errors.New("storage: a personal rule belongs to a person")
@@ -132,6 +140,17 @@ func (p *PG) CreatePersonalRule(ctx context.Context, actorID, ownerID string, sp
 	}
 	if !human {
 		return nil, ErrPersonalRuleOwner
+	}
+	// Serialize one owner's creates so the cap holds under concurrency.
+	var owned int
+	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(hashtext('personal_rule'), hashtext($1))`, ownerID); err != nil {
+		return nil, fmt.Errorf("storage: lock personal rules: %w", err)
+	}
+	if err := tx.QueryRow(ctx, `select count(*) from action_rule where owner_principal_id = $1::uuid`, ownerID).Scan(&owned); err != nil {
+		return nil, fmt.Errorf("storage: count personal rules: %w", err)
+	}
+	if owned >= PersonalRuleCap {
+		return nil, ErrPersonalRuleCap
 	}
 	typeID, err := resolveRuleType(ctx, tx, spec.NotificationType)
 	if err != nil {
@@ -272,7 +291,7 @@ type RuleMatch struct {
 
 // TestPersonalRule judges one of the owner's rules, or a draft of its on and
 // when, against the owner's most recent alarms (at most limit, 20 when zero,
-// 100 at most), each about a component the owner's read scope admits: for
+// 50 at most), each about a component the owner's read scope admits: for
 // every transition the rule fires on that the alarm has had, whether the
 // when holds over that transition's facts. It writes nothing and sends
 // nothing: the teaching surface of a subscription.
@@ -297,13 +316,13 @@ func (p *PG) TestPersonalRule(ctx context.Context, ownerID, ref string, draft Ru
 	if limit <= 0 {
 		limit = 20
 	}
-	if limit > 100 {
-		limit = 100
+	if limit > 50 {
+		limit = 50
 	}
 	type alarmRow struct {
 		id, componentID, component, severity, message string
-		raisedAt                                       time.Time
-		clearedAt                                      *time.Time
+		raisedAt                                      time.Time
+		clearedAt                                     *time.Time
 	}
 	rf := newReadFilter(componentTable, read, 1)
 	rows, err := p.pool.Query(ctx, rf.With+`select a.id::text, a.component_id::text, c.name, a.severity, a.message, a.raised_at, a.cleared_at

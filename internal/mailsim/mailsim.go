@@ -54,8 +54,8 @@ type Options struct {
 
 // Server is a running sim.
 type Server struct {
-	ln   net.Listener
-	opts Options
+	ln       net.Listener
+	opts     Options
 	mu       sync.Mutex
 	msgs     []Received
 	rejected []Received

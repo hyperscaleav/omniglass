@@ -41,7 +41,7 @@ type EmailSend struct {
 }
 
 // emailSend reads one email row's send, or the plain reason it is refused.
-func (p *PG) emailSend(ctx context.Context, q querier, targetID, recipientID *string, componentID string, at time.Time) (*EmailSend, string, error) {
+func (p *PG) emailSend(ctx context.Context, q querier, targetID, ruleID, recipientID *string, componentID string, at time.Time) (*EmailSend, string, error) {
 	if targetID == nil {
 		return nil, "the target was deleted", nil
 	}
@@ -67,6 +67,16 @@ func (p *PG) emailSend(ctx context.Context, q querier, targetID, recipientID *st
 		if err != nil || refused != "" {
 			return nil, refused, err
 		}
+		if t.Kind == TargetPrincipalGroup && ruleID != nil {
+			var opted bool
+			if err := q.QueryRow(ctx, `select exists (select 1 from action_rule_opt_out o join action_rule r on r.id = o.rule_id
+				where o.rule_id = $1::uuid and o.principal_id = $2::uuid and r.opt_out_allowed)`, *ruleID, *recipientID).Scan(&opted); err != nil {
+				return nil, "", fmt.Errorf("storage: recheck opt-out: %w", err)
+			}
+			if opted {
+				return nil, "the recipient opted out of the rule", nil
+			}
+		}
 		to = []string{addr}
 	default:
 		return nil, "the target is not an email destination", nil
@@ -87,12 +97,19 @@ func (p *PG) personalEmailSend(ctx context.Context, q querier, ruleID, recipient
 		return nil, "the subscription was deleted", nil
 	}
 	var owner string
-	err := q.QueryRow(ctx, `select coalesce(owner_principal_id::text, '') from action_rule where id = $1::uuid`, *ruleID).Scan(&owner)
+	var enabled, email bool
+	err := q.QueryRow(ctx, `select coalesce(owner_principal_id::text, ''), enabled, 'email' = any(channels) from action_rule where id = $1::uuid`, *ruleID).Scan(&owner, &enabled, &email)
 	if errors.Is(err, pgx.ErrNoRows) || (err == nil && owner != *recipientID) {
 		return nil, "the subscription was deleted", nil
 	}
 	if err != nil {
 		return nil, "", fmt.Errorf("storage: personal rule %s: %w", *ruleID, err)
+	}
+	switch {
+	case !enabled:
+		return nil, "the subscription is paused", nil
+	case !email:
+		return nil, "the subscription no longer sends email", nil
 	}
 	addr, refused, err := recheckRecipient(ctx, q, &NotificationTarget{Kind: TargetPrincipal, PrincipalID: owner}, recipientID, componentID)
 	if err != nil || refused != "" {

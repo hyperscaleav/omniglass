@@ -1142,3 +1142,6 @@ func (UnimplementedGateway) DeletePersonalRule(context.Context, string, string, 
 func (UnimplementedGateway) TestPersonalRule(context.Context, string, string, RuleDraft, scope.Set, int) ([]RuleMatch, error) {
 	return nil, ErrActionRuleNotFound
 }
+func (UnimplementedGateway) SetRuleOptOut(context.Context, string, string, string, bool) (*ActionRule, error) {
+	return nil, ErrActionRuleNotFound
+}

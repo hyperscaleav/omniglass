@@ -110,6 +110,11 @@ func (v RecipientView) withhold(n *Notification) {
 		return
 	}
 	n.Recipient, n.RecipientID = "", ""
+	// A relay's refusal can quote the person's address (550 <who@...>:
+	// rejected), so a withheld row's reason is withheld with the name.
+	if n.LastError != "" {
+		n.LastError = "(withheld with the recipient)"
+	}
 	// A personal rule's row (a person's, through no target) is named by its
 	// owner's rule, which can say whose it is: withheld with the name.
 	if n.Personal && n.Target == "" {
@@ -140,6 +145,10 @@ type queuedRule struct {
 	// A personal rule's owner, its only recipient, and its channels (#1353).
 	ownerID, ownerName string
 	channels           []string
+	// optOutAllowed lets a group member opt out (#1354); optedOut are those
+	// who have, read only when the rule allows it.
+	optOutAllowed bool
+	optedOut      map[string]bool
 }
 
 // queuedRow is one row a firing rule writes: to a webhook target, or to one
@@ -147,6 +156,9 @@ type queuedRule struct {
 type queuedRow struct {
 	targetID, targetName, channel, status string
 	recipientID, recipientName            *string
+	// The firing rule's own: set when the transition's rows are gathered.
+	rule                  *queuedRule
+	subject, text, reason string
 }
 
 // queueNotificationsTx writes the notifications one alarm transition causes,
@@ -222,7 +234,7 @@ func (p *PG) queueNotifications(ctx context.Context, tx pgx.Tx, componentID, ala
 	}
 	ownerReads := map[string]bool{}
 	if len(owners) > 0 {
-		if ownerReads, err = readersOf(ctx, tx, componentID, owners); err != nil {
+		if ownerReads, err = subscribersOf(ctx, tx, componentID, owners); err != nil {
 			return err
 		}
 	}
@@ -254,22 +266,62 @@ func (p *PG) queueNotifications(ctx context.Context, tx pgx.Tx, componentID, ala
 			}
 		}
 	}
+	firing := make([]*queuedRule, len(fires))
+	for i := range fires {
+		firing[i] = &fires[i].r
+	}
+	if err := loadOptOuts(ctx, tx, firing); err != nil {
+		return err
+	}
 	people := map[string][]recipient{}
 	if len(personTargets) > 0 {
 		if people, err = recipientsFor(ctx, tx, componentID, personTargets); err != nil {
 			return err
 		}
 	}
+	var all []queuedRow
 	for _, f := range fires {
-		rows := rowsFor(f.r, f.status, people)
-		if len(rows) == 0 {
-			continue
-		}
-		if err := insertNotifications(ctx, tx, alarmID, componentID, transition, f.r, f.subject, f.text, factsJSON, f.reason, rows); err != nil {
-			return err
+		for _, row := range rowsFor(f.r, f.status, people) {
+			r := f.r
+			row.rule, row.subject, row.text, row.reason = &r, f.subject, f.text, f.reason
+			all = append(all, row)
 		}
 	}
-	return nil
+	if len(all) == 0 {
+		return nil
+	}
+	return insertNotifications(ctx, tx, alarmID, componentID, transition, factsJSON, all)
+}
+
+// loadOptOuts reads, in one statement, who opted out of each firing rule
+// that allows it (#1354); a rule that does not allow it reads none, so an
+// admin who takes the permission back takes every opt-out with it.
+func loadOptOuts(ctx context.Context, q querier, rs []*queuedRule) error {
+	var ids []string
+	at := map[string]*queuedRule{}
+	for _, r := range rs {
+		if r.optOutAllowed {
+			ids = append(ids, r.id)
+			at[r.id] = r
+			r.optedOut = map[string]bool{}
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	rows, err := q.Query(ctx, `select rule_id::text, principal_id::text from action_rule_opt_out where rule_id = any($1::uuid[])`, ids)
+	if err != nil {
+		return fmt.Errorf("storage: read opt-outs: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var rid, pid string
+		if err := rows.Scan(&rid, &pid); err != nil {
+			return fmt.Errorf("storage: scan opt-out: %w", err)
+		}
+		at[rid].optedOut[pid] = true
+	}
+	return rows.Err()
 }
 
 // rowsFor lays out the rows one firing rule writes: one per webhook target,
@@ -298,6 +350,9 @@ func rowsFor(r queuedRule, status string, people map[string][]recipient) []queue
 			continue
 		}
 		for _, p := range people[id] {
+			if r.targetKinds[i] == TargetPrincipalGroup && r.optedOut[p.id] {
+				continue
+			}
 			for _, ch := range p.channels {
 				if told[p.id+"/"+ch] {
 					continue
@@ -316,27 +371,34 @@ func rowsFor(r queuedRule, status string, people map[string][]recipient) []queue
 	return out
 }
 
-// insertNotifications writes one rule's rows in one statement, whatever
-// their number.
-func insertNotifications(ctx context.Context, tx pgx.Tx, alarmID, componentID, transition string, r queuedRule,
-	subject, text string, factsJSON []byte, reason string, rows []queuedRow) error {
+// insertNotifications writes every row one transition queues, across all its
+// firing rules, in one statement whatever their number.
+func insertNotifications(ctx context.Context, tx pgx.Tx, alarmID, componentID, transition string, factsJSON []byte, rows []queuedRow) error {
 	n := len(rows)
-	targetIDs, targetNames, statuses, channels := make([]string, n), make([]string, n), make([]string, n), make([]string, n)
-	rids, rnames := make([]*string, n), make([]*string, n)
+	cols := make([][]*string, 13)
+	for i := range cols {
+		cols[i] = make([]*string, n)
+	}
+	str := func(v string) *string { return &v }
 	for i, x := range rows {
-		targetIDs[i], targetNames[i], statuses[i], channels[i], rids[i], rnames[i] = x.targetID, x.targetName, x.status, x.channel, x.recipientID, x.recipientName
+		vals := []*string{str(x.rule.id), str(x.rule.name), str(x.rule.typeID), str(x.rule.typeName), str(x.subject), str(x.text),
+			str(x.reason), str(x.targetID), str(x.targetName), str(x.status), str(x.channel), x.recipientID, x.recipientName}
+		for c, v := range vals {
+			cols[c][i] = v
+		}
 	}
 	if _, err := tx.Exec(ctx, `insert into notification (alarm_id, component_id, transition, rule_id, rule_name,
 			notification_type_id, type_name, target_id, target_name, subject, text, facts, status, last_error,
 			channel, recipient_principal_id, recipient_name, sent_at)
-		select $1::uuid, $2::uuid, $3, $4::uuid, $5, $6::uuid, $7, nullif(x.target_id, '')::uuid, x.target_name, $8, $9, $10, x.status, nullif($11, ''),
-			x.channel, x.rid::uuid, x.rname, case when x.status = 'sent' then now() end
-		from unnest($12::text[], $13::text[], $14::text[], $15::text[], $16::text[], $17::text[])
-			with ordinality as x(target_id, target_name, status, channel, rid, rname, ord)
+		select $1::uuid, $2::uuid, $3, x.rule_id::uuid, x.rule_name, x.type_id::uuid, x.type_name, nullif(x.target_id, '')::uuid, x.target_name,
+			x.subject, x.text, $4, x.status, nullif(x.reason, ''), x.channel, x.rid::uuid, x.rname, case when x.status = 'sent' then now() end
+		from unnest($5::text[], $6::text[], $7::text[], $8::text[], $9::text[], $10::text[], $11::text[], $12::text[], $13::text[],
+			$14::text[], $15::text[], $16::text[], $17::text[])
+			with ordinality as x(rule_id, rule_name, type_id, type_name, subject, text, reason, target_id, target_name, status, channel, rid, rname, ord)
 		order by x.ord`,
-		alarmID, componentID, transition, r.id, r.name, r.typeID, r.typeName, subject, text, factsJSON, reason,
-		targetIDs, targetNames, statuses, channels, rids, rnames); err != nil {
-		return fmt.Errorf("storage: queue notifications for rule %s: %w", r.name, err)
+		alarmID, componentID, transition, factsJSON,
+		cols[0], cols[1], cols[2], cols[3], cols[4], cols[5], cols[6], cols[7], cols[8], cols[9], cols[10], cols[11], cols[12]); err != nil {
+		return fmt.Errorf("storage: queue notifications: %w", err)
 	}
 	return nil
 }
@@ -349,7 +411,7 @@ func rulesOn(ctx context.Context, q querier, transition string) ([]queuedRule, e
 			coalesce(array_agg(nt.id::text order by nt.name) filter (where nt.id is not null), '{}'),
 			coalesce(array_agg(nt.name order by nt.name) filter (where nt.id is not null), '{}'),
 			coalesce(array_agg(nt.kind order by nt.name) filter (where nt.id is not null), '{}'),
-			coalesce(r.owner_principal_id::text, ''), coalesce(oh.username, ''), r.channels
+			coalesce(r.owner_principal_id::text, ''), coalesce(oh.username, ''), r.channels, r.opt_out_allowed
 		from action_rule r
 		join notification_type t on t.id = coalesce(r.notification_type_id, (select id from notification_type where name = $2 and official))
 		left join action_rule_target art on art.rule_id = r.id
@@ -358,7 +420,7 @@ func rulesOn(ctx context.Context, q querier, transition string) ([]queuedRule, e
 		left join human oh on oh.principal_id = op.id
 		where r.enabled and $1 = any(r.on_transitions)
 		  and (r.owner_principal_id is null or (op.active and op.archived_at is null and oh.principal_id is not null))
-		group by r.id, r.name, r.when_expr, t.id, t.name, t.subject, t.text, oh.username
+		group by r.id, r.name, r.when_expr, t.id, t.name, t.subject, t.text, oh.username, r.opt_out_allowed
 		order by r.name`, transition, officialTypeFor(transition))
 	if err != nil {
 		return nil, fmt.Errorf("storage: action rules on %s: %w", transition, err)
@@ -368,7 +430,7 @@ func rulesOn(ctx context.Context, q querier, transition string) ([]queuedRule, e
 	for rows.Next() {
 		var r queuedRule
 		if err := rows.Scan(&r.id, &r.name, &r.when, &r.typeID, &r.typeName, &r.subject, &r.text, &r.targetIDs, &r.targetNames, &r.targetKinds,
-			&r.ownerID, &r.ownerName, &r.channels); err != nil {
+			&r.ownerID, &r.ownerName, &r.channels, &r.optOutAllowed); err != nil {
 			return nil, fmt.Errorf("storage: scan action rule: %w", err)
 		}
 		out = append(out, r)
@@ -460,7 +522,7 @@ func (p *PG) DeliverNext(ctx context.Context, send SendFunc) (bool, error) {
 		if targetID == nil && targetName == "" {
 			es, refused, err = p.personalEmailSend(ctx, tx, ruleID, recipientID, componentID, createdAt)
 		} else {
-			es, refused, err = p.emailSend(ctx, tx, targetID, recipientID, componentID, createdAt)
+			es, refused, err = p.emailSend(ctx, tx, targetID, ruleID, recipientID, componentID, createdAt)
 		}
 		if err != nil {
 			return true, err

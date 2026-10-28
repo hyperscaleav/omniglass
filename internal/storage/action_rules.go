@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/hyperscaleav/omniglass/internal/rules"
 	"github.com/hyperscaleav/omniglass/internal/scope"
@@ -40,12 +41,15 @@ type ActionRule struct {
 	Targets []string
 	// OwnerID is a personal rule's owner (#1353), empty for a platform rule;
 	// Channels are the channels a personal rule tells its owner on.
-	OwnerID   string
-	Channels  []string
-	Enabled   bool
-	Official  bool
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	OwnerID  string
+	Channels []string
+	// OptOutAllowed lets a member of a group this platform rule targets opt
+	// out of it for themselves (#1354); false by default.
+	OptOutAllowed bool
+	Enabled       bool
+	Official      bool
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 // ActionRuleSpec is the create input.
@@ -57,6 +61,7 @@ type ActionRuleSpec struct {
 	When             string
 	NotificationType string
 	Targets          []string
+	OptOutAllowed    bool
 	Enabled          *bool
 }
 
@@ -69,6 +74,7 @@ type ActionRulePatch struct {
 	When             *string
 	NotificationType *string
 	Targets          *[]string
+	OptOutAllowed    *bool
 	Enabled          *bool
 }
 
@@ -92,14 +98,14 @@ func officialTypeFor(transition string) string {
 const actionRuleCols = `r.id, r.name, coalesce(r.label, ''), r.description, r.on_transitions, r.when_expr,
 	coalesce(nt.name, ''), coalesce(r.notification_type_id::text, ''),
 	coalesce((select array_agg(t.name order by t.name) from action_rule_target art join notification_target t on t.id = art.target_id where art.rule_id = r.id), '{}'),
-	coalesce(r.owner_principal_id::text, ''), r.channels, r.enabled, r.official, r.created_at, r.updated_at`
+	coalesce(r.owner_principal_id::text, ''), r.channels, r.opt_out_allowed, r.enabled, r.official, r.created_at, r.updated_at`
 
 const actionRuleFrom = ` from action_rule r left join notification_type nt on nt.id = r.notification_type_id`
 
 func scanActionRule(row pgx.Row) (*ActionRule, error) {
 	var r ActionRule
 	if err := row.Scan(&r.ID, &r.Name, &r.Label, &r.Description, &r.On, &r.When, &r.NotificationType, &r.NotificationTypeID,
-		&r.Targets, &r.OwnerID, &r.Channels, &r.Enabled, &r.Official, &r.CreatedAt, &r.UpdatedAt); err != nil {
+		&r.Targets, &r.OwnerID, &r.Channels, &r.OptOutAllowed, &r.Enabled, &r.Official, &r.CreatedAt, &r.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &r, nil
@@ -260,9 +266,9 @@ func (p *PG) CreateActionRule(ctx context.Context, actorID string, spec ActionRu
 		return nil, err
 	}
 	var id string
-	err = tx.QueryRow(ctx, `insert into action_rule (name, label, description, on_transitions, when_expr, notification_type_id, enabled)
-		values ($1, $2, $3, $4, $5, $6::uuid, $7) returning id::text`,
-		spec.Name, labelOrNull(spec.Label), spec.Description, on, spec.When, typeID, enabled).Scan(&id)
+	err = tx.QueryRow(ctx, `insert into action_rule (name, label, description, on_transitions, when_expr, notification_type_id, enabled, opt_out_allowed)
+		values ($1, $2, $3, $4, $5, $6::uuid, $7, $8) returning id::text`,
+		spec.Name, labelOrNull(spec.Label), spec.Description, on, spec.When, typeID, enabled, spec.OptOutAllowed).Scan(&id)
 	if isUniqueViolation(err) {
 		return nil, ErrActionRuleExists
 	}
@@ -326,8 +332,9 @@ func (p *PG) UpdateActionRule(ctx context.Context, actorID, ref string, patch Ac
 			when_expr = coalesce($6, when_expr),
 			notification_type_id = case when $7::boolean then $8::uuid else notification_type_id end,
 			enabled = coalesce($9, enabled),
+			opt_out_allowed = coalesce($10, opt_out_allowed),
 			updated_at = now()
-		where id = $1`, before.ID, setLabel, labelVal, patch.Description, on, patch.When, setType, typeID, patch.Enabled); err != nil {
+		where id = $1`, before.ID, setLabel, labelVal, patch.Description, on, patch.When, setType, typeID, patch.Enabled, patch.OptOutAllowed); err != nil {
 		return nil, fmt.Errorf("storage: update action rule %q: %w", ref, err)
 	}
 	if patch.Targets != nil {
@@ -373,4 +380,49 @@ func (p *PG) DeleteActionRule(ctx context.Context, actorID, ref string, action s
 		return err
 	}
 	return tx.Commit(ctx)
+}
+
+// ErrOptOutNotAllowed is an opt-out of a rule whose admin has not allowed it.
+var ErrOptOutNotAllowed = errors.New("storage: this action rule does not allow opting out")
+
+// SetRuleOptOut opts the principal out of a platform rule (out true) or back
+// in, audited and idempotent (#1354). Opting out takes a rule marked
+// opt_out_allowed; opting back in is always allowed. An opt-out reaches the
+// rule's group targets: a person a target names directly is told regardless.
+func (p *PG) SetRuleOptOut(ctx context.Context, actorID, principalID, ref string, out bool) (*ActionRule, error) {
+	if !isUUID(principalID) {
+		return nil, ErrActionRuleNotFound
+	}
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: begin opt-out: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	r, err := getActionRule(ctx, tx, ref, "", false)
+	if err != nil {
+		return nil, err
+	}
+	verb := "opt_in"
+	var tag pgconn.CommandTag
+	if out {
+		if !r.OptOutAllowed {
+			return nil, ErrOptOutNotAllowed
+		}
+		verb = "opt_out"
+		tag, err = tx.Exec(ctx, `insert into action_rule_opt_out (rule_id, principal_id) values ($1, $2::uuid) on conflict do nothing`, r.ID, principalID)
+	} else {
+		tag, err = tx.Exec(ctx, `delete from action_rule_opt_out where rule_id = $1 and principal_id = $2::uuid`, r.ID, principalID)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("storage: %s of %s: %w", verb, r.Name, err)
+	}
+	if tag.RowsAffected() > 0 {
+		if err := writeAuditRes(ctx, tx, actorID, verb, "action_rule", r.ID, nil, map[string]any{"principal_id": principalID, "opted_out": out}); err != nil {
+			return nil, err
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit opt-out: %w", err)
+	}
+	return r, nil
 }

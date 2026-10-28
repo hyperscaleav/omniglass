@@ -56,6 +56,46 @@ export interface paths {
         patch: operations["update-action-rule"];
         trace?: never;
     };
+    "/action-rules/{name}:optIn": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Opt yourself back in to a group notification
+         * @description Undoes your opt-out of a platform action rule; always allowed. Idempotent and audited. Gated by notification:subscribe.
+         */
+        post: operations["opt-in-action-rule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/action-rules/{name}:optOut": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Opt yourself out of a group notification
+         * @description Stops a platform action rule telling you through a group it targets, for you alone. Only a rule an admin marked opt_out_allowed (a 409 otherwise); a rule that names you directly still tells you. Idempotent and audited. Gated by notification:subscribe.
+         */
+        post: operations["opt-out-action-rule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/audit-log": {
         parameters: {
             query?: never;
@@ -155,7 +195,7 @@ export interface paths {
         put?: never;
         /**
          * Subscribe yourself to alarms
-         * @description Creates a personal action rule: on which alarm transitions, when, what to send, and on which of your channels (inbox, email). It tells you alone and names no target (targets is a 422), and it only ever matches an alarm on a component you can read at that moment, judged before its when runs. A taken name among your rules is a 409. Audited. Gated by notification:subscribe.
+         * @description Creates a personal action rule: on which alarm transitions, when, what to send, and on which of your channels (inbox, email). It tells you alone and names no target (targets is a 422), and it only ever matches an alarm on a component you can read at that moment, judged before its when runs. A taken name among your rules, or a 51st rule, is a 409. Audited. Gated by notification:subscribe.
          */
         post: operations["create-auth-me-action-rule"];
         delete?: never;
@@ -5380,6 +5420,8 @@ export interface components {
             official: boolean;
             /** @description The alarm transitions it fires on: raised, cleared, or both */
             on: string[] | null;
+            /** @description Whether a member of a group it targets may opt out of it for themselves (:optOut); false by default, so an on-call page cannot be opted out of unless an admin allows it */
+            opt_out_allowed: boolean;
             /** @description The notification targets it sends to, by name */
             targets: string[] | null;
             /** Format: date-time */
@@ -6328,6 +6370,8 @@ export interface components {
             notification_type?: string;
             /** @description The alarm transitions it fires on: raised, cleared, or both. Acknowledging an alarm is never one */
             on: string[] | null;
+            /** @description Let a member of a group it targets opt out of it for themselves (default false) */
+            opt_out_allowed?: boolean;
             /** @description The notification targets to send to, by name or uuid */
             targets: string[] | null;
             /** @description A predicate over the alarm facts at the action expression site (component, place, severity, severity_rank, message, transition, rule, ...; see /expressions:validate with site action); absent always holds. A refusal is a 422 with its line and column */
@@ -9216,6 +9260,18 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
         };
+        OptOutOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/OptOutOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The rule, by name */
+            action_rule: string;
+            /** @description Whether you are now opted out of it */
+            opted_out: boolean;
+        };
         OwnerStruct: {
             /**
              * @description The owner arc: a component, or a system (telemetry about the system as a whole, such as a cloud service's account of the room it serves). A system batch carries no log lines, since a log line is component-owned
@@ -11528,6 +11584,8 @@ export interface components {
             notification_type?: string;
             /** @description The transitions it fires on (replaces the set) */
             on?: string[];
+            /** @description Let a member of a group it targets opt out of it; false withdraws every opt-out from the next transition */
+            opt_out_allowed?: boolean;
             /** @description The targets (replaces the set) */
             targets?: string[];
             /** @description The predicate (empty always holds) */
@@ -12304,6 +12362,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ActionRuleBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "opt-in-action-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The rule's name or uuid */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OptOutOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "opt-out-action-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The rule's name or uuid */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OptOutOutputBody"];
                 };
             };
             /** @description Error */

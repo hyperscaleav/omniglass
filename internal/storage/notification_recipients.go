@@ -88,6 +88,38 @@ func recipientsFor(ctx context.Context, q querier, componentID string, targetIDs
 // as a request of theirs would resolve it (scope.Resolve over the role
 // index), judged against the component's ancestry walked once.
 func readersOf(ctx context.Context, q querier, componentID string, principalIDs []string) (map[string]bool, error) {
+	grants, idx, chain, err := accessOf(ctx, q, componentID, principalIDs)
+	if err != nil {
+		return nil, err
+	}
+	return admitReaders(principalIDs, grants, idx, chain), nil
+}
+
+// subscribersOf reports which personal rule owners may be told about the
+// component (#1353): they read it, and they still hold notification:subscribe,
+// so withholding the permission from a person stops their existing rules too.
+func subscribersOf(ctx context.Context, q querier, componentID string, ownerIDs []string) (map[string]bool, error) {
+	grants, idx, chain, err := accessOf(ctx, q, componentID, ownerIDs)
+	if err != nil {
+		return nil, err
+	}
+	out := admitReaders(ownerIDs, grants, idx, chain)
+	for id := range out {
+		roles := make([]string, 0, len(grants[id]))
+		for _, g := range grants[id] {
+			roles = append(roles, g.Role)
+		}
+		if !idx.Flatten(roles).Allows("notification", "subscribe") {
+			delete(out, id)
+		}
+	}
+	return out, nil
+}
+
+// accessOf loads what judging principals against one component takes, in
+// three statements whatever their number: their effective grants, the role
+// index, and the component's ancestry.
+func accessOf(ctx context.Context, q querier, componentID string, principalIDs []string) (map[string][]scope.Grant, rbac.RoleIndex, []string, error) {
 	grants := make(map[string][]scope.Grant, len(principalIDs))
 	if err := eachPrincipalGrant(ctx, q, principalIDs, func(owner string, g Grant) {
 		sg := scope.Grant{Role: g.Role, ScopeKind: g.ScopeKind, ScopeOp: g.ScopeOp}
@@ -96,17 +128,17 @@ func readersOf(ctx context.Context, q querier, componentID string, principalIDs 
 		}
 		grants[owner] = append(grants[owner], sg)
 	}); err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
 	idx, err := roleIndexOf(ctx, q)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
 	chain, err := componentChain(ctx, q, componentID)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
-	return admitReaders(principalIDs, grants, idx, chain), nil
+	return grants, idx, chain, nil
 }
 
 // admitReaders is the pure half of readersOf: a principal is admitted when

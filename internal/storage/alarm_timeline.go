@@ -123,9 +123,9 @@ func (p *PG) AlarmTimeline(ctx context.Context, componentID, alarmID string, vie
 			return nil, fmt.Errorf("storage: scan alarm %s timeline: %w", alarmID, err)
 		}
 		if e.Personal {
-			n := Notification{Personal: true, Recipient: e.Recipient, RecipientID: rid, Target: e.Target, Rule: e.Rule}
+			n := Notification{Personal: true, Recipient: e.Recipient, RecipientID: rid, Target: e.Target, Rule: e.Rule, LastError: e.Error}
 			view.withhold(&n)
-			e.Recipient, e.Rule = n.Recipient, n.Rule
+			e.Recipient, e.Rule, e.Error = n.Recipient, n.Rule, n.LastError
 		}
 		if e.Kind == "audit" {
 			e.What = auditAlarmAction(e.What)

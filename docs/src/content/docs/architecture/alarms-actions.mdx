@@ -593,6 +593,14 @@ The message is plain text, the rendered subject and text, its `Message-ID` the r
 the row's own, so every attempt and a `:retry` carry the same bytes. A relay that refuses is retried
 with the same backoff as a webhook, and `:test` on an email target sends one synthetic message.
 
+**Opting out of a group page.** An admin may mark a platform rule `opt_out_allowed` (default false,
+so an on-call page cannot be opted out of unless an admin says so); a member of a group it targets may
+then opt out of it for themselves with `POST /action-rules/{name}:optOut`, and back in with `:optIn`
+(`notification:subscribe`, audited, #1354). An opt-out skips that person when the rule's group targets
+expand, and a pending email of theirs from that rule fails at send; a target that names them directly
+still tells them, and taking `opt_out_allowed` back off restores every opted-out member from the next
+transition. Snooze (#1318), not opt-out, is the answer for one noisy alarm.
+
 ### Personal action rules: subscribing yourself
 
 A user can subscribe themselves (#1353): a **personal action rule** is an `action_rule` with an
@@ -600,7 +608,10 @@ owner (`owner_principal_id`) and the **channels** it tells its owner on, and no 
 recipient is its owner. It is the owner's alone, created, paused, edited, tested and deleted under
 `/auth/me/action-rules` with `notification:subscribe`, which `viewer` carries so every person who can
 see alarms can subscribe; another user's rule is a 404 on every verb, `/action-rules` lists platform
-rules only, and a personal rule goes with its owner when they are purged. Names are unique per owner.
+rules only, and a personal rule goes with its owner when they are purged. Names are unique per owner,
+and a person owns at most 50 (every rule is judged inside every alarm transition). An owner who loses
+`notification:subscribe` is told nothing more by their rules, and a notification type an admin deletes
+releases a personal rule naming it to the official type rather than being held by it.
 
 ```bash
 omniglass auth me action-rule create --name my-boardroom --on '["raised"]' \
@@ -617,7 +628,7 @@ decision 4). Its email rows are judged again at send like any person's. `:test` 
 draft of its `on` and `when`, against the owner's most recent alarms on components they can read and
 says which it would have told them about; it writes and sends nothing. A personal rule's row is read
 like any person-addressed row, and its rule name, which can say whose it is, is withheld with the
-recipient.
+recipient, as is any person-addressed row's failure reason (a relay's refusal can quote the address).
 
 ### The `action_rule`: when a message is sent
 
@@ -828,14 +839,17 @@ registries, the `action_rule` and the targets it sends to (`action_rule_target`)
   notes={{
     on_transitions: 'The alarm transitions it fires on: raised, cleared, or both (a CHECK holds the set)',
     when_expr: 'The predicate at the action expression site; empty always holds',
-    notification_type_id: 'The type it sends (ON DELETE RESTRICT); NULL sends the official one for the transition',
+    notification_type_id: 'The type it sends (ON DELETE RESTRICT, held by a platform rule; a personal rule is released to NULL when the type is deleted); NULL sends the official one for the transition',
     official: 'The rule-row discipline; no official action rule ships',
+    opt_out_allowed: 'Whether a member of a group it targets may opt out of it (default false)',
     owner_principal_id: 'A personal rule\'s owner, its only recipient (ON DELETE CASCADE); NULL is a platform rule',
     channels: 'A personal rule\'s channels (inbox, email); empty for a platform rule, which has targets',
   }}
 />
 
 <SchemaTable table="action_rule_target" notes={{ target_id: 'A target it sends to; a target a rule names cannot be deleted (RESTRICT)' }} />
+
+<SchemaTable table="action_rule_opt_out" notes={{ principal_id: 'A person who opted out of the rule for themselves; read only while the rule is opt_out_allowed' }} />
 
 <SchemaTable
   table="notification_target"
