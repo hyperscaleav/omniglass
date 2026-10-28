@@ -15,6 +15,7 @@ import { METRICS_KEY } from "../lib/metric_types";
 import { PROPERTIES_KEY } from "../lib/properties";
 import { EVENT_TYPES_KEY } from "../lib/event_types";
 import { COMMAND_TYPES_KEY } from "../lib/command_types";
+import { NOTIFICATION_TYPES_KEY } from "../lib/notification_types";
 import { EVENT_RULES_KEY } from "../lib/event_rules";
 import { CALC_RULES_KEY } from "../lib/calc_rules";
 import { severityLevelsKey } from "../lib/severity";
@@ -52,6 +53,7 @@ const PRIMED: [readonly string[], number][] = [
   [PROPERTIES_KEY, 7],
   [EVENT_TYPES_KEY, 15],
   [COMMAND_TYPES_KEY, 6],
+  [NOTIFICATION_TYPES_KEY, 2],
   [EVENT_RULES_KEY, 3],
   [CALC_RULES_KEY, 2],
   [severityLevelsKey, 5],
@@ -151,18 +153,17 @@ describe("CatalogShell", () => {
     expect(nav().querySelector('a[href="/drivers"]')!.textContent).toBe("Drivers");
   });
 
-  it("renders the Templates slots live, each counting its own kinds of the one catalog list, and the routed soon slot (Notifications) as a link wearing soon", () => {
+  it("renders the Templates slots live, each counting its own kinds of the one catalog list, and Notifications as a live link (#618)", () => {
     mount();
     expect([...nav().querySelectorAll("button[disabled]")]).toHaveLength(0);
     const slot = (q: string) => nav().querySelector(`a[href="/templates?kind=${q}"]`)!;
     expect(slot("component_template").textContent).toBe("Templates5");
     expect(slot("standard_template,system_template").textContent).toBe("Templates4");
     expect(slot("place_template").textContent).toBe("Templates1");
-    // Notifications has a routed stub page, so it LINKS, wearing the same soon
-    // treatment; its count stays absent (no registry exists).
+    // Notifications went live (#618): a plain link with its count.
     const a = nav().querySelector(`a[href="/notifications"]`)!;
-    expect(a.textContent).toContain("soon");
-    expect(a.textContent).not.toMatch(/\d/);
+    expect(a.textContent).toContain("2");
+    expect(a.textContent).not.toContain("soon");
     // Rules went live (#921): a plain link with its count, no soon treatment.
     const rules = nav().querySelector(`a[href="/rules"]`)!;
     expect(rules.textContent).toContain("3");
@@ -196,13 +197,12 @@ describe("CatalogShell", () => {
 
   it("drops a gated entry (and never creates its query) and drops an emptied group's header", () => {
     const { qc } = mount(meWith(["metric_type:read"]), { skip: [TAGS_KEY] });
-    // Only the ungated Overview, the one readable registry, and the routed soon
-    // slot keep their links (Rules is gated on rule:read since it went live).
-    expect(hrefs()).toEqual(["/catalog", "/metrics", "/notifications"]);
-    // Metadata's only entry is gated away, so its header drops too, and so do
-    // the fleet groups, whose Templates slots are gated on template:read now.
+    // Only the ungated Overview and the one readable registry keep their links
+    // (Rules, Notifications and the Templates slots are gated on their reads).
+    expect(hrefs()).toEqual(["/catalog", "/metrics"]);
+    // Every other group's entries are gated away, so their headers drop too.
     const headers = [...nav().querySelectorAll(".menu-title")].map((h) => h.textContent);
-    expect(headers).toEqual(["Telemetry", "Actions"]);
+    expect(headers).toEqual(["Telemetry"]);
     // The structural fact: the gated registry's count query was never created,
     // so no fetch can ever have been on its path.
     expect(qc.getQueryCache().find({ queryKey: [...TAGS_KEY] })).toBeUndefined();

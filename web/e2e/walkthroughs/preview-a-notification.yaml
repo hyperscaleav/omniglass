@@ -1,0 +1,46 @@
+# Preview a notification against a real alarm (#618, #1319): Touch Panel 2
+# (panel-2) holds a High alarm, raised off camera, and an operator's
+# page-oncall notification type turns it into a message. Its blade previews the type through the server's own
+# engine, the same render a delivery carries, beside every fact a template
+# can read; then a draft of the subject is previewed before it is saved,
+# which is how an author tries a template without sending anything.
+title: Preview a notification
+description: Open an operator's notification type, preview it against Touch Panel 2's open alarm, and try a draft subject before saving it.
+setup:
+  - post: /components/panel-2/alarms
+    body: { severity: high, message: No touch input, dedup_key: walkthrough-notification }
+  - post: /notification-types
+    body:
+      name: page-oncall
+      label: Page on-call
+      description: A terse page for the on-call phone
+      subject: '{{.SeverityLabel | upper}} {{.ComponentLabel}}'
+      text: '{{.Message}} since {{.RaisedAt}}'
+steps:
+  - goto: /notifications
+    caption: Notifications says what a message about an alarm says. Two ship with Omniglass; Page on-call is an operator's own.
+  - click: 'text=Page on-call'
+    caption: Open it. A subject and a text, each a template over the alarm's facts.
+  - select: { target: 'aside[data-blade] select >> nth=0', value: Touch Panel 2 (panel-2) }
+    caption: Preview it against a real component, Touch Panel 2. Its most recent alarm is the one rendered.
+  - click: 'aside[data-blade] button:has-text("Preview")'
+    caption: Preview renders through the same engine a delivery uses, and writes nothing.
+  - wait: { text: No touch input since }
+    caption: What the receiver would get, and below it every fact the templates could have read.
+    hold: 1500
+  - click: { role: button, name: Edit }
+    caption: Edit it to try a different subject.
+  - click: 'aside[data-blade] input >> nth=1'
+    caption: The subject template, editable now.
+  - press: Control+a
+    caption: Select it to replace it.
+  - press: Backspace
+    caption: Clear it.
+  - type: { target: 'aside[data-blade] input >> nth=1', text: '{{.SeverityLabel}}: {{.Message}}' }
+    caption: A draft that says what is wrong in the subject itself.
+  - click: 'aside[data-blade] button:has-text("Preview")'
+    caption: Preview the draft before saving it.
+  - wait: { text: 'High: No touch input' }
+    caption: The draft renders against the same alarm, before anything is stored.
+    poster: true
+    hold: 2000

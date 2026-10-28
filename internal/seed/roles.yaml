@@ -16,7 +16,8 @@ roles:
     description: >-
       Day-to-day operations: create or edit components, endpoints (retry an
       endpoint's rejected session, or run its poll now), secrets,
-      variables, and the property, metric, event, and command catalogs, issue
+      variables, the property, metric, event, command and notification
+      catalogs, issue
       commands in scope, preview a driver spec through a node, and impair
       simulated devices.
       Sees and reveals the device secrets in its scope (never the admin-sensitive
@@ -37,6 +38,10 @@ roles:
       - "metric_type:create,update"
       - "event_type:create,update"
       - "command_type:create,update"
+      # notification_type is the outbound message catalog (#618): an operator
+      # writes the templates beside the command catalog; renaming and deleting
+      # one stay with admin.
+      - "notification_type:create,update"
       - "command:issue"
       - "simulation:update"
       # alarm:acknowledge records that a human has seen an alarm. The role that
@@ -48,6 +53,10 @@ roles:
       # grant reaches no component at all (#714), so granting it there would ship
       # a capability that acknowledges nothing in the shape the role is granted in.
       - "alarm:acknowledge"
+      # notification:retry re-queues a notification that failed (#618): the
+      # role that acknowledges an alarm is the role that re-sends its page. It
+      # resolves on the component tier, beside alarm:acknowledge.
+      - "notification:retry"
       # telemetry:push is a WRITE of observations, so it sits with the other
       # operator writes and deliberately outside the viewer read floor. An
       # integration that only reports data needs nothing else: the push scope
@@ -129,6 +138,11 @@ roles:
       - "severity_level:*"
       - "rule:*"
       - "command_type:*"
+      - "notification_type:*"
+      # notification_target is admin-only (#618): a destination the server
+      # sends to, holding a credential, so it is a sensitive resource off the
+      # viewer floor and nothing below admin holds it.
+      - "notification_target:*"
       - "command:*"
       # rename moves a registry row's handle (#555): its own action, as on the
       # fleet tiers, because it breaks a script or a bookmark that typed the old

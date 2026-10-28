@@ -9,8 +9,9 @@ const entry = (header: string, label: string) =>
 // The catalog group table is data; these pin the facts the shell and the
 // Overview render from it, and the no-bare-TODO rule on its pending slots.
 describe("the catalog table's soon slots", () => {
-  it("names each pending registry's tracking issue in the table", () => {
-    expect(entry("Actions", "Notifications").issue).toBe(618);
+  it("holds no pending slot: every one went live", () => {
+    // None is pending any more: every slot went live (#921, #618, #1329).
+    for (const g of CATALOG_GROUPS) for (const e of g.entries) expect(e.soon, e.label).toBeFalsy();
   });
 
   it("mirrors nav.ts on every routed soon slot, so the stub page shows the number the table names", () => {
@@ -58,10 +59,9 @@ describe("the catalog table's Templates slots", () => {
 });
 
 describe("visibleGroups", () => {
-  it("keeps the shell for a caller who may read nothing: the soon slot and its group survive", () => {
+  it("leaves a caller who may read nothing no group: no soon slot remains to hold one", () => {
     const groups = visibleGroups(() => false);
-    expect(groups.map((g) => g.header)).toEqual(["Actions"]);
-    expect(groups.flatMap((g) => g.entries.map((e) => e.label))).toEqual(["Notifications"]);
+    expect(groups.map((g) => g.header)).toEqual([]);
   });
 
   it("keeps every entry for a caller who may read everything", () => {

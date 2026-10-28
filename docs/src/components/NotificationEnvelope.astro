@@ -1,0 +1,32 @@
+---
+// The webhook envelope a notification target receives (#618), rendered from
+// its JSON Schema (docs/src/generated/notification-envelope.json), which make
+// gen generates from the Go struct the send marshals (internal/notify), so the
+// documented payload is the sent payload.
+//
+// Usage: <NotificationEnvelope />
+import schema from '../generated/notification-envelope.json';
+
+const required = new Set(schema.required ?? []);
+const rows = Object.entries(schema.properties ?? {});
+---
+
+<p>{schema.description}</p>
+<table class="label-data-map">
+  <thead>
+    <tr>
+      <th>Field</th>
+      <th>Type</th>
+      <th>What it holds</th>
+    </tr>
+  </thead>
+  <tbody>
+    {rows.map(([name, p]) => (
+      <tr>
+        <td><code>{name}</code>{required.has(name) ? '' : ' (optional)'}</td>
+        <td>{p.enum ? p.enum.join(' | ') : p.type === 'object' ? 'object of strings' : p.type}</td>
+        <td>{p.description}</td>
+      </tr>
+    ))}
+  </tbody>
+</table>

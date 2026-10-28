@@ -177,7 +177,7 @@ func applicableKinds(resource string) map[string]bool {
 		return map[string]bool{"location": true}
 	case "system":
 		return map[string]bool{"system": true}
-	case "component", "endpoint", "task", "alarm", "command":
+	case "component", "endpoint", "task", "alarm", "command", "notification":
 		// An alarm hangs off a component (the thin-cut owner), so the component
 		// tier is what can contain it, exactly as for an endpoint or a task. It
 		// gets its own case rather than borrowing "component" because the ACTION
@@ -201,6 +201,10 @@ func applicableKinds(resource string) map[string]bool {
 		// mismatch resolvePlacementRef records), while telling scope.Covers that a
 		// command scope may be checked against those tables. A route that issues
 		// to another tier adds that tier here, with a test.
+		//
+		// A notification is about an alarm, so it is the alarm's case again
+		// (#618): notification:retry resolves on the component tier from the
+		// grants carrying it.
 		return map[string]bool{"component": true}
 	case "telemetry":
 		// Pushed telemetry resolves on the component and system tiers, the two

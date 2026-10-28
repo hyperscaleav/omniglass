@@ -9,3 +9,8 @@
 - **Fix:** scrub the whole raw text first, every encoded form of each secret (raw, url-, JSON- with
   and without an escaped slash, html-escaped), then collapse and cut (`snippet`,
   internal/collection/httpfetch.go), with a test whose echo straddles the cut.
+- **Second instance (#1320 review, fixed in the same slice):** the egress client copied a
+  receiver's error body into the reason a `:test` audit row keeps with no scrub at all, so a
+  receiver echoing its request path landed a chat webhook URL's credential path there. Fixed the
+  same way: `egress.Post` reads past the cut, scrubs the URL, its path and query and every
+  credential header in each encoded form, then cuts (`TestAReceiverEchoNeverCarriesTheURLOrTheToken`).

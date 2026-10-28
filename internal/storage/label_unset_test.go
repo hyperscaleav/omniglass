@@ -219,6 +219,27 @@ func TestEveryWritePathStoresNullForAnUnsetLabel(t *testing.T) {
 			}
 			return "name", "lbl-cmd"
 		},
+		"action_rule": func(t *testing.T) (string, string) {
+			if _, err := gw.CreateNotificationTarget(ctx, "", storage.NotificationTargetSpec{Name: "lbl-hook", Kind: storage.ChannelWebhook, URL: "https://hooks.example.com/x"}, all, storage.SecretUse{}); err != nil {
+				t.Fatalf("create notification_target: %v", err)
+			}
+			if _, err := gw.CreateActionRule(ctx, "", storage.ActionRuleSpec{Name: "lbl-action", Label: blank, On: []string{"raised"}, Targets: []string{"lbl-hook"}}, all); err != nil {
+				t.Fatalf("create action_rule: %v", err)
+			}
+			return "name", "lbl-action"
+		},
+		"notification_target": func(t *testing.T) (string, string) {
+			if _, err := gw.CreateNotificationTarget(ctx, "", storage.NotificationTargetSpec{Name: "lbl-target", Label: blank, Kind: storage.ChannelWebhook, URL: "https://hooks.example.com/y"}, all, storage.SecretUse{}); err != nil {
+				t.Fatalf("create notification_target: %v", err)
+			}
+			return "name", "lbl-target"
+		},
+		"notification_type": func(t *testing.T) (string, string) {
+			if _, err := gw.CreateNotificationType(ctx, "", storage.NotificationTypeSpec{Name: "lbl-notify", Label: blank}); err != nil {
+				t.Fatalf("create notification_type: %v", err)
+			}
+			return "name", "lbl-notify"
+		},
 	}
 
 	// Completeness: every labelled table is proved or declared, and no

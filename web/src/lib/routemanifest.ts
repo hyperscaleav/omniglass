@@ -99,7 +99,7 @@ export const ROUTE_MANIFEST: RouteEntry[] = [
   // The template catalog (#1329): one page across the four kinds, which the
   // Components, Systems and Locations groups' Templates slots open filtered.
   { path: "/templates", shell: "catalog", page: "Templates", smoke: "/templates" },
-  // The catalog's routed soon slots (catalog.ts's CATALOG_STUB_PATHS), rendering
-  // their stub inside the pane.
-  { path: "/notifications", shell: "catalog", page: "SectionStub", smoke: "/notifications" },
+  // The notification types (#618), the commands' outbound peer; it was the
+  // catalog's last routed soon slot.
+  { path: "/notifications", shell: "catalog", page: "Notifications", smoke: "/notifications" },
 ];

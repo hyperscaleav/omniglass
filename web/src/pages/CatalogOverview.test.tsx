@@ -15,6 +15,7 @@ import { METRICS_KEY } from "../lib/metric_types";
 import { PROPERTIES_KEY } from "../lib/properties";
 import { EVENT_TYPES_KEY } from "../lib/event_types";
 import { COMMAND_TYPES_KEY } from "../lib/command_types";
+import { NOTIFICATION_TYPES_KEY } from "../lib/notification_types";
 import { EVENT_RULES_KEY } from "../lib/event_rules";
 import { severityLevelsKey } from "../lib/severity";
 import { TAGS_KEY } from "../lib/tags";
@@ -27,9 +28,9 @@ import { TEMPLATES_KEY } from "../lib/templates";
 // entries are all gated away renders no card. Counts ride the list pages' own
 // query keys (learning-tool doctrine: real rows, not decoration); each registry
 // is its own query, so one failing fetch marks its own row and nothing else
-// (#598). A soon entry reads soon without a count; a routed soon entry
-// (Notifications) links to its stub. The Templates slots link to the one
-// Templates page filtered to their kinds, each counting its own (#1329).
+// (#598). No slot is soon any more: Notifications went live (#618), and the
+// Templates slots link to the one Templates page filtered to their kinds, each
+// counting its own (#1329).
 
 const owner: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
 const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "view" }, permissions: ["*:read"], grants: [] };
@@ -50,6 +51,7 @@ const PRIMED: [readonly string[], number][] = [
   [PROPERTIES_KEY, 7],
   [EVENT_TYPES_KEY, 15],
   [COMMAND_TYPES_KEY, 6],
+  [NOTIFICATION_TYPES_KEY, 2],
   [EVENT_RULES_KEY, 3],
   [severityLevelsKey, 5],
   [TAGS_KEY, 9],
@@ -120,7 +122,7 @@ describe("CatalogOverview page", () => {
     expect(document.querySelector('a[href="/secret-types"]')).toBeNull();
   });
 
-  it("renders soon entries without counts: the routed ones link to their stubs, the pageless ones do not link", () => {
+  it("renders every entry live with its count: nothing is soon any more", () => {
     mount();
     const act = card("Actions")!;
     expect(entry(act, "Commands").textContent).toContain("6");
@@ -133,9 +135,10 @@ describe("CatalogOverview page", () => {
     const severity = entry(act, "Severity");
     expect(severity.textContent).toContain("5");
     expect(severity.getAttribute("href")).toBe("/severity-levels");
+    // Notifications went live (#618): its count, no soon.
     const notifications = entry(act, "Notifications");
-    expect(notifications.textContent).toContain("soon");
-    expect(notifications.textContent).not.toMatch(/\d/);
+    expect(notifications.textContent).toContain("2");
+    expect(notifications.textContent).not.toContain("soon");
     expect(notifications.getAttribute("href")).toBe("/notifications");
     // The Templates slots went live (#1329): filtered links, their own counts.
     const templates = entry(card("Components")!, "Templates");

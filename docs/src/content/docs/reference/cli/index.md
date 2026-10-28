@@ -19,6 +19,111 @@ Every command accepts these. An omitted flag falls back to its environment varia
 | `--server` | string | `http://localhost:8080` | Omniglass server base URL; when omitted, $OMNIGLASS_SERVER, else the default |
 | `--token` | string | (none) | bearer token; when omitted, $OMNIGLASS_TOKEN (read at run time, never printed) |
 
+## `omniglass action-rule`
+
+Commands for the action-rule resource
+
+### `omniglass action-rule create`
+
+Create an action rule
+
+```
+omniglass action-rule create [flags]
+```
+
+Adds a rule that, on an alarm's raise or clear, when its predicate holds over the alarm facts, queues one notification per target in the transition's own transaction, which the server's tick then delivers. An unknown transition, type or target, or a predicate that does not compile, is a 422; a taken name a 409. Audited. Gated by rule:create, with an all-scope grant: a rule watches the whole fleet.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--description` | string | (none) | What it is for |
+| `--enabled` | bool | `false` | Whether it fires (default true): a disabled rule queues nothing on a transition, and what it queued before still delivers |
+| `--label` | string | (none) | A human label |
+| `--name` | string | (none) | The rule's name (lowercase kebab) |
+| `--notification-type` | string | (none) | The notification type to send, by name or uuid; absent sends the official one for the transition |
+| `--on` | string | (none) | The alarm transitions it fires on: raised, cleared, or both. Acknowledging an alarm is never one |
+| `--targets` | string | (none) | The notification targets to send to, by name or uuid |
+| `--when` | string | (none) | A predicate over the alarm facts at the action expression site (component, place, severity, severity_rank, message, transition, rule, ...; see /expressions:validate with site action); absent always holds. A refusal is a 422 with its line and column |
+
+Example:
+
+```sh
+omniglass action-rule create --name name --on <json> --targets <json>
+```
+
+### `omniglass action-rule delete`
+
+Delete an action rule
+
+```
+omniglass action-rule delete <name>
+```
+
+Removes a rule; the notifications it queued keep its name. Audited. Gated by rule:delete, with an all-scope grant.
+
+Example:
+
+```sh
+omniglass action-rule delete <name>
+```
+
+### `omniglass action-rule get`
+
+Get an action rule
+
+```
+omniglass action-rule get <name>
+```
+
+Returns one action rule by name or uuid. Gated by rule:read.
+
+Example:
+
+```sh
+omniglass action-rule get <name>
+```
+
+### `omniglass action-rule list`
+
+List action rules
+
+```
+omniglass action-rule list
+```
+
+Lists every action rule, by name: on which alarm transitions, when, and what it sends to which targets. Gated by rule:read.
+
+Example:
+
+```sh
+omniglass action-rule list
+```
+
+### `omniglass action-rule update`
+
+Update an action rule
+
+```
+omniglass action-rule update <name> [flags]
+```
+
+Patches a rule (an absent field is unchanged; on and targets replace their sets). It acts on transitions from the next one; a notification already queued is not re-rendered. Audited. Gated by rule:update, with an all-scope grant.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--description` | string | (none) | What it is for |
+| `--enabled` | bool | `false` | Whether it fires: a disabled rule queues nothing on a transition, and what it queued before still delivers; re-enabled, it acts on the next transition |
+| `--label` | string | (none) | A human label (empty clears it) |
+| `--notification-type` | string | (none) | The type to send (empty returns to the official one per transition) |
+| `--on` | string | (none) | The transitions it fires on (replaces the set) |
+| `--targets` | string | (none) | The targets (replaces the set) |
+| `--when` | string | (none) | The predicate (empty always holds) |
+
+Example:
+
+```sh
+omniglass action-rule update <name>
+```
+
 ## `omniglass audit-log`
 
 Commands for the audit-log resource
@@ -637,7 +742,7 @@ Read an alarm's timeline
 omniglass component alarm timeline <name> <id>
 ```
 
-The alarm's history in one list, oldest first: the events that carry it (an event rule's fire event, which opened it, and its clear event, which resolved it) merged by time with its audit rows (the raise, each acknowledgement, the clear, and a rule edit that opened or resolved it, naming the editor). At one instant an event comes before the audit row it caused. Gated by alarm:read; a component outside the caller's component read scope, and an alarm not on the component, are a non-disclosing 404.
+The alarm's history in one list, oldest first: the events that carry it (an event rule's fire event, which opened it, and its clear event, which resolved it) merged by time with its audit rows (the raise, each acknowledgement, the clear, and a rule edit that opened or resolved it, naming the editor) and the notifications its transitions queued, each at the moment it was queued with its status as it stands (#618). At one instant an event comes before the audit row it caused, and that before a notification. Gated by alarm:read; a component outside the caller's component read scope, and an alarm not on the component, are a non-disclosing 404.
 
 Example:
 
@@ -2117,7 +2222,7 @@ Compiles an expression against a registered site's environment and answers wheth
 | `--inputs` | string | (none) | For calc (required there), the rule's inputs: each bound by its alias, typed by its key (by name or uuid) |
 | `--key` | string | (none) | The sample key that types the expression (required at both sites). For criteria, the key the rule reads: its lane and data type type the value (a metric is a number; a property is text, or a bool for a bool property). For calc, the rule's output key: its type is the result the reduce must yield |
 | `--owner-kind` | string | (none) | For calc, what the rule derives on: each input binds by its alias as the list of its current values (one per instance on a component, every member's on a system); a system also binds members, one record per role-bound member with value.<alias> and has.<alias> per input; defaults to component |
-| `--site` | string | (none) | Where the expression is written: calc, a calc rule's reduce; criteria, an event rule's fire_criteria or clear_criteria |
+| `--site` | string | (none) | Where the expression is written: action, an action rule's when; calc, a calc rule's reduce; criteria, an event rule's fire_criteria or clear_criteria |
 | `--source` | string | (none) | The expression |
 
 Example:
@@ -3298,6 +3403,340 @@ Example:
 
 ```sh
 omniglass node update <name>
+```
+
+## `omniglass notification`
+
+Commands for the notification resource
+
+### `omniglass notification get`
+
+Get a notification
+
+```
+omniglass notification get <id>
+```
+
+Returns one notification. One about a component outside the caller's component read scope is a non-disclosing 404. Gated by notification:read.
+
+Example:
+
+```sh
+omniglass notification get <id>
+```
+
+### `omniglass notification list`
+
+List notifications
+
+```
+omniglass notification list [flags]
+```
+
+The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. Gated by notification:read.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--alarm` | string | (none) | Only the notifications about this alarm (its uuid) |
+| `--limit` | int | `0` | At most this many, newest first (default 100) |
+| `--status` | string | (none) | Only those in this status |
+| `--target` | string | (none) | Only those to this target, by name |
+
+Example:
+
+```sh
+omniglass notification list
+```
+
+### `omniglass notification retry`
+
+Retry a failed notification
+
+```
+omniglass notification retry <id>
+```
+
+Re-queues a failed notification for a fresh run of attempts, sending the same rendered message with the same Idempotency-Key. One that is queued or sent, or one that failed before any attempt (its rule's when did not run, or its type did not render, so it holds no message), is a 409. Audited as retry. Gated by notification:retry, whose scope resolves on the component tier; a component outside the caller's component read scope is a non-disclosing 404, one it reads but may not retry on a 403.
+
+Example:
+
+```sh
+omniglass notification retry <id>
+```
+
+## `omniglass notification-target`
+
+Commands for the notification-target resource
+
+### `omniglass notification-target create`
+
+Create a notification target
+
+```
+omniglass notification-target create [flags]
+```
+
+Adds a destination a notification can be sent to: a channel kind (webhook), its URL and, optionally, the platform secret it signs or authenticates with. Binding a secret takes the right to reveal it (secret:reveal, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not reveal a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--enabled` | bool | `false` | Whether deliveries go to it (default true) |
+| `--kind` | string | (none) | The channel kind |
+| `--label` | string | (none) | A human label |
+| `--name` | string | (none) | The target's name (lowercase kebab) |
+| `--secret` | string | (none) | A platform secret, by name or uuid, of type hmac-key (signs each body) or bearer-token (sent as Authorization: Bearer) |
+| `--url` | string | (none) | The destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is |
+
+Example:
+
+```sh
+omniglass notification-target create --kind kind --name name --url url
+```
+
+### `omniglass notification-target delete`
+
+Delete a notification target
+
+```
+omniglass notification-target delete <name>
+```
+
+Removes a target. One an action rule still sends to is a 409. Audited. Gated by notification_target:delete with an all-scope grant.
+
+Example:
+
+```sh
+omniglass notification-target delete <name>
+```
+
+### `omniglass notification-target get`
+
+Get a notification target
+
+```
+omniglass notification-target get <name>
+```
+
+Returns one notification target by name or uuid, its URL masked. Gated by notification_target:read with an all-scope grant.
+
+Example:
+
+```sh
+omniglass notification-target get <name>
+```
+
+### `omniglass notification-target list`
+
+List notification targets
+
+```
+omniglass notification-target list
+```
+
+Lists every notification target, by name, each URL masked to its scheme and host. An all-scope directory: gated by notification_target:read with an all-scope grant (admin), and off the viewer floor, since a target is an egress destination holding a credential.
+
+Example:
+
+```sh
+omniglass notification-target list
+```
+
+### `omniglass notification-target reveal`
+
+Reveal a notification target's URL
+
+```
+omniglass notification-target reveal <name>
+```
+
+Returns the target's URL whole. Audited as reveal (the URL is not in the audit row). Gated by notification_target:reveal with an all-scope grant.
+
+Example:
+
+```sh
+omniglass notification-target reveal <name>
+```
+
+### `omniglass notification-target test`
+
+Send a test notification to a target
+
+```
+omniglass notification-target test <name>
+```
+
+Sends one synthetic message (transition test, about no alarm) to the target through the egress contract, signed or authenticated as a delivery would be, and answers what the receiver said. Records nothing but its audit row (the result, never the URL). A disabled target is still tested. Gated by notification_target:test with an all-scope grant.
+
+Example:
+
+```sh
+omniglass notification-target test <name>
+```
+
+### `omniglass notification-target update`
+
+Update a notification target
+
+```
+omniglass notification-target update <name> [flags]
+```
+
+Patches a target's label, URL, secret or enabled flag (an absent field is unchanged; an empty secret unbinds it). Binding a secret takes the right to reveal it, as on create, and so does moving the URL of a target that keeps a bound secret (a 403 without it), since the next send would hand the secret to the new URL. Audited, the URL masked and a change to it recorded as changed. Gated by notification_target:update with an all-scope grant.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--enabled` | bool | `false` | Whether deliveries go to it |
+| `--label` | string | (none) | A human label (empty clears it) |
+| `--secret` | string | (none) | A platform secret by name or uuid; empty unbinds it |
+| `--url` | string | (none) | The destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is |
+
+Example:
+
+```sh
+omniglass notification-target update <name>
+```
+
+## `omniglass notification-type`
+
+Commands for the notification-type resource
+
+### `omniglass notification-type create`
+
+Create a notification type
+
+```
+omniglass notification-type create [flags]
+```
+
+Registers an operator notification type (official=false). A template in the sandboxed language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Place, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422, and is never stored. A taken name is a 409. Audited. Gated by notification_type:create.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--description` | string | (none) | What the message is for |
+| `--label` | string | (none) | A human label |
+| `--name` | string | (none) | The type's name (lowercase kebab) |
+| `--subject` | string | (none) | The one-line subject template |
+| `--text` | string | (none) | The body text template |
+
+Example:
+
+```sh
+omniglass notification-type create --name name --subject subject --text text
+```
+
+### `omniglass notification-type delete`
+
+Delete a notification type
+
+```
+omniglass notification-type delete <name>
+```
+
+Removes an operator notification type. An official type, or one an action rule still sends, is a 409. Audited. Gated by notification_type:delete.
+
+Example:
+
+```sh
+omniglass notification-type delete <name>
+```
+
+### `omniglass notification-type get`
+
+Get a notification type
+
+```
+omniglass notification-type get <name>
+```
+
+Returns one notification type by name or uuid. Gated by notification_type:read.
+
+Example:
+
+```sh
+omniglass notification-type get <name>
+```
+
+### `omniglass notification-type list`
+
+List notification types
+
+```
+omniglass notification-type list
+```
+
+Lists every notification type (official and operator), by name: what a message about an alarm says. Fleet-wide reference data. Gated by notification_type:read.
+
+Example:
+
+```sh
+omniglass notification-type list
+```
+
+### `omniglass notification-type preview`
+
+Preview a notification type against an alarm
+
+```
+omniglass notification-type preview <name> [flags]
+```
+
+Renders the type's subject and text (or a draft of either, sent in the body) against one real alarm, exactly as a delivery of that alarm's transition would carry them, with the facts they read. Writes nothing. The alarm is named by its component and id; without an id, the component's most recently raised alarm. A draft template the sandbox refuses is a 422, one that fails to render (its output past the cap) a 422 naming it. Gated by notification_type:read; the component is resolved in the caller's component read scope, so a component outside it is a non-disclosing 404.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--alarm` | string | (none) | The alarm's id; absent previews the component's most recently raised alarm |
+| `--component` | string | (none) | The component the alarm is on, by name or dotted address |
+| `--subject` | string | (none) | A draft subject template to render instead of the stored one, so an editor previews before it saves |
+| `--text` | string | (none) | A draft text template to render instead of the stored one |
+| `--transition` | string | (none) | The edge to render for; absent reads the alarm's own state (cleared when it is, raised otherwise) |
+
+Example:
+
+```sh
+omniglass notification-type preview <name> --component component
+```
+
+### `omniglass notification-type rename`
+
+Rename a notification type
+
+```
+omniglass notification-type rename <id> [flags]
+```
+
+Moves a custom notification type's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official notification type keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. Audited as rename. Gated by notification_type:rename.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--name` | string | (none) | The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid) |
+
+Example:
+
+```sh
+omniglass notification-type rename <id> --name name
+```
+
+### `omniglass notification-type update`
+
+Update a notification type
+
+```
+omniglass notification-type update <name> [flags]
+```
+
+Patches an operator type's label, description or templates (an absent field is unchanged). A template in the sandboxed language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Place, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422. An official type is read-only (409). The name moves only through :rename. Audited. Gated by notification_type:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--description` | string | (none) | What the message is for |
+| `--label` | string | (none) | A human label (empty clears it) |
+| `--subject` | string | (none) | The one-line subject template |
+| `--text` | string | (none) | The body text template |
+
+Example:
+
+```sh
+omniglass notification-type update <name>
 ```
 
 ## `omniglass principal`

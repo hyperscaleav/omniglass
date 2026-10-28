@@ -19,6 +19,14 @@ export const settingsSchema = {
       "type": "array"
     }
   },
+  "notification": {
+    "console_url": {
+      "type": "string"
+    },
+    "egress_allow": {
+      "type": "array"
+    }
+  },
   "retention": {
     "metric_days": {
       "type": "integer",

@@ -39,7 +39,14 @@ func TestSetupCommandIsTheCLICreate(t *testing.T) {
 	if got != want {
 		t.Fatalf("got  %s\nwant %s", got, want)
 	}
-	for _, bad := range []string{"components", "/components/x", "/", "/auth/me/tokens"} {
+	nested, err := SetupCommand("/components/panel-2/alarms", map[string]any{"severity": "high", "dedup_key": "walkthrough"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `omniglass component alarm create panel-2 --dedup-key walkthrough --severity high`; nested != want {
+		t.Fatalf("got  %s\nwant %s", nested, want)
+	}
+	for _, bad := range []string{"components", "/components/x", "/", "/auth/me/tokens", "/components//alarms", "/a/b/c/d"} {
 		if _, err := SetupCommand(bad, map[string]any{"name": "x"}); err == nil {
 			t.Errorf("SetupCommand(%q) made a command, want a refusal", bad)
 		}

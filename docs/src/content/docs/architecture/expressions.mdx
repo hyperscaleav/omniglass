@@ -90,7 +90,11 @@ builtins and budget. The **calc** site (#995) is the first whose bindings are au
 expression: a calc rule's inputs, each bound by its alias as the list of its current values (#1018),
 from a struct type built when the rule is written, so its table describes them rather than listing them,
 with the list functions it admits and the names an alias may not take (both generated, and the
-console's alias check is generated from the same list). The console's **expression field**
+console's alias check is generated from the same list). The **action** site (#618) is an
+[action rule](/architecture/alarms-actions/#the-action_rule-when-a-message-is-sent)'s `when`: true or
+false for one alarm transition, its bindings the alarm facts a notification template reads in
+snake_case plus the severity's rank, held to that one declaration by a test, so a predicate and a
+template see the same alarm. The console's **expression field**
 (the rule drawer's **Write as an expression**, #960, and the calc rule's reduce) is that route's face, a
 code editor on CodeMirror 6 (#1000) driven entirely by the route's answer: Expr highlighted as it is
 written, completion of exactly the site's bindings and builtins (as a word is begun, or on Ctrl-Space),

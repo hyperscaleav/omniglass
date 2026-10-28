@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/hyperscaleav/omniglass/internal/driver"
+	"github.com/hyperscaleav/omniglass/internal/egress"
 	"time"
 
 	"github.com/google/uuid"
@@ -1030,3 +1031,76 @@ func (UnimplementedGateway) PlanEndpointRun(context.Context, string, string, str
 func (UnimplementedGateway) ComponentEndpointNames(context.Context, string) ([]string, error) {
 	return nil, nil
 }
+
+func (UnimplementedGateway) UpsertNotificationType(context.Context, NotificationType) error {
+	return nil
+}
+func (UnimplementedGateway) ListNotificationTypes(context.Context) ([]NotificationType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) GetNotificationType(context.Context, string) (*NotificationType, error) {
+	return nil, ErrNotificationTypeNotFound
+}
+func (UnimplementedGateway) CreateNotificationType(context.Context, string, NotificationTypeSpec) (*NotificationType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpdateNotificationType(context.Context, string, string, NotificationTypePatch) (*NotificationType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteNotificationType(context.Context, string, string) error { return nil }
+func (UnimplementedGateway) PreviewNotificationType(context.Context, string, string, string, string, *string, *string) (*NotificationPreview, error) {
+	return nil, ErrNotificationTypeNotFound
+}
+
+func (UnimplementedGateway) ListNotificationTargets(context.Context, scope.Set) ([]NotificationTarget, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) GetNotificationTarget(context.Context, string, scope.Set) (*NotificationTarget, error) {
+	return nil, ErrNotificationTargetNotFound
+}
+func (UnimplementedGateway) CreateNotificationTarget(context.Context, string, NotificationTargetSpec, scope.Set, SecretUse) (*NotificationTarget, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpdateNotificationTarget(context.Context, string, string, NotificationTargetPatch, scope.Set, SecretUse) (*NotificationTarget, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteNotificationTarget(context.Context, string, string, scope.Set) error {
+	return nil
+}
+func (UnimplementedGateway) RevealNotificationTargetURL(context.Context, string, string, scope.Set) (string, error) {
+	return "", ErrNotificationTargetNotFound
+}
+func (UnimplementedGateway) TargetForTest(context.Context, string, scope.Set) (*TargetSend, error) {
+	return nil, ErrNotificationTargetNotFound
+}
+func (UnimplementedGateway) AuditTargetTest(context.Context, string, string, int, bool, string) error {
+	return nil
+}
+func (UnimplementedGateway) EgressPolicy(context.Context) (egress.Policy, error) {
+	return egress.Policy{}, nil
+}
+
+func (UnimplementedGateway) ListActionRules(context.Context) ([]ActionRule, error) { return nil, nil }
+func (UnimplementedGateway) GetActionRule(context.Context, string) (*ActionRule, error) {
+	return nil, ErrActionRuleNotFound
+}
+func (UnimplementedGateway) CreateActionRule(context.Context, string, ActionRuleSpec, scope.Set) (*ActionRule, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpdateActionRule(context.Context, string, string, ActionRulePatch, scope.Set) (*ActionRule, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteActionRule(context.Context, string, string, scope.Set) error {
+	return nil
+}
+func (UnimplementedGateway) ListNotifications(context.Context, NotificationFilter, scope.Set) ([]Notification, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) GetNotification(context.Context, string, scope.Set) (*Notification, error) {
+	return nil, ErrNotificationNotFound
+}
+func (UnimplementedGateway) RetryNotification(context.Context, string, string, scope.Set, scope.Set) (*Notification, error) {
+	return nil, ErrNotificationNotFound
+}
+func (UnimplementedGateway) DeliverNext(context.Context, SendFunc) (bool, error) { return false, nil }
+func (UnimplementedGateway) NotificationBacklog(context.Context) (int, error)    { return 0, nil }

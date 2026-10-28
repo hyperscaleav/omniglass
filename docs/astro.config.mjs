@@ -207,6 +207,7 @@ export default defineConfig({
             { label: 'Commands', slug: 'guides/admin/commands' },
             { label: 'Rules and severity', slug: 'guides/admin/rules' },
             { label: 'Calc rules', slug: 'guides/admin/calc-rules' },
+            { label: 'Notifications', slug: 'guides/admin/notifications' },
             { label: 'Tags', slug: 'guides/admin/tags' },
             { label: 'Vendors', slug: 'guides/admin/vendors' },
             { label: 'Drivers', slug: 'guides/admin/drivers' },

@@ -16,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/hyperscaleav/omniglass/internal/driver"
+	"github.com/hyperscaleav/omniglass/internal/egress"
 	"strings"
 	"sync"
 	"time"
@@ -980,6 +981,46 @@ type Gateway interface {
 	MergePatchSettingOverride(ctx context.Context, actorID, scope, namespace string, patch map[string]any) (*SettingOverride, error)
 	DeleteSettingOverride(ctx context.Context, actorID, scope, namespace string) error
 	DeleteAllSettingOverrides(ctx context.Context, actorID, scope string) error
+
+	// The notification_type registry (#618): official types from the boot
+	// seed, operator types created, patched and deleted; a type addressed by
+	// name or uuid. Preview renders against one alarm and writes nothing.
+	UpsertNotificationType(ctx context.Context, t NotificationType) error
+	ListNotificationTypes(ctx context.Context) ([]NotificationType, error)
+	GetNotificationType(ctx context.Context, ref string) (*NotificationType, error)
+	CreateNotificationType(ctx context.Context, actorID string, spec NotificationTypeSpec) (*NotificationType, error)
+	UpdateNotificationType(ctx context.Context, actorID, ref string, patch NotificationTypePatch) (*NotificationType, error)
+	DeleteNotificationType(ctx context.Context, actorID, ref string) error
+	PreviewNotificationType(ctx context.Context, ref, componentID, alarmID, transition string, subject, text *string) (*NotificationPreview, error)
+	// The notification_target (#618): admin-only, every operation an
+	// all-scope grant (else ErrNotificationTargetForbidden). The URL is
+	// sensitive: reads carry it for the API to mask, the reveal audits it.
+	ListNotificationTargets(ctx context.Context, read scope.Set) ([]NotificationTarget, error)
+	GetNotificationTarget(ctx context.Context, ref string, read scope.Set) (*NotificationTarget, error)
+	// Binding a secret takes the caller's right to reveal it (SecretUse).
+	CreateNotificationTarget(ctx context.Context, actorID string, spec NotificationTargetSpec, create scope.Set, use SecretUse) (*NotificationTarget, error)
+	UpdateNotificationTarget(ctx context.Context, actorID, ref string, patch NotificationTargetPatch, action scope.Set, use SecretUse) (*NotificationTarget, error)
+	DeleteNotificationTarget(ctx context.Context, actorID, ref string, action scope.Set) error
+	RevealNotificationTargetURL(ctx context.Context, actorID, ref string, action scope.Set) (string, error)
+	// TargetForTest unseals a target's credential for the :test send, and
+	// AuditTargetTest records that send's result.
+	TargetForTest(ctx context.Context, ref string, action scope.Set) (*TargetSend, error)
+	AuditTargetTest(ctx context.Context, actorID, targetID string, status int, ok bool, reason string) error
+	// EgressPolicy reads the install's egress allow list.
+	EgressPolicy(ctx context.Context) (egress.Policy, error)
+	// The action rule (#618): reads registry-shaped, writes all-scope.
+	ListActionRules(ctx context.Context) ([]ActionRule, error)
+	GetActionRule(ctx context.Context, ref string) (*ActionRule, error)
+	CreateActionRule(ctx context.Context, actorID string, spec ActionRuleSpec, create scope.Set) (*ActionRule, error)
+	UpdateActionRule(ctx context.Context, actorID, ref string, patch ActionRulePatch, action scope.Set) (*ActionRule, error)
+	DeleteActionRule(ctx context.Context, actorID, ref string, action scope.Set) error
+	// The notification delivery rows (#618): every read scoped by the
+	// alarm's component; the drain takes one due row per call.
+	ListNotifications(ctx context.Context, f NotificationFilter, read scope.Set) ([]Notification, error)
+	GetNotification(ctx context.Context, id string, read scope.Set) (*Notification, error)
+	RetryNotification(ctx context.Context, actorID, id string, read, action scope.Set) (*Notification, error)
+	DeliverNext(ctx context.Context, send SendFunc) (bool, error)
+	NotificationBacklog(ctx context.Context) (int, error)
 
 	// Close releases the underlying connection pool. Idempotent at the pool
 	// level; call once on shutdown.

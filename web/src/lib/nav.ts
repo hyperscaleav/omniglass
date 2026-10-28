@@ -178,7 +178,7 @@ export const OFF_RAIL: { path: string; label: string; hint: string; resource?: s
   { path: "/calc-rules", label: "Calc rules", resource: "rule", hint: "The calc rules: what each derives a value from, how it folds its inputs, and what it last computed on each owner." },
   { path: "/severity-levels", label: "Severity", resource: "severity_level", hint: "The severity levels: how bad an alarm is, ranked, each with its color and whether it takes its component out." },
   { path: "/log-types", label: "Logs", hint: "The log shape catalog. The log lane arrives untyped today; typing what a line can be is still to come." },
-  { path: "/notifications", label: "Notifications", hint: "The outbound notification shapes: how a firing event reaches an operator, still to come.", issue: 618 },
+  { path: "/notifications", label: "Notifications", resource: "notification_type", hint: "The notification types: what a message about an alarm says, as a subject and a text, previewed against a real alarm." },
   // The template catalog (#1329), live inside the catalog shell: the
   // Components, Systems and Locations groups' Templates slots open it filtered.
   { path: "/templates", label: "Templates", resource: "template", hint: "Examples you clone: start a standard, a component, a whole system, or a subtree of places from one, then own what you get." },
@@ -203,14 +203,13 @@ export const navByPath: Record<string, NavMeta> = (() => {
 })();
 
 // Stubbed sections: backends not built yet, each rendering SectionStub in the
-// router. /notifications mounts INSIDE the CatalogShell (its stub renders in the
-// catalog pane). The router renders from the route manifest (#760), and
+// router. The router renders from the route manifest (#760), and
 // route-manifest-guard.test.ts pins the manifest's stub entries to this list,
 // so every unlive rail entry resolves to a registered stub rather than NotFound.
 export const STUBS = [
   "/dashboards", "/alarms",
   "/learn",
-  "/config", "/log-types", "/notifications",
+  "/config", "/log-types",
 ];
 
 // The router base; nav paths are base-relative.

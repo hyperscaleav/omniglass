@@ -348,6 +348,8 @@ func mapSecretErr(err error) error {
 		return huma.Error404NotFound("component not found")
 	case errors.Is(err, storage.ErrSecretForbidden):
 		return huma.Error403Forbidden("forbidden")
+	case errors.Is(err, storage.ErrSecretInUse):
+		return huma.Error409Conflict("a notification target signs with this secret; unbind it from the target first")
 	case errors.Is(err, storage.ErrSecretExists):
 		return huma.Error409Conflict("a secret with this name already exists at this scope")
 	case errors.Is(err, storage.ErrUnknownSecretType):

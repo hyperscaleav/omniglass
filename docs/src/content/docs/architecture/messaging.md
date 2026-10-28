@@ -16,6 +16,10 @@ request-reply lanes. The two-lane split below is target design; today there is *
 serial consumer doing admission (owner confinement) and persistence inline**. Calc rules run off the
 stream too: the sample write marks them pending and a server tick computes them
 ([ADR-0148](/architecture/decisions/#adr-0148-calc-rules-run-on-a-durable-pending-set-and-a-server-tick-not-a-jetstream-consumer)).
+So do notifications: there is no CDC publisher yet, so an alarm transition writes its
+`notification` rows in its own transaction and a server tick sends them, rather than the record
+lane fanning the commit onto JetStream for an `action_rule` consumer
+([ADR-0618](/architecture/decisions/#adr-0618-notifications-are-postgres-rows-drained-by-a-server-tick-not-cdc-to-a-jetstream-sender)).
 The delivery contract on that stream is built: every publish waits for the stream's ack under a
 `Nats-Msg-Id` the stream deduplicates, and the consumer lands each batch once, in one transaction
 under its receipt ([below](#delivery-a-batch-lands-once)).
