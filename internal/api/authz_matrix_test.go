@@ -353,6 +353,21 @@ func systemActions() []actionRoute {
 			},
 			ok: http.StatusNoContent,
 		},
+		{
+			// The push route naming a system (#422, ADR-0422): the same split
+			// as a component's push, resolved on the system tier, its action
+			// scope telemetry:push's and the caller's system:read deciding
+			// only which refusal it is owed.
+			name:  "push-system-telemetry",
+			needs: []string{"telemetry:push"},
+			request: func(target, _ string) (string, string, map[string]any) {
+				return http.MethodPost, "/telemetry:push", map[string]any{
+					"owner":   map[string]any{"kind": "system", "ref": target},
+					"metrics": []map[string]any{{"name": "room-temperature", "value": 21.5}},
+				}
+			},
+			ok: http.StatusAccepted,
+		},
 	}
 }
 

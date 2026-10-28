@@ -38,12 +38,16 @@ func TestAPIBindingRequiresAnAddressableOwner(t *testing.T) {
 		{"no owner at all", &ogv1.TelemetryBatch{}},
 		{"owner with no kind", &ogv1.TelemetryBatch{Owner: &ogv1.Owner{Ref: "disp-1"}}},
 		{"owner with no ref", &ogv1.TelemetryBatch{Owner: &ogv1.Owner{Kind: "component"}}},
-		// Guarded until #422 widens the lane derivations past owner_kind=component.
-		// Accepting these would write a sample to the wrong arc, which is worse than
-		// refusing.
-		{"system owner, not yet supported", &ogv1.TelemetryBatch{Owner: &ogv1.Owner{Kind: "system", Ref: "boardroom-a"}}},
-		{"location owner, not yet supported", &ogv1.TelemetryBatch{Owner: &ogv1.Owner{Kind: "location", Ref: "hq-west"}}},
-		{"node owner, not yet supported", &ogv1.TelemetryBatch{Owner: &ogv1.Owner{Kind: "node", Ref: "edge-hq"}}},
+		// A push names a component or a system (ADR-0422). No route pushes for a
+		// location or a node, so a batch naming one is refused rather than landed
+		// on an arc nothing authorized.
+		{"location owner, never pushed", &ogv1.TelemetryBatch{Owner: &ogv1.Owner{Kind: "location", Ref: "hq-west"}}},
+		{"node owner, never pushed", &ogv1.TelemetryBatch{Owner: &ogv1.Owner{Kind: "node", Ref: "edge-hq"}}},
+		// A log line is component-owned (#589), so a system batch carrying one
+		// has nowhere to land it: the route refuses it with a 422, and the
+		// consumer refuses it again rather than land half a batch.
+		{"system owner with log lines", &ogv1.TelemetryBatch{Owner: &ogv1.Owner{Kind: "system", Ref: "boardroom-a"},
+			Logs: []*ogv1.LogLine{{Message: "a line"}}}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -81,6 +85,58 @@ func TestAPIBindingOwnsBothLanesOfTheBatch(t *testing.T) {
 	}
 }
 
+// A system push (ADR-0422) lands every sample on the system's arc: the
+// binding names the system, carries no log destination (a log line is
+// component-owned, #589) and no endpoint, and speaks for the push lane.
+func TestAPIBindingLandsASystemOwnerOnTheSystemArc(t *testing.T) {
+	bind, ok := apiBinding(&ogv1.TelemetryBatch{
+		Owner:   &ogv1.Owner{Kind: "system", Ref: "boardroom-a"},
+		Metrics: []*ogv1.MetricSample{{Name: "audio-level", Value: 1}},
+	})
+	if !ok {
+		t.Fatal("apiBinding refused a well-formed system owner")
+	}
+	if bind.Arc != (sampleArc{Kind: "system", ID: "boardroom-a"}) {
+		t.Fatalf("sample arc = %+v, want system boardroom-a", bind.Arc)
+	}
+	if bind.LogComponent != "" || bind.LogNode != "" {
+		t.Fatalf("a system batch named a log destination: component %q / node %q", bind.LogComponent, bind.LogNode)
+	}
+	if bind.SampleOwner == nil || bind.SampleOwner.ComponentID != "" || bind.SampleOwner.EndpointName != "" || bind.SampleOwner.EndpointID != "" {
+		t.Fatalf("sample owner = %+v, want one with no component and no endpoint", bind.SampleOwner)
+	}
+	if bind.Writer.Kind != writerclass.Push {
+		t.Fatalf("system binding writer = %q, want the push lane", bind.Writer.Kind)
+	}
+}
+
+// Every lane stamps the binding's arc, never a hardcoded component (#422):
+// a system's metric, property and event each land with owner_kind system.
+func TestDerivedSamplesCarryTheBindingsArc(t *testing.T) {
+	reg := collection.NewRegistry([]storage.MetricType{{Name: "audio-level"}},
+		[]storage.PropertyType{{Name: "room-state", DataType: "string"}},
+		[]storage.EventType{{Name: "call-started"}})
+	ev := &ogv1.TelemetryBatch{
+		Metrics:    []*ogv1.MetricSample{{Name: "audio-level", Value: 3}},
+		Properties: []*ogv1.PropertySample{{Name: "room-state", ValueJson: `"busy"`}},
+		Events:     []*ogv1.EventSample{{Name: "call-started", Message: "started"}},
+	}
+	arc := sampleArc{Kind: "system", ID: "boardroom-a"}
+	w := storage.PushWriter()
+	m := deriveMetrics(ev, arc, storage.TaskOwner{}, reg, w)
+	p := deriveProperties(ev, arc, storage.TaskOwner{}, reg, w)
+	e := deriveEvents(ev, arc, storage.TaskOwner{}, reg, w)
+	if len(m) != 1 || m[0].OwnerKind != "system" || m[0].OwnerID != "boardroom-a" || m[0].Instance != "" {
+		t.Fatalf("metric = %+v, want one on system boardroom-a at the owner level", m)
+	}
+	if len(p) != 1 || p[0].OwnerKind != "system" || p[0].OwnerID != "boardroom-a" || p[0].Instance != "" {
+		t.Fatalf("property = %+v, want one on system boardroom-a at the owner level", p)
+	}
+	if len(e) != 1 || e[0].OwnerKind != "system" || e[0].OwnerID != "boardroom-a" || e[0].Instance != "" {
+		t.Fatalf("event = %+v, want one on system boardroom-a at the owner level", e)
+	}
+}
+
 // The wire value wins where supplied, else the interface-derived value. This is what
 // keeps the node lane byte-for-byte unchanged while letting a push express both.
 func TestDeriveMetricsInstanceAndSourcePrecedence(t *testing.T) {
@@ -90,7 +146,7 @@ func TestDeriveMetricsInstanceAndSourcePrecedence(t *testing.T) {
 		metrics := deriveMetrics(&ogv1.TelemetryBatch{
 			Source:  "webex-cloud",
 			Metrics: []*ogv1.MetricSample{{Name: "audio-level", Instance: "mic-1", Value: 12.4}},
-		}, pushOwner(), reg, storage.PushWriter())
+		}, componentArc(pushOwner()), pushOwner(), reg, storage.PushWriter())
 		if len(metrics) != 1 {
 			t.Fatalf("got %d metrics, want 1", len(metrics))
 		}
@@ -102,7 +158,7 @@ func TestDeriveMetricsInstanceAndSourcePrecedence(t *testing.T) {
 	t.Run("a push never carries a native probe key", func(t *testing.T) {
 		metrics := deriveMetrics(&ogv1.TelemetryBatch{
 			Metrics: []*ogv1.MetricSample{{Name: "icmp-rtt-avg", Instance: "mic-1", Value: 12.4}},
-		}, pushOwner(), reg, storage.PushWriter())
+		}, componentArc(pushOwner()), pushOwner(), reg, storage.PushWriter())
 		if len(metrics) != 0 {
 			t.Fatalf("a pushed icmp-rtt-avg derived %+v, want it dropped", metrics)
 		}
@@ -111,7 +167,7 @@ func TestDeriveMetricsInstanceAndSourcePrecedence(t *testing.T) {
 	t.Run("node lane falls back to the interface", func(t *testing.T) {
 		metrics := deriveMetrics(&ogv1.TelemetryBatch{
 			Metrics: []*ogv1.MetricSample{{Name: "icmp-rtt-avg", Value: 12.4}},
-		}, nodeOwner(), reg, storage.NodeWriter(nodeOwner().ComponentID, nodeOwner().EndpointName))
+		}, componentArc(nodeOwner()), nodeOwner(), reg, storage.NodeWriter(nodeOwner().ComponentID, nodeOwner().EndpointName))
 		if len(metrics) != 1 {
 			t.Fatalf("got %d metrics, want 1", len(metrics))
 		}
