@@ -25,6 +25,11 @@ export type SystemFromTemplateResult = components["schemas"]["CreateSystemFromTe
 export type LocationsFromTemplateBody = components["schemas"]["CreateLocationsFromTemplateInputBody"];
 export type LocationsFromTemplateResult = components["schemas"]["CreateLocationsFromTemplateOutputBody"];
 
+// What a template is, in the words every surface that offers one teaches it
+// with (the Templates rail, the create dialogs' choice).
+export const TEMPLATE_HINT =
+  "A template is an example you clone. Starting from one writes ordinary rows that are yours from that moment: nothing points back at the template, so a later release can change it without touching your fleet.";
+
 // The kinds in catalog order, and the one word an operator reads for each.
 export const TEMPLATE_KINDS: TemplateKind[] = ["standard_template", "system_template", "place_template", "component_template"];
 export const KIND_WORD: Record<TemplateKind, string> = {

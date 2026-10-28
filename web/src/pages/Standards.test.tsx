@@ -61,7 +61,10 @@ function mount(me: Me = admin, path = "/standards") {
   qc.setQueryData([...standardRolesKey(uuidFor("std-huddle-space"))], roles);
   qc.setQueryData([...standardRolesKey(uuidFor("std-meeting-room"))], []);
   qc.setQueryData([...ME_KEY], me);
-  qc.setQueryData([...TEMPLATES_KEY], [{ kind: "standard_template", name: "huddle", label: "Huddle space template" }]);
+  qc.setQueryData([...TEMPLATES_KEY], [
+    { kind: "standard_template", name: "huddle", label: "Huddle space template", standard: { roles: [{ name: "bar", label: "Bar", quorum: 1 }] } },
+    { kind: "system_template", name: "huddle-system", label: "Huddle system", system: { standard: "huddle", roles: {} } },
+  ]);
   window.history.pushState({}, "", path);
   return render(() => (
     <QueryClientProvider client={qc}>
@@ -199,13 +202,41 @@ describe("Standards page", () => {
     expect(sent).toEqual({ label: "Huddle" });
   });
 
-  // The other way to a standard (#1329): create one from a shipped template.
-  it("offers Start from a template in the create drawer, landing on standard templates", async () => {
+  // The other way to a standard (#1329): the New standard drawer offers a
+  // template beside from scratch, lists only standard templates, posts
+  // :createFromTemplate, and lands on the new standard's blade with the notice.
+  it("creates a standard from a template inside the New standard drawer", async () => {
+    let sent: unknown;
+    let url = "";
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "POST") {
+        url = req.url;
+        sent = JSON.parse(await req.clone().text());
+        return new Response(JSON.stringify({ id: uuidFor("std-huddle-2"), name: "huddle-space", label: "Huddle space", official: false }), { status: 201, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ standards: seed }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
     mount();
     fireEvent.click(screen.getByRole("button", { name: /new standard/i }));
-    fireEvent.click(await screen.findByRole("button", { name: /start from a template/i }));
-    expect(await screen.findByTestId("templates-page")).toBeInTheDocument();
-    expect(`${window.location.pathname}${window.location.search}`).toBe("/templates?kind=standard_template");
+    expect(await screen.findByRole("button", { name: "From scratch" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: "From a template" }));
+    const picker = (await screen.findByLabelText("Template")) as HTMLSelectElement;
+    // Only this kind's templates.
+    expect(Array.from(picker.options).map((o) => o.value)).toEqual(["", "huddle"]);
+    fireEvent.change(picker, { target: { value: "huddle" } });
+    expect(await screen.findByTestId("template-create-preview")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Create standard" }));
+    await waitFor(() => expect(url).toMatch(/\/standards:createFromTemplate$/));
+    expect(sent).toEqual({ template: "huddle" });
+    await waitFor(() => expect(window.location.search).toBe("?open=huddle-space&from=huddle"));
+  });
+
+  it("hides the template choice from a caller who may not read templates", async () => {
+    mount({ ...admin, permissions: ["standard:read", "standard:create"] });
+    fireEvent.click(screen.getByRole("button", { name: /new standard/i }));
+    expect(await screen.findByText("Create standard")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "From a template" })).toBeNull();
   });
 
   // A standard created from a template lands here (#1329): ?open= opens its blade and

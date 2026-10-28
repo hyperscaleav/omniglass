@@ -213,7 +213,7 @@ the huddle room, opened down to it and selected.
 
 **Create where you stand.** A row's **+**, or **New** above the outline, offers a location,
 a system or a component: the same create [form](/guides/operator/entities/), with the
-placement already filled in. It offers a location only where your location types let one
+placement already filled in, or the same thing [from a template](/guides/operator/templates/). It offers a location only where your location types let one
 sit, and only what you hold the create permission for.
 
 Everything on the page is already filtered to [your scope](#scope). Verdicts here are a

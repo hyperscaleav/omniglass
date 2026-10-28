@@ -12,8 +12,8 @@ import { useFormActions } from "../lib/formactions";
 import { bindSelectValue } from "../lib/selectvalue";
 import ContractEditor from "../components/ContractEditor";
 import RoleEditor from "../components/RoleEditor";
-import { Copy, Plus } from "../components/icons";
-import { templatesHref } from "../lib/templates";
+import { Plus } from "../components/icons";
+import TemplateCreate, { CreateModeChoice, useTemplateChoice } from "../components/TemplateCreate";
 import {
   type Standard,
   STANDARDS_KEY,
@@ -95,7 +95,7 @@ export default function Standards() {
           openId,
           blades: { registry: { standard: standardBlade }, rootKind: "standard" },
           create: can(me.data, "standard", "create")
-            ? { label: "New standard", can: () => can(me.data, "standard", "create"), body: (ctx) => <CreateStandardForm onCreated={ctx.select} /> }
+            ? { label: "New standard", can: () => can(me.data, "standard", "create"), body: (ctx) => <CreateStandardBody onCreated={ctx.select} close={ctx.close} /> }
             : undefined,
         }}
       />
@@ -213,12 +213,30 @@ function StandardBladeBody(p: { id: string }): JSX.Element {
   );
 }
 
+// CreateStandardBody is the New standard drawer (#1329): from scratch (the form
+// below, the default) or from a standard template, the choice offered only to a
+// caller who may read templates. Created from a template, the drawer closes and
+// the page opens the new standard's blade with the notice (?open=, ?from=).
+function CreateStandardBody(p: { onCreated: (s: Standard) => void; close: () => void }): JSX.Element {
+  const navigate = useNavigate();
+  const choice = useTemplateChoice();
+  return (
+    <div class="flex flex-col gap-4">
+      <Show when={choice.offered()}>
+        <CreateModeChoice mode={choice.mode()} onChange={choice.setMode} />
+      </Show>
+      <Show when={choice.mode() === "template"} fallback={<CreateStandardForm onCreated={p.onCreated} />}>
+        <TemplateCreate kind="standard_template" onDone={(href) => { p.close(); navigate(href); }} />
+      </Show>
+    </div>
+  );
+}
+
 // CreateStandardForm: name the standard and let the name (the
 // operator-facing address; the uuid is the database's to mint) derive from it;
 // the parent standard is optional (a variant of an existing one).
 export function CreateStandardForm(p: { onCreated: (s: Standard) => void }): JSX.Element {
   const qc = useQueryClient();
-  const navigate = useNavigate();
   // Label leads and the handle follows it, stopping the moment the
   // operator edits the handle by hand (lib/entities).
   const { display, setDisplay, name, setName, nameDerived } = createIdentity();
@@ -232,8 +250,6 @@ export function CreateStandardForm(p: { onCreated: (s: Standard) => void }): JSX
     submit: () => void submit(),
     busy,
     disabled: () => !name().trim() || !display().trim(),
-    // The other way to a standard (#1329): create one from a shipped template.
-    secondary: () => ({ label: "Start from a template", icon: Copy, onClick: () => navigate(templatesHref(["standard_template"])) }),
   });
 
   async function submit() {

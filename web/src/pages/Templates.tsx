@@ -20,6 +20,7 @@ import {
   KIND_FACET,
   KIND_WORD,
   TEMPLATES_KEY,
+  TEMPLATE_HINT,
   TEMPLATE_KINDS,
   kindChip,
   listTemplates,
@@ -40,8 +41,7 @@ import {
 // read-only and is never a row: what starts from one is the operator's own, and
 // nothing points back (ADR-0071), which is what the rail's (i) teaches.
 
-export const TEMPLATE_HINT =
-  "A template is an example you clone. Starting from one writes ordinary rows that are yours from that moment: nothing points back at the template, so a later release can change it without touching your fleet.";
+export { TEMPLATE_HINT };
 
 const kindCell = (t: Template): JSX.Element => <span class="badge badge-ghost badge-sm">{KIND_WORD[t.kind]}</span>;
 

@@ -112,7 +112,9 @@ identity pages.
 
 ## Create, edit, delete
 
-- **New** opens a **draft** at the entity's own `/create` address, and it asks **what** and **where**
+- **New** opens a **draft** at the entity's own `/create` address, **From scratch** by default; **From a
+  template** instead starts from one of the examples Omniglass ships
+  ([starting from a template](/guides/operator/templates/)). From scratch, it asks **what** and **where**
   before it asks what to call it, because those are what the naming and labelling rules read.
   **Classification** comes first: a component picks its [product](/guides/admin/products/), a system
   its type and the [standard](/guides/admin/standards/) it conforms to, a location its

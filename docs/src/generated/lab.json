@@ -143,7 +143,7 @@
     {
       "id": "start-from-template",
       "title": "Start a system from a template",
-      "description": "Open the template catalog, read what a system template creates, start it at a place, and land on a system that is yours, with nothing pointing back at the template.",
+      "description": "From a place, create a new system from a template instead of from scratch, read what the template creates, and land on a system that is yours, with nothing pointing back at the template.",
       "setup": []
     },
     {

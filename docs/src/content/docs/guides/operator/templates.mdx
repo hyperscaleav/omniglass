@@ -5,6 +5,22 @@ screenshots:
   - id: templates
     path: /web/templates?kind=standard_template,system_template
     alt: "The Templates page filtered to the Systems group's kinds: every standard and system template, each row naming its kind and what it creates, with the rail's note that a template is an example you clone, then own."
+  - id: templates-dialog
+    path: /web/standards
+    steps:
+      - action: click
+        selector: "role=button[name='New standard']"
+      - action: click
+        selector: "role=button[name='From a template']"
+      # Focus the picker and type ahead to Meeting Room, the first standard
+      # template whose label starts with an m.
+      - action: click
+        selector: "role=combobox[name='Template']"
+      - action: press
+        value: m
+      - action: press
+        value: Enter
+    alt: "The New standard drawer on From a template: the standard templates to choose from, what the chosen one creates read from the template, and only the name and label it needs."
   - id: templates-system
     path: /web/templates?kind=system_template
     steps:
@@ -93,9 +109,18 @@ how many components are still to attach. The note rides the address you landed o
 dismiss it and it is gone, and the row's page never shows it otherwise, because nothing about the row
 remembers the template.
 
-The create flows lead here too: **New system**, **New location** and **New component** carry **Start
-from a template**, which opens this page filtered to the matching kind with the place you were creating
-in as the form's default, and the **New standard** drawer carries the same action for standard templates.
+## From the create dialogs
+
+You do not have to come to this page to use a template. **New system**, **New location** and **New
+component** (from **New** above an outline, or a row's **+**) and the **New standard** drawer each open
+on **From scratch**, the kind's own form, with **From a template** beside it. Choose **From a template**
+and the dialog lists that kind's templates (a place template for a new location), shows what the chosen
+one creates exactly as its panel here does, then asks only for the inputs that template needs, with the
+place you were creating in already chosen. It posts the same `:createFromTemplate` and lands on what it
+created with the same note. The choice is offered to anyone who may read templates, and the start is
+refused, naming what is missing, until you hold every permission it writes with.
+
+::screenshot{#templates-dialog}
 
 Each form posts the `:createFromTemplate` custom method on its own collection (`POST
 /standards:createFromTemplate`, `/components:createFromTemplate`, `/systems:createFromTemplate`,

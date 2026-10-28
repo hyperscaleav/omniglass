@@ -1,8 +1,7 @@
 import { type JSX, Show } from "solid-js";
 import { Dialog } from "@kobalte/core/dialog";
-import { Trash, X } from "./icons";
-import Button from "./Button";
-import PanelFooter from "./PanelFooter";
+import { X } from "./icons";
+import FormActionBar from "./FormActionBar";
 import { FormActionsContext, createFormActions } from "../lib/formactions";
 
 // Drawer: a right slide-over on Kobalte Dialog. Kobalte owns focus-trap, focus
@@ -44,48 +43,7 @@ export default function Drawer(props: {
           </header>
           <FormActionsContext.Provider value={actions}>
             <div class="flex-1 overflow-auto p-5">{props.children}</div>
-            <Show when={actions.binding()}>
-              {(b) => (
-                <PanelFooter>
-                  <Show when={b().destructive?.()}>
-                    {(d) => (
-                      <Button intent="danger" icon={d().icon ?? Trash} onClick={() => d().onClick()} disabled={d().disabled || b().busy?.()}>
-                        {d().label}
-                      </Button>
-                    )}
-                  </Show>
-                  <div class="ml-auto flex items-center gap-2">
-                    <Show when={b().cancel}>
-                      {(c) => (
-                        <Button icon={X} onClick={() => c()()} disabled={b().busy?.()}>
-                          {b().cancelLabel ?? "Cancel"}
-                        </Button>
-                      )}
-                    </Show>
-                    <Show when={b().secondary?.()}>
-                      {(s) => (
-                        <Button icon={s().icon} onClick={() => s().onClick()} disabled={s().disabled || b().busy?.()}>
-                          {s().label}
-                        </Button>
-                      )}
-                    </Show>
-                    <Show when={b().submit}>
-                      {(submit) => (
-                        <Button
-                          intent="action"
-                          icon={b().submitIcon}
-                          onClick={() => submit()()}
-                          loading={b().busy?.()}
-                          disabled={b().disabled?.()}
-                        >
-                          {b().submitLabel}
-                        </Button>
-                      )}
-                    </Show>
-                  </div>
-                </PanelFooter>
-              )}
-            </Show>
+            <FormActionBar actions={actions} />
           </FormActionsContext.Provider>
         </Dialog.Content>
       </Dialog.Portal>
