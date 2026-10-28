@@ -81,7 +81,7 @@ func registerRegistryRename[O any](api huma.API, a *authenticator, gw storage.Ga
 	})
 }
 
-// registerRegistryRenames wires the five registries the rename covers. The
+// registerRegistryRenames wires the six registries the rename covers. The
 // catalogs keyed by telemetry name and the remaining type registries wait on
 // #1188 (storage.renameableRegistries says why).
 func registerRegistryRenames(api huma.API, a *authenticator, gw storage.Gateway) {
@@ -140,5 +140,16 @@ func registerRegistryRenames(api huma.API, a *authenticator, gw storage.Gateway)
 			return &locationTypeOutput{Body: toLocationTypeBody(lt)}, nil
 		},
 		mapErr: func(err error) error { return mapTypeErr(err, "location_type") },
+	})
+	registerRegistryRename(api, a, gw, registryRename[notificationTypeOutput]{
+		resource: "notification_type", collection: "notification-types", noun: "notification type",
+		read: func(ctx context.Context, gw storage.Gateway, id string) (*notificationTypeOutput, error) {
+			t, err := gw.GetNotificationType(ctx, id)
+			if err != nil {
+				return nil, err
+			}
+			return &notificationTypeOutput{Body: toNotificationTypeBody(t)}, nil
+		},
+		mapErr: mapNotificationTypeErr,
 	})
 }

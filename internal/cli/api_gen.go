@@ -4402,6 +4402,216 @@ func generatedCommands() []*cobra.Command {
 	}())
 	roots = append(roots, func() *cobra.Command {
 		parent := &cobra.Command{
+			Use:   "notification-type",
+			Short: "Commands for the notification-type resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fDescription string
+				var fLabel string
+				var fName string
+				var fSubject string
+				var fText string
+				cmd := &cobra.Command{
+					Use:     "create",
+					Short:   "Create a notification type",
+					Long:    "Registers an operator notification type (official=false). A template in the sandboxed template language a label rule uses (title, upper, lower, slug, words; if, and, or, not, eq and the comparisons), reading the alarm facts Component, ComponentLabel, ComponentType, Place, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and a refused construct (printf, call, index, range, a variable) is a 422, and is never stored. A taken name is a 409. Audited. Gated by notification_type:create.",
+					Example: "  omniglass notification-type create --name name --subject subject --text text",
+					Args:    pathArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/notification-types")
+						body := map[string]any{}
+						if cmd.Flags().Changed("description") {
+							body["description"] = fDescription
+						}
+						if cmd.Flags().Changed("label") {
+							body["label"] = fLabel
+						}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						if cmd.Flags().Changed("subject") {
+							body["subject"] = fSubject
+						}
+						if cmd.Flags().Changed("text") {
+							body["text"] = fText
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fDescription, "description", "", "What the message is for")
+				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
+				cmd.Flags().StringVar(&fName, "name", "", "The type's name (lowercase kebab)")
+				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().StringVar(&fSubject, "subject", "", "The one-line subject template")
+				_ = cmd.MarkFlagRequired("subject")
+				cmd.Flags().StringVar(&fText, "text", "", "The body text template")
+				_ = cmd.MarkFlagRequired("text")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "delete <name>",
+					Short:   "Delete a notification type",
+					Long:    "Removes an operator notification type. An official type, or one an action rule still sends, is a 409. Audited. Gated by notification_type:delete.",
+					Example: "  omniglass notification-type delete <name>",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/notification-types/%s", pathSegment(args[0]))
+						return runAPICommand(cmd, "DELETE", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "get <name>",
+					Short:   "Get a notification type",
+					Long:    "Returns one notification type by name or uuid. Gated by notification_type:read.",
+					Example: "  omniglass notification-type get <name>",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/notification-types/%s", pathSegment(args[0]))
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "list",
+					Short:   "List notification types",
+					Long:    "Lists every notification type (official and operator), by name: what a message about an alarm says. Fleet-wide reference data. Gated by notification_type:read.",
+					Example: "  omniglass notification-type list",
+					Args:    pathArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/notification-types")
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fAlarm string
+				var fComponent string
+				var fSubject string
+				var fText string
+				var fTransition string
+				cmd := &cobra.Command{
+					Use:     "preview <name>",
+					Short:   "Preview a notification type against an alarm",
+					Long:    "Renders the type's subject and text (or a draft of either, sent in the body) against one real alarm, exactly as a delivery of that alarm's transition would carry them, with the facts they read. Writes nothing. The alarm is named by its component and id; without an id, the component's most recently raised alarm. A draft template the sandbox refuses is a 422, one that fails to render (its output past the cap) a 422 naming it. Gated by notification_type:read; the component is resolved in the caller's component read scope, so a component outside it is a non-disclosing 404.",
+					Example: "  omniglass notification-type preview <name> --component component",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/notification-types/%s:preview", pathSegment(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("alarm") {
+							body["alarm"] = fAlarm
+						}
+						if cmd.Flags().Changed("component") {
+							body["component"] = fComponent
+						}
+						if cmd.Flags().Changed("subject") {
+							body["subject"] = fSubject
+						}
+						if cmd.Flags().Changed("text") {
+							body["text"] = fText
+						}
+						if cmd.Flags().Changed("transition") {
+							body["transition"] = fTransition
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fAlarm, "alarm", "", "The alarm's id; absent previews the component's most recently raised alarm")
+				cmd.Flags().StringVar(&fComponent, "component", "", "The component the alarm is on, by name or dotted address")
+				_ = cmd.MarkFlagRequired("component")
+				cmd.Flags().StringVar(&fSubject, "subject", "", "A draft subject template to render instead of the stored one, so an editor previews before it saves")
+				cmd.Flags().StringVar(&fText, "text", "", "A draft text template to render instead of the stored one")
+				cmd.Flags().StringVar(&fTransition, "transition", "", "The edge to render for; absent reads the alarm's own state (cleared when it is, raised otherwise)")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fName string
+				cmd := &cobra.Command{
+					Use:     "rename <id>",
+					Short:   "Rename a notification type",
+					Long:    "Moves a custom notification type's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official notification type keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. Audited as rename. Gated by notification_type:rename.",
+					Example: "  omniglass notification-type rename <id> --name name",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/notification-types/%s:rename", pathSegment(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fName, "name", "", "The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid)")
+				_ = cmd.MarkFlagRequired("name")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fDescription string
+				var fLabel string
+				var fSubject string
+				var fText string
+				cmd := &cobra.Command{
+					Use:     "update <name>",
+					Short:   "Update a notification type",
+					Long:    "Patches an operator type's label, description or templates (an absent field is unchanged). A template in the sandboxed template language a label rule uses (title, upper, lower, slug, words; if, and, or, not, eq and the comparisons), reading the alarm facts Component, ComponentLabel, ComponentType, Place, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and a refused construct (printf, call, index, range, a variable) is a 422. An official type is read-only (409). The name moves only through :rename. Audited. Gated by notification_type:update.",
+					Example: "  omniglass notification-type update <name>",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/notification-types/%s", pathSegment(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("description") {
+							body["description"] = fDescription
+						}
+						if cmd.Flags().Changed("label") {
+							body["label"] = fLabel
+						}
+						if cmd.Flags().Changed("subject") {
+							body["subject"] = fSubject
+						}
+						if cmd.Flags().Changed("text") {
+							body["text"] = fText
+						}
+						return runAPICommand(cmd, "PATCH", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fDescription, "description", "", "What the message is for")
+				cmd.Flags().StringVar(&fLabel, "label", "", "A human label (empty clears it)")
+				cmd.Flags().StringVar(&fSubject, "subject", "", "The one-line subject template")
+				cmd.Flags().StringVar(&fText, "text", "", "The body text template")
+				return cmd
+			}()
+			return cmd
+		}())
+		return parent
+	}())
+	roots = append(roots, func() *cobra.Command {
+		parent := &cobra.Command{
 			Use:   "principal",
 			Short: "Commands for the principal resource",
 		}

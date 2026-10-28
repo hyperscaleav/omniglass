@@ -350,6 +350,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 	registerEventRulePreviewRoute(api, a, gw)
 	registerExpressionRoutes(api, a, gw)
 	registerCommandTypeRoutes(api, a, gw)
+	registerNotificationTypeRoutes(api, a, gw)
 	registerCommandRoutes(api, a, gw, newWaitLimiter(o.commandWaiters, o.commandWaitersPerPrincipal))
 	registerNodeRunRoutes(api, a, gw, o.nodeRunner, newRunLimiter(o.nodeRuns, o.nodeRunsPerPrincipal))
 	registerProductPropertyRoutes(api, a, gw)

@@ -50,6 +50,10 @@ func provedByCreate(ctx context.Context, gw *storage.PG) map[string]func(key str
 				OutputKey: "occupancy-count"}, scope.Set{All: true})
 			return err
 		},
+		"notification_type": func(s string) error {
+			_, err := gw.CreateNotificationType(ctx, "", storage.NotificationTypeSpec{Name: s, Subject: "x", Text: "y"})
+			return err
+		},
 		"severity_level": func(s string) error {
 			// Each call takes a rank of its own, since ranks are unique.
 			severityRank++

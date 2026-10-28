@@ -1018,3 +1018,23 @@ func (UnimplementedGateway) PlanEndpointRun(context.Context, string, string, str
 func (UnimplementedGateway) ComponentEndpointNames(context.Context, string) ([]string, error) {
 	return nil, nil
 }
+
+func (UnimplementedGateway) UpsertNotificationType(context.Context, NotificationType) error {
+	return nil
+}
+func (UnimplementedGateway) ListNotificationTypes(context.Context) ([]NotificationType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) GetNotificationType(context.Context, string) (*NotificationType, error) {
+	return nil, ErrNotificationTypeNotFound
+}
+func (UnimplementedGateway) CreateNotificationType(context.Context, string, NotificationTypeSpec) (*NotificationType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpdateNotificationType(context.Context, string, string, NotificationTypePatch) (*NotificationType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteNotificationType(context.Context, string, string) error { return nil }
+func (UnimplementedGateway) PreviewNotificationType(context.Context, string, string, string, string, *string, *string) (*NotificationPreview, error) {
+	return nil, ErrNotificationTypeNotFound
+}

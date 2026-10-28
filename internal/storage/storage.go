@@ -970,6 +970,17 @@ type Gateway interface {
 	DeleteSettingOverride(ctx context.Context, actorID, scope, namespace string) error
 	DeleteAllSettingOverrides(ctx context.Context, actorID, scope string) error
 
+	// The notification_type registry (#618): official types from the boot
+	// seed, operator types created, patched and deleted; a type addressed by
+	// name or uuid. Preview renders against one alarm and writes nothing.
+	UpsertNotificationType(ctx context.Context, t NotificationType) error
+	ListNotificationTypes(ctx context.Context) ([]NotificationType, error)
+	GetNotificationType(ctx context.Context, ref string) (*NotificationType, error)
+	CreateNotificationType(ctx context.Context, actorID string, spec NotificationTypeSpec) (*NotificationType, error)
+	UpdateNotificationType(ctx context.Context, actorID, ref string, patch NotificationTypePatch) (*NotificationType, error)
+	DeleteNotificationType(ctx context.Context, actorID, ref string) error
+	PreviewNotificationType(ctx context.Context, ref, componentID, alarmID, transition string, subject, text *string) (*NotificationPreview, error)
+
 	// Close releases the underlying connection pool. Idempotent at the pool
 	// level; call once on shutdown.
 	Close()

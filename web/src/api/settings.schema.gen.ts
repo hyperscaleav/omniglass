@@ -19,6 +19,11 @@ export const settingsSchema = {
       "type": "array"
     }
   },
+  "notification": {
+    "console_url": {
+      "type": "string"
+    }
+  },
   "ui": {
     "default_landing": {
       "type": "string",

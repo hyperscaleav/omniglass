@@ -9,6 +9,7 @@ sidebar:
 
 import SchemaTable from '../../../components/SchemaTable.astro';
 import SeededSet from '../../../components/SeededSet.astro';
+import NotificationFacts from '../../../components/NotificationFacts.astro';
 
 An **alarm** detects a condition and holds it; an **action** does something about it. A simple
 action is a single step (a `notify`); a multi-step action is a **flow**. Both are **stateful
@@ -34,7 +35,9 @@ a rule's alarm is optional (an informational rule raises none), it writes typed 
 its condition, carrying the alarm they opened or resolved, and an **alarm's timeline** merges those
 events with its audit rows. **Acknowledgement** ([below](#acknowledgement-a-fact-about-a-person)), the record that a
 human has seen an incident, orthogonal to whether it is still raised. **Snooze** and **resolve** are
-not built, and the reasons are in that section.
+not built, and the reasons are in that section. The first of the
+[notification](#notifications) lane (#618): the **notification type** registry, previewed against
+a real alarm.
 See [implementation status](/architecture/status/).
 :::
 
@@ -426,6 +429,42 @@ Whether a severity level is purely a label, color, and order, or also carries po
 default ack-timeout per level.
 :::
 
+## Notifications
+
+A **notification** is the outbound lane to people: a message about an alarm, sent to the chat or
+paging tool somebody already watches. It is distinct from a [command](/architecture/commands/)
+(sent to a component) and from an [event](/architecture/events/) (a record, never sent). The lane
+is three registries and a delivery row, each answering one question: a **notification type** says
+*what* a message says, a **notification target** says *where* it goes, an **action rule** says
+*when* it is sent, and a **notification** is one message on its way (#618).
+
+### Notification types: what a message says
+
+A `notification_type` is the outbound peer of `command_type`: fleet-wide reference data carrying
+the `official` boolean, a `label` and `description`, and two templates, a one-line `subject` and a
+body `text`. The shipped set is authoritative on every boot and read-only; an operator writes
+their own beside it, and renames one with `:rename`.
+
+<SeededSet kind="notification_types" />
+
+A template is the language a [label rule](/architecture/glossary/) is written in, run by the same
+sandbox (`internal/sandbox`, lifted out of the label engine so there is one): a closed grammar
+(`if`, the comparisons and the five functions; `printf`, `call`, `index`, `range` and variables are
+refused when the template is written, a 422 naming the construct, and it is never stored) over a
+closed map of strings. A notification template reads the **alarm facts**, declared once beside
+the accessor that builds them; a fact outside the map renders empty, and a secret is not in it to
+filter out:
+
+<NotificationFacts />
+
+`Link` is built on the `notification.console_url` [setting](/architecture/settings/) (a platform
+namespace, admin-only), since the server cannot know the name a receiver reaches it by.
+`POST /notification-types/{name}:preview` renders a type, or a draft of either template, against
+a real alarm on a component the caller can read, exactly as a delivery of that transition would
+carry it, and returns the facts beside the result; it writes nothing. The console's
+**Catalog > Actions > Notifications** page edits the templates and previews them through that
+route, so an author sees what a receiver gets and what a template can read.
+
 :::design[The `action` entity (ADR-0050)]
 
 ## The action (a stateful entity)
@@ -642,6 +681,8 @@ upgrade backfilled from the rule-raised alarms open at the time. The severity re
     since: 'When the condition came into force; one row while it holds, for every rule',
   }}
 />
+
+<SchemaTable table="notification_type" notes={{ subject: 'The one-line subject template, rendered over the alarm facts; whitespace collapses', text: 'The body text template; its lines are kept' }} />
 
 <SchemaTable table="severity_level" notes={{ rank: 'Higher is worse; at or above the health rule\'s outage floor an active alarm is an outage (the shipped levels, each marked, are on the rules guide)' }} />
 

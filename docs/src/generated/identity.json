@@ -202,6 +202,12 @@
       "labelled": false
     },
     {
+      "table": "notification_type",
+      "shape": "key-bearing",
+      "reason": "alarm-raised, a message shape an action rule sends",
+      "labelled": true
+    },
+    {
       "table": "principal",
       "shape": "id only",
       "labelled": false

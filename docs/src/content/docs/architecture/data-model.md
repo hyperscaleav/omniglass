@@ -354,6 +354,10 @@ telemetry: {
     shape: sql_table
     id: uuid {constraint: primary_key}
   }
+  notification_type: {
+    shape: sql_table
+    id: uuid {constraint: primary_key}
+  }
   property: {
     shape: sql_table
     id: bigint {constraint: primary_key}

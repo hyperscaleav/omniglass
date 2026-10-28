@@ -235,6 +235,18 @@ components:
         - active
         - acknowledged
       type: object
+    AlarmFactBody:
+      additionalProperties: false
+      properties:
+        name:
+          description: The key a template reads it by ({{.Name}})
+          type: string
+        value:
+          type: string
+      required:
+        - name
+        - value
+      type: object
     AlarmTimelineEntryBody:
       additionalProperties: false
       properties:
@@ -2177,6 +2189,37 @@ components:
           type: string
       required:
         - name
+      type: object
+    CreateNotificationTypeInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateNotificationTypeInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        description:
+          description: What the message is for
+          type: string
+        label:
+          description: A human label
+          type: string
+        name:
+          description: The type's name (lowercase kebab)
+          minLength: 1
+          type: string
+        subject:
+          description: The one-line subject template
+          type: string
+        text:
+          description: The body text template
+          type: string
+      required:
+        - name
+        - subject
+        - text
       type: object
     CreatePrincipalInputBody:
       additionalProperties: false
@@ -4719,6 +4762,25 @@ components:
       required:
         - nodes
       type: object
+    ListNotificationTypesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListNotificationTypesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        notification_types:
+          items:
+            $ref: "#/components/schemas/NotificationTypeBody"
+          type:
+            - array
+            - "null"
+      required:
+        - notification_types
+      type: object
     ListPrincipalSessionsOutputBody:
       additionalProperties: false
       properties:
@@ -5818,6 +5880,58 @@ components:
         - node
         - logs
       type: object
+    NotificationSettings:
+      additionalProperties: false
+      properties:
+        console_url:
+          description: The console's base URL as a receiver of a notification reaches it (https://omniglass.example.com); the prefix of the Link a template reads. Empty leaves Link empty
+          type: string
+      required:
+        - console_url
+      type: object
+    NotificationTypeBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/NotificationTypeBody.json
+          format: uri
+          readOnly: true
+          type: string
+        created_at:
+          format: date-time
+          type: string
+        description:
+          type: string
+        id:
+          description: The type's uuid, the stable form of name
+          type: string
+        label:
+          type: string
+        name:
+          type: string
+        official:
+          description: Shipped with the platform and read-only
+          type: boolean
+        subject:
+          description: The one-line subject template
+          type: string
+        text:
+          description: The body text template
+          type: string
+        updated_at:
+          format: date-time
+          type: string
+      required:
+        - id
+        - name
+        - subject
+        - text
+        - official
+        - created_at
+        - updated_at
+      type: object
     OwnerStruct:
       additionalProperties: false
       properties:
@@ -6094,6 +6208,73 @@ components:
         - series_total
         - truncated
         - sustains_ignored
+      type: object
+    PreviewNotificationTypeInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/PreviewNotificationTypeInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        alarm:
+          description: The alarm's id; absent previews the component's most recently raised alarm
+          type: string
+        component:
+          description: The component the alarm is on, by name or dotted address
+          minLength: 1
+          type: string
+        subject:
+          description: A draft subject template to render instead of the stored one, so an editor previews before it saves
+          type: string
+        text:
+          description: A draft text template to render instead of the stored one
+          type: string
+        transition:
+          description: The edge to render for; absent reads the alarm's own state (cleared when it is, raised otherwise)
+          enum:
+            - raised
+            - cleared
+          type: string
+      required:
+        - component
+      type: object
+    PreviewNotificationTypeOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/PreviewNotificationTypeOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        facts:
+          description: The alarm facts the templates read, every key in its declared order (an absent fact is empty)
+          items:
+            $ref: "#/components/schemas/AlarmFactBody"
+          type:
+            - array
+            - "null"
+        subject:
+          description: The rendered subject, as a delivery would carry it
+          type: string
+        text:
+          description: The rendered text, as a delivery would carry it
+          type: string
+        transition:
+          description: The edge it was rendered for
+          enum:
+            - raised
+            - cleared
+          type: string
+      required:
+        - subject
+        - text
+        - transition
+        - facts
       type: object
     PreviewSeriesBody:
       additionalProperties: false
@@ -7941,12 +8122,15 @@ components:
           $ref: "#/components/schemas/Keybindings"
         label:
           $ref: "#/components/schemas/LabelSettings"
+        notification:
+          $ref: "#/components/schemas/NotificationSettings"
         ui:
           $ref: "#/components/schemas/UISettings"
       required:
         - ui
         - keybindings
         - label
+        - notification
       type: object
     SettingsMeOutputBody:
       additionalProperties: false
@@ -9651,6 +9835,29 @@ components:
           type: string
         location:
           description: Set the node's location by name or id, or "" to clear it
+          type: string
+      type: object
+    UpdateNotificationTypeInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateNotificationTypeInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        description:
+          description: What the message is for
+          type: string
+        label:
+          description: A human label (empty clears it)
+          type: string
+        subject:
+          description: The one-line subject template
+          type: string
+        text:
+          description: The body text template
           type: string
       type: object
     UpdatePrincipalInputBody:
@@ -14729,6 +14936,197 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Internal Server Error
       summary: Claim a node identity in exchange for its NATS credential
+  /notification-types:
+    get:
+      description: "Lists every notification type (official and operator), by name: what a message about an alarm says. Fleet-wide reference data. Gated by notification_type:read."
+      operationId: list-notification-type
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListNotificationTypesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List notification types
+      x-omniglass-permission: notification_type:read
+    post:
+      description: Registers an operator notification type (official=false). A template in the sandboxed template language a label rule uses (title, upper, lower, slug, words; if, and, or, not, eq and the comparisons), reading the alarm facts Component, ComponentLabel, ComponentType, Place, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and a refused construct (printf, call, index, range, a variable) is a 422, and is never stored. A taken name is a 409. Audited. Gated by notification_type:create.
+      operationId: create-notification-type
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateNotificationTypeInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationTypeBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create a notification type
+      x-omniglass-permission: notification_type:create
+  /notification-types/{id}:rename:
+    post:
+      description: Moves a custom notification type's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official notification type keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. Audited as rename. Gated by notification_type:rename.
+      operationId: rename-notification-type
+      parameters:
+        - description: The row, by its current name or its uuid
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The row, by its current name or its uuid
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenameRegistryInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationTypeBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Rename a notification type
+      x-omniglass-permission: notification_type:rename
+  /notification-types/{name}:
+    delete:
+      description: Removes an operator notification type. An official type, or one an action rule still sends, is a 409. Audited. Gated by notification_type:delete.
+      operationId: delete-notification-type
+      parameters:
+        - description: The notification type's name or uuid
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The notification type's name or uuid
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a notification type
+      x-omniglass-permission: notification_type:delete
+    get:
+      description: Returns one notification type by name or uuid. Gated by notification_type:read.
+      operationId: get-notification-type
+      parameters:
+        - description: The notification type's name or uuid
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The notification type's name or uuid
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationTypeBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get a notification type
+      x-omniglass-permission: notification_type:read
+    patch:
+      description: Patches an operator type's label, description or templates (an absent field is unchanged). A template in the sandboxed template language a label rule uses (title, upper, lower, slug, words; if, and, or, not, eq and the comparisons), reading the alarm facts Component, ComponentLabel, ComponentType, Place, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and a refused construct (printf, call, index, range, a variable) is a 422. An official type is read-only (409). The name moves only through :rename. Audited. Gated by notification_type:update.
+      operationId: update-notification-type
+      parameters:
+        - description: The notification type's name or uuid
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The notification type's name or uuid
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateNotificationTypeInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationTypeBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a notification type
+      x-omniglass-permission: notification_type:update
+  /notification-types/{name}:preview:
+    post:
+      description: Renders the type's subject and text (or a draft of either, sent in the body) against one real alarm, exactly as a delivery of that alarm's transition would carry them, with the facts they read. Writes nothing. The alarm is named by its component and id; without an id, the component's most recently raised alarm. A draft template the sandbox refuses is a 422, one that fails to render (its output past the cap) a 422 naming it. Gated by notification_type:read; the component is resolved in the caller's component read scope, so a component outside it is a non-disclosing 404.
+      operationId: preview-notification-type
+      parameters:
+        - description: The notification type's name or uuid
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The notification type's name or uuid
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PreviewNotificationTypeInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PreviewNotificationTypeOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Preview a notification type against an alarm
+      x-omniglass-mcp: {}
+      x-omniglass-permission: notification_type:read
   /principal-groups:
     get:
       description: Every principal group. Gated by principal_group:read:admin.

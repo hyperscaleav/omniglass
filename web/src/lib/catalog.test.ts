@@ -13,7 +13,6 @@ describe("the catalog table's soon slots", () => {
     expect(entry("Components", "Templates").issue).toBe(615);
     expect(entry("Systems", "Templates").issue).toBe(616);
     expect(entry("Locations", "Templates").issue).toBe(617);
-    expect(entry("Actions", "Notifications").issue).toBe(618);
   });
 
   it("mirrors nav.ts on every routed soon slot, so the stub page shows the number the table names", () => {
@@ -32,9 +31,9 @@ describe("the catalog table's soon slots", () => {
 describe("visibleGroups", () => {
   it("keeps the shell for a caller who may read nothing: soon slots and their groups survive", () => {
     const groups = visibleGroups(() => false);
-    expect(groups.map((g) => g.header)).toEqual(["Actions", "Components", "Systems", "Locations"]);
+    expect(groups.map((g) => g.header)).toEqual(["Components", "Systems", "Locations"]);
     expect(groups.flatMap((g) => g.entries.map((e) => e.label))).toEqual([
-      "Notifications", "Templates", "Templates", "Templates",
+      "Templates", "Templates", "Templates",
     ]);
   });
 

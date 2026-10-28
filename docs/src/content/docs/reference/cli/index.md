@@ -3252,6 +3252,149 @@ Example:
 omniglass node update <name>
 ```
 
+## `omniglass notification-type`
+
+Commands for the notification-type resource
+
+### `omniglass notification-type create`
+
+Create a notification type
+
+```
+omniglass notification-type create [flags]
+```
+
+Registers an operator notification type (official=false). A template in the sandboxed template language a label rule uses (title, upper, lower, slug, words; if, and, or, not, eq and the comparisons), reading the alarm facts Component, ComponentLabel, ComponentType, Place, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and a refused construct (printf, call, index, range, a variable) is a 422, and is never stored. A taken name is a 409. Audited. Gated by notification_type:create.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--description` | string | (none) | What the message is for |
+| `--label` | string | (none) | A human label |
+| `--name` | string | (none) | The type's name (lowercase kebab) |
+| `--subject` | string | (none) | The one-line subject template |
+| `--text` | string | (none) | The body text template |
+
+Example:
+
+```sh
+omniglass notification-type create --name name --subject subject --text text
+```
+
+### `omniglass notification-type delete`
+
+Delete a notification type
+
+```
+omniglass notification-type delete <name>
+```
+
+Removes an operator notification type. An official type, or one an action rule still sends, is a 409. Audited. Gated by notification_type:delete.
+
+Example:
+
+```sh
+omniglass notification-type delete <name>
+```
+
+### `omniglass notification-type get`
+
+Get a notification type
+
+```
+omniglass notification-type get <name>
+```
+
+Returns one notification type by name or uuid. Gated by notification_type:read.
+
+Example:
+
+```sh
+omniglass notification-type get <name>
+```
+
+### `omniglass notification-type list`
+
+List notification types
+
+```
+omniglass notification-type list
+```
+
+Lists every notification type (official and operator), by name: what a message about an alarm says. Fleet-wide reference data. Gated by notification_type:read.
+
+Example:
+
+```sh
+omniglass notification-type list
+```
+
+### `omniglass notification-type preview`
+
+Preview a notification type against an alarm
+
+```
+omniglass notification-type preview <name> [flags]
+```
+
+Renders the type's subject and text (or a draft of either, sent in the body) against one real alarm, exactly as a delivery of that alarm's transition would carry them, with the facts they read. Writes nothing. The alarm is named by its component and id; without an id, the component's most recently raised alarm. A draft template the sandbox refuses is a 422, one that fails to render (its output past the cap) a 422 naming it. Gated by notification_type:read; the component is resolved in the caller's component read scope, so a component outside it is a non-disclosing 404.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--alarm` | string | (none) | The alarm's id; absent previews the component's most recently raised alarm |
+| `--component` | string | (none) | The component the alarm is on, by name or dotted address |
+| `--subject` | string | (none) | A draft subject template to render instead of the stored one, so an editor previews before it saves |
+| `--text` | string | (none) | A draft text template to render instead of the stored one |
+| `--transition` | string | (none) | The edge to render for; absent reads the alarm's own state (cleared when it is, raised otherwise) |
+
+Example:
+
+```sh
+omniglass notification-type preview <name> --component component
+```
+
+### `omniglass notification-type rename`
+
+Rename a notification type
+
+```
+omniglass notification-type rename <id> [flags]
+```
+
+Moves a custom notification type's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official notification type keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. Audited as rename. Gated by notification_type:rename.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--name` | string | (none) | The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid) |
+
+Example:
+
+```sh
+omniglass notification-type rename <id> --name name
+```
+
+### `omniglass notification-type update`
+
+Update a notification type
+
+```
+omniglass notification-type update <name> [flags]
+```
+
+Patches an operator type's label, description or templates (an absent field is unchanged). A template in the sandboxed template language a label rule uses (title, upper, lower, slug, words; if, and, or, not, eq and the comparisons), reading the alarm facts Component, ComponentLabel, ComponentType, Place, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and a refused construct (printf, call, index, range, a variable) is a 422. An official type is read-only (409). The name moves only through :rename. Audited. Gated by notification_type:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--description` | string | (none) | What the message is for |
+| `--label` | string | (none) | A human label (empty clears it) |
+| `--subject` | string | (none) | The one-line subject template |
+| `--text` | string | (none) | The body text template |
+
+Example:
+
+```sh
+omniglass notification-type update <name>
+```
+
 ## `omniglass principal`
 
 Commands for the principal resource

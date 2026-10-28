@@ -43,6 +43,9 @@ var metricTypesYAML []byte
 //go:embed event_types.yaml
 var eventTypesYAML []byte
 
+//go:embed notification_types.yaml
+var notificationTypesYAML []byte
+
 //go:embed command_types.yaml
 var commandTypesYAML []byte
 
@@ -283,6 +286,9 @@ func Run(ctx context.Context, gw storage.Gateway) error {
 	if err := seedCommandTypes(ctx, gw); err != nil {
 		return err
 	}
+	if err := seedNotificationTypes(ctx, gw); err != nil {
+		return err
+	}
 	// The official event rules after the registries their keys and levels
 	// name.
 	if err := seedEventRules(ctx, gw); err != nil {
@@ -513,6 +519,37 @@ func seedCommandTypes(ctx context.Context, gw storage.Gateway) error {
 			Name: c.Name, Label: c.Label, Description: c.Description,
 			TargetPropertyType: c.TargetPropertyType, TargetMetricType: c.TargetMetricType,
 			SettleWindowSeconds: c.SettleWindowSeconds, Official: true,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// notificationTypesDoc is the notification_types.yaml shape, shared by the
+// seeder and the facts render.
+type notificationTypesDoc struct {
+	NotificationTypes []struct {
+		Name        string `yaml:"name"`
+		Label       string `yaml:"label"`
+		Description string `yaml:"description"`
+		Subject     string `yaml:"subject"`
+		Text        string `yaml:"text"`
+	} `yaml:"notification_types"`
+}
+
+// seedNotificationTypes installs the ship-with notification types (#618),
+// authoritative on conflict; a template the sandbox refuses, or a name an
+// operator's type already holds, fails the seed run naming the row.
+func seedNotificationTypes(ctx context.Context, gw storage.Gateway) error {
+	var doc notificationTypesDoc
+	if err := yaml.Unmarshal(notificationTypesYAML, &doc); err != nil {
+		return fmt.Errorf("seed: parse notification_types: %w", err)
+	}
+	for _, t := range doc.NotificationTypes {
+		if err := gw.UpsertNotificationType(ctx, storage.NotificationType{
+			Name: t.Name, Label: t.Label, Description: t.Description,
+			Subject: t.Subject, Text: t.Text, Official: true,
 		}); err != nil {
 			return err
 		}

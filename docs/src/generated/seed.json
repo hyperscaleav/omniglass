@@ -15,7 +15,7 @@
   {
    "id": "operator",
    "label": "Operator",
-   "description": "Day-to-day operations: create or edit components, endpoints (retry an endpoint's rejected session, or run its poll now), secrets, variables, and the property, metric, event, and command catalogs, issue commands in scope, preview a driver spec through a node, and impair simulated devices. Sees and reveals the device secrets in its scope (never the admin-sensitive platform credentials). Inherits Viewer.",
+   "description": "Day-to-day operations: create or edit components, endpoints (retry an endpoint's rejected session, or run its poll now), secrets, variables, the property, metric, event, command and notification catalogs, issue commands in scope, preview a driver spec through a node, and impair simulated devices. Sees and reveals the device secrets in its scope (never the admin-sensitive platform credentials). Inherits Viewer.",
    "inherits": [
     "viewer"
    ],
@@ -29,6 +29,7 @@
     "metric_type:create,update",
     "event_type:create,update",
     "command_type:create,update",
+    "notification_type:create,update",
     "command:issue",
     "simulation:update",
     "alarm:acknowledge",
@@ -59,6 +60,8 @@
     "event_type:update",
     "command_type:create",
     "command_type:update",
+    "notification_type:create",
+    "notification_type:update",
     "command:issue",
     "simulation:update",
     "alarm:acknowledge",
@@ -136,6 +139,7 @@
     "severity_level:*",
     "rule:*",
     "command_type:*",
+    "notification_type:*",
     "command:*",
     "location_type:create,update,delete,rename",
     "component_type:create,update,delete",
@@ -181,6 +185,7 @@
     "severity_level:*",
     "rule:*",
     "command_type:*",
+    "notification_type:*",
     "command:*",
     "location_type:create",
     "location_type:update",
@@ -232,6 +237,8 @@
     "event_type:update",
     "command_type:create",
     "command_type:update",
+    "notification_type:create",
+    "notification_type:update",
     "command:issue",
     "simulation:update",
     "alarm:acknowledge",
@@ -562,6 +569,22 @@
    "name": "set-power",
    "label": "Set Power",
    "description": "Tell a component to turn on, turn off, or enter standby. A settleable command against the power state."
+  }
+ ],
+ "notification_types": [
+  {
+   "name": "alarm-raised",
+   "label": "Alarm raised",
+   "description": "Says an alarm opened: what is wrong, where, and how bad. The message an action rule on raised sends unless it names another type.",
+   "subject": "[{{.SeverityLabel}}] {{.ComponentLabel}}: {{.Message}}",
+   "text": "{{.ComponentLabel}}{{if .Place}} at {{.Place}}{{end}} raised a {{.SeverityLabel}} alarm: {{.Message}}\nRaised at {{.RaisedAt}}{{if .Rule}} by the rule {{.Rule}}{{end}}.\n{{if .Link}}{{.Link}}{{end}}"
+  },
+  {
+   "name": "alarm-cleared",
+   "label": "Alarm cleared",
+   "description": "Says an alarm closed, so whoever was told it opened is told it is over. The message an action rule on cleared sends unless it names another type.",
+   "subject": "[Cleared] {{.ComponentLabel}}: {{.Message}}",
+   "text": "{{.ComponentLabel}}{{if .Place}} at {{.Place}}{{end}} cleared its {{.SeverityLabel}} alarm: {{.Message}}\nRaised at {{.RaisedAt}}, cleared at {{.ClearedAt}}.\n{{if .Link}}{{.Link}}{{end}}"
   }
  ],
  "secret_types": [

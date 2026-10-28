@@ -87,6 +87,19 @@ if (nested && tree.length !== rows.length) {
         ))}
       </tbody>
     </table>
+  ) : kind === 'notification_types' ? (
+    <table class="seeded-set">
+      <thead><tr><th>Type</th><th>Subject</th><th>Text</th></tr></thead>
+      <tbody>
+        {rows.map((t) => (
+          <tr>
+            <td><code>{t.name}</code> ({t.label})</td>
+            <td><code>{t.subject}</code></td>
+            <td><pre>{t.text}</pre></td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   ) : kind === 'secret_types' ? (
     <table class="seeded-set">
       <thead><tr><th>Type</th><th>Fields</th><th>Admin-sensitive default</th></tr></thead>

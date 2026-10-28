@@ -196,25 +196,36 @@ type factsEventRule struct {
 	ClearEventType string `json:"clear_event_type,omitempty"`
 }
 
+// factsNotificationType is one shipped notification type (#618) as the docs
+// render it: its two templates as written.
+type factsNotificationType struct {
+	Name        string `json:"name"`
+	Label       string `json:"label"`
+	Description string `json:"description"`
+	Subject     string `json:"subject"`
+	Text        string `json:"text"`
+}
+
 type seedFactsDoc struct {
-	Comment        string               `json:"//"`
-	Roles          []factsRole          `json:"roles"`
-	PropertyTypes  []factsProperty      `json:"property_types"`
-	MetricTypes    []factsMetricType    `json:"metric_types"`
-	EventTypes     []factsNamed         `json:"event_types"`
-	CommandTypes   []factsNamed         `json:"command_types"`
-	SecretTypes    []factsSecretType    `json:"secret_types"`
-	Transports     []factsTransport     `json:"transports"`
-	LocationTypes  []factsLocationType  `json:"location_types"`
-	ComponentTypes []factsTypeNode      `json:"component_types"`
-	SystemTypes    []factsTypeNode      `json:"system_types"`
-	Standards      []factsStandard      `json:"standards"`
-	Vendors        []factsVendor        `json:"vendors"`
-	Drivers        []factsDriver        `json:"drivers"`
-	Products       []factsProduct       `json:"products"`
-	LabelRules     []factsLabelRule     `json:"label_rules"`
-	SeverityLevels []factsSeverityLevel `json:"severity_levels"`
-	EventRules     []factsEventRule     `json:"event_rules"`
+	Comment           string                  `json:"//"`
+	Roles             []factsRole             `json:"roles"`
+	PropertyTypes     []factsProperty         `json:"property_types"`
+	MetricTypes       []factsMetricType       `json:"metric_types"`
+	EventTypes        []factsNamed            `json:"event_types"`
+	CommandTypes      []factsNamed            `json:"command_types"`
+	NotificationTypes []factsNotificationType `json:"notification_types"`
+	SecretTypes       []factsSecretType       `json:"secret_types"`
+	Transports        []factsTransport        `json:"transports"`
+	LocationTypes     []factsLocationType     `json:"location_types"`
+	ComponentTypes    []factsTypeNode         `json:"component_types"`
+	SystemTypes       []factsTypeNode         `json:"system_types"`
+	Standards         []factsStandard         `json:"standards"`
+	Vendors           []factsVendor           `json:"vendors"`
+	Drivers           []factsDriver           `json:"drivers"`
+	Products          []factsProduct          `json:"products"`
+	LabelRules        []factsLabelRule        `json:"label_rules"`
+	SeverityLevels    []factsSeverityLevel    `json:"severity_levels"`
+	EventRules        []factsEventRule        `json:"event_rules"`
 }
 
 // eventCommandDoc covers the shared name/display/description shape of the
@@ -425,6 +436,15 @@ func FactsJSON() ([]byte, error) {
 		doc.SeverityLevels = append(doc.SeverityLevels, factsSeverityLevel{
 			Name: l.Name, Label: l.Label, Color: l.Color, Rank: l.Rank, Outage: l.Rank >= health.OutageRank,
 		})
+	}
+
+	var nts notificationTypesDoc
+	if err := yaml.Unmarshal(notificationTypesYAML, &nts); err != nil {
+		return nil, fmt.Errorf("seed facts: notification types: %w", err)
+	}
+	for _, t := range nts.NotificationTypes {
+		doc.NotificationTypes = append(doc.NotificationTypes, factsNotificationType{
+			Name: t.Name, Label: t.Label, Description: t.Description, Subject: t.Subject, Text: t.Text})
 	}
 
 	var ers eventRulesDoc

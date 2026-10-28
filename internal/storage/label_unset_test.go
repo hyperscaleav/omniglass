@@ -219,6 +219,12 @@ func TestEveryWritePathStoresNullForAnUnsetLabel(t *testing.T) {
 			}
 			return "name", "lbl-cmd"
 		},
+		"notification_type": func(t *testing.T) (string, string) {
+			if _, err := gw.CreateNotificationType(ctx, "", storage.NotificationTypeSpec{Name: "lbl-notify", Label: blank}); err != nil {
+				t.Fatalf("create notification_type: %v", err)
+			}
+			return "name", "lbl-notify"
+		},
 	}
 
 	// Completeness: every labelled table is proved or declared, and no

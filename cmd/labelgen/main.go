@@ -26,6 +26,10 @@ import (
 const (
 	funcDst = "docs/src/generated/label.json"
 	dataDst = "docs/src/generated/labeldata.json"
+	// The alarm fact map a notification template reads (#618), declared in
+	// internal/storage beside the accessor that builds it, rendered through
+	// the same sandbox as a label rule.
+	notifyDst = "docs/src/generated/notificationfacts.json"
 )
 
 func main() {
@@ -42,6 +46,13 @@ func main() {
 	}
 	write(dataDst, data)
 	log.Printf("wrote the rule data map to %s", dataDst)
+
+	notify, err := storage.NotificationFactsJSON()
+	if err != nil {
+		log.Fatalf("labelgen: %v", err)
+	}
+	write(notifyDst, notify)
+	log.Printf("wrote the notification fact map to %s", notifyDst)
 }
 
 func write(dst string, body []byte) {

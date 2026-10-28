@@ -53,6 +53,9 @@ var renameableRegistries = map[string]renameableRegistry{
 	"product":       {stamped: true},
 	"standard":      {stamped: true, seeded: true},
 	"location_type": {carry: carryLocationTypeName},
+	// A notification type is referenced only by uuid (an action rule's
+	// foreign key) and is nothing a node or a driver pushes by name (#618).
+	"notification_type": {stamped: true},
 }
 
 // RenameRegistry moves a registry row's name, addressed by its current name or
