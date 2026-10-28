@@ -1011,6 +1011,15 @@ Un-acknowledging is deliberately not a verb yet
 ([#728](https://github.com/hyperscaleav/omniglass/issues/728)); snooze and resolve are
 [out of scope with reasons](/architecture/alarms-actions/).
 
+An alarm's transitions also queue its **notifications** (#618): `/notification-types` (the message
+catalog, `notification_type:*`, read on the viewer floor, `:rename` and a `:preview` that renders against
+a real alarm and writes nothing), `/notification-targets` (admin-only and all-scope, the URL masked on
+every read, `:reveal` audited, `:test` one synthetic send), `/action-rules` (`rule:*`, written all-scope)
+and `GET /notifications` with `GET /notifications/{id}` (`notification:read`, scoped by the alarm's
+component exactly as the alarm reads are) and `POST /notifications/{id}:retry` (`notification:retry`, on
+the component tier). An alarm's `:timeline` carries each notification after the edge that queued it
+([alarms and actions](/architecture/alarms-actions/#notifications)).
+
 - `GET /components/{name}/alarms/{id}:timeline` (**`alarm:read`**, the component's read scope
   injected, a non-disclosing **404** outside it or for an alarm not on the component) returns the
   alarm's history oldest first: `entries` of `{at, kind (event|audit), what, actor?, rule?, instance?,

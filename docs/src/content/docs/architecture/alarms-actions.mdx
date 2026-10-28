@@ -137,9 +137,9 @@ decision, not a nullable field somebody flips
 :::caution[Snooze and resolve are deliberately absent]
 Both are commonly bundled with acknowledge, and neither is built, for reasons rather than sequencing:
 
-- **Snooze** exists to suppress **notification**. The outbound notification registry is unbuilt
-  (#618), so a snooze today would suppress nothing: a column that lies. It belongs with #618 or
-  after it.
+- **Snooze** exists to suppress **notification**. Until the [notification](#notifications) lane
+  was built (#618) a snooze would have suppressed nothing: a column that lies. There is something to
+  suppress now, and snooze is its own feature, #1318.
 - **Resolve** is either the existing `DELETE /components/{name}/alarms/{id}` (clear) under a second
   name, or a different concept nobody has specified. A human "resolving" an alarm whose raised state
   belongs to its condition is a contradiction until somebody says what it means.
