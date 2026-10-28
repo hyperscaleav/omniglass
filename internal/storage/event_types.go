@@ -83,7 +83,7 @@ func (p *PG) UpsertEventType(ctx context.Context, et EventType) error {
 // ListEventTypes returns every registered event type (official and custom). No
 // scope.Set: the registry is fleet-wide reference data.
 func (p *PG) ListEventTypes(ctx context.Context) ([]EventType, error) {
-	rows, err := p.pool.Query(ctx, `select id, name, coalesce(label, ''), description, payload_schema, official from event_type`)
+	rows, err := p.pool.Query(ctx, eventTypeListSQL)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list event types: %w", err)
 	}

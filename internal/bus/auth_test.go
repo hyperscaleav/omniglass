@@ -68,6 +68,7 @@ func (f fakeStore) PruneTelemetryReceipts(context.Context, time.Time, int) (int6
 func (f fakeStore) ListEventTypes(context.Context) ([]storage.EventType, error) {
 	return nil, nil
 }
+func (f fakeStore) CatalogFingerprint(context.Context) (string, error) { return "", nil }
 
 // fakeClientAuth is a minimal server.ClientAuthentication that carries the
 // presented options and captures the RegisterUser call.

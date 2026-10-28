@@ -54,6 +54,7 @@ type Server struct {
 	stopCalc        context.CancelFunc // ends the calc tick
 	stopPrune       context.CancelFunc // ends the receipt retention pass
 	orphans         *orphanTally       // the node lane's orphaned batches, warned and counted (#1200)
+	registry        registryCache      // the ingest sample registry, kept until a catalog changes (#1279)
 	stopOrphanFlush context.CancelFunc // ends the orphan count's flush
 	sweepStop       sync.Once
 	sweepDone       sync.WaitGroup

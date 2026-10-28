@@ -28,7 +28,7 @@ import (
 // This is the counting instrument of ADR-0094 extended from reads to ingest.
 // The standard workload (internal/footprint) is delivered through the real
 // handler, handleTelemetry, exactly as JetStream would: the owner binding, the
-// catalog reads, LandBatch with its receipt, locks, transition guard and rule
+// catalog fingerprint read, LandBatch with its receipt, locks, transition guard and rule
 // evaluation, and the endpoint's seen stamp. Only the transport is a double.
 // The fleet is the dev scenario's, seeded for real, and every batch is bound to
 // one of its simulated endpoints' tasks, so the node writer's binding check
@@ -56,8 +56,10 @@ const footprintTicks = 4
 // with what moved.
 const (
 	// wantStatementsPerBatch is every statement one batch costs, from the
-	// owner resolution to the endpoint's seen stamp. Exact.
-	wantStatementsPerBatch = 31
+	// owner resolution to the endpoint's seen stamp. Exact. 31 until #1279,
+	// which replaced the three catalog reads with one fingerprint read and a
+	// registry kept between batches.
+	wantStatementsPerBatch = 29
 	// wantMetricRowsPerPage is how many of the window's metric rows fill one
 	// 8 KiB heap page (about 126 bytes a row). Exact on every full page. Density
 	// rather than a page count, so a fleet that grows by a few endpoints moves

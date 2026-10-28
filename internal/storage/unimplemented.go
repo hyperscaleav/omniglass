@@ -337,6 +337,10 @@ func (UnimplementedGateway) UpsertEventType(context.Context, EventType) error { 
 func (UnimplementedGateway) ListEventTypes(context.Context) ([]EventType, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) CatalogFingerprint(context.Context) (string, error) {
+	return "", nil
+}
+
 func (UnimplementedGateway) GetEventType(context.Context, string) (*EventType, error) {
 	return nil, nil
 }
