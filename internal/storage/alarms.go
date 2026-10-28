@@ -232,6 +232,12 @@ func (p *PG) raiseAlarmTx(ctx context.Context, tx pgx.Tx, actorID string, compon
 	if err := p.RecomputeHealth(ctx, tx, component.ID); err != nil {
 		return nil, err
 	}
+	// The raise's notifications, in its transaction (#618): a hand raise
+	// and a rule's raise both pass here, and a re-raise that landed on an
+	// open alarm returned above, so each opened incident notifies once.
+	if err := p.queueNotificationsTx(ctx, tx, component.ID, a.ID, TransitionRaised); err != nil {
+		return nil, err
+	}
 	return &a, nil
 }
 
@@ -280,6 +286,11 @@ func (p *PG) ClearAlarm(ctx context.Context, actorID, componentName, alarmID str
 		return err
 	}
 	if err := p.RecomputeHealth(ctx, tx, component.ID); err != nil {
+		return err
+	}
+	// A clear is the condition's edge whoever records it (decision 6 of
+	// #618), so a hand clear notifies as a rule's does.
+	if err := p.queueNotificationsTx(ctx, tx, component.ID, alarmID, TransitionCleared); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -475,5 +486,8 @@ func (p *PG) clearAlarmByDedupTx(ctx context.Context, tx pgx.Tx, actorID string,
 		map[string]any{"component": component.Name, "dedup_key": dedupKey, "cleared_at": cleared, "raised_by_rule_id": ruleID}); err != nil {
 		return "", err
 	}
-	return alarmID, p.RecomputeHealth(ctx, tx, component.ID)
+	if err := p.RecomputeHealth(ctx, tx, component.ID); err != nil {
+		return "", err
+	}
+	return alarmID, p.queueNotificationsTx(ctx, tx, component.ID, alarmID, TransitionCleared)
 }

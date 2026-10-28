@@ -15,6 +15,10 @@ type Settings struct {
 	Keybindings Keybindings       `json:"keybindings" settings:"profile,client"`
 	Label       LabelSettings     `json:"label" settings:"platform,client"`
 	Retention   RetentionSettings `json:"retention" settings:"platform,client"`
+	// Notification is the outbound lane's install-wide policy (#618): platform
+	// domain and NOT client-visible, since it names where the platform may send
+	// (an admin's business) rather than how anything renders.
+	Notification NotificationSettings `json:"notification" settings:"platform"`
 }
 
 // UISettings is the ui namespace.
@@ -56,6 +60,21 @@ type LabelSettings struct {
 	// sentinel, and a schema that admitted it would be inviting a write that means
 	// something else entirely.
 	Acronyms []string `json:"acronyms" nullable:"false" default:"AV,BYOD,DSP,EDID,HDBaseT,HDCP,HDMI,IP,IR,KVM,LAN,LCD,LED,MTR,NDI,NVR,OLED,PC,PoE,PTZ,RF,SDI,SIP,TV,UC,USB,VC,VLAN,4K,8K" doc:"Words a generated label title-cases to a fixed form, whole-word and case-insensitive"`
+}
+
+// NotificationSettings is the notification namespace (#618).
+type NotificationSettings struct {
+	// ConsoleURL is the console's base URL as a person outside the install
+	// reaches it, the prefix of the Link fact a notification template reads
+	// (a component's page). Empty leaves Link empty: the server cannot know the
+	// name it is reached by behind a proxy.
+	ConsoleURL string `json:"console_url" default:"" doc:"The console's base URL as a receiver of a notification reaches it (https://omniglass.example.com); the prefix of the Link a template reads. Empty leaves Link empty"`
+	// EgressAllow opens internal destinations to the outbound client
+	// (internal/egress): each entry a CIDR, an address, or a host name. A
+	// private, loopback or link-local destination is refused unless named
+	// here; a cloud metadata address is refused even when it is. Plain http
+	// is admitted only to a destination named here.
+	EgressAllow []string `json:"egress_allow" nullable:"false" default:"" doc:"The internal destinations a notification may reach, each a CIDR (10.20.0.0/16), an address, or a host name (chat.corp.example). Everything private, loopback or link-local is refused unless named here; a cloud metadata address is refused even when it is; plain http is admitted only to a destination named here"`
 }
 
 // RetentionSettings is the retention namespace (#417): how long each sample

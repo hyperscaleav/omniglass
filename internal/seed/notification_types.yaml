@@ -1,0 +1,28 @@
+# The ship-with notification_type registry (#618): what a message about an
+# alarm says. Each type carries two templates rendered through the shared
+# template sandbox over the alarm fact map (Component, Place, SeverityLabel,
+# Message, Transition, RaisedAt, ClearedAt, Rule, Link, ...): a one-line
+# subject and a body text. Official rows are authoritative on every boot and
+# read-only; an operator writes their own beside them. A template the sandbox
+# refuses fails the seed run naming the row.
+notification_types:
+  - name: alarm-raised
+    label: Alarm raised
+    description: >-
+      Says an alarm opened: what is wrong, where, and how bad. The message an
+      action rule on raised sends unless it names another type.
+    subject: "[{{.SeverityLabel}}] {{.ComponentLabel}}: {{.Message}}"
+    text: |-
+      {{.ComponentLabel}}{{if .Place}} at {{.Place}}{{end}} raised a {{.SeverityLabel}} alarm: {{.Message}}
+      Raised at {{.RaisedAt}}{{if .Rule}} by the rule {{.Rule}}{{end}}.
+      {{if .Link}}{{.Link}}{{end}}
+  - name: alarm-cleared
+    label: Alarm cleared
+    description: >-
+      Says an alarm closed, so whoever was told it opened is told it is over.
+      The message an action rule on cleared sends unless it names another type.
+    subject: "[Cleared] {{.ComponentLabel}}: {{.Message}}"
+    text: |-
+      {{.ComponentLabel}}{{if .Place}} at {{.Place}}{{end}} cleared its {{.SeverityLabel}} alarm: {{.Message}}
+      Raised at {{.RaisedAt}}, cleared at {{.ClearedAt}}.
+      {{if .Link}}{{.Link}}{{end}}

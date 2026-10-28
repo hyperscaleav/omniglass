@@ -9,6 +9,7 @@ import { METRICS_KEY, listMetricTypes } from "./metric_types";
 import { PROPERTIES_KEY, listProperties } from "./properties";
 import { EVENT_TYPES_KEY, listEventTypes } from "./event_types";
 import { COMMAND_TYPES_KEY, listCommandTypes } from "./command_types";
+import { NOTIFICATION_TYPES_KEY, listNotificationTypes } from "./notification_types";
 import { CALC_RULES_KEY, listCalcRules } from "./calc_rules";
 import { EVENT_RULES_KEY, listEventRules } from "./event_rules";
 import { severityLevelsKey, listSeverityLevels } from "./severity";
@@ -60,7 +61,7 @@ export type CatalogGroup = {
 
 // Each soon slot names its tracking issue (the no-bare-TODO rule): the
 // template registries are #615 (component), #616 (system), #617 (location);
-// notifications is #618. Rules went live with the event rules (#921). Group copy follows the direction axis: Telemetry is what you
+// Rules went live with the event rules (#921), notifications with #618. Group copy follows the direction axis: Telemetry is what you
 // receive, Actions is what you send or run.
 export const CATALOG_GROUPS: CatalogGroup[] = [
   {
@@ -74,7 +75,7 @@ export const CATALOG_GROUPS: CatalogGroup[] = [
   },
   {
     header: "Actions",
-    copy: "What you send or run: commands (the instructions you issue, with a target and a settle window), rules (what opens an alarm, and when), calc rules (a value derived from others), severity (how bad that alarm is), notifications (soon).",
+    copy: "What you send or run: commands (the instructions you issue, with a target and a settle window), rules (what opens an alarm, and when), calc rules (a value derived from others), severity (how bad that alarm is), notifications (what a message about an alarm says).",
     entries: [
       { label: "Commands", path: "/command-types", gate: ["command_type", "read"], key: COMMAND_TYPES_KEY, list: listCommandTypes },
       { label: "Rules", path: "/rules", gate: ["rule", "read"], key: EVENT_RULES_KEY, list: listEventRules },
@@ -82,7 +83,8 @@ export const CATALOG_GROUPS: CatalogGroup[] = [
       { label: "Calc rules", path: "/calc-rules", gate: ["rule", "read"], key: CALC_RULES_KEY, list: listCalcRules },
       // The levels a rule raises at, beside the rules (#921).
       { label: "Severity", path: "/severity-levels", gate: ["severity_level", "read"], key: severityLevelsKey, list: listSeverityLevels },
-      { label: "Notifications", path: "/notifications", soon: true, issue: 618 },
+      // The outbound message registry (#618), the commands' peer.
+      { label: "Notifications", path: "/notifications", gate: ["notification_type", "read"], key: NOTIFICATION_TYPES_KEY, list: listNotificationTypes },
     ],
   },
   {
@@ -217,7 +219,7 @@ export function visibleGroups(allow: (tokens: string[]) => boolean): CatalogGrou
   return out;
 }
 
-// The routed soon slots' paths (/notifications today): the router mounts
+// The routed soon slots' paths (none today; /notifications was the last, #618): the router mounts
 // SectionStub for each INSIDE the shell, so the stub renders in the pane. The
 // route manifest carries them with shell "catalog", pinned by the guard test.
 export const CATALOG_STUB_PATHS: string[] = CATALOG_GROUPS.flatMap((g) =>

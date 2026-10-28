@@ -656,6 +656,24 @@ The `reply` is the component's answer as its node reported it, masked of the end
 and of anything labeled a credential before it was stored; a timed-out command's `reason` says where
 it stopped (`queued for node edge-depot-dark, which did not take it within its 15s settle window`).
 
+## Notifications
+
+The [notification](/architecture/alarms-actions/#notifications) commands send an alarm to the chat or
+paging tool somebody watches: a `notification-type` says what a message says (an operator writes one,
+`preview` renders it against a real alarm), a `notification-target` says where it goes (admin-only,
+its URL masked until `reveal`), an `action-rule` says when (`rule:*`, all-scope), and a
+`notification` is one message on its way. The whole task is the
+[notifications guide](/guides/admin/notifications/).
+
+```sh
+omniglass notification-type preview alarm-raised --component panel-2 | jq -c '{subject, text}'
+omniglass notification-target create --name ops-chat --kind webhook --url https://chat.example.com/hooks/ops --secret ops-chat-signing
+omniglass notification-target test ops-chat                           # one synthetic send: {ok, status}
+omniglass action-rule create --name page-ops --on '["raised","cleared"]' --when 'severity_rank >= 40' --targets '["ops-chat"]'
+omniglass notification list --status failed                          # scoped by the alarm's component
+omniglass notification retry <id>                                     # notification:retry, an operator's
+```
+
 ## Property contracts and values
 
 A classifier **declares** which properties its instances carry; an instance **sets** a value. Both sides

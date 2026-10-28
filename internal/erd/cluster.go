@@ -33,6 +33,8 @@ var Subsystems = []Cluster{
 		"event_type", "event", "log_line", "alarm", "severity_level", "event_rule", "event_rule_state", "event_rule_live",
 		"event_rule_condition", "calc_rule", "calc_rule_input", "calc_pending", "calc_rule_state",
 		"command_type", "command",
+		// The outbound notification lane (#618): what a message says.
+		"notification_type", "notification_target", "action_rule", "action_rule_target", "notification",
 		// telemetry_receipt is each ingest batch that landed (#311,
 		// ADR-0311), held to a horizon: what makes a redelivered batch land
 		// once.

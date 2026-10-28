@@ -254,8 +254,9 @@ describe("Catalog single entry", () => {
     expect(lookupNav("/web/log-types").label).toBe("Logs");
   });
 
-  it("surfaces each pending off-rail page's tracking issue on its stub", () => {
-    expect(lookupNav("/web/notifications").issue).toBe(618);
+  it("keeps the notification types page's identity now it is live (#618)", () => {
+    expect(lookupNav("/web/notifications").label).toBe("Notifications");
+    expect(lookupNav("/web/notifications").issue).toBeUndefined();
   });
 
   // The shell is presentation over existing routes: every pre-shell URL keeps
@@ -280,7 +281,7 @@ describe("Catalog single entry", () => {
       "/rules": ["rule", "read"],
       "/calc-rules": ["rule", "read"],
       "/severity-levels": ["severity_level", "read"],
-      "/notifications": null,
+      "/notifications": ["notification_type", "read"],
       "/templates": null,
       "/log-types": null,
       // The re-homed index routes (#798): off the rail, gates unchanged.

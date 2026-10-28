@@ -151,17 +151,31 @@ export async function alarmTimeline(component: string, id: string): Promise<Alar
 
 const AUDIT_WORDS: Record<string, string> = { raise: "raised", clear: "cleared", acknowledge: "acknowledged" };
 
+// NOTIFY_WORDS word a notification's status as what happened to its target
+// (#618): queued is on its way, sent arrived, failed gave up.
+const NOTIFY_WORDS: Record<string, string> = { queued: "notifying", sent: "notified", failed: "failed to notify" };
+
 // timelineWhat is the entry's verb as an operator reads it: an event by its
-// type (condition-started), an audit row by what was done to the alarm.
-export function timelineWhat(e: Pick<AlarmTimelineEntry, "kind" | "what">): string {
+// type (condition-started), an audit row by what was done to the alarm, a
+// notification by what happened to its target.
+export function timelineWhat(e: Pick<AlarmTimelineEntry, "kind" | "what" | "target">): string {
+  if (e.kind === "notification") return `${NOTIFY_WORDS[e.what] ?? e.what} ${e.target ?? ""}`.trim();
   return e.kind === "audit" ? (AUDIT_WORDS[e.what] ?? e.what) : e.what;
 }
 
 // timelineWho says who: the person who acted, else the rule the entry belongs
-// to (the rule wrote the event, or the platform acted for it), else the
-// platform itself.
-export function timelineWho(e: Pick<AlarmTimelineEntry, "actor" | "rule">): string {
+// to (the rule wrote the event, or the platform acted for it; a notification's
+// action rule queued it), else the platform itself.
+export function timelineWho(e: Pick<AlarmTimelineEntry, "actor" | "rule" | "action_rule">): string {
   if (e.actor) return e.actor;
+  if (e.action_rule) return `action rule ${e.action_rule}`;
   if (e.rule) return `rule ${e.rule}`;
   return "the platform";
+}
+
+// retryNotification re-queues a failed notification for a fresh run of
+// attempts (#618): the same message, the same Idempotency-Key.
+export async function retryNotification(id: string): Promise<void> {
+  const { error } = await api.POST("/notifications/{id}:retry", { params: { path: { id } } });
+  if (error) throw error;
 }

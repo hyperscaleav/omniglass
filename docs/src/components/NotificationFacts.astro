@@ -1,0 +1,31 @@
+---
+// The alarm facts a notification template reads (#618), rendered from the
+// generated facts (docs/src/generated/notificationfacts.json, written by make
+// gen via cmd/labelgen). The map is declared once in internal/storage beside the
+// accessor that builds it, so the set taught here and the set a template can
+// reach are readers of one declaration.
+//
+// Usage: <NotificationFacts />
+import facts from '../generated/notificationfacts.json';
+---
+
+<table class="label-data-map">
+  <thead>
+    <tr>
+      <th>Key</th>
+      <th>What it holds</th>
+    </tr>
+  </thead>
+  <tbody>
+    {facts.facts.map((f) => (
+      <tr>
+        <td><code>{'{{.' + f.name + '}}'}</code></td>
+        <td>{f.summary}</td>
+      </tr>
+    ))}
+  </tbody>
+</table>
+<p>
+  A rendered subject is at most {facts.subject_max} characters and a text at most {facts.text_max};
+  past either, the render fails rather than cutting the message.
+</p>

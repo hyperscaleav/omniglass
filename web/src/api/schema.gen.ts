@@ -4,6 +4,58 @@
  */
 
 export interface paths {
+    "/action-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List action rules
+         * @description Lists every action rule, by name: on which alarm transitions, when, and what it sends to which targets. Gated by rule:read.
+         */
+        get: operations["list-action-rule"];
+        put?: never;
+        /**
+         * Create an action rule
+         * @description Adds a rule that, on an alarm's raise or clear, when its predicate holds over the alarm facts, queues one notification per target in the transition's own transaction, which the server's tick then delivers. An unknown transition, type or target, or a predicate that does not compile, is a 422; a taken name a 409. Audited. Gated by rule:create, with an all-scope grant: a rule watches the whole fleet.
+         */
+        post: operations["create-action-rule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/action-rules/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get an action rule
+         * @description Returns one action rule by name or uuid. Gated by rule:read.
+         */
+        get: operations["get-action-rule"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete an action rule
+         * @description Removes a rule; the notifications it queued keep its name. Audited. Gated by rule:delete, with an all-scope grant.
+         */
+        delete: operations["delete-action-rule"];
+        options?: never;
+        head?: never;
+        /**
+         * Update an action rule
+         * @description Patches a rule (an absent field is unchanged; on and targets replace their sets). It acts on transitions from the next one; a notification already queued is not re-rendered. Audited. Gated by rule:update, with an all-scope grant.
+         */
+        patch: operations["update-action-rule"];
+        trace?: never;
+    };
     "/audit-log": {
         parameters: {
             query?: never;
@@ -645,7 +697,7 @@ export interface paths {
         };
         /**
          * Read an alarm's timeline
-         * @description The alarm's history in one list, oldest first: the events that carry it (an event rule's fire event, which opened it, and its clear event, which resolved it) merged by time with its audit rows (the raise, each acknowledgement, the clear, and a rule edit that opened or resolved it, naming the editor). At one instant an event comes before the audit row it caused. Gated by alarm:read; a component outside the caller's component read scope, and an alarm not on the component, are a non-disclosing 404.
+         * @description The alarm's history in one list, oldest first: the events that carry it (an event rule's fire event, which opened it, and its clear event, which resolved it) merged by time with its audit rows (the raise, each acknowledgement, the clear, and a rule edit that opened or resolved it, naming the editor) and the notifications its transitions queued, each at the moment it was queued with its status as it stands (#618). At one instant an event comes before the audit row it caused, and that before a notification. Gated by alarm:read; a component outside the caller's component read scope, and an alarm not on the component, are a non-disclosing 404.
          */
         get: operations["get-component-alarm-timeline"];
         put?: never;
@@ -2510,6 +2562,250 @@ export interface paths {
          * @description The node-facing exchange: a node presents its enrollment token and receives its NATS credential (url, username, password). Public (the token is the authentication); an invalid token is a 401.
          */
         post: operations["claim-node"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notification-targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List notification targets
+         * @description Lists every notification target, by name, each URL masked to its scheme and host. An all-scope directory: gated by notification_target:read with an all-scope grant (admin), and off the viewer floor, since a target is an egress destination holding a credential.
+         */
+        get: operations["list-notification-target"];
+        put?: never;
+        /**
+         * Create a notification target
+         * @description Adds a destination a notification can be sent to: a channel kind (webhook), its URL and, optionally, the platform secret it signs or authenticates with. Binding a secret takes the right to reveal it (secret:reveal, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not reveal a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.
+         */
+        post: operations["create-notification-target"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notification-targets/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a notification target
+         * @description Returns one notification target by name or uuid, its URL masked. Gated by notification_target:read with an all-scope grant.
+         */
+        get: operations["get-notification-target"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a notification target
+         * @description Removes a target. One an action rule still sends to is a 409. Audited. Gated by notification_target:delete with an all-scope grant.
+         */
+        delete: operations["delete-notification-target"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a notification target
+         * @description Patches a target's label, URL, secret or enabled flag (an absent field is unchanged; an empty secret unbinds it). Binding a secret takes the right to reveal it, as on create, and so does moving the URL of a target that keeps a bound secret (a 403 without it), since the next send would hand the secret to the new URL. Audited, the URL masked and a change to it recorded as changed. Gated by notification_target:update with an all-scope grant.
+         */
+        patch: operations["update-notification-target"];
+        trace?: never;
+    };
+    "/notification-targets/{name}:reveal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reveal a notification target's URL
+         * @description Returns the target's URL whole. Audited as reveal (the URL is not in the audit row). Gated by notification_target:reveal with an all-scope grant.
+         */
+        post: operations["reveal-notification-target"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notification-targets/{name}:test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send a test notification to a target
+         * @description Sends one synthetic message (transition test, about no alarm) to the target through the egress contract, signed or authenticated as a delivery would be, and answers what the receiver said. Records nothing but its audit row (the result, never the URL). A disabled target is still tested. Gated by notification_target:test with an all-scope grant.
+         */
+        post: operations["test-notification-target"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notification-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List notification types
+         * @description Lists every notification type (official and operator), by name: what a message about an alarm says. Fleet-wide reference data. Gated by notification_type:read.
+         */
+        get: operations["list-notification-type"];
+        put?: never;
+        /**
+         * Create a notification type
+         * @description Registers an operator notification type (official=false). A template in the sandboxed language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Place, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422, and is never stored. A taken name is a 409. Audited. Gated by notification_type:create.
+         */
+        post: operations["create-notification-type"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notification-types/{id}:rename": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rename a notification type
+         * @description Moves a custom notification type's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official notification type keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. Audited as rename. Gated by notification_type:rename.
+         */
+        post: operations["rename-notification-type"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notification-types/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a notification type
+         * @description Returns one notification type by name or uuid. Gated by notification_type:read.
+         */
+        get: operations["get-notification-type"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a notification type
+         * @description Removes an operator notification type. An official type, or one an action rule still sends, is a 409. Audited. Gated by notification_type:delete.
+         */
+        delete: operations["delete-notification-type"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a notification type
+         * @description Patches an operator type's label, description or templates (an absent field is unchanged). A template in the sandboxed language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Place, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422. An official type is read-only (409). The name moves only through :rename. Audited. Gated by notification_type:update.
+         */
+        patch: operations["update-notification-type"];
+        trace?: never;
+    };
+    "/notification-types/{name}:preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview a notification type against an alarm
+         * @description Renders the type's subject and text (or a draft of either, sent in the body) against one real alarm, exactly as a delivery of that alarm's transition would carry them, with the facts they read. Writes nothing. The alarm is named by its component and id; without an id, the component's most recently raised alarm. A draft template the sandbox refuses is a 422, one that fails to render (its output past the cap) a 422 naming it. Gated by notification_type:read; the component is resolved in the caller's component read scope, so a component outside it is a non-disclosing 404.
+         */
+        post: operations["preview-notification-type"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List notifications
+         * @description The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. Gated by notification:read.
+         */
+        get: operations["list-notification"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notifications/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a notification
+         * @description Returns one notification. One about a component outside the caller's component read scope is a non-disclosing 404. Gated by notification:read.
+         */
+        get: operations["get-notification"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notifications/{id}:retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry a failed notification
+         * @description Re-queues a failed notification for a fresh run of attempts, sending the same rendered message with the same Idempotency-Key. One that is queued or sent, or one that failed before any attempt (its rule's when did not run, or its type did not render, so it holds no message), is a 409. Audited as retry. Gated by notification:retry, whose scope resolves on the component tier; a component outside the caller's component read scope is a non-disclosing 404, one it reads but may not retry on a 403.
+         */
+        post: operations["retry-notification"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4870,6 +5166,35 @@ export interface components {
             /** Format: int64 */
             properties: number;
         };
+        ActionRuleBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ActionRuleBody.json
+             */
+            readonly $schema?: string;
+            /** Format: date-time */
+            created_at: string;
+            description?: string;
+            enabled: boolean;
+            /** @description The rule's uuid, the stable form of name */
+            id: string;
+            label?: string;
+            name: string;
+            /** @description The notification type it sends, by name; absent sends the official one for the transition (alarm-raised, alarm-cleared) */
+            notification_type?: string;
+            /** @description That type's uuid */
+            notification_type_id?: string;
+            official: boolean;
+            /** @description The alarm transitions it fires on: raised, cleared, or both */
+            on: string[] | null;
+            /** @description The notification targets it sends to, by name */
+            targets: string[] | null;
+            /** Format: date-time */
+            updated_at: string;
+            /** @description The predicate over the alarm facts (the action expression site); absent always holds */
+            when?: string;
+        };
         AddMemberInputBody: {
             /**
              * Format: uri
@@ -4988,26 +5313,46 @@ export interface components {
             /** @description The severity level the alarm was raised at, by name (see /severity-levels) */
             severity: string;
         };
+        AlarmFactBody: {
+            /** @description The key a template reads it by ({{.Name}}) */
+            name: string;
+            value: string;
+        };
         AlarmTimelineEntryBody: {
+            /** @description The action rule that queued a notification, by name */
+            action_rule?: string;
             /** @description Who acted, by name; absent when the platform acted for a rule */
             actor?: string;
             /**
              * Format: date-time
-             * @description When it happened
+             * @description When it happened (a notification: when it was queued, the transition's own moment)
              */
             at: string;
+            /**
+             * Format: int64
+             * @description A notification's attempts so far
+             */
+            attempts?: number;
+            /** @description Why a notification's last attempt failed */
+            error?: string;
             /** @description The series instance (an endpoint) an event is about */
             instance?: string;
             /**
-             * @description An event carrying the alarm (a rule's fire or clear event), or an audit row about it
+             * @description An event carrying the alarm (a rule's fire or clear event), an audit row about it, or a notification about it (#618)
              * @enum {string}
              */
-            kind: "event" | "audit";
-            /** @description The event's message, or the message the alarm was raised with */
+            kind: "event" | "audit" | "notification";
+            /** @description The event's message, the message the alarm was raised with, or a notification's rendered subject */
             message?: string;
+            /** @description A notification's uuid, what :retry names */
+            notification?: string;
             /** @description The event rule the entry belongs to, by name: the rule that wrote the event, or the rule the platform acted for */
             rule?: string;
-            /** @description The event's type (e.g. condition-started), or the audit action: raise, acknowledge or clear */
+            /** @description The target a notification goes to, by name */
+            target?: string;
+            /** @description The alarm edge a notification is about: raised or cleared */
+            transition?: string;
+            /** @description The event's type (e.g. condition-started), the audit action (raise, acknowledge or clear), or a notification's status as it stands (queued, sent or failed) */
             what: string;
         };
         AlarmTimelineOutputBody: {
@@ -5763,6 +6108,30 @@ export interface components {
             /** @description The auto-generated component name's prefix; empty inherits the nearest ancestor's */
             stem?: string;
         };
+        CreateActionRuleInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateActionRuleInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description What it is for */
+            description?: string;
+            /** @description Whether it fires (default true): a disabled rule queues nothing on a transition, and what it queued before still delivers */
+            enabled?: boolean;
+            /** @description A human label */
+            label?: string;
+            /** @description The rule's name (lowercase kebab) */
+            name: string;
+            /** @description The notification type to send, by name or uuid; absent sends the official one for the transition */
+            notification_type?: string;
+            /** @description The alarm transitions it fires on: raised, cleared, or both. Acknowledging an alarm is never one */
+            on: string[] | null;
+            /** @description The notification targets to send to, by name or uuid */
+            targets: string[] | null;
+            /** @description A predicate over the alarm facts at the action expression site (component, place, severity, severity_rank, message, transition, rule, ...; see /expressions:validate with site action); absent always holds. A refusal is a 422 with its line and column */
+            when?: string;
+        };
         CreateCalcRuleInputBody: {
             /**
              * Format: uri
@@ -6139,6 +6508,47 @@ export interface components {
             location?: string;
             /** @description Globally unique node name (lowercase letters, digits, and hyphens); it is also the node's NATS subject token, which is why the rule forbids a dot */
             name: string;
+        };
+        CreateNotificationTargetInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateNotificationTargetInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Whether deliveries go to it (default true) */
+            enabled?: boolean;
+            /**
+             * @description The channel kind
+             * @enum {string}
+             */
+            kind: "webhook";
+            /** @description A human label */
+            label?: string;
+            /** @description The target's name (lowercase kebab) */
+            name: string;
+            /** @description A platform secret, by name or uuid, of type hmac-key (signs each body) or bearer-token (sent as Authorization: Bearer) */
+            secret?: string;
+            /** @description The destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is */
+            url: string;
+        };
+        CreateNotificationTypeInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateNotificationTypeInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description What the message is for */
+            description?: string;
+            /** @description A human label */
+            label?: string;
+            /** @description The type's name (lowercase kebab) */
+            name: string;
+            /** @description The one-line subject template */
+            subject: string;
+            /** @description The body text template */
+            text: string;
         };
         CreatePrincipalInputBody: {
             /**
@@ -7387,6 +7797,15 @@ export interface components {
              */
             acronyms: string[];
         };
+        ListActionRulesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListActionRulesOutputBody.json
+             */
+            readonly $schema?: string;
+            action_rules: components["schemas"]["ActionRuleBody"][] | null;
+        };
         ListAlarmsOutputBody: {
             /**
              * Format: uri
@@ -7592,6 +8011,33 @@ export interface components {
              */
             readonly $schema?: string;
             nodes: components["schemas"]["NodeBody"][] | null;
+        };
+        ListNotificationTargetsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListNotificationTargetsOutputBody.json
+             */
+            readonly $schema?: string;
+            notification_targets: components["schemas"]["NotificationTargetBody"][] | null;
+        };
+        ListNotificationTypesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListNotificationTypesOutputBody.json
+             */
+            readonly $schema?: string;
+            notification_types: components["schemas"]["NotificationTypeBody"][] | null;
+        };
+        ListNotificationsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListNotificationsOutputBody.json
+             */
+            readonly $schema?: string;
+            notifications: components["schemas"]["NotificationBody"][] | null;
         };
         ListPrincipalSessionsOutputBody: {
             /**
@@ -8175,6 +8621,129 @@ export interface components {
             logs: components["schemas"]["LogBody"][] | null;
             node: string;
         };
+        NotificationBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/NotificationBody.json
+             */
+            readonly $schema?: string;
+            /** @description The action rule that queued it, by name (kept after the rule is deleted) */
+            action_rule: string;
+            /** @description The alarm it is about, by uuid */
+            alarm: string;
+            /**
+             * Format: int64
+             * @description Attempts made; the 8th failure is final
+             */
+            attempts: number;
+            /** @description The alarm's component, by name */
+            component: string;
+            /** @description The component's uuid */
+            component_id: string;
+            /**
+             * Format: date-time
+             * @description When it was queued: the transition's own moment
+             */
+            created_at: string;
+            /** @description The notification's uuid, the Idempotency-Key its receiver sees */
+            id: string;
+            /** @description Why the last attempt failed, never the URL or a credential */
+            last_error?: string;
+            /**
+             * Format: int64
+             * @description The receiver's HTTP status on the last attempt
+             */
+            last_status?: number;
+            /**
+             * Format: date-time
+             * @description When the tick next tries it, while queued
+             */
+            next_attempt_at?: string;
+            /** @description The notification type that rendered it, by name */
+            notification_type: string;
+            /** Format: date-time */
+            sent_at?: string;
+            /**
+             * @description queued: on its way (its next attempt at next_attempt_at); sent: the receiver answered 2xx; failed: its last attempt failed, or it was refused before one
+             * @enum {string}
+             */
+            status: "queued" | "sent" | "failed";
+            /** @description The rendered subject */
+            subject: string;
+            /** @description The target it goes to, by name */
+            target: string;
+            /** @description The rendered text */
+            text: string;
+            /**
+             * @description The alarm edge it is about
+             * @enum {string}
+             */
+            transition: "raised" | "cleared";
+        };
+        NotificationSettings: {
+            /** @description The console's base URL as a receiver of a notification reaches it (https://omniglass.example.com); the prefix of the Link a template reads. Empty leaves Link empty */
+            console_url: string;
+            /** @description The internal destinations a notification may reach, each a CIDR (10.20.0.0/16), an address, or a host name (chat.corp.example). Everything private, loopback or link-local is refused unless named here; a cloud metadata address is refused even when it is; plain http is admitted only to a destination named here */
+            egress_allow: string[];
+        };
+        NotificationTargetBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/NotificationTargetBody.json
+             */
+            readonly $schema?: string;
+            /**
+             * @description How a send proves itself: hmac signs each body with the bound hmac-key (X-Omniglass-Signature), bearer presents the bound bearer-token, none sends unsigned
+             * @enum {string}
+             */
+            auth: "none" | "hmac" | "bearer";
+            /** Format: date-time */
+            created_at: string;
+            /** @description Whether deliveries go to it; a disabled target is skipped */
+            enabled: boolean;
+            /** @description The target's uuid, the stable form of name */
+            id: string;
+            /**
+             * @description The channel kind: webhook posts a signed JSON envelope to the URL
+             * @enum {string}
+             */
+            kind: "webhook";
+            label?: string;
+            name: string;
+            /** @description The platform secret the send signs (an hmac-key) or authenticates (a bearer-token) with, by name; absent sends unsigned */
+            secret?: string;
+            /** @description The bound secret's uuid, the stable form of secret */
+            secret_id?: string;
+            /** Format: date-time */
+            updated_at: string;
+            /** @description The destination, masked to its scheme and host (the path and query often carry a credential); :reveal returns it whole */
+            url: string;
+        };
+        NotificationTypeBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/NotificationTypeBody.json
+             */
+            readonly $schema?: string;
+            /** Format: date-time */
+            created_at: string;
+            description?: string;
+            /** @description The type's uuid, the stable form of name */
+            id: string;
+            label?: string;
+            name: string;
+            /** @description Shipped with the platform and read-only */
+            official: boolean;
+            /** @description The one-line subject template */
+            subject: string;
+            /** @description The body text template */
+            text: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
         OwnerStruct: {
             /**
              * @description The owner arc: a component, or a system (telemetry about the system as a whole, such as a cloud service's account of the room it serves). A system batch carries no log lines, since a log line is component-owned
@@ -8333,6 +8902,46 @@ export interface components {
             window_since: string;
             /** Format: date-time */
             window_until: string;
+        };
+        PreviewNotificationTypeInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/PreviewNotificationTypeInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The alarm's id; absent previews the component's most recently raised alarm */
+            alarm?: string;
+            /** @description The component the alarm is on, by name or dotted address */
+            component: string;
+            /** @description A draft subject template to render instead of the stored one, so an editor previews before it saves */
+            subject?: string;
+            /** @description A draft text template to render instead of the stored one */
+            text?: string;
+            /**
+             * @description The edge to render for; absent reads the alarm's own state (cleared when it is, raised otherwise)
+             * @enum {string}
+             */
+            transition?: "raised" | "cleared";
+        };
+        PreviewNotificationTypeOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/PreviewNotificationTypeOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The alarm facts the templates read, every key in its declared order (an absent fact is empty) */
+            facts: components["schemas"]["AlarmFactBody"][] | null;
+            /** @description The rendered subject, as a delivery would carry it */
+            subject: string;
+            /** @description The rendered text, as a delivery would carry it */
+            text: string;
+            /**
+             * @description The edge it was rendered for
+             * @enum {string}
+             */
+            transition: "raised" | "cleared";
         };
         PreviewSeriesBody: {
             /** @description The component, by name */
@@ -8995,6 +9604,17 @@ export interface components {
             /** @description The SHA256 fingerprint of a changed key the operator now trusts, the key the endpoint's transport pins (the offered_key a key refusal names on the component's reachability read): an ssh endpoint's host key, which becomes its declared ssh-host-key, or a tls or https endpoint's certificate public key, which becomes its declared tls-certificate. The session redials onto it. While a key refusal holds, it must be that exact offered key: any other is a 409 that changes nothing (the refusal on record is the node's last word, so to trust a key the component presents since, retry without a key first). With no key refusal held it declares a pin ahead of time. Omit to retry with the pin unchanged */
             host_key?: string;
         };
+        RevealNotificationTargetOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/RevealNotificationTargetOutputBody.json
+             */
+            readonly $schema?: string;
+            name: string;
+            /** @description The destination URL, whole */
+            url: string;
+        };
         RevealSecretOutputBody: {
             /**
              * Format: uri
@@ -9408,6 +10028,7 @@ export interface components {
         Settings: {
             keybindings: components["schemas"]["Keybindings"];
             label: components["schemas"]["LabelSettings"];
+            notification: components["schemas"]["NotificationSettings"];
             retention: components["schemas"]["RetentionSettings"];
             ui: components["schemas"]["UISettings"];
         };
@@ -10250,6 +10871,23 @@ export interface components {
             /** @description The system type the system is classified as */
             system_type?: string;
         };
+        TestNotificationTargetOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/TestNotificationTargetOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Whether the receiver answered 2xx */
+            ok: boolean;
+            /** @description Why it failed, as a delivery would record it; never the URL or a credential */
+            reason?: string;
+            /**
+             * Format: int64
+             * @description The receiver's HTTP status; 0 when no answer came (refused, unreachable, TLS, timeout)
+             */
+            status: number;
+        };
         Transport: {
             built: boolean;
             description: string;
@@ -10297,6 +10935,28 @@ export interface components {
             source: string;
             /** @description The push transport the source sent over */
             transport: string;
+        };
+        UpdateActionRuleInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateActionRuleInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description What it is for */
+            description?: string;
+            /** @description Whether it fires: a disabled rule queues nothing on a transition, and what it queued before still delivers; re-enabled, it acts on the next transition */
+            enabled?: boolean;
+            /** @description A human label (empty clears it) */
+            label?: string;
+            /** @description The type to send (empty returns to the official one per transition) */
+            notification_type?: string;
+            /** @description The transitions it fires on (replaces the set) */
+            on?: string[];
+            /** @description The targets (replaces the set) */
+            targets?: string[];
+            /** @description The predicate (empty always holds) */
+            when?: string;
         };
         UpdateCalcRuleInputBody: {
             /**
@@ -10546,6 +11206,38 @@ export interface components {
             /** @description Set the node's location by name or id, or "" to clear it */
             location?: string;
         };
+        UpdateNotificationTargetInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateNotificationTargetInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Whether deliveries go to it */
+            enabled?: boolean;
+            /** @description A human label (empty clears it) */
+            label?: string;
+            /** @description A platform secret by name or uuid; empty unbinds it */
+            secret?: string;
+            /** @description The destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is */
+            url?: string;
+        };
+        UpdateNotificationTypeInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateNotificationTypeInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description What the message is for */
+            description?: string;
+            /** @description A human label (empty clears it) */
+            label?: string;
+            /** @description The one-line subject template */
+            subject?: string;
+            /** @description The body text template */
+            text?: string;
+        };
         UpdatePrincipalInputBody: {
             /**
              * Format: uri
@@ -10768,10 +11460,10 @@ export interface components {
              */
             owner_kind?: "component" | "system";
             /**
-             * @description Where the expression is written: calc, a calc rule's reduce; criteria, an event rule's fire_criteria or clear_criteria
+             * @description Where the expression is written: action, an action rule's when; calc, a calc rule's reduce; criteria, an event rule's fire_criteria or clear_criteria
              * @enum {string}
              */
-            site: "calc" | "criteria";
+            site: "action" | "calc" | "criteria";
             /** @description The expression */
             source: string;
         };
@@ -10864,6 +11556,166 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    "list-action-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListActionRulesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-action-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateActionRuleInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionRuleBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-action-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The rule's name or uuid */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionRuleBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-action-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The rule's name or uuid */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-action-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The rule's name or uuid */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateActionRuleInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionRuleBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "list-audit-log": {
         parameters: {
             query?: {
@@ -16175,6 +17027,564 @@ export interface operations {
             };
             /** @description Internal Server Error */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-notification-target": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListNotificationTargetsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-notification-target": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateNotificationTargetInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationTargetBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-notification-target": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The target's name or uuid */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationTargetBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-notification-target": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The target's name or uuid */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-notification-target": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The target's name or uuid */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateNotificationTargetInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationTargetBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "reveal-notification-target": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The target's name or uuid */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevealNotificationTargetOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "test-notification-target": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The target's name or uuid */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestNotificationTargetOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-notification-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListNotificationTypesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-notification-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateNotificationTypeInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationTypeBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "rename-notification-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The row, by its current name or its uuid */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameRegistryInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationTypeBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-notification-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The notification type's name or uuid */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationTypeBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-notification-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The notification type's name or uuid */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-notification-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The notification type's name or uuid */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateNotificationTypeInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationTypeBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "preview-notification-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The notification type's name or uuid */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreviewNotificationTypeInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreviewNotificationTypeOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-notification": {
+        parameters: {
+            query?: {
+                /** @description Only the notifications about this alarm (its uuid) */
+                alarm?: string;
+                /** @description Only those to this target, by name */
+                target?: string;
+                /** @description Only those in this status */
+                status?: "queued" | "sent" | "failed" | "";
+                /** @description At most this many, newest first (default 100) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListNotificationsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-notification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The notification's uuid */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "retry-notification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The notification's uuid */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationBody"];
+                };
+            };
+            /** @description Error */
+            default: {
                 headers: {
                     [name: string]: unknown;
                 };

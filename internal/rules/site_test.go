@@ -16,8 +16,8 @@ func TestCriteriaSite(t *testing.T) {
 	if !ok {
 		t.Fatal("the criteria site is not registered")
 	}
-	if names := SiteNames(); !reflect.DeepEqual(names, []string{"calc", "criteria"}) {
-		t.Errorf("SiteNames() = %v, want [calc criteria]", names)
+	if names := SiteNames(); !reflect.DeepEqual(names, []string{"action", "calc", "criteria"}) {
+		t.Errorf("SiteNames() = %v, want [action calc criteria]", names)
 	}
 	if _, ok := LookupSite("filter"); ok {
 		t.Error("an unregistered site was found")
@@ -58,11 +58,11 @@ func TestSiteFactsAreTheEnvs(t *testing.T) {
 	if err := json.Unmarshal(raw, &doc); err != nil {
 		t.Fatal(err)
 	}
-	if len(doc.Sites) != 2 || doc.Sites[0].Name != "calc" || doc.Sites[1].Name != "criteria" || !doc.Sites[1].KeyRequired {
+	if len(doc.Sites) != 3 || doc.Sites[0].Name != "action" || doc.Sites[1].Name != "calc" || doc.Sites[2].Name != "criteria" || !doc.Sites[2].KeyRequired || doc.Sites[0].KeyRequired {
 		t.Fatalf("sites = %+v", doc.Sites)
 	}
 	site, _ := LookupSite("criteria")
-	got := doc.Sites[1]
+	got := doc.Sites[2]
 	if len(got.Variants) != len(site.Variants) {
 		t.Fatalf("%d variants, want %d", len(got.Variants), len(site.Variants))
 	}

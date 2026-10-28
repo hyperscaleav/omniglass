@@ -185,10 +185,12 @@ export async function fetchMyAvatar(): Promise<string | null> {
 // admin_sensitivity, enforced server-side, then fences individual rows).
 // `platform` is here for a different reason: it is not a resource anyone reads, it
 // is install-wide AUTHORITY (the right to write at the cascade's least-specific
-// tier), and full-fleet reach must not confer it. Keep this in sync with the Go
-// set: the server's copy is what admits the request, and a console that disagrees
-// either hides a control that works or offers one the server refuses.
-const SENSITIVE_RESOURCES = new Set(["secret", "platform"]);
+// tier), and full-fleet reach must not confer it. `settings` is install
+// configuration, and `notification_target` an egress destination holding a
+// credential (#618). Keep this in sync with the Go set: the server's copy is what
+// admits the request, and a console that disagrees either hides a control that
+// works or offers one the server refuses.
+const SENSITIVE_RESOURCES = new Set(["secret", "settings", "platform", "notification_target"]);
 
 // A permission is a colon-delimited topic pattern, matched exactly like the server
 // rbac core that authorizes the request: a literal matches itself, `*` matches

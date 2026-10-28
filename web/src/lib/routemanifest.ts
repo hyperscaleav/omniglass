@@ -97,7 +97,7 @@ export const ROUTE_MANIFEST: RouteEntry[] = [
   { path: "/location-types", shell: "catalog", page: "LocationTypes", smoke: "/location-types" },
   { path: "/secret-types", shell: "catalog", page: "SecretTypes", smoke: "/secret-types" },
   { path: "/tags", shell: "catalog", page: "Tags", smoke: "/tags" },
-  // The catalog's routed soon slots (catalog.ts's CATALOG_STUB_PATHS), rendering
-  // their stub inside the pane.
-  { path: "/notifications", shell: "catalog", page: "SectionStub", smoke: "/notifications" },
+  // The notification types (#618), the commands' outbound peer; it was the
+  // catalog's last routed soon slot.
+  { path: "/notifications", shell: "catalog", page: "Notifications", smoke: "/notifications" },
 ];

@@ -17,3 +17,15 @@
   the gateway cleans every sample, event and node-log write the same way (`cleanPropertyWrites`
   and its siblings, internal/storage/nul_clean.go), and any value the database can refuse must be
   cleaned or refused before a composed transaction, never left to fail it.
+- **Third instance (#1321 review, fixed in the same slice):** a notification template's string
+  literal (`{{"\x00"}}`, `{{"\xff"}}`) rendered a NUL or invalid UTF-8 into a notification row
+  inserted inside the alarm transition, so a raise or clear (and the ingest batch carrying it)
+  failed. Fix: such output is a render failure recorded on the row (`renderNotification`), and the
+  whole notification write runs under a savepoint that a database error rolls back to, so it can
+  never fail the transition.
+- **Third instance (#1321 review, fixed in the same slice):** a notification template's string
+  literal (`{{"\x00"}}`, `{{"\xff"}}`) rendered a NUL or invalid UTF-8 into a notification row
+  inserted inside the alarm transition, so a raise or clear (and the ingest batch carrying it)
+  failed. Fix: such output is a render failure recorded on the row (`renderNotification`), and the
+  whole notification write runs under a savepoint that a database error rolls back to, so it can
+  never fail the transition.

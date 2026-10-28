@@ -21,6 +21,68 @@ components:
         - events
         - logs
       type: object
+    ActionRuleBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ActionRuleBody.json
+          format: uri
+          readOnly: true
+          type: string
+        created_at:
+          format: date-time
+          type: string
+        description:
+          type: string
+        enabled:
+          type: boolean
+        id:
+          description: The rule's uuid, the stable form of name
+          type: string
+        label:
+          type: string
+        name:
+          type: string
+        notification_type:
+          description: The notification type it sends, by name; absent sends the official one for the transition (alarm-raised, alarm-cleared)
+          type: string
+        notification_type_id:
+          description: That type's uuid
+          type: string
+        official:
+          type: boolean
+        "on":
+          description: "The alarm transitions it fires on: raised, cleared, or both"
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        targets:
+          description: The notification targets it sends to, by name
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        updated_at:
+          format: date-time
+          type: string
+        when:
+          description: The predicate over the alarm facts (the action expression site); absent always holds
+          type: string
+      required:
+        - id
+        - name
+        - "on"
+        - targets
+        - enabled
+        - official
+        - created_at
+        - updated_at
+      type: object
     AddMemberInputBody:
       additionalProperties: false
       properties:
@@ -235,33 +297,65 @@ components:
         - active
         - acknowledged
       type: object
+    AlarmFactBody:
+      additionalProperties: false
+      properties:
+        name:
+          description: The key a template reads it by ({{.Name}})
+          type: string
+        value:
+          type: string
+      required:
+        - name
+        - value
+      type: object
     AlarmTimelineEntryBody:
       additionalProperties: false
       properties:
+        action_rule:
+          description: The action rule that queued a notification, by name
+          type: string
         actor:
           description: Who acted, by name; absent when the platform acted for a rule
           type: string
         at:
-          description: When it happened
+          description: "When it happened (a notification: when it was queued, the transition's own moment)"
           format: date-time
+          type: string
+        attempts:
+          description: A notification's attempts so far
+          format: int64
+          type: integer
+        error:
+          description: Why a notification's last attempt failed
           type: string
         instance:
           description: The series instance (an endpoint) an event is about
           type: string
         kind:
-          description: An event carrying the alarm (a rule's fire or clear event), or an audit row about it
+          description: An event carrying the alarm (a rule's fire or clear event), an audit row about it, or a notification about it (#618)
           enum:
             - event
             - audit
+            - notification
           type: string
         message:
-          description: The event's message, or the message the alarm was raised with
+          description: The event's message, the message the alarm was raised with, or a notification's rendered subject
+          type: string
+        notification:
+          description: A notification's uuid, what :retry names
           type: string
         rule:
           description: "The event rule the entry belongs to, by name: the rule that wrote the event, or the rule the platform acted for"
           type: string
+        target:
+          description: The target a notification goes to, by name
+          type: string
+        transition:
+          description: "The alarm edge a notification is about: raised or cleared"
+          type: string
         what:
-          description: "The event's type (e.g. condition-started), or the audit action: raise, acknowledge or clear"
+          description: The event's type (e.g. condition-started), the audit action (raise, acknowledge or clear), or a notification's status as it stands (queued, sent or failed)
           type: string
       required:
         - at
@@ -1529,6 +1623,56 @@ components:
         - official
         - forked
       type: object
+    CreateActionRuleInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateActionRuleInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        description:
+          description: What it is for
+          type: string
+        enabled:
+          description: "Whether it fires (default true): a disabled rule queues nothing on a transition, and what it queued before still delivers"
+          type: boolean
+        label:
+          description: A human label
+          type: string
+        name:
+          description: The rule's name (lowercase kebab)
+          minLength: 1
+          type: string
+        notification_type:
+          description: The notification type to send, by name or uuid; absent sends the official one for the transition
+          type: string
+        "on":
+          description: "The alarm transitions it fires on: raised, cleared, or both. Acknowledging an alarm is never one"
+          items:
+            type: string
+          minItems: 1
+          type:
+            - array
+            - "null"
+        targets:
+          description: The notification targets to send to, by name or uuid
+          items:
+            type: string
+          minItems: 1
+          type:
+            - array
+            - "null"
+        when:
+          description: A predicate over the alarm facts at the action expression site (component, place, severity, severity_rank, message, transition, rule, ...; see /expressions:validate with site action); absent always holds. A refusal is a 422 with its line and column
+          type: string
+      required:
+        - name
+        - "on"
+        - targets
+      type: object
     CreateCalcRuleInputBody:
       additionalProperties: false
       properties:
@@ -2177,6 +2321,74 @@ components:
           type: string
       required:
         - name
+      type: object
+    CreateNotificationTargetInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateNotificationTargetInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        enabled:
+          description: Whether deliveries go to it (default true)
+          type: boolean
+        kind:
+          description: The channel kind
+          enum:
+            - webhook
+          type: string
+        label:
+          description: A human label
+          type: string
+        name:
+          description: The target's name (lowercase kebab)
+          minLength: 1
+          type: string
+        secret:
+          description: "A platform secret, by name or uuid, of type hmac-key (signs each body) or bearer-token (sent as Authorization: Bearer)"
+          type: string
+        url:
+          description: "The destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is"
+          minLength: 1
+          type: string
+      required:
+        - name
+        - kind
+        - url
+      type: object
+    CreateNotificationTypeInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateNotificationTypeInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        description:
+          description: What the message is for
+          type: string
+        label:
+          description: A human label
+          type: string
+        name:
+          description: The type's name (lowercase kebab)
+          minLength: 1
+          type: string
+        subject:
+          description: The one-line subject template
+          type: string
+        text:
+          description: The body text template
+          type: string
+      required:
+        - name
+        - subject
+        - text
       type: object
     CreatePrincipalInputBody:
       additionalProperties: false
@@ -4313,6 +4525,25 @@ components:
       required:
         - acronyms
       type: object
+    ListActionRulesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListActionRulesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        action_rules:
+          items:
+            $ref: "#/components/schemas/ActionRuleBody"
+          type:
+            - array
+            - "null"
+      required:
+        - action_rules
+      type: object
     ListAlarmsOutputBody:
       additionalProperties: false
       properties:
@@ -4746,6 +4977,63 @@ components:
             - "null"
       required:
         - nodes
+      type: object
+    ListNotificationTargetsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListNotificationTargetsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        notification_targets:
+          items:
+            $ref: "#/components/schemas/NotificationTargetBody"
+          type:
+            - array
+            - "null"
+      required:
+        - notification_targets
+      type: object
+    ListNotificationTypesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListNotificationTypesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        notification_types:
+          items:
+            $ref: "#/components/schemas/NotificationTypeBody"
+          type:
+            - array
+            - "null"
+      required:
+        - notification_types
+      type: object
+    ListNotificationsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListNotificationsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        notifications:
+          items:
+            $ref: "#/components/schemas/NotificationBody"
+          type:
+            - array
+            - "null"
+      required:
+        - notifications
       type: object
     ListPrincipalSessionsOutputBody:
       additionalProperties: false
@@ -5866,6 +6154,208 @@ components:
         - node
         - logs
       type: object
+    NotificationBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/NotificationBody.json
+          format: uri
+          readOnly: true
+          type: string
+        action_rule:
+          description: The action rule that queued it, by name (kept after the rule is deleted)
+          type: string
+        alarm:
+          description: The alarm it is about, by uuid
+          type: string
+        attempts:
+          description: Attempts made; the 8th failure is final
+          format: int64
+          type: integer
+        component:
+          description: The alarm's component, by name
+          type: string
+        component_id:
+          description: The component's uuid
+          type: string
+        created_at:
+          description: "When it was queued: the transition's own moment"
+          format: date-time
+          type: string
+        id:
+          description: The notification's uuid, the Idempotency-Key its receiver sees
+          type: string
+        last_error:
+          description: Why the last attempt failed, never the URL or a credential
+          type: string
+        last_status:
+          description: The receiver's HTTP status on the last attempt
+          format: int64
+          type: integer
+        next_attempt_at:
+          description: When the tick next tries it, while queued
+          format: date-time
+          type: string
+        notification_type:
+          description: The notification type that rendered it, by name
+          type: string
+        sent_at:
+          format: date-time
+          type: string
+        status:
+          description: "queued: on its way (its next attempt at next_attempt_at); sent: the receiver answered 2xx; failed: its last attempt failed, or it was refused before one"
+          enum:
+            - queued
+            - sent
+            - failed
+          type: string
+        subject:
+          description: The rendered subject
+          type: string
+        target:
+          description: The target it goes to, by name
+          type: string
+        text:
+          description: The rendered text
+          type: string
+        transition:
+          description: The alarm edge it is about
+          enum:
+            - raised
+            - cleared
+          type: string
+      required:
+        - id
+        - alarm
+        - component
+        - component_id
+        - transition
+        - action_rule
+        - notification_type
+        - target
+        - subject
+        - text
+        - status
+        - attempts
+        - created_at
+      type: object
+    NotificationSettings:
+      additionalProperties: false
+      properties:
+        console_url:
+          description: The console's base URL as a receiver of a notification reaches it (https://omniglass.example.com); the prefix of the Link a template reads. Empty leaves Link empty
+          type: string
+        egress_allow:
+          description: The internal destinations a notification may reach, each a CIDR (10.20.0.0/16), an address, or a host name (chat.corp.example). Everything private, loopback or link-local is refused unless named here; a cloud metadata address is refused even when it is; plain http is admitted only to a destination named here
+          items:
+            type: string
+          type: array
+      required:
+        - console_url
+        - egress_allow
+      type: object
+    NotificationTargetBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/NotificationTargetBody.json
+          format: uri
+          readOnly: true
+          type: string
+        auth:
+          description: "How a send proves itself: hmac signs each body with the bound hmac-key (X-Omniglass-Signature), bearer presents the bound bearer-token, none sends unsigned"
+          enum:
+            - none
+            - hmac
+            - bearer
+          type: string
+        created_at:
+          format: date-time
+          type: string
+        enabled:
+          description: Whether deliveries go to it; a disabled target is skipped
+          type: boolean
+        id:
+          description: The target's uuid, the stable form of name
+          type: string
+        kind:
+          description: "The channel kind: webhook posts a signed JSON envelope to the URL"
+          enum:
+            - webhook
+          type: string
+        label:
+          type: string
+        name:
+          type: string
+        secret:
+          description: The platform secret the send signs (an hmac-key) or authenticates (a bearer-token) with, by name; absent sends unsigned
+          type: string
+        secret_id:
+          description: The bound secret's uuid, the stable form of secret
+          type: string
+        updated_at:
+          format: date-time
+          type: string
+        url:
+          description: The destination, masked to its scheme and host (the path and query often carry a credential); :reveal returns it whole
+          type: string
+      required:
+        - id
+        - name
+        - kind
+        - url
+        - auth
+        - enabled
+        - created_at
+        - updated_at
+      type: object
+    NotificationTypeBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/NotificationTypeBody.json
+          format: uri
+          readOnly: true
+          type: string
+        created_at:
+          format: date-time
+          type: string
+        description:
+          type: string
+        id:
+          description: The type's uuid, the stable form of name
+          type: string
+        label:
+          type: string
+        name:
+          type: string
+        official:
+          description: Shipped with the platform and read-only
+          type: boolean
+        subject:
+          description: The one-line subject template
+          type: string
+        text:
+          description: The body text template
+          type: string
+        updated_at:
+          format: date-time
+          type: string
+      required:
+        - id
+        - name
+        - subject
+        - text
+        - official
+        - created_at
+        - updated_at
+      type: object
     OwnerStruct:
       additionalProperties: false
       properties:
@@ -6142,6 +6632,73 @@ components:
         - series_total
         - truncated
         - sustains_ignored
+      type: object
+    PreviewNotificationTypeInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/PreviewNotificationTypeInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        alarm:
+          description: The alarm's id; absent previews the component's most recently raised alarm
+          type: string
+        component:
+          description: The component the alarm is on, by name or dotted address
+          minLength: 1
+          type: string
+        subject:
+          description: A draft subject template to render instead of the stored one, so an editor previews before it saves
+          type: string
+        text:
+          description: A draft text template to render instead of the stored one
+          type: string
+        transition:
+          description: The edge to render for; absent reads the alarm's own state (cleared when it is, raised otherwise)
+          enum:
+            - raised
+            - cleared
+          type: string
+      required:
+        - component
+      type: object
+    PreviewNotificationTypeOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/PreviewNotificationTypeOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        facts:
+          description: The alarm facts the templates read, every key in its declared order (an absent fact is empty)
+          items:
+            $ref: "#/components/schemas/AlarmFactBody"
+          type:
+            - array
+            - "null"
+        subject:
+          description: The rendered subject, as a delivery would carry it
+          type: string
+        text:
+          description: The rendered text, as a delivery would carry it
+          type: string
+        transition:
+          description: The edge it was rendered for
+          enum:
+            - raised
+            - cleared
+          type: string
+      required:
+        - subject
+        - text
+        - transition
+        - facts
       type: object
     PreviewSeriesBody:
       additionalProperties: false
@@ -7289,6 +7846,25 @@ components:
           description: "The SHA256 fingerprint of a changed key the operator now trusts, the key the endpoint's transport pins (the offered_key a key refusal names on the component's reachability read): an ssh endpoint's host key, which becomes its declared ssh-host-key, or a tls or https endpoint's certificate public key, which becomes its declared tls-certificate. The session redials onto it. While a key refusal holds, it must be that exact offered key: any other is a 409 that changes nothing (the refusal on record is the node's last word, so to trust a key the component presents since, retry without a key first). With no key refusal held it declares a pin ahead of time. Omit to retry with the pin unchanged"
           type: string
       type: object
+    RevealNotificationTargetOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/RevealNotificationTargetOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        name:
+          type: string
+        url:
+          description: The destination URL, whole
+          type: string
+      required:
+        - name
+        - url
+      type: object
     RevealSecretOutputBody:
       additionalProperties: false
       properties:
@@ -8018,6 +8594,8 @@ components:
           $ref: "#/components/schemas/Keybindings"
         label:
           $ref: "#/components/schemas/LabelSettings"
+        notification:
+          $ref: "#/components/schemas/NotificationSettings"
         retention:
           $ref: "#/components/schemas/RetentionSettings"
         ui:
@@ -8027,6 +8605,7 @@ components:
         - keybindings
         - label
         - retention
+        - notification
       type: object
     SettingsMeOutputBody:
       additionalProperties: false
@@ -9600,6 +10179,30 @@ components:
         - standard
         - roles
       type: object
+    TestNotificationTargetOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/TestNotificationTargetOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        ok:
+          description: Whether the receiver answered 2xx
+          type: boolean
+        reason:
+          description: Why it failed, as a delivery would record it; never the URL or a credential
+          type: string
+        status:
+          description: The receiver's HTTP status; 0 when no answer came (refused, unreachable, TLS, timeout)
+          format: int64
+          type: integer
+      required:
+        - ok
+        - status
+      type: object
     Transport:
       additionalProperties: false
       properties:
@@ -9680,6 +10283,42 @@ components:
         - last_heard_at
         - count
         - last_message
+      type: object
+    UpdateActionRuleInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateActionRuleInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        description:
+          description: What it is for
+          type: string
+        enabled:
+          description: "Whether it fires: a disabled rule queues nothing on a transition, and what it queued before still delivers; re-enabled, it acts on the next transition"
+          type: boolean
+        label:
+          description: A human label (empty clears it)
+          type: string
+        notification_type:
+          description: The type to send (empty returns to the official one per transition)
+          type: string
+        "on":
+          description: The transitions it fires on (replaces the set)
+          items:
+            type: string
+          type: array
+        targets:
+          description: The targets (replaces the set)
+          items:
+            type: string
+          type: array
+        when:
+          description: The predicate (empty always holds)
+          type: string
       type: object
     UpdateCalcRuleInputBody:
       additionalProperties: false
@@ -10046,6 +10685,52 @@ components:
           description: Set the node's location by name or id, or "" to clear it
           type: string
       type: object
+    UpdateNotificationTargetInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateNotificationTargetInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        enabled:
+          description: Whether deliveries go to it
+          type: boolean
+        label:
+          description: A human label (empty clears it)
+          type: string
+        secret:
+          description: A platform secret by name or uuid; empty unbinds it
+          type: string
+        url:
+          description: "The destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is"
+          type: string
+      type: object
+    UpdateNotificationTypeInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateNotificationTypeInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        description:
+          description: What the message is for
+          type: string
+        label:
+          description: A human label (empty clears it)
+          type: string
+        subject:
+          description: The one-line subject template
+          type: string
+        text:
+          description: The body text template
+          type: string
+      type: object
     UpdatePrincipalInputBody:
       additionalProperties: false
       properties:
@@ -10385,8 +11070,9 @@ components:
             - system
           type: string
         site:
-          description: "Where the expression is written: calc, a calc rule's reduce; criteria, an event rule's fire_criteria or clear_criteria"
+          description: "Where the expression is written: action, an action rule's when; calc, a calc rule's reduce; criteria, an event rule's fire_criteria or clear_criteria"
           enum:
+            - action
             - calc
             - criteria
           type: string
@@ -10558,6 +11244,130 @@ info:
   version: 0.0.1-skeleton
 openapi: 3.1.0
 paths:
+  /action-rules:
+    get:
+      description: "Lists every action rule, by name: on which alarm transitions, when, and what it sends to which targets. Gated by rule:read."
+      operationId: list-action-rule
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListActionRulesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List action rules
+      x-omniglass-permission: rule:read
+    post:
+      description: "Adds a rule that, on an alarm's raise or clear, when its predicate holds over the alarm facts, queues one notification per target in the transition's own transaction, which the server's tick then delivers. An unknown transition, type or target, or a predicate that does not compile, is a 422; a taken name a 409. Audited. Gated by rule:create, with an all-scope grant: a rule watches the whole fleet."
+      operationId: create-action-rule
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateActionRuleInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionRuleBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create an action rule
+      x-omniglass-permission: rule:create
+  /action-rules/{name}:
+    delete:
+      description: Removes a rule; the notifications it queued keep its name. Audited. Gated by rule:delete, with an all-scope grant.
+      operationId: delete-action-rule
+      parameters:
+        - description: The rule's name or uuid
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The rule's name or uuid
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete an action rule
+      x-omniglass-permission: rule:delete
+    get:
+      description: Returns one action rule by name or uuid. Gated by rule:read.
+      operationId: get-action-rule
+      parameters:
+        - description: The rule's name or uuid
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The rule's name or uuid
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionRuleBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get an action rule
+      x-omniglass-permission: rule:read
+    patch:
+      description: Patches a rule (an absent field is unchanged; on and targets replace their sets). It acts on transitions from the next one; a notification already queued is not re-rendered. Audited. Gated by rule:update, with an all-scope grant.
+      operationId: update-action-rule
+      parameters:
+        - description: The rule's name or uuid
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The rule's name or uuid
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateActionRuleInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionRuleBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update an action rule
+      x-omniglass-permission: rule:update
   /audit-log:
     get:
       description: Recent audit-trail events, newest first, each with the actor and, for an impersonated action, the real actor behind it. Read-only; gated by audit:read:admin (admin/owner only, since the audit trail is admin-sensitive).
@@ -11668,7 +12478,7 @@ paths:
       x-omniglass-permission: alarm:acknowledge
   /components/{name}/alarms/{id}:timeline:
     get:
-      description: "The alarm's history in one list, oldest first: the events that carry it (an event rule's fire event, which opened it, and its clear event, which resolved it) merged by time with its audit rows (the raise, each acknowledgement, the clear, and a rule edit that opened or resolved it, naming the editor). At one instant an event comes before the audit row it caused. Gated by alarm:read; a component outside the caller's component read scope, and an alarm not on the component, are a non-disclosing 404."
+      description: "The alarm's history in one list, oldest first: the events that carry it (an event rule's fire event, which opened it, and its clear event, which resolved it) merged by time with its audit rows (the raise, each acknowledgement, the clear, and a rule edit that opened or resolved it, naming the editor) and the notifications its transitions queued, each at the moment it was queued with its status as it stands (#618). At one instant an event comes before the audit row it caused, and that before a notification. Gated by alarm:read; a component outside the caller's component read scope, and an alarm not on the component, are a non-disclosing 404."
       operationId: get-component-alarm-timeline
       parameters:
         - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
@@ -15122,6 +15932,486 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Internal Server Error
       summary: Claim a node identity in exchange for its NATS credential
+  /notification-targets:
+    get:
+      description: "Lists every notification target, by name, each URL masked to its scheme and host. An all-scope directory: gated by notification_target:read with an all-scope grant (admin), and off the viewer floor, since a target is an egress destination holding a credential."
+      operationId: list-notification-target
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListNotificationTargetsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List notification targets
+      x-omniglass-permission: notification_target:read
+    post:
+      description: "Adds a destination a notification can be sent to: a channel kind (webhook), its URL and, optionally, the platform secret it signs or authenticates with. Binding a secret takes the right to reveal it (secret:reveal, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not reveal a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant."
+      operationId: create-notification-target
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateNotificationTargetInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationTargetBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create a notification target
+      x-omniglass-permission: notification_target:create
+  /notification-targets/{name}:
+    delete:
+      description: Removes a target. One an action rule still sends to is a 409. Audited. Gated by notification_target:delete with an all-scope grant.
+      operationId: delete-notification-target
+      parameters:
+        - description: The target's name or uuid
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The target's name or uuid
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a notification target
+      x-omniglass-permission: notification_target:delete
+    get:
+      description: Returns one notification target by name or uuid, its URL masked. Gated by notification_target:read with an all-scope grant.
+      operationId: get-notification-target
+      parameters:
+        - description: The target's name or uuid
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The target's name or uuid
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationTargetBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get a notification target
+      x-omniglass-permission: notification_target:read
+    patch:
+      description: Patches a target's label, URL, secret or enabled flag (an absent field is unchanged; an empty secret unbinds it). Binding a secret takes the right to reveal it, as on create, and so does moving the URL of a target that keeps a bound secret (a 403 without it), since the next send would hand the secret to the new URL. Audited, the URL masked and a change to it recorded as changed. Gated by notification_target:update with an all-scope grant.
+      operationId: update-notification-target
+      parameters:
+        - description: The target's name or uuid
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The target's name or uuid
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateNotificationTargetInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationTargetBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a notification target
+      x-omniglass-permission: notification_target:update
+  /notification-targets/{name}:reveal:
+    post:
+      description: Returns the target's URL whole. Audited as reveal (the URL is not in the audit row). Gated by notification_target:reveal with an all-scope grant.
+      operationId: reveal-notification-target
+      parameters:
+        - description: The target's name or uuid
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The target's name or uuid
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RevealNotificationTargetOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Reveal a notification target's URL
+      x-omniglass-permission: notification_target:reveal
+  /notification-targets/{name}:test:
+    post:
+      description: Sends one synthetic message (transition test, about no alarm) to the target through the egress contract, signed or authenticated as a delivery would be, and answers what the receiver said. Records nothing but its audit row (the result, never the URL). A disabled target is still tested. Gated by notification_target:test with an all-scope grant.
+      operationId: test-notification-target
+      parameters:
+        - description: The target's name or uuid
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The target's name or uuid
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestNotificationTargetOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Send a test notification to a target
+      x-omniglass-permission: notification_target:test
+  /notification-types:
+    get:
+      description: "Lists every notification type (official and operator), by name: what a message about an alarm says. Fleet-wide reference data. Gated by notification_type:read."
+      operationId: list-notification-type
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListNotificationTypesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List notification types
+      x-omniglass-permission: notification_type:read
+    post:
+      description: Registers an operator notification type (official=false). A template in the sandboxed language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Place, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422, and is never stored. A taken name is a 409. Audited. Gated by notification_type:create.
+      operationId: create-notification-type
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateNotificationTypeInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationTypeBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create a notification type
+      x-omniglass-permission: notification_type:create
+  /notification-types/{id}:rename:
+    post:
+      description: Moves a custom notification type's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official notification type keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. Audited as rename. Gated by notification_type:rename.
+      operationId: rename-notification-type
+      parameters:
+        - description: The row, by its current name or its uuid
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The row, by its current name or its uuid
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenameRegistryInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationTypeBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Rename a notification type
+      x-omniglass-permission: notification_type:rename
+  /notification-types/{name}:
+    delete:
+      description: Removes an operator notification type. An official type, or one an action rule still sends, is a 409. Audited. Gated by notification_type:delete.
+      operationId: delete-notification-type
+      parameters:
+        - description: The notification type's name or uuid
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The notification type's name or uuid
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a notification type
+      x-omniglass-permission: notification_type:delete
+    get:
+      description: Returns one notification type by name or uuid. Gated by notification_type:read.
+      operationId: get-notification-type
+      parameters:
+        - description: The notification type's name or uuid
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The notification type's name or uuid
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationTypeBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get a notification type
+      x-omniglass-permission: notification_type:read
+    patch:
+      description: Patches an operator type's label, description or templates (an absent field is unchanged). A template in the sandboxed language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Place, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422. An official type is read-only (409). The name moves only through :rename. Audited. Gated by notification_type:update.
+      operationId: update-notification-type
+      parameters:
+        - description: The notification type's name or uuid
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The notification type's name or uuid
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateNotificationTypeInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationTypeBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a notification type
+      x-omniglass-permission: notification_type:update
+  /notification-types/{name}:preview:
+    post:
+      description: Renders the type's subject and text (or a draft of either, sent in the body) against one real alarm, exactly as a delivery of that alarm's transition would carry them, with the facts they read. Writes nothing. The alarm is named by its component and id; without an id, the component's most recently raised alarm. A draft template the sandbox refuses is a 422, one that fails to render (its output past the cap) a 422 naming it. Gated by notification_type:read; the component is resolved in the caller's component read scope, so a component outside it is a non-disclosing 404.
+      operationId: preview-notification-type
+      parameters:
+        - description: The notification type's name or uuid
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The notification type's name or uuid
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PreviewNotificationTypeInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PreviewNotificationTypeOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Preview a notification type against an alarm
+      x-omniglass-mcp: {}
+      x-omniglass-permission: notification_type:read
+  /notifications:
+    get:
+      description: The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. Gated by notification:read.
+      operationId: list-notification
+      parameters:
+        - description: Only the notifications about this alarm (its uuid)
+          explode: false
+          in: query
+          name: alarm
+          schema:
+            description: Only the notifications about this alarm (its uuid)
+            type: string
+        - description: Only those to this target, by name
+          explode: false
+          in: query
+          name: target
+          schema:
+            description: Only those to this target, by name
+            type: string
+        - description: Only those in this status
+          explode: false
+          in: query
+          name: status
+          schema:
+            description: Only those in this status
+            enum:
+              - queued
+              - sent
+              - failed
+              - ""
+            type: string
+        - description: At most this many, newest first (default 100)
+          explode: false
+          in: query
+          name: limit
+          schema:
+            description: At most this many, newest first (default 100)
+            format: int64
+            maximum: 500
+            minimum: 0
+            type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListNotificationsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List notifications
+      x-omniglass-mcp: {}
+      x-omniglass-permission: notification:read
+  /notifications/{id}:
+    get:
+      description: Returns one notification. One about a component outside the caller's component read scope is a non-disclosing 404. Gated by notification:read.
+      operationId: get-notification
+      parameters:
+        - description: The notification's uuid
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The notification's uuid
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get a notification
+      x-omniglass-permission: notification:read
+  /notifications/{id}:retry:
+    post:
+      description: Re-queues a failed notification for a fresh run of attempts, sending the same rendered message with the same Idempotency-Key. One that is queued or sent, or one that failed before any attempt (its rule's when did not run, or its type did not render, so it holds no message), is a 409. Audited as retry. Gated by notification:retry, whose scope resolves on the component tier; a component outside the caller's component read scope is a non-disclosing 404, one it reads but may not retry on a 403.
+      operationId: retry-notification
+      parameters:
+        - description: The notification's uuid
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The notification's uuid
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Retry a failed notification
+      x-omniglass-permission: notification:retry
   /principal-groups:
     get:
       description: Every principal group. Gated by principal_group:read:admin.

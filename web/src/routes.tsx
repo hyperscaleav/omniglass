@@ -18,6 +18,7 @@ import Metrics from "./pages/Metrics";
 import Properties from "./pages/Properties";
 import EventTypes from "./pages/EventTypes";
 import CommandTypes from "./pages/CommandTypes";
+import Notifications from "./pages/Notifications";
 import Rules from "./pages/Rules";
 import CalcRules from "./pages/CalcRules";
 import SeverityLevels from "./pages/SeverityLevels";
@@ -62,6 +63,7 @@ export const PAGES: Record<string, Component> = {
   Properties,
   EventTypes,
   CommandTypes,
+  Notifications,
   Rules,
   CalcRules,
   SeverityLevels,

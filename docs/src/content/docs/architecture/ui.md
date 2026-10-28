@@ -209,7 +209,7 @@ registry's own word, and where the registry's only word is "type" the entry is T
 group completing the sentence (Catalog, under Locations: Types). The organizing line the groups
 teach: **Telemetry is what you receive, Actions is what you send or run**; an event is a record of
 a happening (caught from the fleet or caused by the platform), never an outbound message, which
-is why Events sits in Telemetry while Rules, Commands, and the future Notifications sit in
+is why Events sits in Telemetry while Rules, Commands, and Notifications (#618) sit in
 Actions.
 
 **Values is its own top-level group**: values set on fleet entities and resolved
