@@ -265,7 +265,7 @@ status mapping:
 | 403 | **action denied on this target**: the principal lacks the capability entirely, or can read the target but not perform this action on it (below) |
 | 404 | not found, **including out-of-read-scope** (below) |
 | 409 | conflict: PK collision, a stale conditional write, or an idempotency replay mismatch |
-| 422 | semantic validation (the `:apply` unmet-required-inputs case) |
+| 422 | semantic validation (a driver attach missing a required input) |
 | 429 | throttled |
 
 **The 403/404 split is three-way, by where the target sits in the caller's

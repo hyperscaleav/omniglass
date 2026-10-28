@@ -10,15 +10,15 @@ sidebar:
 ::::design[Target design, tracked in #827]
 
 A template is an **example configuration an operator clones**. It ships inside the binary as a menu,
-never as data: nothing is inserted until somebody picks one, and the fork is an ordinary row they
-own outright. **Nothing points back at the template**: forking is one-time, no
-inheritance, no back-pointer, so a template can be rewritten in any release without migrating a
-single install.
+never as data: nothing is inserted until somebody picks one, and what they pick lands as ordinary rows
+they own outright. **Nothing points back at the template**: forking is one-time, no inheritance, no
+back-pointer, so a template can be rewritten in any release without migrating a single install.
 
 :::caution[Design]
-Nothing on this page is built. Interim: standards and location types **seed as ordinary rows**
-(`official: false`, inserted only if absent, so an operator's edit is never reverted on boot). The
-template loader, its catalog, and the create-from-template flow are tracked by
+Nothing on this page is built. Interim: the shipped standards **seed as ordinary rows**
+(`official: false`, inserted only if absent, so an operator's edit is never reverted on boot), and
+the shipped location types are official rows an operator reshapes through the registry fork. The
+template catalog, its read routes, and the fork and instantiate flows are tracked by
 [#827](https://github.com/hyperscaleav/omniglass/issues/827).
 :::
 
@@ -34,35 +34,71 @@ What replaced the pinned shapes is not a template at all:
 
 | The shape of a... | is its... | and the relationship is |
 |---|---|---|
-| component | [`product`](/architecture/core-entities/), with its `product_property` contract | a pointer, `component.product_id` |
+| component | [`product`](/architecture/core-entities/), with its `product_property` contract, naming its [driver](/architecture/collection/#drivers-the-declarative-menu) | a pointer, `component.product_id` |
 | system | [`standard`](/architecture/core-entities/) | **conformance**, with live inheritance |
 
 **Forking applies template to row. Conformance applies row to instance.** Only the second is live:
 a standard's contract default resolves for every conforming system until that system overrides it.
-A template's link is severed at creation.
+A template's link is severed at creation. How to reach and read a class of component is not a
+template's job either: that is the driver's spec
+([ADR-0827](/architecture/decisions/#adr-0827-the-template-layer-owns-the-clone-model-and-the-componenttemplate-authoring-model-is-superseded-by-the-driver-spec)).
 
-## What a template can create
+## The four kinds
 
-Anything an operator would otherwise build from nothing, at three sizes:
+A template is one of four kinds, each naming what it creates:
 
-- **A [location type](/architecture/core-entities/)**: start from Campus, Building, Floor rather
-  than inventing a hierarchy vocabulary on day one.
-- **A [standard](/architecture/core-entities/)**: a huddle room, an auditorium, a training room.
-- **A system**, instantiated whole: "start from: huddle room" should produce a working system, not
-  merely the standard it conforms to.
+- **A standard template**: a [standard](/architecture/core-entities/)'s attributes, its
+  [system roles](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled) (accepted
+  types, pinned products, quorum, capacity, choices), and its property and metric contract lines.
+  Forking one scaffolds the contract and the roles in the same write, which answers what a template
+  carries: everything the standard declares, so "start from a meeting room" yields the slots the
+  space needs filled, not only a name.
+- **A component template**: a product, a driver attach preset (every driver input except the address,
+  secret inputs as references), and declared property values.
+- **A system template**: a standard (a standard template by name, or an existing standard), a
+  component template or a product per role, and declared system property values.
+- **A place template**: a nested tree of places, each naming a location type, an optional label, and
+  optional nested places and system templates.
 
-The first two generalize the fork-seed model of
-[ADR-0048](/architecture/decisions/#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model);
-the third is the reason the model is worth building.
+A location type is not a template kind. Since
+[ADR-0106](/architecture/decisions/#adr-0106-a-location-type-is-platform-owned-and-a-nullable-object-clears-under-the-mask)
+a location type is an official row an operator reshapes through the
+[registry fork](/architecture/decisions/#adr-0095-an-operator-forks-a-shipped-registry-row-instead-of-the-platform-writing-it),
+so what places get is a template for a **subtree of places**, each place's type checked against its
+parent's allowance, and no wording or logic keyed on any particular type.
 
 ## How a template ships
 
-**Authored as YAML in the repo and `go:embed`ed into the binary**, exactly like today's seed files;
-the difference is the loader. A **seed** inserts rows unasked; a **template** inserts nothing, a
-catalog the create-from-template flow reads, writing exactly one row on fork. Offered, not
-applied: a template addressable as a row, or inserted
-wholesale, becomes shipped data carrying every update-versus-local-edit problem the model exists to
-avoid.
+**Authored as kind-tagged YAML in the repo and `go:embed`ed into the binary** (an `internal/template`
+package), exactly like the seed files; the difference is the loader. A **seed** inserts rows unasked; a
+**template** inserts nothing. The loader exposes a read-only catalog, validated against the template
+schema at load, and never writes a row: a template addressable as a row, or inserted wholesale, would
+become shipped data carrying every update-versus-local-edit problem the model exists to avoid. A build
+test dry-runs every template against the seeded catalogs in a rolled-back transaction, so a template
+naming a product, a type or a property a release withdrew fails the build rather than an operator.
+
+There is **no template versioning**: a template is addressed by its name and replaced by the next
+release. Only shipped templates exist; an operator authoring or saving a template of their own is
+[#1330](https://github.com/hyperscaleav/omniglass/issues/1330). Once the catalog ships, the stand-in
+standards seed retires: a fresh install starts with no standards, and the catalog offers them.
+
+## Reading and starting from a template
+
+- **`GET /templates`** (filtered by `kind`) and **`GET /templates/{template}`**, gated
+  `template:read` on the viewer floor. A catalog read is a registry read: no owner and no scope
+  injection.
+- **`POST /standards:fork`**, gated `standard:create`: one operator-owned standard
+  (`official: false`) with its roles, choices and contract lines, under a name the operator chooses
+  (the template's by default).
+- **`POST /components:instantiate`**, **`POST /systems:instantiate`** and
+  **`POST /locations:instantiate`**, each gated by its resource's own create permission. Every piece
+  a call creates (a component, its endpoint attach, a system and its standard, a place) is checked
+  as its own route checks it, in the caller's own scope, audited, and landed in **one transaction**:
+  all of it or none. A target place outside the caller's location scope is a non-disclosing 404.
+
+**Provenance lives in the audit trail only**: each created row's audit detail names the template it
+came from. No column and no back-pointer, which keeps the fork severed while still answering "where
+did this come from".
 
 ## Why this dissolves the shipped-defaults problem
 
@@ -70,19 +106,11 @@ The thing the vendor updates and the thing the operator owns are **never the sam
 template change never needs a migration. Authoritative rows either overwrite operator edits or
 freeze the defaults; pinned versions mean persuading every install to re-point. Forking has nothing
 to reconcile.
+::::
 
-## What a template carries
-
-Open, and the answer decides how much a fork scaffolds in one write: only the row's own attributes
-(trivial), or also a **property contract** and later **[system roles](/architecture/health/)**,
-letting "start from: huddle room" scaffold the slots a room needs filled, most of the operator
-value. Tracked as the open question on
-[#827](https://github.com/hyperscaleav/omniglass/issues/827).
-
-## Trust: the signature and the capability manifest
-
+:::design[Trust: the signature and the capability manifest, tracked in #318]
 The trust surface of a catalog accepting templates from outside the binary (the hosted /
-marketplace path), two glossary terms:
+marketplace path), which matters only once templates arrive from somewhere other than the release:
 
 - **template signature / attestation**: an optional author signature verified on import;
   authenticity, distinct from the content-hash integrity check. Verified on the hosted /
@@ -90,4 +118,4 @@ marketplace path), two glossary terms:
 - **capability manifest**: which write-commands and credential shapes a template exercises, shown
   and approved at fork time, so a device-mutating template never gains powers the operator did not
   see.
-::::
+:::

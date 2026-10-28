@@ -44,7 +44,7 @@ and the `official` boolean:
   view rather than a bespoke route, the same view backing a dashboard widget unchanged.
 - **Private views** are operator-saved **structured** queries (filter + order + fields + params),
   **never raw SQL**, following the official / private
-  [namespace shadow](/architecture/properties/#key-scope-template-org-official) like the registries.
+  [namespace shadow](/architecture/properties/#key-scope-org-and-official) like the registries.
 - **Parameterized**: typed params bound at run time at `/views/{id}:run?param=`; an undeclared or
   missing-required param is a clean 400.
 

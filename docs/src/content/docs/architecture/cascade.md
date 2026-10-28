@@ -17,7 +17,11 @@ least-specific tier named **`platform`** and gated by its own `platform:<action>
 The same primitive resolves down the principal axis for [settings](/architecture/settings/). The
 **resolve view** is also built: the three `/components/{name}/effective-*` routes return the winner
 plus the ordered shadowed bindings, rendered by the console ResolutionPanel. Still `Design`: the two
-**template** bands, [group](/architecture/groups/) placement by weight, additive **rule**
+**classifier** bands (the product and the standard, which bind a value for every component of a
+product and every system conforming to a standard: the cross-owner cascade on
+[#1255](https://github.com/hyperscaleav/omniglass/issues/1255), and the secret and variable bands on
+[#184](https://github.com/hyperscaleav/omniglass/issues/184); a [template](/architecture/templates/) is
+never a band, since a fork leaves nothing behind to resolve through), [group](/architecture/groups/) placement by weight, additive **rule**
 accumulation with suppression, and the fall-through-to-declaration provenance in the resolve view.
 :::
 
@@ -36,14 +40,14 @@ derivable from a single rule), so the resolve view is the safety net, not an aft
 In operator terms:
 
 - **Set once, override where it matters.** HQ's devices need a different credential, so it is set
-  at the HQ location and overrides the template for everything there, no template edit; a room
-  three levels down inherits the nearest setting. *(deployment beats template bindings; deepest
-  location wins)*
+  at the HQ location and overrides the product's binding for everything there, no product edit; a
+  place three levels down inherits the nearest setting. *(deployment beats classifier bindings;
+  deepest location wins)*
 - **Composition tightens the part.** "Standard Huddle Room" polls codecs every 30s, tighter than
-  the codec's own template's 60s, and every codec placed in a huddle room picks that up. *(the
+  the codec's own product's 60s, and every codec placed in a huddle room picks that up. *(the
   system's standard beats the component's product)*
 - **"Why did it get this?"** The resolve view shows the "Old-firmware Room Kits" group (weight 450)
-  shadowing the template's 30s ([worked example](#worked-example)). *(the effective-config resolve
+  shadowing the product's 30s ([worked example](#worked-example)). *(the effective-config resolve
   view)*
 
 The cross-cutting cases (a fleet-wide fix that auto-clears, a policy as a floor, a hand-picked set)
@@ -72,11 +76,11 @@ component tree        chassis -> card -> ...                   (deepest wins, = 
   an ordinary location: binding at `earth` misses `mars`, and a top added next quarter starts
   uncovered. A tier above today's tops is a new `location_type` and a real node, never a magic one;
   "everything" is `platform`, not a location.
-- **Philosophy: deployment beats the template.** HQ's location credential overrides what the Room
-  Kit template binds; "Standard Huddle Room" overrides what the bare Room Kit binds.
-- **Templates are the leaf's base.** Ancestor nodes contribute their **instance** bindings, not
-  their templates (a chassis hands a card its chassis-wide credential; the card keeps its own
-  template).
+- **Philosophy: deployment beats the classifier.** HQ's location credential overrides what the Room
+  Kit product binds; "Standard Huddle Room" overrides what the bare Room Kit binds.
+- **Classifiers are the leaf's base.** Ancestor nodes contribute their **instance** bindings, not
+  their classifiers (a chassis hands a card its chassis-wide credential; the card keeps its own
+  product's).
 - The three structural segments are **variable-depth trees**; the deepest node wins. Weight-free,
   pure depth.
 
@@ -84,8 +88,8 @@ component tree        chassis -> card -> ...                   (deepest wins, = 
 
 There are two structures here, and only one of them is the cascade.
 
-**The binding side is the cascade**: every rung above is something somebody **decided** (a template
-author's value, an operator's at a location, an admin's for the whole install), ordered by
+**The binding side is the cascade**: every rung above is something somebody **decided** (a product
+or standard author's value, an operator's at a location, an admin's for the whole install), ordered by
 deployment specificity and folded most-specific-wins.
 
 **The declaration side is what a thing *is*** absent any decision. A **default** lives there, a
@@ -131,7 +135,7 @@ consumes them by **weight** on the one specificity scale.
 
 :::design[Group placement by weight, tracked in #10]
 **One specificity scale.** Structural layers auto-derive a specificity from position, weight-free:
-`platform` lowest, then the templates, then the location / system / component trees by depth, then
+`platform` lowest, then the classifier bands (product, standard), then the location / system / component trees by depth, then
 the entity's own **instance** at the ceiling. A **group's weight is its specificity on that same
 scale**: a high weight beats deployment (a must-apply override), a low weight loses to it. The
 instance ceiling beats any group; equal specificity breaks by creation order. A typed group applies
@@ -149,7 +153,7 @@ a tree position. The tree is structural; attributes are groups.
 
 **The comparison key is segmented, not a single number.** Precedence is a lexicographic key
 `(segment_rank, depth, group_weight, creation_order)`, compared field by field: `segment_rank`
-orders the structural bands (platform, templates, location / system / component trees, the instance
+orders the structural bands (platform, the product and standard classifiers, location / system / component trees, the instance
 ceiling), `depth` orders within a variable-depth tree (deepest wins), `group_weight` places a group
 relative to the structural bands, `creation_order` breaks an exact tie. Because the segment is the
 first field, a structural segment never overruns into another however deep a tree runs or however
@@ -207,7 +211,7 @@ RM204 codec (Room Kit Pro, fw 11.2) at Room RM204 -> Floor 3 -> HQ Building -> H
 Huddle Room AV system. The fleet has four unparented tops (HQ Campus, East Campus, Airport
 Office, Service Depot), so HQ Campus is a **top, not a root**. Member of two groups: **Old-firmware Room Kits**
 (weight 450) and **PCI-scope** (weight 250). Specificity bands are illustrative (`0` platform,
-`100/200` templates, `300s` location by depth, `400s` system by depth, `500` the instance), a
+`100/200` the product and standard classifiers, `300s` location by depth, `400s` system by depth, `500` the instance), a
 presentation flattening of the segmented key `(segment_rank, depth, group_weight, creation_order)`,
 not the comparison itself.
 
@@ -228,7 +232,7 @@ RM204 - cascade precedence            most-specific (highest) wins
  100   product: Room Kit Pro              30s            -            -
    0   platform  (admin, install-wide)    60s            -            -
 ==============================================================================
- effective:  poll-interval = 5min    (group 450; shadowed template 30s, platform 60s)
+ effective:  poll-interval = 5min    (group 450; shadowed product 30s, platform 60s)
              credential    = vault-B (location Floor 3 @330; shadowed PCI-scope @250, HQ Campus @310)
              retry-limit   = 3       (no binding at any rung: the declaration stands)
 ```
@@ -236,7 +240,7 @@ RM204 - cascade precedence            most-specific (highest) wins
 The three columns are the point:
 
 - **`poll-interval`**: the **Old-firmware group (450)** sits *above* deployment, so its `5min`
-  workaround beats the template's `30s` and the admin's install-wide `60s`, what a fleet-wide bug
+  workaround beats the product's `30s` and the admin's install-wide `60s`, what a fleet-wide bug
   fix needs.
 - **`credential`**: the **PCI-scope group (250)** sits *below* deployment, so the specific
   **Floor 3 (330)** setting beats it, the case a fixed band would get wrong.

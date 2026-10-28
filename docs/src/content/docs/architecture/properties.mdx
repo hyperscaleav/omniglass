@@ -141,23 +141,40 @@ Temperature is canonical `celsius`; `fahrenheit` carries `to_canonical: (v - 32)
 `convert(value, "<unit>")` resolves same-family targets through it. No table exists today.
 :::
 
-## Key scope: template, org, official
+## Key scope: org and official
 
-**This section is future design.** Built: the **`official`** boolean on both catalogs (names unique per catalog, `official: true` the seeded canonical set, `official: false` operator-authored). The target is a three-layer **`scope`** (the built boolean folding into the enum's top value), deciding where a name is unique and where its trust comes from:
+Built: the **`official`** boolean on both catalogs (names unique per catalog, `official: true` the
+seeded canonical set, `official: false` operator-authored).
+
+:::design[The registry scope ladder, tracked in #318]
+The target is a **`scope`** on the catalogs (the built boolean folding into the enum's top value),
+deciding where a name is unique and where its trust comes from:
 
 | scope | identity (uniqueness) | trust | who defines it |
 |---|---|---|---|
-| **template** | `(template_id, name)` | local | the template author |
 | **org** | `name`, unique within the deployment | local custom canonical | the org / operator |
 | **official** | `name`, globally | shipped with the distro | the distro |
 
-Template-scope conflicts are impossible (identity is `(template_id, name)`: two templates can both declare an `input`, the Zabbix model). Trust comes from **distribution**, not a label: an official name is **in the release**, not spoofable; an org name is authoritative within its one database (one database is one tenant); a template name is local to its template.
+Trust comes from **distribution**, not a label: an official name is **in the release**, not
+spoofable; an org name is authoritative within its one database (one database is one tenant). The
+community and private tiers of a catalog that accepts content from outside the binary are the rest of
+[#318](https://github.com/hyperscaleav/omniglass/issues/318).
 
-**Every sample is typed by a catalog row, just at some scope.** The sample-to-catalog FK is **non-null** in both lanes: template-scoped names would be catalog rows (`scope=template`, with a `template_id`), so no nullable type FK, no dual identity.
+**The promotion ladder is org -> official**, a cheap re-scope, not a migration: official is earned by
+shipping in the distribution, and collected samples keep resolving. Normalization is optional but
+encouraged: aligning buys cross-fleet comparability, and most drivers just **reference** a shipped
+official name.
 
-**The promotion ladder is template -> org -> official**, each step a cheap re-scope or re-point, not a migration: lift a template's `input` to an org-canonical `video-input` and re-point the template; official is earned by shipping in the distribution. Collected samples keep resolving. Normalization is optional but encouraged: aligning buys cross-fleet comparability, and most templates just **reference** a shipped official name. Sharing is template-level (an import is **linked** or **copied**), its names landing at template or org scope.
+**Governance is curation, not runtime enforcement**: Omniglass is a Postgres database an operator
+runs; we vouch for what we **ship**, you vet what you import.
+:::
 
-**Governance is curation, not runtime enforcement**: Omniglass is a Postgres database an operator runs; we vouch for what we **ship**, you vet what you import. Commands sit at **template** scope with the same ladder ([templates](/architecture/templates/)).
+There is no **template** rung. An earlier design scoped a name to the template that declared it,
+`(template_id, name)`; a [template](/architecture/templates/) is a clonable example that is never a
+row, so nothing can be scoped to one, and that rung retired
+([ADR-0827](/architecture/decisions/#adr-0827-the-template-layer-owns-the-clone-model-and-the-componenttemplate-authoring-model-is-superseded-by-the-driver-spec)).
+**Every sample is typed by a catalog row**: the sample-to-catalog FK is **non-null** in both lanes,
+and a driver's emit names a catalog row, checked when the spec is written.
 
 ## Provenance: how we know a value
 

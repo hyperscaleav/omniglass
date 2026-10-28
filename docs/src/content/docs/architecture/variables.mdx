@@ -37,14 +37,15 @@ differ in what they are keyed to and what lifecycle they carry:
 |---|---|---|---|
 | what it is | a declared device setting | an access secret, encrypted at rest | a free interpolated value |
 | keyed by | a canonical signal (`property_type`) | its own `secret_type` shape name | its own `name`, an org-local cascade namespace |
-| has an observed side? | yes, a sample via a get function | its **validity**, not the secret value | no |
-| lifecycle | drift → reconcile (a set function) | refresh + rotation + expiry (deferred) | none; resolved and interpolated |
+| has an observed side? | yes, a sample the driver's poll or listener emits | its **validity**, not the secret value | no |
+| lifecycle | drift → reconcile (the driver's command binding) | refresh + rotation + expiry (deferred) | none; resolved and interpolated |
 | example | `video-input = HDMI1` | an `snmp-community`, a `basic-auth` | `poll-interval = 30s`, a base URL, a label |
 
 The common thread is the cascade and an exclusive-arc scope (exactly one of
-`platform | template | location | system | component`): the same exclusive-arc ownership as samples,
-plus a `template`-scoped binding the sample arc lacks (and unlike samples, config is not
-`node`-owned).
+`platform | location | system | component`): the same exclusive-arc ownership as samples (and unlike
+samples, config is not `node`-owned). The product and standard classifier bands above the trees are
+still ahead ([#184](https://github.com/hyperscaleav/omniglass/issues/184)); a
+[template](/architecture/templates/) is never one, since a fork leaves no row to bind to.
 
 ## config: declared device state, keyed to a signal
 
@@ -54,13 +55,14 @@ sides, the **observed** value the device reports (a `property` sample, provenanc
 **declared** value you set, sharing the **key**: under the lane model the declared value is itself
 a declared series row ([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)). Their gap is **drift**.
 
-A component template **brings no keys, it references registered ones**: two display templates
-touching `video-input` are two references to one governed key, not a collision. Config reuses the
+A driver **brings no keys, it references registered ones**: two display drivers touching
+`video-input` are two references to one governed key, not a collision. Config reuses the
 `property_type`'s value domain for validation.
 
-**The template is the source of truth for configurability**: a signal becomes settable on a device
-class when its [component template](/architecture/templates/) binds a **get** function (emitting the
-observed sample) and a **set** function (command-triggered); the registry's soft `settable` hint is
+**The driver is the source of truth for configurability**: a signal becomes settable on a class of
+component when its [driver](/architecture/collection/#drivers-the-declarative-menu) both reads it (a
+poll function or listener emitting the observed sample) and writes it (a **command binding** that
+actuates the signal's command over the driver's protocol); the registry's soft `settable` hint is
 never authoritative.
 
 Each piece of a config item has one home, joined by the canonical key:
@@ -68,7 +70,7 @@ Each piece of a config item has one home, joined by the canonical key:
 | Piece | What it holds | Lives in |
 |---|---|---|
 | signal definition | name, value domain | `property_type` (the catalog; a numeric signal's unit lives on `metric_type`) |
-| get / set binding | how this device class reads and writes the signal | the component's **product** |
+| read / write binding | how this class of component reads and writes the signal | the **driver** its product names (an emit, and a command binding) |
 | declared value | the intent (`HDMI1`), plus the per-item `reconcile` policy | a `property` series row, `provenance='declared'` (built, [ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)); the policy is #1248 |
 | observed value | what the device reports (`HDMI2`) | `property` rows (observed) |
 | drift | declared ≠ observed | **computed on read**, not stored (built: each properties-read row's reconciliation) |
@@ -83,7 +85,7 @@ action:
 - **`observe`** (default): record the drift, raise **no** alarm; it stays visible through
   [`disagree`](/architecture/properties/#disagree-and-divergence) and the config view.
 - **`warn`**: raise a **warning**-severity alarm; change nothing.
-- **`enforce`**: declared wins. Call the template's **set** function to push the value back; that
+- **`enforce`**: declared wins. Send the signal's command through the driver's command binding; that
   issues a command, writes an [`intended`](/architecture/properties/#intended-the-declared-effect-of-a-command)
   sample, and reconciles against the next observation (desired-state convergence). If the set
   **fails**, raise a real alarm (enforcement failure).
@@ -92,26 +94,26 @@ Adopting the observed value as the declared one is **not** an ongoing mode but a
 **one-shot import action**.
 
 :::caution[Open question]
-The `reconcile: enforce` execution (the set-function push and the enforcement-failure alarm) and the
+The `reconcile: enforce` execution (the command push and the enforcement-failure alarm) and the
 separate one-shot import action: the controller shape behind the reserved seam.
 :::
 
 **Remediation needs no rule**: declare the value, set `enforce`, and the cascade plus drift plus the
-set function close the loop, guarded at action dispatch
+driver's command binding close the loop, guarded at action dispatch
 ([alarms and actions](/architecture/alarms-actions/)) with a per-item backoff so a refusing device
-does not hammer. Reconcile runs **per item**; an item's capability is which get/set functions the
-template bound (get alone: observe or warn; a set makes it enforceable).
+does not hammer. Reconcile runs **per item**; an item's capability is what the driver binds for its
+signal (a read alone: observe or warn; a command binding makes it enforceable).
 
 ### Declaring at the system level
 
 Because config rides the cascade, you rarely declare on the device: declare `video-input = HDMI1` for
-the **main-display role** on the system template and the cascade resolves it onto whichever display
+the **main-display role** on the system's standard and the cascade resolves it onto whichever display
 fills that role; drift and reconcile follow.
 
 :::caution[Open question]
 Resolving a value scoped to a role slot (the [system role](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled)
 where quorum already lives) may need a new cascade level between system and component, alongside the
-per-item get/set binding shape on the template.
+per-item read and write binding shape on the driver.
 :::
 ::::
 
@@ -183,13 +185,13 @@ platform credential stays admin/owner-only beside an operational device secret. 
   `secret:*` cannot); `owner`'s `>` covers everything.
 
 :::design[The secret lifecycle and validity health: rotation flows are ADR-0050, the timer #419]
-**Lifecycle is a later slice**, each behavior a template-declared use of functions, time, and flows:
+**Lifecycle is a later slice**, each behavior a declared use of driver commands, time, and flows:
 
 - **refresh** (an `oauth2` access token) is **lazy**: refreshed on use within a skew window of
   expiry, coordinated across replicas by a NATS KV lock (CAS on the secret key); the refreshed token
   is a separate encrypted cache, not an operator secret.
-- **rotation** (a password on a schedule) is a **flow**: generate → set on the device (a set
-  function) → update the store → verify → invalidate the old, driven by
+- **rotation** (a password on a schedule) is a **flow**: generate → set on the device (a driver
+  command) → update the store → verify → invalidate the old, driven by
   [time](/architecture/time/).
 - **expiry and reminders** are an expiry timestamp plus a **watchdog** firing an event and an
   **alarm** before the secret lapses.
@@ -209,8 +211,8 @@ The first slice ([#183](https://github.com/hyperscaleav/omniglass/issues/183)) i
 cell (a `value_type` of `string` / `int` / `float` / `bool` / `json`, stored as jsonb, validated against the type
 in the app), owned on the exclusive arc and resolved down the cascade, with a Variables directory. It **grants
 `variable:create,update` to operators** (delete stays admin and owner), mirroring the secret member. Deferred from
-the design below: the **`template`** owner scope (slice 1 mirrors the secret arc,
-`platform | location | system | component`; template scope and cascade groups are
+the design below: the classifier owner bands (slice 1 mirrors the secret arc,
+`platform | location | system | component`; the product and standard bands and cascade groups are
 [#184](https://github.com/hyperscaleav/omniglass/issues/184)); a **`variable_type` registry** (slice 1 types
 inline with the `value_type` enum, matching the "operator-defined, not curated" model); and the **`$var:`**
 consumer and the **secret-flagged** variable. Logged in the [decision log](/architecture/decisions/).
@@ -231,8 +233,8 @@ interpolated as `$var:<name>` into functions, endpoint definitions, and rule sco
   ([ADR-0119](/architecture/decisions/#adr-0119-a-table-an-operator-names-carries-a-label-or-declares-why-it-does-not)).
   Optional, not an identifier, and never interpolated: `$var:` reads the name and only the name. A
   variable with no label reads its name **verbatim**.
-- **Install-wide and template-local are the same primitive at different scopes** (a company-wide NTP
-  server versus a device class's poll interval).
+- **Install-wide and product-wide are the same primitive at different scopes** (a company-wide NTP
+  server versus a class of component's poll interval).
 - **No observed side and no reconcile**, exactly what separates it from config.
 
 Scalar shapes (`string`, `int`, `float`, `bool`, `json`) cover the common case; a variable may be
