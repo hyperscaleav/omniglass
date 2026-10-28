@@ -143,6 +143,21 @@ The `group` membership mechanism (static list or dynamic filter) is shared acros
 
 So `group` appears on **both sides of authZ**: `principal_group`s as subjects, entity-groups as object scopes.
 
+### People as notification audiences
+
+A `principal_group` is also an **audience**: a notification target can name a group or one person, and
+an alarm transition tells its human members in their console inbox (#1341,
+[alarms and actions](/architecture/alarms-actions/#people-group-and-person-targets-and-the-inbox)). The
+ABAC invariant holds for what a person is told, not only for what they query: each member is told
+only when **their own** component read scope admits the alarm's component, judged at the transition
+from their grants exactly as a request of theirs would be, and judged again where the row waits (an
+inbox read is scoped by the reader's scope as it stands, so a revoked grant empties the entry at once)
+([ADR-1341](/architecture/decisions/#adr-1341-a-person-is-told-about-an-alarm-only-while-they-can-read-it-groups-expand-at-queue-time-scope-is-checked-there-and-again-at-delivery)).
+Membership is read at the transition, so a group change takes effect on the next alarm. Because the
+directory is admin-tier, two things follow from it: binding a group or a person to a target takes
+`principal_group:read:admin` or `principal:read:admin`, and a person-addressed row names its recipient
+only to that person and to `principal:read:admin` holders; others see the row with the name withheld.
+
 :::caution[Open question]
 Whether to unify the group kinds into a single polymorphic `group` primitive; revisit if their usage
 converges.

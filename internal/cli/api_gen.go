@@ -377,6 +377,78 @@ func generatedCommands() []*cobra.Command {
 				}
 				return cmd
 			}()
+			cmd.AddCommand(func() *cobra.Command {
+				parent := &cobra.Command{
+					Use:   "notification",
+					Short: "Commands for the notification resource",
+				}
+				parent.AddCommand(func() *cobra.Command {
+					cmd := func() *cobra.Command {
+						var qUnread bool
+						var qLimit int
+						cmd := &cobra.Command{
+							Use:     "list",
+							Short:   "List your inbox",
+							Long:    "The caller's own console inbox: the notifications addressed to them on the inbox channel, newest first, with the unread count. Self-scoped (never another principal's), and scoped again by the caller's component read scope as it stands now, so an entry about a component they can no longer read is gone. Gated by notification:read.",
+							Example: "  omniglass auth me notification list",
+							Args:    pathArgs(0),
+							RunE: func(cmd *cobra.Command, args []string) error {
+								path := fmt.Sprintf("/api/v1/auth/me/notifications")
+								q := url.Values{}
+								if cmd.Flags().Changed("unread") {
+									q.Set("unread", fmt.Sprintf("%v", qUnread))
+								}
+								if cmd.Flags().Changed("limit") {
+									q.Set("limit", fmt.Sprintf("%v", qLimit))
+								}
+								if enc := q.Encode(); enc != "" {
+									path += "?" + enc
+								}
+								return runAPICommand(cmd, "GET", path, nil)
+							},
+						}
+						cmd.Flags().BoolVar(&qUnread, "unread", false, "Only the entries not yet read")
+						cmd.Flags().IntVar(&qLimit, "limit", 0, "At most this many, newest first (default 100)")
+						return cmd
+					}()
+					return cmd
+				}())
+				parent.AddCommand(func() *cobra.Command {
+					cmd := func() *cobra.Command {
+						cmd := &cobra.Command{
+							Use:     "markAllRead",
+							Short:   "Mark every inbox entry read",
+							Long:    "Marks every unread entry in the caller's own inbox read, over the same scope the inbox reads, and says how many. Audited as one row. Gated by notification:read.",
+							Example: "  omniglass auth me notification markAllRead",
+							Args:    pathArgs(0),
+							RunE: func(cmd *cobra.Command, args []string) error {
+								path := fmt.Sprintf("/api/v1/auth/me/notifications:markAllRead")
+								return runAPICommand(cmd, "POST", path, nil)
+							},
+						}
+						return cmd
+					}()
+					return cmd
+				}())
+				parent.AddCommand(func() *cobra.Command {
+					cmd := func() *cobra.Command {
+						cmd := &cobra.Command{
+							Use:     "markRead <id>",
+							Short:   "Mark an inbox entry read",
+							Long:    "Marks one of the caller's own inbox entries read (one already read keeps its first read time). An entry that is not the caller's, or about a component outside their component read scope, is a non-disclosing 404. Audited. Gated by notification:read.",
+							Example: "  omniglass auth me notification markRead <id>",
+							Args:    pathArgs(1),
+							RunE: func(cmd *cobra.Command, args []string) error {
+								path := fmt.Sprintf("/api/v1/auth/me/notifications/%s:markRead", pathSegment(args[0]))
+								return runAPICommand(cmd, "POST", path, nil)
+							},
+						}
+						return cmd
+					}()
+					return cmd
+				}())
+				return parent
+			}())
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
@@ -4691,7 +4763,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List notifications",
-					Long:    "The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. Gated by notification:read.",
+					Long:    "The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. A row addressed to a person names them only to that person and to holders of principal:read:admin. Gated by notification:read.",
 					Example: "  omniglass notification list",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -4749,21 +4821,27 @@ func generatedCommands() []*cobra.Command {
 		}
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var fChannels string
 				var fEnabled bool
 				var fKind string
 				var fLabel string
 				var fName string
+				var fPrincipal string
+				var fPrincipalGroup string
 				var fSecret string
 				var fUrl string
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create a notification target",
-					Long:    "Adds a destination a notification can be sent to: a channel kind (webhook), its URL and, optionally, the platform secret it signs or authenticates with. Binding a secret takes the right to reveal it (secret:reveal, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not reveal a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.",
-					Example: "  omniglass notification-target create --kind kind --name name --url url",
+					Long:    "Adds a destination a notification can be sent to: a webhook, its URL and, optionally, the platform secret it signs or authenticates with; or people, a principal_group (every human member, read at each alarm transition) or one principal, on the channels named. A person is told only about an alarm on a component their own component read scope admits. Binding a group takes principal_group:read:admin and binding a person principal:read:admin (a 403 without it), since the target reaches whoever they name. Binding a secret takes the right to reveal it (secret:reveal, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not reveal a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.",
+					Example: "  omniglass notification-target create --kind kind --name name",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/notification-targets")
 						body := map[string]any{}
+						if cmd.Flags().Changed("channels") {
+							body["channels"] = jsonOrString(fChannels)
+						}
 						if cmd.Flags().Changed("enabled") {
 							body["enabled"] = fEnabled
 						}
@@ -4776,6 +4854,12 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
 						}
+						if cmd.Flags().Changed("principal") {
+							body["principal"] = fPrincipal
+						}
+						if cmd.Flags().Changed("principal-group") {
+							body["principal_group"] = fPrincipalGroup
+						}
 						if cmd.Flags().Changed("secret") {
 							body["secret"] = fSecret
 						}
@@ -4785,15 +4869,17 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
+				cmd.Flags().StringVar(&fChannels, "channels", "", "A group or person target's channels: inbox")
 				cmd.Flags().BoolVar(&fEnabled, "enabled", false, "Whether deliveries go to it (default true)")
-				cmd.Flags().StringVar(&fKind, "kind", "", "The channel kind")
+				cmd.Flags().StringVar(&fKind, "kind", "", "The target kind")
 				_ = cmd.MarkFlagRequired("kind")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
 				cmd.Flags().StringVar(&fName, "name", "", "The target's name (lowercase kebab)")
 				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().StringVar(&fPrincipal, "principal", "", "A principal target's person, by username or uuid; binding one takes principal:read:admin")
+				cmd.Flags().StringVar(&fPrincipalGroup, "principal-group", "", "A principal_group target's group, by name or uuid; binding one takes principal_group:read:admin")
 				cmd.Flags().StringVar(&fSecret, "secret", "", "A platform secret, by name or uuid, of type hmac-key (signs each body) or bearer-token (sent as Authorization: Bearer)")
-				cmd.Flags().StringVar(&fUrl, "url", "", "The destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is")
-				_ = cmd.MarkFlagRequired("url")
+				cmd.Flags().StringVar(&fUrl, "url", "", "A webhook's destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is")
 				return cmd
 			}()
 			return cmd
@@ -4885,6 +4971,7 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var fChannels string
 				var fEnabled bool
 				var fLabel string
 				var fSecret string
@@ -4898,6 +4985,9 @@ func generatedCommands() []*cobra.Command {
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/notification-targets/%s", pathSegment(args[0]))
 						body := map[string]any{}
+						if cmd.Flags().Changed("channels") {
+							body["channels"] = jsonOrString(fChannels)
+						}
 						if cmd.Flags().Changed("enabled") {
 							body["enabled"] = fEnabled
 						}
@@ -4913,6 +5003,7 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "PATCH", path, body)
 					},
 				}
+				cmd.Flags().StringVar(&fChannels, "channels", "", "A group or person target's channels: inbox")
 				cmd.Flags().BoolVar(&fEnabled, "enabled", false, "Whether deliveries go to it")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label (empty clears it)")
 				cmd.Flags().StringVar(&fSecret, "secret", "", "A platform secret by name or uuid; empty unbinds it")

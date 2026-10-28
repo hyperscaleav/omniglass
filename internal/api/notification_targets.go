@@ -27,8 +27,13 @@ type notificationTargetBody struct {
 	ID        string    `json:"id" doc:"The target's uuid, the stable form of name"`
 	Name      string    `json:"name"`
 	Label     string    `json:"label,omitempty"`
-	Kind      string    `json:"kind" enum:"webhook" doc:"The channel kind: webhook posts a signed JSON envelope to the URL"`
-	URL       string    `json:"url" doc:"The destination, masked to its scheme and host (the path and query often carry a credential); :reveal returns it whole"`
+	Kind      string    `json:"kind" enum:"webhook,principal_group,principal" doc:"The target kind: webhook posts a signed JSON envelope to the URL; principal_group reaches every human member of a group, read at each alarm transition; principal reaches one person. A person is told only about alarms on components they can read"`
+	URL       string    `json:"url,omitempty" doc:"A webhook's destination, masked to its scheme and host (the path and query often carry a credential); :reveal returns it whole"`
+	Group     string    `json:"principal_group,omitempty" doc:"The group a principal_group target reaches, by name"`
+	GroupID   string    `json:"principal_group_id,omitempty" doc:"The group's uuid"`
+	Principal string    `json:"principal,omitempty" doc:"The person a principal target reaches, by username"`
+	PrincID   string    `json:"principal_id,omitempty" doc:"The person's uuid"`
+	Channels  []string  `json:"channels,omitempty" doc:"The channels a group or person target delivers on: inbox (the console inbox)"`
 	Secret    string    `json:"secret,omitempty" doc:"The platform secret the send signs (an hmac-key) or authenticates (a bearer-token) with, by name; absent sends unsigned"`
 	SecretID  string    `json:"secret_id,omitempty" doc:"The bound secret's uuid, the stable form of secret"`
 	Auth      string    `json:"auth" enum:"none,hmac,bearer" doc:"How a send proves itself: hmac signs each body with the bound hmac-key (X-Omniglass-Signature), bearer presents the bound bearer-token, none sends unsigned"`
@@ -45,7 +50,12 @@ func toNotificationTargetBody(t *storage.NotificationTarget) notificationTargetB
 	case storage.SecretTypeBearerToken:
 		auth = "bearer"
 	}
-	return notificationTargetBody{ID: t.ID, Name: t.Name, Label: t.Label, Kind: t.Kind, URL: storage.MaskURL(t.URL),
+	url := ""
+	if t.URL != "" {
+		url = storage.MaskURL(t.URL)
+	}
+	return notificationTargetBody{ID: t.ID, Name: t.Name, Label: t.Label, Kind: t.Kind, URL: url,
+		Group: t.PrincipalGroup, GroupID: t.PrincipalGroupID, Principal: t.Principal, PrincID: t.PrincipalID, Channels: t.Channels,
 		Secret: t.Secret, SecretID: t.SecretID, Auth: auth, Enabled: t.Enabled, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt}
 }
 
@@ -63,22 +73,26 @@ type notificationTargetRefInput struct {
 
 type createNotificationTargetInput struct {
 	Body struct {
-		Name    string `json:"name" minLength:"1" doc:"The target's name (lowercase kebab)"`
-		Label   string `json:"label,omitempty" required:"false" doc:"A human label"`
-		Kind    string `json:"kind" enum:"webhook" doc:"The channel kind"`
-		URL     string `json:"url" minLength:"1" doc:"The destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is"`
-		Secret  string `json:"secret,omitempty" required:"false" doc:"A platform secret, by name or uuid, of type hmac-key (signs each body) or bearer-token (sent as Authorization: Bearer)"`
-		Enabled *bool  `json:"enabled,omitempty" required:"false" doc:"Whether deliveries go to it (default true)"`
+		Name    string   `json:"name" minLength:"1" doc:"The target's name (lowercase kebab)"`
+		Label   string   `json:"label,omitempty" required:"false" doc:"A human label"`
+		Kind    string   `json:"kind" enum:"webhook,principal_group,principal" doc:"The target kind"`
+		URL     string   `json:"url,omitempty" required:"false" doc:"A webhook's destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is"`
+		Group   string   `json:"principal_group,omitempty" required:"false" doc:"A principal_group target's group, by name or uuid; binding one takes principal_group:read:admin"`
+		Princ   string   `json:"principal,omitempty" required:"false" doc:"A principal target's person, by username or uuid; binding one takes principal:read:admin"`
+		Chans   []string `json:"channels,omitempty" required:"false" doc:"A group or person target's channels: inbox"`
+		Secret  string   `json:"secret,omitempty" required:"false" doc:"A platform secret, by name or uuid, of type hmac-key (signs each body) or bearer-token (sent as Authorization: Bearer)"`
+		Enabled *bool    `json:"enabled,omitempty" required:"false" doc:"Whether deliveries go to it (default true)"`
 	}
 }
 
 type updateNotificationTargetInput struct {
 	Name string `path:"name" doc:"The target's name or uuid"`
 	Body struct {
-		Label   *string `json:"label,omitempty" required:"false" doc:"A human label (empty clears it)"`
-		URL     *string `json:"url,omitempty" required:"false" doc:"The destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is"`
-		Secret  *string `json:"secret,omitempty" required:"false" doc:"A platform secret by name or uuid; empty unbinds it"`
-		Enabled *bool   `json:"enabled,omitempty" required:"false" doc:"Whether deliveries go to it"`
+		Label   *string   `json:"label,omitempty" required:"false" doc:"A human label (empty clears it)"`
+		URL     *string   `json:"url,omitempty" required:"false" doc:"The destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is"`
+		Secret  *string   `json:"secret,omitempty" required:"false" doc:"A platform secret by name or uuid; empty unbinds it"`
+		Chans   *[]string `json:"channels,omitempty" required:"false" doc:"A group or person target's channels: inbox"`
+		Enabled *bool     `json:"enabled,omitempty" required:"false" doc:"Whether deliveries go to it"`
 	}
 }
 
@@ -138,12 +152,14 @@ func registerNotificationTargetRoutes(api huma.API, a *authenticator, gw storage
 		Path:          "/notification-targets",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create a notification target",
-		Description:   "Adds a destination a notification can be sent to: a channel kind (webhook), its URL and, optionally, the platform secret it signs or authenticates with. Binding a secret takes the right to reveal it (secret:reveal, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not reveal a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.",
+		Description:   "Adds a destination a notification can be sent to: a webhook, its URL and, optionally, the platform secret it signs or authenticates with; or people, a principal_group (every human member, read at each alarm transition) or one principal, on the channels named. A person is told only about an alarm on a component their own component read scope admits. Binding a group takes principal_group:read:admin and binding a person principal:read:admin (a 403 without it), since the target reaches whoever they name. Binding a secret takes the right to reveal it (secret:reveal, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not reveal a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.",
 	}, "notification_target", "create"), func(ctx context.Context, in *createNotificationTargetInput) (*notificationTargetOutput, error) {
 		t, err := gw.CreateNotificationTarget(ctx, actorID(ctx), storage.NotificationTargetSpec{
 			Name: in.Body.Name, Label: in.Body.Label, Kind: in.Body.Kind, URL: in.Body.URL,
-			Secret: in.Body.Secret, Enabled: in.Body.Enabled,
-		}, a.scopeFor(ctx, "notification_target", "create"), secretUse(ctx, a))
+			Secret: in.Body.Secret, PrincipalGroup: in.Body.Group, Principal: in.Body.Princ, Channels: in.Body.Chans, Enabled: in.Body.Enabled,
+		}, a.scopeFor(ctx, "notification_target", "create"), secretUse(ctx, a), storage.PeopleUse{
+			Groups: a.allows(ctx, "principal_group", "read", "admin"), Principals: a.allows(ctx, "principal", "read", "admin"),
+		})
 		if err != nil {
 			return nil, mapNotificationTargetErr(err)
 		}
@@ -158,7 +174,7 @@ func registerNotificationTargetRoutes(api huma.API, a *authenticator, gw storage
 		Description: "Patches a target's label, URL, secret or enabled flag (an absent field is unchanged; an empty secret unbinds it). Binding a secret takes the right to reveal it, as on create, and so does moving the URL of a target that keeps a bound secret (a 403 without it), since the next send would hand the secret to the new URL. Audited, the URL masked and a change to it recorded as changed. Gated by notification_target:update with an all-scope grant.",
 	}, "notification_target", "update"), func(ctx context.Context, in *updateNotificationTargetInput) (*notificationTargetOutput, error) {
 		t, err := gw.UpdateNotificationTarget(ctx, actorID(ctx), in.Name, storage.NotificationTargetPatch{
-			Label: in.Body.Label, URL: in.Body.URL, Secret: in.Body.Secret, Enabled: in.Body.Enabled,
+			Label: in.Body.Label, URL: in.Body.URL, Secret: in.Body.Secret, Channels: in.Body.Chans, Enabled: in.Body.Enabled,
 		}, a.scopeFor(ctx, "notification_target", "update"), secretUse(ctx, a))
 		if err != nil {
 			return nil, mapNotificationTargetErr(err)
@@ -249,6 +265,8 @@ func mapNotificationTargetErr(err error) error {
 		return refErr
 	}
 	switch {
+	case errors.Is(err, storage.ErrNotificationTargetPeopleForbidden):
+		return huma.Error403Forbidden("binding a group takes principal_group:read:admin and binding a person principal:read:admin: the target reaches whoever they name")
 	case errors.Is(err, storage.ErrNotificationTargetForbidden):
 		return huma.Error403Forbidden("notification targets take an all-scope grant: a target is install-wide")
 	case errors.Is(err, storage.ErrNotificationTargetNotFound):

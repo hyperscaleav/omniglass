@@ -47,7 +47,7 @@ func newNotifyFixture(t *testing.T) *notifyFixture {
 	}
 	for _, name := range []string{"ops-chat", "pager"} {
 		if _, err := gw.CreateNotificationTarget(ctx, "", storage.NotificationTargetSpec{Name: name, Kind: storage.ChannelWebhook,
-			URL: "https://hooks.example.com/" + name}, f.all, storage.SecretUse{}); err != nil {
+			URL: "https://hooks.example.com/" + name}, f.all, storage.SecretUse{}, storage.PeopleUse{}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -61,7 +61,7 @@ func newNotifyFixture(t *testing.T) *notifyFixture {
 
 func (f *notifyFixture) list(t *testing.T, filter storage.NotificationFilter) []storage.Notification {
 	t.Helper()
-	ns, err := f.gw.ListNotifications(f.ctx, filter, f.all)
+	ns, err := f.gw.ListNotifications(f.ctx, filter, f.all, storage.RecipientView{All: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -212,15 +212,15 @@ func TestTheDrainRetriesWithBackoffToAFinalFailureAndARetryRequeues(t *testing.T
 
 	// :retry re-queues one, and a later success reads sent.
 	n := f.list(t, storage.NotificationFilter{AlarmID: a.ID})[0]
-	if _, err := f.gw.RetryNotification(f.ctx, "", n.ID, f.all, f.all); err != nil {
+	if _, err := f.gw.RetryNotification(f.ctx, "", n.ID, f.all, f.all, storage.RecipientView{All: true}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.gw.RetryNotification(f.ctx, "", n.ID, f.all, f.all); err != storage.ErrNotificationNotRetryable {
+	if _, err := f.gw.RetryNotification(f.ctx, "", n.ID, f.all, f.all, storage.RecipientView{All: true}); err != storage.ErrNotificationNotRetryable {
 		t.Fatalf("retrying a queued notification = %v, want not retryable", err)
 	}
 	up := &sender{sent: map[string]int{}, answer: func(int) storage.SendResult { return storage.SendResult{OK: true, Status: 200} }}
 	drainAll(t, f, up)
-	got, err := f.gw.GetNotification(f.ctx, n.ID, f.all)
+	got, err := f.gw.GetNotification(f.ctx, n.ID, f.all, storage.RecipientView{All: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -307,7 +307,7 @@ func TestNotificationReadsAreScopedByTheAlarmsComponent(t *testing.T) {
 		t.Fatal(err)
 	}
 	only1 := scope.Set{IDs: []string{a1.ComponentID}}
-	ns, err := f.gw.ListNotifications(f.ctx, storage.NotificationFilter{}, only1)
+	ns, err := f.gw.ListNotifications(f.ctx, storage.NotificationFilter{}, only1, storage.RecipientView{All: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -321,13 +321,13 @@ func TestNotificationReadsAreScopedByTheAlarmsComponent(t *testing.T) {
 			other = n.ID
 		}
 	}
-	if _, err := f.gw.GetNotification(f.ctx, other, only1); err != storage.ErrNotificationNotFound {
+	if _, err := f.gw.GetNotification(f.ctx, other, only1, storage.RecipientView{All: true}); err != storage.ErrNotificationNotFound {
 		t.Fatalf("a notification outside the scope = %v, want not found", err)
 	}
-	if _, err := f.gw.RetryNotification(f.ctx, "", ns[0].ID, only1, scope.Set{}); err != storage.ErrNotificationForbidden {
+	if _, err := f.gw.RetryNotification(f.ctx, "", ns[0].ID, only1, scope.Set{}, storage.RecipientView{All: true}); err != storage.ErrNotificationForbidden {
 		t.Fatalf("a retry outside the action scope = %v, want forbidden", err)
 	}
-	if _, err := f.gw.ListNotifications(f.ctx, storage.NotificationFilter{}, scope.Set{}); err != nil {
+	if _, err := f.gw.ListNotifications(f.ctx, storage.NotificationFilter{}, scope.Set{}, storage.RecipientView{All: true}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -341,7 +341,7 @@ func TestANotificationJoinsItsAlarmsTimelineAfterTheEdge(t *testing.T) {
 	if err := f.gw.ClearAlarm(f.ctx, "", "display-1", a.ID); err != nil {
 		t.Fatal(err)
 	}
-	tl, err := f.gw.AlarmTimeline(f.ctx, a.ComponentID, a.ID)
+	tl, err := f.gw.AlarmTimeline(f.ctx, a.ComponentID, a.ID, storage.RecipientView{All: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -382,7 +382,7 @@ func TestARenderTheDatabaseWouldRefuseFailsTheRowNotTheTransition(t *testing.T) 
 	if len(ns) != 2 || ns[0].Status != storage.NotificationFailed || ns[0].Attempts != 0 || !strings.Contains(ns[0].LastError, "NUL") {
 		t.Fatalf("notifications = %+v, want failed with the reason", ns)
 	}
-	if _, err := f.gw.RetryNotification(f.ctx, "", ns[0].ID, f.all, f.all); err != storage.ErrNotificationNotRetryable {
+	if _, err := f.gw.RetryNotification(f.ctx, "", ns[0].ID, f.all, f.all, storage.RecipientView{All: true}); err != storage.ErrNotificationNotRetryable {
 		t.Fatalf("retrying a row never attempted = %v, want not retryable", err)
 	}
 }

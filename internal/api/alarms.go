@@ -267,6 +267,9 @@ type alarmTimelineEntryBody struct {
 	Target       string `json:"target,omitempty" doc:"The target a notification goes to, by name"`
 	Attempts     int    `json:"attempts,omitempty" doc:"A notification's attempts so far"`
 	Error        string `json:"error,omitempty" doc:"Why a notification's last attempt failed"`
+	Channel      string `json:"channel,omitempty" enum:"webhook,inbox,email," doc:"How a notification travels: webhook, a person's inbox, or email"`
+	Recipient    string `json:"recipient,omitempty" doc:"The person a notification is addressed to, by username: shown to that person and to holders of principal:read:admin"`
+	Withheld     bool   `json:"recipient_withheld,omitempty" doc:"True when a notification is addressed to a person whose name the caller may not see"`
 }
 
 type alarmTimelineOutput struct {
@@ -293,7 +296,7 @@ func registerAlarmTimelineRoute(api huma.API, a *authenticator, gw storage.Gatew
 		if err != nil {
 			return nil, err
 		}
-		entries, err := gw.AlarmTimeline(ctx, compID, in.ID)
+		entries, err := gw.AlarmTimeline(ctx, compID, in.ID, recipientView(ctx, a))
 		if err != nil {
 			return nil, mapAlarmErr(err)
 		}
@@ -307,6 +310,7 @@ func registerAlarmTimelineRoute(api huma.API, a *authenticator, gw storage.Gatew
 			if e.Kind == "notification" {
 				b.Rule = ""
 				b.Notification, b.ActionRule, b.Transition, b.Target, b.Attempts, b.Error = e.NotificationID, e.Rule, e.Transition, e.Target, e.Attempts, e.Error
+				b.Channel, b.Recipient, b.Withheld = e.Channel, e.Recipient, e.Personal && e.Recipient == ""
 			}
 			out.Body.Entries = append(out.Body.Entries, b)
 		}

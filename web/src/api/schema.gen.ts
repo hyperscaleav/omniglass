@@ -160,6 +160,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/me/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List your inbox
+         * @description The caller's own console inbox: the notifications addressed to them on the inbox channel, newest first, with the unread count. Self-scoped (never another principal's), and scoped again by the caller's component read scope as it stands now, so an entry about a component they can no longer read is gone. Gated by notification:read.
+         */
+        get: operations["list-auth-me-notifications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/me/notifications/{id}:markRead": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark an inbox entry read
+         * @description Marks one of the caller's own inbox entries read (one already read keeps its first read time). An entry that is not the caller's, or about a component outside their component read scope, is a non-disclosing 404. Audited. Gated by notification:read.
+         */
+        post: operations["mark-read-auth-me-notification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/me/notifications:markAllRead": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark every inbox entry read
+         * @description Marks every unread entry in the caller's own inbox read, over the same scope the inbox reads, and says how many. Audited as one row. Gated by notification:read.
+         */
+        post: operations["mark-all-read-auth-me-notifications"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/me/sessions": {
         parameters: {
             query?: never;
@@ -2623,7 +2683,7 @@ export interface paths {
         put?: never;
         /**
          * Create a notification target
-         * @description Adds a destination a notification can be sent to: a channel kind (webhook), its URL and, optionally, the platform secret it signs or authenticates with. Binding a secret takes the right to reveal it (secret:reveal, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not reveal a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.
+         * @description Adds a destination a notification can be sent to: a webhook, its URL and, optionally, the platform secret it signs or authenticates with; or people, a principal_group (every human member, read at each alarm transition) or one principal, on the channels named. A person is told only about an alarm on a component their own component read scope admits. Binding a group takes principal_group:read:admin and binding a person principal:read:admin (a 403 without it), since the target reaches whoever they name. Binding a secret takes the right to reveal it (secret:reveal, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not reveal a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.
          */
         post: operations["create-notification-target"];
         delete?: never;
@@ -2801,7 +2861,7 @@ export interface paths {
         };
         /**
          * List notifications
-         * @description The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. Gated by notification:read.
+         * @description The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. A row addressed to a person names them only to that person and to holders of principal:read:admin. Gated by notification:read.
          */
         get: operations["list-notification"];
         put?: never;
@@ -5393,6 +5453,11 @@ export interface components {
              * @description A notification's attempts so far
              */
             attempts?: number;
+            /**
+             * @description How a notification travels: webhook, a person's inbox, or email
+             * @enum {string}
+             */
+            channel?: "webhook" | "inbox" | "email" | "";
             /** @description Why a notification's last attempt failed */
             error?: string;
             /** @description The series instance (an endpoint) an event is about */
@@ -5406,6 +5471,10 @@ export interface components {
             message?: string;
             /** @description A notification's uuid, what :retry names */
             notification?: string;
+            /** @description The person a notification is addressed to, by username: shown to that person and to holders of principal:read:admin */
+            recipient?: string;
+            /** @description True when a notification is addressed to a person whose name the caller may not see */
+            recipient_withheld?: boolean;
             /** @description The event rule the entry belongs to, by name: the rule that wrote the event, or the rule the platform acted for */
             rule?: string;
             /** @description The target a notification goes to, by name */
@@ -6656,21 +6725,27 @@ export interface components {
              * @example /api/v1/schemas/CreateNotificationTargetInputBody.json
              */
             readonly $schema?: string;
+            /** @description A group or person target's channels: inbox */
+            channels?: string[] | null;
             /** @description Whether deliveries go to it (default true) */
             enabled?: boolean;
             /**
-             * @description The channel kind
+             * @description The target kind
              * @enum {string}
              */
-            kind: "webhook";
+            kind: "webhook" | "principal_group" | "principal";
             /** @description A human label */
             label?: string;
             /** @description The target's name (lowercase kebab) */
             name: string;
+            /** @description A principal target's person, by username or uuid; binding one takes principal:read:admin */
+            principal?: string;
+            /** @description A principal_group target's group, by name or uuid; binding one takes principal_group:read:admin */
+            principal_group?: string;
             /** @description A platform secret, by name or uuid, of type hmac-key (signs each body) or bearer-token (sent as Authorization: Bearer) */
             secret?: string;
-            /** @description The destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is */
-            url: string;
+            /** @description A webhook's destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is */
+            url?: string;
         };
         CreateNotificationTypeInputBody: {
             /**
@@ -8163,6 +8238,20 @@ export interface components {
             readonly $schema?: string;
             groups: components["schemas"]["GroupBody"][] | null;
         };
+        ListInboxOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListInboxOutputBody.json
+             */
+            readonly $schema?: string;
+            notifications: components["schemas"]["NotificationBody"][] | null;
+            /**
+             * Format: int64
+             * @description How many entries the caller has not read, over the same scope
+             */
+            unread: number;
+        };
         ListLocationTypeMetricsOutputBody: {
             /**
              * Format: uri
@@ -8659,6 +8748,19 @@ export interface components {
             /** @description The channels the window's lines arrived on, whatever the filter: the source filter's choices */
             sources: string[] | null;
         };
+        MarkAllReadOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/MarkAllReadOutputBody.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: int64
+             * @description How many entries were marked read
+             */
+            marked: number;
+        };
         MeOutputBody: {
             /**
              * Format: uri
@@ -8860,6 +8962,11 @@ export interface components {
              * @description Attempts made; the 8th failure is final
              */
             attempts: number;
+            /**
+             * @description How it travels: a webhook post, a person's console inbox (delivered by its own commit), or email
+             * @enum {string}
+             */
+            channel: "webhook" | "inbox" | "email";
             /** @description The alarm's component, by name */
             component: string;
             /** @description The component's uuid */
@@ -8885,6 +8992,15 @@ export interface components {
             next_attempt_at?: string;
             /** @description The notification type that rendered it, by name */
             notification_type: string;
+            /**
+             * Format: date-time
+             * @description When its recipient read it, for an inbox entry
+             */
+            read_at?: string;
+            /** @description The person it is addressed to, by username: shown to that person and to holders of principal:read:admin, withheld from everyone else (see recipient_withheld) */
+            recipient?: string;
+            /** @description True when the row is addressed to a person whose name the caller may not see */
+            recipient_withheld?: boolean;
             /** Format: date-time */
             sent_at?: string;
             /**
@@ -8894,7 +9010,7 @@ export interface components {
             status: "queued" | "sent" | "failed";
             /** @description The rendered subject */
             subject: string;
-            /** @description The target it goes to, by name */
+            /** @description The target it goes to, by name: a webhook, or the group or person target it reached its recipient through */
             target: string;
             /** @description The rendered text */
             text: string;
@@ -8922,6 +9038,8 @@ export interface components {
              * @enum {string}
              */
             auth: "none" | "hmac" | "bearer";
+            /** @description The channels a group or person target delivers on: inbox (the console inbox) */
+            channels?: string[] | null;
             /** Format: date-time */
             created_at: string;
             /** @description Whether deliveries go to it; a disabled target is skipped */
@@ -8929,20 +9047,28 @@ export interface components {
             /** @description The target's uuid, the stable form of name */
             id: string;
             /**
-             * @description The channel kind: webhook posts a signed JSON envelope to the URL
+             * @description The target kind: webhook posts a signed JSON envelope to the URL; principal_group reaches every human member of a group, read at each alarm transition; principal reaches one person. A person is told only about alarms on components they can read
              * @enum {string}
              */
-            kind: "webhook";
+            kind: "webhook" | "principal_group" | "principal";
             label?: string;
             name: string;
+            /** @description The person a principal target reaches, by username */
+            principal?: string;
+            /** @description The group a principal_group target reaches, by name */
+            principal_group?: string;
+            /** @description The group's uuid */
+            principal_group_id?: string;
+            /** @description The person's uuid */
+            principal_id?: string;
             /** @description The platform secret the send signs (an hmac-key) or authenticates (a bearer-token) with, by name; absent sends unsigned */
             secret?: string;
             /** @description The bound secret's uuid, the stable form of secret */
             secret_id?: string;
             /** Format: date-time */
             updated_at: string;
-            /** @description The destination, masked to its scheme and host (the path and query often carry a credential); :reveal returns it whole */
-            url: string;
+            /** @description A webhook's destination, masked to its scheme and host (the path and query often carry a credential); :reveal returns it whole */
+            url?: string;
         };
         NotificationTypeBody: {
             /**
@@ -11460,6 +11586,8 @@ export interface components {
              * @example /api/v1/schemas/UpdateNotificationTargetInputBody.json
              */
             readonly $schema?: string;
+            /** @description A group or person target's channels: inbox */
+            channels?: string[];
             /** @description Whether deliveries go to it */
             enabled?: boolean;
             /** @description A human label (empty clears it) */
@@ -12168,6 +12296,101 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AvatarOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-auth-me-notifications": {
+        parameters: {
+            query?: {
+                /** @description Only the entries not yet read */
+                unread?: boolean;
+                /** @description At most this many, newest first (default 100) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListInboxOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "mark-read-auth-me-notification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The notification's uuid */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "mark-all-read-auth-me-notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarkAllReadOutputBody"];
                 };
             };
             /** @description Error */

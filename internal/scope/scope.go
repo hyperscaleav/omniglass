@@ -54,6 +54,43 @@ type Set struct {
 // Empty reports whether the set admits nothing (no all flag, no roots of any op).
 func (s Set) Empty() bool { return !s.All && len(s.IDs) == 0 && len(s.SelfIDs) == 0 }
 
+// AdmitsChain reports whether one row is inside s, judged from its ancestry:
+// chain is the row's own id first, then its ancestors in any order (an empty
+// chain is a row that does not exist). It is inScopeTree's rule with the walk
+// already done, so a caller judging many principals against one row walks
+// the tree once and resolves each principal here, purely (#1341, the
+// queue-time recipient filter): the row is a self root, or it or an ancestor
+// is an inclusive subtree root, or a strict ancestor is an excluded root.
+func (s Set) AdmitsChain(chain []string) bool {
+	if s.All {
+		return true
+	}
+	if len(chain) == 0 {
+		return false
+	}
+	excluded := make(map[string]bool, len(s.ExcludeRootIDs))
+	for _, id := range s.ExcludeRootIDs {
+		excluded[id] = true
+	}
+	inclusive := make(map[string]bool, len(s.IDs))
+	for _, id := range s.IDs {
+		if !excluded[id] {
+			inclusive[id] = true
+		}
+	}
+	for _, id := range s.SelfIDs {
+		if id == chain[0] {
+			return true
+		}
+	}
+	for i, id := range chain {
+		if inclusive[id] || (i > 0 && excluded[id]) {
+			return true
+		}
+	}
+	return false
+}
+
 // Resolve computes visible_set(P, action) for resource. A grant contributes only
 // when its role carries resource:action (per the role index, including the :read
 // floor) and its scope_kind can contain the resource. A scope_kind of "all"

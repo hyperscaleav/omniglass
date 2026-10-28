@@ -18,6 +18,17 @@ var catalog = []tooldef.Def{
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{},\"type\":\"object\"}",
 	},
 	{
+		Name:        "list-auth-me-notifications",
+		Title:       "List your inbox",
+		Description: "The caller's own console inbox: the notifications addressed to them on the inbox channel, newest first, with the unread count. Self-scoped (never another principal's), and scoped again by the caller's component read scope as it stands now, so an entry about a component they can no longer read is gone. Gated by notification:read.",
+		Method:      "GET",
+		Path:        "/auth/me/notifications",
+		Permission:  "notification:read",
+		QueryParams: []string{"unread", "limit"},
+		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"limit\":{\"description\":\"At most this many, newest first (default 100)\",\"format\":\"int64\",\"maximum\":500,\"minimum\":0,\"type\":\"integer\"},\"unread\":{\"description\":\"Only the entries not yet read\",\"type\":\"boolean\"}},\"type\":\"object\"}",
+	},
+	{
 		Name:        "list-component-types",
 		Title:       "List component types",
 		Description: "Lists the component_type registry (the taxonomy a product is classified under: mic, camera, wireless-mic under mic), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Gated by component_type:read.",
@@ -444,7 +455,7 @@ var catalog = []tooldef.Def{
 	{
 		Name:        "list-notification",
 		Title:       "List notifications",
-		Description: "The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. Gated by notification:read.",
+		Description: "The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. A row addressed to a person names them only to that person and to holders of principal:read:admin. Gated by notification:read.",
 		Method:      "GET",
 		Path:        "/notifications",
 		Permission:  "notification:read",

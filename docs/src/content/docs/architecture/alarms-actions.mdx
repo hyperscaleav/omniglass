@@ -39,8 +39,9 @@ human has seen an incident, orthogonal to whether it is still raised. **Snooze**
 not built, and the reasons are in that section. The [notification](#notifications) lane (#618):
 **notification types** previewed against a real alarm, **webhook targets** sent through the egress
 primitive, the **action rule** with its one `notify` step, and the **notification** delivery row a
-server tick sends, on the alarm's timeline with a retry. Flows, grouping and the other channel kinds
-are still design.
+server tick sends, on the alarm's timeline with a retry. **People as recipients** (#1341): a
+**principal group** or a **person** as a target, told in their console **inbox**, each only about the
+alarms they can read. Flows, grouping and the other channel kinds are still design.
 See [implementation status](/architecture/status/).
 :::
 
@@ -475,7 +476,8 @@ route, so an author sees what a receiver gets and what a template can read.
 A `notification_target` names a **channel kind**, a destination and, optionally, the credential it
 proves itself with. The kinds are a code-declared enum published through the API; `webhook` is
 the first, and it reaches people through the tools they already watch (a chat incoming webhook, a
-paging service) without a mail relay. Email (#1317) and other channel kinds are later. A target
+paging service) without a mail relay. A target can also name people: a `principal_group` or one
+`principal` ([below](#people-group-and-person-targets-and-the-inbox)). Other channel kinds are later. A target
 is **platform-owned and admin-only**: an egress destination holding a credential reference, so
 `notification_target` is a sensitive resource off the viewer floor, every route takes an
 all-scope `notification_target:*` grant, and nothing below admin holds one.
@@ -515,6 +517,49 @@ scrubbed of the URL and every credential first. https always, plain http only to
 the allow list names; TLS verified; a redirect is the receiver's answer, never followed; every
 phase bounded (dial, handshake, the response's headers, the whole exchange); no proxy from the
 environment.
+
+### People: group and person targets, and the inbox
+
+A target can name people instead of a channel (#1341): a **`principal_group`** target reaches every
+member of a group, and a **`principal`** target one person, each on the **channels** it names (`inbox`,
+the console inbox). They ride the rule's targets exactly as a webhook does, so "the on-call group gets
+every critical alarm" is an action rule whose target is the group:
+
+```bash
+omniglass notification-target create --name on-call-page --kind principal_group \
+  --principal-group on-call --channels '["inbox"]'
+omniglass action-rule create --name page-on-call --on '["raised"]' \
+  --when 'severity_rank >= 50' --targets '["on-call-page"]'
+```
+
+**The group is expanded at the transition**, not when the rule is written: the alarm's own transaction
+reads the membership as it stands, so a member added later is told on the next alarm and a removed one
+is not, with no rule edited. Recipients are people: only active, unarchived **human** members are told
+(a service account or a node in the group is skipped). Each person gets **one row per channel**, with
+their own delivery state; a person one rule reaches twice (two of its groups, or a group and directly)
+is told once.
+
+**Nobody is told about an alarm they could not read.** At the transition each candidate is kept only
+when their own component read scope, resolved from their grants exactly as a request of theirs would be,
+admits the alarm's component. The check is set-based (the members, all their grants, the role index and
+one walk up the component's ancestry, then a pure resolve per person), so it costs the same for a group
+of two or two hundred, and it runs under the notification savepoint, so it can never fail the
+transition ([ADR-1341](/architecture/decisions/#adr-1341-a-person-is-told-about-an-alarm-only-while-they-can-read-it-groups-expand-at-queue-time-scope-is-checked-there-and-again-at-delivery)).
+
+**The inbox** is a person's own `inbox` rows: delivered by their own commit (written `sent`, never
+drained by the tick), each with a `read_at`. `GET /auth/me/notifications` lists the caller's entries,
+newest first, with the unread count; `POST /auth/me/notifications/{id}:markRead` and
+`POST /auth/me/notifications:markAllRead` mark them, audited, and only the caller's own (another's entry
+is a 404). Every inbox read is **scoped again** by the caller's component read scope as it stands, so an
+entry about a component they have since lost is gone from their inbox.
+
+**Who is named.** A person-addressed row is visible wherever its alarm is (`/notifications`, the
+alarm's timeline), so the alarm's history stays whole, but its recipient is named only to that person
+and to holders of `principal:read:admin`; everyone else reads it as withheld
+([identity and access](/architecture/identity-access/#people-as-notification-audiences)). Binding a group or a person to a
+target takes `principal_group:read:admin` or `principal:read:admin` on top of
+`notification_target:create`, as binding a secret takes the right to reveal it, and a group or person a
+target names cannot be deleted from under it: the refusal names the target.
 
 ### The `action_rule`: when a message is sent
 
@@ -572,7 +617,7 @@ alarm reads are: a principal never sees a message about a component outside its 
 What an `action_rule` raises and runs beyond the built `notify` step; stateful, holding its own
 state directly:
 
-- **kinds**: `notify` to an in-app inbox, `email` (#1317), a `webhook` action with a per-target
+- **kinds**: `email` (#1317), a `webhook` action with a per-target
   body, `run` (execute a command; edge realization in [templates](/architecture/templates/) /
   [nodes](/architecture/nodes/));
 - a **multistep** action is a **flow**, carrying workflow state (current step, waiting, branches).
@@ -735,8 +780,11 @@ registries, the `action_rule` and the targets it sends to (`action_rule_target`)
 <SchemaTable
   table="notification_target"
   notes={{
-    kind: 'The channel kind, a code-declared enum (webhook)',
-    url: 'The destination; masked on every read, revealed whole under an audit row',
+    kind: 'The target kind, a code-declared enum: webhook, principal_group or principal; a CHECK holds each kind to its own columns',
+    url: 'A webhook\'s destination; masked on every read, revealed whole under an audit row. NULL for a person target',
+    principal_group_id: 'The group a principal_group target reaches, expanded at every transition (ON DELETE RESTRICT)',
+    principal_id: 'The person a principal target reaches (ON DELETE RESTRICT)',
+    channels: 'The channels a person target delivers on (inbox); empty for a webhook',
     secret_id: 'The platform hmac-key or bearer-token secret it signs or authenticates with; a bound secret cannot be deleted (RESTRICT)',
   }}
 />
@@ -750,6 +798,10 @@ registries, the `action_rule` and the targets it sends to (`action_rule_target`)
     facts: 'The alarm facts the templates rendered over, sent as the envelope\'s facts',
     status: 'queued, sent or failed; the partial index on due queued rows is what the tick drains',
     next_attempt_at: 'When the tick next tries a queued row: now, then 10s doubling after each failure',
+    channel: 'How it travels: webhook, inbox (delivered by its commit) or email',
+    recipient_principal_id: 'The person it is addressed to; ON DELETE SET NULL, recipient_name keeping who it was',
+    recipient_name: 'The recipient by username, kept after a purge; withheld on read from all but the recipient and principal:read:admin',
+    read_at: 'When its recipient read an inbox entry',
   }}
 />
 

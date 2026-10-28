@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strconv"
 	"time"
 
@@ -59,6 +60,15 @@ type Notification struct {
 	Rule          string
 	Type          string
 	Target        string
+	// Channel is how it travels: webhook, inbox or email (#1341).
+	Channel string
+	// Personal is a row addressed to one person. Recipient is that person by
+	// name and RecipientID by uuid, both empty when the reader may not see
+	// who it is (RecipientView) or the person was purged.
+	Personal      bool
+	Recipient     string
+	RecipientID   string
+	ReadAt        *time.Time
 	Subject       string
 	Text          string
 	Status        string
@@ -81,12 +91,31 @@ var (
 )
 
 const notificationCols = `n.id::text, n.alarm_id::text, n.component_id::text, coalesce((select c.name from component c where c.id = n.component_id), ''),
-	n.transition, n.rule_name, n.type_name, n.target_name, n.subject, n.text, n.status, n.attempts,
+	n.transition, n.rule_name, n.type_name, n.target_name, n.channel, n.recipient_name is not null, coalesce(n.recipient_name, ''),
+	coalesce(n.recipient_principal_id::text, ''), n.read_at, n.subject, n.text, n.status, n.attempts,
 	case when n.status = 'queued' then n.next_attempt_at end, n.last_status, coalesce(n.last_error, ''), n.sent_at, n.created_at, n.updated_at`
+
+// RecipientView is who may see a person-addressed row's recipient (#1341,
+// decision 5): the recipient themselves (Self, their principal uuid) and a
+// holder of the principal directory's admin-tier read (All). Everyone else
+// sees the row, so an alarm's history stays complete, without the name.
+type RecipientView struct {
+	Self string
+	All  bool
+}
+
+// withhold blanks a recipient the view may not see.
+func (v RecipientView) withhold(n *Notification) {
+	if v.All || (n.RecipientID != "" && n.RecipientID == v.Self) {
+		return
+	}
+	n.Recipient, n.RecipientID = "", ""
+}
 
 func scanNotification(row pgx.Row) (*Notification, error) {
 	var n Notification
 	if err := row.Scan(&n.ID, &n.AlarmID, &n.ComponentID, &n.ComponentName, &n.Transition, &n.Rule, &n.Type, &n.Target,
+		&n.Channel, &n.Personal, &n.Recipient, &n.RecipientID, &n.ReadAt,
 		&n.Subject, &n.Text, &n.Status, &n.Attempts, &n.NextAttemptAt, &n.LastStatus, &n.LastError, &n.SentAt, &n.CreatedAt, &n.UpdatedAt); err != nil {
 		return nil, err
 	}
@@ -99,10 +128,17 @@ func scanNotification(row pgx.Row) (*Notification, error) {
 // type's templates (the rule's own, else the official one for the
 // transition) and its enabled targets.
 type queuedRule struct {
-	id, name, when         string
-	typeID, typeName       string
-	subject, text          string
-	targetIDs, targetNames []string
+	id, name, when                      string
+	typeID, typeName                    string
+	subject, text                       string
+	targetIDs, targetNames, targetKinds []string
+}
+
+// queuedRow is one row a firing rule writes: to a webhook target, or to one
+// person on one channel through a group or person target.
+type queuedRow struct {
+	targetID, targetName, channel, status string
+	recipientID, recipientName            *string
 }
 
 // queueNotificationsTx writes the notifications one alarm transition causes,
@@ -157,8 +193,16 @@ func (p *PG) queueNotifications(ctx context.Context, tx pgx.Tx, componentID, ala
 	if err != nil {
 		return fmt.Errorf("storage: encode notification facts: %w", err)
 	}
+	// Judge every rule first: the people a firing rule names are expanded
+	// and scope-filtered together, in a fixed handful of statements.
+	type fired struct {
+		r                             queuedRule
+		status, subject, text, reason string
+	}
+	var fires []fired
+	var personTargets []string
 	for _, r := range rs {
-		status, subject, text, reason := NotificationQueued, "", "", ""
+		f := fired{r: r, status: NotificationQueued}
 		when, err := rules.CompileWhen(r.when)
 		holds := false
 		if err == nil {
@@ -166,24 +210,93 @@ func (p *PG) queueNotifications(ctx context.Context, tx pgx.Tx, componentID, ala
 		}
 		switch {
 		case err != nil:
-			status, reason = NotificationFailed, "the rule's when did not run: "+err.Error()
+			f.status, f.reason = NotificationFailed, "the rule's when did not run: "+err.Error()
 		case !holds:
 			continue
 		default:
-			subject, text, err = renderNotification(eng, r.subject, r.text, facts)
+			f.subject, f.text, err = renderNotification(eng, r.subject, r.text, facts)
 			if err != nil {
-				status, reason = NotificationFailed, "the notification did not render: "+TemplateRefusal(err)
+				f.status, f.reason = NotificationFailed, "the notification did not render: "+TemplateRefusal(err)
 			}
 		}
-		for i, targetID := range r.targetIDs {
-			if _, err := tx.Exec(ctx, `insert into notification (alarm_id, component_id, transition, rule_id, rule_name,
-					notification_type_id, type_name, target_id, target_name, subject, text, facts, status, last_error)
-				values ($1::uuid, $2::uuid, $3, $4::uuid, $5, $6::uuid, $7, $8::uuid, $9, $10, $11, $12, $13, nullif($14, ''))`,
-				alarmID, componentID, transition, r.id, r.name, r.typeID, r.typeName, targetID, r.targetNames[i],
-				subject, text, factsJSON, status, reason); err != nil {
-				return fmt.Errorf("storage: queue notification for rule %s: %w", r.name, err)
+		fires = append(fires, f)
+		for i, k := range r.targetKinds {
+			if isPersonKind(k) && !slices.Contains(personTargets, r.targetIDs[i]) {
+				personTargets = append(personTargets, r.targetIDs[i])
 			}
 		}
+	}
+	people := map[string][]recipient{}
+	if len(personTargets) > 0 {
+		if people, err = recipientsFor(ctx, tx, componentID, personTargets); err != nil {
+			return err
+		}
+	}
+	for _, f := range fires {
+		rows := rowsFor(f.r, f.status, people)
+		if len(rows) == 0 {
+			continue
+		}
+		if err := insertNotifications(ctx, tx, alarmID, componentID, transition, f.r, f.subject, f.text, factsJSON, f.reason, rows); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// rowsFor lays out the rows one firing rule writes: one per webhook target,
+// and one per person per channel through its group and person targets, a
+// person reached twice by one rule (a member of two of its groups, or named
+// directly too) told once per channel. An inbox row is delivered by its own
+// commit, so it is written sent; a rule that failed writes every row failed.
+func rowsFor(r queuedRule, status string, people map[string][]recipient) []queuedRow {
+	var out []queuedRow
+	told := map[string]bool{}
+	for i, id := range r.targetIDs {
+		if !isPersonKind(r.targetKinds[i]) {
+			out = append(out, queuedRow{targetID: id, targetName: r.targetNames[i], channel: DeliveryWebhook, status: status})
+			continue
+		}
+		for _, p := range people[id] {
+			for _, ch := range p.channels {
+				if told[p.id+"/"+ch] {
+					continue
+				}
+				told[p.id+"/"+ch] = true
+				st := status
+				if st == NotificationQueued && ch == DeliveryInbox {
+					st = NotificationSent
+				}
+				pid, pname := p.id, p.name
+				out = append(out, queuedRow{targetID: id, targetName: r.targetNames[i], channel: ch, status: st,
+					recipientID: &pid, recipientName: &pname})
+			}
+		}
+	}
+	return out
+}
+
+// insertNotifications writes one rule's rows in one statement, whatever
+// their number.
+func insertNotifications(ctx context.Context, tx pgx.Tx, alarmID, componentID, transition string, r queuedRule,
+	subject, text string, factsJSON []byte, reason string, rows []queuedRow) error {
+	n := len(rows)
+	targetIDs, targetNames, statuses, channels := make([]string, n), make([]string, n), make([]string, n), make([]string, n)
+	rids, rnames := make([]*string, n), make([]*string, n)
+	for i, x := range rows {
+		targetIDs[i], targetNames[i], statuses[i], channels[i], rids[i], rnames[i] = x.targetID, x.targetName, x.status, x.channel, x.recipientID, x.recipientName
+	}
+	if _, err := tx.Exec(ctx, `insert into notification (alarm_id, component_id, transition, rule_id, rule_name,
+			notification_type_id, type_name, target_id, target_name, subject, text, facts, status, last_error,
+			channel, recipient_principal_id, recipient_name, sent_at)
+		select $1::uuid, $2::uuid, $3, $4::uuid, $5, $6::uuid, $7, x.target_id::uuid, x.target_name, $8, $9, $10, x.status, nullif($11, ''),
+			x.channel, x.rid::uuid, x.rname, case when x.status = 'sent' then now() end
+		from unnest($12::text[], $13::text[], $14::text[], $15::text[], $16::text[], $17::text[])
+			with ordinality as x(target_id, target_name, status, channel, rid, rname, ord)
+		order by x.ord`,
+		alarmID, componentID, transition, r.id, r.name, r.typeID, r.typeName, subject, text, factsJSON, reason,
+		targetIDs, targetNames, statuses, channels, rids, rnames); err != nil {
+		return fmt.Errorf("storage: queue notifications for rule %s: %w", r.name, err)
 	}
 	return nil
 }
@@ -194,7 +307,8 @@ func rulesOn(ctx context.Context, q querier, transition string) ([]queuedRule, e
 	rows, err := q.Query(ctx, `
 		select r.id::text, r.name, r.when_expr, t.id::text, t.name, t.subject, t.text,
 			coalesce(array_agg(nt.id::text order by nt.name) filter (where nt.id is not null), '{}'),
-			coalesce(array_agg(nt.name order by nt.name) filter (where nt.id is not null), '{}')
+			coalesce(array_agg(nt.name order by nt.name) filter (where nt.id is not null), '{}'),
+			coalesce(array_agg(nt.kind order by nt.name) filter (where nt.id is not null), '{}')
 		from action_rule r
 		join notification_type t on t.id = coalesce(r.notification_type_id, (select id from notification_type where name = $2 and official))
 		left join action_rule_target art on art.rule_id = r.id
@@ -209,7 +323,7 @@ func rulesOn(ctx context.Context, q querier, transition string) ([]queuedRule, e
 	var out []queuedRule
 	for rows.Next() {
 		var r queuedRule
-		if err := rows.Scan(&r.id, &r.name, &r.when, &r.typeID, &r.typeName, &r.subject, &r.text, &r.targetIDs, &r.targetNames); err != nil {
+		if err := rows.Scan(&r.id, &r.name, &r.when, &r.typeID, &r.typeName, &r.subject, &r.text, &r.targetIDs, &r.targetNames, &r.targetKinds); err != nil {
 			return nil, fmt.Errorf("storage: scan action rule: %w", err)
 		}
 		out = append(out, r)
@@ -357,7 +471,7 @@ type NotificationFilter struct {
 
 // ListNotifications lists notifications about components the read scope
 // admits, newest first.
-func (p *PG) ListNotifications(ctx context.Context, f NotificationFilter, read scope.Set) ([]Notification, error) {
+func (p *PG) ListNotifications(ctx context.Context, f NotificationFilter, read scope.Set, view RecipientView) ([]Notification, error) {
 	limit := f.Limit
 	if limit <= 0 {
 		limit = 100
@@ -388,6 +502,7 @@ func (p *PG) ListNotifications(ctx context.Context, f NotificationFilter, read s
 		if err != nil {
 			return nil, fmt.Errorf("storage: scan notification: %w", err)
 		}
+		view.withhold(x)
 		out = append(out, *x)
 	}
 	return out, rows.Err()
@@ -395,8 +510,13 @@ func (p *PG) ListNotifications(ctx context.Context, f NotificationFilter, read s
 
 // GetNotification reads one notification by id; one about a component
 // outside the read scope is the non-disclosing ErrNotificationNotFound.
-func (p *PG) GetNotification(ctx context.Context, id string, read scope.Set) (*Notification, error) {
-	return getNotification(ctx, p.pool, id, read, false)
+func (p *PG) GetNotification(ctx context.Context, id string, read scope.Set, view RecipientView) (*Notification, error) {
+	n, err := getNotification(ctx, p.pool, id, read, false)
+	if err != nil {
+		return nil, err
+	}
+	view.withhold(n)
+	return n, nil
 }
 
 func getNotification(ctx context.Context, q querier, id string, read scope.Set, forUpdate bool) (*Notification, error) {
@@ -424,7 +544,7 @@ func getNotification(ctx context.Context, q querier, id string, read scope.Set, 
 // attempts, audited: one outside the read scope is not found, one inside it
 // but outside the action scope (notification:retry, on the component tier)
 // forbidden, one that has not failed not retryable.
-func (p *PG) RetryNotification(ctx context.Context, actorID, id string, read, action scope.Set) (*Notification, error) {
+func (p *PG) RetryNotification(ctx context.Context, actorID, id string, read, action scope.Set, view RecipientView) (*Notification, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin retry notification: %w", err)
@@ -461,5 +581,146 @@ func (p *PG) RetryNotification(ctx context.Context, actorID, id string, read, ac
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("storage: commit retry notification: %w", err)
 	}
+	view.withhold(after)
 	return after, nil
+}
+
+// --- the inbox: a person's own rows, scoped again at read (#1341) ----------
+
+// InboxFilter narrows an inbox read: unread entries only, at most Limit
+// (100 when zero, 500 at most), newest first.
+type InboxFilter struct {
+	Unread bool
+	Limit  int
+}
+
+// Inbox is one person's inbox as it reads: the entries and the unread count,
+// both over the same scope.
+type Inbox struct {
+	Notifications []Notification
+	Unread        int
+}
+
+// inboxPred is the inbox's own predicate over the caller and a read filter
+// whose roots bind from $2: the caller's delivered inbox rows about
+// components their read scope admits now. A grant lost since the row was
+// written makes the entry unreadable at once (the read-time recheck).
+func inboxPred(rf readFilter) string {
+	return `n.recipient_principal_id = $1::uuid and n.channel = 'inbox' and n.status = 'sent' and ` + rf.Pred("n.component_id")
+}
+
+// ListInbox reads a person's inbox: their own delivered inbox rows, about
+// components their component read scope admits now, newest first, with the
+// unread count over the same set.
+func (p *PG) ListInbox(ctx context.Context, principalID string, f InboxFilter, read scope.Set) (*Inbox, error) {
+	out := &Inbox{Notifications: []Notification{}}
+	if !isUUID(principalID) {
+		return out, nil
+	}
+	limit := f.Limit
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > 500 {
+		limit = 500
+	}
+	rf := newReadFilter(componentTable, read, 2)
+	args := append([]any{principalID}, rf.Args...)
+	n := len(args)
+	rows, err := p.pool.Query(ctx, rf.With+`select `+notificationCols+` from notification n
+		where `+inboxPred(rf)+` and (not $`+strconv.Itoa(n+1)+`::boolean or n.read_at is null)
+		order by n.created_at desc, n.id desc limit $`+strconv.Itoa(n+2), append(args, f.Unread, limit)...)
+	if err != nil {
+		return nil, fmt.Errorf("storage: list inbox: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		x, err := scanNotification(rows)
+		if err != nil {
+			return nil, fmt.Errorf("storage: scan inbox entry: %w", err)
+		}
+		out.Notifications = append(out.Notifications, *x)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("storage: list inbox: %w", err)
+	}
+	if err := p.pool.QueryRow(ctx, rf.With+`select count(*) from notification n where `+inboxPred(rf)+` and n.read_at is null`, args...).Scan(&out.Unread); err != nil {
+		return nil, fmt.Errorf("storage: count unread inbox: %w", err)
+	}
+	return out, nil
+}
+
+// MarkInboxRead marks one of the caller's own inbox entries read, audited.
+// An entry that is not theirs, not an inbox entry, or about a component they
+// can no longer read is the non-disclosing ErrNotificationNotFound; marking
+// one already read keeps its first read time.
+func (p *PG) MarkInboxRead(ctx context.Context, actorID, principalID, id string, read scope.Set) (*Notification, error) {
+	if !isUUID(id) || !isUUID(principalID) {
+		return nil, ErrNotificationNotFound
+	}
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: begin mark read: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	rf := newReadFilter(componentTable, read, 2)
+	args := append([]any{principalID}, rf.Args...)
+	idArg := "$" + strconv.Itoa(len(args)+1)
+	var before *time.Time
+	err = tx.QueryRow(ctx, rf.With+`select n.read_at from notification n where n.id = `+idArg+`::uuid and `+inboxPred(rf)+` for update of n`,
+		append(args, id)...).Scan(&before)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotificationNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("storage: mark read %s: %w", id, err)
+	}
+	if before == nil {
+		if _, err := tx.Exec(ctx, `update notification set read_at = now(), updated_at = now() where id = $1::uuid`, id); err != nil {
+			return nil, fmt.Errorf("storage: mark read %s: %w", id, err)
+		}
+	}
+	after, err := getNotification(ctx, tx, id, scope.Set{All: true}, false)
+	if err != nil {
+		return nil, err
+	}
+	if before == nil {
+		if err := writeAuditRes(ctx, tx, actorID, "read", "notification", after.ID, map[string]any{"read": false}, map[string]any{"read": true}); err != nil {
+			return nil, err
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit mark read: %w", err)
+	}
+	return after, nil
+}
+
+// MarkInboxAllRead marks every unread entry the caller can read in their
+// inbox read, audited as one row on the caller, and reports how many.
+func (p *PG) MarkInboxAllRead(ctx context.Context, actorID, principalID string, read scope.Set) (int, error) {
+	if !isUUID(principalID) {
+		return 0, nil
+	}
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("storage: begin mark all read: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	rf := newReadFilter(componentTable, read, 2)
+	args := append([]any{principalID}, rf.Args...)
+	tag, err := tx.Exec(ctx, rf.With+`update notification n set read_at = now(), updated_at = now()
+		where `+inboxPred(rf)+` and n.read_at is null`, args...)
+	if err != nil {
+		return 0, fmt.Errorf("storage: mark all read: %w", err)
+	}
+	marked := int(tag.RowsAffected())
+	if marked > 0 {
+		if err := writeAuditRes(ctx, tx, actorID, "read_all", "principal", principalID, nil, map[string]any{"inbox_entries_read": marked}); err != nil {
+			return 0, err
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return 0, fmt.Errorf("storage: commit mark all read: %w", err)
+	}
+	return marked, nil
 }

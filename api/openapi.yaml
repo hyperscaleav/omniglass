@@ -326,6 +326,14 @@ components:
           description: A notification's attempts so far
           format: int64
           type: integer
+        channel:
+          description: "How a notification travels: webhook, a person's inbox, or email"
+          enum:
+            - webhook
+            - inbox
+            - email
+            - ""
+          type: string
         error:
           description: Why a notification's last attempt failed
           type: string
@@ -345,6 +353,12 @@ components:
         notification:
           description: A notification's uuid, what :retry names
           type: string
+        recipient:
+          description: "The person a notification is addressed to, by username: shown to that person and to holders of principal:read:admin"
+          type: string
+        recipient_withheld:
+          description: True when a notification is addressed to a person whose name the caller may not see
+          type: boolean
         rule:
           description: "The event rule the entry belongs to, by name: the rule that wrote the event, or the rule the platform acted for"
           type: string
@@ -2476,13 +2490,22 @@ components:
           format: uri
           readOnly: true
           type: string
+        channels:
+          description: "A group or person target's channels: inbox"
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         enabled:
           description: Whether deliveries go to it (default true)
           type: boolean
         kind:
-          description: The channel kind
+          description: The target kind
           enum:
             - webhook
+            - principal_group
+            - principal
           type: string
         label:
           description: A human label
@@ -2491,17 +2514,21 @@ components:
           description: The target's name (lowercase kebab)
           minLength: 1
           type: string
+        principal:
+          description: A principal target's person, by username or uuid; binding one takes principal:read:admin
+          type: string
+        principal_group:
+          description: A principal_group target's group, by name or uuid; binding one takes principal_group:read:admin
+          type: string
         secret:
           description: "A platform secret, by name or uuid, of type hmac-key (signs each body) or bearer-token (sent as Authorization: Bearer)"
           type: string
         url:
-          description: "The destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is"
-          minLength: 1
+          description: "A webhook's destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is"
           type: string
       required:
         - name
         - kind
-        - url
       type: object
     CreateNotificationTypeInputBody:
       additionalProperties: false
@@ -5132,6 +5159,30 @@ components:
       required:
         - groups
       type: object
+    ListInboxOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListInboxOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        notifications:
+          items:
+            $ref: "#/components/schemas/NotificationBody"
+          type:
+            - array
+            - "null"
+        unread:
+          description: How many entries the caller has not read, over the same scope
+          format: int64
+          type: integer
+      required:
+        - notifications
+        - unread
+      type: object
     ListLocationTypeMetricsOutputBody:
       additionalProperties: false
       properties:
@@ -6130,6 +6181,23 @@ components:
         - logs
         - sources
       type: object
+    MarkAllReadOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/MarkAllReadOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        marked:
+          description: How many entries were marked read
+          format: int64
+          type: integer
+      required:
+        - marked
+      type: object
     MeOutputBody:
       additionalProperties: false
       properties:
@@ -6480,6 +6548,13 @@ components:
           description: Attempts made; the 8th failure is final
           format: int64
           type: integer
+        channel:
+          description: "How it travels: a webhook post, a person's console inbox (delivered by its own commit), or email"
+          enum:
+            - webhook
+            - inbox
+            - email
+          type: string
         component:
           description: The alarm's component, by name
           type: string
@@ -6507,6 +6582,16 @@ components:
         notification_type:
           description: The notification type that rendered it, by name
           type: string
+        read_at:
+          description: When its recipient read it, for an inbox entry
+          format: date-time
+          type: string
+        recipient:
+          description: "The person it is addressed to, by username: shown to that person and to holders of principal:read:admin, withheld from everyone else (see recipient_withheld)"
+          type: string
+        recipient_withheld:
+          description: True when the row is addressed to a person whose name the caller may not see
+          type: boolean
         sent_at:
           format: date-time
           type: string
@@ -6521,7 +6606,7 @@ components:
           description: The rendered subject
           type: string
         target:
-          description: The target it goes to, by name
+          description: "The target it goes to, by name: a webhook, or the group or person target it reached its recipient through"
           type: string
         text:
           description: The rendered text
@@ -6541,6 +6626,7 @@ components:
         - action_rule
         - notification_type
         - target
+        - channel
         - subject
         - text
         - status
@@ -6579,6 +6665,13 @@ components:
             - hmac
             - bearer
           type: string
+        channels:
+          description: "The channels a group or person target delivers on: inbox (the console inbox)"
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         created_at:
           format: date-time
           type: string
@@ -6589,13 +6682,27 @@ components:
           description: The target's uuid, the stable form of name
           type: string
         kind:
-          description: "The channel kind: webhook posts a signed JSON envelope to the URL"
+          description: "The target kind: webhook posts a signed JSON envelope to the URL; principal_group reaches every human member of a group, read at each alarm transition; principal reaches one person. A person is told only about alarms on components they can read"
           enum:
             - webhook
+            - principal_group
+            - principal
           type: string
         label:
           type: string
         name:
+          type: string
+        principal:
+          description: The person a principal target reaches, by username
+          type: string
+        principal_group:
+          description: The group a principal_group target reaches, by name
+          type: string
+        principal_group_id:
+          description: The group's uuid
+          type: string
+        principal_id:
+          description: The person's uuid
           type: string
         secret:
           description: The platform secret the send signs (an hmac-key) or authenticates (a bearer-token) with, by name; absent sends unsigned
@@ -6607,13 +6714,12 @@ components:
           format: date-time
           type: string
         url:
-          description: The destination, masked to its scheme and host (the path and query often carry a credential); :reveal returns it whole
+          description: A webhook's destination, masked to its scheme and host (the path and query often carry a credential); :reveal returns it whole
           type: string
       required:
         - id
         - name
         - kind
-        - url
         - auth
         - enabled
         - created_at
@@ -11033,6 +11139,11 @@ components:
           format: uri
           readOnly: true
           type: string
+        channels:
+          description: "A group or person target's channels: inbox"
+          items:
+            type: string
+          type: array
         enabled:
           description: Whether deliveries go to it
           type: boolean
@@ -11880,6 +11991,90 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Get your own profile picture
+  /auth/me/notifications:
+    get:
+      description: "The caller's own console inbox: the notifications addressed to them on the inbox channel, newest first, with the unread count. Self-scoped (never another principal's), and scoped again by the caller's component read scope as it stands now, so an entry about a component they can no longer read is gone. Gated by notification:read."
+      operationId: list-auth-me-notifications
+      parameters:
+        - description: Only the entries not yet read
+          explode: false
+          in: query
+          name: unread
+          schema:
+            description: Only the entries not yet read
+            type: boolean
+        - description: At most this many, newest first (default 100)
+          explode: false
+          in: query
+          name: limit
+          schema:
+            description: At most this many, newest first (default 100)
+            format: int64
+            maximum: 500
+            minimum: 0
+            type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListInboxOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List your inbox
+      x-omniglass-mcp: {}
+      x-omniglass-permission: notification:read
+  /auth/me/notifications/{id}:markRead:
+    post:
+      description: Marks one of the caller's own inbox entries read (one already read keeps its first read time). An entry that is not the caller's, or about a component outside their component read scope, is a non-disclosing 404. Audited. Gated by notification:read.
+      operationId: mark-read-auth-me-notification
+      parameters:
+        - description: The notification's uuid
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The notification's uuid
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Mark an inbox entry read
+      x-omniglass-permission: notification:read
+  /auth/me/notifications:markAllRead:
+    post:
+      description: Marks every unread entry in the caller's own inbox read, over the same scope the inbox reads, and says how many. Audited as one row. Gated by notification:read.
+      operationId: mark-all-read-auth-me-notifications
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarkAllReadOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Mark every inbox entry read
+      x-omniglass-permission: notification:read
   /auth/me/sessions:
     get:
       description: Lists the caller's own active bearer credentials (time-bounded web-login sessions and CLI/API tokens) with their non-secret metadata; the current one is flagged. Requires authentication; self-scoped (never another principal's). The token secret is never returned.
@@ -16342,7 +16537,7 @@ paths:
       summary: List notification targets
       x-omniglass-permission: notification_target:read
     post:
-      description: "Adds a destination a notification can be sent to: a channel kind (webhook), its URL and, optionally, the platform secret it signs or authenticates with. Binding a secret takes the right to reveal it (secret:reveal, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not reveal a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant."
+      description: "Adds a destination a notification can be sent to: a webhook, its URL and, optionally, the platform secret it signs or authenticates with; or people, a principal_group (every human member, read at each alarm transition) or one principal, on the channels named. A person is told only about an alarm on a component their own component read scope admits. Binding a group takes principal_group:read:admin and binding a person principal:read:admin (a 403 without it), since the target reaches whoever they name. Binding a secret takes the right to reveal it (secret:reveal, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not reveal a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant."
       operationId: create-notification-target
       requestBody:
         content:
@@ -16693,7 +16888,7 @@ paths:
       x-omniglass-permission: notification_type:read
   /notifications:
     get:
-      description: The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. Gated by notification:read.
+      description: The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. A row addressed to a person names them only to that person and to holders of principal:read:admin. Gated by notification:read.
       operationId: list-notification
       parameters:
         - description: Only the notifications about this alarm (its uuid)

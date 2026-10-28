@@ -730,6 +730,12 @@ func mapPrincipalErr(err error) error {
 		return huma.Error409Conflict("cannot revoke the last owner grant")
 	case errors.Is(err, storage.ErrNotArchived):
 		return huma.Error409Conflict("a principal must be archived before it can be purged")
+	case errors.Is(err, storage.ErrBoundToTarget):
+		var bound *storage.TargetBindingError
+		if errors.As(err, &bound) {
+			return huma.Error409Conflict("the notification target " + bound.Target + " notifies this " + bound.What + "; delete that target or point it elsewhere first")
+		}
+		return huma.Error409Conflict("a notification target notifies it; delete that target first")
 	case errors.Is(err, storage.ErrGrantNotFound):
 		return huma.Error404NotFound("grant not found")
 	case errors.Is(err, storage.ErrGrantExists):

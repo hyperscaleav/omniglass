@@ -255,7 +255,7 @@ omniglass auth logout
 The authenticated principal, its permissions, and grants
 
 ```
-omniglass auth me
+omniglass auth me [flags]
 ```
 
 Returns the caller's principal, flattened permissions (a UI hint and the fast-reject set), the permissions held on an all-scope grant (fleet_permissions), and grants. Requires authentication.
@@ -264,6 +264,63 @@ Example:
 
 ```sh
 omniglass auth me
+```
+
+#### `omniglass auth me notification`
+
+Commands for the notification resource
+
+##### `omniglass auth me notification list`
+
+List your inbox
+
+```
+omniglass auth me notification list [flags]
+```
+
+The caller's own console inbox: the notifications addressed to them on the inbox channel, newest first, with the unread count. Self-scoped (never another principal's), and scoped again by the caller's component read scope as it stands now, so an entry about a component they can no longer read is gone. Gated by notification:read.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--limit` | int | `0` | At most this many, newest first (default 100) |
+| `--unread` | bool | `false` | Only the entries not yet read |
+
+Example:
+
+```sh
+omniglass auth me notification list
+```
+
+##### `omniglass auth me notification markAllRead`
+
+Mark every inbox entry read
+
+```
+omniglass auth me notification markAllRead
+```
+
+Marks every unread entry in the caller's own inbox read, over the same scope the inbox reads, and says how many. Audited as one row. Gated by notification:read.
+
+Example:
+
+```sh
+omniglass auth me notification markAllRead
+```
+
+##### `omniglass auth me notification markRead`
+
+Mark an inbox entry read
+
+```
+omniglass auth me notification markRead <id>
+```
+
+Marks one of the caller's own inbox entries read (one already read keeps its first read time). An entry that is not the caller's, or about a component outside their component read scope, is a non-disclosing 404. Audited. Gated by notification:read.
+
+Example:
+
+```sh
+omniglass auth me notification markRead <id>
 ```
 
 ### `omniglass auth remove-avatar`
@@ -3433,7 +3490,7 @@ List notifications
 omniglass notification list [flags]
 ```
 
-The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. Gated by notification:read.
+The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. A row addressed to a person names them only to that person and to holders of principal:read:admin. Gated by notification:read.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -3476,21 +3533,24 @@ Create a notification target
 omniglass notification-target create [flags]
 ```
 
-Adds a destination a notification can be sent to: a channel kind (webhook), its URL and, optionally, the platform secret it signs or authenticates with. Binding a secret takes the right to reveal it (secret:reveal, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not reveal a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.
+Adds a destination a notification can be sent to: a webhook, its URL and, optionally, the platform secret it signs or authenticates with; or people, a principal_group (every human member, read at each alarm transition) or one principal, on the channels named. A person is told only about an alarm on a component their own component read scope admits. Binding a group takes principal_group:read:admin and binding a person principal:read:admin (a 403 without it), since the target reaches whoever they name. Binding a secret takes the right to reveal it (secret:reveal, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not reveal a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--channels` | string | (none) | A group or person target's channels: inbox |
 | `--enabled` | bool | `false` | Whether deliveries go to it (default true) |
-| `--kind` | string | (none) | The channel kind |
+| `--kind` | string | (none) | The target kind |
 | `--label` | string | (none) | A human label |
 | `--name` | string | (none) | The target's name (lowercase kebab) |
+| `--principal` | string | (none) | A principal target's person, by username or uuid; binding one takes principal:read:admin |
+| `--principal-group` | string | (none) | A principal_group target's group, by name or uuid; binding one takes principal_group:read:admin |
 | `--secret` | string | (none) | A platform secret, by name or uuid, of type hmac-key (signs each body) or bearer-token (sent as Authorization: Bearer) |
-| `--url` | string | (none) | The destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is |
+| `--url` | string | (none) | A webhook's destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is |
 
 Example:
 
 ```sh
-omniglass notification-target create --kind kind --name name --url url
+omniglass notification-target create --kind kind --name name
 ```
 
 ### `omniglass notification-target delete`
@@ -3585,6 +3645,7 @@ Patches a target's label, URL, secret or enabled flag (an absent field is unchan
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--channels` | string | (none) | A group or person target's channels: inbox |
 | `--enabled` | bool | `false` | Whether deliveries go to it |
 | `--label` | string | (none) | A human label (empty clears it) |
 | `--secret` | string | (none) | A platform secret by name or uuid; empty unbinds it |

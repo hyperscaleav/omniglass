@@ -4882,9 +4882,36 @@
       "type": "timestamp with time zone",
       "nullable": false,
       "default": "now()"
+     },
+     {
+      "name": "recipient_principal_id",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "principal.id"
+     },
+     {
+      "name": "recipient_name",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "channel",
+      "type": "text",
+      "nullable": false,
+      "default": "'webhook'::text"
+     },
+     {
+      "name": "read_at",
+      "type": "timestamp with time zone",
+      "nullable": true
      }
     ],
     "checks": [
+     {
+      "name": "notification_channel_check",
+      "expr": "CHECK (((channel = ANY (ARRAY['webhook'::text, 'email'::text, 'inbox'::text])) AND ((channel \u003c\u003e 'webhook'::text) OR (recipient_name IS NULL)) AND ((channel \u003c\u003e 'inbox'::text) OR (recipient_name IS NOT NULL))))"
+     },
      {
       "name": "notification_status_check",
       "expr": "CHECK ((status = ANY (ARRAY['queued'::text, 'sent'::text, 'failed'::text])))"
@@ -4922,7 +4949,7 @@
      {
       "name": "url",
       "type": "text",
-      "nullable": false
+      "nullable": true
      },
      {
       "name": "secret_id",
@@ -4948,6 +4975,32 @@
       "type": "timestamp with time zone",
       "nullable": false,
       "default": "now()"
+     },
+     {
+      "name": "principal_group_id",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "principal_group.id"
+     },
+     {
+      "name": "principal_id",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "principal.id"
+     },
+     {
+      "name": "channels",
+      "type": "ARRAY",
+      "nullable": false,
+      "default": "'{}'::text[]"
+     }
+    ],
+    "checks": [
+     {
+      "name": "notification_target_kind_check",
+      "expr": "CHECK ((((kind = 'webhook'::text) AND (url IS NOT NULL) AND (principal_group_id IS NULL) AND (principal_id IS NULL) AND (cardinality(channels) = 0)) OR ((kind = 'principal_group'::text) AND (principal_group_id IS NOT NULL) AND (url IS NULL) AND (principal_id IS NULL) AND (secret_id IS NULL) AND (cardinality(channels) \u003e 0) AND (channels \u003c@ ARRAY['inbox'::text, 'email'::text])) OR ((kind = 'principal'::text) AND (principal_id IS NOT NULL) AND (url IS NULL) AND (principal_group_id IS NULL) AND (secret_id IS NULL) AND (cardinality(channels) \u003e 0) AND (channels \u003c@ ARRAY['inbox'::text, 'email'::text]))))"
      }
     ],
     "uniques": [
