@@ -22,7 +22,7 @@ once while `metric` / `property` carry no uniqueness key of their own
 from the series (latest row per series); the maintained latest-value cache retired
 ([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)),
 and the server prunes `metric` and `property` samples to their retention windows above the
-provenance-aware floor
+provenance-aware floor, and `log_line` and `node_log` by severity band
 ([ADR-0080](/architecture/decisions/#adr-0080-retention-is-provenance-aware-never-declared-never-the-latest-row-per-series),
 [ADR-0417](/architecture/decisions/#adr-0417-the-server-prunes-each-sample-lane-to-a-window-in-bounded-chunks)).
 See [implementation status](/architecture/status/).
@@ -320,8 +320,23 @@ Finding the old rows reads every page the `ts` BRIN cannot rule out. Pruned page
 new rows, which widens their ranges for good, so over time a pass's last chunk reads much of the
 table: hence the hourly steady state, until `ts` partitioning (#420) drops whole partitions instead.
 
+The same pass keeps the two log tables, a component's `log_line` and a node's `node_log`, by
+severity band (`logline.RetentionBands`): `retention.log_debug_days` (3 by default) for debug,
+`log_info_days` (14) for info and notice, `log_warning_days` (30) for warning, and
+`log_error_days` (90) for error, critical, alert and emergency. A line with no severity is kept with
+info. A log line has no floor: it is not a series' value, and an event that named one as its source
+keeps itself and drops the link (`event.source_log_line_id` is `on delete set null`).
+- **Searched, not walked.** Each band's prune searches exactly the rows it may delete, through the
+  table's `(severity, ts)` index, or its `(ts)` index for lines with no severity, ordered as that
+  index is so the planner never prefers a sequential scan. The BRIN limit above does not apply.
+- **The event link has its own index.** A deleted line's events keep themselves and drop the link
+  through `event_source_log_line_idx`, so the foreign key's set-null never scans the event table.
+- **One vocabulary.** Every stored severity is on RFC 5424's canonical set. A one-time backfill
+  mapped the older words (`warn`, `ERROR`); a word outside the table moves to the `severity_raw`
+  attribute. Both log tables normalize every new line at the gateway, so no band ever meets a
+  stray word.
+
 Not yet:
-- **Log lines and node logs** age out per severity in the next slice of #417.
 - **A window per metric or property type** is the slice after it.
 - **The floor's amendment** to "the latest row within retention" waits for `ts` partitioning
   (#420), which a dropped partition needs.
@@ -331,7 +346,7 @@ Not yet:
 ## Partitioning and retention
 
 - **Append-only tables are range-partitioned by `ts`** (native declarative partitioning; `pg_partman` where the provider permits, else a documented manual roll). The firehose (`metric`) is the partitioning-critical one.
-- **Retention is per table**, set by policy: `metric` short, `property` longer, `audit_log` longest (compliance), `internal_log` short, and `log_line` / `node_log` keyed on their own axes (`severity` / `facility` are indexed precisely so retention and routing can discriminate). On-row lineage ages out with its sample, and a `log_line` aged out from under an event leaves `event.source_log_line_id` null (`on delete set null`), never deleting the event. Per-table defaults are **cascade-resolved** ([cascade](/architecture/cascade/)) with an install-wide `platform` binding. Every path obeys the `PruneSamples` floor above. (Built for the sample lanes as one install-wide window per lane in the platform-domain `retention` namespace, not cascade-resolved: [ADR-0417](/architecture/decisions/#adr-0417-the-server-prunes-each-sample-lane-to-a-window-in-bounded-chunks).)
+- **Retention is per table**, set by policy: `metric` short, `property` longer, `audit_log` longest (compliance), `internal_log` short, and `log_line` / `node_log` keyed on their own axes (`severity` / `facility` are indexed precisely so retention and routing can discriminate). On-row lineage ages out with its sample, and a `log_line` aged out from under an event leaves `event.source_log_line_id` null (`on delete set null`), never deleting the event. Per-table defaults are **cascade-resolved** ([cascade](/architecture/cascade/)) with an install-wide `platform` binding. Every path over the sample tables obeys the `PruneSamples` floor above; a log line has none. (Built for the sample lanes as one install-wide window per lane, and for the log tables as one per severity band, in the platform-domain `retention` namespace, not cascade-resolved: [ADR-0417](/architecture/decisions/#adr-0417-the-server-prunes-each-sample-lane-to-a-window-in-bounded-chunks).)
 - **The `raw_sample` buffer** ([collection](/architecture/collection/)) is range-partitioned by `ts` and cold-tierable like the metric partitions, on a short retention: bounded, sampled, short-lived, not a telemetry table.
 - **Views are not partitioned** (bounded by fleet size, not time), computed from the underlying tables, never the source of truth.
 

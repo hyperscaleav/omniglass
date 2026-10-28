@@ -843,6 +843,9 @@ type Gateway interface {
 	// lane (metric or property): delete up to limit samples older than before,
 	// never a declared row and never the latest row of a series (#591, #417).
 	PruneSamples(ctx context.Context, lane string, before time.Time, limit int) (int64, error)
+	// PruneLogs deletes up to limit lines of one log table in one severity band
+	// older than before (#417).
+	PruneLogs(ctx context.Context, table, band string, before time.Time, limit int) (int64, error)
 	// RetentionWindows is the effective retention namespace, the windows the
 	// server's retention pass prunes by (#417).
 	RetentionWindows(ctx context.Context) (settings.RetentionSettings, error)

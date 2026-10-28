@@ -9798,6 +9798,30 @@ export interface components {
         RetentionSettings: {
             /**
              * Format: int64
+             * @description Days a debug log line is kept
+             * @default 3
+             */
+            log_debug_days: number;
+            /**
+             * Format: int64
+             * @description Days an error, critical, alert or emergency log line is kept
+             * @default 90
+             */
+            log_error_days: number;
+            /**
+             * Format: int64
+             * @description Days an info or notice log line, or one with no severity, is kept
+             * @default 14
+             */
+            log_info_days: number;
+            /**
+             * Format: int64
+             * @description Days a warning log line is kept
+             * @default 30
+             */
+            log_warning_days: number;
+            /**
+             * Format: int64
              * @description Days a metric sample is kept
              * @default 14
              */

@@ -146,3 +146,32 @@ func TestCleanReplacesEveryNul(t *testing.T) {
 		t.Fatalf("CleanAttributes re-encoded clean attributes: %s", got)
 	}
 }
+
+// The retention bands (#417): every canonical level falls in exactly one, and
+// a line with no severity is kept as long as info.
+func TestEveryLevelFallsInOneRetentionBand(t *testing.T) {
+	seen := map[string]string{}
+	for _, band := range RetentionBands() {
+		for _, l := range BandLevels(band) {
+			if prev, dup := seen[l]; dup {
+				t.Errorf("%s is in both %s and %s", l, prev, band)
+			}
+			seen[l] = band
+		}
+	}
+	for _, l := range Levels() {
+		if seen[l] == "" {
+			t.Errorf("%s is in no band", l)
+		}
+	}
+	want := map[string]string{"debug": "debug", "info": "info", "notice": "info", "warning": "warning",
+		"error": "error", "critical": "error", "alert": "error", "emergency": "error"}
+	for l, b := range want {
+		if seen[l] != b {
+			t.Errorf("%s is in band %q, want %q", l, seen[l], b)
+		}
+	}
+	if UnratedBand != "info" {
+		t.Errorf("a line with no severity is kept with %q, want info", UnratedBand)
+	}
+}

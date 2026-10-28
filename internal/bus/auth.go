@@ -68,6 +68,8 @@ type Store interface {
 	// the windows from the settings store, and one bounded chunk of one lane.
 	RetentionWindows(ctx context.Context) (settings.RetentionSettings, error)
 	PruneSamples(ctx context.Context, lane string, before time.Time, limit int) (int64, error)
+	// PruneLogs is one chunk of one log table's severity band (#417).
+	PruneLogs(ctx context.Context, table, band string, before time.Time, limit int) (int64, error)
 	// StampEndpointsSeen records that a batch an endpoint's task delivered
 	// landed, whatever it carried: an endpoint's freshness (#933).
 	StampEndpointsSeen(ctx context.Context, endpointIDs []string) error

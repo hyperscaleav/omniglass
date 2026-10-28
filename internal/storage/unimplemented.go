@@ -729,6 +729,9 @@ func (UnimplementedGateway) LatestValue(context.Context, string, string, string,
 func (UnimplementedGateway) PruneSamples(context.Context, string, time.Time, int) (int64, error) {
 	return 0, nil
 }
+func (UnimplementedGateway) PruneLogs(context.Context, string, string, time.Time, int) (int64, error) {
+	return 0, nil
+}
 func (UnimplementedGateway) RetentionWindows(context.Context) (settings.RetentionSettings, error) {
 	return settings.RetentionSettings{}, nil
 }

@@ -3,6 +3,8 @@ package settings
 import (
 	"reflect"
 	"testing"
+
+	"github.com/hyperscaleav/omniglass/internal/logline"
 )
 
 func TestCoerceDefaultPreservesKind(t *testing.T) {
@@ -55,5 +57,16 @@ func TestReflectedNamespaces(t *testing.T) {
 	}
 	if _, ok := byName["keybindings"]; !ok {
 		t.Fatalf("keybindings namespace missing")
+	}
+}
+
+// Every log retention band has a window (#417): a band added to logline with
+// no setting behind it would never be pruned.
+func TestEveryLogBandHasARetentionWindow(t *testing.T) {
+	w := RetentionSettings{DebugLogDays: 1, InfoLogDays: 2, WarningLogDays: 3, ErrorLogDays: 4}
+	for _, band := range logline.RetentionBands() {
+		if w.LogDays(band) == 0 {
+			t.Errorf("band %q has no retention window", band)
+		}
 	}
 }

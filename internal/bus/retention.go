@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/internal/logline"
 	"github.com/hyperscaleav/omniglass/internal/settings"
 )
 
@@ -44,6 +45,38 @@ func nextRetentionWait(rep retentionReport) time.Duration {
 type retentionStore interface {
 	RetentionWindows(ctx context.Context) (settings.RetentionSettings, error)
 	PruneSamples(ctx context.Context, lane string, before time.Time, limit int) (int64, error)
+	PruneLogs(ctx context.Context, table, band string, before time.Time, limit int) (int64, error)
+}
+
+// retentionLane is one thing a pass prunes to one window: a sample lane, or a
+// log table's severity band.
+type retentionLane struct {
+	name  string
+	days  int
+	prune func(ctx context.Context, before time.Time, limit int) (int64, error)
+}
+
+// retentionLanes is every lane a pass prunes, in order: the metric and property
+// samples, then each log table's bands (logline.RetentionBands), least severe
+// first.
+func retentionLanes(store retentionStore, w settings.RetentionSettings) []retentionLane {
+	lanes := []retentionLane{}
+	for _, l := range []struct {
+		name string
+		days int
+	}{{"metric", w.MetricDays}, {"property", w.PropertyDays}} {
+		lanes = append(lanes, retentionLane{l.name, l.days, func(ctx context.Context, before time.Time, limit int) (int64, error) {
+			return store.PruneSamples(ctx, l.name, before, limit)
+		}})
+	}
+	for _, table := range []string{"log_line", "node_log"} {
+		for _, band := range logline.RetentionBands() {
+			lanes = append(lanes, retentionLane{table + "/" + band, w.LogDays(band), func(ctx context.Context, before time.Time, limit int) (int64, error) {
+				return store.PruneLogs(ctx, table, band, before, limit)
+			}})
+		}
+	}
+	return lanes
 }
 
 // retentionReport is what one pass removed per lane, and the lanes it left
@@ -53,13 +86,14 @@ type retentionReport struct {
 	Behind  []string
 }
 
-// retentionPass prunes each sample lane to its window once: the metric lane to
-// metric_days, the property lane to property_days, each counted back from now.
+// retentionPass prunes each lane to its window once (retentionLanes): the metric
+// lane to metric_days, the property lane to property_days, each log table's band
+// to its log window, each counted back from now.
 // A lane is deleted chunk by chunk until a chunk comes back short (nothing more
 // to find) or the pass has spent maxChunks on it, each lane under a deadline of
 // its own (laneTimeout, none when zero), so a slow lane never starts the next on
 // an expired context. A lane that fails, its deadline included, is reported and
-// named behind, so the next pass comes in a minute; the other lane is still
+// named behind, so the next pass comes in a minute; the other lanes are still
 // pruned. A lane whose window is out of range (stored past the settings
 // validator) is refused, not pruned: its cutoff could overflow the timestamp
 // encoding and match every row. It holds no clock and no database of its own,
@@ -79,10 +113,7 @@ func retentionPass(ctx context.Context, store retentionStore, now time.Time, chu
 		return rep, err
 	}
 	var errs []error
-	for _, lane := range []struct {
-		name string
-		days int
-	}{{"metric", w.MetricDays}, {"property", w.PropertyDays}} {
+	for _, lane := range retentionLanes(store, w) {
 		if lane.days <= 0 || lane.days > settings.RetentionMaxDays {
 			errs = append(errs, fmt.Errorf("prune %s: a window of %d days is outside 1 to %d; not pruned", lane.name, lane.days, settings.RetentionMaxDays))
 			continue
@@ -94,7 +125,7 @@ func retentionPass(ctx context.Context, store retentionStore, now time.Time, chu
 				rep.Behind = append(rep.Behind, lane.name)
 				break
 			}
-			n, err := store.PruneSamples(lctx, lane.name, before, chunk)
+			n, err := lane.prune(lctx, before, chunk)
 			rep.Deleted[lane.name] += n
 			if err != nil {
 				errs = append(errs, fmt.Errorf("prune %s: %w", lane.name, err))
@@ -125,9 +156,13 @@ func (s *Server) startSampleRetention() {
 			if err != nil && ctx.Err() == nil {
 				slog.Warn("sample retention pass failed", "facility", "retention", "error", err.Error())
 			}
-			if rep.Deleted["metric"]+rep.Deleted["property"] > 0 || len(rep.Behind) > 0 {
-				slog.Info("samples pruned past their retention window", "facility", "retention",
-					"metric", rep.Deleted["metric"], "property", rep.Deleted["property"], "behind", rep.Behind)
+			var total int64
+			for _, n := range rep.Deleted {
+				total += n
+			}
+			if total > 0 || len(rep.Behind) > 0 {
+				slog.Info("rows pruned past their retention window", "facility", "retention",
+					"deleted", rep.Deleted, "behind", rep.Behind)
 			}
 			t := time.NewTimer(nextRetentionWait(rep))
 			select {

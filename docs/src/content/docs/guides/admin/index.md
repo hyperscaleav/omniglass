@@ -79,13 +79,19 @@ on **Admin > Settings**, each from 1 to 36,500 days:
 - `property_days`, 90 by default: how long a property transition (a change such as a power state
   going from on to off) is kept.
 - `trend_days`, 730 by default: how long hourly trends will be kept, once they exist (#1276).
+- Log lines, from your components and from your nodes, by severity:
+  - `log_debug_days`, 3 by default;
+  - `log_info_days`, 14 by default, which also covers notice and a line with no severity;
+  - `log_warning_days`, 30 by default;
+  - `log_error_days`, 90 by default, which also covers critical, alert and emergency.
 
 Three things are never removed, however old:
 - a declared value (an operator's assertion is the truth, not a sample);
 - the latest row of every series, so a quiet device still shows its current value;
 - the value a command set out to write, which its history reads back.
-A change to a window takes effect at the next pass. Log lines and events are not removed yet. Neither
-is a window per metric or property type yet (#417). See
+A change to a window takes effect at the next pass. Events and alarms are not removed yet (#1159,
+#1339), and neither is the audit log (#1340); a window per metric or property type is the last slice
+of #417. See
 [storage](/architecture/storage/#retention-what-is-kept-and-for-how-long) for how it works.
 
 The model behind all of this is [identity and access](/architecture/identity-access/) and
