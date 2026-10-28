@@ -94,8 +94,8 @@ type NotificationSettings struct {
 // severity's band (logline.RetentionBands): four windows rather than eight, and
 // a line with no severity is kept as long as info.
 type RetentionSettings struct {
-	MetricDays     int `json:"metric_days" minimum:"1" maximum:"36500" default:"14" doc:"Days a metric sample is kept"`
-	PropertyDays   int `json:"property_days" minimum:"1" maximum:"36500" default:"90" doc:"Days a property transition is kept"`
+	MetricDays     int `json:"metric_days" minimum:"1" maximum:"36500" default:"14" doc:"Days a metric sample is kept, unless its type keeps its own (a metric type's retention_days)"`
+	PropertyDays   int `json:"property_days" minimum:"1" maximum:"36500" default:"90" doc:"Days a property transition is kept, unless its type keeps its own (a property type's retention_days)"`
 	TrendDays      int `json:"trend_days" minimum:"1" maximum:"36500" default:"730" doc:"Days an hourly metric trend is kept, once trends exist (#1276)"`
 	DebugLogDays   int `json:"log_debug_days" minimum:"1" maximum:"36500" default:"3" doc:"Days a debug log line is kept"`
 	InfoLogDays    int `json:"log_info_days" minimum:"1" maximum:"36500" default:"14" doc:"Days an info or notice log line, or one with no severity, is kept"`

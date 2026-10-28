@@ -2376,6 +2376,26 @@ export interface paths {
         patch: operations["update-metric-type"];
         trace?: never;
     };
+    "/metric-types/{name}:setRetention": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set a metric type's retention window
+         * @description Sets how many days this type's samples are kept, overriding the metric lane's window (retention.metric_days), or with null returns it to the lane's. Works on an official type: a shipped type's definition is read-only, but how long an install keeps its samples is the install's, and the boot seed never resets it. The retention floor still holds: a type's latest value per series is never removed. 1 to 36,500 days. Audited as set_retention. Gated by metric_type:update and platform:update.
+         */
+        post: operations["set-metric-type-retention"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/nodes": {
         parameters: {
             query?: never;
@@ -3570,6 +3590,26 @@ export interface paths {
          * @description Patches a custom property's label, description, or validation (a nil field is unchanged). Data type is fixed at creation. Official properties are read-only. Gated by property_type:update.
          */
         patch: operations["update-property-type"];
+        trace?: never;
+    };
+    "/property-types/{name}:setRetention": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set a property type's retention window
+         * @description Sets how many days this type's transitions are kept, overriding the property lane's window (retention.property_days), or with null returns it to the lane's. Works on an official type: a shipped type's definition is read-only, but how long an install keeps its samples is the install's, and the boot seed never resets it. The retention floor still holds: a declared value and a series' latest value are never removed. 1 to 36,500 days. Audited as set_retention. Gated by property_type:update and platform:update.
+         */
+        post: operations["set-property-type-retention"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/roles": {
@@ -8742,6 +8782,11 @@ export interface components {
              * @description Decimal places a rendered value keeps
              */
             precision?: number;
+            /**
+             * Format: int64
+             * @description The type's own retention window in days, overriding its lane's; absent when the lane's applies (#417)
+             */
+            retention_days?: number;
             /** @description The display unit of the series (ms, dB, percent) */
             unit?: string;
             /**
@@ -9289,6 +9334,11 @@ export interface components {
             label?: string;
             name: string;
             official: boolean;
+            /**
+             * Format: int64
+             * @description The type's own retention window in days, overriding its lane's; absent when the lane's applies (#417)
+             */
+            retention_days?: number;
             /** @description A JSON Schema fragment constraining the value */
             validation?: unknown;
             /**
@@ -9822,13 +9872,13 @@ export interface components {
             log_warning_days: number;
             /**
              * Format: int64
-             * @description Days a metric sample is kept
+             * @description Days a metric sample is kept, unless its type keeps its own (a metric type's retention_days)
              * @default 14
              */
             metric_days: number;
             /**
              * Format: int64
-             * @description Days a property transition is kept
+             * @description Days a property transition is kept, unless its type keeps its own (a property type's retention_days)
              * @default 90
              */
             property_days: number;
@@ -10271,6 +10321,19 @@ export interface components {
             readonly $schema?: string;
             /** @description The value to declare, shape given by the property's data_type */
             value: unknown;
+        };
+        SetTypeRetentionBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SetTypeRetentionBody.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: int64
+             * @description The type's own retention window in whole days, 1 to 36,500; null clears it, so the type is kept for its lane's window (retention.metric_days or retention.property_days). Required: an empty body is refused
+             */
+            days: number | null;
         };
         Settings: {
             keybindings: components["schemas"]["Keybindings"];
@@ -16869,6 +16932,42 @@ export interface operations {
             };
         };
     };
+    "set-metric-type-retention": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The metric type's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetTypeRetentionBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricTypeBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "list-nodes": {
         parameters: {
             query?: never;
@@ -19565,6 +19664,42 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["UpdatePropertyInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PropertyBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "set-property-type-retention": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The property type's name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetTypeRetentionBody"];
             };
         };
         responses: {

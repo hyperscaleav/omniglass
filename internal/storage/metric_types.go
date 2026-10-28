@@ -28,6 +28,10 @@ type MetricType struct {
 	FusionPolicy []byte
 	Description  string
 	Official     bool
+	// RetentionDays is the type's own retention window in days, overriding
+	// its lane's; nil is the lane's (#417). Set by SetMetricTypeRetention,
+	// official types included.
+	RetentionDays *int
 	// WrittenBy is the calc rule that writes this metric, nil when none
 	// does (#1019). Read beside the type, never stored or audited.
 	WrittenBy *CalcWriter `json:"-"`
@@ -65,13 +69,13 @@ type MetricTypePatch struct {
 	Precision   *int
 }
 
-var metricTypeCols = `id, name, coalesce(label, ''), data_type, unit, "precision", fusion_policy, description, official, ` +
+var metricTypeCols = `id, name, coalesce(label, ''), data_type, unit, "precision", fusion_policy, description, official, retention_days, ` +
 	calcWriterCol("output_metric_type_id", "metric_type")
 
 func scanMetricType(row pgx.Row) (*MetricType, error) {
 	var mt MetricType
 	var writer []byte
-	if err := row.Scan(&mt.ID, &mt.Name, &mt.Label, &mt.DataType, &mt.Unit, &mt.Precision, &mt.FusionPolicy, &mt.Description, &mt.Official, &writer); err != nil {
+	if err := row.Scan(&mt.ID, &mt.Name, &mt.Label, &mt.DataType, &mt.Unit, &mt.Precision, &mt.FusionPolicy, &mt.Description, &mt.Official, &mt.RetentionDays, &writer); err != nil {
 		return nil, err
 	}
 	mt.WrittenBy = parseCalcWriter(writer)

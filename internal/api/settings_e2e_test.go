@@ -23,6 +23,9 @@ type settingsFixture struct {
 	gw     storage.Gateway
 	admin  string
 	viewer string
+	// operator holds the seeded Operator role: the type catalogs' update
+	// permissions, but no platform:* (#417's setRetention refuses it).
+	operator string
 }
 
 func newSettingsFixture(t *testing.T) settingsFixture {
@@ -43,10 +46,11 @@ func newSettingsFixture(t *testing.T) settingsFixture {
 	srv := httptest.NewServer(api.NewHandler(gw))
 	t.Cleanup(srv.Close)
 	return settingsFixture{
-		c:      &apiClient{t: t, ctx: ctx, base: srv.URL},
-		gw:     gw,
-		admin:  principalWithGrants(t, ctx, dsn, "settings-admin", []grant{{role: "admin", scopeKind: "all"}}),
-		viewer: principalWithGrants(t, ctx, dsn, "settings-viewer", []grant{{role: "viewer", scopeKind: "all"}}),
+		c:        &apiClient{t: t, ctx: ctx, base: srv.URL},
+		gw:       gw,
+		admin:    principalWithGrants(t, ctx, dsn, "settings-admin", []grant{{role: "admin", scopeKind: "all"}}),
+		viewer:   principalWithGrants(t, ctx, dsn, "settings-viewer", []grant{{role: "viewer", scopeKind: "all"}}),
+		operator: principalWithGrants(t, ctx, dsn, "settings-operator", []grant{{role: "operator", scopeKind: "all"}}),
 	}
 }
 

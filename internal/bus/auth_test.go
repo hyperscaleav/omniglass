@@ -67,6 +67,12 @@ func (f fakeStore) RetentionWindows(context.Context) (settings.RetentionSettings
 	return settings.RetentionSettings{MetricDays: 14, PropertyDays: 90, TrendDays: 730,
 		DebugLogDays: 3, InfoLogDays: 14, WarningLogDays: 30, ErrorLogDays: 90}, nil
 }
+func (f fakeStore) RetentionOverrides(context.Context) ([]storage.TypeRetention, error) {
+	return nil, nil
+}
+func (f fakeStore) PruneSamplesOfType(context.Context, string, string, int, time.Time, int) (int64, error) {
+	return 0, nil
+}
 func (f fakeStore) PruneLogs(context.Context, string, string, time.Time, int) (int64, error) {
 	return 0, nil
 }

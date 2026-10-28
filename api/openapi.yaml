@@ -6287,6 +6287,10 @@ components:
           description: Decimal places a rendered value keeps
           format: int64
           type: integer
+        retention_days:
+          description: The type's own retention window in days, overriding its lane's; absent when the lane's applies (#417)
+          format: int64
+          type: integer
         unit:
           description: The display unit of the series (ms, dB, percent)
           type: string
@@ -7231,6 +7235,10 @@ components:
           type: string
         official:
           type: boolean
+        retention_days:
+          description: The type's own retention window in days, overriding its lane's; absent when the lane's applies (#417)
+          format: int64
+          type: integer
         validation:
           description: A JSON Schema fragment constraining the value
         writer_class:
@@ -8139,14 +8147,14 @@ components:
           type: integer
         metric_days:
           default: 14
-          description: Days a metric sample is kept
+          description: Days a metric sample is kept, unless its type keeps its own (a metric type's retention_days)
           format: int64
           maximum: 36500
           minimum: 1
           type: integer
         property_days:
           default: 90
-          description: Days a property transition is kept
+          description: Days a property transition is kept, unless its type keeps its own (a property type's retention_days)
           format: int64
           maximum: 36500
           minimum: 1
@@ -8924,6 +8932,27 @@ components:
           description: The value to declare, shape given by the property's data_type
       required:
         - value
+      type: object
+    SetTypeRetentionBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SetTypeRetentionBody.json
+          format: uri
+          readOnly: true
+          type: string
+        days:
+          description: "The type's own retention window in whole days, 1 to 36,500; null clears it, so the type is kept for its lane's window (retention.metric_days or retention.property_days). Required: an empty body is refused"
+          format: int64
+          maximum: 36500
+          minimum: 1
+          type:
+            - integer
+            - "null"
+      required:
+        - days
       type: object
     Settings:
       additionalProperties: false
@@ -15925,6 +15954,40 @@ paths:
           description: Error
       summary: Update a metric type
       x-omniglass-permission: metric_type:update
+  /metric-types/{name}:setRetention:
+    post:
+      description: "Sets how many days this type's samples are kept, overriding the metric lane's window (retention.metric_days), or with null returns it to the lane's. Works on an official type: a shipped type's definition is read-only, but how long an install keeps its samples is the install's, and the boot seed never resets it. The retention floor still holds: a type's latest value per series is never removed. 1 to 36,500 days. Audited as set_retention. Gated by metric_type:update and platform:update."
+      operationId: set-metric-type-retention
+      parameters:
+        - description: The metric type's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The metric type's name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetTypeRetentionBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetricTypeBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Set a metric type's retention window
+      x-omniglass-permission: metric_type:update
+      x-omniglass-platform-permission: platform:update
   /nodes:
     get:
       description: Lists the edge nodes. A node is fleet-wide, so listing requires an all-scope read. Gated by node:read.
@@ -18249,6 +18312,40 @@ paths:
           description: Error
       summary: Update a property
       x-omniglass-permission: property_type:update
+  /property-types/{name}:setRetention:
+    post:
+      description: "Sets how many days this type's transitions are kept, overriding the property lane's window (retention.property_days), or with null returns it to the lane's. Works on an official type: a shipped type's definition is read-only, but how long an install keeps its samples is the install's, and the boot seed never resets it. The retention floor still holds: a declared value and a series' latest value are never removed. 1 to 36,500 days. Audited as set_retention. Gated by property_type:update and platform:update."
+      operationId: set-property-type-retention
+      parameters:
+        - description: The property type's name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The property type's name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetTypeRetentionBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PropertyBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Set a property type's retention window
+      x-omniglass-permission: property_type:update
+      x-omniglass-platform-permission: platform:update
   /roles:
     get:
       description: Lists the roles with their metadata and effective (flattened) permissions. Gated by the role:read:admin capability.

@@ -36,13 +36,13 @@ type PropertyTypePatch struct {
 	Validation  []byte
 }
 
-var propertyCols = `id, name, coalesce(label, ''), data_type, validation, fusion_policy, description, official, ` +
+var propertyCols = `id, name, coalesce(label, ''), data_type, validation, fusion_policy, description, official, retention_days, ` +
 	calcWriterCol("output_property_type_id", "property_type")
 
 func scanPropertyType(row pgx.Row) (*PropertyType, error) {
 	var prop PropertyType
 	var writer []byte
-	if err := row.Scan(&prop.ID, &prop.Name, &prop.Label, &prop.DataType, &prop.Validation, &prop.FusionPolicy, &prop.Description, &prop.Official, &writer); err != nil {
+	if err := row.Scan(&prop.ID, &prop.Name, &prop.Label, &prop.DataType, &prop.Validation, &prop.FusionPolicy, &prop.Description, &prop.Official, &prop.RetentionDays, &writer); err != nil {
 		return nil, err
 	}
 	prop.WrittenBy = parseCalcWriter(writer)

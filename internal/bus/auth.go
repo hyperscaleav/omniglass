@@ -70,6 +70,10 @@ type Store interface {
 	PruneSamples(ctx context.Context, lane string, before time.Time, limit int) (int64, error)
 	// PruneLogs is one chunk of one log table's severity band (#417).
 	PruneLogs(ctx context.Context, table, band string, before time.Time, limit int) (int64, error)
+	// RetentionOverrides and PruneSamplesOfType are the types with retention
+	// windows of their own, and one chunk of one such type (#417).
+	RetentionOverrides(ctx context.Context) ([]storage.TypeRetention, error)
+	PruneSamplesOfType(ctx context.Context, lane, typeID string, days int, before time.Time, limit int) (int64, error)
 	// StampEndpointsSeen records that a batch an endpoint's task delivered
 	// landed, whatever it carried: an endpoint's freshness (#933).
 	StampEndpointsSeen(ctx context.Context, endpointIDs []string) error
