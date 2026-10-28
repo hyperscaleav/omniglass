@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/hyperscaleav/omniglass/internal/egress"
+	"github.com/hyperscaleav/omniglass/internal/mail"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/secret"
 )
@@ -25,16 +26,18 @@ import (
 // RevealNotificationTargetURL returns it under an audit row.
 
 // Target kinds are a code-declared enum (like transports), published through
-// the API's enum. webhook is #618's; a principal group and a principal (one
-// person) are #1341's, the targets that name people rather than a channel.
+// the API's enum. webhook is #618's; email (a fixed set of addresses, a
+// shared mailbox) is #1317's; a principal group and a principal (one person)
+// are #1341's, the targets that name people rather than a destination.
 const (
 	ChannelWebhook       = "webhook"
+	TargetEmail          = "email"
 	TargetPrincipalGroup = "principal_group"
 	TargetPrincipal      = "principal"
 )
 
 // ChannelKinds are the kinds a target may name.
-var ChannelKinds = []string{ChannelWebhook, TargetPrincipalGroup, TargetPrincipal}
+var ChannelKinds = []string{ChannelWebhook, TargetEmail, TargetPrincipalGroup, TargetPrincipal}
 
 // Delivery channels: the way one notification row travels. A webhook row goes
 // to a target's URL; a person's row goes to their console inbox (delivered by
@@ -46,7 +49,15 @@ const (
 )
 
 // PersonChannels are the channels a group or person target may deliver on.
-var PersonChannels = []string{DeliveryInbox}
+var PersonChannels = []string{DeliveryInbox, DeliveryEmail}
+
+// deliveryFor is the channel a destination target's row travels on.
+func deliveryFor(kind string) string {
+	if kind == TargetEmail {
+		return DeliveryEmail
+	}
+	return DeliveryWebhook
+}
 
 // isPersonKind reports whether a target kind names people.
 func isPersonKind(kind string) bool { return kind == TargetPrincipalGroup || kind == TargetPrincipal }
@@ -76,8 +87,10 @@ type NotificationTarget struct {
 	PrincipalID      string
 	Principal        string
 	Channels         []string
-	Enabled          bool
-	CreatedAt        time.Time
+	// Addresses are an email target's fixed recipients (#1317).
+	Addresses []string
+	Enabled   bool
+	CreatedAt time.Time
 	UpdatedAt        time.Time
 }
 
@@ -95,7 +108,9 @@ type NotificationTargetSpec struct {
 	PrincipalGroup string
 	Principal      string
 	Channels       []string
-	Enabled        *bool
+	// Addresses are an email target's recipients.
+	Addresses []string
+	Enabled   *bool
 }
 
 // PeopleUse is the caller's right over the people a target would name: binding
@@ -120,11 +135,12 @@ type SecretUse struct {
 // NotificationTargetPatch carries the mutable fields; nil is unchanged, and
 // an empty Secret unbinds it.
 type NotificationTargetPatch struct {
-	Label    *string
-	URL      *string
-	Secret   *string
-	Channels *[]string
-	Enabled  *bool
+	Label     *string
+	URL       *string
+	Secret    *string
+	Channels  *[]string
+	Addresses *[]string
+	Enabled   *bool
 }
 
 // Notification target sentinels.
@@ -185,7 +201,7 @@ func MaskURL(raw string) string {
 
 const notificationTargetCols = `t.id, t.name, coalesce(t.label, ''), t.kind, coalesce(t.url, ''), coalesce(t.secret_id::text, ''),
 	coalesce(s.name, ''), coalesce(st.name, ''), coalesce(t.principal_group_id::text, ''), coalesce(g.name, ''),
-	coalesce(t.principal_id::text, ''), coalesce(h.username, ''), t.channels, t.enabled, t.created_at, t.updated_at`
+	coalesce(t.principal_id::text, ''), coalesce(h.username, ''), t.channels, t.addresses, t.enabled, t.created_at, t.updated_at`
 
 const notificationTargetFrom = ` from notification_target t
 	left join secret s on s.id = t.secret_id
@@ -196,7 +212,7 @@ const notificationTargetFrom = ` from notification_target t
 func scanNotificationTarget(row pgx.Row) (*NotificationTarget, error) {
 	var t NotificationTarget
 	if err := row.Scan(&t.ID, &t.Name, &t.Label, &t.Kind, &t.URL, &t.SecretID, &t.Secret, &t.SecretType,
-		&t.PrincipalGroupID, &t.PrincipalGroup, &t.PrincipalID, &t.Principal, &t.Channels,
+		&t.PrincipalGroupID, &t.PrincipalGroup, &t.PrincipalID, &t.Principal, &t.Channels, &t.Addresses,
 		&t.Enabled, &t.CreatedAt, &t.UpdatedAt); err != nil {
 		return nil, err
 	}
@@ -215,6 +231,9 @@ func auditTarget(t *NotificationTarget) map[string]any {
 	}
 	if isPersonKind(t.Kind) {
 		img["principal_group"], img["principal"], img["channels"] = t.PrincipalGroup, t.Principal, t.Channels
+	}
+	if t.Kind == TargetEmail {
+		img["addresses"] = t.Addresses
 	}
 	return img
 }
@@ -348,7 +367,7 @@ func (p *PG) CreateNotificationTarget(ctx context.Context, actorID string, spec 
 		return nil, fmt.Errorf("%w: %w", ErrNotificationTargetInvalid, err)
 	}
 	if !validChannel(spec.Kind) {
-		return nil, fmt.Errorf("%w: kind %q is not a target kind (webhook, principal_group, principal)", ErrNotificationTargetInvalid, spec.Kind)
+		return nil, fmt.Errorf("%w: kind %q is not a target kind (webhook, email, principal_group, principal)", ErrNotificationTargetInvalid, spec.Kind)
 	}
 	if err := checkTargetShape(spec, people); err != nil {
 		return nil, err
@@ -359,15 +378,20 @@ func (p *PG) CreateNotificationTarget(ctx context.Context, actorID string, spec 
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	var secretID, groupID, principalID *string
-	var channels []string
-	if isPersonKind(spec.Kind) {
+	var channels, addresses []string
+	switch {
+	case spec.Kind == TargetEmail:
+		if addresses, err = checkAddresses(spec.Addresses); err != nil {
+			return nil, err
+		}
+	case isPersonKind(spec.Kind):
 		if channels, err = checkPersonChannels(spec.Channels); err != nil {
 			return nil, err
 		}
 		if groupID, principalID, err = resolveTargetPeople(ctx, tx, spec); err != nil {
 			return nil, err
 		}
-	} else {
+	default:
 		if err := p.checkTargetURL(ctx, tx, spec.URL); err != nil {
 			return nil, err
 		}
@@ -378,14 +402,17 @@ func (p *PG) CreateNotificationTarget(ctx context.Context, actorID string, spec 
 	if channels == nil {
 		channels = []string{}
 	}
+	if addresses == nil {
+		addresses = []string{}
+	}
 	enabled := true
 	if spec.Enabled != nil {
 		enabled = *spec.Enabled
 	}
 	var id string
-	err = tx.QueryRow(ctx, `insert into notification_target (name, label, kind, url, secret_id, principal_group_id, principal_id, channels, enabled)
-		values ($1, $2, $3, nullif($4, ''), $5::uuid, $6::uuid, $7::uuid, $8, $9) returning id::text`,
-		spec.Name, labelOrNull(spec.Label), spec.Kind, spec.URL, secretID, groupID, principalID, channels, enabled).Scan(&id)
+	err = tx.QueryRow(ctx, `insert into notification_target (name, label, kind, url, secret_id, principal_group_id, principal_id, channels, addresses, enabled)
+		values ($1, $2, $3, nullif($4, ''), $5::uuid, $6::uuid, $7::uuid, $8, $9, $10) returning id::text`,
+		spec.Name, labelOrNull(spec.Label), spec.Kind, spec.URL, secretID, groupID, principalID, channels, addresses, enabled).Scan(&id)
 	if isUniqueViolation(err) {
 		return nil, ErrNotificationTargetExists
 	}
@@ -412,8 +439,13 @@ func (p *PG) CreateNotificationTarget(ctx context.Context, actorID string, spec 
 func checkTargetShape(spec NotificationTargetSpec, people PeopleUse) error {
 	switch spec.Kind {
 	case ChannelWebhook:
-		if spec.PrincipalGroup != "" || spec.Principal != "" || len(spec.Channels) > 0 {
-			return fmt.Errorf("%w: a webhook target names a URL, not a group, a person or channels", ErrNotificationTargetInvalid)
+		if spec.PrincipalGroup != "" || spec.Principal != "" || len(spec.Channels) > 0 || len(spec.Addresses) > 0 {
+			return fmt.Errorf("%w: a webhook target names a URL, not a group, a person, channels or addresses", ErrNotificationTargetInvalid)
+		}
+		return nil
+	case TargetEmail:
+		if spec.URL != "" || spec.Secret != "" || spec.PrincipalGroup != "" || spec.Principal != "" || len(spec.Channels) > 0 {
+			return fmt.Errorf("%w: an email target names its addresses alone; the relay and its credential are the install's (notification settings)", ErrNotificationTargetInvalid)
 		}
 		return nil
 	case TargetPrincipalGroup:
@@ -431,10 +463,30 @@ func checkTargetShape(spec NotificationTargetSpec, people PeopleUse) error {
 			return fmt.Errorf("%w: a principal target names one person (principal) and no group", ErrNotificationTargetInvalid)
 		}
 	}
-	if spec.URL != "" || spec.Secret != "" {
-		return fmt.Errorf("%w: a %s target reaches people on their channels; it has no URL and no secret", ErrNotificationTargetInvalid, spec.Kind)
+	if spec.URL != "" || spec.Secret != "" || len(spec.Addresses) > 0 {
+		return fmt.Errorf("%w: a %s target reaches people on their channels; it has no URL, secret or addresses", ErrNotificationTargetInvalid, spec.Kind)
 	}
 	return nil
+}
+
+// checkAddresses returns an email target's addresses, each parsed (a bare
+// address or "Name <address>") and kept as its address part, deduplicated in
+// the order given; none is refused.
+func checkAddresses(in []string) ([]string, error) {
+	var out []string
+	for _, raw := range in {
+		a, err := mail.CheckAddress(raw)
+		if err != nil {
+			return nil, fmt.Errorf("%w: addresses: %q is not an email address", ErrNotificationTargetInvalid, raw)
+		}
+		if !slices.Contains(out, a) {
+			out = append(out, a)
+		}
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("%w: addresses: name at least one", ErrNotificationTargetInvalid)
+	}
+	return out, nil
 }
 
 // checkPersonChannels returns a person target's channels deduplicated in
@@ -508,18 +560,28 @@ func (p *PG) UpdateNotificationTarget(ctx context.Context, actorID, ref string, 
 	if err != nil {
 		return nil, err
 	}
-	var channels []string
-	if isPersonKind(before.Kind) {
-		if patch.URL != nil || (patch.Secret != nil && *patch.Secret != "") {
-			return nil, fmt.Errorf("%w: a %s target reaches people on their channels; it has no URL and no secret", ErrNotificationTargetInvalid, before.Kind)
+	var channels, addresses []string
+	switch {
+	case isPersonKind(before.Kind):
+		if patch.URL != nil || (patch.Secret != nil && *patch.Secret != "") || patch.Addresses != nil {
+			return nil, fmt.Errorf("%w: a %s target reaches people on their channels; it has no URL, secret or addresses", ErrNotificationTargetInvalid, before.Kind)
 		}
 		if patch.Channels != nil {
 			if channels, err = checkPersonChannels(*patch.Channels); err != nil {
 				return nil, err
 			}
 		}
-	} else if patch.Channels != nil {
-		return nil, fmt.Errorf("%w: a webhook target has no channels", ErrNotificationTargetInvalid)
+	case before.Kind == TargetEmail:
+		if patch.URL != nil || (patch.Secret != nil && *patch.Secret != "") || patch.Channels != nil {
+			return nil, fmt.Errorf("%w: an email target names its addresses alone", ErrNotificationTargetInvalid)
+		}
+		if patch.Addresses != nil {
+			if addresses, err = checkAddresses(*patch.Addresses); err != nil {
+				return nil, err
+			}
+		}
+	case patch.Channels != nil || patch.Addresses != nil:
+		return nil, fmt.Errorf("%w: a webhook target has no channels or addresses", ErrNotificationTargetInvalid)
 	}
 	if patch.URL != nil {
 		if err := p.checkTargetURL(ctx, tx, *patch.URL); err != nil {
@@ -552,8 +614,9 @@ func (p *PG) UpdateNotificationTarget(ctx context.Context, actorID, ref string, 
 			secret_id = case when $5::boolean then $6::uuid else secret_id end,
 			enabled = coalesce($7, enabled),
 			channels = coalesce($8, channels),
+			addresses = coalesce($9, addresses),
 			updated_at = now()
-		where id = $1`, before.ID, setLabel, labelVal, patch.URL, setSecret, secretID, patch.Enabled, channels); err != nil {
+		where id = $1`, before.ID, setLabel, labelVal, patch.URL, setSecret, secretID, patch.Enabled, channels, addresses); err != nil {
 		return nil, fmt.Errorf("storage: update notification target %q: %w", ref, err)
 	}
 	after, err := getNotificationTarget(ctx, tx, before.ID, false)
@@ -561,7 +624,7 @@ func (p *PG) UpdateNotificationTarget(ctx context.Context, actorID, ref string, 
 		return nil, err
 	}
 	img := auditTarget(after)
-	if !isPersonKind(after.Kind) {
+	if after.Kind == ChannelWebhook {
 		img["url_changed"] = after.URL != before.URL
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "update", "notification_target", before.ID, auditTarget(before), img); err != nil {
@@ -628,7 +691,10 @@ func (p *PG) RevealNotificationTargetURL(ctx context.Context, actorID, ref strin
 // a caller's, and never leaves the process.
 type TargetSend struct {
 	TargetID, Name, URL string
-	Enabled             bool
+	// Kind is webhook or email; Addresses an email target's recipients.
+	Kind      string
+	Addresses []string
+	Enabled   bool
 	HMACKey             string
 	BearerToken         string
 	// CredentialMissing is a bound secret that no longer unseals.
@@ -643,7 +709,7 @@ func (p *PG) targetSend(ctx context.Context, q querier, ref string) (*TargetSend
 	if err != nil {
 		return nil, err
 	}
-	out := &TargetSend{TargetID: t.ID, Name: t.Name, URL: t.URL, Enabled: t.Enabled}
+	out := &TargetSend{TargetID: t.ID, Name: t.Name, URL: t.URL, Kind: t.Kind, Addresses: t.Addresses, Enabled: t.Enabled}
 	if t.SecretID == "" {
 		return out, nil
 	}
@@ -700,7 +766,7 @@ func (p *PG) TargetForTest(ctx context.Context, ref string, action scope.Set) (*
 		return nil, err
 	}
 	if isPersonKind(t.Kind) {
-		return nil, fmt.Errorf("%w: a test send goes to a webhook target; a %s target reaches people, who are told only about alarms", ErrNotificationTargetInvalid, t.Kind)
+		return nil, fmt.Errorf("%w: a test send goes to a webhook or an email target; a %s target reaches people, who are told only about alarms", ErrNotificationTargetInvalid, t.Kind)
 	}
 	return p.targetSend(ctx, p.pool, t.ID)
 }

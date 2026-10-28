@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/hyperscaleav/omniglass/internal/config"
+	"github.com/hyperscaleav/omniglass/internal/mailsim"
 	"github.com/hyperscaleav/omniglass/internal/simnode"
 )
 
@@ -64,6 +66,54 @@ func newSimCmd() *cobra.Command {
 	run.Flags().IntVar(&portOffset, "port-offset", 0, "lift the simulated ports below 1024 by this much, to serve without the privilege to bind them")
 	run.Flags().DurationVar(&poll, "poll", 10*time.Second, "how often to re-pull the device list")
 	run.Flags().BoolVar(&impairments, "impairments", false, "apply impairments (unplug, latency, loss) and truthful ping by rewriting the firewall and traffic shaping of this network namespace; needs NET_ADMIN, and is meant for a namespace of the simulator's own (a pod or container)")
-	group.AddCommand(run)
+	group.AddCommand(run, newSimMailCmd())
 	return group
+}
+
+// newSimMailCmd is `sim mail`: the mail relay simulator (#1317), an SMTP server
+// that keeps what it is sent and sends nothing on, so a lab or a demo proves
+// an email notification without a real relay. Each accepted message is one
+// JSON line on --out; a --down-file whose content is "down" makes it refuse
+// every message with a temporary error, as a relay outage would.
+func newSimMailCmd() *cobra.Command {
+	var listen, out, downFile string
+	cmd := &cobra.Command{
+		Use:   "mail",
+		Short: "Run a mail relay simulator that keeps what it is sent",
+		Long: "Serves SMTP on --listen and keeps every message it accepts, writing each as one JSON line " +
+			"(from, to, subject, text, message_id) to --out (standard output by default). It sends nothing on. " +
+			"Point the notification settings' mail_relay at it with mail_security none and name its address in " +
+			"egress_allow. While --down-file holds the word down, it refuses every message with a temporary error.",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			w := cmd.OutOrStdout()
+			if out != "" {
+				f, err := os.OpenFile(out, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+				if err != nil {
+					return err
+				}
+				defer f.Close()
+				w = f
+			}
+			opts := mailsim.Options{Out: w}
+			if downFile != "" {
+				opts.Failing = func() bool {
+					b, err := os.ReadFile(downFile)
+					return err == nil && strings.TrimSpace(string(b)) == "down"
+				}
+			}
+			srv, err := mailsim.Start(listen, opts)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.ErrOrStderr(), "mail sim listening on %s\n", srv.Addr())
+			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+			defer stop()
+			<-ctx.Done()
+			return srv.Close()
+		},
+	}
+	cmd.Flags().StringVar(&listen, "listen", "127.0.0.1:2525", "the address to serve SMTP on")
+	cmd.Flags().StringVar(&out, "out", "", "append each accepted message as a JSON line to this file (default standard output)")
+	cmd.Flags().StringVar(&downFile, "down-file", "", "while this file holds the word down, refuse every message with a temporary error")
+	return cmd
 }

@@ -121,10 +121,10 @@ func registerNotificationRoutes(api huma.API, a *authenticator, gw storage.Gatew
 }
 
 // recipientView is who the caller may see a person-addressed row's recipient
-// as (#1341): themselves always, everyone when they hold the principal
-// directory's admin-tier read.
+// as (#1341): themselves always, everyone when they read the principal
+// directory (its admin-tier read on an all-scope grant).
 func recipientView(ctx context.Context, a *authenticator) storage.RecipientView {
-	v := storage.RecipientView{All: a.allows(ctx, "principal", "read", "admin")}
+	v := storage.RecipientView{All: a.canReadDirectory(ctx, "principal")}
 	if pr, ok := principalFrom(ctx); ok {
 		v.Self = pr.ID
 	}

@@ -4995,12 +4995,18 @@
       "type": "ARRAY",
       "nullable": false,
       "default": "'{}'::text[]"
+     },
+     {
+      "name": "addresses",
+      "type": "ARRAY",
+      "nullable": false,
+      "default": "'{}'::text[]"
      }
     ],
     "checks": [
      {
       "name": "notification_target_kind_check",
-      "expr": "CHECK ((((kind = 'webhook'::text) AND (url IS NOT NULL) AND (principal_group_id IS NULL) AND (principal_id IS NULL) AND (cardinality(channels) = 0)) OR ((kind = 'principal_group'::text) AND (principal_group_id IS NOT NULL) AND (url IS NULL) AND (principal_id IS NULL) AND (secret_id IS NULL) AND (cardinality(channels) \u003e 0) AND (channels \u003c@ ARRAY['inbox'::text, 'email'::text])) OR ((kind = 'principal'::text) AND (principal_id IS NOT NULL) AND (url IS NULL) AND (principal_group_id IS NULL) AND (secret_id IS NULL) AND (cardinality(channels) \u003e 0) AND (channels \u003c@ ARRAY['inbox'::text, 'email'::text]))))"
+      "expr": "CHECK ((((kind = 'webhook'::text) AND (url IS NOT NULL) AND (principal_group_id IS NULL) AND (principal_id IS NULL) AND (cardinality(channels) = 0) AND (cardinality(addresses) = 0)) OR ((kind = 'email'::text) AND (url IS NULL) AND (principal_group_id IS NULL) AND (principal_id IS NULL) AND (secret_id IS NULL) AND (cardinality(channels) = 0) AND (cardinality(addresses) \u003e 0)) OR ((kind = 'principal_group'::text) AND (principal_group_id IS NOT NULL) AND (url IS NULL) AND (principal_id IS NULL) AND (secret_id IS NULL) AND (cardinality(addresses) = 0) AND (cardinality(channels) \u003e 0) AND (channels \u003c@ ARRAY['inbox'::text, 'email'::text])) OR ((kind = 'principal'::text) AND (principal_id IS NOT NULL) AND (url IS NULL) AND (principal_group_id IS NULL) AND (secret_id IS NULL) AND (cardinality(addresses) = 0) AND (cardinality(channels) \u003e 0) AND (channels \u003c@ ARRAY['inbox'::text, 'email'::text]))))"
      }
     ],
     "uniques": [

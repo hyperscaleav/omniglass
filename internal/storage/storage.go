@@ -1013,6 +1013,10 @@ type Gateway interface {
 	AuditTargetTest(ctx context.Context, actorID, targetID string, status int, ok bool, reason string) error
 	// EgressPolicy reads the install's egress allow list.
 	EgressPolicy(ctx context.Context) (egress.Policy, error)
+	// MailRelay reads the install's mail relay for a :test send (#1317);
+	// CheckMailSecret judges binding a secret to it (the reveal right).
+	MailRelay(ctx context.Context) (*MailRelay, string, error)
+	CheckMailSecret(ctx context.Context, ref string, use SecretUse) error
 	// The action rule (#618): reads registry-shaped, writes all-scope.
 	ListActionRules(ctx context.Context) ([]ActionRule, error)
 	GetActionRule(ctx context.Context, ref string) (*ActionRule, error)

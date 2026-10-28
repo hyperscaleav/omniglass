@@ -40,8 +40,9 @@ not built, and the reasons are in that section. The [notification](#notification
 **notification types** previewed against a real alarm, **webhook targets** sent through the egress
 primitive, the **action rule** with its one `notify` step, and the **notification** delivery row a
 server tick sends, on the alarm's timeline with a retry. **People as recipients** (#1341): a
-**principal group** or a **person** as a target, told in their console **inbox**, each only about the
-alarms they can read. Flows, grouping and the other channel kinds are still design.
+**principal group** or a **person** as a target, told in their console **inbox** and by **email**
+through the install's mail relay, each only about the alarms they can read. Flows, grouping and the
+other channel kinds are still design.
 See [implementation status](/architecture/status/).
 :::
 
@@ -476,8 +477,10 @@ route, so an author sees what a receiver gets and what a template can read.
 A `notification_target` names a **channel kind**, a destination and, optionally, the credential it
 proves itself with. The kinds are a code-declared enum published through the API; `webhook` is
 the first, and it reaches people through the tools they already watch (a chat incoming webhook, a
-paging service) without a mail relay. A target can also name people: a `principal_group` or one
-`principal` ([below](#people-group-and-person-targets-and-the-inbox)). Other channel kinds are later. A target
+paging service) without a mail relay. An `email` target is a fixed set of addresses, a shared
+mailbox ([below](#email-a-shared-mailbox-and-a-persons-directory-email)). A target can also name
+people: a `principal_group` or one `principal` ([below](#people-group-and-person-targets-and-the-inbox)).
+Other channel kinds are later. A target
 is **platform-owned and admin-only**: an egress destination holding a credential reference, so
 `notification_target` is a sensitive resource off the viewer floor, every route takes an
 all-scope `notification_target:*` grant, and nothing below admin holds one.
@@ -522,7 +525,7 @@ environment.
 
 A target can name people instead of a channel (#1341): a **`principal_group`** target reaches every
 member of a group, and a **`principal`** target one person, each on the **channels** it names (`inbox`,
-the console inbox). They ride the rule's targets exactly as a webhook does, so "the on-call group gets
+the console inbox, and `email`, each person's directory email). They ride the rule's targets exactly as a webhook does, so "the on-call group gets
 every critical alarm" is an action rule whose target is the group:
 
 ```bash
@@ -560,6 +563,32 @@ and to holders of `principal:read:admin`; everyone else reads it as withheld
 target takes `principal_group:read:admin` or `principal:read:admin` on top of
 `notification_target:create`, as binding a secret takes the right to reveal it, and a group or person a
 target names cannot be deleted from under it: the refusal names the target.
+
+### Email: a shared mailbox, and a person's directory email
+
+Email goes through **the install's mail relay** (#1317), set in the `notification` settings namespace:
+`mail_relay` (host:port; empty turns email off), `mail_security` (`starttls`, the default, which the
+relay must offer; `tls`, implicit TLS; or `none`), `mail_from`, and `mail_secret`, a **platform
+`basic-auth` secret** the session authenticates with. The relay is judged by the same egress contract a
+webhook is, on the address actually dialed (the session dials through the egress primitive's one
+dial): an internal relay only when `egress_allow` names it, a metadata address never, and `none` only
+for a relay the allow list names (a lab's mail sim). A credential never crosses an unencrypted session
+to anything but loopback. Binding `mail_secret`, or moving `mail_relay` while one is bound, takes the
+right to reveal that secret, as binding a secret to a target does.
+
+Two kinds of row travel by email. An **`email` target** sends to its `addresses`, admin-owned like a
+webhook. A **person's email row** (a group or person target with the `email` channel) sends to the
+person's **directory email** (`human.email`, admin-set or synced from the identity provider), resolved
+at send. Before it sends, the tick **judges the recipient again**, inside the row's own transaction:
+they are still an active human, still a member of the group the row came through, and their component
+read scope as it stands still admits the alarm's component; otherwise the row fails at once with the
+plain reason (`the recipient no longer reads the alarm's component`, `the recipient is no longer a
+member of on-call`, `the recipient has no directory email`) rather than mailing a person who lost the
+alarm while it waited out a retry
+([ADR-1341](/architecture/decisions/#adr-1341-a-person-is-told-about-an-alarm-only-while-they-can-read-it-groups-expand-at-queue-time-scope-is-checked-there-and-again-at-delivery)).
+The message is plain text, the rendered subject and text, its `Message-ID` the row's uuid and its date
+the row's own, so every attempt and a `:retry` carry the same bytes. A relay that refuses is retried
+with the same backoff as a webhook, and `:test` on an email target sends one synthetic message.
 
 ### The `action_rule`: when a message is sent
 
@@ -617,7 +646,7 @@ alarm reads are: a principal never sees a message about a component outside its 
 What an `action_rule` raises and runs beyond the built `notify` step; stateful, holding its own
 state directly:
 
-- **kinds**: `email` (#1317), a `webhook` action with a per-target
+- **kinds**: a `webhook` action with a per-target
   body, `run` (execute a command; edge realization in [templates](/architecture/templates/) /
   [nodes](/architecture/nodes/));
 - a **multistep** action is a **flow**, carrying workflow state (current step, waiting, branches).
@@ -780,11 +809,12 @@ registries, the `action_rule` and the targets it sends to (`action_rule_target`)
 <SchemaTable
   table="notification_target"
   notes={{
-    kind: 'The target kind, a code-declared enum: webhook, principal_group or principal; a CHECK holds each kind to its own columns',
+    kind: 'The target kind, a code-declared enum: webhook, email, principal_group or principal; a CHECK holds each kind to its own columns',
+    addresses: 'An email target\'s recipients, a shared mailbox; empty for every other kind',
     url: 'A webhook\'s destination; masked on every read, revealed whole under an audit row. NULL for a person target',
     principal_group_id: 'The group a principal_group target reaches, expanded at every transition (ON DELETE RESTRICT)',
     principal_id: 'The person a principal target reaches (ON DELETE RESTRICT)',
-    channels: 'The channels a person target delivers on (inbox); empty for a webhook',
+    channels: 'The channels a person target delivers on (inbox, email); empty for a webhook or an email target',
     secret_id: 'The platform hmac-key or bearer-token secret it signs or authenticates with; a bound secret cannot be deleted (RESTRICT)',
   }}
 />

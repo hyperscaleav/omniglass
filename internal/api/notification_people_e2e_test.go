@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/auth"
 	"github.com/hyperscaleav/omniglass/internal/scope"
+	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
@@ -37,7 +39,7 @@ func newPeople(t *testing.T) *people {
 	t.Helper()
 	ctx := context.Background()
 	dsn := storagetest.NewDSN(t)
-	gw, err := storage.NewPG(ctx, dsn)
+	gw, err := storage.NewPG(ctx, dsn, storage.WithSecretProvider(secret.NewStaticProvider(bytes.Repeat([]byte{0x7}, 32))))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +52,8 @@ func newPeople(t *testing.T) *people {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := conn.Exec(ctx, `insert into role (name, permissions, inherits) values ('target-admin', '{"notification_target:*"}', '{}')`); err != nil {
+	if _, err := conn.Exec(ctx, `insert into role (name, permissions, inherits) values ('target-admin', '{"notification_target:*"}', '{}'),
+		('settings-admin', '{"settings:*","platform:*","secret:read"}', '{}')`); err != nil {
 		t.Fatal(err)
 	}
 	conn.Close(ctx)
@@ -201,6 +204,17 @@ func TestAGroupIsToldInTheirInboxOnlyWhatEachCanRead(t *testing.T) {
 	}
 	if owner := string(p.c.do(p.owner, http.MethodGet, "/notifications?alarm="+two.ID, nil, http.StatusOK)); !strings.Contains(owner, `"alice"`) || !strings.Contains(owner, `"bob"`) {
 		t.Fatalf("the owner's view withholds a name: %s", owner)
+	}
+	// An admin grant scoped to one component carries principal:read:admin in
+	// its permissions but reads no directory (the directory takes an
+	// all-scope grant): the names stay withheld from it.
+	p.human("lena", "admin", "component", p.comps["display-2"])
+	if lena := string(p.c.do(p.toks["lena"], http.MethodGet, "/notifications?alarm="+two.ID, nil, http.StatusOK)); strings.Contains(lena, `"alice"`) || strings.Contains(lena, `"bob"`) || !strings.Contains(lena, `"recipient_withheld":true`) {
+		t.Fatalf("a component-scoped admin read a recipient's name: %s", lena)
+	}
+	// A target admin without the directory reads the target, not who it names.
+	if tg := string(p.c.do(p.toks["tara"], http.MethodGet, "/notification-targets/on-call-page", nil, http.StatusOK)); strings.Contains(tg, "on-call\"") {
+		t.Fatalf("a target read named the group to a caller without the directory: %s", tg)
 	}
 
 	// alice loses her fleet-wide read and gains display-1 alone: the

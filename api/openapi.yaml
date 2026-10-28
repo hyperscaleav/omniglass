@@ -2490,8 +2490,15 @@ components:
           format: uri
           readOnly: true
           type: string
+        addresses:
+          description: An email target's recipient addresses
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         channels:
-          description: "A group or person target's channels: inbox"
+          description: "A group or person target's channels: inbox, email"
           items:
             type: string
           type:
@@ -2504,6 +2511,7 @@ components:
           description: The target kind
           enum:
             - webhook
+            - email
             - principal_group
             - principal
           type: string
@@ -6644,9 +6652,30 @@ components:
           items:
             type: string
           type: array
+        mail_from:
+          description: The From address of an email notification (Omniglass <alerts@example.com>)
+          type: string
+        mail_relay:
+          description: The SMTP relay email notifications go through, host:port (smtp.example.com:587). Empty turns email off. An internal relay is reached only when egress_allow names it
+          type: string
+        mail_secret:
+          description: A platform basic-auth secret, by name, the relay session authenticates with; empty sends without authenticating. Setting it, or moving mail_relay while one is set, takes the right to reveal that secret
+          type: string
+        mail_security:
+          default: starttls
+          description: "How the session to the relay is protected: starttls (the relay must offer it), tls (implicit TLS, port 465), or none, admitted only for a relay egress_allow names (a lab's mail sim)"
+          enum:
+            - starttls
+            - tls
+            - none
+          type: string
       required:
         - console_url
         - egress_allow
+        - mail_relay
+        - mail_security
+        - mail_from
+        - mail_secret
       type: object
     NotificationTargetBody:
       additionalProperties: false
@@ -6658,6 +6687,13 @@ components:
           format: uri
           readOnly: true
           type: string
+        addresses:
+          description: "An email target's recipients: a shared mailbox, sent through the install's mail relay"
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         auth:
           description: "How a send proves itself: hmac signs each body with the bound hmac-key (X-Omniglass-Signature), bearer presents the bound bearer-token, none sends unsigned"
           enum:
@@ -6666,7 +6702,7 @@ components:
             - bearer
           type: string
         channels:
-          description: "The channels a group or person target delivers on: inbox (the console inbox)"
+          description: "The channels a group or person target delivers on: inbox (the console inbox) and email (each person's directory email)"
           items:
             type: string
           type:
@@ -6682,9 +6718,10 @@ components:
           description: The target's uuid, the stable form of name
           type: string
         kind:
-          description: "The target kind: webhook posts a signed JSON envelope to the URL; principal_group reaches every human member of a group, read at each alarm transition; principal reaches one person. A person is told only about alarms on components they can read"
+          description: "The target kind: webhook posts a signed JSON envelope to the URL; email sends to fixed addresses through the install's mail relay; principal_group reaches every human member of a group, read at each alarm transition; principal reaches one person. A person is told only about alarms on components they can read"
           enum:
             - webhook
+            - email
             - principal_group
             - principal
           type: string
@@ -6693,10 +6730,10 @@ components:
         name:
           type: string
         principal:
-          description: The person a principal target reaches, by username
+          description: The person a principal target reaches, by username; shown to a caller who reads the principal directory (principal:read:admin, all-scope)
           type: string
         principal_group:
-          description: The group a principal_group target reaches, by name
+          description: The group a principal_group target reaches, by name; shown to a caller who reads the group directory (principal_group:read:admin, all-scope)
           type: string
         principal_group_id:
           description: The group's uuid
@@ -11139,8 +11176,13 @@ components:
           format: uri
           readOnly: true
           type: string
+        addresses:
+          description: An email target's recipient addresses
+          items:
+            type: string
+          type: array
         channels:
-          description: "A group or person target's channels: inbox"
+          description: "A group or person target's channels: inbox, email"
           items:
             type: string
           type: array
@@ -16670,7 +16712,7 @@ paths:
       x-omniglass-permission: notification_target:reveal
   /notification-targets/{name}:test:
     post:
-      description: Sends one synthetic message (transition test, about no alarm) to the target through the egress contract, signed or authenticated as a delivery would be, and answers what the receiver said. Records nothing but its audit row (the result, never the URL). A disabled target is still tested. Gated by notification_target:test with an all-scope grant.
+      description: Sends one synthetic message (transition test, about no alarm) to a webhook or email target through the egress contract, signed or authenticated as a delivery would be (an email through the install's mail relay), and answers what the receiver said; a group or person target is a 422, since people are told only about alarms. Records nothing but its audit row (the result, never the URL). A disabled target is still tested. Gated by notification_target:test with an all-scope grant.
       operationId: test-notification-target
       parameters:
         - description: The target's name or uuid
@@ -17042,7 +17084,7 @@ paths:
       x-omniglass-permission: principal_group:create
   /principal-groups/{group}:
     delete:
-      description: Removes a group and, by cascade, its memberships and grants. Gated by principal_group:delete (all-scope).
+      description: "Removes a group and, by cascade, its memberships and grants. A group a notification target notifies cannot be deleted (a 409): the refusal names the target to a caller who reads targets. Gated by principal_group:delete (all-scope)."
       operationId: delete-group
       parameters:
         - description: The group, by name or uuid
@@ -17826,7 +17868,7 @@ paths:
       x-omniglass-permission: principal:impersonate
   /principals/{id}:purge:
     post:
-      description: Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. Gated by principal:purge:admin (admin-sensitive, all-scope), and the principal must be archived first.
+      description: Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. A person a notification target notifies cannot be purged (a 409; the refusal names the target to a caller who reads targets). Gated by principal:purge:admin (admin-sensitive, all-scope), and the principal must be archived first.
       operationId: purge-principal
       parameters:
         - description: The principal, addressed by its uuid, a human's username, or a service account's name

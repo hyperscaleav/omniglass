@@ -690,6 +690,11 @@ omniglass notification-target test ops-chat                           # one synt
 omniglass action-rule create --name page-ops --on '["raised","cleared"]' --when 'severity_rank >= 40' --targets '["ops-chat"]'
 omniglass notification list --status failed                          # scoped by the alarm's component
 omniglass notification retry <id>                                     # notification:retry, an operator's
+omniglass notification-target create --name on-call-page --kind principal_group --principal-group on-call --channels '["inbox","email"]'
+omniglass notification-target create --name ops-mailbox --kind email --addresses '["ops@example.com"]'
+omniglass auth me notification list --unread                          # your own inbox, scoped as you read now
+omniglass auth me notification markAllRead
+omniglass sim mail --listen 0.0.0.0:2525 --out /tmp/mail.jsonl         # a mail relay simulator for a lab
 ```
 
 ## Property contracts and values

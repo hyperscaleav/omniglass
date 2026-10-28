@@ -1,6 +1,6 @@
 ---
 title: Notifications
-description: "Send an alarm to a chat channel: a webhook target, the action rule that sends to it, the message it carries, and how a delivery reads on the alarm's timeline."
+description: "Send an alarm to a chat channel, a group's inbox or email: the targets, the action rule that sends to them, the message it carries, and how a delivery reads on the alarm's timeline."
 ---
 
 import SeededSet from '../../../../components/SeededSet.astro';
@@ -86,6 +86,54 @@ To say something else, write your own on **Catalog, under Actions: Notifications
 the rule. The page previews a type, or the draft you are editing, against a real component's most
 recent alarm through the same engine a delivery uses, beside every fact the templates could have
 read; `omniglass notification-type preview <type> --component <component>` does the same.
+
+## Tell people: a group's inbox, and email
+
+A target can name people instead of a URL: a `principal_group` target tells every member of a
+group, and a `principal` target one person, on the channels it names. `inbox` is the console inbox
+(the bell in the shell); `email` is each person's directory email, sent through the install's mail
+relay (below). Binding a group takes `principal_group:read:admin` and binding a person
+`principal:read:admin`, both admin's.
+
+```bash
+omniglass notification-target create --name on-call-page --kind principal_group \
+  --principal-group on-call --channels '["inbox","email"]'
+omniglass action-rule create --name page-on-call --on '["raised"]' \
+  --when 'severity_rank >= 50' --targets '["on-call-page"]'
+```
+
+The group is read at every alarm, so adding someone to `on-call` is all it takes to page them next
+time. **Each member is told only about an alarm on a component they can read**: a member whose grants
+do not reach the component gets nothing about it, on any channel, and an email still waiting to send
+to a member who has since lost that component, or left the group, fails with the reason instead of
+sending. A person can read their own inbox (`omniglass auth me notification list`); who an entry was
+for is shown to them and to admins, and withheld from everyone else who can see the alarm.
+
+To send to a shared mailbox instead, make an `email` target with its addresses:
+
+```bash
+omniglass notification-target create --name ops-mailbox --kind email --addresses '["ops@example.com"]'
+omniglass notification-target test ops-mailbox
+```
+
+### The mail relay
+
+Email goes through one relay, set in the `notification` settings namespace. Store its login as a
+**platform** secret of the `basic-auth` type, then point the settings at it (binding the secret takes
+the right to reveal it):
+
+```bash
+omniglass secret create --name relay-login --owner-kind platform --secret-type basic-auth \
+  --fields '{"username":"omniglass","password":"<the relay password>"}'
+# Settings > notification, or PATCH /api/v1/settings/notification:
+{"mail_relay": "smtp.example.com:587", "mail_security": "starttls",
+ "mail_from": "Omniglass <alerts@example.com>", "mail_secret": "relay-login"}
+```
+
+`starttls` (the default) needs a relay that offers it, `tls` is implicit TLS (port 465), and `none` is
+only for a relay `egress_allow` names, such as the mail simulator a lab or a test runs
+(`omniglass sim mail`, which keeps what it is sent and sends nothing on). An internal relay is reached
+only when `egress_allow` names it, as for a webhook.
 
 ## Reading a delivery
 

@@ -254,7 +254,7 @@ func rowsFor(r queuedRule, status string, people map[string][]recipient) []queue
 	told := map[string]bool{}
 	for i, id := range r.targetIDs {
 		if !isPersonKind(r.targetKinds[i]) {
-			out = append(out, queuedRow{targetID: id, targetName: r.targetNames[i], channel: DeliveryWebhook, status: status})
+			out = append(out, queuedRow{targetID: id, targetName: r.targetNames[i], channel: deliveryFor(r.targetKinds[i]), status: status})
 			continue
 		}
 		for _, p := range people[id] {
@@ -354,7 +354,11 @@ type NotificationSend struct {
 	ID, AlarmID, Type, Transition string
 	Subject, Text                 string
 	Facts                         map[string]string
-	Target                        TargetSend
+	// Channel is webhook or email; Target is a webhook's send, Email an
+	// email's (#1317).
+	Channel string
+	Target  TargetSend
+	Email   *EmailSend
 	// Refused is set when there is no send to make (the target was deleted,
 	// disabled, or its secret no longer unseals): the attempt fails with it.
 	Refused string
@@ -385,13 +389,17 @@ func (p *PG) DeliverNext(ctx context.Context, send SendFunc) (bool, error) {
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	var ns NotificationSend
-	var targetID *string
+	var targetID, recipientID *string
+	var componentID string
+	var createdAt time.Time
 	var attempts int
 	var factsRaw []byte
-	err = tx.QueryRow(ctx, `select id::text, alarm_id::text, type_name, transition, subject, text, facts, target_id::text, attempts
+	err = tx.QueryRow(ctx, `select id::text, alarm_id::text, type_name, transition, subject, text, facts, target_id::text, attempts,
+			channel, recipient_principal_id::text, component_id::text, created_at
 		from notification where status = 'queued' and next_attempt_at <= now()
 		order by next_attempt_at, id for update skip locked limit 1`).
-		Scan(&ns.ID, &ns.AlarmID, &ns.Type, &ns.Transition, &ns.Subject, &ns.Text, &factsRaw, &targetID, &attempts)
+		Scan(&ns.ID, &ns.AlarmID, &ns.Type, &ns.Transition, &ns.Subject, &ns.Text, &factsRaw, &targetID, &attempts,
+			&ns.Channel, &recipientID, &componentID, &createdAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}
@@ -400,6 +408,14 @@ func (p *PG) DeliverNext(ctx context.Context, send SendFunc) (bool, error) {
 	}
 	_ = json.Unmarshal(factsRaw, &ns.Facts)
 	switch {
+	case ns.Channel == DeliveryEmail:
+		es, refused, err := p.emailSend(ctx, tx, targetID, recipientID, componentID, createdAt)
+		if err != nil {
+			return true, err
+		}
+		ns.Email, ns.Refused = es, refused
+	case ns.Channel != DeliveryWebhook:
+		ns.Refused = "an inbox entry is delivered by its own commit, never sent"
 	case targetID == nil:
 		ns.Refused = "the target was deleted"
 	default:

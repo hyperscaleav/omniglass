@@ -394,7 +394,7 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Path:          "/principals/{id}:purge",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Purge a principal",
-		Description:   "Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. Gated by principal:purge:admin (admin-sensitive, all-scope), and the principal must be archived first.",
+		Description:   "Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. A person a notification target notifies cannot be purged (a 409; the refusal names the target to a caller who reads targets). Gated by principal:purge:admin (admin-sensitive, all-scope), and the principal must be archived first.",
 	}, "principal", "purge", "admin"), func(ctx context.Context, in *principalPathInput) (*struct{}, error) {
 		id, rerr := a.resolvePrincipalRef(ctx, in.ID)
 		if rerr != nil {
@@ -402,7 +402,7 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		}
 		in.ID = id
 		if err := gw.PurgePrincipal(ctx, actorID(ctx), in.ID, a.scopeFor(ctx, "principal", "purge")); err != nil {
-			return nil, mapPrincipalErr(err)
+			return nil, mapBoundErr(ctx, a, err)
 		}
 		return nil, nil
 	})
@@ -709,8 +709,29 @@ func (a *authenticator) resolvePrincipalRef(ctx context.Context, ref string) (st
 // canListPrincipals reports whether the caller may list every principal: the
 // principal:read:admin permission, held on an all-scope grant.
 func (a *authenticator) canListPrincipals(ctx context.Context) bool {
-	perms, ok := permsFrom(ctx)
-	return ok && perms.Allows("principal", "read", "admin") && a.scopeFor(ctx, "principal", "read").All
+	return a.canReadDirectory(ctx, "principal")
+}
+
+// canReadDirectory reports whether the caller reads an IAM directory
+// (principal, principal_group) the way its own list route requires: the
+// admin-tier read permission, held on an all-scope grant. The permission
+// alone is scope-blind (the flattened set ignores where a grant is scoped),
+// so a location-scoped admin holds it without reading the directory, and any
+// check that stands in for the directory's read takes both halves (#1341).
+func (a *authenticator) canReadDirectory(ctx context.Context, resource string) bool {
+	return a.allows(ctx, resource, "read", "admin") && a.scopeFor(ctx, resource, "read").All
+}
+
+// mapBoundErr maps a delete refused because a notification target binds the
+// group or person (#1341): the refusal names the target to a caller who reads
+// targets (notification_target:read, all-scope), the generic refusal to
+// anyone else, since a target name is not theirs to learn.
+func mapBoundErr(ctx context.Context, a *authenticator, err error) error {
+	var bound *storage.TargetBindingError
+	if errors.As(err, &bound) && a.allows(ctx, "notification_target", "read") && a.scopeFor(ctx, "notification_target", "read").All {
+		return huma.Error409Conflict("the notification target " + bound.Target + " notifies this " + bound.What + "; delete that target first")
+	}
+	return mapPrincipalErr(err)
 }
 
 func mapPrincipalErr(err error) error {
@@ -731,10 +752,6 @@ func mapPrincipalErr(err error) error {
 	case errors.Is(err, storage.ErrNotArchived):
 		return huma.Error409Conflict("a principal must be archived before it can be purged")
 	case errors.Is(err, storage.ErrBoundToTarget):
-		var bound *storage.TargetBindingError
-		if errors.As(err, &bound) {
-			return huma.Error409Conflict("the notification target " + bound.Target + " notifies this " + bound.What + "; delete that target or point it elsewhere first")
-		}
 		return huma.Error409Conflict("a notification target notifies it; delete that target first")
 	case errors.Is(err, storage.ErrGrantNotFound):
 		return huma.Error404NotFound("grant not found")

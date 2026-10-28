@@ -1116,3 +1116,8 @@ func (UnimplementedGateway) MarkInboxAllRead(context.Context, string, string, sc
 }
 func (UnimplementedGateway) DeliverNext(context.Context, SendFunc) (bool, error) { return false, nil }
 func (UnimplementedGateway) NotificationBacklog(context.Context) (int, error)    { return 0, nil }
+
+func (UnimplementedGateway) MailRelay(context.Context) (*MailRelay, string, error) {
+	return nil, "no mail relay is configured", nil
+}
+func (UnimplementedGateway) CheckMailSecret(context.Context, string, SecretUse) error { return nil }

@@ -2751,7 +2751,7 @@ export interface paths {
         put?: never;
         /**
          * Send a test notification to a target
-         * @description Sends one synthetic message (transition test, about no alarm) to the target through the egress contract, signed or authenticated as a delivery would be, and answers what the receiver said. Records nothing but its audit row (the result, never the URL). A disabled target is still tested. Gated by notification_target:test with an all-scope grant.
+         * @description Sends one synthetic message (transition test, about no alarm) to a webhook or email target through the egress contract, signed or authenticated as a delivery would be (an email through the install's mail relay), and answers what the receiver said; a group or person target is a 422, since people are told only about alarms. Records nothing but its audit row (the result, never the URL). A disabled target is still tested. Gated by notification_target:test with an all-scope grant.
          */
         post: operations["test-notification-target"];
         delete?: never;
@@ -2952,7 +2952,7 @@ export interface paths {
         post?: never;
         /**
          * Delete a principal group
-         * @description Removes a group and, by cascade, its memberships and grants. Gated by principal_group:delete (all-scope).
+         * @description Removes a group and, by cascade, its memberships and grants. A group a notification target notifies cannot be deleted (a 409): the refusal names the target to a caller who reads targets. Gated by principal_group:delete (all-scope).
          */
         delete: operations["delete-group"];
         options?: never;
@@ -3331,7 +3331,7 @@ export interface paths {
         put?: never;
         /**
          * Purge a principal
-         * @description Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. Gated by principal:purge:admin (admin-sensitive, all-scope), and the principal must be archived first.
+         * @description Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. A person a notification target notifies cannot be purged (a 409; the refusal names the target to a caller who reads targets). Gated by principal:purge:admin (admin-sensitive, all-scope), and the principal must be archived first.
          */
         post: operations["purge-principal"];
         delete?: never;
@@ -6725,7 +6725,9 @@ export interface components {
              * @example /api/v1/schemas/CreateNotificationTargetInputBody.json
              */
             readonly $schema?: string;
-            /** @description A group or person target's channels: inbox */
+            /** @description An email target's recipient addresses */
+            addresses?: string[] | null;
+            /** @description A group or person target's channels: inbox, email */
             channels?: string[] | null;
             /** @description Whether deliveries go to it (default true) */
             enabled?: boolean;
@@ -6733,7 +6735,7 @@ export interface components {
              * @description The target kind
              * @enum {string}
              */
-            kind: "webhook" | "principal_group" | "principal";
+            kind: "webhook" | "email" | "principal_group" | "principal";
             /** @description A human label */
             label?: string;
             /** @description The target's name (lowercase kebab) */
@@ -9025,6 +9027,18 @@ export interface components {
             console_url: string;
             /** @description The internal destinations a notification may reach, each a CIDR (10.20.0.0/16), an address, or a host name (chat.corp.example). Everything private, loopback or link-local is refused unless named here; a cloud metadata address is refused even when it is; plain http is admitted only to a destination named here */
             egress_allow: string[];
+            /** @description The From address of an email notification (Omniglass <alerts@example.com>) */
+            mail_from: string;
+            /** @description The SMTP relay email notifications go through, host:port (smtp.example.com:587). Empty turns email off. An internal relay is reached only when egress_allow names it */
+            mail_relay: string;
+            /** @description A platform basic-auth secret, by name, the relay session authenticates with; empty sends without authenticating. Setting it, or moving mail_relay while one is set, takes the right to reveal that secret */
+            mail_secret: string;
+            /**
+             * @description How the session to the relay is protected: starttls (the relay must offer it), tls (implicit TLS, port 465), or none, admitted only for a relay egress_allow names (a lab's mail sim)
+             * @default starttls
+             * @enum {string}
+             */
+            mail_security: "starttls" | "tls" | "none";
         };
         NotificationTargetBody: {
             /**
@@ -9033,12 +9047,14 @@ export interface components {
              * @example /api/v1/schemas/NotificationTargetBody.json
              */
             readonly $schema?: string;
+            /** @description An email target's recipients: a shared mailbox, sent through the install's mail relay */
+            addresses?: string[] | null;
             /**
              * @description How a send proves itself: hmac signs each body with the bound hmac-key (X-Omniglass-Signature), bearer presents the bound bearer-token, none sends unsigned
              * @enum {string}
              */
             auth: "none" | "hmac" | "bearer";
-            /** @description The channels a group or person target delivers on: inbox (the console inbox) */
+            /** @description The channels a group or person target delivers on: inbox (the console inbox) and email (each person's directory email) */
             channels?: string[] | null;
             /** Format: date-time */
             created_at: string;
@@ -9047,15 +9063,15 @@ export interface components {
             /** @description The target's uuid, the stable form of name */
             id: string;
             /**
-             * @description The target kind: webhook posts a signed JSON envelope to the URL; principal_group reaches every human member of a group, read at each alarm transition; principal reaches one person. A person is told only about alarms on components they can read
+             * @description The target kind: webhook posts a signed JSON envelope to the URL; email sends to fixed addresses through the install's mail relay; principal_group reaches every human member of a group, read at each alarm transition; principal reaches one person. A person is told only about alarms on components they can read
              * @enum {string}
              */
-            kind: "webhook" | "principal_group" | "principal";
+            kind: "webhook" | "email" | "principal_group" | "principal";
             label?: string;
             name: string;
-            /** @description The person a principal target reaches, by username */
+            /** @description The person a principal target reaches, by username; shown to a caller who reads the principal directory (principal:read:admin, all-scope) */
             principal?: string;
-            /** @description The group a principal_group target reaches, by name */
+            /** @description The group a principal_group target reaches, by name; shown to a caller who reads the group directory (principal_group:read:admin, all-scope) */
             principal_group?: string;
             /** @description The group's uuid */
             principal_group_id?: string;
@@ -11586,7 +11602,9 @@ export interface components {
              * @example /api/v1/schemas/UpdateNotificationTargetInputBody.json
              */
             readonly $schema?: string;
-            /** @description A group or person target's channels: inbox */
+            /** @description An email target's recipient addresses */
+            addresses?: string[];
+            /** @description A group or person target's channels: inbox, email */
             channels?: string[];
             /** @description Whether deliveries go to it */
             enabled?: boolean;

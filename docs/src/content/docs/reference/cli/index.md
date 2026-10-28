@@ -3537,7 +3537,8 @@ Adds a destination a notification can be sent to: a webhook, its URL and, option
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--channels` | string | (none) | A group or person target's channels: inbox |
+| `--addresses` | string | (none) | An email target's recipient addresses |
+| `--channels` | string | (none) | A group or person target's channels: inbox, email |
 | `--enabled` | bool | `false` | Whether deliveries go to it (default true) |
 | `--kind` | string | (none) | The target kind |
 | `--label` | string | (none) | A human label |
@@ -3625,7 +3626,7 @@ Send a test notification to a target
 omniglass notification-target test <name>
 ```
 
-Sends one synthetic message (transition test, about no alarm) to the target through the egress contract, signed or authenticated as a delivery would be, and answers what the receiver said. Records nothing but its audit row (the result, never the URL). A disabled target is still tested. Gated by notification_target:test with an all-scope grant.
+Sends one synthetic message (transition test, about no alarm) to a webhook or email target through the egress contract, signed or authenticated as a delivery would be (an email through the install's mail relay), and answers what the receiver said; a group or person target is a 422, since people are told only about alarms. Records nothing but its audit row (the result, never the URL). A disabled target is still tested. Gated by notification_target:test with an all-scope grant.
 
 Example:
 
@@ -3645,7 +3646,8 @@ Patches a target's label, URL, secret or enabled flag (an absent field is unchan
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--channels` | string | (none) | A group or person target's channels: inbox |
+| `--addresses` | string | (none) | An email target's recipient addresses |
+| `--channels` | string | (none) | A group or person target's channels: inbox, email |
 | `--enabled` | bool | `false` | Whether deliveries go to it |
 | `--label` | string | (none) | A human label (empty clears it) |
 | `--secret` | string | (none) | A platform secret by name or uuid; empty unbinds it |
@@ -4004,7 +4006,7 @@ Purge a principal
 omniglass principal purge <id>
 ```
 
-Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. Gated by principal:purge:admin (admin-sensitive, all-scope), and the principal must be archived first.
+Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. A person a notification target notifies cannot be purged (a 409; the refusal names the target to a caller who reads targets). Gated by principal:purge:admin (admin-sensitive, all-scope), and the principal must be archived first.
 
 Example:
 
@@ -4196,7 +4198,7 @@ Delete a principal group
 omniglass principal-group delete <group>
 ```
 
-Removes a group and, by cascade, its memberships and grants. Gated by principal_group:delete (all-scope).
+Removes a group and, by cascade, its memberships and grants. A group a notification target notifies cannot be deleted (a 409): the refusal names the target to a caller who reads targets. Gated by principal_group:delete (all-scope).
 
 Example:
 
@@ -5180,6 +5182,22 @@ omniglass severity-level update <name>
 ## `omniglass sim`
 
 Simulate the devices placed on a node
+
+### `omniglass sim mail`
+
+Run a mail relay simulator that keeps what it is sent
+
+```
+omniglass sim mail [flags]
+```
+
+Serves SMTP on --listen and keeps every message it accepts, writing each as one JSON line (from, to, subject, text, message_id) to --out (standard output by default). It sends nothing on. Point the notification settings' mail_relay at it with mail_security none and name its address in egress_allow. While --down-file holds the word down, it refuses every message with a temporary error.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--down-file` | string | (none) | while this file holds the word down, refuse every message with a temporary error |
+| `--listen` | string | `127.0.0.1:2525` | the address to serve SMTP on |
+| `--out` | string | (none) | append each accepted message as a JSON line to this file (default standard output) |
 
 ### `omniglass sim run`
 

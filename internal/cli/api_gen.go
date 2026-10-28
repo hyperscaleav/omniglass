@@ -4821,6 +4821,7 @@ func generatedCommands() []*cobra.Command {
 		}
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var fAddresses string
 				var fChannels string
 				var fEnabled bool
 				var fKind string
@@ -4839,6 +4840,9 @@ func generatedCommands() []*cobra.Command {
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/notification-targets")
 						body := map[string]any{}
+						if cmd.Flags().Changed("addresses") {
+							body["addresses"] = jsonOrString(fAddresses)
+						}
 						if cmd.Flags().Changed("channels") {
 							body["channels"] = jsonOrString(fChannels)
 						}
@@ -4869,7 +4873,8 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fChannels, "channels", "", "A group or person target's channels: inbox")
+				cmd.Flags().StringVar(&fAddresses, "addresses", "", "An email target's recipient addresses")
+				cmd.Flags().StringVar(&fChannels, "channels", "", "A group or person target's channels: inbox, email")
 				cmd.Flags().BoolVar(&fEnabled, "enabled", false, "Whether deliveries go to it (default true)")
 				cmd.Flags().StringVar(&fKind, "kind", "", "The target kind")
 				_ = cmd.MarkFlagRequired("kind")
@@ -4957,7 +4962,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "test <name>",
 					Short:   "Send a test notification to a target",
-					Long:    "Sends one synthetic message (transition test, about no alarm) to the target through the egress contract, signed or authenticated as a delivery would be, and answers what the receiver said. Records nothing but its audit row (the result, never the URL). A disabled target is still tested. Gated by notification_target:test with an all-scope grant.",
+					Long:    "Sends one synthetic message (transition test, about no alarm) to a webhook or email target through the egress contract, signed or authenticated as a delivery would be (an email through the install's mail relay), and answers what the receiver said; a group or person target is a 422, since people are told only about alarms. Records nothing but its audit row (the result, never the URL). A disabled target is still tested. Gated by notification_target:test with an all-scope grant.",
 					Example: "  omniglass notification-target test <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -4971,6 +4976,7 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var fAddresses string
 				var fChannels string
 				var fEnabled bool
 				var fLabel string
@@ -4985,6 +4991,9 @@ func generatedCommands() []*cobra.Command {
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/notification-targets/%s", pathSegment(args[0]))
 						body := map[string]any{}
+						if cmd.Flags().Changed("addresses") {
+							body["addresses"] = jsonOrString(fAddresses)
+						}
 						if cmd.Flags().Changed("channels") {
 							body["channels"] = jsonOrString(fChannels)
 						}
@@ -5003,7 +5012,8 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "PATCH", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fChannels, "channels", "", "A group or person target's channels: inbox")
+				cmd.Flags().StringVar(&fAddresses, "addresses", "", "An email target's recipient addresses")
+				cmd.Flags().StringVar(&fChannels, "channels", "", "A group or person target's channels: inbox, email")
 				cmd.Flags().BoolVar(&fEnabled, "enabled", false, "Whether deliveries go to it")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label (empty clears it)")
 				cmd.Flags().StringVar(&fSecret, "secret", "", "A platform secret by name or uuid; empty unbinds it")
@@ -5489,7 +5499,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "purge <id>",
 					Short:   "Purge a principal",
-					Long:    "Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. Gated by principal:purge:admin (admin-sensitive, all-scope), and the principal must be archived first.",
+					Long:    "Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. A person a notification target notifies cannot be purged (a 409; the refusal names the target to a caller who reads targets). Gated by principal:purge:admin (admin-sensitive, all-scope), and the principal must be archived first.",
 					Example: "  omniglass principal purge <id>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -5727,7 +5737,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "delete <group>",
 					Short:   "Delete a principal group",
-					Long:    "Removes a group and, by cascade, its memberships and grants. Gated by principal_group:delete (all-scope).",
+					Long:    "Removes a group and, by cascade, its memberships and grants. A group a notification target notifies cannot be deleted (a 409): the refusal names the target to a caller who reads targets. Gated by principal_group:delete (all-scope).",
 					Example: "  omniglass principal-group delete night-shift",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
