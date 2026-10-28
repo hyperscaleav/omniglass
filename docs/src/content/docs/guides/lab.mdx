@@ -152,6 +152,12 @@ server's bus and the node publish nothing; the node reaches the server across th
 impairments and truthful ping, and they reach only that container's own network namespace, never
 your machine's. The `server` and `db` containers carry no added capability.
 
+The node checks in every 2s, so a change you make in the console reaches it within seconds, and
+probes reachability every 10s (`--probe-every`): a lab may run for days, and a probe on every
+check-in wrote most of its rows. The throwaway lab each walkthrough is recorded on probes every 2s,
+since a recording is held to a time budget, so in your lab a walkthrough that waits on a probe's
+verdict (watching a rule raise an alarm, say) waits up to 8 seconds longer than its recording.
+
 Publishing nothing is not the same as unreachable. On Linux, a Docker bridge network's addresses are
 routable from the machine itself, so a local process that finds the lab network's address can reach
 the database there, with the lab's fixed Postgres login (`omniglass` / `omniglass`, a superuser of
