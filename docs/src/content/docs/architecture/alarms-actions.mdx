@@ -449,9 +449,11 @@ their own beside it, and renames one with `:rename`.
 
 A template is the language a [label rule](/architecture/glossary/) is written in, run by the same
 sandbox (`internal/sandbox`, lifted out of the label engine so there is one): a closed grammar
-(`if`, the comparisons and the five functions; `printf`, `call`, `index`, `range` and variables are
-refused when the template is written, a 422 naming the construct, and it is never stored) over a
-closed map of strings. A notification template reads the **alarm facts**, declared once beside
+(`if`, the comparisons and the label rule's functions; `printf`, `call`, `index`, `range` and
+variables are refused when the template is written, a 422 naming the construct, and it is never
+stored) over a closed map of strings. The work one render may do is bounded at the primitive, not
+by the grammar alone: a template's source, the arguments of one call, and each fact's length are
+capped, so a template over a long alarm message cannot multiply it. A notification template reads the **alarm facts**, declared once beside
 the accessor that builds them; a fact outside the map renders empty, and a secret is not in it to
 filter out:
 

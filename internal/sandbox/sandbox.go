@@ -74,6 +74,25 @@ import (
 	"text/template"
 	"text/template/parse"
 	"unicode"
+	"unicode/utf8"
+)
+
+// The bounds on the WORK one render can do. The grammar bounds which
+// constructs a template may use, not how much each costs: text/template
+// evaluates every argument of a call before making it, so a variadic builtin
+// over copies of a fact (`{{if eq .X (upper .X) (upper .X) ...}}`) holds one
+// copy per argument, and nothing is written for an output cap to see (#618's
+// review). Work is the template's length times the facts' length, so both
+// factors are bounded here, at the primitive, for every caller.
+const (
+	// MaxSource is the longest template source a caller may compile.
+	MaxSource = 4096
+	// MaxFact is the longest fact value a template reads; a longer value is
+	// cut on a rune boundary before the render, never refused (a fact is data
+	// the template's author did not choose).
+	MaxFact = 2048
+	// MaxArgs is the most arguments one function call may take.
+	MaxArgs = 8
 )
 
 var (
@@ -220,6 +239,9 @@ type Template struct {
 // surface that accepted the text, not at the path that would have used it. An
 // empty template parses and renders empty.
 func (e *Engine) Parse(src string) (*Template, error) {
+	if len(src) > MaxSource {
+		return nil, fmt.Errorf("%w: a template is at most %d bytes (got %d)", ErrUnparseable, MaxSource, len(src))
+	}
 	tpl, err := template.New(rootName).
 		Funcs(e.funcs).
 		Option("missingkey=zero").
@@ -243,8 +265,8 @@ const rootName = "template"
 // They are listed because the parser accepts them whether or not the FuncMap
 // does, so a grammar that admitted only our own functions would be describing a
 // smaller language than the one being run. Each admitted one returns a bool from
-// values it does not copy, so none can be made to do work proportional to
-// anything but the rule's own length.
+// values it does not copy; the arguments a call evaluates first are bounded by
+// MaxArgs, MaxSource and MaxFact.
 //
 // Everything else is refused BY NAME rather than by what it appears to do:
 // printf, print and println build strings, index and slice and call reach into
@@ -329,6 +351,10 @@ func checkNode(n parse.Node) error {
 		}
 		return nil
 	case *parse.CommandNode:
+		// A call's first node is the function; the rest are its arguments.
+		if len(n.Args) > MaxArgs+1 {
+			return fmt.Errorf("a call takes at most %d arguments", MaxArgs)
+		}
 		for _, a := range n.Args {
 			if err := checkNode(a); err != nil {
 				return err
@@ -388,10 +414,37 @@ func describe(n parse.Node) string {
 func (t *Template) Execute(d Data, maxLen int) (string, error) {
 	var b strings.Builder
 	w := &capped{w: &b, left: maxLen, max: maxLen}
-	if err := t.tpl.Execute(w, d); err != nil {
+	if err := t.tpl.Execute(w, BoundFacts(d)); err != nil {
 		return "", fmt.Errorf("%w: %s", ErrFailed, err)
 	}
 	return b.String(), nil
+}
+
+// BoundFacts returns d with every value cut to MaxFact bytes on a rune
+// boundary, copying only when a value is over (the common case reads d as is).
+func BoundFacts(d Data) Data {
+	over := false
+	for _, v := range d {
+		if len(v) > MaxFact {
+			over = true
+			break
+		}
+	}
+	if !over {
+		return d
+	}
+	out := make(Data, len(d))
+	for k, v := range d {
+		if len(v) > MaxFact {
+			cut := MaxFact
+			for cut > 0 && !utf8.RuneStart(v[cut]) {
+				cut--
+			}
+			v = v[:cut]
+		}
+		out[k] = v
+	}
+	return out
 }
 
 // capped is an io.Writer that refuses past a byte budget.

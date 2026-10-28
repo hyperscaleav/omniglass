@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 
+	"github.com/hyperscaleav/omniglass/internal/sandbox"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
@@ -49,8 +51,11 @@ type notificationTypeRefInput struct {
 
 // notificationTemplateDoc is the field help both templates carry: what a
 // template may read, generated from the one declaration of the fact map.
-var notificationTemplateDoc = "A template in the sandboxed template language a label rule uses (title, upper, lower, slug, words; if, and, or, not, eq and the comparisons), reading the alarm facts " +
-	strings.Join(storage.AlarmFactKeys(), ", ") + "; a fact outside them renders empty, and a refused construct (printf, call, index, range, a variable) is a 422"
+var notificationTemplateDoc = "A template in the sandboxed language a label rule uses (the functions " +
+	strings.Join(sandbox.FuncNames(), ", ") + "; {{if}} and the builtins " + strings.Join(sandbox.Builtins(), ", ") +
+	"), reading the alarm facts " + strings.Join(storage.AlarmFactKeys(), ", ") +
+	"; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past " +
+	strconv.Itoa(sandbox.MaxSource) + " bytes) is a 422"
 
 type createNotificationTypeInput struct {
 	Body struct {
@@ -234,5 +239,5 @@ func mapNotificationTypeErr(err error) error {
 	case errors.Is(err, storage.ErrNotificationRender):
 		return huma.Error422UnprocessableEntity(storage.TemplateRefusal(err))
 	}
-	return huma.Error500InternalServerError("notification type operation failed")
+	return mapTypeErr(err, "notification type")
 }

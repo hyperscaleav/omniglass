@@ -87,13 +87,16 @@ var alarmFactKeys = []labelKey[alarmFactRow]{
 // descriptions and the expression site, which a test holds to this list.
 func AlarmFactKeys() []string { return keyNames(alarmFactKeys) }
 
-// alarmFactData builds the closed map from the declaration.
+// alarmFactData builds the closed map from the declaration, each value cut to
+// the sandbox's MaxFact, so the facts a preview shows and an envelope carries
+// are the ones the template read (an alarm's message has no length cap of
+// its own).
 func alarmFactData(f alarmFactRow) sandbox.Data {
 	d := make(sandbox.Data, len(alarmFactKeys))
 	for _, k := range alarmFactKeys {
 		d[k.Name] = k.value(f)
 	}
-	return d
+	return sandbox.BoundFacts(d)
 }
 
 // alarmFacts reads one alarm on a component (both already resolved by the

@@ -2,8 +2,10 @@ package sandbox_test
 
 import (
 	"errors"
+	"runtime"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/hyperscaleav/omniglass/internal/sandbox"
 )
@@ -59,5 +61,46 @@ func TestExecuteRefusesPastTheCallersCap(t *testing.T) {
 	}
 	if _, err := tpl.Execute(sandbox.Data{"X": "123456"}, 10); !errors.Is(err, sandbox.ErrFailed) {
 		t.Fatalf("Execute past the cap = %v, want ErrFailed", err)
+	}
+}
+
+// The review's scenario (#618): a variadic builtin over copies of a large
+// fact. The grammar admits eq and upper, so the bound has to be on the work:
+// a call's arguments, the source's length, and each fact's length. The render
+// stays within a few megabytes whatever the fact holds.
+func TestWorkIsBoundedWhateverTheFactsHold(t *testing.T) {
+	huge := strings.Repeat("x", 1<<20)
+	args := strings.Repeat(" (upper .Message)", sandbox.MaxArgs)
+	if _, err := sandbox.Basic.Parse("{{if eq .Message" + args + " (upper .Message)}}y{{end}}"); !errors.Is(err, sandbox.ErrUnparseable) {
+		t.Fatalf("a call past MaxArgs = %v, want refused at parse", err)
+	}
+	if _, err := sandbox.Basic.Parse(strings.Repeat("a", sandbox.MaxSource+1)); !errors.Is(err, sandbox.ErrUnparseable) {
+		t.Fatalf("a source past MaxSource = %v, want refused at parse", err)
+	}
+	src := strings.Repeat("{{if eq .Message"+strings.Repeat(" (upper .Message)", sandbox.MaxArgs-1)+"}}y{{end}}", 20)
+	tpl, err := sandbox.Basic.Parse(src)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	if _, err := tpl.Execute(sandbox.Data{"Message": huge}, 4000); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	runtime.ReadMemStats(&after)
+	if grew := after.TotalAlloc - before.TotalAlloc; grew > 8<<20 {
+		t.Fatalf("a render over a 1 MB fact allocated %d bytes, want it bounded by MaxFact", grew)
+	}
+}
+
+func TestAFactIsCutOnARuneBoundary(t *testing.T) {
+	tpl, _ := sandbox.Basic.Parse("{{.X}}")
+	got, err := tpl.Execute(sandbox.Data{"X": strings.Repeat("a", sandbox.MaxFact-1) + "é" + "tail"}, 1<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != sandbox.MaxFact-1 || !utf8.ValidString(got) {
+		t.Fatalf("cut fact is %d bytes (valid %v), want %d and valid UTF-8", len(got), utf8.ValidString(got), sandbox.MaxFact-1)
 	}
 }

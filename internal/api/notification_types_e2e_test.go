@@ -175,6 +175,7 @@ func TestNotificationTypeAPI(t *testing.T) {
 	if renamed.ID != mine.ID || renamed.Name != "page-on-call" {
 		t.Fatalf("renamed = %+v", renamed)
 	}
+	c.do(ownerTok, http.MethodPost, "/notification-types/page-on-call:rename", map[string]any{"name": "0190f6a2-7c1e-7b3a-9c4d-1a2b3c4d5e6f"}, http.StatusUnprocessableEntity)
 	c.do(operator, http.MethodDelete, "/notification-types/page-on-call", nil, http.StatusForbidden)
 	c.do(ownerTok, http.MethodDelete, "/notification-types/page-on-call", nil, http.StatusNoContent)
 }
