@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, fireEvent, screen, waitFor, within } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
-import Notifications from "./Notifications";
+import Notifications, { componentOption } from "./Notifications";
 import * as lib from "../lib/notification_types";
 import { NOTIFICATION_TYPES_KEY, type NotificationTypeRow } from "../lib/notification_types";
 import { COMPONENTS_KEY, type Component } from "../lib/components";
@@ -103,5 +103,12 @@ describe("Notifications page", () => {
     fireEvent.click(within(blade).getByText("Preview", { selector: "button" }));
     await waitFor(() => expect(spy).toHaveBeenCalled());
     expect(spy).toHaveBeenCalledWith("page-oncall", { component: uuidFor("display-1"), transition: "cleared", subject: "{{.Transition}}", text: "{{.Message}}" });
+  });
+});
+
+describe("the preview's component picker", () => {
+  it("tells two components with one generated label apart by name", () => {
+    expect(componentOption({ name: "aud-dsp", label: "DSP" })).toBe("DSP (aud-dsp)");
+    expect(componentOption({ name: "panel-2" })).toBe("panel-2");
   });
 });

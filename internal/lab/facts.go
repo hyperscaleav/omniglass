@@ -60,18 +60,35 @@ type Walkthrough struct {
 // top-level collection is a create the CLI spells this way.
 func SetupCommand(apiPath string, body map[string]any) (string, error) {
 	res, ok := strings.CutPrefix(apiPath, "/")
-	if !ok || res == "" || strings.ContainsAny(res, "/:{}") || !strings.HasSuffix(res, "s") {
-		return "", fmt.Errorf("walkthrough setup: %q is not a collection the CLI creates in", apiPath)
+	parts := strings.Split(res, "/")
+	refuse := fmt.Errorf("walkthrough setup: %q is not a collection the CLI creates in", apiPath)
+	if !ok || res == "" || strings.ContainsAny(res, ":{}") {
+		return "", refuse
 	}
-	words := []string{"omniglass", strings.TrimSuffix(res, "s"), "create"}
+	var words []string
+	switch {
+	case len(parts) == 1 && collection(parts[0]):
+		words = []string{"omniglass", strings.TrimSuffix(parts[0], "s"), "create"}
+	case len(parts) == 3 && collection(parts[0]) && parts[1] != "" && collection(parts[2]):
+		// A sub-collection of one named parent (a component's alarms):
+		// `omniglass component alarm create <parent>`, as the CLI nests it.
+		words = []string{"omniglass", strings.TrimSuffix(parts[0], "s"), strings.TrimSuffix(parts[2], "s"), "create", parts[1]}
+	default:
+		return "", refuse
+	}
 	for _, k := range SortedKeys(body) {
 		v := fmt.Sprint(body[k])
 		if strings.ContainsAny(v, " \t\"'$`\\") {
 			v = strconv.Quote(v)
 		}
-		words = append(words, "--"+k, v)
+		words = append(words, "--"+strings.ReplaceAll(k, "_", "-"), v)
 	}
 	return strings.Join(words, " "), nil
+}
+
+// collection reports whether a path segment names a collection: a plural word.
+func collection(seg string) bool {
+	return seg != "" && strings.HasSuffix(seg, "s") && !strings.ContainsAny(seg, "/:{}")
 }
 
 // FactsJSON renders the facts for the default lab, reading the walkthrough

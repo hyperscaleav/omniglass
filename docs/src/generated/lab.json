@@ -106,6 +106,15 @@
       "setup": []
     },
     {
+      "id": "preview-a-notification",
+      "title": "Preview a notification",
+      "description": "Open an operator's notification type, preview it against Touch Panel 2's open alarm, and try a draft subject before saving it.",
+      "setup": [
+        "omniglass component alarm create panel-2 --dedup-key walkthrough-notification --message \"No touch input\" --severity high",
+        "omniglass notification-type create --description \"A terse page for the on-call phone\" --label \"Page on-call\" --name page-oncall --subject \"{{.SeverityLabel | upper}} {{.ComponentLabel}}\" --text \"{{.Message}} since {{.RaisedAt}}\""
+      ]
+    },
+    {
       "id": "read-a-multi-endpoint-vital",
       "title": "Read a vital two endpoints collect",
       "description": "Open the Boardroom DSP, read which endpoint its TCP connect time comes from and of how many, and open the row for each endpoint's latest value.",

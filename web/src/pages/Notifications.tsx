@@ -188,6 +188,14 @@ function NotificationTypeBladeBody(p: { name: string }): JSX.Element {
   );
 }
 
+// componentOption names a component in the preview's picker by its label and,
+// when the label is not its name, its name too: generated labels repeat across
+// a fleet ("DSP"), and the picker must tell two apart.
+export function componentOption(c: Pick<Component, "name" | "label">): string {
+  const label = entityLabel(c);
+  return label === c.name ? c.name : `${label} (${c.name})`;
+}
+
 // PreviewPanel renders a type against a real alarm through the server's engine:
 // pick a component (its most recent alarm is the one rendered) and the edge.
 // It is the surface that teaches what a template sees: the rendered message
@@ -229,7 +237,7 @@ export function PreviewPanel(p: { type: string; drafts: () => { subject?: string
         <FieldRow label="Component">
           <select ref={bindSelectValue(component, options)} class="select select-bordered select-sm w-full" onChange={(e) => setComponent(e.currentTarget.value)}>
             <option value="">Choose a component</option>
-            <For each={options()}>{(c) => <option value={c.id}>{entityLabel(c)}</option>}</For>
+            <For each={options()}>{(c) => <option value={c.id}>{componentOption(c)}</option>}</For>
           </select>
         </FieldRow>
         <FieldRow label="Transition" info={NOTIFICATION_HINTS.transition}>
