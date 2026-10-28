@@ -135,6 +135,15 @@ export default function ExpressionField(p: {
         } catch (e) {
           if (n !== seq) return;
           setCheck(null);
+          // A keyless site's own route may be open to a caller the checker
+          // is not (a subscription is notification:subscribe, the checker
+          // rule:read): the field then says it could not check, and leaves the
+          // verdict to the server, which judges the source when it is saved.
+          if (p.keyless && (e as { status?: number } | null)?.status === 403) {
+            setFailed("Not checked here: the server judges it when you save or test.");
+            verdict(true);
+            return;
+          }
           setFailed(describeError(e));
           verdict(false);
         }

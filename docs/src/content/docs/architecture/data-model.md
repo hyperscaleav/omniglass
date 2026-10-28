@@ -249,6 +249,11 @@ telemetry: {
     notification_type_id: uuid {constraint: foreign_key}
     owner_principal_id: uuid {constraint: foreign_key}
   }
+  action_rule_opt_out: {
+    shape: sql_table
+    principal_id: uuid {constraint: primary_key}
+    rule_id: uuid {constraint: primary_key}
+  }
   action_rule_target: {
     shape: sql_table
     rule_id: uuid {constraint: primary_key}
@@ -519,14 +524,6 @@ audit: {
   }
 }
 
-unclustered: {
-  action_rule_opt_out: {
-    shape: sql_table
-    principal_id: uuid {constraint: primary_key}
-    rule_id: uuid {constraint: primary_key}
-  }
-}
-
 audit.audit_log.actor_principal_id -> identity.principal.id
 audit.audit_log.real_actor_principal_id -> identity.principal.id
 catalog.component_type.parent_id -> catalog.component_type.id
@@ -613,6 +610,8 @@ identity.system_role_type.component_type_id -> catalog.component_type.id
 identity.system_role_type.role_id -> identity.system_role.id
 telemetry.action_rule.notification_type_id -> telemetry.notification_type.id
 telemetry.action_rule.owner_principal_id -> identity.principal.id
+telemetry.action_rule_opt_out.principal_id -> identity.principal.id
+telemetry.action_rule_opt_out.rule_id -> telemetry.action_rule.id
 telemetry.action_rule_target.rule_id -> telemetry.action_rule.id
 telemetry.action_rule_target.target_id -> telemetry.notification_target.id
 telemetry.alarm.acknowledged_by -> identity.principal.id
@@ -681,8 +680,6 @@ telemetry.property.location_id -> fleet.location.id
 telemetry.property.node_id -> collection.node.principal_id
 telemetry.property.property_type_id -> telemetry.property_type.id
 telemetry.property.system_id -> fleet.system.id
-unclustered.action_rule_opt_out.principal_id -> identity.principal.id
-unclustered.action_rule_opt_out.rule_id -> telemetry.action_rule.id
 ```
 
 <!-- erd:end -->

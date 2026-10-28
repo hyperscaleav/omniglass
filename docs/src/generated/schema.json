@@ -3391,6 +3391,32 @@
      }
     ]
    },
+   "action_rule_opt_out": {
+    "columns": [
+     {
+      "name": "rule_id",
+      "type": "uuid",
+      "nullable": false,
+      "pk": true,
+      "fk": true,
+      "fk_target": "action_rule.id"
+     },
+     {
+      "name": "principal_id",
+      "type": "uuid",
+      "nullable": false,
+      "pk": true,
+      "fk": true,
+      "fk_target": "principal.id"
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     }
+    ]
+   },
    "action_rule_target": {
     "columns": [
      {
@@ -5392,34 +5418,6 @@
      },
      {
       "name": "landed_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
-     }
-    ]
-   }
-  },
-  "unclustered": {
-   "action_rule_opt_out": {
-    "columns": [
-     {
-      "name": "rule_id",
-      "type": "uuid",
-      "nullable": false,
-      "pk": true,
-      "fk": true,
-      "fk_target": "action_rule.id"
-     },
-     {
-      "name": "principal_id",
-      "type": "uuid",
-      "nullable": false,
-      "pk": true,
-      "fk": true,
-      "fk_target": "principal.id"
-     },
-     {
-      "name": "created_at",
       "type": "timestamp with time zone",
       "nullable": false,
       "default": "now()"

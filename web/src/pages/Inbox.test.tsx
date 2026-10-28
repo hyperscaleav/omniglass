@@ -92,6 +92,24 @@ describe("Inbox", () => {
     expect(screen.getByTestId("inbox-unread-count").textContent).toBe("0");
   });
 
+  it("marks an entry read when its component is opened", async () => {
+    let marked = "";
+    stubFetch((r) => {
+      if (r.method === "POST" && r.url.includes(":markRead")) {
+        marked = r.url;
+        return json({ ...unreadOne, read_at: new Date().toISOString() });
+      }
+      if (r.method === "GET" && r.url.includes("/auth/me/notifications")) {
+        return json({ notifications: [{ ...unreadOne, read_at: new Date().toISOString() }, readOne], unread: 0 });
+      }
+      return json({});
+    });
+    mount({ all: { notifications: [unreadOne, readOne], unread: 1 } });
+    const rows = await screen.findAllByTestId("inbox-entry");
+    fireEvent.click(within(rows[0]).getByText("hq-boardroom-dsp"));
+    await waitFor(() => expect(marked).toContain("/auth/me/notifications/n-1:markRead"));
+  });
+
   it("marks everything read", async () => {
     let all = false;
     stubFetch((r) => {

@@ -23,7 +23,8 @@ disappears from your inbox ([alarms and actions](/architecture/alarms-actions/#p
 
 The bell in the top bar counts what you have not read, and opens **Inbox**: newest first, each entry
 the alarm's rendered message, its component, and the rule that told you. **Mark read** marks one,
-**Mark all read** the rest, and **Unread only** filters to what is left.
+**Mark all read** the rest, and **Unread only** filters to what is left. Opening an entry's component
+marks it read too.
 
 ::screenshot{#notifications-inbox}
 
