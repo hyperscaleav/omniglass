@@ -33,6 +33,12 @@ type IngestBatch struct {
 	Metrics    []MetricSampleWrite
 	Events     []EventWrite
 	Properties []PropertySampleWrite
+	// CommandTargeted is the property type names some command type targets,
+	// as the caller last read them (CommandTargetedProperties), so the
+	// property lane need not read them in the batch's transaction (#1299).
+	// Nil reads them there. Read only, so a caller may share one set across
+	// batches.
+	CommandTargeted map[string]bool
 }
 
 // LandBatch writes one ingest batch in ONE transaction: its receipt, then
@@ -55,7 +61,9 @@ func (p *PG) LandBatch(ctx context.Context, b IngestBatch) (bool, error) {
 		landed = false
 		// Each attempt (a deadlock retries the whole batch) resolves its owners
 		// and reads its clock afresh, once, for every lane (#1274).
-		var tx pgx.Tx = newBatchTx(attempt)
+		bt := newBatchTx(attempt)
+		bt.targeted = b.CommandTargeted
+		var tx pgx.Tx = bt
 		if b.BatchID != "" {
 			tag, err := tx.Exec(ctx, `insert into telemetry_receipt (batch_id) values ($1) on conflict (batch_id) do nothing`, b.BatchID)
 			if err != nil {
