@@ -266,6 +266,134 @@ Example:
 omniglass auth me
 ```
 
+#### `omniglass auth me action-rule`
+
+Commands for the action-rule resource
+
+##### `omniglass auth me action-rule create`
+
+Subscribe yourself to alarms
+
+```
+omniglass auth me action-rule create [flags]
+```
+
+Creates a personal action rule: on which alarm transitions, when, what to send, and on which of your channels (inbox, email). It tells you alone and names no target (targets is a 422), and it only ever matches an alarm on a component you can read at that moment, judged before its when runs. A taken name among your rules is a 409. Audited. Gated by notification:subscribe.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--channels` | string | (none) | How it tells you: inbox, email (your directory email) |
+| `--description` | string | (none) | What it is for |
+| `--enabled` | bool | `false` | Whether it fires (default true) |
+| `--label` | string | (none) | A human label |
+| `--name` | string | (none) | The rule's name (lowercase kebab), unique among your own rules |
+| `--notification-type` | string | (none) | The notification type to send, by name or uuid; absent sends the official one for the transition |
+| `--on` | string | (none) | The alarm transitions it fires on: raised, cleared, or both |
+| `--targets` | string | (none) | Refused when set (a 422): a personal rule tells you alone and names no target |
+| `--when` | string | (none) | A predicate over the alarm facts (component, place, severity, severity_rank, message, rule, ...); absent always holds. Judged only for alarms on components you can read |
+
+Example:
+
+```sh
+omniglass auth me action-rule create --channels <json> --name name --on <json>
+```
+
+##### `omniglass auth me action-rule delete`
+
+Unsubscribe: delete one of your alarm subscriptions
+
+```
+omniglass auth me action-rule delete <name>
+```
+
+Deletes one of your own personal action rules; what it already sent keeps its name. Another user's is a 404. Audited. Gated by notification:subscribe.
+
+Example:
+
+```sh
+omniglass auth me action-rule delete <name>
+```
+
+##### `omniglass auth me action-rule get`
+
+Get one of your alarm subscriptions
+
+```
+omniglass auth me action-rule get <name>
+```
+
+One of your own personal action rules, by name or uuid; another user's is a 404. Gated by notification:subscribe.
+
+Example:
+
+```sh
+omniglass auth me action-rule get <name>
+```
+
+##### `omniglass auth me action-rule list`
+
+List your alarm subscriptions
+
+```
+omniglass auth me action-rule list
+```
+
+Your own personal action rules, by name. Self-scoped. Gated by notification:subscribe.
+
+Example:
+
+```sh
+omniglass auth me action-rule list
+```
+
+##### `omniglass auth me action-rule test`
+
+Test one of your alarm subscriptions against your recent alarms
+
+```
+omniglass auth me action-rule test <name> [flags]
+```
+
+Judges one of your own personal action rules, or a draft of its on and when, against your most recent alarms on components you can read: for each transition it fires on, whether it would have told you. Writes and sends nothing. Another user's rule is a 404. Gated by notification:subscribe.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--limit` | int | `0` | How many of your most recent alarms to judge (default 20) |
+| `--on` | string | (none) | A draft of the transitions to judge with, in place of the rule's own |
+| `--when` | string | (none) | A draft of the predicate to judge with, in place of the rule's own |
+
+Example:
+
+```sh
+omniglass auth me action-rule test <name>
+```
+
+##### `omniglass auth me action-rule update`
+
+Change or pause one of your alarm subscriptions
+
+```
+omniglass auth me action-rule update <name> [flags]
+```
+
+Patches one of your own personal action rules (an absent field is unchanged); enabled false pauses it. Another user's is a 404. Audited. Gated by notification:subscribe.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--channels` | string | (none) | How it tells you (replaces the set) |
+| `--description` | string | (none) | What it is for |
+| `--enabled` | bool | `false` | Whether it fires: false pauses it, true resumes it from the next transition |
+| `--label` | string | (none) | A human label (empty clears it) |
+| `--notification-type` | string | (none) | The type to send (empty returns to the official one per transition) |
+| `--on` | string | (none) | The transitions it fires on (replaces the set) |
+| `--when` | string | (none) | The predicate (empty always holds) |
+
+Example:
+
+```sh
+omniglass auth me action-rule update <name>
+```
+
 #### `omniglass auth me notification`
 
 Commands for the notification resource

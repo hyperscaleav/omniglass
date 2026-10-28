@@ -140,6 +140,78 @@ export interface paths {
         patch: operations["update-auth-me"];
         trace?: never;
     };
+    "/auth/me/action-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List your alarm subscriptions
+         * @description Your own personal action rules, by name. Self-scoped. Gated by notification:subscribe.
+         */
+        get: operations["list-auth-me-action-rules"];
+        put?: never;
+        /**
+         * Subscribe yourself to alarms
+         * @description Creates a personal action rule: on which alarm transitions, when, what to send, and on which of your channels (inbox, email). It tells you alone and names no target (targets is a 422), and it only ever matches an alarm on a component you can read at that moment, judged before its when runs. A taken name among your rules is a 409. Audited. Gated by notification:subscribe.
+         */
+        post: operations["create-auth-me-action-rule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/me/action-rules/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get one of your alarm subscriptions
+         * @description One of your own personal action rules, by name or uuid; another user's is a 404. Gated by notification:subscribe.
+         */
+        get: operations["get-auth-me-action-rule"];
+        put?: never;
+        post?: never;
+        /**
+         * Unsubscribe: delete one of your alarm subscriptions
+         * @description Deletes one of your own personal action rules; what it already sent keeps its name. Another user's is a 404. Audited. Gated by notification:subscribe.
+         */
+        delete: operations["delete-auth-me-action-rule"];
+        options?: never;
+        head?: never;
+        /**
+         * Change or pause one of your alarm subscriptions
+         * @description Patches one of your own personal action rules (an absent field is unchanged); enabled false pauses it. Another user's is a 404. Audited. Gated by notification:subscribe.
+         */
+        patch: operations["update-auth-me-action-rule"];
+        trace?: never;
+    };
+    "/auth/me/action-rules/{name}:test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test one of your alarm subscriptions against your recent alarms
+         * @description Judges one of your own personal action rules, or a draft of its on and when, against your most recent alarms on components you can read: for each transition it fires on, whether it would have told you. Writes and sends nothing. Another user's rule is a 404. Gated by notification:subscribe.
+         */
+        post: operations["test-auth-me-action-rule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/me/avatar": {
         parameters: {
             query?: never;
@@ -6767,6 +6839,32 @@ export interface components {
             /** @description The body text template */
             text: string;
         };
+        CreatePersonalRuleInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreatePersonalRuleInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description How it tells you: inbox, email (your directory email) */
+            channels: string[] | null;
+            /** @description What it is for */
+            description?: string;
+            /** @description Whether it fires (default true) */
+            enabled?: boolean;
+            /** @description A human label */
+            label?: string;
+            /** @description The rule's name (lowercase kebab), unique among your own rules */
+            name: string;
+            /** @description The notification type to send, by name or uuid; absent sends the official one for the transition */
+            notification_type?: string;
+            /** @description The alarm transitions it fires on: raised, cleared, or both */
+            on: string[] | null;
+            /** @description Refused when set (a 422): a personal rule tells you alone and names no target */
+            targets?: string[] | null;
+            /** @description A predicate over the alarm facts (component, place, severity, severity_rank, message, rule, ...); absent always holds. Judged only for alarms on components you can read */
+            when?: string;
+        };
         CreatePrincipalInputBody: {
             /**
              * Format: uri
@@ -8353,6 +8451,15 @@ export interface components {
             readonly $schema?: string;
             notifications: components["schemas"]["NotificationBody"][] | null;
         };
+        ListPersonalRulesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListPersonalRulesOutputBody.json
+             */
+            readonly $schema?: string;
+            action_rules: components["schemas"]["PersonalRuleBody"][] | null;
+        };
         ListPrincipalSessionsOutputBody: {
             /**
              * Format: uri
@@ -9117,6 +9224,36 @@ export interface components {
             kind: "component" | "system";
             /** @description The owning entity, by name or id */
             ref: string;
+        };
+        PersonalRuleBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/PersonalRuleBody.json
+             */
+            readonly $schema?: string;
+            /** @description How it tells you: inbox (your console inbox), email (your directory email) */
+            channels: string[] | null;
+            /** Format: date-time */
+            created_at: string;
+            description?: string;
+            /** @description Whether it fires; a paused rule queues nothing */
+            enabled: boolean;
+            /** @description The rule's uuid, the stable form of name */
+            id: string;
+            label?: string;
+            /** @description The rule's name, unique among your own rules */
+            name: string;
+            /** @description The notification type it sends, by name; absent sends the official one for the transition */
+            notification_type?: string;
+            /** @description That type's uuid */
+            notification_type_id?: string;
+            /** @description The alarm transitions it fires on: raised, cleared, or both */
+            on: string[] | null;
+            /** Format: date-time */
+            updated_at: string;
+            /** @description The predicate over the alarm facts (the action expression site); absent always holds */
+            when?: string;
         };
         PlatformBindingInputBody: {
             /**
@@ -10136,6 +10273,28 @@ export interface components {
              * @description When the condition came into force
              */
             since: string;
+        };
+        RuleMatchBody: {
+            /** @description The alarm's uuid */
+            alarm: string;
+            /**
+             * Format: date-time
+             * @description When that edge happened
+             */
+            at: string;
+            /** @description The alarm's component, by name */
+            component: string;
+            /** @description Why the when did not run, when it did not */
+            error?: string;
+            /** @description Whether the rule would have told you */
+            matched: boolean;
+            message: string;
+            severity: string;
+            /**
+             * @description The edge judged
+             * @enum {string}
+             */
+            transition: "raised" | "cleared";
         };
         RuleOpenAlarmBody: {
             alarm_id: string;
@@ -11277,6 +11436,33 @@ export interface components {
              */
             status: number;
         };
+        TestPersonalRuleInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/TestPersonalRuleInputBody.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: int64
+             * @description How many of your most recent alarms to judge (default 20)
+             */
+            limit?: number;
+            /** @description A draft of the transitions to judge with, in place of the rule's own */
+            on?: string[];
+            /** @description A draft of the predicate to judge with, in place of the rule's own */
+            when?: string;
+        };
+        TestPersonalRuleOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/TestPersonalRuleOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Your most recent alarms on components you can read, newest first, each transition the rule fires on that the alarm has had */
+            matches: components["schemas"]["RuleMatchBody"][] | null;
+        };
         Transport: {
             built: boolean;
             description: string;
@@ -11630,6 +11816,28 @@ export interface components {
             subject?: string;
             /** @description The body text template */
             text?: string;
+        };
+        UpdatePersonalRuleInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdatePersonalRuleInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description How it tells you (replaces the set) */
+            channels?: string[];
+            /** @description What it is for */
+            description?: string;
+            /** @description Whether it fires: false pauses it, true resumes it from the next transition */
+            enabled?: boolean;
+            /** @description A human label (empty clears it) */
+            label?: string;
+            /** @description The type to send (empty returns to the official one per transition) */
+            notification_type?: string;
+            /** @description The transitions it fires on (replaces the set) */
+            on?: string[];
+            /** @description The predicate (empty always holds) */
+            when?: string;
         };
         UpdatePrincipalInputBody: {
             /**
@@ -12285,6 +12493,202 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HumanBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-auth-me-action-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListPersonalRulesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-auth-me-action-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePersonalRuleInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonalRuleBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-auth-me-action-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Your rule's name or uuid */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonalRuleBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-auth-me-action-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Your rule's name or uuid */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-auth-me-action-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Your rule's name or uuid */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePersonalRuleInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonalRuleBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "test-auth-me-action-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Your rule's name or uuid */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["TestPersonalRuleInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestPersonalRuleOutputBody"];
                 };
             };
             /** @description Error */

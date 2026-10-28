@@ -110,6 +110,11 @@ func (v RecipientView) withhold(n *Notification) {
 		return
 	}
 	n.Recipient, n.RecipientID = "", ""
+	// A personal rule's row (a person's, through no target) is named by its
+	// owner's rule, which can say whose it is: withheld with the name.
+	if n.Personal && n.Target == "" {
+		n.Rule = ""
+	}
 }
 
 func scanNotification(row pgx.Row) (*Notification, error) {
@@ -132,6 +137,9 @@ type queuedRule struct {
 	typeID, typeName                    string
 	subject, text                       string
 	targetIDs, targetNames, targetKinds []string
+	// A personal rule's owner, its only recipient, and its channels (#1353).
+	ownerID, ownerName string
+	channels           []string
 }
 
 // queuedRow is one row a firing rule writes: to a webhook target, or to one
@@ -201,7 +209,27 @@ func (p *PG) queueNotifications(ctx context.Context, tx pgx.Tx, componentID, ala
 	}
 	var fires []fired
 	var personTargets []string
+	// A personal rule is gated by its owner's component read scope BEFORE its
+	// when runs (ADR-1341, decision 2): an alarm outside that scope is never
+	// matched, so neither a delivery nor the when's result (a failure is a row
+	// too) can tell the owner anything about it. Every owner is judged in one
+	// set-based pass.
+	var owners []string
 	for _, r := range rs {
+		if r.ownerID != "" && !slices.Contains(owners, r.ownerID) {
+			owners = append(owners, r.ownerID)
+		}
+	}
+	ownerReads := map[string]bool{}
+	if len(owners) > 0 {
+		if ownerReads, err = readersOf(ctx, tx, componentID, owners); err != nil {
+			return err
+		}
+	}
+	for _, r := range rs {
+		if r.ownerID != "" && !ownerReads[r.ownerID] {
+			continue
+		}
 		f := fired{r: r, status: NotificationQueued}
 		when, err := rules.CompileWhen(r.when)
 		holds := false
@@ -252,6 +280,18 @@ func (p *PG) queueNotifications(ctx context.Context, tx pgx.Tx, componentID, ala
 func rowsFor(r queuedRule, status string, people map[string][]recipient) []queuedRow {
 	var out []queuedRow
 	told := map[string]bool{}
+	if r.ownerID != "" {
+		// A personal rule names no target: its owner, on its channels.
+		for _, ch := range r.channels {
+			st := status
+			if st == NotificationQueued && ch == DeliveryInbox {
+				st = NotificationSent
+			}
+			pid, pname := r.ownerID, r.ownerName
+			out = append(out, queuedRow{channel: ch, status: st, recipientID: &pid, recipientName: &pname})
+		}
+		return out
+	}
 	for i, id := range r.targetIDs {
 		if !isPersonKind(r.targetKinds[i]) {
 			out = append(out, queuedRow{targetID: id, targetName: r.targetNames[i], channel: deliveryFor(r.targetKinds[i]), status: status})
@@ -289,7 +329,7 @@ func insertNotifications(ctx context.Context, tx pgx.Tx, alarmID, componentID, t
 	if _, err := tx.Exec(ctx, `insert into notification (alarm_id, component_id, transition, rule_id, rule_name,
 			notification_type_id, type_name, target_id, target_name, subject, text, facts, status, last_error,
 			channel, recipient_principal_id, recipient_name, sent_at)
-		select $1::uuid, $2::uuid, $3, $4::uuid, $5, $6::uuid, $7, x.target_id::uuid, x.target_name, $8, $9, $10, x.status, nullif($11, ''),
+		select $1::uuid, $2::uuid, $3, $4::uuid, $5, $6::uuid, $7, nullif(x.target_id, '')::uuid, x.target_name, $8, $9, $10, x.status, nullif($11, ''),
 			x.channel, x.rid::uuid, x.rname, case when x.status = 'sent' then now() end
 		from unnest($12::text[], $13::text[], $14::text[], $15::text[], $16::text[], $17::text[])
 			with ordinality as x(target_id, target_name, status, channel, rid, rname, ord)
@@ -308,13 +348,17 @@ func rulesOn(ctx context.Context, q querier, transition string) ([]queuedRule, e
 		select r.id::text, r.name, r.when_expr, t.id::text, t.name, t.subject, t.text,
 			coalesce(array_agg(nt.id::text order by nt.name) filter (where nt.id is not null), '{}'),
 			coalesce(array_agg(nt.name order by nt.name) filter (where nt.id is not null), '{}'),
-			coalesce(array_agg(nt.kind order by nt.name) filter (where nt.id is not null), '{}')
+			coalesce(array_agg(nt.kind order by nt.name) filter (where nt.id is not null), '{}'),
+			coalesce(r.owner_principal_id::text, ''), coalesce(oh.username, ''), r.channels
 		from action_rule r
 		join notification_type t on t.id = coalesce(r.notification_type_id, (select id from notification_type where name = $2 and official))
 		left join action_rule_target art on art.rule_id = r.id
 		left join notification_target nt on nt.id = art.target_id and nt.enabled
+		left join principal op on op.id = r.owner_principal_id
+		left join human oh on oh.principal_id = op.id
 		where r.enabled and $1 = any(r.on_transitions)
-		group by r.id, r.name, r.when_expr, t.id, t.name, t.subject, t.text
+		  and (r.owner_principal_id is null or (op.active and op.archived_at is null and oh.principal_id is not null))
+		group by r.id, r.name, r.when_expr, t.id, t.name, t.subject, t.text, oh.username
 		order by r.name`, transition, officialTypeFor(transition))
 	if err != nil {
 		return nil, fmt.Errorf("storage: action rules on %s: %w", transition, err)
@@ -323,7 +367,8 @@ func rulesOn(ctx context.Context, q querier, transition string) ([]queuedRule, e
 	var out []queuedRule
 	for rows.Next() {
 		var r queuedRule
-		if err := rows.Scan(&r.id, &r.name, &r.when, &r.typeID, &r.typeName, &r.subject, &r.text, &r.targetIDs, &r.targetNames, &r.targetKinds); err != nil {
+		if err := rows.Scan(&r.id, &r.name, &r.when, &r.typeID, &r.typeName, &r.subject, &r.text, &r.targetIDs, &r.targetNames, &r.targetKinds,
+			&r.ownerID, &r.ownerName, &r.channels); err != nil {
 			return nil, fmt.Errorf("storage: scan action rule: %w", err)
 		}
 		out = append(out, r)
@@ -389,17 +434,18 @@ func (p *PG) DeliverNext(ctx context.Context, send SendFunc) (bool, error) {
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	var ns NotificationSend
-	var targetID, recipientID *string
+	var targetID, recipientID, ruleID *string
+	var targetName string
 	var componentID string
 	var createdAt time.Time
 	var attempts int
 	var factsRaw []byte
 	err = tx.QueryRow(ctx, `select id::text, alarm_id::text, type_name, transition, subject, text, facts, target_id::text, attempts,
-			channel, recipient_principal_id::text, component_id::text, created_at
+			channel, recipient_principal_id::text, component_id::text, created_at, rule_id::text, target_name
 		from notification where status = 'queued' and next_attempt_at <= now()
 		order by next_attempt_at, id for update skip locked limit 1`).
 		Scan(&ns.ID, &ns.AlarmID, &ns.Type, &ns.Transition, &ns.Subject, &ns.Text, &factsRaw, &targetID, &attempts,
-			&ns.Channel, &recipientID, &componentID, &createdAt)
+			&ns.Channel, &recipientID, &componentID, &createdAt, &ruleID, &targetName)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}
@@ -409,7 +455,13 @@ func (p *PG) DeliverNext(ctx context.Context, send SendFunc) (bool, error) {
 	_ = json.Unmarshal(factsRaw, &ns.Facts)
 	switch {
 	case ns.Channel == DeliveryEmail:
-		es, refused, err := p.emailSend(ctx, tx, targetID, recipientID, componentID, createdAt)
+		var es *EmailSend
+		var refused string
+		if targetID == nil && targetName == "" {
+			es, refused, err = p.personalEmailSend(ctx, tx, ruleID, recipientID, componentID, createdAt)
+		} else {
+			es, refused, err = p.emailSend(ctx, tx, targetID, recipientID, componentID, createdAt)
+		}
 		if err != nil {
 			return true, err
 		}

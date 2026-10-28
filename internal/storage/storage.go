@@ -1013,16 +1013,25 @@ type Gateway interface {
 	AuditTargetTest(ctx context.Context, actorID, targetID string, status int, ok bool, reason string) error
 	// EgressPolicy reads the install's egress allow list.
 	EgressPolicy(ctx context.Context) (egress.Policy, error)
-	// MailRelay reads the install's mail relay for a :test send (#1317);
-	// CheckMailSecret judges binding a secret to it (the reveal right).
+	// MailRelay reads the install's mail relay for a :test send (#1317).
 	MailRelay(ctx context.Context) (*MailRelay, string, error)
-	CheckMailSecret(ctx context.Context, ref string, use SecretUse) error
+	// MergePatchNotificationSettings patches the notification namespace,
+	// judging the mail relay's secret binding on the result (the reveal right).
+	MergePatchNotificationSettings(ctx context.Context, actorID string, patch map[string]any, use SecretUse) (*SettingOverride, error)
 	// The action rule (#618): reads registry-shaped, writes all-scope.
 	ListActionRules(ctx context.Context) ([]ActionRule, error)
 	GetActionRule(ctx context.Context, ref string) (*ActionRule, error)
 	CreateActionRule(ctx context.Context, actorID string, spec ActionRuleSpec, create scope.Set) (*ActionRule, error)
 	UpdateActionRule(ctx context.Context, actorID, ref string, patch ActionRulePatch, action scope.Set) (*ActionRule, error)
 	DeleteActionRule(ctx context.Context, actorID, ref string, action scope.Set) error
+	// Personal action rules (#1353): the owner's alone, every query carrying
+	// the ownership predicate; another's rule is ErrActionRuleNotFound.
+	ListPersonalRules(ctx context.Context, ownerID string) ([]ActionRule, error)
+	GetPersonalRule(ctx context.Context, ownerID, ref string) (*ActionRule, error)
+	CreatePersonalRule(ctx context.Context, actorID, ownerID string, spec PersonalRuleSpec) (*ActionRule, error)
+	UpdatePersonalRule(ctx context.Context, actorID, ownerID, ref string, patch PersonalRulePatch) (*ActionRule, error)
+	DeletePersonalRule(ctx context.Context, actorID, ownerID, ref string) error
+	TestPersonalRule(ctx context.Context, ownerID, ref string, draft RuleDraft, read scope.Set, limit int) ([]RuleMatch, error)
 	// The notification delivery rows (#618): every read scoped by the
 	// alarm's component; the drain takes one due row per call.
 	// A person-addressed row's recipient is withheld as view says (#1341).

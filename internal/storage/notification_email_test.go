@@ -1,14 +1,20 @@
 package storage_test
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
+	"github.com/hyperscaleav/omniglass/internal/secret"
+	"github.com/hyperscaleav/omniglass/internal/seed"
+	"github.com/hyperscaleav/omniglass/internal/settings"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
 // The email channel at the drain (#1317, #1341), against a real Postgres and
@@ -213,4 +219,45 @@ func sortedCopy(in []string) []string {
 		}
 	}
 	return out
+}
+
+// The relay's secret binding is judged on the settings a patch RESULTS in,
+// every layer resolved: a caller who may not reveal the operator file's relay
+// secret cannot repoint the relay at it in two steps (unbind and move, then
+// let the file's binding show through).
+func TestTheRelaysSecretIsJudgedOnTheResultingSettings(t *testing.T) {
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t),
+		storage.WithSecretProvider(secret.NewStaticProvider(bytes.Repeat([]byte{0x9}, 32))),
+		storage.WithSettingsFile(settings.Doc{"notification": map[string]any{"mail_relay": "smtp.corp.example:587", "mail_secret": "relay-login", "mail_from": "alerts@example.com"}}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(gw.Close)
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatal(err)
+	}
+	all := scope.Set{All: true}
+	if _, err := gw.CreateSecret(ctx, "", storage.SecretSpec{Name: "relay-login", SecretType: "basic-auth", OwnerKind: "platform",
+		Fields: map[string]string{"username": "u", "password": "p"}}, all, true); err != nil {
+		t.Fatal(err)
+	}
+	noReveal := storage.SecretUse{Read: all}
+	reveal := storage.SecretUse{Read: all, Reveal: all, CanAdmin: true}
+	if _, err := gw.MergePatchNotificationSettings(ctx, "", map[string]any{"mail_relay": "evil.example.com:587"}, noReveal); !errors.Is(err, storage.ErrSecretForbidden) {
+		t.Fatalf("moving the relay with the file's secret bound = %v, want forbidden", err)
+	}
+	if _, err := gw.MergePatchNotificationSettings(ctx, "", map[string]any{"mail_secret": "", "mail_relay": "evil.example.com:587"}, noReveal); err != nil {
+		t.Fatalf("moving the relay with no secret bound = %v", err)
+	}
+	if _, err := gw.MergePatchNotificationSettings(ctx, "", map[string]any{"mail_secret": nil}, noReveal); !errors.Is(err, storage.ErrSecretForbidden) {
+		t.Fatalf("letting the file's secret show through onto the moved relay = %v, want forbidden", err)
+	}
+	if _, err := gw.MergePatchNotificationSettings(ctx, "", map[string]any{"mail_secret": nil}, reveal); err != nil {
+		t.Fatalf("the same patch by a caller who may reveal it = %v", err)
+	}
+	relay, refused, err := gw.MailRelay(ctx)
+	if err != nil || refused != "" || relay.Addr != "evil.example.com:587" || relay.Username != "u" {
+		t.Fatalf("the relay = %+v, %q, %v", relay, refused, err)
+	}
 }

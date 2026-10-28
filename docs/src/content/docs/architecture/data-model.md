@@ -247,6 +247,7 @@ telemetry: {
     shape: sql_table
     id: uuid {constraint: primary_key}
     notification_type_id: uuid {constraint: foreign_key}
+    owner_principal_id: uuid {constraint: foreign_key}
   }
   action_rule_target: {
     shape: sql_table
@@ -603,6 +604,7 @@ identity.system_role_product.role_id -> identity.system_role.id
 identity.system_role_type.component_type_id -> catalog.component_type.id
 identity.system_role_type.role_id -> identity.system_role.id
 telemetry.action_rule.notification_type_id -> telemetry.notification_type.id
+telemetry.action_rule.owner_principal_id -> identity.principal.id
 telemetry.action_rule_target.rule_id -> telemetry.action_rule.id
 telemetry.action_rule_target.target_id -> telemetry.notification_target.id
 telemetry.alarm.acknowledged_by -> identity.principal.id

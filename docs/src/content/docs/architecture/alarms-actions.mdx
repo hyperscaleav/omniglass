@@ -41,7 +41,8 @@ not built, and the reasons are in that section. The [notification](#notification
 primitive, the **action rule** with its one `notify` step, and the **notification** delivery row a
 server tick sends, on the alarm's timeline with a retry. **People as recipients** (#1341): a
 **principal group** or a **person** as a target, told in their console **inbox** and by **email**
-through the install's mail relay, each only about the alarms they can read. Flows, grouping and the
+through the install's mail relay, each only about the alarms they can read, and **personal action
+rules**, a user's own subscription to the alarms they can see. Flows, grouping and the
 other channel kinds are still design.
 See [implementation status](/architecture/status/).
 :::
@@ -573,8 +574,9 @@ relay must offer; `tls`, implicit TLS; or `none`), `mail_from`, and `mail_secret
 webhook is, on the address actually dialed (the session dials through the egress primitive's one
 dial): an internal relay only when `egress_allow` names it, a metadata address never, and `none` only
 for a relay the allow list names (a lab's mail sim). A credential never crosses an unencrypted session
-to anything but loopback. Binding `mail_secret`, or moving `mail_relay` while one is bound, takes the
-right to reveal that secret, as binding a secret to a target does.
+to anything but loopback. A settings patch whose **result** binds a `mail_secret` (whichever layer
+binds it, the operator file included) and changes that secret or the relay takes the right to reveal
+that secret, judged inside the patch's own transaction, as binding a secret to a target does.
 
 Two kinds of row travel by email. An **`email` target** sends to its `addresses`, admin-owned like a
 webhook. A **person's email row** (a group or person target with the `email` channel) sends to the
@@ -583,12 +585,39 @@ at send. Before it sends, the tick **judges the recipient again**, inside the ro
 they are still an active human, still a member of the group the row came through, and their component
 read scope as it stands still admits the alarm's component; otherwise the row fails at once with the
 plain reason (`the recipient no longer reads the alarm's component`, `the recipient is no longer a
-member of on-call`, `the recipient has no directory email`) rather than mailing a person who lost the
+member of the target's group`, `the recipient has no directory email`, `the target no longer delivers by
+email`) rather than mailing a person who lost the
 alarm while it waited out a retry
 ([ADR-1341](/architecture/decisions/#adr-1341-a-person-is-told-about-an-alarm-only-while-they-can-read-it-groups-expand-at-queue-time-scope-is-checked-there-and-again-at-delivery)).
 The message is plain text, the rendered subject and text, its `Message-ID` the row's uuid and its date
 the row's own, so every attempt and a `:retry` carry the same bytes. A relay that refuses is retried
 with the same backoff as a webhook, and `:test` on an email target sends one synthetic message.
+
+### Personal action rules: subscribing yourself
+
+A user can subscribe themselves (#1353): a **personal action rule** is an `action_rule` with an
+owner (`owner_principal_id`) and the **channels** it tells its owner on, and no targets: its only
+recipient is its owner. It is the owner's alone, created, paused, edited, tested and deleted under
+`/auth/me/action-rules` with `notification:subscribe`, which `viewer` carries so every person who can
+see alarms can subscribe; another user's rule is a 404 on every verb, `/action-rules` lists platform
+rules only, and a personal rule goes with its owner when they are purged. Names are unique per owner.
+
+```bash
+omniglass auth me action-rule create --name my-boardroom --on '["raised"]' \
+  --when 'place == "Boardroom" && severity_rank >= 40' --channels '["inbox","email"]'
+omniglass auth me action-rule test my-boardroom --when 'severity_rank >= 50'
+```
+
+**It never matches outside its owner's scope.** At the transition the owner's component read scope
+is judged first, set-based with every other owner; an alarm on a component they cannot read is
+skipped before the rule's `when` runs, so neither a delivery nor the `when`'s own result (a failure
+is a row too) can tell them anything about it
+([ADR-1341](/architecture/decisions/#adr-1341-a-person-is-told-about-an-alarm-only-while-they-can-read-it-groups-expand-at-queue-time-scope-is-checked-there-and-again-at-delivery),
+decision 4). Its email rows are judged again at send like any person's. `:test` judges the rule, or a
+draft of its `on` and `when`, against the owner's most recent alarms on components they can read and
+says which it would have told them about; it writes and sends nothing. A personal rule's row is read
+like any person-addressed row, and its rule name, which can say whose it is, is withheld with the
+recipient.
 
 ### The `action_rule`: when a message is sent
 
@@ -801,6 +830,8 @@ registries, the `action_rule` and the targets it sends to (`action_rule_target`)
     when_expr: 'The predicate at the action expression site; empty always holds',
     notification_type_id: 'The type it sends (ON DELETE RESTRICT); NULL sends the official one for the transition',
     official: 'The rule-row discipline; no official action rule ships',
+    owner_principal_id: 'A personal rule\'s owner, its only recipient (ON DELETE CASCADE); NULL is a platform rule',
+    channels: 'A personal rule\'s channels (inbox, email); empty for a platform rule, which has targets',
   }}
 />
 

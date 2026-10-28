@@ -94,14 +94,15 @@ func registerSettingsRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 			}
 			return nil, err
 		}
-		if in.Namespace == "notification" {
-			if err := checkMailSecretBinding(ctx, a, gw, svc, in.Body); err != nil {
-				return nil, err
-			}
-		}
 		// The merge is a single atomic read-modify-write in the Gateway, serialized
 		// against concurrent patches to the same namespace so no update is lost.
-		if _, err := gw.MergePatchSettingOverride(ctx, actorID(ctx), "platform", in.Namespace, in.Body); err != nil {
+		// The notification namespace's mail relay binds a secret, so its patch
+		// is judged on the settings it results in (#1317).
+		if in.Namespace == "notification" {
+			if _, err := gw.MergePatchNotificationSettings(ctx, actorID(ctx), in.Body, secretUse(ctx, a)); err != nil {
+				return nil, mapMailSecretErr(err)
+			}
+		} else if _, err := gw.MergePatchSettingOverride(ctx, actorID(ctx), "platform", in.Namespace, in.Body); err != nil {
 			return nil, err
 		}
 		return resolveOutput(ctx, svc)
@@ -160,34 +161,12 @@ func resolveOutput(ctx context.Context, svc *settings.Service) (*settingsReadOut
 	return out, nil
 }
 
-// checkMailSecretBinding judges a notification settings patch that binds the
-// mail relay's secret, or moves the relay while one stays bound (#1317): every
-// send hands that secret to whatever mail_relay names, so either takes the
-// right to reveal the secret, exactly as binding a secret to a notification
-// target does (a 404 for a secret the caller cannot see, a 403 for one it
-// reads but may not reveal, a 422 for one that is not a platform basic-auth
-// secret).
-func checkMailSecretBinding(ctx context.Context, a *authenticator, gw storage.Gateway, svc *settings.Service, patch map[string]any) error {
-	ref, setsSecret := patch["mail_secret"].(string)
-	_, movesRelay := patch["mail_relay"]
-	if !setsSecret && movesRelay {
-		eff, err := svc.Resolve(ctx)
-		if err != nil {
-			return huma.Error500InternalServerError("reading the notification settings failed")
-		}
-		typed, err := settings.Typed(eff.Values)
-		if err != nil {
-			return huma.Error500InternalServerError("reading the notification settings failed")
-		}
-		ref = typed.Notification.MailSecret
-	}
-	if ref == "" || (!setsSecret && !movesRelay) {
-		return nil
-	}
-	err := gw.CheckMailSecret(ctx, ref, secretUse(ctx, a))
+// mapMailSecretErr maps a notification settings patch refused for the mail
+// relay's secret (#1317): binding one, or moving the relay while one stays
+// bound, by any layer, takes the right to reveal it, exactly as binding a
+// secret to a notification target does.
+func mapMailSecretErr(err error) error {
 	switch {
-	case err == nil:
-		return nil
 	case errors.Is(err, storage.ErrSecretNotFound):
 		return huma.Error404NotFound("secret not found")
 	case errors.Is(err, storage.ErrSecretForbidden):
@@ -195,5 +174,5 @@ func checkMailSecretBinding(ctx context.Context, a *authenticator, gw storage.Ga
 	case errors.Is(err, storage.ErrMailSecretInvalid):
 		return huma.Error422UnprocessableEntity(strings.TrimPrefix(err.Error(), "storage: the mail relay's secret is invalid: "))
 	}
-	return huma.Error500InternalServerError("checking the mail relay's secret failed")
+	return err
 }

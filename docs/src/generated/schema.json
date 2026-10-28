@@ -3349,9 +3349,26 @@
       "type": "timestamp with time zone",
       "nullable": false,
       "default": "now()"
+     },
+     {
+      "name": "owner_principal_id",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "principal.id"
+     },
+     {
+      "name": "channels",
+      "type": "ARRAY",
+      "nullable": false,
+      "default": "'{}'::text[]"
      }
     ],
     "checks": [
+     {
+      "name": "action_rule_channels_check",
+      "expr": "CHECK ((((owner_principal_id IS NULL) AND (cardinality(channels) = 0)) OR ((owner_principal_id IS NOT NULL) AND (cardinality(channels) \u003e 0) AND (channels \u003c@ ARRAY['inbox'::text, 'email'::text]))))"
+     },
      {
       "name": "action_rule_on_check",
       "expr": "CHECK (((cardinality(on_transitions) \u003e 0) AND (on_transitions \u003c@ ARRAY['raised'::text, 'cleared'::text])))"
@@ -3359,8 +3376,12 @@
     ],
     "uniques": [
      {
-      "name": "action_rule_name_key",
-      "definition": "CREATE UNIQUE INDEX action_rule_name_key ON public.action_rule USING btree (name)"
+      "name": "action_rule_owner_name_key",
+      "definition": "CREATE UNIQUE INDEX action_rule_owner_name_key ON public.action_rule USING btree (owner_principal_id, name) WHERE (owner_principal_id IS NOT NULL)"
+     },
+     {
+      "name": "action_rule_platform_name_key",
+      "definition": "CREATE UNIQUE INDEX action_rule_platform_name_key ON public.action_rule USING btree (name) WHERE (owner_principal_id IS NULL)"
      }
     ]
    },

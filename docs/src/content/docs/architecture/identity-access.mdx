@@ -158,6 +158,12 @@ directory is admin-tier, two things follow from it: binding a group or a person 
 `principal_group:read:admin` or `principal:read:admin`, and a person-addressed row names its recipient
 only to that person and to `principal:read:admin` holders; others see the row with the name withheld.
 
+A person subscribes **themselves** with a personal action rule, under `notification:subscribe`, which
+`viewer` carries explicitly (its floor is `*:read`), so every person who can see alarms can subscribe
+and an install can withhold it with a custom role. Every personal-rule query carries the ownership
+predicate (another user's rule is a non-disclosing 404), and the owner's component read scope gates
+an alarm before the rule's `when` is evaluated.
+
 :::caution[Open question]
 Whether to unify the group kinds into a single polymorphic `group` primitive; revisit if their usage
 converges.

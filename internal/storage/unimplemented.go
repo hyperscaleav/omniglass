@@ -1120,4 +1120,25 @@ func (UnimplementedGateway) NotificationBacklog(context.Context) (int, error)   
 func (UnimplementedGateway) MailRelay(context.Context) (*MailRelay, string, error) {
 	return nil, "no mail relay is configured", nil
 }
-func (UnimplementedGateway) CheckMailSecret(context.Context, string, SecretUse) error { return nil }
+func (UnimplementedGateway) MergePatchNotificationSettings(context.Context, string, map[string]any, SecretUse) (*SettingOverride, error) {
+	return nil, nil
+}
+
+func (UnimplementedGateway) ListPersonalRules(context.Context, string) ([]ActionRule, error) {
+	return []ActionRule{}, nil
+}
+func (UnimplementedGateway) GetPersonalRule(context.Context, string, string) (*ActionRule, error) {
+	return nil, ErrActionRuleNotFound
+}
+func (UnimplementedGateway) CreatePersonalRule(context.Context, string, string, PersonalRuleSpec) (*ActionRule, error) {
+	return nil, ErrActionRuleNotFound
+}
+func (UnimplementedGateway) UpdatePersonalRule(context.Context, string, string, string, PersonalRulePatch) (*ActionRule, error) {
+	return nil, ErrActionRuleNotFound
+}
+func (UnimplementedGateway) DeletePersonalRule(context.Context, string, string, string) error {
+	return ErrActionRuleNotFound
+}
+func (UnimplementedGateway) TestPersonalRule(context.Context, string, string, RuleDraft, scope.Set, int) ([]RuleMatch, error) {
+	return nil, ErrActionRuleNotFound
+}

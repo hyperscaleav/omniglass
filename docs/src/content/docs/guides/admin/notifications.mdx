@@ -105,8 +105,8 @@ omniglass action-rule create --name page-on-call --on '["raised"]' \
 The group is read at every alarm, so adding someone to `on-call` is all it takes to page them next
 time. **Each member is told only about an alarm on a component they can read**: a member whose grants
 do not reach the component gets nothing about it, on any channel, and an email still waiting to send
-to a member who has since lost that component, or left the group, fails with the reason instead of
-sending. A person can read their own inbox (`omniglass auth me notification list`); who an entry was
+to a member who has since lost that component, or left the group, or after `email` was taken off the
+target, fails with the reason instead of sending. A person can read their own inbox (`omniglass auth me notification list`); who an entry was
 for is shown to them and to admins, and withheld from everyone else who can see the alarm.
 
 To send to a shared mailbox instead, make an `email` target with its addresses:

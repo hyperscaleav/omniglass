@@ -25,6 +25,8 @@ There are two ways to operate, and they are the same API with the same checks be
   detail view each system opens, with its place as context.
 - **[Work with an entity](/guides/operator/entities/)**: opening a blade, drilling into
   children, and creating, editing, or deleting.
+- **[Your inbox and alarm subscriptions](/guides/operator/notifications/)**: the alarms you are
+  told about, and subscribing yourself to the ones you care about.
 - **[Nodes and reachability](/guides/operator/collection/)**: enrolling a collection node,
   adding a protocol-named endpoint to a component, and reading its reachability and events.
 - **[Simulate a fleet](/guides/operator/simulation/)**: running the device simulator beside a node,

@@ -3423,6 +3423,83 @@
         ],
         "type": "object"
       },
+      "CreatePersonalRuleInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/CreatePersonalRuleInputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "channels": {
+            "description": "How it tells you: inbox, email (your directory email)",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "description": {
+            "description": "What it is for",
+            "type": "string"
+          },
+          "enabled": {
+            "description": "Whether it fires (default true)",
+            "type": "boolean"
+          },
+          "label": {
+            "description": "A human label",
+            "type": "string"
+          },
+          "name": {
+            "description": "The rule's name (lowercase kebab), unique among your own rules",
+            "minLength": 1,
+            "type": "string"
+          },
+          "notification_type": {
+            "description": "The notification type to send, by name or uuid; absent sends the official one for the transition",
+            "type": "string"
+          },
+          "on": {
+            "description": "The alarm transitions it fires on: raised, cleared, or both",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "targets": {
+            "description": "Refused when set (a 422): a personal rule tells you alone and names no target",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "when": {
+            "description": "A predicate over the alarm facts (component, place, severity, severity_rank, message, rule, ...); absent always holds. Judged only for alarms on components you can read",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "on",
+          "channels"
+        ],
+        "type": "object"
+      },
       "CreatePrincipalInputBody": {
         "additionalProperties": false,
         "properties": {
@@ -7236,6 +7313,33 @@
         ],
         "type": "object"
       },
+      "ListPersonalRulesOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/ListPersonalRulesOutputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "action_rules": {
+            "items": {
+              "$ref": "#/components/schemas/PersonalRuleBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "action_rules"
+        ],
+        "type": "object"
+      },
       "ListPrincipalSessionsOutputBody": {
         "additionalProperties": false,
         "properties": {
@@ -9182,6 +9286,88 @@
         "required": [
           "kind",
           "ref"
+        ],
+        "type": "object"
+      },
+      "PersonalRuleBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/PersonalRuleBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "channels": {
+            "description": "How it tells you: inbox (your console inbox), email (your directory email)",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "enabled": {
+            "description": "Whether it fires; a paused rule queues nothing",
+            "type": "boolean"
+          },
+          "id": {
+            "description": "The rule's uuid, the stable form of name",
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "name": {
+            "description": "The rule's name, unique among your own rules",
+            "type": "string"
+          },
+          "notification_type": {
+            "description": "The notification type it sends, by name; absent sends the official one for the transition",
+            "type": "string"
+          },
+          "notification_type_id": {
+            "description": "That type's uuid",
+            "type": "string"
+          },
+          "on": {
+            "description": "The alarm transitions it fires on: raised, cleared, or both",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "when": {
+            "description": "The predicate over the alarm facts (the action expression site); absent always holds",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "on",
+          "channels",
+          "enabled",
+          "created_at",
+          "updated_at"
         ],
         "type": "object"
       },
@@ -11562,6 +11748,56 @@
           "component",
           "component_id",
           "since"
+        ],
+        "type": "object"
+      },
+      "RuleMatchBody": {
+        "additionalProperties": false,
+        "properties": {
+          "alarm": {
+            "description": "The alarm's uuid",
+            "type": "string"
+          },
+          "at": {
+            "description": "When that edge happened",
+            "format": "date-time",
+            "type": "string"
+          },
+          "component": {
+            "description": "The alarm's component, by name",
+            "type": "string"
+          },
+          "error": {
+            "description": "Why the when did not run, when it did not",
+            "type": "string"
+          },
+          "matched": {
+            "description": "Whether the rule would have told you",
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string"
+          },
+          "transition": {
+            "description": "The edge judged",
+            "enum": [
+              "raised",
+              "cleared"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "alarm",
+          "component",
+          "severity",
+          "message",
+          "transition",
+          "at",
+          "matched"
         ],
         "type": "object"
       },
@@ -14423,6 +14659,67 @@
         ],
         "type": "object"
       },
+      "TestPersonalRuleInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/TestPersonalRuleInputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "limit": {
+            "description": "How many of your most recent alarms to judge (default 20)",
+            "format": "int64",
+            "maximum": 100,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "on": {
+            "description": "A draft of the transitions to judge with, in place of the rule's own",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "when": {
+            "description": "A draft of the predicate to judge with, in place of the rule's own",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "TestPersonalRuleOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/TestPersonalRuleOutputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "matches": {
+            "description": "Your most recent alarms on components you can read, newest first, each transition the rule fires on that the alarm has had",
+            "items": {
+              "$ref": "#/components/schemas/RuleMatchBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "matches"
+        ],
+        "type": "object"
+      },
       "Transport": {
         "additionalProperties": false,
         "properties": {
@@ -15142,6 +15439,55 @@
           },
           "text": {
             "description": "The body text template",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UpdatePersonalRuleInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/UpdatePersonalRuleInputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "channels": {
+            "description": "How it tells you (replaces the set)",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "description": {
+            "description": "What it is for",
+            "type": "string"
+          },
+          "enabled": {
+            "description": "Whether it fires: false pauses it, true resumes it from the next transition",
+            "type": "boolean"
+          },
+          "label": {
+            "description": "A human label (empty clears it)",
+            "type": "string"
+          },
+          "notification_type": {
+            "description": "The type to send (empty returns to the official one per transition)",
+            "type": "string"
+          },
+          "on": {
+            "description": "The transitions it fires on (replaces the set)",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "when": {
+            "description": "The predicate (empty always holds)",
             "type": "string"
           }
         },
@@ -16277,6 +16623,250 @@
           }
         },
         "summary": "Update your own profile"
+      }
+    },
+    "/auth/me/action-rules": {
+      "get": {
+        "description": "Your own personal action rules, by name. Self-scoped. Gated by notification:subscribe.",
+        "operationId": "list-auth-me-action-rules",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListPersonalRulesOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List your alarm subscriptions",
+        "x-omniglass-permission": "notification:subscribe"
+      },
+      "post": {
+        "description": "Creates a personal action rule: on which alarm transitions, when, what to send, and on which of your channels (inbox, email). It tells you alone and names no target (targets is a 422), and it only ever matches an alarm on a component you can read at that moment, judged before its when runs. A taken name among your rules is a 409. Audited. Gated by notification:subscribe.",
+        "operationId": "create-auth-me-action-rule",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePersonalRuleInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonalRuleBody"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Subscribe yourself to alarms",
+        "x-omniglass-permission": "notification:subscribe"
+      }
+    },
+    "/auth/me/action-rules/{name}": {
+      "delete": {
+        "description": "Deletes one of your own personal action rules; what it already sent keeps its name. Another user's is a 404. Audited. Gated by notification:subscribe.",
+        "operationId": "delete-auth-me-action-rule",
+        "parameters": [
+          {
+            "description": "Your rule's name or uuid",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "description": "Your rule's name or uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Unsubscribe: delete one of your alarm subscriptions",
+        "x-omniglass-permission": "notification:subscribe"
+      },
+      "get": {
+        "description": "One of your own personal action rules, by name or uuid; another user's is a 404. Gated by notification:subscribe.",
+        "operationId": "get-auth-me-action-rule",
+        "parameters": [
+          {
+            "description": "Your rule's name or uuid",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "description": "Your rule's name or uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonalRuleBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Get one of your alarm subscriptions",
+        "x-omniglass-permission": "notification:subscribe"
+      },
+      "patch": {
+        "description": "Patches one of your own personal action rules (an absent field is unchanged); enabled false pauses it. Another user's is a 404. Audited. Gated by notification:subscribe.",
+        "operationId": "update-auth-me-action-rule",
+        "parameters": [
+          {
+            "description": "Your rule's name or uuid",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "description": "Your rule's name or uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePersonalRuleInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonalRuleBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Change or pause one of your alarm subscriptions",
+        "x-omniglass-permission": "notification:subscribe"
+      }
+    },
+    "/auth/me/action-rules/{name}:test": {
+      "post": {
+        "description": "Judges one of your own personal action rules, or a draft of its on and when, against your most recent alarms on components you can read: for each transition it fires on, whether it would have told you. Writes and sends nothing. Another user's rule is a 404. Gated by notification:subscribe.",
+        "operationId": "test-auth-me-action-rule",
+        "parameters": [
+          {
+            "description": "Your rule's name or uuid",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "description": "Your rule's name or uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestPersonalRuleInputBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestPersonalRuleOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Test one of your alarm subscriptions against your recent alarms",
+        "x-omniglass-permission": "notification:subscribe"
       }
     },
     "/auth/me/avatar": {

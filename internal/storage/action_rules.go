@@ -37,7 +37,11 @@ type ActionRule struct {
 	NotificationType   string
 	NotificationTypeID string
 	// Targets are the targets it sends to, by name, in name order.
-	Targets   []string
+	Targets []string
+	// OwnerID is a personal rule's owner (#1353), empty for a platform rule;
+	// Channels are the channels a personal rule tells its owner on.
+	OwnerID   string
+	Channels  []string
 	Enabled   bool
 	Official  bool
 	CreatedAt time.Time
@@ -88,22 +92,23 @@ func officialTypeFor(transition string) string {
 const actionRuleCols = `r.id, r.name, coalesce(r.label, ''), r.description, r.on_transitions, r.when_expr,
 	coalesce(nt.name, ''), coalesce(r.notification_type_id::text, ''),
 	coalesce((select array_agg(t.name order by t.name) from action_rule_target art join notification_target t on t.id = art.target_id where art.rule_id = r.id), '{}'),
-	r.enabled, r.official, r.created_at, r.updated_at`
+	coalesce(r.owner_principal_id::text, ''), r.channels, r.enabled, r.official, r.created_at, r.updated_at`
 
 const actionRuleFrom = ` from action_rule r left join notification_type nt on nt.id = r.notification_type_id`
 
 func scanActionRule(row pgx.Row) (*ActionRule, error) {
 	var r ActionRule
 	if err := row.Scan(&r.ID, &r.Name, &r.Label, &r.Description, &r.On, &r.When, &r.NotificationType, &r.NotificationTypeID,
-		&r.Targets, &r.Enabled, &r.Official, &r.CreatedAt, &r.UpdatedAt); err != nil {
+		&r.Targets, &r.OwnerID, &r.Channels, &r.Enabled, &r.Official, &r.CreatedAt, &r.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &r, nil
 }
 
-// ListActionRules lists every rule, by name. Rules read like a registry.
+// ListActionRules lists every platform rule, by name. Rules read like a
+// registry; a personal rule is its owner's alone and never listed here.
 func (p *PG) ListActionRules(ctx context.Context) ([]ActionRule, error) {
-	rows, err := p.pool.Query(ctx, `select `+actionRuleCols+actionRuleFrom+` order by r.name`)
+	rows, err := p.pool.Query(ctx, `select `+actionRuleCols+actionRuleFrom+` where r.owner_principal_id is null order by r.name`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list action rules: %w", err)
 	}
@@ -121,10 +126,13 @@ func (p *PG) ListActionRules(ctx context.Context) ([]ActionRule, error) {
 
 // GetActionRule reads one rule by name or uuid.
 func (p *PG) GetActionRule(ctx context.Context, ref string) (*ActionRule, error) {
-	return getActionRule(ctx, p.pool, ref, false)
+	return getActionRule(ctx, p.pool, ref, "", false)
 }
 
-func getActionRule(ctx context.Context, q querier, ref string, forUpdate bool) (*ActionRule, error) {
+// getActionRule reads one rule by name or uuid: a platform rule when owner
+// is empty, else that owner's personal rule (another's is not found, never
+// forbidden).
+func getActionRule(ctx context.Context, q querier, ref, owner string, forUpdate bool) (*ActionRule, error) {
 	if err := RejectAddressForm("action_rule", ref); err != nil {
 		return nil, err
 	}
@@ -132,7 +140,11 @@ func getActionRule(ctx context.Context, q querier, ref string, forUpdate bool) (
 	if forUpdate {
 		lock = " for update of r"
 	}
-	r, err := scanActionRule(q.QueryRow(ctx, `select `+actionRuleCols+actionRuleFrom+` where r.`+registryRefCol(ref)+` = $1`+lock, ref))
+	if owner != "" && !isUUID(owner) {
+		return nil, ErrActionRuleNotFound
+	}
+	r, err := scanActionRule(q.QueryRow(ctx, `select `+actionRuleCols+actionRuleFrom+` where r.`+registryRefCol(ref)+` = $1
+		and r.owner_principal_id is not distinct from nullif($2, '')::uuid`+lock, ref, owner))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrActionRuleNotFound
 	}
@@ -260,7 +272,7 @@ func (p *PG) CreateActionRule(ctx context.Context, actorID string, spec ActionRu
 	if err := setRuleTargets(ctx, tx, id, targetIDs); err != nil {
 		return nil, err
 	}
-	r, err := getActionRule(ctx, tx, id, false)
+	r, err := getActionRule(ctx, tx, id, "", false)
 	if err != nil {
 		return nil, err
 	}
@@ -295,7 +307,7 @@ func (p *PG) UpdateActionRule(ctx context.Context, actorID, ref string, patch Ac
 		return nil, fmt.Errorf("storage: begin update action rule: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	before, err := getActionRule(ctx, tx, ref, true)
+	before, err := getActionRule(ctx, tx, ref, "", true)
 	if err != nil {
 		return nil, err
 	}
@@ -327,7 +339,7 @@ func (p *PG) UpdateActionRule(ctx context.Context, actorID, ref string, patch Ac
 			return nil, err
 		}
 	}
-	after, err := getActionRule(ctx, tx, before.ID, false)
+	after, err := getActionRule(ctx, tx, before.ID, "", false)
 	if err != nil {
 		return nil, err
 	}
@@ -350,7 +362,7 @@ func (p *PG) DeleteActionRule(ctx context.Context, actorID, ref string, action s
 		return fmt.Errorf("storage: begin delete action rule: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	before, err := getActionRule(ctx, tx, ref, true)
+	before, err := getActionRule(ctx, tx, ref, "", true)
 	if err != nil {
 		return err
 	}

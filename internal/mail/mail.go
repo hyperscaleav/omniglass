@@ -24,6 +24,7 @@ import (
 	"net/textproto"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/hyperscaleav/omniglass/internal/egress"
 )
@@ -232,11 +233,22 @@ func failed(err error) Result {
 	return Result{Reason: egress.Reason(err)}
 }
 
-// printable keeps a reply excerpt to one bounded line.
+// printable keeps a reply excerpt to one bounded line of printable text, fit
+// for a text column: control characters (a NUL among them) dropped, invalid
+// UTF-8 replaced, and the cut made on a rune boundary.
 func printable(s string) string {
-	s = strings.Join(strings.Fields(s), " ")
-	if len(s) > egress.MaxReasonBytes {
-		s = s[:egress.MaxReasonBytes]
+	s = strings.ToValidUTF8(s, "\uFFFD")
+	var sb strings.Builder
+	for _, r := range s {
+		switch {
+		case r == '\n' || r == '\r' || r == '\t':
+			sb.WriteByte(' ')
+		case r >= 0x20 && r != 0x7f:
+			if sb.Len()+utf8.RuneLen(r) > egress.MaxReasonBytes {
+				return strings.Join(strings.Fields(sb.String()), " ")
+			}
+			sb.WriteRune(r)
+		}
 	}
-	return s
+	return strings.Join(strings.Fields(sb.String()), " ")
 }

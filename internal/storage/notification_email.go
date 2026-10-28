@@ -4,10 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"github.com/hyperscaleav/omniglass/internal/mail"
 )
 
 // The email channel's send (#1317, #1341): what the tick hands the mail
@@ -57,6 +60,9 @@ func (p *PG) emailSend(ctx context.Context, q querier, targetID, recipientID *st
 	case t.Kind == TargetEmail:
 		to = t.Addresses
 	case isPersonKind(t.Kind):
+		if !slices.Contains(t.Channels, DeliveryEmail) {
+			return nil, "the target no longer delivers by email", nil
+		}
 		addr, refused, err := recheckRecipient(ctx, q, t, recipientID, componentID)
 		if err != nil || refused != "" {
 			return nil, refused, err
@@ -70,6 +76,33 @@ func (p *PG) emailSend(ctx context.Context, q querier, targetID, recipientID *st
 		return nil, refused, err
 	}
 	return &EmailSend{Relay: *relay, To: to, Date: at}, "", nil
+}
+
+// personalEmailSend reads a personal rule's email row's send (#1353): its
+// owner, judged again as any person's row is (still active, still reading
+// the component), to their directory email. A subscription deleted since is
+// not sent.
+func (p *PG) personalEmailSend(ctx context.Context, q querier, ruleID, recipientID *string, componentID string, at time.Time) (*EmailSend, string, error) {
+	if ruleID == nil || recipientID == nil {
+		return nil, "the subscription was deleted", nil
+	}
+	var owner string
+	err := q.QueryRow(ctx, `select coalesce(owner_principal_id::text, '') from action_rule where id = $1::uuid`, *ruleID).Scan(&owner)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && owner != *recipientID) {
+		return nil, "the subscription was deleted", nil
+	}
+	if err != nil {
+		return nil, "", fmt.Errorf("storage: personal rule %s: %w", *ruleID, err)
+	}
+	addr, refused, err := recheckRecipient(ctx, q, &NotificationTarget{Kind: TargetPrincipal, PrincipalID: owner}, recipientID, componentID)
+	if err != nil || refused != "" {
+		return nil, refused, err
+	}
+	relay, refused, err := p.mailRelay(ctx, q)
+	if err != nil || refused != "" {
+		return nil, refused, err
+	}
+	return &EmailSend{Relay: *relay, To: []string{addr}, Date: at}, "", nil
 }
 
 // recheckRecipient judges a person's email row again at send, as the queue
@@ -97,7 +130,9 @@ func recheckRecipient(ctx context.Context, q querier, t *NotificationTarget, rec
 	case !active:
 		return "", "the recipient is no longer active", nil
 	case !member:
-		return "", "the recipient is no longer a member of " + t.PrincipalGroup, nil
+		// The group is not named: a reason is read by whoever reads the
+		// alarm, and the group directory is admin-tier.
+		return "", "the recipient is no longer a member of the target's group", nil
 	case t.Kind == TargetPrincipal && t.PrincipalID != *recipientID:
 		return "", "the target no longer names the recipient", nil
 	}
@@ -111,7 +146,11 @@ func recheckRecipient(ctx context.Context, q querier, t *NotificationTarget, rec
 	if strings.TrimSpace(email) == "" {
 		return "", "the recipient has no directory email", nil
 	}
-	return email, "", nil
+	addr, err := mail.CheckAddress(email)
+	if err != nil {
+		return "", "the recipient's directory email is not an email address", nil
+	}
+	return addr, "", nil
 }
 
 // mailRelay reads the install's relay from the notification settings, its
@@ -170,27 +209,27 @@ func (p *PG) MailRelay(ctx context.Context) (*MailRelay, string, error) {
 	return p.mailRelay(ctx, p.pool)
 }
 
-// CheckMailSecret judges binding a secret to the mail relay (the notification
+// checkMailSecret judges binding a secret to the mail relay (the notification
 // settings' mail_secret), as binding one to a target is judged: a PLATFORM
 // basic-auth secret, by bare name, that the caller may reveal (SecretUse),
 // since every send hands it to whatever mail_relay names. A secret outside
 // the caller's view is ErrSecretNotFound, one it reads but may not reveal
 // ErrSecretForbidden, one of another kind ErrMailSecretInvalid.
-func (p *PG) CheckMailSecret(ctx context.Context, ref string, use SecretUse) error {
+func (p *PG) checkMailSecret(ctx context.Context, q querier, ref string, use SecretUse) error {
 	if ref == "" {
 		return nil
 	}
 	if isUUID(ref) || strings.Contains(ref, "/") {
 		return fmt.Errorf("%w: mail_secret names a platform secret by its bare name", ErrMailSecretInvalid)
 	}
-	row, _, err := p.secretRowForAction(ctx, p.pool, ref, use.Read, use.Reveal, use.CanAdmin, true)
+	row, _, err := p.secretRowForAction(ctx, q, ref, use.Read, use.Reveal, use.CanAdmin, true)
 	if err != nil {
 		return err
 	}
 	if row.ownerKind != "platform" {
 		return fmt.Errorf("%w: secret %q is not a platform secret", ErrMailSecretInvalid, ref)
 	}
-	if _, err := platformBasicAuthSecret(ctx, p.pool, ref); errors.Is(err, ErrSecretNotFound) {
+	if _, err := platformBasicAuthSecret(ctx, q, ref); errors.Is(err, ErrSecretNotFound) {
 		return fmt.Errorf("%w: secret %q is not a basic-auth secret", ErrMailSecretInvalid, ref)
 	} else if err != nil {
 		return err
