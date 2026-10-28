@@ -101,7 +101,7 @@ func (p *PG) UpsertMetricType(ctx context.Context, mt MetricType) error {
 // ListMetricTypes returns every registered metric type (official and custom). No
 // scope.Set: the registry is fleet-wide reference data, not a scoped resource.
 func (p *PG) ListMetricTypes(ctx context.Context) ([]MetricType, error) {
-	rows, err := p.pool.Query(ctx, `select `+metricTypeCols+` from metric_type`)
+	rows, err := p.pool.Query(ctx, metricTypeListSQL)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list metric types: %w", err)
 	}

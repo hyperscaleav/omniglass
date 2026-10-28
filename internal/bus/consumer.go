@@ -374,19 +374,12 @@ func (s *Server) land(ctx context.Context, id string, ev *ogv1.TelemetryBatch, b
 		batch.LogLines = append(batch.LogLines, taskLogWrites(ev, *bind.SampleOwner)...)
 	}
 	if bind.SampleOwner != nil && sampleCount(ev) > 0 {
-		metricTypes, err := s.store.ListMetricTypes(ctx)
+		// The registry is kept between batches and rebuilt only when the
+		// catalogs change (#1279): one fingerprint read, not three catalogs.
+		reg, err := s.registry.get(ctx, s.store)
 		if err != nil {
 			return err
 		}
-		properties, err := s.store.ListPropertyTypes(ctx)
-		if err != nil {
-			return err
-		}
-		eventTypes, err := s.store.ListEventTypes(ctx)
-		if err != nil {
-			return err
-		}
-		reg := collection.NewRegistry(metricTypes, properties, eventTypes)
 		// A name in both registries resolves to nothing, so every sample carrying it is
 		// refused. The fence at the create routes stops new ones, but an install that
 		// already has a collision would otherwise just lose data quietly. Say so.
