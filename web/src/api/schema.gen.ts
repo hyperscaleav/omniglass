@@ -7925,6 +7925,8 @@ export interface components {
             principal_id: string;
         };
         MetricInstanceBody: {
+            /** @description True when the instance names an endpoint the owner has; false for the owner-level series and an instance a push named */
+            endpoint: boolean;
             /** @description The instance: the endpoint that collected the sample, or empty for the owner-level series */
             instance: string;
             /**

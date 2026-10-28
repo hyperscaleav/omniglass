@@ -81,6 +81,9 @@ func TestEffectiveMetricsNameTheShownInstance(t *testing.T) {
 		m.Instances[1].Instance != "http" || string(m.Instances[1].Value) != `2.2` {
 		t.Fatalf("two endpoints: want [tcp 4.8, http 2.2], got %+v", m.Instances)
 	}
+	if !m.Instances[0].Endpoint || !m.Instances[1].Endpoint {
+		t.Fatalf("two endpoints: both instances name an endpoint, got %+v", m.Instances)
+	}
 	if !m.Instances[0].TS.Equal(base.Add(2*time.Second)) || !m.Instances[1].TS.Equal(base.Add(time.Second)) {
 		t.Fatalf("two endpoints: each instance carries its own sample time, got %+v", m.Instances)
 	}
@@ -105,7 +108,7 @@ func TestEffectiveMetricsNameTheShownInstance(t *testing.T) {
 	mustExec(t, conn, `insert into metric (ts, owner_kind, component_id, metric_type_id, instance, value, provenance, source, source_rule, source_rule_version)
 		values ($1, 'component', $2::uuid, (select id from metric_type where name = 'tcp-connect-time'), '', 9.75, 'calculated', 'rule', 'rule-x', 1)`,
 		base.Add(4*time.Second), comp.ID)
-	if m := read(); string(m.Value) != `9.75` || m.Instance != "" || m.InstanceCount != 2 || len(m.Instances) != 2 || m.Instances[0].Instance != "" {
+	if m := read(); string(m.Value) != `9.75` || m.Instance != "" || m.InstanceCount != 2 || len(m.Instances) != 2 || m.Instances[0].Instance != "" || m.Instances[0].Endpoint || !m.Instances[1].Endpoint {
 		t.Fatalf("calculated owner-level newest: want 9.75 at the empty instance, count 2; got value=%s instance=%q count=%d list=%+v", m.Value, m.Instance, m.InstanceCount, m.Instances)
 	}
 

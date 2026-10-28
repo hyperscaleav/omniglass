@@ -51,6 +51,9 @@ type MetricInstanceSample struct {
 	Instance string          `json:"instance"`
 	Value    json.RawMessage `json:"value"`
 	TS       time.Time       `json:"ts"`
+	// Endpoint is true when the instance names an endpoint the owner has
+	// now; false for the owner-level series and a push-named instance.
+	Endpoint bool `json:"endpoint"`
 }
 
 // EffectiveMetrics resolves an instance's declared metrics: every metric its
@@ -92,12 +95,14 @@ func (p *PG) EffectiveMetrics(ctx context.Context, ownerKind, ownerID string, re
 		return nil, err
 	}
 
-	// The current sample per metric: the latest series row of each live
-	// instance on this owner's arc (latest), then the newest of those per
-	// metric (sampled) beside the count and the per-instance list (spread),
-	// values rendered to jsonb so the coalesce against the contract default
-	// stays in SQL. Shared by both arms; kindParam and transportsParam are
-	// the placeholders each arm binds the owner kind and transport names to.
+	// The current sample per metric: the latest series row of each instance
+	// on this owner's arc (latest), the live ones of those (live: liveness
+	// depends on the instance alone, so it is judged once per instance after
+	// the reduction, never once per history row), then the newest per metric
+	// (sampled) beside the count and the per-instance list (spread), values
+	// rendered to jsonb so the coalesce against the contract default stays in
+	// SQL. Shared by both arms; kindParam and transportsParam are the
+	// placeholders each arm binds the owner kind and transport names to.
 	kindParam, transportsParam := "$2", "$3"
 	if oc.metricContractTable != "" {
 		kindParam, transportsParam = "$3", "$4"
@@ -112,22 +117,27 @@ func (p *PG) EffectiveMetrics(ctx context.Context, ownerKind, ownerID string, re
 			from metric m
 			join inst on m.%[1]s = inst.arc
 			where m.provenance in ('observed', 'calculated')
-			  and %[2]s
 			order by m.metric_type_id, m.instance, m.ts desc, m.id desc
+		),
+		live as (
+			select l.*,
+			       exists (select 1 from endpoint e where %[3]s = 'component' and e.component = inst.arc and e.name = l.instance) as is_endpoint
+			from latest l cross join inst
+			where %[2]s
 		),
 		spread as (
 			select metric_type_id, count(*)::int as instance_count,
-			       case when count(*) > 1 then jsonb_agg(jsonb_build_object('instance', instance, 'value', value, 'ts', ts) order by ts desc, id desc) end as instances
-			from latest group by metric_type_id
+			       case when count(*) > 1 then jsonb_agg(jsonb_build_object('instance', instance, 'value', value, 'ts', ts, 'endpoint', is_endpoint) order by ts desc, id desc) end as instances
+			from live group by metric_type_id
 		),
 		sampled as (
 			select distinct on (l.metric_type_id)
 			       l.metric_type_id, l.value, l.source_rule, l.source_rule_id, l.instance,
 			       sp.instance_count, sp.instances
-			from latest l
+			from live l
 			join spread sp on sp.metric_type_id = l.metric_type_id
 			order by l.metric_type_id, l.ts desc, l.id desc
-		)`, oc.arcCol, liveInstanceSQL("m.instance", kindParam, "inst.arc", transportsParam))
+		)`, oc.arcCol, liveInstanceSQL("l.instance", kindParam, "inst.arc", transportsParam), kindParam)
 
 	var q string
 	if oc.metricContractTable == "" {

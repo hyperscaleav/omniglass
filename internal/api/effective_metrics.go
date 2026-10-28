@@ -41,6 +41,7 @@ type metricInstanceBody struct {
 	Instance string          `json:"instance" doc:"The instance: the endpoint that collected the sample, or empty for the owner-level series"`
 	Value    json.RawMessage `json:"value" doc:"That instance's latest sample"`
 	TS       time.Time       `json:"ts" doc:"When that sample was taken"`
+	Endpoint bool            `json:"endpoint" doc:"True when the instance names an endpoint the owner has; false for the owner-level series and an instance a push named"`
 }
 
 func toEffectiveMetricBody(e *storage.EffectiveMetric) effectiveMetricBody {
@@ -69,7 +70,7 @@ func toMetricInstanceBodies(in []storage.MetricInstanceSample) []metricInstanceB
 	}
 	out := make([]metricInstanceBody, len(in))
 	for i, s := range in {
-		out[i] = metricInstanceBody{Instance: s.Instance, Value: s.Value, TS: s.TS}
+		out[i] = metricInstanceBody{Instance: s.Instance, Value: s.Value, TS: s.TS, Endpoint: s.Endpoint}
 	}
 	return out
 }

@@ -106,6 +106,12 @@
       "setup": []
     },
     {
+      "id": "read-a-multi-endpoint-vital",
+      "title": "Read a vital two endpoints collect",
+      "description": "Open the Boardroom DSP, read which endpoint its TCP connect time comes from and of how many, and open the row for each endpoint's latest value.",
+      "setup": []
+    },
+    {
       "id": "sample-simulation",
       "title": "Read a simulated component's status",
       "description": "The Simulation page lists every component a simulator serves beside a node. Open one to see where it is served and what has reached it.",

@@ -400,7 +400,7 @@ export default function ComponentLeaf() {
                                     </button>
                                     <InfoTip
                                       label={`which endpoint ${row().label} shows`}
-                                      text="This metric is collected through more than one endpoint, each its own series. The row shows the newest sample across the endpoints and names the one it came from; open it for each endpoint's latest. An endpoint since deleted is left out."
+                                      text="This metric has more than one live series here, one for each endpoint that collects it (or the component as a whole). The row shows the newest sample across them and names the one it came from; open it for each one's latest. An endpoint since deleted is left out."
                                     />
                                   </span>
                                 )}

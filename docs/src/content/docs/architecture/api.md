@@ -871,7 +871,7 @@ row is a metric the classifier declares or the series holds off contract, resolv
 (`is_sampled` marks a live series). The row names the instance its sample came from (`instance`: the
 endpoint that collected it, empty for the owner-level series), counts the live instances holding a
 sample (`instance_count`), and, when there is more than one, lists each one's latest with its time
-(`instances`, newest first), a deleted endpoint's frozen reading left out of all three
+(`instances`, newest first, each marked `endpoint` when it names an endpoint the owner has), a deleted endpoint's frozen reading left out of all three
 ([ADR-0456](/architecture/decisions/#adr-0456-an-instance-names-which-value-of-one-key-on-one-owner-a-row-is-and-an-owner-level-read-reduces-across-every-instance), #1020).
 
 ## Roles: a system declares a slot, a component fills it

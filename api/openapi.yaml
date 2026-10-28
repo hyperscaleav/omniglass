@@ -5549,6 +5549,9 @@ components:
     MetricInstanceBody:
       additionalProperties: false
       properties:
+        endpoint:
+          description: True when the instance names an endpoint the owner has; false for the owner-level series and an instance a push named
+          type: boolean
         instance:
           description: "The instance: the endpoint that collected the sample, or empty for the owner-level series"
           type: string
@@ -5562,6 +5565,7 @@ components:
         - instance
         - value
         - ts
+        - endpoint
       type: object
     MetricSampleBody:
       additionalProperties: false

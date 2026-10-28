@@ -267,7 +267,7 @@ describe("the leaf's dispatch facts (#786)", () => {
     {
       metric_type_name: "tcp-connect-time", label: "TCP Connect Time", data_type: "float", value: connect, is_sampled: true, from_contract: false, required: false,
       instance: "tcp", instance_count: 2,
-      instances: [{ instance: "tcp", value: connect, ts: iso(30) }, { instance: "http", value: 2.2, ts: iso(45) }],
+      instances: [{ instance: "tcp", value: connect, ts: iso(30), endpoint: true }, { instance: "http", value: 2.2, ts: iso(45), endpoint: true }],
     },
     { metric_type_name: "tcp-open", label: "TCP Open", data_type: "float", value: 1, is_sampled: true, from_contract: false, required: false, instance: "tcp", instance_count: 1 },
   ];
@@ -308,7 +308,7 @@ describe("the leaf's dispatch facts (#786)", () => {
     const tip = within(screen.getByTestId("vital-spread-tcp-connect-time")).getByRole("button", { name: /More about/ });
     fireEvent.keyDown(document.body, { key: "Tab" });
     tip.focus();
-    expect(await screen.findByText(/newest sample across the endpoints/)).toBeTruthy();
+    expect(await screen.findByText(/newest sample across them/)).toBeTruthy();
   });
 
   it("the collection card shows each endpoint's ladder, bottom up", () => {

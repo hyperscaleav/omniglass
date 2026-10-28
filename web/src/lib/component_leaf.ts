@@ -138,7 +138,7 @@ export type VitalRow = { name: string; label: string; value: unknown; sampled: b
 // One live instance's latest sample, and the spread a multi-instance row
 // carries: the instance shown, how many there are, and each one's latest,
 // newest first (the server's order).
-export type VitalInstance = { instance: string; value: unknown; ts: string };
+export type VitalInstance = { instance: string; value: unknown; ts: string; endpoint: boolean };
 export type VitalSpread = { shown: string; count: number; instances: VitalInstance[] };
 
 // vitalRows is the same rule over the metric lane, with the live-series
@@ -151,7 +151,7 @@ export function vitalRows(metrics: components["schemas"]["EffectiveMetricBody"][
       const row: VitalRow = { name: m.metric_type_name, label: entityLabel({ name: m.metric_type_name, label: m.label }), value: m.value, sampled: m.is_sampled };
       if (m.source_rule && m.source_rule_id) Object.assign(row, { sourceRule: m.source_rule, sourceRuleId: m.source_rule_id });
       if ((m.instance_count ?? 0) > 1 && m.instances?.length) {
-        row.spread = { shown: m.instance ?? "", count: m.instance_count, instances: m.instances.map((i) => ({ instance: i.instance, value: i.value, ts: i.ts })) };
+        row.spread = { shown: m.instance ?? "", count: m.instance_count, instances: m.instances.map((i) => ({ instance: i.instance, value: i.value, ts: i.ts, endpoint: i.endpoint })) };
       }
       return row;
     });
@@ -165,10 +165,11 @@ export function instanceName(instance: string): string {
 }
 
 // spreadSummary is a multi-instance row's caption: "latest of 2 endpoints
-// (tcp)". It counts endpoints when every instance names one, and instances
-// otherwise, since the owner-level series is not an endpoint.
+// (tcp)". It counts endpoints when every instance names one the component
+// has (the server says which), and instances otherwise: the owner-level
+// series, or an instance a push named, is no endpoint.
 export function spreadSummary(spread: VitalSpread): string {
-  const noun = spread.instances.every((i) => i.instance) ? "endpoints" : "instances";
+  const noun = spread.instances.every((i) => i.endpoint) ? "endpoints" : "instances";
   return `latest of ${spread.count} ${noun} (${instanceName(spread.shown)})`;
 }
 
