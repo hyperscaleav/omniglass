@@ -305,7 +305,11 @@ func (p *PG) CreateNotificationTarget(ctx context.Context, actorID string, spec 
 }
 
 // UpdateNotificationTarget patches a target, audited (URL masked; a URL
-// change is recorded as changed without either value).
+// change is recorded as changed without either value). Every path that
+// changes where a bound credential goes takes the right to reveal it: binding
+// a secret, and moving the URL of a target that keeps one. Nothing else on a
+// target redirects a send (no header, method or signing field exists, and a
+// target is not renamed or cloned); :test sends to the URL as it stands.
 func (p *PG) UpdateNotificationTarget(ctx context.Context, actorID, ref string, patch NotificationTargetPatch, action scope.Set, use SecretUse) (*NotificationTarget, error) {
 	if !action.All {
 		return nil, ErrNotificationTargetForbidden
@@ -328,6 +332,18 @@ func (p *PG) UpdateNotificationTarget(ctx context.Context, actorID, ref string, 
 	var secretID *string
 	if setSecret {
 		if secretID, err = p.resolveTargetSecret(ctx, tx, *patch.Secret, use); err != nil {
+			return nil, err
+		}
+	}
+	// Moving a target that keeps its bound secret is handing that secret to
+	// the new URL on the next send, so it takes the same right as binding it.
+	// The caller already reads the secret's name off the target, so a secret
+	// it cannot see is answered forbidden here, not hidden.
+	if patch.URL != nil && *patch.URL != before.URL && !setSecret && before.SecretID != "" {
+		if _, err := p.resolveTargetSecret(ctx, tx, before.SecretID, use); err != nil {
+			if errors.Is(err, ErrSecretNotFound) {
+				return nil, ErrSecretForbidden
+			}
 			return nil, err
 		}
 	}

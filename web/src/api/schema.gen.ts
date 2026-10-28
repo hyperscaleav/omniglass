@@ -2531,7 +2531,7 @@ export interface paths {
         put?: never;
         /**
          * Create a notification target
-         * @description Adds a destination a notification can be sent to: a channel kind (webhook), its URL and, optionally, the platform secret it signs or authenticates with. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.
+         * @description Adds a destination a notification can be sent to: a channel kind (webhook), its URL and, optionally, the platform secret it signs or authenticates with. Binding a secret takes the right to reveal it (secret:reveal, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not reveal a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.
          */
         post: operations["create-notification-target"];
         delete?: never;
@@ -2563,7 +2563,7 @@ export interface paths {
         head?: never;
         /**
          * Update a notification target
-         * @description Patches a target's label, URL, secret or enabled flag (an absent field is unchanged; an empty secret unbinds it). Audited, the URL masked and a change to it recorded as changed. Gated by notification_target:update with an all-scope grant.
+         * @description Patches a target's label, URL, secret or enabled flag (an absent field is unchanged; an empty secret unbinds it). Binding a secret takes the right to reveal it, as on create, and so does moving the URL of a target that keeps a bound secret (a 403 without it), since the next send would hand the secret to the new URL. Audited, the URL masked and a change to it recorded as changed. Gated by notification_target:update with an all-scope grant.
          */
         patch: operations["update-notification-target"];
         trace?: never;

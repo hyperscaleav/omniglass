@@ -192,11 +192,28 @@ func TestNotificationTargetAPI(t *testing.T) {
 	c.do(notifier, http.MethodPost, "/notification-targets", map[string]any{"name": "exfil", "kind": "webhook", "url": hook.URL + "/x", "secret": "ops-chat-signing"}, http.StatusNotFound)
 	c.do(notifier, http.MethodPatch, "/notification-targets/ops-chat", map[string]any{"secret": "ops-chat-signing"}, http.StatusNotFound)
 	c.do(notifier, http.MethodGet, "/notification-targets/exfil", nil, http.StatusNotFound)
+	// A target with no secret needs no secret right.
+	c.do(notifier, http.MethodPost, "/notification-targets", map[string]any{"name": "plain-hook", "kind": "webhook", "url": hook.URL + "/p"}, http.StatusCreated)
+	// Nor can it move a target that already binds a secret to a URL it
+	// controls: the next send would deliver the credential there. The same
+	// patch by an admin, who may reveal the secret, goes through.
+	c.do(notifier, http.MethodPatch, "/notification-targets/ops-chat", map[string]any{"url": hook.URL + "/attacker"}, http.StatusForbidden)
+	var still notificationTargetWire
+	if err := json.Unmarshal(c.do(admin, http.MethodPost, "/notification-targets/ops-chat:reveal", nil, http.StatusOK), &revealed); err != nil {
+		t.Fatal(err)
+	}
+	if revealed.URL != url {
+		t.Fatalf("after the refused patch the URL is %q, want it unchanged", revealed.URL)
+	}
+	if err := json.Unmarshal(c.do(admin, http.MethodPatch, "/notification-targets/ops-chat", map[string]any{"url": url + "?v=2"}, http.StatusOK), &still); err != nil {
+		t.Fatal(err)
+	}
+	c.do(admin, http.MethodPatch, "/notification-targets/ops-chat", map[string]any{"url": url}, http.StatusOK)
+	// A target with no secret moves freely: it carries nothing to deliver.
+	c.do(notifier, http.MethodPatch, "/notification-targets/plain-hook", map[string]any{"url": hook.URL + "/q"}, http.StatusOK)
 	// One that can read the secret but not reveal it is told so, and binds nothing.
 	reader := principalWithGrants(t, ctx, dsn, "nt-reader", []grant{{role: "notifier-reader", scopeKind: "all"}})
 	c.do(reader, http.MethodPatch, "/notification-targets/ops-chat", map[string]any{"secret": "ops-chat-signing"}, http.StatusForbidden)
-	// Unbinding needs no secret right; nor does a target with no secret.
-	c.do(notifier, http.MethodPost, "/notification-targets", map[string]any{"name": "plain-hook", "kind": "webhook", "url": hook.URL + "/p"}, http.StatusCreated)
 
 	// A secret a target signs with cannot be deleted from under it.
 	c.do(admin, http.MethodDelete, "/secrets/ops-chat-signing", nil, http.StatusConflict)

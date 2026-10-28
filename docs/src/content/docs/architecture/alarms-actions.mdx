@@ -484,7 +484,8 @@ changed), and `:reveal` returns it whole under an audit row of its own. The boun
 **platform secret** of the `hmac-key` type (the send signs each body) or the `bearer-token` type
 (the send presents it); a secret a target binds cannot be deleted from under it. Binding one
 takes exactly what revealing it takes (`secret:reveal`, and the admin tier for an admin-sensitive
-secret), since every send hands it to whatever the URL names: a target permission alone would make
+secret), and so does moving the URL of a target that keeps one, since every send hands it to
+whatever the URL names: a target permission alone would make
 the platform a confused deputy, delivering a credential its holder cannot read to a URL it chose.
 `POST /notification-targets/{name}:test` sends one synthetic message (transition `test`, about no
 alarm) exactly as a delivery would be sent, answers what the receiver said, and records only its

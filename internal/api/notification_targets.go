@@ -155,7 +155,7 @@ func registerNotificationTargetRoutes(api huma.API, a *authenticator, gw storage
 		Method:      http.MethodPatch,
 		Path:        "/notification-targets/{name}",
 		Summary:     "Update a notification target",
-		Description: "Patches a target's label, URL, secret or enabled flag (an absent field is unchanged; an empty secret unbinds it). Binding a secret takes the right to reveal it, as on create. Audited, the URL masked and a change to it recorded as changed. Gated by notification_target:update with an all-scope grant.",
+		Description: "Patches a target's label, URL, secret or enabled flag (an absent field is unchanged; an empty secret unbinds it). Binding a secret takes the right to reveal it, as on create, and so does moving the URL of a target that keeps a bound secret (a 403 without it), since the next send would hand the secret to the new URL. Audited, the URL masked and a change to it recorded as changed. Gated by notification_target:update with an all-scope grant.",
 	}, "notification_target", "update"), func(ctx context.Context, in *updateNotificationTargetInput) (*notificationTargetOutput, error) {
 		t, err := gw.UpdateNotificationTarget(ctx, actorID(ctx), in.Name, storage.NotificationTargetPatch{
 			Label: in.Body.Label, URL: in.Body.URL, Secret: in.Body.Secret, Enabled: in.Body.Enabled,
@@ -260,7 +260,7 @@ func mapNotificationTargetErr(err error) error {
 	case errors.Is(err, storage.ErrSecretNotFound):
 		return huma.Error404NotFound("secret not found")
 	case errors.Is(err, storage.ErrSecretForbidden):
-		return huma.Error403Forbidden("binding a secret to a target takes the right to reveal it (secret:reveal)")
+		return huma.Error403Forbidden("binding a secret to a target, or moving the URL of a target that binds one, takes the right to reveal that secret (secret:reveal)")
 	case errors.Is(err, storage.ErrNotificationTargetInvalid):
 		return huma.Error422UnprocessableEntity(strings.TrimPrefix(err.Error(), "storage: notification target is invalid: "))
 	}
