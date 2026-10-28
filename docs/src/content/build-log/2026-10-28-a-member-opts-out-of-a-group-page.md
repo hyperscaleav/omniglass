@@ -9,5 +9,5 @@ a group the rule targets opts out for themselves with `POST /action-rules/{name}
 with `:optIn` (`notification:subscribe`, audited); a rule that does not allow it answers 409. The
 opt-outs of the firing rules are read in one statement and skipped when their group targets expand,
 a pending email from that rule fails at send for a member who opted out after it was queued, and
-taking `opt_out_allowed` back off restores every member from the next transition. A target that names
+taking `opt_out_allowed` back off withdraws every opt-out (recorded on the rule's audit row). A target that names
 a person directly is not affected by their opt-out.

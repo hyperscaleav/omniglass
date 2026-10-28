@@ -115,6 +115,15 @@ func (p *PG) personalEmailSend(ctx context.Context, q querier, ruleID, recipient
 	if err != nil || refused != "" {
 		return nil, refused, err
 	}
+	// An owner who lost notification:subscribe is told nothing more, a queued
+	// email included.
+	subs, err := subscribersOf(ctx, q, componentID, []string{owner})
+	if err != nil {
+		return nil, "", err
+	}
+	if !subs[owner] {
+		return nil, "the recipient no longer holds notification:subscribe", nil
+	}
 	relay, refused, err := p.mailRelay(ctx, q)
 	if err != nil || refused != "" {
 		return nil, refused, err

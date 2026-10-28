@@ -49,7 +49,15 @@ func TestAMemberOptsOutOfARuleTheAdminAllows(t *testing.T) {
 		t.Fatalf("with opt-out withdrawn the raise queued %v, want both", got)
 	}
 	// Opting back in is always allowed.
+	// Allowed again, the withdrawn opt-out does not silently return.
 	if _, err := f.gw.UpdateActionRule(f.ctx, "", "page-on-call", storage.ActionRulePatch{OptOutAllowed: &yes}, f.all); err != nil {
+		t.Fatal(err)
+	}
+	if got := raise(); got != "[alice/inbox/sent bob/inbox/sent]" && got != "[bob/inbox/sent alice/inbox/sent]" {
+		t.Fatalf("an opt-out withdrawn came back when re-allowed: %v", got)
+	}
+	// Opting out and back in.
+	if _, err := f.gw.SetRuleOptOut(f.ctx, alice, alice, "page-on-call", true); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.gw.SetRuleOptOut(f.ctx, alice, alice, "page-on-call", false); err != nil {
@@ -57,5 +65,19 @@ func TestAMemberOptsOutOfARuleTheAdminAllows(t *testing.T) {
 	}
 	if got := raise(); got != "[alice/inbox/sent bob/inbox/sent]" && got != "[bob/inbox/sent alice/inbox/sent]" {
 		t.Fatalf("after opting back in the raise queued %v, want both", got)
+	}
+	// A target naming alice directly tells her whatever her group opt-out.
+	if _, err := f.gw.SetRuleOptOut(f.ctx, alice, alice, "page-on-call", true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.gw.CreateNotificationTarget(f.ctx, "", storage.NotificationTargetSpec{Name: "z-alice", Kind: storage.TargetPrincipal,
+		Principal: "alice", Channels: []string{storage.DeliveryInbox}}, f.all, storage.SecretUse{}, bindAll); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.gw.UpdateActionRule(f.ctx, "", "page-on-call", storage.ActionRulePatch{Targets: &[]string{"on-call-page", "z-alice"}}, f.all); err != nil {
+		t.Fatal(err)
+	}
+	if got := raise(); got != "[alice/inbox/sent bob/inbox/sent]" && got != "[bob/inbox/sent alice/inbox/sent]" {
+		t.Fatalf("a direct target with alice opted out of the group queued %v, want both", got)
 	}
 }

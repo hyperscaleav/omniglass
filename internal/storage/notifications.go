@@ -112,7 +112,7 @@ func (v RecipientView) withhold(n *Notification) {
 	n.Recipient, n.RecipientID = "", ""
 	// A relay's refusal can quote the person's address (550 <who@...>:
 	// rejected), so a withheld row's reason is withheld with the name.
-	if n.LastError != "" {
+	if n.Personal && n.LastError != "" {
 		n.LastError = "(withheld with the recipient)"
 	}
 	// A personal rule's row (a person's, through no target) is named by its
@@ -344,7 +344,22 @@ func rowsFor(r queuedRule, status string, people map[string][]recipient) []queue
 		}
 		return out
 	}
-	for i, id := range r.targetIDs {
+	// A person a target names directly is attributed to that target before
+	// any group reaches them, so their own opt-out of the group never stops
+	// what names them by name.
+	order := make([]int, 0, len(r.targetIDs))
+	for i, k := range r.targetKinds {
+		if k == TargetPrincipal {
+			order = append(order, i)
+		}
+	}
+	for i, k := range r.targetKinds {
+		if k != TargetPrincipal {
+			order = append(order, i)
+		}
+	}
+	for _, i := range order {
+		id := r.targetIDs[i]
 		if !isPersonKind(r.targetKinds[i]) {
 			out = append(out, queuedRow{targetID: id, targetName: r.targetNames[i], channel: deliveryFor(r.targetKinds[i]), status: status})
 			continue

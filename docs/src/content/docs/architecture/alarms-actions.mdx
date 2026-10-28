@@ -598,8 +598,9 @@ so an on-call page cannot be opted out of unless an admin says so); a member of 
 then opt out of it for themselves with `POST /action-rules/{name}:optOut`, and back in with `:optIn`
 (`notification:subscribe`, audited, #1354). An opt-out skips that person when the rule's group targets
 expand, and a pending email of theirs from that rule fails at send; a target that names them directly
-still tells them, and taking `opt_out_allowed` back off restores every opted-out member from the next
-transition. Snooze (#1318), not opt-out, is the answer for one noisy alarm.
+still tells them (a person a rule reaches both directly and through a group is attributed to the
+direct target), and taking `opt_out_allowed` back off withdraws every opt-out, recorded on the rule's
+audit row, so allowing it again starts from none. Snooze (#1318), not opt-out, is the answer for one noisy alarm.
 
 ### Personal action rules: subscribing yourself
 

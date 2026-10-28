@@ -460,3 +460,29 @@ func TestARecipientFilterThatFailsNeverFailsTheTransition(t *testing.T) {
 		t.Fatalf("the alarm did not commit: %v, %v", open, err)
 	}
 }
+
+// A webhook row has no recipient to withhold: its failure reason reads to
+// everyone who reads the alarm.
+func TestAWebhookRowsReasonIsNotWithheld(t *testing.T) {
+	f := newPeopleFixture(t)
+	if _, err := f.gw.CreateNotificationTarget(f.ctx, "", storage.NotificationTargetSpec{Name: "ops-chat", Kind: storage.ChannelWebhook,
+		URL: "https://hooks.example.com/x"}, f.all, storage.SecretUse{}, storage.PeopleUse{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.gw.CreateActionRule(f.ctx, "", storage.ActionRuleSpec{Name: "chat", On: []string{"raised"}, Targets: []string{"ops-chat"}}, f.all); err != nil {
+		t.Fatal(err)
+	}
+	a, err := f.gw.RaiseAlarm(f.ctx, "", "display-1", storage.AlarmSpec{Severity: "high", Message: "x"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.gw.DeliverNext(f.ctx, func(context.Context, storage.NotificationSend) storage.SendResult {
+		return storage.SendResult{Status: 503, Reason: "the receiver answered 503"}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	ns, err := f.gw.ListNotifications(f.ctx, storage.NotificationFilter{AlarmID: a.ID}, f.all, storage.RecipientView{Self: f.ids["bob"]})
+	if err != nil || len(ns) != 1 || ns[0].LastError != "the receiver answered 503" {
+		t.Fatalf("a webhook row's reason read by a non-admin = %+v, %v", ns, err)
+	}
+}

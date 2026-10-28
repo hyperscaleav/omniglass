@@ -337,6 +337,16 @@ func (p *PG) UpdateActionRule(ctx context.Context, actorID, ref string, patch Ac
 		where id = $1`, before.ID, setLabel, labelVal, patch.Description, on, patch.When, setType, typeID, patch.Enabled, patch.OptOutAllowed); err != nil {
 		return nil, fmt.Errorf("storage: update action rule %q: %w", ref, err)
 	}
+	// Taking opt-out back off withdraws every opt-out, rather than suspending
+	// them to return silently if it is allowed again (#1354).
+	withdrawn := int64(0)
+	if patch.OptOutAllowed != nil && !*patch.OptOutAllowed && before.OptOutAllowed {
+		tag, err := tx.Exec(ctx, `delete from action_rule_opt_out where rule_id = $1`, before.ID)
+		if err != nil {
+			return nil, fmt.Errorf("storage: withdraw opt-outs of %q: %w", ref, err)
+		}
+		withdrawn = tag.RowsAffected()
+	}
 	if patch.Targets != nil {
 		ids, err := resolveRuleTargets(ctx, tx, *patch.Targets)
 		if err != nil {
@@ -350,7 +360,11 @@ func (p *PG) UpdateActionRule(ctx context.Context, actorID, ref string, patch Ac
 	if err != nil {
 		return nil, err
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "action_rule", before.ID, before, after); err != nil {
+	img := any(after)
+	if withdrawn > 0 {
+		img = map[string]any{"rule": after, "opt_outs_withdrawn": withdrawn}
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "update", "action_rule", before.ID, before, img); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
