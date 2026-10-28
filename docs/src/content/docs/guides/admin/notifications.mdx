@@ -1,0 +1,101 @@
+---
+title: Notifications
+description: "Send an alarm to a chat channel: a webhook target, the action rule that sends to it, the message it carries, and how a delivery reads on the alarm's timeline."
+---
+
+import SeededSet from '../../../../components/SeededSet.astro';
+
+A **notification** is the message Omniglass sends somebody when an alarm opens or clears, to the
+chat or paging tool they already watch. This page walks the one task end to end: **send an alarm
+to a chat channel**. Three pieces take part, each answering one question
+([alarms and actions](/architecture/alarms-actions/#notifications)):
+
+- a **notification target** says *where* (a webhook URL, and the secret it signs with);
+- an **action rule** says *when* (on which transitions, under which predicate);
+- a **notification type** says *what* (the subject and text, rendered over the alarm's facts).
+
+Targets are admin-only (`notification_target:*`): a target is a destination the server sends to,
+holding a credential, and its URL is often itself a credential. Action rules ride `rule:*`, written
+with an all-scope grant. Notification types are a catalog an operator writes
+(`notification_type:create,update`).
+
+## 1. Open the destination
+
+A self-hosted chat server usually sits on a private address, which Omniglass refuses to send to
+until an admin names it. Name it in the `egress_allow` setting of the `notification` namespace, as
+a CIDR, an address or a host name (each is checked as it is written; a cloud metadata address is
+refused whatever it says):
+
+```bash
+# Settings > notification > egress_allow, or PATCH /api/v1/settings/notification:
+{"egress_allow": ["chat.corp.example", "10.20.0.0/16"]}
+```
+
+A public destination (a hosted chat or paging service) needs nothing here. Plain `http` is only
+for a destination the list names; anything else is `https`, its certificate verified.
+
+## 2. Make the target
+
+Store the signing key as a **platform** secret of the `hmac-key` type (or a `bearer-token`, for a
+receiver that expects `Authorization: Bearer`), then point a webhook target at the URL with it.
+Binding a secret takes the right to reveal it.
+
+```bash
+omniglass secret create --name ops-chat-signing --owner-kind platform --secret-type hmac-key \
+  --fields '{"key":"<the shared key>"}'
+omniglass notification-target create --name ops-chat --kind webhook \
+  --url 'https://chat.corp.example/hooks/ops' --secret ops-chat-signing
+omniglass notification-target test ops-chat
+```
+
+`test` sends one synthetic message (transition `test`) exactly as a delivery would, and answers
+what the receiver said: `{"ok": true, "status": 200}`, or a reason (`the receiver answered 401`,
+an address the allow list does not name, a certificate that does not verify). The target's URL
+reads masked from then on; `omniglass notification-target reveal ops-chat` returns it, under an
+audit row of its own.
+
+Each delivery is a JSON envelope (the rendered subject and text, the alarm's id, its facts, a
+version), signed over the exact bytes sent: an `X-Omniglass-Signature: sha256=<hex>` hmac over the
+`X-Omniglass-Timestamp`, a `.` and the body. The `Idempotency-Key` header is the notification's id,
+the same on every attempt, so a receiver can drop a redelivery.
+
+## 3. Say when
+
+An action rule sends on an alarm's `raised`, `cleared`, or both, when its predicate holds. The
+predicate reads the alarm's facts (`component`, `place`, `severity`, `severity_rank`, `message`,
+`rule`, ...); `severity_rank >= 40` is high and above.
+
+```bash
+omniglass action-rule create --name page-ops --on '["raised","cleared"]' \
+  --when 'severity_rank >= 40' --targets '["ops-chat"]'
+```
+
+Without a `--notification-type`, a raise sends the official `alarm-raised` message and a clear the
+official `alarm-cleared` one. Acknowledging an alarm never sends anything; clearing one does,
+whoever clears it.
+
+## 4. Say what (optional)
+
+The shipped types read well in most chat tools:
+
+<SeededSet kind="notification_types" />
+
+To say something else, write your own on **Catalog, under Actions: Notifications** and name it on
+the rule. The page previews a type, or the draft you are editing, against a real component's most
+recent alarm through the same engine a delivery uses, beside every fact the templates could have
+read; `omniglass notification-type preview <type> --component <component>` does the same.
+
+## Reading a delivery
+
+Every notification joins its alarm's timeline after the edge that queued it: **notifying**
+ops-chat while it is on its way, **notified** when the receiver answered 2xx, **failed to notify**
+with the reason when it gave up. A receiver that is down is retried: 10 seconds, then doubling,
+until the 8th failed attempt (about 21 minutes in all). A failed one carries **Retry** on the
+timeline for whoever holds `notification:retry` (operators do), or:
+
+```bash
+omniglass notification list --status failed
+omniglass notification retry <id>
+```
+
+A notification about a component outside your scope is not listed, exactly as its alarm is not.

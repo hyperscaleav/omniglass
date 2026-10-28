@@ -21,7 +21,7 @@ Each tool says what a client may assume of it, from one rule over the route's me
 
 A tool that is not read-only and not destructive adds something (a create).
 
-51 tools.
+52 tools.
 
 | Tool | What it does | Gate | Assume |
 |---|---|---|---|
@@ -62,6 +62,7 @@ A tool that is not read-only and not destructive adds something (a create).
 | [`get-node`](#get-node) | Get a node | `node:read` | read-only, idempotent |
 | [`list-node-logs`](#list-node-logs) | List a node's recent self-logs | `node:read` | read-only, idempotent |
 | [`preview-notification-type`](#preview-notification-type) | Preview a notification type against an alarm | `notification_type:read` | read-only, idempotent |
+| [`list-notification`](#list-notification) | List notifications | `notification:read` | read-only, idempotent |
 | [`list-products`](#list-products) | List products | `product:read` | read-only, idempotent |
 | [`get-product`](#get-product) | Get a product | `product:read` | read-only, idempotent |
 | [`list-secret-types`](#list-secret-types) | List secret types | `secret:read` | read-only, idempotent |
@@ -631,6 +632,23 @@ Renders the type's subject and text (or a draft of either, sent in the body) aga
 | `subject` | string | no | A draft subject template to render instead of the stored one, so an editor previews before it saves |
 | `text` | string | no | A draft text template to render instead of the stored one |
 | `transition` | string | no | The edge to render for; absent reads the alarm's own state (cleared when it is, raised otherwise) |
+
+## `list-notification`
+
+List notifications
+
+The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. Gated by notification:read.
+
+- Route: `GET /api/v1/notifications`
+- Gate: `notification:read`
+- Assume: read-only, idempotent
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `alarm` | string | no | Only the notifications about this alarm (its uuid) |
+| `limit` | integer | no | At most this many, newest first (default 100) |
+| `status` | string | no | Only those in this status |
+| `target` | string | no | Only those to this target, by name |
 
 ## `list-products`
 

@@ -16,6 +16,178 @@ func generatedCommands() []*cobra.Command {
 
 	roots = append(roots, func() *cobra.Command {
 		parent := &cobra.Command{
+			Use:   "action-rule",
+			Short: "Commands for the action-rule resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fDescription string
+				var fEnabled bool
+				var fLabel string
+				var fName string
+				var fNotificationType string
+				var fOn string
+				var fTargets string
+				var fWhen string
+				cmd := &cobra.Command{
+					Use:     "create",
+					Short:   "Create an action rule",
+					Long:    "Adds a rule that, on an alarm's raise or clear, when its predicate holds over the alarm facts, queues one notification per target in the transition's own transaction, which the server's tick then delivers. An unknown transition, type or target, or a predicate that does not compile, is a 422; a taken name a 409. Audited. Gated by rule:create, with an all-scope grant: a rule watches the whole fleet.",
+					Example: "  omniglass action-rule create --name name --on <json> --targets <json>",
+					Args:    pathArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/action-rules")
+						body := map[string]any{}
+						if cmd.Flags().Changed("description") {
+							body["description"] = fDescription
+						}
+						if cmd.Flags().Changed("enabled") {
+							body["enabled"] = fEnabled
+						}
+						if cmd.Flags().Changed("label") {
+							body["label"] = fLabel
+						}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						if cmd.Flags().Changed("notification-type") {
+							body["notification_type"] = fNotificationType
+						}
+						if cmd.Flags().Changed("on") {
+							body["on"] = jsonOrString(fOn)
+						}
+						if cmd.Flags().Changed("targets") {
+							body["targets"] = jsonOrString(fTargets)
+						}
+						if cmd.Flags().Changed("when") {
+							body["when"] = fWhen
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fDescription, "description", "", "What it is for")
+				cmd.Flags().BoolVar(&fEnabled, "enabled", false, "Whether it fires (default true)")
+				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
+				cmd.Flags().StringVar(&fName, "name", "", "The rule's name (lowercase kebab)")
+				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().StringVar(&fNotificationType, "notification-type", "", "The notification type to send, by name or uuid; absent sends the official one for the transition")
+				cmd.Flags().StringVar(&fOn, "on", "", "The alarm transitions it fires on: raised, cleared, or both. Acknowledging an alarm is never one")
+				_ = cmd.MarkFlagRequired("on")
+				cmd.Flags().StringVar(&fTargets, "targets", "", "The notification targets to send to, by name or uuid")
+				_ = cmd.MarkFlagRequired("targets")
+				cmd.Flags().StringVar(&fWhen, "when", "", "A predicate over the alarm facts at the action expression site (component, place, severity, severity_rank, message, transition, rule, ...; see /expressions:validate with site action); absent always holds. A refusal is a 422 with its line and column")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "delete <name>",
+					Short:   "Delete an action rule",
+					Long:    "Removes a rule; the notifications it queued keep its name. Audited. Gated by rule:delete, with an all-scope grant.",
+					Example: "  omniglass action-rule delete <name>",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/action-rules/%s", pathSegment(args[0]))
+						return runAPICommand(cmd, "DELETE", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "get <name>",
+					Short:   "Get an action rule",
+					Long:    "Returns one action rule by name or uuid. Gated by rule:read.",
+					Example: "  omniglass action-rule get <name>",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/action-rules/%s", pathSegment(args[0]))
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "list",
+					Short:   "List action rules",
+					Long:    "Lists every action rule, by name: on which alarm transitions, when, and what it sends to which targets. Gated by rule:read.",
+					Example: "  omniglass action-rule list",
+					Args:    pathArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/action-rules")
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fDescription string
+				var fEnabled bool
+				var fLabel string
+				var fNotificationType string
+				var fOn string
+				var fTargets string
+				var fWhen string
+				cmd := &cobra.Command{
+					Use:     "update <name>",
+					Short:   "Update an action rule",
+					Long:    "Patches a rule (an absent field is unchanged; on and targets replace their sets). It acts on transitions from the next one; a notification already queued is not re-rendered. Audited. Gated by rule:update, with an all-scope grant.",
+					Example: "  omniglass action-rule update <name>",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/action-rules/%s", pathSegment(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("description") {
+							body["description"] = fDescription
+						}
+						if cmd.Flags().Changed("enabled") {
+							body["enabled"] = fEnabled
+						}
+						if cmd.Flags().Changed("label") {
+							body["label"] = fLabel
+						}
+						if cmd.Flags().Changed("notification-type") {
+							body["notification_type"] = fNotificationType
+						}
+						if cmd.Flags().Changed("on") {
+							body["on"] = jsonOrString(fOn)
+						}
+						if cmd.Flags().Changed("targets") {
+							body["targets"] = jsonOrString(fTargets)
+						}
+						if cmd.Flags().Changed("when") {
+							body["when"] = fWhen
+						}
+						return runAPICommand(cmd, "PATCH", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fDescription, "description", "", "What it is for")
+				cmd.Flags().BoolVar(&fEnabled, "enabled", false, "Whether it fires")
+				cmd.Flags().StringVar(&fLabel, "label", "", "A human label (empty clears it)")
+				cmd.Flags().StringVar(&fNotificationType, "notification-type", "", "The type to send (empty returns to the official one per transition)")
+				cmd.Flags().StringVar(&fOn, "on", "", "The transitions it fires on (replaces the set)")
+				cmd.Flags().StringVar(&fTargets, "targets", "", "The targets (replaces the set)")
+				cmd.Flags().StringVar(&fWhen, "when", "", "The predicate (empty always holds)")
+				return cmd
+			}()
+			return cmd
+		}())
+		return parent
+	}())
+	roots = append(roots, func() *cobra.Command {
+		parent := &cobra.Command{
 			Use:   "audit-log",
 			Short: "Commands for the audit-log resource",
 		}
@@ -876,7 +1048,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "timeline <name> <id>",
 						Short:   "Read an alarm's timeline",
-						Long:    "The alarm's history in one list, oldest first: the events that carry it (an event rule's fire event, which opened it, and its clear event, which resolved it) merged by time with its audit rows (the raise, each acknowledgement, the clear, and a rule edit that opened or resolved it, naming the editor). At one instant an event comes before the audit row it caused. Gated by alarm:read; a component outside the caller's component read scope, and an alarm not on the component, are a non-disclosing 404.",
+						Long:    "The alarm's history in one list, oldest first: the events that carry it (an event rule's fire event, which opened it, and its clear event, which resolved it) merged by time with its audit rows (the raise, each acknowledgement, the clear, and a rule edit that opened or resolved it, naming the editor) and the notifications its transitions queued, each at the moment it was queued with its status as it stands (#618). At one instant an event comes before the audit row it caused, and that before a notification. Gated by alarm:read; a component outside the caller's component read scope, and an alarm not on the component, are a non-disclosing 404.",
 						Example: "  omniglass component alarm timeline <name> <id>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -3024,7 +3196,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fInputs, "inputs", "", "For calc (required there), the rule's inputs: each bound by its alias, typed by its key (by name or uuid)")
 				cmd.Flags().StringVar(&fKey, "key", "", "The sample key that types the expression (required at both sites). For criteria, the key the rule reads: its lane and data type type the value (a metric is a number; a property is text, or a bool for a bool property). For calc, the rule's output key: its type is the result the reduce must yield")
 				cmd.Flags().StringVar(&fOwnerKind, "owner-kind", "", "For calc, what the rule derives on: each input binds by its alias as the list of its current values (one per instance on a component, every member's on a system); a system also binds members, one record per role-bound member with value.<alias> and has.<alias> per input; defaults to component")
-				cmd.Flags().StringVar(&fSite, "site", "", "Where the expression is written: calc, a calc rule's reduce; criteria, an event rule's fire_criteria or clear_criteria")
+				cmd.Flags().StringVar(&fSite, "site", "", "Where the expression is written: action, an action rule's when; calc, a calc rule's reduce; criteria, an event rule's fire_criteria or clear_criteria")
 				_ = cmd.MarkFlagRequired("site")
 				cmd.Flags().StringVar(&fSource, "source", "", "The expression")
 				_ = cmd.MarkFlagRequired("source")
@@ -4394,6 +4566,88 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fDescription, "description", "", "New free-form operator notes")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A new operator-facing label")
 				cmd.Flags().StringVar(&fLocation, "location", "", "Set the node's location by name or id, or \"\" to clear it")
+				return cmd
+			}()
+			return cmd
+		}())
+		return parent
+	}())
+	roots = append(roots, func() *cobra.Command {
+		parent := &cobra.Command{
+			Use:   "notification",
+			Short: "Commands for the notification resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "get <id>",
+					Short:   "Get a notification",
+					Long:    "Returns one notification. One about a component outside the caller's component read scope is a non-disclosing 404. Gated by notification:read.",
+					Example: "  omniglass notification get <id>",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/notifications/%s", pathSegment(args[0]))
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var qAlarm string
+				var qTarget string
+				var qStatus string
+				var qLimit int
+				cmd := &cobra.Command{
+					Use:     "list",
+					Short:   "List notifications",
+					Long:    "The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. Gated by notification:read.",
+					Example: "  omniglass notification list",
+					Args:    pathArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/notifications")
+						q := url.Values{}
+						if cmd.Flags().Changed("alarm") {
+							q.Set("alarm", fmt.Sprintf("%v", qAlarm))
+						}
+						if cmd.Flags().Changed("target") {
+							q.Set("target", fmt.Sprintf("%v", qTarget))
+						}
+						if cmd.Flags().Changed("status") {
+							q.Set("status", fmt.Sprintf("%v", qStatus))
+						}
+						if cmd.Flags().Changed("limit") {
+							q.Set("limit", fmt.Sprintf("%v", qLimit))
+						}
+						if enc := q.Encode(); enc != "" {
+							path += "?" + enc
+						}
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				cmd.Flags().StringVar(&qAlarm, "alarm", "", "Only the notifications about this alarm (its uuid)")
+				cmd.Flags().StringVar(&qTarget, "target", "", "Only those to this target, by name")
+				cmd.Flags().StringVar(&qStatus, "status", "", "Only those in this status")
+				cmd.Flags().IntVar(&qLimit, "limit", 0, "At most this many, newest first (default 100)")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "retry <id>",
+					Short:   "Retry a failed notification",
+					Long:    "Re-queues a failed notification for a fresh run of attempts, sending the same rendered message with the same Idempotency-Key. One that is queued or sent is a 409. Audited as retry. Gated by notification:retry, whose scope resolves on the component tier; a component outside the caller's component read scope is a non-disclosing 404, one it reads but may not retry on a 403.",
+					Example: "  omniglass notification retry <id>",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/notifications/%s:retry", pathSegment(args[0]))
+						return runAPICommand(cmd, "POST", path, nil)
+					},
+				}
 				return cmd
 			}()
 			return cmd

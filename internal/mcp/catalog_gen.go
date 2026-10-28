@@ -420,6 +420,17 @@ var catalog = []tooldef.Def{
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"alarm\":{\"description\":\"The alarm's id; absent previews the component's most recently raised alarm\",\"type\":\"string\"},\"component\":{\"description\":\"The component the alarm is on, by name or dotted address\",\"minLength\":1,\"type\":\"string\"},\"name\":{\"description\":\"The notification type's name or uuid\",\"type\":\"string\"},\"subject\":{\"description\":\"A draft subject template to render instead of the stored one, so an editor previews before it saves\",\"type\":\"string\"},\"text\":{\"description\":\"A draft text template to render instead of the stored one\",\"type\":\"string\"},\"transition\":{\"description\":\"The edge to render for; absent reads the alarm's own state (cleared when it is, raised otherwise)\",\"enum\":[\"raised\",\"cleared\"],\"type\":\"string\"}},\"required\":[\"component\",\"name\"],\"type\":\"object\"}",
 	},
 	{
+		Name:        "list-notification",
+		Title:       "List notifications",
+		Description: "The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. Gated by notification:read.",
+		Method:      "GET",
+		Path:        "/notifications",
+		Permission:  "notification:read",
+		QueryParams: []string{"alarm", "target", "status", "limit"},
+		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"alarm\":{\"description\":\"Only the notifications about this alarm (its uuid)\",\"type\":\"string\"},\"limit\":{\"description\":\"At most this many, newest first (default 100)\",\"format\":\"int64\",\"maximum\":500,\"minimum\":0,\"type\":\"integer\"},\"status\":{\"description\":\"Only those in this status\",\"enum\":[\"queued\",\"sent\",\"failed\",\"\"],\"type\":\"string\"},\"target\":{\"description\":\"Only those to this target, by name\",\"type\":\"string\"}},\"type\":\"object\"}",
+	},
+	{
 		Name:        "list-products",
 		Title:       "List products",
 		Description: "Lists the product registry, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.",

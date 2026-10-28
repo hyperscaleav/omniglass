@@ -253,13 +253,20 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 }
 
 type alarmTimelineEntryBody struct {
-	At       time.Time `json:"at" doc:"When it happened"`
-	Kind     string    `json:"kind" enum:"event,audit" doc:"An event carrying the alarm (a rule's fire or clear event), or an audit row about it"`
-	What     string    `json:"what" doc:"The event's type (e.g. condition-started), or the audit action: raise, acknowledge or clear"`
+	At       time.Time `json:"at" doc:"When it happened (a notification: when it was queued, the transition's own moment)"`
+	Kind     string    `json:"kind" enum:"event,audit,notification" doc:"An event carrying the alarm (a rule's fire or clear event), an audit row about it, or a notification about it (#618)"`
+	What     string    `json:"what" doc:"The event's type (e.g. condition-started), the audit action (raise, acknowledge or clear), or a notification's status as it stands (queued, sent or failed)"`
 	Actor    string    `json:"actor,omitempty" doc:"Who acted, by name; absent when the platform acted for a rule"`
 	Rule     string    `json:"rule,omitempty" doc:"The event rule the entry belongs to, by name: the rule that wrote the event, or the rule the platform acted for"`
 	Instance string    `json:"instance,omitempty" doc:"The series instance (an endpoint) an event is about"`
-	Message  string    `json:"message,omitempty" doc:"The event's message, or the message the alarm was raised with"`
+	Message  string    `json:"message,omitempty" doc:"The event's message, the message the alarm was raised with, or a notification's rendered subject"`
+	// A notification's own fields.
+	Notification string `json:"notification,omitempty" doc:"A notification's uuid, what :retry names"`
+	ActionRule   string `json:"action_rule,omitempty" doc:"The action rule that queued a notification, by name"`
+	Transition   string `json:"transition,omitempty" doc:"The alarm edge a notification is about: raised or cleared"`
+	Target       string `json:"target,omitempty" doc:"The target a notification goes to, by name"`
+	Attempts     int    `json:"attempts,omitempty" doc:"A notification's attempts so far"`
+	Error        string `json:"error,omitempty" doc:"Why a notification's last attempt failed"`
 }
 
 type alarmTimelineOutput struct {
@@ -280,7 +287,7 @@ func registerAlarmTimelineRoute(api huma.API, a *authenticator, gw storage.Gatew
 		Method:      http.MethodGet,
 		Path:        "/components/{name}/alarms/{id}:timeline",
 		Summary:     "Read an alarm's timeline",
-		Description: "The alarm's history in one list, oldest first: the events that carry it (an event rule's fire event, which opened it, and its clear event, which resolved it) merged by time with its audit rows (the raise, each acknowledgement, the clear, and a rule edit that opened or resolved it, naming the editor). At one instant an event comes before the audit row it caused. Gated by alarm:read; a component outside the caller's component read scope, and an alarm not on the component, are a non-disclosing 404.",
+		Description: "The alarm's history in one list, oldest first: the events that carry it (an event rule's fire event, which opened it, and its clear event, which resolved it) merged by time with its audit rows (the raise, each acknowledgement, the clear, and a rule edit that opened or resolved it, naming the editor) and the notifications its transitions queued, each at the moment it was queued with its status as it stands (#618). At one instant an event comes before the audit row it caused, and that before a notification. Gated by alarm:read; a component outside the caller's component read scope, and an alarm not on the component, are a non-disclosing 404.",
 	}, "alarm", "read"), func(ctx context.Context, in *clearAlarmInput) (*alarmTimelineOutput, error) {
 		compID, err := requireComponentInScope(ctx, a, gw, in.Name, "read")
 		if err != nil {
@@ -295,8 +302,13 @@ func registerAlarmTimelineRoute(api huma.API, a *authenticator, gw storage.Gatew
 		out.Body.AlarmID = in.ID
 		out.Body.Entries = make([]alarmTimelineEntryBody, 0, len(entries))
 		for _, e := range entries {
-			out.Body.Entries = append(out.Body.Entries, alarmTimelineEntryBody{At: e.At, Kind: e.Kind, What: e.What,
-				Actor: e.Actor, Rule: e.Rule, Instance: e.Instance, Message: e.Message})
+			b := alarmTimelineEntryBody{At: e.At, Kind: e.Kind, What: e.What,
+				Actor: e.Actor, Rule: e.Rule, Instance: e.Instance, Message: e.Message}
+			if e.Kind == "notification" {
+				b.Rule = ""
+				b.Notification, b.ActionRule, b.Transition, b.Target, b.Attempts, b.Error = e.NotificationID, e.Rule, e.Transition, e.Target, e.Attempts, e.Error
+			}
+			out.Body.Entries = append(out.Body.Entries, b)
 		}
 		return out, nil
 	})

@@ -997,6 +997,19 @@ type Gateway interface {
 	AuditTargetTest(ctx context.Context, actorID, targetID string, status int, ok bool, reason string) error
 	// EgressPolicy reads the install's egress allow list.
 	EgressPolicy(ctx context.Context) (egress.Policy, error)
+	// The action rule (#618): reads registry-shaped, writes all-scope.
+	ListActionRules(ctx context.Context) ([]ActionRule, error)
+	GetActionRule(ctx context.Context, ref string) (*ActionRule, error)
+	CreateActionRule(ctx context.Context, actorID string, spec ActionRuleSpec, create scope.Set) (*ActionRule, error)
+	UpdateActionRule(ctx context.Context, actorID, ref string, patch ActionRulePatch, action scope.Set) (*ActionRule, error)
+	DeleteActionRule(ctx context.Context, actorID, ref string, action scope.Set) error
+	// The notification delivery rows (#618): every read scoped by the
+	// alarm's component; the drain takes one due row per call.
+	ListNotifications(ctx context.Context, f NotificationFilter, read scope.Set) ([]Notification, error)
+	GetNotification(ctx context.Context, id string, read scope.Set) (*Notification, error)
+	RetryNotification(ctx context.Context, actorID, id string, read, action scope.Set) (*Notification, error)
+	DeliverNext(ctx context.Context, send SendFunc) (bool, error)
+	NotificationBacklog(ctx context.Context) (int, error)
 
 	// Close releases the underlying connection pool. Idempotent at the pool
 	// level; call once on shutdown.

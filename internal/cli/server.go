@@ -17,7 +17,9 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/bus"
 	"github.com/hyperscaleav/omniglass/internal/clientaddr"
 	"github.com/hyperscaleav/omniglass/internal/config"
+	"github.com/hyperscaleav/omniglass/internal/egress"
 	"github.com/hyperscaleav/omniglass/internal/migrate"
+	"github.com/hyperscaleav/omniglass/internal/notifier"
 	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/settings"
@@ -164,6 +166,13 @@ func runServer(ctx context.Context, version string, lab bool) error {
 		return err
 	}
 	defer removeReady()
+
+	// The notification tick (#618, ADR-0618): delivers what the alarm
+	// transitions queued, until shutdown cancels it (a send in flight rolls
+	// back and stays queued for the next boot or replica).
+	notifyCtx, stopNotify := context.WithCancel(ctx)
+	defer stopNotify()
+	go notifier.New(gw, egress.Options{}).Run(notifyCtx)
 
 	errc := make(chan error, 1)
 	go func() {

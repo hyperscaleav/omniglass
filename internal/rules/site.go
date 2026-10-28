@@ -88,6 +88,14 @@ var sites = []Site{{
 		"(avg, max, min, sum, majority, any, all) folds a list into one value.",
 	ReservedNames: CalcReservedNames(),
 }, {
+	Name: "action",
+	Summary: "An action rule's when: true or false for one alarm transition, over the alarm facts a " +
+		"notification template reads (in snake_case) and the severity's rank. Empty always holds. " +
+		"No key types it, so none is needed.",
+	Variants: []SiteVariant{
+		{ValueType: ValueBool, When: "every action rule", Env: actionEnv},
+	},
+}, {
 	Name: "criteria",
 	Summary: "An event rule's fire_criteria and clear_criteria: true or false for one arriving sample. " +
 		"The sample key's lane and data type type the value, so a key is required.",

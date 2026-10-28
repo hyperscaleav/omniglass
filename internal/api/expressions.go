@@ -14,7 +14,7 @@ import (
 
 type validateExpressionInput struct {
 	Body struct {
-		Site      string          `json:"site" enum:"calc,criteria" doc:"Where the expression is written: calc, a calc rule's reduce; criteria, an event rule's fire_criteria or clear_criteria"`
+		Site      string          `json:"site" enum:"action,calc,criteria" doc:"Where the expression is written: action, an action rule's when; calc, a calc rule's reduce; criteria, an event rule's fire_criteria or clear_criteria"`
 		Source    string          `json:"source" doc:"The expression"`
 		Key       string          `json:"key,omitempty" required:"false" doc:"The sample key that types the expression (required at both sites). For criteria, the key the rule reads: its lane and data type type the value (a metric is a number; a property is text, or a bool for a bool property). For calc, the rule's output key: its type is the result the reduce must yield"`
 		OwnerKind string          `json:"owner_kind,omitempty" required:"false" enum:"component,system" doc:"For calc, what the rule derives on: each input binds by its alias as the list of its current values (one per instance on a component, every member's on a system); a system also binds members, one record per role-bound member with value.<alias> and has.<alias> per input; defaults to component"`

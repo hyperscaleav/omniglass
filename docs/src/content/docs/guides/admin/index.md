@@ -64,6 +64,9 @@ Every task on these pages has two front doors, and they call the same API with t
   [component type](/architecture/core-entities/#catalog-reference-data-component_type) tree above
   products, and the [system type](/architecture/core-entities/#catalog-reference-data-system_type)
   tree that says what kind of space a system is.
+- **[Notifications](/guides/admin/notifications/)** is sending an alarm to a chat channel: a
+  webhook target, the action rule that sends to it, the message it carries, and how a delivery
+  reads on the alarm's timeline.
 
 The model behind all of this is [identity and access](/architecture/identity-access/) and
 [config and credentials](/architecture/variables/); those pages say how it is built, these say

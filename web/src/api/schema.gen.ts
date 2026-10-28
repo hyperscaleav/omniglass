@@ -4,6 +4,58 @@
  */
 
 export interface paths {
+    "/action-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List action rules
+         * @description Lists every action rule, by name: on which alarm transitions, when, and what it sends to which targets. Gated by rule:read.
+         */
+        get: operations["list-action-rule"];
+        put?: never;
+        /**
+         * Create an action rule
+         * @description Adds a rule that, on an alarm's raise or clear, when its predicate holds over the alarm facts, queues one notification per target in the transition's own transaction, which the server's tick then delivers. An unknown transition, type or target, or a predicate that does not compile, is a 422; a taken name a 409. Audited. Gated by rule:create, with an all-scope grant: a rule watches the whole fleet.
+         */
+        post: operations["create-action-rule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/action-rules/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get an action rule
+         * @description Returns one action rule by name or uuid. Gated by rule:read.
+         */
+        get: operations["get-action-rule"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete an action rule
+         * @description Removes a rule; the notifications it queued keep its name. Audited. Gated by rule:delete, with an all-scope grant.
+         */
+        delete: operations["delete-action-rule"];
+        options?: never;
+        head?: never;
+        /**
+         * Update an action rule
+         * @description Patches a rule (an absent field is unchanged; on and targets replace their sets). It acts on transitions from the next one; a notification already queued is not re-rendered. Audited. Gated by rule:update, with an all-scope grant.
+         */
+        patch: operations["update-action-rule"];
+        trace?: never;
+    };
     "/audit-log": {
         parameters: {
             query?: never;
@@ -645,7 +697,7 @@ export interface paths {
         };
         /**
          * Read an alarm's timeline
-         * @description The alarm's history in one list, oldest first: the events that carry it (an event rule's fire event, which opened it, and its clear event, which resolved it) merged by time with its audit rows (the raise, each acknowledgement, the clear, and a rule edit that opened or resolved it, naming the editor). At one instant an event comes before the audit row it caused. Gated by alarm:read; a component outside the caller's component read scope, and an alarm not on the component, are a non-disclosing 404.
+         * @description The alarm's history in one list, oldest first: the events that carry it (an event rule's fire event, which opened it, and its clear event, which resolved it) merged by time with its audit rows (the raise, each acknowledgement, the clear, and a rule edit that opened or resolved it, naming the editor) and the notifications its transitions queued, each at the moment it was queued with its status as it stands (#618). At one instant an event comes before the audit row it caused, and that before a notification. Gated by alarm:read; a component outside the caller's component read scope, and an alarm not on the component, are a non-disclosing 404.
          */
         get: operations["get-component-alarm-timeline"];
         put?: never;
@@ -2694,6 +2746,66 @@ export interface paths {
          * @description Renders the type's subject and text (or a draft of either, sent in the body) against one real alarm, exactly as a delivery of that alarm's transition would carry them, with the facts they read. Writes nothing. The alarm is named by its component and id; without an id, the component's most recently raised alarm. A draft template the sandbox refuses is a 422, one that fails to render (its output past the cap) a 422 naming it. Gated by notification_type:read; the component is resolved in the caller's component read scope, so a component outside it is a non-disclosing 404.
          */
         post: operations["preview-notification-type"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List notifications
+         * @description The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. Gated by notification:read.
+         */
+        get: operations["list-notification"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notifications/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a notification
+         * @description Returns one notification. One about a component outside the caller's component read scope is a non-disclosing 404. Gated by notification:read.
+         */
+        get: operations["get-notification"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notifications/{id}:retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry a failed notification
+         * @description Re-queues a failed notification for a fresh run of attempts, sending the same rendered message with the same Idempotency-Key. One that is queued or sent is a 409. Audited as retry. Gated by notification:retry, whose scope resolves on the component tier; a component outside the caller's component read scope is a non-disclosing 404, one it reads but may not retry on a 403.
+         */
+        post: operations["retry-notification"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4994,6 +5106,35 @@ export interface components {
             /** Format: int64 */
             properties: number;
         };
+        ActionRuleBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ActionRuleBody.json
+             */
+            readonly $schema?: string;
+            /** Format: date-time */
+            created_at: string;
+            description?: string;
+            enabled: boolean;
+            /** @description The rule's uuid, the stable form of name */
+            id: string;
+            label?: string;
+            name: string;
+            /** @description The notification type it sends, by name; absent sends the official one for the transition (alarm-raised, alarm-cleared) */
+            notification_type?: string;
+            /** @description That type's uuid */
+            notification_type_id?: string;
+            official: boolean;
+            /** @description The alarm transitions it fires on: raised, cleared, or both */
+            on: string[] | null;
+            /** @description The notification targets it sends to, by name */
+            targets: string[] | null;
+            /** Format: date-time */
+            updated_at: string;
+            /** @description The predicate over the alarm facts (the action expression site); absent always holds */
+            when?: string;
+        };
         AddMemberInputBody: {
             /**
              * Format: uri
@@ -5118,25 +5259,40 @@ export interface components {
             value: string;
         };
         AlarmTimelineEntryBody: {
+            /** @description The action rule that queued a notification, by name */
+            action_rule?: string;
             /** @description Who acted, by name; absent when the platform acted for a rule */
             actor?: string;
             /**
              * Format: date-time
-             * @description When it happened
+             * @description When it happened (a notification: when it was queued, the transition's own moment)
              */
             at: string;
+            /**
+             * Format: int64
+             * @description A notification's attempts so far
+             */
+            attempts?: number;
+            /** @description Why a notification's last attempt failed */
+            error?: string;
             /** @description The series instance (an endpoint) an event is about */
             instance?: string;
             /**
-             * @description An event carrying the alarm (a rule's fire or clear event), or an audit row about it
+             * @description An event carrying the alarm (a rule's fire or clear event), an audit row about it, or a notification about it (#618)
              * @enum {string}
              */
-            kind: "event" | "audit";
-            /** @description The event's message, or the message the alarm was raised with */
+            kind: "event" | "audit" | "notification";
+            /** @description The event's message, the message the alarm was raised with, or a notification's rendered subject */
             message?: string;
+            /** @description A notification's uuid, what :retry names */
+            notification?: string;
             /** @description The event rule the entry belongs to, by name: the rule that wrote the event, or the rule the platform acted for */
             rule?: string;
-            /** @description The event's type (e.g. condition-started), or the audit action: raise, acknowledge or clear */
+            /** @description The target a notification goes to, by name */
+            target?: string;
+            /** @description The alarm edge a notification is about: raised or cleared */
+            transition?: string;
+            /** @description The event's type (e.g. condition-started), the audit action (raise, acknowledge or clear), or a notification's status as it stands (queued, sent or failed) */
             what: string;
         };
         AlarmTimelineOutputBody: {
@@ -5891,6 +6047,30 @@ export interface components {
             resolved_icon?: string;
             /** @description The auto-generated component name's prefix; empty inherits the nearest ancestor's */
             stem?: string;
+        };
+        CreateActionRuleInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateActionRuleInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description What it is for */
+            description?: string;
+            /** @description Whether it fires (default true) */
+            enabled?: boolean;
+            /** @description A human label */
+            label?: string;
+            /** @description The rule's name (lowercase kebab) */
+            name: string;
+            /** @description The notification type to send, by name or uuid; absent sends the official one for the transition */
+            notification_type?: string;
+            /** @description The alarm transitions it fires on: raised, cleared, or both. Acknowledging an alarm is never one */
+            on: string[] | null;
+            /** @description The notification targets to send to, by name or uuid */
+            targets: string[] | null;
+            /** @description A predicate over the alarm facts at the action expression site (component, place, severity, severity_rank, message, transition, rule, ...; see /expressions:validate with site action); absent always holds. A refusal is a 422 with its line and column */
+            when?: string;
         };
         CreateCalcRuleInputBody: {
             /**
@@ -7538,6 +7718,15 @@ export interface components {
              */
             acronyms: string[];
         };
+        ListActionRulesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListActionRulesOutputBody.json
+             */
+            readonly $schema?: string;
+            action_rules: components["schemas"]["ActionRuleBody"][] | null;
+        };
         ListAlarmsOutputBody: {
             /**
              * Format: uri
@@ -7761,6 +7950,15 @@ export interface components {
              */
             readonly $schema?: string;
             notification_types: components["schemas"]["NotificationTypeBody"][] | null;
+        };
+        ListNotificationsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListNotificationsOutputBody.json
+             */
+            readonly $schema?: string;
+            notifications: components["schemas"]["NotificationBody"][] | null;
         };
         ListPrincipalSessionsOutputBody: {
             /**
@@ -8333,6 +8531,66 @@ export interface components {
             readonly $schema?: string;
             logs: components["schemas"]["LogBody"][] | null;
             node: string;
+        };
+        NotificationBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/NotificationBody.json
+             */
+            readonly $schema?: string;
+            /** @description The action rule that queued it, by name (kept after the rule is deleted) */
+            action_rule: string;
+            /** @description The alarm it is about, by uuid */
+            alarm: string;
+            /**
+             * Format: int64
+             * @description Attempts made; the 8th failure is final
+             */
+            attempts: number;
+            /** @description The alarm's component, by name */
+            component: string;
+            /** @description The component's uuid */
+            component_id: string;
+            /**
+             * Format: date-time
+             * @description When it was queued: the transition's own moment
+             */
+            created_at: string;
+            /** @description The notification's uuid, the Idempotency-Key its receiver sees */
+            id: string;
+            /** @description Why the last attempt failed, never the URL or a credential */
+            last_error?: string;
+            /**
+             * Format: int64
+             * @description The receiver's HTTP status on the last attempt
+             */
+            last_status?: number;
+            /**
+             * Format: date-time
+             * @description When the tick next tries it, while queued
+             */
+            next_attempt_at?: string;
+            /** @description The notification type that rendered it, by name */
+            notification_type: string;
+            /** Format: date-time */
+            sent_at?: string;
+            /**
+             * @description queued: on its way (its next attempt at next_attempt_at); sent: the receiver answered 2xx; failed: its last attempt failed, or it was refused before one
+             * @enum {string}
+             */
+            status: "queued" | "sent" | "failed";
+            /** @description The rendered subject */
+            subject: string;
+            /** @description The target it goes to, by name */
+            target: string;
+            /** @description The rendered text */
+            text: string;
+            /**
+             * @description The alarm edge it is about
+             * @enum {string}
+             */
+            transition: "raised" | "cleared";
         };
         NotificationSettings: {
             /** @description The console's base URL as a receiver of a notification reaches it (https://omniglass.example.com); the prefix of the Link a template reads. Empty leaves Link empty */
@@ -10399,6 +10657,28 @@ export interface components {
             /** @description The push transport the source sent over */
             transport: string;
         };
+        UpdateActionRuleInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateActionRuleInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description What it is for */
+            description?: string;
+            /** @description Whether it fires */
+            enabled?: boolean;
+            /** @description A human label (empty clears it) */
+            label?: string;
+            /** @description The type to send (empty returns to the official one per transition) */
+            notification_type?: string;
+            /** @description The transitions it fires on (replaces the set) */
+            on?: string[];
+            /** @description The targets (replaces the set) */
+            targets?: string[];
+            /** @description The predicate (empty always holds) */
+            when?: string;
+        };
         UpdateCalcRuleInputBody: {
             /**
              * Format: uri
@@ -10901,10 +11181,10 @@ export interface components {
              */
             owner_kind?: "component" | "system";
             /**
-             * @description Where the expression is written: calc, a calc rule's reduce; criteria, an event rule's fire_criteria or clear_criteria
+             * @description Where the expression is written: action, an action rule's when; calc, a calc rule's reduce; criteria, an event rule's fire_criteria or clear_criteria
              * @enum {string}
              */
-            site: "calc" | "criteria";
+            site: "action" | "calc" | "criteria";
             /** @description The expression */
             source: string;
         };
@@ -10997,6 +11277,166 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    "list-action-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListActionRulesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-action-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateActionRuleInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionRuleBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-action-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The rule's name or uuid */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionRuleBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-action-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The rule's name or uuid */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-action-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The rule's name or uuid */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateActionRuleInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionRuleBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "list-audit-log": {
         parameters: {
             query?: {
@@ -16760,6 +17200,108 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PreviewNotificationTypeOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-notification": {
+        parameters: {
+            query?: {
+                /** @description Only the notifications about this alarm (its uuid) */
+                alarm?: string;
+                /** @description Only those to this target, by name */
+                target?: string;
+                /** @description Only those in this status */
+                status?: "queued" | "sent" | "failed" | "";
+                /** @description At most this many, newest first (default 100) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListNotificationsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-notification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The notification's uuid */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "retry-notification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The notification's uuid */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationBody"];
                 };
             };
             /** @description Error */

@@ -53,6 +53,10 @@ roles:
       # grant reaches no component at all (#714), so granting it there would ship
       # a capability that acknowledges nothing in the shape the role is granted in.
       - "alarm:acknowledge"
+      # notification:retry re-queues a notification that failed (#618): the
+      # role that acknowledges an alarm is the role that re-sends its page. It
+      # resolves on the component tier, beside alarm:acknowledge.
+      - "notification:retry"
       # telemetry:push is a WRITE of observations, so it sits with the other
       # operator writes and deliberately outside the viewer read floor. An
       # integration that only reports data needs nothing else: the push scope

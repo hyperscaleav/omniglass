@@ -29,6 +29,90 @@
         ],
         "type": "object"
       },
+      "ActionRuleBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/ActionRuleBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "id": {
+            "description": "The rule's uuid, the stable form of name",
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "notification_type": {
+            "description": "The notification type it sends, by name; absent sends the official one for the transition (alarm-raised, alarm-cleared)",
+            "type": "string"
+          },
+          "notification_type_id": {
+            "description": "That type's uuid",
+            "type": "string"
+          },
+          "official": {
+            "type": "boolean"
+          },
+          "on": {
+            "description": "The alarm transitions it fires on: raised, cleared, or both",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "targets": {
+            "description": "The notification targets it sends to, by name",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "when": {
+            "description": "The predicate over the alarm facts (the action expression site); absent always holds",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "on",
+          "targets",
+          "enabled",
+          "official",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
       "AddMemberInputBody": {
         "additionalProperties": false,
         "properties": {
@@ -335,13 +419,26 @@
       "AlarmTimelineEntryBody": {
         "additionalProperties": false,
         "properties": {
+          "action_rule": {
+            "description": "The action rule that queued a notification, by name",
+            "type": "string"
+          },
           "actor": {
             "description": "Who acted, by name; absent when the platform acted for a rule",
             "type": "string"
           },
           "at": {
-            "description": "When it happened",
+            "description": "When it happened (a notification: when it was queued, the transition's own moment)",
             "format": "date-time",
+            "type": "string"
+          },
+          "attempts": {
+            "description": "A notification's attempts so far",
+            "format": "int64",
+            "type": "integer"
+          },
+          "error": {
+            "description": "Why a notification's last attempt failed",
             "type": "string"
           },
           "instance": {
@@ -349,23 +446,36 @@
             "type": "string"
           },
           "kind": {
-            "description": "An event carrying the alarm (a rule's fire or clear event), or an audit row about it",
+            "description": "An event carrying the alarm (a rule's fire or clear event), an audit row about it, or a notification about it (#618)",
             "enum": [
               "event",
-              "audit"
+              "audit",
+              "notification"
             ],
             "type": "string"
           },
           "message": {
-            "description": "The event's message, or the message the alarm was raised with",
+            "description": "The event's message, the message the alarm was raised with, or a notification's rendered subject",
+            "type": "string"
+          },
+          "notification": {
+            "description": "A notification's uuid, what :retry names",
             "type": "string"
           },
           "rule": {
             "description": "The event rule the entry belongs to, by name: the rule that wrote the event, or the rule the platform acted for",
             "type": "string"
           },
+          "target": {
+            "description": "The target a notification goes to, by name",
+            "type": "string"
+          },
+          "transition": {
+            "description": "The alarm edge a notification is about: raised or cleared",
+            "type": "string"
+          },
           "what": {
-            "description": "The event's type (e.g. condition-started), or the audit action: raise, acknowledge or clear",
+            "description": "The event's type (e.g. condition-started), the audit action (raise, acknowledge or clear), or a notification's status as it stands (queued, sent or failed)",
             "type": "string"
           }
         },
@@ -2059,6 +2169,73 @@
           "default_tags",
           "official",
           "forked"
+        ],
+        "type": "object"
+      },
+      "CreateActionRuleInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/CreateActionRuleInputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "description": {
+            "description": "What it is for",
+            "type": "string"
+          },
+          "enabled": {
+            "description": "Whether it fires (default true)",
+            "type": "boolean"
+          },
+          "label": {
+            "description": "A human label",
+            "type": "string"
+          },
+          "name": {
+            "description": "The rule's name (lowercase kebab)",
+            "minLength": 1,
+            "type": "string"
+          },
+          "notification_type": {
+            "description": "The notification type to send, by name or uuid; absent sends the official one for the transition",
+            "type": "string"
+          },
+          "on": {
+            "description": "The alarm transitions it fires on: raised, cleared, or both. Acknowledging an alarm is never one",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "targets": {
+            "description": "The notification targets to send to, by name or uuid",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "when": {
+            "description": "A predicate over the alarm facts at the action expression site (component, place, severity, severity_rank, message, transition, rule, ...; see /expressions:validate with site action); absent always holds. A refusal is a 422 with its line and column",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "on",
+          "targets"
         ],
         "type": "object"
       },
@@ -5805,6 +5982,33 @@
         ],
         "type": "object"
       },
+      "ListActionRulesOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/ListActionRulesOutputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "action_rules": {
+            "items": {
+              "$ref": "#/components/schemas/ActionRuleBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "action_rules"
+        ],
+        "type": "object"
+      },
       "ListAlarmsOutputBody": {
         "additionalProperties": false,
         "properties": {
@@ -6470,6 +6674,33 @@
         },
         "required": [
           "notification_types"
+        ],
+        "type": "object"
+      },
+      "ListNotificationsOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/ListNotificationsOutputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "notifications": {
+            "items": {
+              "$ref": "#/components/schemas/NotificationBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "notifications"
         ],
         "type": "object"
       },
@@ -7994,6 +8225,117 @@
         "required": [
           "node",
           "logs"
+        ],
+        "type": "object"
+      },
+      "NotificationBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/NotificationBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "action_rule": {
+            "description": "The action rule that queued it, by name (kept after the rule is deleted)",
+            "type": "string"
+          },
+          "alarm": {
+            "description": "The alarm it is about, by uuid",
+            "type": "string"
+          },
+          "attempts": {
+            "description": "Attempts made; the 8th failure is final",
+            "format": "int64",
+            "type": "integer"
+          },
+          "component": {
+            "description": "The alarm's component, by name",
+            "type": "string"
+          },
+          "component_id": {
+            "description": "The component's uuid",
+            "type": "string"
+          },
+          "created_at": {
+            "description": "When it was queued: the transition's own moment",
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "description": "The notification's uuid, the Idempotency-Key its receiver sees",
+            "type": "string"
+          },
+          "last_error": {
+            "description": "Why the last attempt failed, never the URL or a credential",
+            "type": "string"
+          },
+          "last_status": {
+            "description": "The receiver's HTTP status on the last attempt",
+            "format": "int64",
+            "type": "integer"
+          },
+          "next_attempt_at": {
+            "description": "When the tick next tries it, while queued",
+            "format": "date-time",
+            "type": "string"
+          },
+          "notification_type": {
+            "description": "The notification type that rendered it, by name",
+            "type": "string"
+          },
+          "sent_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "description": "queued: on its way (its next attempt at next_attempt_at); sent: the receiver answered 2xx; failed: its last attempt failed, or it was refused before one",
+            "enum": [
+              "queued",
+              "sent",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "subject": {
+            "description": "The rendered subject",
+            "type": "string"
+          },
+          "target": {
+            "description": "The target it goes to, by name",
+            "type": "string"
+          },
+          "text": {
+            "description": "The rendered text",
+            "type": "string"
+          },
+          "transition": {
+            "description": "The alarm edge it is about",
+            "enum": [
+              "raised",
+              "cleared"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "alarm",
+          "component",
+          "component_id",
+          "transition",
+          "action_rule",
+          "notification_type",
+          "target",
+          "subject",
+          "text",
+          "status",
+          "attempts",
+          "created_at"
         ],
         "type": "object"
       },
@@ -13014,6 +13356,55 @@
         ],
         "type": "object"
       },
+      "UpdateActionRuleInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/UpdateActionRuleInputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "description": {
+            "description": "What it is for",
+            "type": "string"
+          },
+          "enabled": {
+            "description": "Whether it fires",
+            "type": "boolean"
+          },
+          "label": {
+            "description": "A human label (empty clears it)",
+            "type": "string"
+          },
+          "notification_type": {
+            "description": "The type to send (empty returns to the official one per transition)",
+            "type": "string"
+          },
+          "on": {
+            "description": "The transitions it fires on (replaces the set)",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "targets": {
+            "description": "The targets (replaces the set)",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "when": {
+            "description": "The predicate (empty always holds)",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "UpdateCalcRuleInputBody": {
         "additionalProperties": false,
         "properties": {
@@ -14022,8 +14413,9 @@
             "type": "string"
           },
           "site": {
-            "description": "Where the expression is written: calc, a calc rule's reduce; criteria, an event rule's fire_criteria or clear_criteria",
+            "description": "Where the expression is written: action, an action rule's when; calc, a calc rule's reduce; criteria, an event rule's fire_criteria or clear_criteria",
             "enum": [
+              "action",
               "calc",
               "criteria"
             ],
@@ -14258,6 +14650,199 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/action-rules": {
+      "get": {
+        "description": "Lists every action rule, by name: on which alarm transitions, when, and what it sends to which targets. Gated by rule:read.",
+        "operationId": "list-action-rule",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListActionRulesOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List action rules",
+        "x-omniglass-permission": "rule:read"
+      },
+      "post": {
+        "description": "Adds a rule that, on an alarm's raise or clear, when its predicate holds over the alarm facts, queues one notification per target in the transition's own transaction, which the server's tick then delivers. An unknown transition, type or target, or a predicate that does not compile, is a 422; a taken name a 409. Audited. Gated by rule:create, with an all-scope grant: a rule watches the whole fleet.",
+        "operationId": "create-action-rule",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateActionRuleInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionRuleBody"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Create an action rule",
+        "x-omniglass-permission": "rule:create"
+      }
+    },
+    "/action-rules/{name}": {
+      "delete": {
+        "description": "Removes a rule; the notifications it queued keep its name. Audited. Gated by rule:delete, with an all-scope grant.",
+        "operationId": "delete-action-rule",
+        "parameters": [
+          {
+            "description": "The rule's name or uuid",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "description": "The rule's name or uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Delete an action rule",
+        "x-omniglass-permission": "rule:delete"
+      },
+      "get": {
+        "description": "Returns one action rule by name or uuid. Gated by rule:read.",
+        "operationId": "get-action-rule",
+        "parameters": [
+          {
+            "description": "The rule's name or uuid",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "description": "The rule's name or uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionRuleBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Get an action rule",
+        "x-omniglass-permission": "rule:read"
+      },
+      "patch": {
+        "description": "Patches a rule (an absent field is unchanged; on and targets replace their sets). It acts on transitions from the next one; a notification already queued is not re-rendered. Audited. Gated by rule:update, with an all-scope grant.",
+        "operationId": "update-action-rule",
+        "parameters": [
+          {
+            "description": "The rule's name or uuid",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "description": "The rule's name or uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateActionRuleInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionRuleBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Update an action rule",
+        "x-omniglass-permission": "rule:update"
+      }
+    },
     "/audit-log": {
       "get": {
         "description": "Recent audit-trail events, newest first, each with the actor and, for an impersonated action, the real actor behind it. Read-only; gated by audit:read:admin (admin/owner only, since the audit trail is admin-sensitive).",
@@ -15990,7 +16575,7 @@
     },
     "/components/{name}/alarms/{id}:timeline": {
       "get": {
-        "description": "The alarm's history in one list, oldest first: the events that carry it (an event rule's fire event, which opened it, and its clear event, which resolved it) merged by time with its audit rows (the raise, each acknowledgement, the clear, and a rule edit that opened or resolved it, naming the editor). At one instant an event comes before the audit row it caused. Gated by alarm:read; a component outside the caller's component read scope, and an alarm not on the component, are a non-disclosing 404.",
+        "description": "The alarm's history in one list, oldest first: the events that carry it (an event rule's fire event, which opened it, and its clear event, which resolved it) merged by time with its audit rows (the raise, each acknowledgement, the clear, and a rule edit that opened or resolved it, naming the editor) and the notifications its transitions queued, each at the moment it was queued with its status as it stands (#618). At one instant an event comes before the audit row it caused, and that before a notification. Gated by alarm:read; a component outside the caller's component read scope, and an alarm not on the component, are a non-disclosing 404.",
         "operationId": "get-component-alarm-timeline",
         "parameters": [
           {
@@ -21900,6 +22485,172 @@
         "summary": "Preview a notification type against an alarm",
         "x-omniglass-mcp": {},
         "x-omniglass-permission": "notification_type:read"
+      }
+    },
+    "/notifications": {
+      "get": {
+        "description": "The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. Gated by notification:read.",
+        "operationId": "list-notification",
+        "parameters": [
+          {
+            "description": "Only the notifications about this alarm (its uuid)",
+            "explode": false,
+            "in": "query",
+            "name": "alarm",
+            "schema": {
+              "description": "Only the notifications about this alarm (its uuid)",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only those to this target, by name",
+            "explode": false,
+            "in": "query",
+            "name": "target",
+            "schema": {
+              "description": "Only those to this target, by name",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only those in this status",
+            "explode": false,
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "description": "Only those in this status",
+              "enum": [
+                "queued",
+                "sent",
+                "failed",
+                ""
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "At most this many, newest first (default 100)",
+            "explode": false,
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "description": "At most this many, newest first (default 100)",
+              "format": "int64",
+              "maximum": 500,
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListNotificationsOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List notifications",
+        "x-omniglass-mcp": {},
+        "x-omniglass-permission": "notification:read"
+      }
+    },
+    "/notifications/{id}": {
+      "get": {
+        "description": "Returns one notification. One about a component outside the caller's component read scope is a non-disclosing 404. Gated by notification:read.",
+        "operationId": "get-notification",
+        "parameters": [
+          {
+            "description": "The notification's uuid",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "The notification's uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Get a notification",
+        "x-omniglass-permission": "notification:read"
+      }
+    },
+    "/notifications/{id}:retry": {
+      "post": {
+        "description": "Re-queues a failed notification for a fresh run of attempts, sending the same rendered message with the same Idempotency-Key. One that is queued or sent is a 409. Audited as retry. Gated by notification:retry, whose scope resolves on the component tier; a component outside the caller's component read scope is a non-disclosing 404, one it reads but may not retry on a 403.",
+        "operationId": "retry-notification",
+        "parameters": [
+          {
+            "description": "The notification's uuid",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "The notification's uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Retry a failed notification",
+        "x-omniglass-permission": "notification:retry"
       }
     },
     "/principal-groups": {

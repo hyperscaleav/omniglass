@@ -1067,3 +1067,28 @@ func (UnimplementedGateway) AuditTargetTest(context.Context, string, string, int
 func (UnimplementedGateway) EgressPolicy(context.Context) (egress.Policy, error) {
 	return egress.Policy{}, nil
 }
+
+func (UnimplementedGateway) ListActionRules(context.Context) ([]ActionRule, error) { return nil, nil }
+func (UnimplementedGateway) GetActionRule(context.Context, string) (*ActionRule, error) {
+	return nil, ErrActionRuleNotFound
+}
+func (UnimplementedGateway) CreateActionRule(context.Context, string, ActionRuleSpec, scope.Set) (*ActionRule, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UpdateActionRule(context.Context, string, string, ActionRulePatch, scope.Set) (*ActionRule, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteActionRule(context.Context, string, string, scope.Set) error {
+	return nil
+}
+func (UnimplementedGateway) ListNotifications(context.Context, NotificationFilter, scope.Set) ([]Notification, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) GetNotification(context.Context, string, scope.Set) (*Notification, error) {
+	return nil, ErrNotificationNotFound
+}
+func (UnimplementedGateway) RetryNotification(context.Context, string, string, scope.Set, scope.Set) (*Notification, error) {
+	return nil, ErrNotificationNotFound
+}
+func (UnimplementedGateway) DeliverNext(context.Context, SendFunc) (bool, error) { return false, nil }
+func (UnimplementedGateway) NotificationBacklog(context.Context) (int, error)    { return 0, nil }

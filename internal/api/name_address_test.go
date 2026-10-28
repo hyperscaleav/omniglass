@@ -52,6 +52,8 @@ var referenceFields = map[string]string{
 	"secret_type_id":     "secret_type",
 	// A notification target's bound credential (#618), by name beside its uuid.
 	"secret_id": "secret",
+	// An action rule's notification type (#618), by name beside its uuid.
+	"notification_type_id": "notification_type",
 	// A calc rule's input names the property or metric it reads as `key`, the
 	// sample-key vocabulary, beside the uuid the rule holds it by (#1018).
 	"key_id": "key",

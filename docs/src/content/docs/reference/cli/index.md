@@ -19,6 +19,111 @@ Every command accepts these. An omitted flag falls back to its environment varia
 | `--server` | string | `http://localhost:8080` | Omniglass server base URL; when omitted, $OMNIGLASS_SERVER, else the default |
 | `--token` | string | (none) | bearer token; when omitted, $OMNIGLASS_TOKEN (read at run time, never printed) |
 
+## `omniglass action-rule`
+
+Commands for the action-rule resource
+
+### `omniglass action-rule create`
+
+Create an action rule
+
+```
+omniglass action-rule create [flags]
+```
+
+Adds a rule that, on an alarm's raise or clear, when its predicate holds over the alarm facts, queues one notification per target in the transition's own transaction, which the server's tick then delivers. An unknown transition, type or target, or a predicate that does not compile, is a 422; a taken name a 409. Audited. Gated by rule:create, with an all-scope grant: a rule watches the whole fleet.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--description` | string | (none) | What it is for |
+| `--enabled` | bool | `false` | Whether it fires (default true) |
+| `--label` | string | (none) | A human label |
+| `--name` | string | (none) | The rule's name (lowercase kebab) |
+| `--notification-type` | string | (none) | The notification type to send, by name or uuid; absent sends the official one for the transition |
+| `--on` | string | (none) | The alarm transitions it fires on: raised, cleared, or both. Acknowledging an alarm is never one |
+| `--targets` | string | (none) | The notification targets to send to, by name or uuid |
+| `--when` | string | (none) | A predicate over the alarm facts at the action expression site (component, place, severity, severity_rank, message, transition, rule, ...; see /expressions:validate with site action); absent always holds. A refusal is a 422 with its line and column |
+
+Example:
+
+```sh
+omniglass action-rule create --name name --on <json> --targets <json>
+```
+
+### `omniglass action-rule delete`
+
+Delete an action rule
+
+```
+omniglass action-rule delete <name>
+```
+
+Removes a rule; the notifications it queued keep its name. Audited. Gated by rule:delete, with an all-scope grant.
+
+Example:
+
+```sh
+omniglass action-rule delete <name>
+```
+
+### `omniglass action-rule get`
+
+Get an action rule
+
+```
+omniglass action-rule get <name>
+```
+
+Returns one action rule by name or uuid. Gated by rule:read.
+
+Example:
+
+```sh
+omniglass action-rule get <name>
+```
+
+### `omniglass action-rule list`
+
+List action rules
+
+```
+omniglass action-rule list
+```
+
+Lists every action rule, by name: on which alarm transitions, when, and what it sends to which targets. Gated by rule:read.
+
+Example:
+
+```sh
+omniglass action-rule list
+```
+
+### `omniglass action-rule update`
+
+Update an action rule
+
+```
+omniglass action-rule update <name> [flags]
+```
+
+Patches a rule (an absent field is unchanged; on and targets replace their sets). It acts on transitions from the next one; a notification already queued is not re-rendered. Audited. Gated by rule:update, with an all-scope grant.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--description` | string | (none) | What it is for |
+| `--enabled` | bool | `false` | Whether it fires |
+| `--label` | string | (none) | A human label (empty clears it) |
+| `--notification-type` | string | (none) | The type to send (empty returns to the official one per transition) |
+| `--on` | string | (none) | The transitions it fires on (replaces the set) |
+| `--targets` | string | (none) | The targets (replaces the set) |
+| `--when` | string | (none) | The predicate (empty always holds) |
+
+Example:
+
+```sh
+omniglass action-rule update <name>
+```
+
 ## `omniglass audit-log`
 
 Commands for the audit-log resource
@@ -637,7 +742,7 @@ Read an alarm's timeline
 omniglass component alarm timeline <name> <id>
 ```
 
-The alarm's history in one list, oldest first: the events that carry it (an event rule's fire event, which opened it, and its clear event, which resolved it) merged by time with its audit rows (the raise, each acknowledgement, the clear, and a rule edit that opened or resolved it, naming the editor). At one instant an event comes before the audit row it caused. Gated by alarm:read; a component outside the caller's component read scope, and an alarm not on the component, are a non-disclosing 404.
+The alarm's history in one list, oldest first: the events that carry it (an event rule's fire event, which opened it, and its clear event, which resolved it) merged by time with its audit rows (the raise, each acknowledgement, the clear, and a rule edit that opened or resolved it, naming the editor) and the notifications its transitions queued, each at the moment it was queued with its status as it stands (#618). At one instant an event comes before the audit row it caused, and that before a notification. Gated by alarm:read; a component outside the caller's component read scope, and an alarm not on the component, are a non-disclosing 404.
 
 Example:
 
@@ -2092,7 +2197,7 @@ Compiles an expression against a registered site's environment and answers wheth
 | `--inputs` | string | (none) | For calc (required there), the rule's inputs: each bound by its alias, typed by its key (by name or uuid) |
 | `--key` | string | (none) | The sample key that types the expression (required at both sites). For criteria, the key the rule reads: its lane and data type type the value (a metric is a number; a property is text, or a bool for a bool property). For calc, the rule's output key: its type is the result the reduce must yield |
 | `--owner-kind` | string | (none) | For calc, what the rule derives on: each input binds by its alias as the list of its current values (one per instance on a component, every member's on a system); a system also binds members, one record per role-bound member with value.<alias> and has.<alias> per input; defaults to component |
-| `--site` | string | (none) | Where the expression is written: calc, a calc rule's reduce; criteria, an event rule's fire_criteria or clear_criteria |
+| `--site` | string | (none) | Where the expression is written: action, an action rule's when; calc, a calc rule's reduce; criteria, an event rule's fire_criteria or clear_criteria |
 | `--source` | string | (none) | The expression |
 
 Example:
@@ -3250,6 +3355,65 @@ Example:
 
 ```sh
 omniglass node update <name>
+```
+
+## `omniglass notification`
+
+Commands for the notification resource
+
+### `omniglass notification get`
+
+Get a notification
+
+```
+omniglass notification get <id>
+```
+
+Returns one notification. One about a component outside the caller's component read scope is a non-disclosing 404. Gated by notification:read.
+
+Example:
+
+```sh
+omniglass notification get <id>
+```
+
+### `omniglass notification list`
+
+List notifications
+
+```
+omniglass notification list [flags]
+```
+
+The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. Gated by notification:read.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--alarm` | string | (none) | Only the notifications about this alarm (its uuid) |
+| `--limit` | int | `0` | At most this many, newest first (default 100) |
+| `--status` | string | (none) | Only those in this status |
+| `--target` | string | (none) | Only those to this target, by name |
+
+Example:
+
+```sh
+omniglass notification list
+```
+
+### `omniglass notification retry`
+
+Retry a failed notification
+
+```
+omniglass notification retry <id>
+```
+
+Re-queues a failed notification for a fresh run of attempts, sending the same rendered message with the same Idempotency-Key. One that is queued or sent is a 409. Audited as retry. Gated by notification:retry, whose scope resolves on the component tier; a component outside the caller's component read scope is a non-disclosing 404, one it reads but may not retry on a 403.
+
+Example:
+
+```sh
+omniglass notification retry <id>
 ```
 
 ## `omniglass notification-target`

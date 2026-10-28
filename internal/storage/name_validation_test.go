@@ -54,6 +54,16 @@ func provedByCreate(ctx context.Context, gw *storage.PG) map[string]func(key str
 			_, err := gw.CreateNotificationTarget(ctx, "", storage.NotificationTargetSpec{Name: s, Kind: storage.ChannelWebhook, URL: "https://hooks.example.com/x"}, all, storage.SecretUse{})
 			return err
 		},
+		"action_rule": func(s string) error {
+			// A rule names a target, so the first call plants one.
+			if _, err := gw.GetNotificationTarget(ctx, "name-proof-hook", all); err != nil {
+				if _, err := gw.CreateNotificationTarget(ctx, "", storage.NotificationTargetSpec{Name: "name-proof-hook", Kind: storage.ChannelWebhook, URL: "https://hooks.example.com/x"}, all, storage.SecretUse{}); err != nil {
+					return err
+				}
+			}
+			_, err := gw.CreateActionRule(ctx, "", storage.ActionRuleSpec{Name: s, On: []string{"raised"}, Targets: []string{"name-proof-hook"}}, all)
+			return err
+		},
 		"notification_type": func(s string) error {
 			_, err := gw.CreateNotificationType(ctx, "", storage.NotificationTypeSpec{Name: s, Subject: "x", Text: "y"})
 			return err

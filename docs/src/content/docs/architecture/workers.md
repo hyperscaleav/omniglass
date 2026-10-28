@@ -15,7 +15,7 @@ its receipt
 ([ADR-0311](/architecture/decisions/#adr-0311-a-telemetry-batch-lands-once-in-one-transaction-under-its-receipt)).
 :::
 
-Workers are how Omniglass means to do the steady background work (deriving samples, sending actions, firing timers, reconciling drift) on one machinery, with crash recovery and exactly-once outcomes for free everywhere. Not all of it rides a consumer today: the event rule sweep closes sustains and reconciles streaks on a server tick ([ADR-0144](/architecture/decisions/#adr-0144-alarms-are-raised-by-event-rules-at-a-severity-level-from-a-ranked-registry) point 6), and calc rules drain a durable pending set on a tick of their own ([ADR-0148](/architecture/decisions/#adr-0148-calc-rules-run-on-a-durable-pending-set-and-a-server-tick-not-a-jetstream-consumer)). Both are replica-safe and lose nothing on restart; [time](/architecture/time/) as a primitive (#419) is where those loops converge.
+Workers are how Omniglass means to do the steady background work (deriving samples, sending actions, firing timers, reconciling drift) on one machinery, with crash recovery and exactly-once outcomes for free everywhere. Not all of it rides a consumer today: the event rule sweep closes sustains and reconciles streaks on a server tick ([ADR-0144](/architecture/decisions/#adr-0144-alarms-are-raised-by-event-rules-at-a-severity-level-from-a-ranked-registry) point 6), calc rules drain a durable pending set on a tick of their own ([ADR-0148](/architecture/decisions/#adr-0148-calc-rules-run-on-a-durable-pending-set-and-a-server-tick-not-a-jetstream-consumer)), and notifications are sent by a tick that drains the `notification` rows an alarm transition writes in its own transaction ([ADR-0618](/architecture/decisions/#adr-0618-notifications-are-postgres-rows-drained-by-a-server-tick-not-cdc-to-a-jetstream-sender)), which stands in for the action sender below until the CDC publisher (#430) lands. All three are replica-safe and lose nothing on restart; [time](/architecture/time/) as a primitive (#419) is where those loops converge.
 
 ## One machinery, several consumers
 
@@ -29,7 +29,10 @@ The one machinery is a **JetStream work-queue consumer** over a configurable con
   producer, no admission pass), and writes events and alarm transitions to Postgres in one
   transaction;
 - **the action sender** ([alarms and actions](/architecture/alarms-actions/)): consumes action work
-  fanned out by CDC, sends at-least-once, advances action step state (PG-first, CDC-out);
+  fanned out by CDC, sends at-least-once, advances action step state (PG-first, CDC-out). A
+  notification's single `notify` step is sent today by a server tick over its Postgres row instead
+  ([ADR-0618](/architecture/decisions/#adr-0618-notifications-are-postgres-rows-drained-by-a-server-tick-not-cdc-to-a-jetstream-sender));
+  the row stays, and the drain moves behind this consumer once CDC lands;
 - **the persistence consumer**: the data lane's batch sink into the Postgres sample tables, async so
   rules never wait on PG ([messaging](/architecture/messaging/#two-lanes-one-bus));
 - **the clock** ([time](/architecture/time/)): fires schedules and armed timers (a leader-elected
