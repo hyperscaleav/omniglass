@@ -869,7 +869,7 @@ export interface paths {
         };
         /**
          * List a component's effective metrics
-         * @description Every metric the component's product declares, resolved to the series' latest observed or calculated sample or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the component (from_contract false). Gated by component:read; an out-of-scope component is a non-disclosing 404.
+         * @description Every metric the component's product declares, resolved to the newest observed or calculated sample across its live instances (instance names the one shown, instance_count counts them) or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the component (from_contract false). Gated by component:read; an out-of-scope component is a non-disclosing 404.
          */
         get: operations["list-component-metrics"];
         put?: never;
@@ -1977,7 +1977,7 @@ export interface paths {
         };
         /**
          * List a location's effective metrics
-         * @description Every metric the location's type declares, resolved to the series' latest observed or calculated sample or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the location (from_contract false). Gated by location:read; an out-of-scope location is a non-disclosing 404.
+         * @description Every metric the location's type declares, resolved to the newest observed or calculated sample across its live instances (instance names the one shown, instance_count counts them) or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the location (from_contract false). Gated by location:read; an out-of-scope location is a non-disclosing 404.
          */
         get: operations["list-location-metrics"];
         put?: never;
@@ -4017,7 +4017,7 @@ export interface paths {
         };
         /**
          * List a system's effective metrics
-         * @description Every metric the system's standard declares, resolved to the series' latest observed or calculated sample or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the system (from_contract false). Gated by system:read; an out-of-scope system is a non-disclosing 404.
+         * @description Every metric the system's standard declares, resolved to the newest observed or calculated sample across its live instances (instance names the one shown, instance_count counts them) or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the system (from_contract false). Gated by system:read; an out-of-scope system is a non-disclosing 404.
          */
         get: operations["list-system-metrics"];
         put?: never;
@@ -6411,6 +6411,15 @@ export interface components {
             default_value?: unknown;
             /** @description True when the owner's classifier declares the metric; false for a series landing directly on the owner */
             from_contract: boolean;
+            /** @description The instance the shown sample came from (ADR-0456): for an observed sample the endpoint that collected it, empty for the owner-level series (a calculated sample, or a push naming no endpoint) and when nothing is sampled */
+            instance: string;
+            /**
+             * Format: int64
+             * @description How many live instances of the metric hold a sample on this owner (a deleted endpoint's frozen reading is not counted); the shown sample is the newest of them. 0 when nothing is sampled
+             */
+            instance_count: number;
+            /** @description Each live instance's latest sample, newest first; present only when instance_count is above 1, so a single-instance metric carries none */
+            instances?: components["schemas"]["MetricInstanceBody"][] | null;
             /** @description True when the series holds an observed or calculated sample */
             is_sampled: boolean;
             /** @description The metric's human label; omitted when unset */
@@ -7914,6 +7923,17 @@ export interface components {
             /** @description The member's identifier: a human's username, or a service account's name */
             name?: string;
             principal_id: string;
+        };
+        MetricInstanceBody: {
+            /** @description The instance: the endpoint that collected the sample, or empty for the owner-level series */
+            instance: string;
+            /**
+             * Format: date-time
+             * @description When that sample was taken
+             */
+            ts: string;
+            /** @description That instance's latest sample */
+            value: unknown;
         };
         MetricSampleBody: {
             /** @description The series discriminator, when set */

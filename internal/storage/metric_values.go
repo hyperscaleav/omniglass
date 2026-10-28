@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/writerclass"
@@ -32,6 +33,24 @@ type EffectiveMetric struct {
 	// derived by (its name when written, and its id), "" for any other.
 	SourceRule   string
 	SourceRuleID string
+	// Instance names the instance the shown sample came from (ADR-0456 rule
+	// 6, #1020): for an observed sample the endpoint that collected it, ""
+	// for the owner-level series (a calculated sample, or a push naming no
+	// endpoint) and when nothing is sampled. InstanceCount is how many live
+	// instances of the key hold a sample (0 unsampled), and Instances lists
+	// each one's latest, newest first, only when there is more than one: a
+	// single-instance key reads as it always did.
+	Instance      string
+	InstanceCount int
+	Instances     []MetricInstanceSample
+}
+
+// MetricInstanceSample is one live instance's latest sample of a metric on an
+// owner, a line of EffectiveMetric.Instances.
+type MetricInstanceSample struct {
+	Instance string          `json:"instance"`
+	Value    json.RawMessage `json:"value"`
+	TS       time.Time       `json:"ts"`
 }
 
 // EffectiveMetrics resolves an instance's declared metrics: every metric its
@@ -42,11 +61,13 @@ type EffectiveMetric struct {
 // through one code path and cannot drift apart. The instance must be within the
 // read scope; an out-of-scope instance is its non-disclosing not-found.
 //
-// The sample side is the LatestMetric rule: the newest row per metric across
-// every instance dimension (ts desc, id desc breaking same-instant ties),
-// confined to the provenances that report reality (observed, calculated). An
-// intended row is what a command told the device, not what the metric is, so it
-// never satisfies the resolution.
+// The sample side is an owner-level read over an instanced key (ADR-0456): the
+// newest row per metric across every live instance (ts desc, id desc breaking
+// same-instant ties; liveInstanceSQL, so a retired observer's frozen reading
+// is left out), confined to the provenances that report reality (observed,
+// calculated). An intended row is what a command told the device, not what
+// the metric is, so it never satisfies the resolution. The row names the
+// instance it shows and counts the live instances (#1020).
 func (p *PG) EffectiveMetrics(ctx context.Context, ownerKind, ownerID string, read scope.Set) ([]EffectiveMetric, error) {
 	oc, ok := ownerContracts[ownerKind]
 	if !ok {
@@ -71,21 +92,42 @@ func (p *PG) EffectiveMetrics(ctx context.Context, ownerKind, ownerID string, re
 		return nil, err
 	}
 
-	// The current sample per metric: the latest series row on this owner's arc,
-	// rendered to jsonb so the coalesce against the contract default stays in
-	// SQL. Shared by both arms.
+	// The current sample per metric: the latest series row of each live
+	// instance on this owner's arc (latest), then the newest of those per
+	// metric (sampled) beside the count and the per-instance list (spread),
+	// values rendered to jsonb so the coalesce against the contract default
+	// stays in SQL. Shared by both arms; kindParam and transportsParam are
+	// the placeholders each arm binds the owner kind and transport names to.
+	kindParam, transportsParam := "$2", "$3"
+	if oc.metricContractTable != "" {
+		kindParam, transportsParam = "$3", "$4"
+	}
 	sampled := fmt.Sprintf(`
-		sampled as (
-			select distinct on (m.metric_type_id)
-			       m.metric_type_id,
+		latest as (
+			select distinct on (m.metric_type_id, m.instance)
+			       m.metric_type_id, m.instance, m.ts, m.id,
 			       to_jsonb(m.value) as value,
 			       case when m.provenance = 'calculated' and m.source_rule_id is not null then m.source_rule end as source_rule,
 			       m.source_rule_id::text as source_rule_id
 			from metric m
 			join inst on m.%[1]s = inst.arc
 			where m.provenance in ('observed', 'calculated')
-			order by m.metric_type_id, m.ts desc, m.id desc
-		)`, oc.arcCol)
+			  and %[2]s
+			order by m.metric_type_id, m.instance, m.ts desc, m.id desc
+		),
+		spread as (
+			select metric_type_id, count(*)::int as instance_count,
+			       case when count(*) > 1 then jsonb_agg(jsonb_build_object('instance', instance, 'value', value, 'ts', ts) order by ts desc, id desc) end as instances
+			from latest group by metric_type_id
+		),
+		sampled as (
+			select distinct on (l.metric_type_id)
+			       l.metric_type_id, l.value, l.source_rule, l.source_rule_id, l.instance,
+			       sp.instance_count, sp.instances
+			from latest l
+			join spread sp on sp.metric_type_id = l.metric_type_id
+			order by l.metric_type_id, l.ts desc, l.id desc
+		)`, oc.arcCol, liveInstanceSQL("m.instance", kindParam, "inst.arc", transportsParam))
 
 	var q string
 	if oc.metricContractTable == "" {
@@ -99,7 +141,8 @@ func (p *PG) EffectiveMetrics(ctx context.Context, ownerKind, ownerID string, re
 		       s.value as effective_value,
 		       true as is_sampled,
 		       false as from_contract,
-		       coalesce(s.source_rule, ''), coalesce(s.source_rule_id, '')
+		       coalesce(s.source_rule, ''), coalesce(s.source_rule_id, ''),
+		       coalesce(s.instance, ''), coalesce(s.instance_count, 0), s.instances
 		from sampled s
 		join metric_type mt on mt.id = s.metric_type_id
 		order by 1`,
@@ -117,7 +160,8 @@ func (p *PG) EffectiveMetrics(ctx context.Context, ownerKind, ownerID string, re
 		       coalesce(s.value, `+contractDefaultSQL("mt")+`) as effective_value,
 		       (s.value is not null) as is_sampled,
 		       true as from_contract,
-		       coalesce(s.source_rule, ''), coalesce(s.source_rule_id, '')
+		       coalesce(s.source_rule, ''), coalesce(s.source_rule_id, ''),
+		       coalesce(s.instance, ''), coalesce(s.instance_count, 0), s.instances
 		from inst
 		join %[3]s c on c.%[4]s = inst.classifier
 		join metric_type mt on mt.id = c.metric_type_id
@@ -127,7 +171,8 @@ func (p *PG) EffectiveMetrics(ctx context.Context, ownerKind, ownerID string, re
 		-- contract does not declare.
 		select mt.name, mt.id, mt.label, mt.data_type, false,
 		       null::jsonb,
-		       s.value, s.value, true, false, coalesce(s.source_rule, ''), coalesce(s.source_rule_id, '')
+		       s.value, s.value, true, false, coalesce(s.source_rule, ''), coalesce(s.source_rule_id, ''),
+		       coalesce(s.instance, ''), coalesce(s.instance_count, 0), s.instances
 		from inst
 		cross join sampled s
 		join metric_type mt on mt.id = s.metric_type_id
@@ -143,6 +188,7 @@ func (p *PG) EffectiveMetrics(ctx context.Context, ownerKind, ownerID string, re
 	if oc.metricContractTable != "" {
 		args = append(args, writerclass.ReservedNames())
 	}
+	args = append(args, ownerKind, transportNames())
 	rows, err := p.pool.Query(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("storage: effective metrics %s/%s: %w", ownerKind, ownerID, err)
@@ -154,11 +200,18 @@ func (p *PG) EffectiveMetrics(ctx context.Context, ownerKind, ownerID string, re
 		var (
 			e                EffectiveMetric
 			def, sample, val []byte
+			instances        []byte
 			label            *string // NULL when unset
 		)
 		if err := rows.Scan(&e.MetricTypeName, &e.MetricTypeID, &label, &e.DataType, &e.Required,
-			&def, &sample, &val, &e.IsSampled, &e.FromContract, &e.SourceRule, &e.SourceRuleID); err != nil {
+			&def, &sample, &val, &e.IsSampled, &e.FromContract, &e.SourceRule, &e.SourceRuleID,
+			&e.Instance, &e.InstanceCount, &instances); err != nil {
 			return nil, fmt.Errorf("storage: scan effective metric: %w", err)
+		}
+		if instances != nil {
+			if err := json.Unmarshal(instances, &e.Instances); err != nil {
+				return nil, fmt.Errorf("storage: decode effective metric instances: %w", err)
+			}
 		}
 		if label != nil {
 			e.Label = *label

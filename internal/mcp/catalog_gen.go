@@ -133,7 +133,7 @@ var catalog = []tooldef.Def{
 	{
 		Name:        "list-component-metrics",
 		Title:       "List a component's effective metrics",
-		Description: "Every metric the component's product declares, resolved to the series' latest observed or calculated sample or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the component (from_contract false). Gated by component:read; an out-of-scope component is a non-disclosing 404.",
+		Description: "Every metric the component's product declares, resolved to the newest observed or calculated sample across its live instances (instance names the one shown, instance_count counts them) or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the component (from_contract false). Gated by component:read; an out-of-scope component is a non-disclosing 404.",
 		Method:      "GET",
 		Path:        "/components/{name}/metrics",
 		Permission:  "component:read",
