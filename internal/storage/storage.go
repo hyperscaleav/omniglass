@@ -986,8 +986,9 @@ type Gateway interface {
 	// sensitive: reads carry it for the API to mask, the reveal audits it.
 	ListNotificationTargets(ctx context.Context, read scope.Set) ([]NotificationTarget, error)
 	GetNotificationTarget(ctx context.Context, ref string, read scope.Set) (*NotificationTarget, error)
-	CreateNotificationTarget(ctx context.Context, actorID string, spec NotificationTargetSpec, create scope.Set) (*NotificationTarget, error)
-	UpdateNotificationTarget(ctx context.Context, actorID, ref string, patch NotificationTargetPatch, action scope.Set) (*NotificationTarget, error)
+	// Binding a secret takes the caller's right to reveal it (SecretUse).
+	CreateNotificationTarget(ctx context.Context, actorID string, spec NotificationTargetSpec, create scope.Set, use SecretUse) (*NotificationTarget, error)
+	UpdateNotificationTarget(ctx context.Context, actorID, ref string, patch NotificationTargetPatch, action scope.Set, use SecretUse) (*NotificationTarget, error)
 	DeleteNotificationTarget(ctx context.Context, actorID, ref string, action scope.Set) error
 	RevealNotificationTargetURL(ctx context.Context, actorID, ref string, action scope.Set) (string, error)
 	// TargetForTest unseals a target's credential for the :test send, and

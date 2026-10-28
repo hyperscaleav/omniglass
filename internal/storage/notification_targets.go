@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -61,6 +62,17 @@ type NotificationTargetSpec struct {
 	URL     string
 	Secret  string
 	Enabled *bool
+}
+
+// SecretUse is the caller's right over a secret it binds to a target: its
+// secret read and reveal scopes and whether it holds the admin tier. Binding
+// a secret hands it to whatever the target's URL names on every send, so it
+// takes exactly what revealing the secret takes; a target holder without it
+// would be a confused deputy, sending a credential it cannot read to a URL it
+// chose.
+type SecretUse struct {
+	Read, Reveal scope.Set
+	CanAdmin     bool
 }
 
 // NotificationTargetPatch carries the mutable fields; nil is unchanged, and
@@ -163,23 +175,27 @@ func (p *PG) checkTargetURL(ctx context.Context, q querier, raw string) error {
 
 // resolveTargetSecret binds a target's credential: a PLATFORM secret (targets
 // are platform-owned, so a secret owned by one component or place is not
-// theirs to sign with), by name or uuid, of a type a send can use. Empty is
-// no secret.
-func resolveTargetSecret(ctx context.Context, q querier, ref string) (*string, error) {
+// theirs to sign with), by name or uuid, of a type a send can use, that the
+// caller may reveal (SecretUse). The reveal check is the reveal route's own
+// (secretRowForAction): a secret outside the caller's read scope, or an
+// admin-sensitive one without the admin tier, is the non-disclosing
+// ErrSecretNotFound, and one it can read but not reveal is ErrSecretForbidden.
+// Empty is no secret.
+func (p *PG) resolveTargetSecret(ctx context.Context, q querier, ref string, use SecretUse) (*string, error) {
 	if ref == "" {
 		return nil, nil
 	}
-	var id, ownerKind, typ string
-	col := "s.name = $1 and s.owner_kind = 'platform'"
-	if isUUID(ref) {
-		col = "s.id = $1::uuid"
+	// A bare name or a uuid, resolved through the caller's view either way.
+	if !isUUID(ref) && strings.Contains(ref, "/") {
+		return nil, fmt.Errorf("%w: secret %q: a target binds a platform secret by its bare name or uuid", ErrNotificationTargetInvalid, ref)
 	}
-	err := q.QueryRow(ctx, `select s.id::text, s.owner_kind, st.name from secret s join secret_type st on st.id = s.secret_type where `+col, ref).
-		Scan(&id, &ownerKind, &typ)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, fmt.Errorf("%w: secret %q is not a platform secret", ErrNotificationTargetInvalid, ref)
-	}
+	row, _, err := p.secretRowForAction(ctx, q, ref, use.Read, use.Reveal, use.CanAdmin, true)
 	if err != nil {
+		return nil, err
+	}
+	id, ownerKind := row.id, row.ownerKind
+	var typ string
+	if err := q.QueryRow(ctx, `select st.name from secret s join secret_type st on st.id = s.secret_type where s.id = $1::uuid`, id).Scan(&typ); err != nil {
 		return nil, fmt.Errorf("storage: resolve target secret %q: %w", ref, err)
 	}
 	if ownerKind != "platform" {
@@ -239,7 +255,7 @@ func (p *PG) GetNotificationTarget(ctx context.Context, ref string, read scope.S
 }
 
 // CreateNotificationTarget adds a target, audited with its URL masked.
-func (p *PG) CreateNotificationTarget(ctx context.Context, actorID string, spec NotificationTargetSpec, create scope.Set) (*NotificationTarget, error) {
+func (p *PG) CreateNotificationTarget(ctx context.Context, actorID string, spec NotificationTargetSpec, create scope.Set, use SecretUse) (*NotificationTarget, error) {
 	if !create.All {
 		return nil, ErrNotificationTargetForbidden
 	}
@@ -257,7 +273,7 @@ func (p *PG) CreateNotificationTarget(ctx context.Context, actorID string, spec 
 	if err := p.checkTargetURL(ctx, tx, spec.URL); err != nil {
 		return nil, err
 	}
-	secretID, err := resolveTargetSecret(ctx, tx, spec.Secret)
+	secretID, err := p.resolveTargetSecret(ctx, tx, spec.Secret, use)
 	if err != nil {
 		return nil, err
 	}
@@ -290,7 +306,7 @@ func (p *PG) CreateNotificationTarget(ctx context.Context, actorID string, spec 
 
 // UpdateNotificationTarget patches a target, audited (URL masked; a URL
 // change is recorded as changed without either value).
-func (p *PG) UpdateNotificationTarget(ctx context.Context, actorID, ref string, patch NotificationTargetPatch, action scope.Set) (*NotificationTarget, error) {
+func (p *PG) UpdateNotificationTarget(ctx context.Context, actorID, ref string, patch NotificationTargetPatch, action scope.Set, use SecretUse) (*NotificationTarget, error) {
 	if !action.All {
 		return nil, ErrNotificationTargetForbidden
 	}
@@ -311,7 +327,7 @@ func (p *PG) UpdateNotificationTarget(ctx context.Context, actorID, ref string, 
 	setSecret := patch.Secret != nil
 	var secretID *string
 	if setSecret {
-		if secretID, err = resolveTargetSecret(ctx, tx, *patch.Secret); err != nil {
+		if secretID, err = p.resolveTargetSecret(ctx, tx, *patch.Secret, use); err != nil {
 			return nil, err
 		}
 	}

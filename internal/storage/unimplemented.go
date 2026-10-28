@@ -1046,10 +1046,10 @@ func (UnimplementedGateway) ListNotificationTargets(context.Context, scope.Set) 
 func (UnimplementedGateway) GetNotificationTarget(context.Context, string, scope.Set) (*NotificationTarget, error) {
 	return nil, ErrNotificationTargetNotFound
 }
-func (UnimplementedGateway) CreateNotificationTarget(context.Context, string, NotificationTargetSpec, scope.Set) (*NotificationTarget, error) {
+func (UnimplementedGateway) CreateNotificationTarget(context.Context, string, NotificationTargetSpec, scope.Set, SecretUse) (*NotificationTarget, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) UpdateNotificationTarget(context.Context, string, string, NotificationTargetPatch, scope.Set) (*NotificationTarget, error) {
+func (UnimplementedGateway) UpdateNotificationTarget(context.Context, string, string, NotificationTargetPatch, scope.Set, SecretUse) (*NotificationTarget, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) DeleteNotificationTarget(context.Context, string, string, scope.Set) error {

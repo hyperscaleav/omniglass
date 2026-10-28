@@ -138,12 +138,12 @@ func registerNotificationTargetRoutes(api huma.API, a *authenticator, gw storage
 		Path:          "/notification-targets",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create a notification target",
-		Description:   "Adds a destination a notification can be sent to: a channel kind (webhook), its URL and, optionally, the platform secret it signs or authenticates with. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.",
+		Description:   "Adds a destination a notification can be sent to: a channel kind (webhook), its URL and, optionally, the platform secret it signs or authenticates with. Binding a secret takes the right to reveal it (secret:reveal, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not reveal a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.",
 	}, "notification_target", "create"), func(ctx context.Context, in *createNotificationTargetInput) (*notificationTargetOutput, error) {
 		t, err := gw.CreateNotificationTarget(ctx, actorID(ctx), storage.NotificationTargetSpec{
 			Name: in.Body.Name, Label: in.Body.Label, Kind: in.Body.Kind, URL: in.Body.URL,
 			Secret: in.Body.Secret, Enabled: in.Body.Enabled,
-		}, a.scopeFor(ctx, "notification_target", "create"))
+		}, a.scopeFor(ctx, "notification_target", "create"), secretUse(ctx, a))
 		if err != nil {
 			return nil, mapNotificationTargetErr(err)
 		}
@@ -155,11 +155,11 @@ func registerNotificationTargetRoutes(api huma.API, a *authenticator, gw storage
 		Method:      http.MethodPatch,
 		Path:        "/notification-targets/{name}",
 		Summary:     "Update a notification target",
-		Description: "Patches a target's label, URL, secret or enabled flag (an absent field is unchanged; an empty secret unbinds it). Audited, the URL masked and a change to it recorded as changed. Gated by notification_target:update with an all-scope grant.",
+		Description: "Patches a target's label, URL, secret or enabled flag (an absent field is unchanged; an empty secret unbinds it). Binding a secret takes the right to reveal it, as on create. Audited, the URL masked and a change to it recorded as changed. Gated by notification_target:update with an all-scope grant.",
 	}, "notification_target", "update"), func(ctx context.Context, in *updateNotificationTargetInput) (*notificationTargetOutput, error) {
 		t, err := gw.UpdateNotificationTarget(ctx, actorID(ctx), in.Name, storage.NotificationTargetPatch{
 			Label: in.Body.Label, URL: in.Body.URL, Secret: in.Body.Secret, Enabled: in.Body.Enabled,
-		}, a.scopeFor(ctx, "notification_target", "update"))
+		}, a.scopeFor(ctx, "notification_target", "update"), secretUse(ctx, a))
 		if err != nil {
 			return nil, mapNotificationTargetErr(err)
 		}
@@ -217,6 +217,13 @@ func registerNotificationTargetRoutes(api huma.API, a *authenticator, gw storage
 	})
 }
 
+// secretUse is the caller's right over a secret it would bind: the reveal
+// route's own gate (secret:read and secret:reveal scopes, the admin tier for
+// an admin-sensitive one), since a bound secret is sent wherever the URL says.
+func secretUse(ctx context.Context, a *authenticator) storage.SecretUse {
+	return storage.SecretUse{Read: a.scopeFor(ctx, "secret", "read"), Reveal: a.scopeFor(ctx, "secret", "reveal"), CanAdmin: a.canSecretAdmin(ctx, "reveal")}
+}
+
 // testSend builds and sends a target's synthetic message.
 func testSend(ctx context.Context, gw storage.Gateway, ts *storage.TargetSend, eo egress.Options) egress.Result {
 	if ts.CredentialMissing {
@@ -250,6 +257,10 @@ func mapNotificationTargetErr(err error) error {
 		return huma.Error409Conflict("a notification target with this name already exists")
 	case errors.Is(err, storage.ErrNotificationTargetInUse):
 		return huma.Error409Conflict("an action rule still sends to this target")
+	case errors.Is(err, storage.ErrSecretNotFound):
+		return huma.Error404NotFound("secret not found")
+	case errors.Is(err, storage.ErrSecretForbidden):
+		return huma.Error403Forbidden("binding a secret to a target takes the right to reveal it (secret:reveal)")
 	case errors.Is(err, storage.ErrNotificationTargetInvalid):
 		return huma.Error422UnprocessableEntity(strings.TrimPrefix(err.Error(), "storage: notification target is invalid: "))
 	}
