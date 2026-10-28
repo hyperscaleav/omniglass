@@ -28,6 +28,11 @@ func (b *backlogStore) RetentionWindows(context.Context) (settings.RetentionSett
 	return b.windows, nil
 }
 
+// PruneLogs is a log lane of the same store, keyed "<table>/<band>".
+func (b *backlogStore) PruneLogs(ctx context.Context, table, band string, before time.Time, limit int) (int64, error) {
+	return b.PruneSamples(ctx, table+"/"+band, before, limit)
+}
+
 func (b *backlogStore) PruneSamples(_ context.Context, lane string, before time.Time, limit int) (int64, error) {
 	b.calls = append(b.calls, pruneCall{lane, before, limit})
 	if err := b.fail[lane]; err != nil {
@@ -39,7 +44,34 @@ func (b *backlogStore) PruneSamples(_ context.Context, lane string, before time.
 }
 
 func defaultWindows() settings.RetentionSettings {
-	return settings.RetentionSettings{MetricDays: 14, PropertyDays: 90, TrendDays: 730}
+	return settings.RetentionSettings{MetricDays: 14, PropertyDays: 90, TrendDays: 730,
+		DebugLogDays: 3, InfoLogDays: 14, WarningLogDays: 30, ErrorLogDays: 90}
+}
+
+// The pass prunes both log tables too (#417 PR 2), each severity band to its
+// own window, through the same chunked loop as the sample lanes.
+func TestARetentionPassPrunesEachLogBandToItsWindow(t *testing.T) {
+	now := time.Date(2026, 10, 28, 12, 0, 0, 0, time.UTC)
+	store := &backlogStore{windows: defaultWindows(), backlog: map[string]int64{"log_line/debug": 7, "node_log/error": 2}}
+	rep, err := retentionPass(context.Background(), store, now, 100, 10, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cutoff := map[string]time.Time{}
+	for _, c := range store.calls {
+		cutoff[c.lane] = c.before
+	}
+	for _, table := range []string{"log_line", "node_log"} {
+		for band, days := range map[string]int{"debug": 3, "info": 14, "warning": 30, "error": 90} {
+			lane := table + "/" + band
+			if want := now.AddDate(0, 0, -days); !cutoff[lane].Equal(want) {
+				t.Errorf("%s cutoff %v, want %d days back", lane, cutoff[lane], days)
+			}
+		}
+	}
+	if rep.Deleted["log_line/debug"] != 7 || rep.Deleted["node_log/error"] != 2 {
+		t.Errorf("report %+v, want 7 log_line debug and 2 node_log error lines removed", rep.Deleted)
+	}
 }
 
 // TestARetentionPassPrunesEachLaneToItsWindow is #417's pass: each sample lane

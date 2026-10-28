@@ -183,7 +183,11 @@ func (p *PG) writeNodeLogs(ctx context.Context, tx pgx.Tx, lines []NodeLogWrite)
 		if err != nil {
 			return fmt.Errorf("storage: node log %s: %w", l.Node, err)
 		}
-		sev, fac, corr, attrs, labels := nullableLogFields(l.Severity, l.Facility, l.CorrelationID, l.Attributes, l.Labels)
+		// The severity on the canonical set, as a component's line is (#417): a
+		// word the table does not know is kept as severity_raw, so a retention
+		// window by severity never meets a stray word.
+		severity, attributes := logline.Normalize(l.Severity, l.Attributes)
+		sev, fac, corr, attrs, labels := nullableLogFields(severity, l.Facility, l.CorrelationID, attributes, l.Labels)
 		if _, err := tx.Exec(ctx, `insert into node_log (ts, node_id, source, severity, facility, message, attributes, labels, correlation_id)
 			values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
 			ts, pid, l.Source, sev, fac, l.Message, attrs, labels, corr); err != nil {

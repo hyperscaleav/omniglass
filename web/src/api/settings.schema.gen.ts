@@ -28,6 +28,30 @@ export const settingsSchema = {
     }
   },
   "retention": {
+    "log_debug_days": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 36500,
+      "format": "int64"
+    },
+    "log_error_days": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 36500,
+      "format": "int64"
+    },
+    "log_info_days": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 36500,
+      "format": "int64"
+    },
+    "log_warning_days": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 36500,
+      "format": "int64"
+    },
     "metric_days": {
       "type": "integer",
       "minimum": 1,

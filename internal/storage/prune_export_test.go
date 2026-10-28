@@ -9,3 +9,9 @@ func ExportPruneSamplesSQL(lane string) map[string]string {
 	}
 	return out
 }
+
+// ExportPruneLogsSQL is one log table's prune statements, "rated" (by the
+// levels in $3) and "unrated", for the external access-path test (#417).
+func ExportPruneLogsSQL(table string) map[string]string {
+	return map[string]string{"rated": pruneLogsSQL(table, "rated"), "unrated": pruneLogsSQL(table, "unrated")}
+}
