@@ -1,10 +1,10 @@
 # Subscribe yourself to alarms (#1341, #1355): a person writes a personal
 # alarm subscription, tests the draft against their own recent alarms before
-# saving it (the teaching surface: the predicate judged on real alarms), saves
-# it, and reads what it tells them in the console inbox. Touch Panel 2 holds a
+# saving it (the teaching surface: the predicate judged on real alarms), and saves
+# it. Touch Panel 2 holds a
 # High alarm raised off camera, so the test has something real to judge.
 title: Subscribe to alarms
-description: Write a personal alarm subscription, test it against your own recent alarms before saving it, and read what it tells you in your inbox.
+description: Write a personal alarm subscription and test it against your own recent alarms before saving it.
 setup:
   - post: /components/panel-2/alarms
     body: { severity: high, message: Touch input lost, dedup_key: walkthrough-subscribe }

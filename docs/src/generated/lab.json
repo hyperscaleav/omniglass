@@ -147,6 +147,14 @@
       "setup": []
     },
     {
+      "id": "subscribe-to-alarms",
+      "title": "Subscribe to alarms",
+      "description": "Write a personal alarm subscription and test it against your own recent alarms before saving it.",
+      "setup": [
+        "omniglass component alarm create panel-2 --dedup-key walkthrough-subscribe --message \"Touch input lost\" --severity high"
+      ]
+    },
+    {
       "id": "trust-a-changed-host-key",
       "title": "Trust a changed host key",
       "description": "A touch panel was reimaged, so it presents a new ssh host key and the node refused it. Read both keys, learn why a key changes, trust the new one, and watch the session come up.",
