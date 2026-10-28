@@ -53,6 +53,7 @@ type Server struct {
 	stopReconcile   context.CancelFunc // ends the rule reconcile loop
 	stopCalc        context.CancelFunc // ends the calc tick
 	stopPrune       context.CancelFunc // ends the receipt retention pass
+	stopRetention   context.CancelFunc // ends the sample retention pass (#417)
 	orphans         *orphanTally       // the node lane's orphaned batches, warned and counted (#1200)
 	registry        registryCache      // the ingest sample registry, kept until a catalog changes (#1279)
 	stopOrphanFlush context.CancelFunc // ends the orphan count's flush
@@ -219,6 +220,7 @@ func (s *Server) subscribe() error {
 		return fmt.Errorf("bus: start telemetry consumer: %w", err)
 	}
 	s.startReceiptPrune()
+	s.startSampleRetention()
 	s.startOrphanFlush()
 	return nil
 }
@@ -274,6 +276,9 @@ func (s *Server) Shutdown() {
 	}
 	if s.stopPrune != nil {
 		s.stopPrune()
+	}
+	if s.stopRetention != nil {
+		s.stopRetention()
 	}
 	if s.stopOrphanFlush != nil {
 		s.stopOrphanFlush()

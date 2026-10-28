@@ -87,8 +87,9 @@ set only at the `platform` level, never further down.
 cascades and therefore who WRITES it; `client` says who may READ the effective value. A
 platform-domain namespace is admin-write by definition, and `label` is `platform,client` because the
 console renders a label from the same dictionary the server did, which an ordinary viewer has to be
-able to read. Omitting `client` on a platform namespace makes it admin-only-read as well
-(`retention`, `integrations`).
+able to read. `retention` is `platform,client` too: a window is no secret, and a chart of a series'
+history can say how far back it reaches ([ADR-0417](/architecture/decisions/#adr-0417-the-server-prunes-each-sample-lane-to-a-window-in-bounded-chunks)). Omitting `client` on a platform namespace
+makes it admin-only-read as well (`integrations`).
 
 ## Storage: one override table, unscoped
 
@@ -200,7 +201,7 @@ a boot panic like any other. Three consequences worth knowing before declaring o
 type Settings struct {
 	UI          UISettings         `json:"ui"          settings:"profile,client"`
 	Keybindings Keybindings        `json:"keybindings" settings:"profile,client"`
-	Retention   RetentionSettings  `json:"retention"   settings:"platform"` // new: platform-level only, admin-read
+	Retention   RetentionSettings  `json:"retention"   settings:"platform,client"` // platform-level, any caller reads (#417)
 }
 ```
 
@@ -278,8 +279,8 @@ the API, the two permissions, the two seeded `profile` namespaces, and the Admin
 :::design[The fast-follow rungs and platform-domain namespaces, tracked in #270]
 **Fast-follow (not this slice):** the group and user override rungs and the Profile preferences tab
 (editable, user-scoped Gateway reads), the `settings:lock` permission split for group-admins, the
-remaining `platform`-domain namespaces (`retention`, `integrations`) with their features (`label`
-has since landed with the acronym dictionary), a GitOps read-only mode, and live file reload (SIGHUP)
+remaining `platform`-domain namespaces (`integrations`) with their features (`label` has since
+landed with the acronym dictionary, and `retention` with sample retention, #417), a GitOps read-only mode, and live file reload (SIGHUP)
 instead of restart-to-reload.
 :::
 

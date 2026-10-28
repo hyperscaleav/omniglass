@@ -14,6 +14,11 @@ summary: "retention is provenance-aware: a prune never deletes a declared row an
   Storage Gateway primitive, tested for both invariants, **before any retention feature exists**;
   no caller wires it yet, and any future retention feature calls the primitive rather than writing
   its own delete.
+  **Amended (#417):** the server's retention pass is its first caller, pruning each sample lane to a
+  window; `PruneSamples` now deletes one lane in bounded chunks, cutoff first, with an index probe for
+  the latest row. Both invariants are unchanged; "latest" now holds under both reader orders (ts then
+  id, and id), and a command's lineage rows are kept too
+  ([ADR-0417](/architecture/decisions/#adr-0417-the-server-prunes-each-sample-lane-to-a-window-in-bounded-chunks)).
 - **Context:** a blanket "delete older than N days" is the obvious first retention feature, and it
   would silently erase a declared value set two years ago, because for declared provenance the
   single row is the record itself, not one sample among many. With current values now derived from

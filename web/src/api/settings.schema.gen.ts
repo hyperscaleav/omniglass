@@ -19,6 +19,26 @@ export const settingsSchema = {
       "type": "array"
     }
   },
+  "retention": {
+    "metric_days": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 36500,
+      "format": "int64"
+    },
+    "property_days": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 36500,
+      "format": "int64"
+    },
+    "trend_days": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 36500,
+      "format": "int64"
+    }
+  },
   "ui": {
     "default_landing": {
       "type": "string",

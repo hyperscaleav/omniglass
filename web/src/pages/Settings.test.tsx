@@ -156,6 +156,35 @@ describe("Settings page", () => {
     expect(calls[0].body).toEqual({ acronyms: ["AV", "DSP", "QM55"] });
   });
 
+  it("patches an integer setting as a number, not the typed text", async () => {
+    const retentionRead: SettingsRead = {
+      values: { retention: { metric_days: 14 } },
+      sources: { "retention.metric_days": "default" },
+      locks: {},
+    };
+    const calls: { url: string; body: unknown }[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : (input as Request).url;
+      const method = (typeof input === "string" || input instanceof URL ? init?.method : (input as Request).method) ?? "GET";
+      if (method === "PATCH") {
+        const raw = typeof input === "string" || input instanceof URL ? (init?.body as string | undefined) : await (input as Request).clone().text();
+        calls.push({ url, body: raw ? JSON.parse(raw) : null });
+      }
+      return new Response(JSON.stringify(retentionRead), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    mount(retentionRead);
+    enterEdit();
+    // The control is named by its key, so a screen reader and a walkthrough
+    // both find it by role.
+    const input = (await screen.findByRole("textbox", { name: "metric_days" })) as HTMLInputElement;
+    expect(input.value).toBe("14");
+    fireEvent.input(input, { target: { value: "7" } });
+    fireEvent.click(await screen.findByRole("button", { name: "Save" }));
+    await waitFor(() => expect(calls.length).toBe(1));
+    expect(calls[0].url).toContain("/settings/retention");
+    expect(calls[0].body).toEqual({ metric_days: 7 });
+  });
+
   it("blocks Save on a list whose entries are empty", async () => {
     mount(listRead);
     enterEdit();

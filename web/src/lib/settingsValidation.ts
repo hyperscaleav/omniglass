@@ -42,6 +42,19 @@ export function textList(raw: string): string[] {
   return raw.split(",").map((s) => s.trim());
 }
 
+// wireValue is the value a draft is written back as, by the field's generated
+// type: a list as an array (textList), a number or an integer as a JSON number,
+// anything else as the text typed. The control is a text input, so without this
+// an integer setting would go back as a string and the API would refuse it with
+// a 422 on every save (the retention windows, #417, were the first).
+export function wireValue(c: Constraint | undefined, raw: string): unknown {
+  if (isList(c)) return textList(raw);
+  if ((c?.type === "integer" || c?.type === "number") && raw.trim() !== "" && !Number.isNaN(Number(raw))) {
+    return Number(raw);
+  }
+  return raw;
+}
+
 // validateField returns an inline error message for a draft value, or null when it
 // satisfies the generated constraint. An unknown field (no constraint) is itself an
 // error: the form only edits declared settings.
@@ -56,6 +69,12 @@ export function validateField(c: Constraint | undefined, raw: string): string | 
   if (c.enum && !c.enum.includes(raw)) return `must be one of: ${c.enum.join(", ")}`;
   if ((c.type === "integer" || c.type === "number") && raw !== "" && Number.isNaN(Number(raw))) {
     return "must be a number";
+  }
+  // An integer is a whole number and never blank: the API refuses either, so
+  // Save stays disabled rather than sending one (restoring a key sends null,
+  // not a blank).
+  if (c.type === "integer" && (raw.trim() === "" || !Number.isInteger(Number(raw)))) {
+    return "must be a whole number";
   }
   if (raw !== "" && !Number.isNaN(Number(raw))) {
     if (c.minimum !== undefined && Number(raw) < c.minimum) return `must be at least ${c.minimum}`;

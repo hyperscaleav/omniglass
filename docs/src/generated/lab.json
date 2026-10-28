@@ -106,6 +106,12 @@
       "setup": []
     },
     {
+      "id": "keep-data-for-a-week",
+      "title": "Keep data for a week",
+      "description": "Shorten how long metric samples are kept, from the default 14 days to 7, on the Settings page, and see the new window take the place of the default.",
+      "setup": []
+    },
+    {
       "id": "read-a-multi-endpoint-vital",
       "title": "Read a vital two endpoints collect",
       "description": "Open the Boardroom DSP, read which endpoint its TCP connect time comes from and of how many, and open the row for each endpoint's latest value.",

@@ -832,11 +832,13 @@ type Gateway interface {
 	// instance, provenance); there is no maintained cache (#591). LatestValue is
 	// that read, scope-guarded per owner kind.
 	LatestValue(ctx context.Context, ownerKind, ownerID, key, instance, provenance string, read scope.Set) (*CurrentValue, error)
-	// PruneSamples is the provenance-aware retention primitive over both series
-	// tables: delete samples older than before, never a declared row and never
-	// the latest row of a series. The retention feature that will call it is a
-	// later slice; the rule ships first (#591).
-	PruneSamples(ctx context.Context, before time.Time) (int64, error)
+	// PruneSamples is the provenance-aware retention primitive over one sample
+	// lane (metric or property): delete up to limit samples older than before,
+	// never a declared row and never the latest row of a series (#591, #417).
+	PruneSamples(ctx context.Context, lane string, before time.Time, limit int) (int64, error)
+	// RetentionWindows is the effective retention namespace, the windows the
+	// server's retention pass prunes by (#417).
+	RetentionWindows(ctx context.Context) (settings.RetentionSettings, error)
 
 	// Membership: the binding a role attaches to. Many-valued on purpose, since a
 	// shared device belongs to every system it serves, which a single pointer on

@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/hyperscaleav/omniglass/internal/rules"
 	"github.com/hyperscaleav/omniglass/internal/scope"
+	"github.com/hyperscaleav/omniglass/internal/settings"
 	"github.com/hyperscaleav/omniglass/internal/sim/impair"
 )
 
@@ -719,8 +720,11 @@ func (UnimplementedGateway) EffectiveMetrics(context.Context, string, string, sc
 func (UnimplementedGateway) LatestValue(context.Context, string, string, string, string, string, scope.Set) (*CurrentValue, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) PruneSamples(context.Context, time.Time) (int64, error) {
+func (UnimplementedGateway) PruneSamples(context.Context, string, time.Time, int) (int64, error) {
 	return 0, nil
+}
+func (UnimplementedGateway) RetentionWindows(context.Context) (settings.RetentionSettings, error) {
+	return settings.RetentionSettings{}, nil
 }
 func (UnimplementedGateway) ListTags(context.Context) ([]Tag, error) {
 	return nil, nil
