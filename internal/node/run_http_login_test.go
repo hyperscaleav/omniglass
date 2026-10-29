@@ -23,13 +23,14 @@ import (
 // secret fixed in place brings the endpoint back.
 
 // loginProfile is the simulator profile whose http face enforces a login of
-// the auth type, derived from the catalog, never named (#804).
-func loginProfile(t *testing.T, store *profile.Store, typ string) string {
+// the auth type and answers every route named, derived from the catalog,
+// never named (#804).
+func loginProfile(t *testing.T, store *profile.Store, typ string, routes ...string) string {
 	t.Helper()
 	var names []string
 	for name, d := range store.Devices {
 		for _, iface := range d.Interfaces {
-			if iface.Protocol == "http" && iface.Auth.Enforce && iface.Auth.Type == typ {
+			if iface.Protocol == "http" && iface.Auth.Enforce && iface.Auth.Type == typ && servesRoutes(iface, routes) {
 				names = append(names, name)
 			}
 		}
@@ -39,6 +40,22 @@ func loginProfile(t *testing.T, store *profile.Store, typ string) string {
 	}
 	sort.Strings(names)
 	return names[0]
+}
+
+// servesRoutes reports whether an interface answers every route named (its
+// match, "METHOD /path"): a test that drives a display's routes picks a
+// profile serving them, not whichever login of the type sorts first.
+func servesRoutes(iface profile.Interface, routes []string) bool {
+	have := map[string]bool{}
+	for _, r := range iface.Routes {
+		have[r.Match] = true
+	}
+	for _, r := range routes {
+		if !have[r] {
+			return false
+		}
+	}
+	return true
 }
 
 // loginVariant adds a copy of a profile under name whose http face logs in
@@ -227,7 +244,7 @@ func TestNodeHTTPDigestAnswersItsChallenge(t *testing.T) {
 	var md5Profile string
 	shaProfile := "display-sha256"
 	s := newHTTPStack(t, "edge-digest", func(store *profile.Store) {
-		md5Profile = loginProfile(t, store, "digest")
+		md5Profile = loginProfile(t, store, "digest", "POST /api/display/power")
 		a := faceAuth(store, md5Profile)
 		a.Algorithm = "SHA-256"
 		loginVariant(store, md5Profile, shaProfile, a)
