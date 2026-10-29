@@ -13,6 +13,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
+	"github.com/hyperscaleav/omniglass/internal/storage/storagetest/querycount"
 	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
 	"github.com/jackc/pgx/v5"
 	"github.com/nats-io/nats.go"
@@ -46,11 +47,11 @@ type fanIngest struct {
 	seq     int
 }
 
-func newFanIngest(t *testing.T) *fanIngest {
+func newFanIngest(t *testing.T, opts ...storage.Option) *fanIngest {
 	t.Helper()
 	ctx := context.Background()
 	dsn := storagetest.NewDSN(t)
-	gw, err := storage.NewPG(ctx, dsn)
+	gw, err := storage.NewPG(ctx, dsn, opts...)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
@@ -304,5 +305,47 @@ func TestConfinementComesBeforeTheFanOut(t *testing.T) {
 	f.deliver(t, collection.TelemetrySubject("node-b"), ev, "")
 	if rows := f.landed(t); len(rows) != 0 {
 		t.Errorf("another conduit's batch landed %v on meetings-cloud's owners", rows)
+	}
+}
+
+// TestFanOutResolvesOwnersInOneRead: a batch of two hundred identified
+// records, each about its own bound system, issues exactly the statements a
+// batch of three does: the identities resolve in one read, the gateway's
+// fence is one read, and each owner's arc comes with it (#1282). Measured on
+// the metric lane, which lands in one statement however many rows; the
+// property lane writes a row per statement, as it always has.
+func TestFanOutResolvesOwnersInOneRead(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	counter := querycount.New()
+	f := newFanIngest(t, storage.WithQueryTracer(counter))
+	all := scope.Set{All: true}
+	for i := range 200 {
+		name := fmt.Sprintf("room-%03d", i)
+		if _, err := f.gw.CreateSystem(f.ctx, "", storage.SystemSpec{Name: name}, all, all); err != nil {
+			t.Fatal(err)
+		}
+		f.bind(t, fmt.Sprintf("zr-%03d", i), name)
+	}
+	statements := func(n int) int {
+		ev := &ogv1.TelemetryBatch{}
+		for i := range n {
+			ev.Metrics = append(ev.Metrics, &ogv1.MetricSample{Name: "participant-count", Value: float64(i), Identity: room(fmt.Sprintf("zr-%03d", i))})
+		}
+		subject, ev := f.nodeLane(ev)
+		f.deliver(t, subject, ev, "") // warm the registry and the first rows
+		counter.Reset()
+		subject, ev = f.nodeLane(ev)
+		f.deliver(t, subject, ev, "")
+		return counter.N()
+	}
+	three, many := statements(3), statements(200)
+	if three != many {
+		t.Errorf("a batch of 200 identified records issued %d statements, a batch of 3 issued %d: the fan-out reads per owner\n%s",
+			many, three, strings.Join(counter.Summary(), "\n"))
+	}
+	if n := f.count(t, `select count(*) from metric m join system s on s.id = m.system_id`); n != 2*3+2*200 {
+		t.Errorf("landed %d fanned metric rows, want %d", n, 2*3+2*200)
 	}
 }
