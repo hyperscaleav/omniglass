@@ -897,6 +897,7 @@ func (UnimplementedGateway) SnoozeAlarm(context.Context, string, string, string,
 func (UnimplementedGateway) UnsnoozeAlarm(context.Context, string, string, string) (*Alarm, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) EndExpiredSnoozes(context.Context, int) (int, error) { return 0, nil }
 func (UnimplementedGateway) ListAlarms(context.Context, string, AlarmFilter) ([]Alarm, error) {
 	return nil, nil
 }

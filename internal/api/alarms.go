@@ -295,7 +295,7 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodPost,
 		Path:        "/components/{name}/alarms/{id}:snooze",
 		Summary:     "Snooze an alarm's condition",
-		Description: "Snoozes the alarm's condition, its component and dedup_key, for a duration from now (1m to 7d), so every notification any alarm of that condition would send, a raise or a clear, on any channel, is written suppressed with the reason instead, and a message already waiting to be retried is suppressed when its turn comes. Snoozing a snoozed condition replaces the deadline. It changes nothing else: it does not acknowledge, does not recompute health, a snoozed alarm stays in the unacknowledged queue, and a clear does not end it. It notifies nothing itself. Audited on this alarm. Gated by alarm:snooze, whose scope is resolved on the component tier from that permission; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not snooze on is a 403.",
+		Description: "Snoozes the alarm's condition, its component and dedup_key, for a duration from now (1m to 7d), so every notification any alarm of that condition would send, a raise or a clear, on any channel, is written suppressed with the reason instead, and a message already waiting to be retried is suppressed when its turn comes. Snoozing a snoozed condition replaces the deadline. It changes nothing else: it does not acknowledge, does not recompute health, a snoozed alarm stays in the unacknowledged queue, and a clear does not end it. It notifies nothing itself. When the snooze ends, at its deadline or by :unsnooze, with an alarm of the condition still raised, that alarm is announced again as raised to whoever the action rules reach then. Audited on this alarm. Gated by alarm:snooze, whose scope is resolved on the component tier from that permission; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not snooze on is a 403.",
 	}, "alarm", "snooze"), func(ctx context.Context, in *snoozeAlarmInput) (*alarmOutput, error) {
 		d, err := parseSnoozeDuration(in.Body.Duration)
 		if err != nil {
@@ -318,7 +318,7 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodPost,
 		Path:        "/components/{name}/alarms/{id}:unsnooze",
 		Summary:     "End an alarm's condition's snooze",
-		Description: "Ends the snooze on the alarm's condition early. Audited on this alarm, naming the caller. Unsnoozing a condition that is not snoozed is a 200 that writes nothing. Gated by alarm:snooze, resolved as :snooze is.",
+		Description: "Ends the snooze on the alarm's condition early, exactly as its deadline passing would: if an alarm of the condition is still raised, it is announced again as raised to whoever the action rules reach now. Audited on this alarm, naming the caller. Unsnoozing a condition that is not snoozed is a 200 that writes nothing. Gated by alarm:snooze, resolved as :snooze is.",
 	}, "alarm", "snooze"), func(ctx context.Context, in *clearAlarmInput) (*alarmOutput, error) {
 		compID, err := gw.ResolveActionTarget(ctx, "component", in.Name,
 			a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "alarm", "snooze"))
@@ -336,7 +336,7 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 type alarmTimelineEntryBody struct {
 	At       time.Time `json:"at" doc:"When it happened (a notification: when it was queued, the transition's own moment)"`
 	Kind     string    `json:"kind" enum:"event,audit,notification" doc:"An event carrying the alarm (a rule's fire or clear event), an audit row about it, or a notification about it (#618)"`
-	What     string    `json:"what" doc:"The event's type (e.g. condition-started), the audit action (raise, acknowledge, clear, snooze or unsnooze), or a notification's status as it stands (queued, sent, failed, or suppressed when its condition was snoozed)"`
+	What     string    `json:"what" doc:"The event's type (e.g. condition-started), the audit action (raise, acknowledge, clear, snooze, unsnooze, or snooze-end when a snooze reached its deadline), or a notification's status as it stands (queued, sent, failed, or suppressed when its condition was snoozed)"`
 	Actor    string    `json:"actor,omitempty" doc:"Who acted, by name; absent when the platform acted for a rule"`
 	Rule     string    `json:"rule,omitempty" doc:"The event rule the entry belongs to, by name: the rule that wrote the event, or the rule the platform acted for"`
 	Instance string    `json:"instance,omitempty" doc:"The series instance (an endpoint) an event is about"`
@@ -371,7 +371,7 @@ func registerAlarmTimelineRoute(api huma.API, a *authenticator, gw storage.Gatew
 		Method:      http.MethodGet,
 		Path:        "/components/{name}/alarms/{id}:timeline",
 		Summary:     "Read an alarm's timeline",
-		Description: "The alarm's history in one list, oldest first: the events that carry it (an event rule's fire event, which opened it, and its clear event, which resolved it) merged by time with its audit rows (the raise, each acknowledgement, the clear, each snooze and unsnooze, and a rule edit that opened or resolved it, naming the editor) and the notifications its transitions queued, each at the moment it was queued with its status as it stands (#618). At one instant an event comes before the audit row it caused, and that before a notification. Gated by alarm:read; a component outside the caller's component read scope, and an alarm not on the component, are a non-disclosing 404.",
+		Description: "The alarm's history in one list, oldest first: the events that carry it (an event rule's fire event, which opened it, and its clear event, which resolved it) merged by time with its audit rows (the raise, each acknowledgement, the clear, each snooze, unsnooze and snooze-end, and a rule edit that opened or resolved it, naming the editor) and the notifications its transitions queued, each at the moment it was queued with its status as it stands (#618). At one instant an event comes before the audit row it caused, and that before a notification. Gated by alarm:read; a component outside the caller's component read scope, and an alarm not on the component, are a non-disclosing 404.",
 	}, "alarm", "read"), func(ctx context.Context, in *clearAlarmInput) (*alarmTimelineOutput, error) {
 		compID, err := requireComponentInScope(ctx, a, gw, in.Name, "read")
 		if err != nil {

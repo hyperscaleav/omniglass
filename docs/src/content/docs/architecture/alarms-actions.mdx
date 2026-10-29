@@ -203,6 +203,19 @@ when its turn comes, so "stop paging me" also stops the retry already on its way
 final: it is never released or retried, and `:retry` refuses it. It is the primitive storm
 suppression and dedupe (#1345) consume.
 
+**When it ends, a condition still raised is announced again.** When the deadline passes, or
+`:unsnooze` ends it early, the snooze's row is deleted and, if an alarm of the condition is still
+open, that alarm is announced again as a plain `raised` transition, judged against the action rules
+and memberships as they stand at that moment: a rule disabled during the snooze stays quiet, and the
+people a group reaches are filtered by the same queue-time scope check as at any raise. A condition
+that cleared during the snooze gets nothing. The end is audited just before the rows it causes,
+`unsnooze` naming the operator on the alarm it was called on, or `snooze-end` from the platform on
+the condition's latest alarm, so the timeline reads the end, then the new rows. The held rows are
+never replayed: the rules are judged again from scratch, so nobody gets a backlog of stale messages.
+The deadline sweep runs on the notification tick (every 2s) until the time primitive (#419) lands:
+it takes each expired snooze `FOR UPDATE SKIP LOCKED` and deletes it in the transaction that queues
+its announcement, so two replicas never announce one condition twice and a restart loses nothing.
+
 **It governs notifications and nothing else.**
 
 - Acknowledging does not snooze, snoozing does not acknowledge, and a snoozed, unacknowledged alarm
@@ -210,7 +223,7 @@ suppression and dedupe (#1345) consume.
 - It does not recompute health, and a snoozed alarm still degrades its component.
 - A clear does not end it.
 - It notifies nothing itself: it is an operator act, not a condition edge
-  ([cycle safety](#cycle-safety-in-the-action-layer) rule 2).
+  ([cycle safety](#cycle-safety-in-the-action-layer) rule 2). Its end is the one exception, above.
 
 ## The `event_rule`
 
@@ -710,7 +723,8 @@ omniglass action-rule create --name page-ops --on '["raised","cleared"]' \
 are the alarm facts above in snake_case (`component`, `place`, `severity`, `message`, `rule`, ...)
 plus `severity_rank`, so a floor reads as a comparison (`severity_rank >= 40` is high and above).
 **Acknowledgement never notifies**, and neither does a snooze: an operator act is not a condition
-edge ([cycle safety](#cycle-safety-in-the-action-layer) rule 2). A clear is
+edge ([cycle safety](#cycle-safety-in-the-action-layer) rule 2), with the one exception of a snooze's
+end announcing a still-raised condition again ([above](#snooze-a-fact-about-a-condition)). A clear is
 the condition's edge whoever records it, so clearing a hand-raised alarm notifies as a rule's clear
 does. One message per transition per rule per target: no grouping, no digest (the storm design
 below is later).
@@ -810,7 +824,11 @@ opens an alarm, fires the action again), closed with three rules:
    ([ADR-0069](/architecture/decisions/#adr-0069-cycle-safety-is-provenance-based-not-topology-based)).
 2. **Operator transitions do not match `action_rule`s** (only open / resolve do). Built (#618): an
    `action_rule` fires on `raised` and `cleared` alone, and neither acknowledging nor snoozing
-   queues anything (#1318).
+   queues anything. The one exception is the end of a snooze, which announces a still-raised
+   condition again as `raised` (#1318,
+   [ADR-1318](/architecture/decisions/#adr-1318-a-snooze-is-a-fact-about-an-alarms-condition-its-notifications-are-written-suppressed-and-its-end-tells-people-again)):
+   it re-sends a transition the platform already announced, judged by the same rules, and a snooze
+   ends only once, so it cannot loop.
 3. **The control loop is lineage-guarded at dispatch**: before running an action, the engine walks
    the triggering event's **causation lineage** (carried on **NATS message headers**); if the same
    `(action, owner)` appears upstream it is suppressed, with a depth bound as backstop. Flows are

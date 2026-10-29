@@ -164,3 +164,40 @@ func TestTheTickSuppressesARowWaitingOutItsRetry(t *testing.T) {
 		t.Fatalf("another condition's rows sent %d, want both", len(up.sent))
 	}
 }
+
+// TestASnoozeWaitsForATransitionAlreadyJudged closes the window between the
+// seam's lookup and its commit: an inbox row is delivered by that commit, so
+// a snooze that committed inside the window would be followed by a delivery
+// no tick could catch. The snooze waits for the transition instead, so its
+// 200 comes after the row the transition judged.
+func TestASnoozeWaitsForATransitionAlreadyJudged(t *testing.T) {
+	f := newPeopleFixture(t)
+	f.groupRule(t)
+	first, err := f.gw.RaiseAlarm(f.ctx, "", "display-2", storage.AlarmSpec{Severity: "high", Message: "no video", DedupKey: "video"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.gw.ClearAlarm(f.ctx, "", "display-2", first.ID); err != nil {
+		t.Fatal(err)
+	}
+	commit, err := f.gw.ExportRaiseHeld(f.ctx, "display-2", storage.AlarmSpec{Severity: "high", Message: "no video", DedupKey: "video"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := f.gw.SnoozeAlarm(f.ctx, f.ids["root"], "display-2", first.ID, time.Hour)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		t.Fatalf("the snooze returned (%v) while a transition of its condition was judged and uncommitted", err)
+	case <-time.After(300 * time.Millisecond):
+	}
+	if err := commit(); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}

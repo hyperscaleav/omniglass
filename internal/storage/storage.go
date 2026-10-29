@@ -930,6 +930,10 @@ type Gateway interface {
 	// UnsnoozeAlarm ends it early; a condition that is not snoozed is a no-op.
 	SnoozeAlarm(ctx context.Context, actorID, componentName, alarmID string, d time.Duration) (*Alarm, error)
 	UnsnoozeAlarm(ctx context.Context, actorID, componentName, alarmID string) (*Alarm, error)
+	// EndExpiredSnoozes is the end-of-snooze sweep the notifier's tick runs:
+	// it ends up to max snoozes past their deadline, announcing a condition
+	// still raised again, and reports how many it ended.
+	EndExpiredSnoozes(ctx context.Context, max int) (int, error)
 	// AlarmTimeline reads one alarm's events and audit rows merged by time
 	// (#950), on a component by the uuid the caller resolved in scope; an
 	// alarm not on the component is ErrAlarmNotFound.
