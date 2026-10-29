@@ -466,6 +466,12 @@ func (s *Server) subscribeSim() error {
 		if err != nil {
 			return // read failed; drop, the simulator re-pulls
 		}
+		// The webhook subscriptions of the components it simulates
+		// (ADR-1370): only here, on the list only a simulator pulls.
+		hooks, err := s.store.NodeSimWebhooks(context.Background(), node)
+		if err != nil {
+			return // read failed; drop, the simulator re-pulls
+		}
 		reply := collection.SimlistReply{Devices: make([]collection.SimDevice, 0, len(devices))}
 		ids := make([]string, 0, len(devices))
 		for _, d := range devices {
@@ -473,6 +479,9 @@ func (s *Server) subscribeSim() error {
 			if d.Impairment != nil {
 				imp := collection.SimImpairment(*d.Impairment)
 				sd.Impairment = &imp
+			}
+			if h, ok := hooks[d.ComponentID]; ok {
+				sd.Webhook = &collection.SimWebhook{Path: h.Path, Scheme: h.Scheme, Secret: h.Secret}
 			}
 			reply.Devices = append(reply.Devices, sd)
 			ids = append(ids, d.ComponentID)

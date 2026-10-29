@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/hyperscaleav/omniglass/internal/driver"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/sim/impair"
 )
@@ -94,4 +95,91 @@ func TargetHost(target string) string {
 		return host
 	}
 	return target
+}
+
+// SimWebhook is a simulated component's webhook subscription (ADR-1370): the
+// server path its webhook endpoint answers at (the token in it), the scheme
+// its driver declares, and the secret the sender signs or authenticates with
+// (the hmac key, the token, or user:password; empty for none).
+type SimWebhook struct {
+	Path   string
+	Scheme string
+	Secret string
+}
+
+// NodeSimWebhooks reads, for each component the node's simulator serves (an
+// endpoint on the node targets a loopback address), the subscription of its
+// webhook endpoint, keyed by component id (ADR-1370). The simulator plays the
+// external service that posts to it, so it is handed what that service would
+// hold: a real device on the network (no loopback endpoint) never appears.
+// It runs as the server's own read for the simulator's device list, which
+// the node's subject grant has already confined to its own node.
+func (p *PG) NodeSimWebhooks(ctx context.Context, name string) (map[string]SimWebhook, error) {
+	devices, err := p.NodeSimDevices(ctx, name, scope.Set{All: true})
+	if err != nil {
+		return nil, err
+	}
+	simulated := map[string]bool{}
+	for _, d := range devices {
+		if ip := net.ParseIP(d.Address); ip != nil && ip.IsLoopback() {
+			simulated[d.ComponentID] = true
+		}
+	}
+	if len(simulated) == 0 {
+		return nil, nil
+	}
+	ids := make([]string, 0, len(simulated))
+	for id := range simulated {
+		ids = append(ids, id)
+	}
+	rows, err := p.pool.Query(ctx, `
+		select e.component::text from webhook_token w join endpoint e on e.id = w.endpoint_id
+		where e.component = any($1::uuid[])`, ids)
+	if err != nil {
+		return nil, fmt.Errorf("storage: node sim webhooks %q: %w", name, err)
+	}
+	var comps []string
+	for rows.Next() {
+		var c string
+		if err := rows.Scan(&c); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("storage: scan sim webhook: %w", err)
+		}
+		comps = append(comps, c)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("storage: node sim webhooks %q: %w", name, err)
+	}
+	out := map[string]SimWebhook{}
+	for _, c := range comps {
+		tok, _, err := p.nodeSecretFields(ctx, WebhookTokenSecret, c)
+		if err != nil {
+			continue // the token was deleted: nothing to post to until it is minted again
+		}
+		t, err := p.ResolveWebhook(ctx, WebhookTokenHash(tok["token"]))
+		if err != nil {
+			continue
+		}
+		out[c] = SimWebhook{Path: "/api/v1/webhooks/" + tok["token"], Scheme: t.Scheme, Secret: webhookSenderSecret(t.Scheme, t.Credential)}
+	}
+	return out, nil
+}
+
+// webhookSenderSecret is the secret a sender holds for a scheme, from the
+// endpoint's credential fields: the hmac key, the shared token, or
+// user:password.
+func webhookSenderSecret(scheme string, f map[string]string) string {
+	switch scheme {
+	case driver.WebhookHMAC:
+		return f["key"]
+	case driver.WebhookToken:
+		return f["token"]
+	case driver.WebhookBasic:
+		if f["username"] == "" && f["password"] == "" {
+			return ""
+		}
+		return f["username"] + ":" + f["password"]
+	}
+	return ""
 }

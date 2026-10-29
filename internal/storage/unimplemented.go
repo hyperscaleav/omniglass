@@ -529,6 +529,9 @@ func (UnimplementedGateway) WithSimAddressLock(_ context.Context, fn func() erro
 func (UnimplementedGateway) NodeSimDevices(context.Context, string, scope.Set) ([]SimDevice, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) NodeSimWebhooks(context.Context, string) (map[string]SimWebhook, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) ResolveTaskOwner(context.Context, string, string) (TaskOwner, bool, error) {
 	return TaskOwner{}, false, nil
 }

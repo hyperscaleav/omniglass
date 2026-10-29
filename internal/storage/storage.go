@@ -730,6 +730,10 @@ type Gateway interface {
 	// NodeSimDevices lists the components a simulator beside the node serves,
 	// within the component read scope.
 	NodeSimDevices(ctx context.Context, name string, read scope.Set) ([]SimDevice, error)
+	// NodeSimWebhooks reads the webhook subscription of each simulated
+	// component on the node (ADR-1370), keyed by component id: only for the
+	// simulator's own device list, never an operator's read.
+	NodeSimWebhooks(ctx context.Context, name string) (map[string]SimWebhook, error)
 	// GetSimImpairment and SetSimImpairment read and record what is broken on
 	// a simulated component (by resolved id; the caller checks scope).
 	GetSimImpairment(ctx context.Context, componentID string) (impair.Impairment, error)

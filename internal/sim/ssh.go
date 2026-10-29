@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -43,7 +44,7 @@ func (d *Device) StartSSH(port int, defaultUser, defaultPassword string, permiss
 // bound.
 func (d *Device) startSSH(port int, defaultUser, defaultPassword string, permissive bool) (net.Addr, error) {
 	if d.sshHostKey == nil {
-		k, err := generateHostKey()
+		k, err := deviceSSHHostKey(d.DeviceID)
 		if err != nil {
 			return nil, fmt.Errorf("host key: %w", err)
 		}
@@ -307,6 +308,15 @@ func (d *Device) sshPort() int {
 
 // generateHostKey produces an ephemeral ed25519 host key. Demo posture,
 // the client ignores host key verification with InsecureIgnoreHostKey.
+// deviceSSHHostKey is the device's ssh host key, derived from its id (#1370)
+// as its https key is, so a key a node pinned on first use survives a
+// simulator restart, as a real device keeps its key across a reboot. A
+// rotation (a reimaged device) draws a random one.
+func deviceSSHHostKey(deviceID string) (ssh.Signer, error) {
+	seed := sha256.Sum256([]byte("omniglass-sim-ssh\x00" + deviceID))
+	return ssh.NewSignerFromKey(ed25519.NewKeyFromSeed(seed[:]))
+}
+
 func generateHostKey() (ssh.Signer, error) {
 	_, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
