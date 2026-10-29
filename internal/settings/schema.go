@@ -15,6 +15,10 @@ type Settings struct {
 	Keybindings Keybindings       `json:"keybindings" settings:"profile,client"`
 	Label       LabelSettings     `json:"label" settings:"platform,client"`
 	Retention   RetentionSettings `json:"retention" settings:"platform,client"`
+	// Collection is how the install's collection reports on itself (#1369):
+	// platform domain, client-visible, as retention is, since a chart of a
+	// collection telemetry series reads its window.
+	Collection CollectionSettings `json:"collection" settings:"platform,client"`
 	// Notification is the outbound lane's install-wide policy (#618): platform
 	// domain and NOT client-visible, since it names where the platform may send
 	// (an admin's business) rather than how anything renders.
@@ -110,6 +114,19 @@ type RetentionSettings struct {
 	InfoLogDays    int `json:"log_info_days" minimum:"1" maximum:"36500" default:"14" doc:"Days an info or notice log line, or one with no severity, is kept"`
 	WarningLogDays int `json:"log_warning_days" minimum:"1" maximum:"36500" default:"30" doc:"Days a warning log line is kept"`
 	ErrorLogDays   int `json:"log_error_days" minimum:"1" maximum:"36500" default:"90" doc:"Days an error, critical, alert or emergency log line is kept"`
+}
+
+// CollectionSettings is the collection namespace (#1369): the platform
+// defaults of the collection cadence model (#1373), which an operator's
+// override and a driver's declaration take precedence over once they exist.
+//
+// ReportSeconds is the window each endpoint's collection telemetry covers:
+// the node aggregates its polls' durations and failures and its listeners'
+// claimed and unclaimed pushes over it, and the server its webhook posts, so
+// the telemetry costs a few rows per endpoint per window however fast a
+// driver polls. The node reads it off its worklist, at heartbeat granularity.
+type CollectionSettings struct {
+	ReportSeconds int `json:"report_seconds" minimum:"10" maximum:"3600" default:"60" doc:"Seconds each endpoint's collection telemetry covers: its polls' mean duration and failures, and the pushes its listeners claimed or did not, reported once a window"`
 }
 
 // LogDays is the window for one log retention band; 0 for an unknown band.

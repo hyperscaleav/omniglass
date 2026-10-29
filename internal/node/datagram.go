@@ -231,6 +231,7 @@ func (m *sessionManager) openDatagram(id string, w datagramWant) error {
 func (m *sessionManager) closeDatagram(id string, h *heldDatagram, why string) {
 	_ = h.sock.Close()
 	delete(m.datagrams, id)
+	m.keepPushes(id, h.router)
 	taskID, endpoint := h.publishTo()
 	slog.Info("udp socket closed", "facility", "session", "task", taskID, "endpoint", endpoint, "target", h.conn.target, "reason", why)
 }
