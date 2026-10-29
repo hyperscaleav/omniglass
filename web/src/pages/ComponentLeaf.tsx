@@ -367,7 +367,11 @@ export default function ComponentLeaf() {
             <Show when={vitals().length > 0}>
               <section data-testid="leaf-vitals" class="rounded-box border border-base-300 bg-base-100 p-3.5 text-sm">
                 <Eyebrow label="Vitals" hint="The latest sample per series; a dot marks the component speaking, not a contract default standing in. A metric several endpoints collect shows the newest of them and says which." />
-                <dl class="mt-2 grid grid-cols-[minmax(7rem,max-content)_minmax(5rem,max-content)_1fr] gap-x-3 gap-y-1">
+                {/* Rows align on their first baseline (#1379): the label is
+                    the card's text and the value smaller monospace, and a
+                    stretched row would start each at the top, lifting the
+                    value above its label. */}
+                <dl class="mt-2 grid grid-cols-[minmax(7rem,max-content)_minmax(5rem,max-content)_1fr] items-baseline gap-x-3 gap-y-1">
                   <For each={vitalKeys()}>
                     {(key) => (
                       <Show when={vitalByKey().get(key)}>
@@ -377,7 +381,9 @@ export default function ComponentLeaf() {
                             <dd data-testid={`vital-${key}`} class="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 font-mono text-xs">
                               <span>{String(row().value)}</span>
                               <Show when={row().sampled} fallback={<span class="text-[10px] text-base-content/40">contract default</span>}>
-                                <span class="h-1.5 w-1.5 flex-none self-center rounded-full bg-success" title="live series" />
+                                {/* Centered on the value's digits, not on its line box,
+                                    which rests the dot on the baseline (#1379). */}
+                                <span class="h-1.5 w-1.5 flex-none -translate-y-px self-center rounded-full bg-success" title="live series" />
                               </Show>
                               <Show when={row().sourceRuleId}>
                                 <CalcRuleLink name={row().sourceRule!} id={row().sourceRuleId!} />
