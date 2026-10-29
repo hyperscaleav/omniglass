@@ -390,6 +390,10 @@ binding and needs update on the owner it leaves as well, a re-put to the same ow
 an unregistered key, an owner that is a place or a node, or the conduit itself as owner is a 422,
 the value rides the path as one percent-encoded segment (`room%2F1` round-trips), and every change is audited in
 its transaction, naming both ends.
+`GET /components/{name}/unbound-identities` (gated `component:read`, scope-injected on the conduit)
+reads the conduit's inbox of identities it reported that no binding places (#1388): one row per match
+key and value, its count, first and last heard and the keys its samples carried, most recently heard
+first, bounded at 1024 per conduit and aged out after seven days; binding one lets its row go.
 
 **A simulated device can be broken on purpose.** `GET` and `PUT /components/{name}/impairment`
 (gated `simulation:read` and `simulation:update`, component-scoped, the write audited) read and set
