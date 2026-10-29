@@ -130,6 +130,13 @@ interfaces:
     protocol: icmp
     doc: { summary: "ICMP ping reachability", tags: [monitoring] }
 
+# How the simulator subscribes this service to its webhook endpoint (#1370,
+# ADR-1370): the subscribe route above, called with the endpoint's URL and
+# signing key when the service's component holds a webhook endpoint, as the
+# service's own admin would. A lab's posts flow from the start.
+webhook:
+  subscribe: /api/webhooks
+
 computed:
   - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
 

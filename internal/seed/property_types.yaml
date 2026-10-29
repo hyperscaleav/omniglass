@@ -160,6 +160,11 @@ property_types:
     validation: { enum: [up, down] }
     label: Link State
     description: Whether the link between a component's paired ends (an extender's transmitter and receiver) is up.
+  - name: booking-state
+    data_type: string
+    validation: { enum: [booked, free] }
+    label: Booking State
+    description: Whether a space is booked now (a meeting in progress) or free, as its scheduling service reports it.
   # Declared attribute properties: the starter set a field draws from.
   - name: serial-number
     data_type: string
