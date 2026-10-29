@@ -117,7 +117,7 @@ property_types:
       because its hardware was never installed, which no alarm will ever fire for.
   - name: video-input
     data_type: string
-    validation: { enum: [hdmi1, hdmi2, hdmi3, dp1, usbc] }
+    validation: { enum: [hdmi1, hdmi2, hdmi3, hdmi4, hdmi5, hdmi6, dp1, usbc] }
     label: Video Input
     description: >-
       The selected video input on a display or switcher. A settable state: the
@@ -148,6 +148,18 @@ property_types:
     validation: { enum: [occupied, vacant] }
     label: Occupancy State
     description: Whether a space reads occupied or vacant by its occupancy source.
+  # A signal path's state (#895): whether video arrives, and whether the
+  # link carrying it is up.
+  - name: signal-state
+    data_type: string
+    validation: { enum: [present, absent] }
+    label: Signal State
+    description: Whether a component reports a video signal arriving where it is watched (a switcher output, an extender's link).
+  - name: link-state
+    data_type: string
+    validation: { enum: [up, down] }
+    label: Link State
+    description: Whether the link between a component's paired ends (an extender's transmitter and receiver) is up.
   # Declared attribute properties: the starter set a field draws from.
   - name: serial-number
     data_type: string

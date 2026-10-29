@@ -371,6 +371,18 @@
    "description": "Whether a space reads occupied or vacant by its occupancy source."
   },
   {
+   "name": "signal-state",
+   "data_type": "string",
+   "label": "Signal State",
+   "description": "Whether a component reports a video signal arriving where it is watched (a switcher output, an extender's link)."
+  },
+  {
+   "name": "link-state",
+   "data_type": "string",
+   "label": "Link State",
+   "description": "Whether the link between a component's paired ends (an extender's transmitter and receiver) is up."
+  },
+  {
    "name": "serial-number",
    "data_type": "string",
    "label": "Serial number",
@@ -2601,6 +2613,20 @@
    "polls": 1
   },
   {
+   "id": "meridian-mx-snmp",
+   "label": "Meridian MX SNMP",
+   "version": "1.0.0",
+   "transport": "snmp",
+   "polls": 2
+  },
+  {
+   "id": "meridian-xl-snmp",
+   "label": "Meridian XL SNMP",
+   "version": "1.0.0",
+   "transport": "snmp",
+   "polls": 2
+  },
+  {
    "id": "kestrel-api",
    "label": "Kestrel Device API",
    "version": "1.0.0",
@@ -2880,7 +2906,7 @@
    "id": "meridian-mx-84",
    "label": "Meridian MX 84",
    "vendor_id": "meridian",
-   "driver_id": "snmp-generic",
+   "driver_id": "meridian-mx-snmp",
    "component_type": "presentation-switcher",
    "kind": "device"
   },
@@ -2888,7 +2914,7 @@
    "id": "meridian-xl-1",
    "label": "Meridian XL-1",
    "vendor_id": "meridian",
-   "driver_id": "snmp-generic",
+   "driver_id": "meridian-xl-snmp",
    "component_type": "av-extender",
    "kind": "device"
   },

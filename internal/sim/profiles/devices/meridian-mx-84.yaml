@@ -1,0 +1,168 @@
+# yaml-language-server: $schema=schema.json
+# Meridian MX 84, Presentation Switcher
+#
+# Meridian is the lab's fictional signal-distribution vendor. The MX 84
+# is an eight-input, four-output presentation switcher in a room's rack:
+# laptops and the room PC come in, the displays and the capture feed go
+# out. What an operator watches it for is which input each output shows,
+# and whether that input carries a signal at all (a dark display is
+# usually a laptop asleep, not a broken display).
+#
+# Monitoring is SNMP on the Meridian arc (1.3.6.1.4.1.55550): signal
+# presence per input in an input table, the routed input and its signal
+# per output in an output table. Routing is an HTTP JSON API behind the
+# Meridian header key.
+
+name: meridian-mx-84
+manufacturer: Meridian
+model: "MX 84"
+device_type: presentation-switcher
+slug_prefix: switcher
+
+doc:
+  summary: "Meridian MX 84 eight-input, four-output presentation switcher"
+  description: |
+    Rack presentation switcher. Monitored over SNMP (per-input signal,
+    per-output route and signal); routed over an HTTP JSON API behind
+    the Meridian header key.
+
+interfaces:
+  - name: http-api
+    protocol: http
+    port: 80
+    doc: { summary: "Meridian routing API", tags: [management, api] }
+    auth:
+      type: header
+      header: "X-Meridian-Key"
+      api_key: "meridian-lab-key"
+      enforce: true
+    api_surface: meridian-switcher
+    routes:
+      - match: "GET /api/status"
+        template: api/meridian/switcher-status.json.gotempl
+        doc: { summary: "Inputs, outputs and identity", tags: [api, status] }
+
+      # Route an input to an output (1 to 4). The output takes the input's
+      # signal at once.
+      - match: "POST /api/route"
+        template: api/meridian/route-ack.json.gotempl
+        doc: { summary: "Route an input to an output", tags: [api, control] }
+        example: |
+          {"output": 1, "input": "hdmi2"}
+        mutations:
+          - path: 'status.outputs.{{ .Request.Body.output }}{{ guard "^[1-4]$" .Request.Body.output }}.input'
+            value: "{{ .Request.Body.input }}"
+            enum: [hdmi1, hdmi2, hdmi3, hdmi4, hdmi5, hdmi6, dp1, usbc]
+          - path: 'status.outputs.{{ .Request.Body.output }}{{ guard "^[1-4]$" .Request.Body.output }}.signal'
+            value: '{{ index .State.status.inputs (printf "%v" .Request.Body.input) }}'
+
+      # A source plugged in or unplugged (a laptop arriving, going to sleep).
+      - match: "POST /api/inputs/signal"
+        template: api/meridian/route-ack.json.gotempl
+        doc: { summary: "Set an input's signal (a source plugged in or out)", tags: [api, control] }
+        example: |
+          {"input": "hdmi1", "signal": false}
+        mutations:
+          - path: 'status.inputs.{{ segment .Request.Body.input }}'
+            value: "{{ .Request.Body.signal }}"
+            enum: ["true", "false"]
+
+      - match: "POST /api/admin/reboot"
+        template: api/meridian/reboot-ack.json.gotempl
+        doc: { summary: "Reboot switcher (clears uptime)", tags: [api, admin] }
+        example: "{}"
+        mutations:
+          - { path: status.device.boot_epoch, value: "{{ now }}" }
+
+  - name: snmp
+    protocol: snmp
+    port: 161
+    doc: { summary: "SNMP monitoring", tags: [monitoring] }
+    api_surface: meridian-switcher
+    auth:
+      community: "public"
+      refused_community: "revoked"
+    # The Meridian arc, 1.3.6.1.4.1.55550: inputs at .1.<n> (signal, n 1 to
+    # 8 in the switcher's input order), outputs at .2.<column>.<n> (column 1
+    # the routed input, 2 its signal; n 1 to 4), identity at .5.
+    oid_map:
+      configuration.device.model:     "1.3.6.1.2.1.1.1.0"   # sysDescr
+      status.device.uptime:           "1.3.6.1.2.1.1.3.0"
+      status.inputs.hdmi1:            "1.3.6.1.4.1.55550.1.1"
+      status.inputs.hdmi2:            "1.3.6.1.4.1.55550.1.2"
+      status.inputs.hdmi3:            "1.3.6.1.4.1.55550.1.3"
+      status.inputs.hdmi4:            "1.3.6.1.4.1.55550.1.4"
+      status.inputs.hdmi5:            "1.3.6.1.4.1.55550.1.5"
+      status.inputs.hdmi6:            "1.3.6.1.4.1.55550.1.6"
+      status.inputs.dp1:              "1.3.6.1.4.1.55550.1.7"
+      status.inputs.usbc:             "1.3.6.1.4.1.55550.1.8"
+      status.outputs.1.input:         "1.3.6.1.4.1.55550.2.1.1"
+      status.outputs.2.input:         "1.3.6.1.4.1.55550.2.1.2"
+      status.outputs.3.input:         "1.3.6.1.4.1.55550.2.1.3"
+      status.outputs.4.input:         "1.3.6.1.4.1.55550.2.1.4"
+      status.outputs.1.signal:        "1.3.6.1.4.1.55550.2.2.1"
+      status.outputs.2.signal:        "1.3.6.1.4.1.55550.2.2.2"
+      status.outputs.3.signal:        "1.3.6.1.4.1.55550.2.2.3"
+      status.outputs.4.signal:        "1.3.6.1.4.1.55550.2.2.4"
+      configuration.firmware.version: "1.3.6.1.4.1.55550.5.1.0"
+      configuration.device.serial:    "1.3.6.1.4.1.55550.5.2.0"
+
+  - name: icmp
+    protocol: icmp
+    doc: { summary: "ICMP ping reachability", tags: [monitoring] }
+
+computed:
+  - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
+
+# Each output follows its routed input's signal: a source going dark goes
+# dark on every output showing it, within a tick. A scenario timeline
+# unplugs a laptop or puts the room PC to sleep through the inputs.
+behaviors:
+  - name: output_signal_follow
+    schedule:
+      interval: 10s
+    mutations:
+      - path: status.outputs.1.signal
+        value: '{{ index .State.status.inputs (printf "%v" (index .State.status.outputs "1" | get "input")) }}'
+      - path: status.outputs.2.signal
+        value: '{{ index .State.status.inputs (printf "%v" (index .State.status.outputs "2" | get "input")) }}'
+      - path: status.outputs.3.signal
+        value: '{{ index .State.status.inputs (printf "%v" (index .State.status.outputs "3" | get "input")) }}'
+      - path: status.outputs.4.signal
+        value: '{{ index .State.status.inputs (printf "%v" (index .State.status.outputs "4" | get "input")) }}'
+
+defaults:
+  status:
+    device:
+      boot_epoch: 0
+    # Each input's signal: the room PC (hdmi1) and the wall plate (hdmi2)
+    # are live, the table inputs wait for a laptop.
+    inputs:
+      hdmi1: true
+      hdmi2: true
+      hdmi3: false
+      hdmi4: false
+      hdmi5: false
+      hdmi6: false
+      dp1: false
+      usbc: false
+    # Outputs keyed 1 to 4 as the switcher's rear panel numbers them: the
+    # two displays, the confidence monitor, the capture feed.
+    outputs:
+      "1": { input: hdmi1, signal: true }
+      "2": { input: hdmi1, signal: true }
+      "3": { input: hdmi2, signal: true }
+      "4": { input: hdmi1, signal: true }
+    network:
+      ipv4:
+        address: ""
+        mac: ""
+  configuration:
+    device:
+      serial: ""
+      model: "MX 84"
+      manufacturer: "Meridian"
+    firmware:
+      version: "3.1.4"
+    network:
+      hostname: ""

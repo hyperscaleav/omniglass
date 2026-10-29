@@ -135,13 +135,13 @@ products:
   - id: meridian-mx-84
     label: Meridian MX 84
     vendor_id: meridian
-    driver_id: snmp-generic
+    driver_id: meridian-mx-snmp
     kind: device
     component_type: presentation-switcher
   - id: meridian-xl-1
     label: Meridian XL-1
     vendor_id: meridian
-    driver_id: snmp-generic
+    driver_id: meridian-xl-snmp
     kind: device
     component_type: av-extender
   # Newtron: control.

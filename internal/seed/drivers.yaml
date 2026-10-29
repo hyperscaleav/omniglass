@@ -31,6 +31,65 @@ drivers:
             # sysUpTime is timeticks (hundredths); the declared scale lands it
             # in the canon's seconds.
             - { name: uptime, extract: { oid: "1.3.6.1.2.1.1.3.0" }, transform: { scale: 0.01 } }
+  - id: meridian-mx-snmp
+    label: Meridian MX SNMP
+    version: "1.0.0"
+    spec:
+      version: 1
+      # The Meridian MX switcher over v2c (#895), from the Meridian arc
+      # (1.3.6.1.4.1.55550): output 1, the room's main display feed, its
+      # routed input and whether that input carries a signal. The other
+      # outputs and the per-input table wait on a driver naming an instance
+      # (#1252). Routing is the switcher's HTTP API, which this driver does
+      # not speak.
+      transport: snmp
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "161" }
+        - { name: community, kind: secret, secret_type: snmp-community, required: true }
+      polls:
+        - name: identity
+          schedule: { every: 5m }
+          request: { get: ["1.3.6.1.2.1.1.1.0", "1.3.6.1.4.1.55550.5.2.0", "1.3.6.1.4.1.55550.5.1.0"] }
+          emits:
+            - { name: model-number, extract: { oid: "1.3.6.1.2.1.1.1.0" } }
+            - { name: serial-number, extract: { oid: "1.3.6.1.4.1.55550.5.2.0" } }
+            - { name: firmware-version, extract: { oid: "1.3.6.1.4.1.55550.5.1.0" } }
+        - name: status
+          schedule: { every: 30s }
+          request: { get: ["1.3.6.1.2.1.1.3.0", "1.3.6.1.4.1.55550.2.1.1", "1.3.6.1.4.1.55550.2.2.1"] }
+          emits:
+            - { name: uptime, extract: { oid: "1.3.6.1.2.1.1.3.0" }, transform: { scale: 0.01 } }
+            - { name: video-input, extract: { oid: "1.3.6.1.4.1.55550.2.1.1" } }
+            - { name: signal-state, extract: { oid: "1.3.6.1.4.1.55550.2.2.1" }, transform: { map: { "true": present, "false": absent } } }
+  - id: meridian-xl-snmp
+    label: Meridian XL SNMP
+    version: "1.0.0"
+    spec:
+      version: 1
+      # The Meridian XL extender's receiver over v2c (#895), from the
+      # extender's branch of the Meridian arc (.55550.3): whether the link
+      # between the pair is up, and whether a signal arrives over it.
+      transport: snmp
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "161" }
+        - { name: community, kind: secret, secret_type: snmp-community, required: true }
+      polls:
+        - name: identity
+          schedule: { every: 5m }
+          request: { get: ["1.3.6.1.2.1.1.1.0", "1.3.6.1.4.1.55550.5.2.0", "1.3.6.1.4.1.55550.5.1.0"] }
+          emits:
+            - { name: model-number, extract: { oid: "1.3.6.1.2.1.1.1.0" } }
+            - { name: serial-number, extract: { oid: "1.3.6.1.4.1.55550.5.2.0" } }
+            - { name: firmware-version, extract: { oid: "1.3.6.1.4.1.55550.5.1.0" } }
+        - name: status
+          schedule: { every: 30s }
+          request: { get: ["1.3.6.1.2.1.1.3.0", "1.3.6.1.4.1.55550.3.1.0", "1.3.6.1.4.1.55550.3.2.0"] }
+          emits:
+            - { name: uptime, extract: { oid: "1.3.6.1.2.1.1.3.0" }, transform: { scale: 0.01 } }
+            - { name: link-state, extract: { oid: "1.3.6.1.4.1.55550.3.1.0" } }
+            - { name: signal-state, extract: { oid: "1.3.6.1.4.1.55550.3.2.0" }, transform: { map: { "true": present, "false": absent } } }
   - id: kestrel-api
     label: Kestrel Device API
     version: "1.0.0"
