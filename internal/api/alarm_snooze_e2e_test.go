@@ -134,3 +134,47 @@ func readSnooze(t *testing.T, f *ackFixture, component, id string) snoozeView {
 	t.Fatalf("alarm %s not in %+v", id, env.Alarms)
 	return snoozeView{}
 }
+
+// TestASnoozedConditionsNotificationsListAsSuppressed drives #1381 over the
+// routes: a clear during the snooze writes suppressed rows, which the list
+// filters by status under the caller's component scope, and :retry refuses.
+func TestASnoozedConditionsNotificationsListAsSuppressed(t *testing.T) {
+	f := newAckFixture(t)
+	f.c.do(f.owner, http.MethodPost, "/notification-targets", map[string]any{
+		"name": "ops-chat", "kind": "webhook", "url": "https://hooks.example.com/ops",
+	}, http.StatusCreated)
+	f.c.do(f.owner, http.MethodPost, "/action-rules", map[string]any{
+		"name": "page-ops", "on": []string{"raised", "cleared"}, "when": "true", "targets": []string{"ops-chat"},
+	}, http.StatusCreated)
+	f.c.do(f.responder, http.MethodPost, snoozePath(f.mine, f.mineAlarm, "snooze"), map[string]any{"duration": "1h"}, http.StatusOK)
+	f.c.do(f.owner, http.MethodDelete, "/components/"+f.mine+"/alarms/"+f.mineAlarm, nil, http.StatusNoContent)
+
+	type row struct {
+		ID         string `json:"id"`
+		Transition string `json:"transition"`
+		Status     string `json:"status"`
+		LastError  string `json:"last_error"`
+	}
+	var env struct {
+		Notifications []row `json:"notifications"`
+	}
+	if err := json.Unmarshal(f.c.do(f.watcher, http.MethodGet, "/notifications?status=suppressed", nil, http.StatusOK), &env); err != nil {
+		t.Fatal(err)
+	}
+	if len(env.Notifications) != 1 || env.Notifications[0].Transition != "cleared" || !strings.Contains(env.Notifications[0].LastError, "snoozed until") {
+		t.Fatalf("status=suppressed lists %+v, want the one cleared row with the snooze's reason", env.Notifications)
+	}
+	f.c.do(f.owner, http.MethodPost, "/notifications/"+env.Notifications[0].ID+":retry", nil, http.StatusConflict)
+
+	// A caller who reads only the far component sees none of it.
+	far := principalWithGrants(t, f.c.ctx, f.dsn, "far", []grant{{role: "viewer", scopeKind: "component", scopeID: f.theirsCompID}})
+	var none struct {
+		Notifications []row `json:"notifications"`
+	}
+	if err := json.Unmarshal(f.c.do(far, http.MethodGet, "/notifications?status=suppressed", nil, http.StatusOK), &none); err != nil {
+		t.Fatal(err)
+	}
+	if len(none.Notifications) != 0 {
+		t.Fatalf("a caller scoped to the far component listed %+v", none.Notifications)
+	}
+}

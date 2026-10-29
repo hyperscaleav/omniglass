@@ -5018,7 +5018,7 @@
      },
      {
       "name": "notification_status_check",
-      "expr": "CHECK ((status = ANY (ARRAY['queued'::text, 'sent'::text, 'failed'::text])))"
+      "expr": "CHECK ((status = ANY (ARRAY['queued'::text, 'sent'::text, 'failed'::text, 'suppressed'::text])))"
      },
      {
       "name": "notification_transition_check",

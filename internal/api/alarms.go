@@ -295,7 +295,7 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodPost,
 		Path:        "/components/{name}/alarms/{id}:snooze",
 		Summary:     "Snooze an alarm's condition",
-		Description: "Snoozes the alarm's condition, its component and dedup_key, for a duration from now (1m to 7d). Snoozing a snoozed condition replaces the deadline. It changes nothing else: it does not acknowledge, does not recompute health, a snoozed alarm stays in the unacknowledged queue, and a clear does not end it. It notifies nothing itself. Audited on this alarm. Gated by alarm:snooze, whose scope is resolved on the component tier from that permission; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not snooze on is a 403.",
+		Description: "Snoozes the alarm's condition, its component and dedup_key, for a duration from now (1m to 7d), so every notification any alarm of that condition would send, a raise or a clear, on any channel, is written suppressed with the reason instead, and a message already waiting to be retried is suppressed when its turn comes. Snoozing a snoozed condition replaces the deadline. It changes nothing else: it does not acknowledge, does not recompute health, a snoozed alarm stays in the unacknowledged queue, and a clear does not end it. It notifies nothing itself. Audited on this alarm. Gated by alarm:snooze, whose scope is resolved on the component tier from that permission; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not snooze on is a 403.",
 	}, "alarm", "snooze"), func(ctx context.Context, in *snoozeAlarmInput) (*alarmOutput, error) {
 		d, err := parseSnoozeDuration(in.Body.Duration)
 		if err != nil {
@@ -336,7 +336,7 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 type alarmTimelineEntryBody struct {
 	At       time.Time `json:"at" doc:"When it happened (a notification: when it was queued, the transition's own moment)"`
 	Kind     string    `json:"kind" enum:"event,audit,notification" doc:"An event carrying the alarm (a rule's fire or clear event), an audit row about it, or a notification about it (#618)"`
-	What     string    `json:"what" doc:"The event's type (e.g. condition-started), the audit action (raise, acknowledge or clear), or a notification's status as it stands (queued, sent or failed)"`
+	What     string    `json:"what" doc:"The event's type (e.g. condition-started), the audit action (raise, acknowledge, clear, snooze or unsnooze), or a notification's status as it stands (queued, sent, failed, or suppressed when its condition was snoozed)"`
 	Actor    string    `json:"actor,omitempty" doc:"Who acted, by name; absent when the platform acted for a rule"`
 	Rule     string    `json:"rule,omitempty" doc:"The event rule the entry belongs to, by name: the rule that wrote the event, or the rule the platform acted for"`
 	Instance string    `json:"instance,omitempty" doc:"The series instance (an endpoint) an event is about"`
@@ -347,7 +347,7 @@ type alarmTimelineEntryBody struct {
 	Transition   string `json:"transition,omitempty" doc:"The alarm edge a notification is about: raised or cleared"`
 	Target       string `json:"target,omitempty" doc:"The target a notification goes to, by name"`
 	Attempts     int    `json:"attempts,omitempty" doc:"A notification's attempts so far"`
-	Error        string `json:"error,omitempty" doc:"Why a notification's last attempt failed"`
+	Error        string `json:"error,omitempty" doc:"Why a notification's last attempt failed, or why a suppressed one was held back"`
 	Channel      string `json:"channel,omitempty" enum:"webhook,inbox,email," doc:"How a notification travels: webhook, a person's inbox, or email"`
 	Recipient    string `json:"recipient,omitempty" doc:"The person a notification is addressed to, by username: shown to that person and to holders of principal:read:admin"`
 	Withheld     bool   `json:"recipient_withheld,omitempty" doc:"True when a notification is addressed to a person whose name the caller may not see"`
@@ -371,7 +371,7 @@ func registerAlarmTimelineRoute(api huma.API, a *authenticator, gw storage.Gatew
 		Method:      http.MethodGet,
 		Path:        "/components/{name}/alarms/{id}:timeline",
 		Summary:     "Read an alarm's timeline",
-		Description: "The alarm's history in one list, oldest first: the events that carry it (an event rule's fire event, which opened it, and its clear event, which resolved it) merged by time with its audit rows (the raise, each acknowledgement, the clear, and a rule edit that opened or resolved it, naming the editor) and the notifications its transitions queued, each at the moment it was queued with its status as it stands (#618). At one instant an event comes before the audit row it caused, and that before a notification. Gated by alarm:read; a component outside the caller's component read scope, and an alarm not on the component, are a non-disclosing 404.",
+		Description: "The alarm's history in one list, oldest first: the events that carry it (an event rule's fire event, which opened it, and its clear event, which resolved it) merged by time with its audit rows (the raise, each acknowledgement, the clear, each snooze and unsnooze, and a rule edit that opened or resolved it, naming the editor) and the notifications its transitions queued, each at the moment it was queued with its status as it stands (#618). At one instant an event comes before the audit row it caused, and that before a notification. Gated by alarm:read; a component outside the caller's component read scope, and an alarm not on the component, are a non-disclosing 404.",
 	}, "alarm", "read"), func(ctx context.Context, in *clearAlarmInput) (*alarmTimelineOutput, error) {
 		compID, err := requireComponentInScope(ctx, a, gw, in.Name, "read")
 		if err != nil {

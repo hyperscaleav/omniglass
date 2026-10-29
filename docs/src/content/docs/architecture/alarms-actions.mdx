@@ -189,6 +189,20 @@ so they show on its [timeline](#the-alarms-timeline) as `snooze` and `unsnooze` 
 timeline's read. Every alarm read carries `snoozed_until` and `snoozed_by` while its condition is
 snoozed, `snoozed_by` resolved when read as the acknowledger is.
 
+**What it holds back: every notification of the condition, written `suppressed`.** At the one seam
+every raise and clear passes, one indexed lookup of the alarm's condition runs once some
+[action rule](#the-action_rule-when-a-message-is-sent) fires, and while the condition is snoozed each
+row the firing rules would write (webhook, email, inbox, a group's people, a personal rule's owner) is
+written with the terminal status **`suppressed`** instead of `queued` or `sent`, the reason in
+`last_error` (`the condition is snoozed until 2026-10-29 14:30 UTC by alice`). A raise and a clear
+are both suppressed, so nobody gets a closing message about a raise they were never told of. A rule
+whose `when` fails still writes `failed`, so a broken rule stays visible. Nothing is sent and nothing
+reaches an inbox, and the alarm's timeline keeps every row it held back. Where a row waits, the tick
+judges it again: a row queued before the snooze and still waiting out a retry is marked `suppressed`
+when its turn comes, so "stop paging me" also stops the retry already on its way. A suppressed row is
+final: it is never released or retried, and `:retry` refuses it. It is the primitive storm
+suppression and dedupe (#1345) consume.
+
 **It governs notifications and nothing else.**
 
 - Acknowledging does not snooze, snoozing does not acknowledge, and a snoozed, unacknowledged alarm
@@ -704,7 +718,8 @@ below is later).
 ### Delivery: the `notification` row
 
 A **notification** is one message on its way, a stateful row holding its own delivery state
-(`queued`, `sent`, `failed`). It is written **in the same transaction as the alarm transition**, at
+(`queued`, `sent`, `failed`, or `suppressed`, written but never sent because its condition was
+[snoozed](#snooze-a-fact-about-a-condition)). It is written **in the same transaction as the alarm transition**, at
 the one seam every hand and rule raise and clear passes, so no transition is lost and none is
 written twice; it is rendered then, so a retry sends the same bytes and a preview is what a
 delivery carries. A server tick drains the due rows, one per transaction under `FOR UPDATE SKIP
@@ -719,7 +734,7 @@ The delivery is visible where an operator already looks: each row joins its
 [alarm's timeline](#the-alarms-timeline) after the edge that queued it, reading its status as it
 stands, and a failed one that was attempted is re-queued with `POST /notifications/{id}:retry` (`notification:retry`,
 an operator's, beside `alarm:acknowledge`), from the timeline or the CLI. `GET /notifications` lists
-them by alarm, target or status, and every read is scoped by the alarm's component exactly as the
+them by alarm, target or status (`?status=suppressed` lists what snoozes held back), and every read is scoped by the alarm's component exactly as the
 alarm reads are: a principal never sees a message about a component outside its scope.
 
 :::design[The rest of the action (ADR-0050)]
@@ -873,6 +888,19 @@ not. The **target design shape** adds the owner arc, `status`, `opened_at`, and 
   }}
 />
 
+A snooze is a row of its own, one per snoozed condition, keyed by the condition rather than the alarm
+([above](#snooze-a-fact-about-a-condition)):
+
+<SchemaTable
+  table="alarm_snooze"
+  notes={{
+    component_id: 'With dedup_key, the condition identity (ADR-0075) the snooze is on; it goes with its component',
+    dedup_key: 'The condition snoozed; every alarm of it, past and future, reads the snooze while it holds',
+    snoozed_until: 'When it ends; the index on it is what the end-of-snooze sweep reads. Snoozing again replaces it',
+    snoozed_by: 'Who set it; ON DELETE SET NULL, its name resolved when read, and audit_log keeps the name',
+  }}
+/>
+
 The notification lane is four tables: the `notification_type` and `notification_target`
 registries, the `action_rule` and the targets it sends to (`action_rule_target`), and the
 `notification` delivery row.
@@ -914,7 +942,7 @@ registries, the `action_rule` and the targets it sends to (`action_rule_target`)
     component_id: 'The alarm\'s component, denormalized for the scope filter every read injects',
     rule_name: 'The action rule that queued it, kept by name after the rule is deleted (as type_name and target_name are)',
     facts: 'The alarm facts the templates rendered over, sent as the envelope\'s facts',
-    status: 'queued, sent or failed; the partial index on due queued rows is what the tick drains',
+    status: 'queued, sent, failed or suppressed (a snoozed condition\'s row, written but never sent); the partial index on due queued rows is what the tick drains',
     next_attempt_at: 'When the tick next tries a queued row: now, then 10s doubling after each failure',
     channel: 'How it travels: webhook, inbox (delivered by its commit) or email',
     recipient_principal_id: 'The person it is addressed to; ON DELETE SET NULL, recipient_name keeping who it was',

@@ -258,3 +258,68 @@ func TestSnoozeRefusesABadDurationAndAMiss(t *testing.T) {
 		t.Errorf("snooze on an unknown component: err %v, want ErrAlarmNotFound", err)
 	}
 }
+
+// TestUnsnoozingAnExpiredSnoozeRecordsNothing: a snooze past its deadline the
+// sweep has not reached is no snooze in force, so ending it by hand writes no
+// unsnooze row (an unsnooze that ended nothing would read as one on the
+// timeline).
+func TestUnsnoozingAnExpiredSnoozeRecordsNothing(t *testing.T) {
+	gw, dsn, comp, raised := ackFixture(t)
+	ctx := context.Background()
+	actor := ackActor(t, dsn, "jordan-ops")
+	if _, err := gw.SnoozeAlarm(ctx, actor, comp, raised.ID, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	if err := gw.(*storage.PG).ExportExpireSnoozes(ctx); err != nil {
+		t.Fatal(err)
+	}
+	got, err := gw.UnsnoozeAlarm(ctx, actor, comp, raised.ID)
+	if err != nil || got.SnoozedUntil != nil {
+		t.Fatalf("unsnooze of an expired snooze = %+v (%v)", got, err)
+	}
+	if n := auditRows(t, dsn, "unsnooze", raised.ID); n != 0 {
+		t.Errorf("unsnoozing an expired snooze wrote %d audit rows, want none", n)
+	}
+	// And a snooze after it audits no before: none was in force.
+	if _, err := gw.SnoozeAlarm(ctx, actor, comp, raised.ID, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	if _, before, _ := snoozeAudit(t, dsn, "snooze", raised.ID); before != nil {
+		t.Errorf("a snooze after an expired one audited before %v, want none", before)
+	}
+}
+
+// TestConcurrentFirstSnoozesAuditTheReplacement: two first snoozes of one
+// condition at once serialize on the condition, so exactly one of them audits
+// no before and the other audits the deadline it replaced.
+func TestConcurrentFirstSnoozesAuditTheReplacement(t *testing.T) {
+	gw, dsn, comp, raised := ackFixture(t)
+	ctx := context.Background()
+	actor := ackActor(t, dsn, "jordan-ops")
+	errs := make(chan error, 2)
+	for _, d := range []time.Duration{time.Hour, 4 * time.Hour} {
+		go func(d time.Duration) {
+			_, err := gw.SnoozeAlarm(ctx, actor, comp, raised.ID, d)
+			errs <- err
+		}(d)
+	}
+	for range 2 {
+		if err := <-errs; err != nil {
+			t.Fatal(err)
+		}
+	}
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(ctx)
+	var withBefore, without int
+	if err := conn.QueryRow(ctx, `select count(*) filter (where old is not null and old <> 'null'::jsonb),
+		count(*) filter (where old is null or old = 'null'::jsonb)
+		from audit_log where verb = 'snooze' and resource_id = $1`, raised.ID).Scan(&withBefore, &without); err != nil {
+		t.Fatal(err)
+	}
+	if withBefore != 1 || without != 1 {
+		t.Errorf("two concurrent first snoozes audited %d with a before and %d without, want one of each", withBefore, without)
+	}
+}

@@ -983,7 +983,7 @@ Snooze an alarm's condition
 omniglass component alarm snooze <name> <id> [flags]
 ```
 
-Snoozes the alarm's condition, its component and dedup_key, for a duration from now (1m to 7d). Snoozing a snoozed condition replaces the deadline. It changes nothing else: it does not acknowledge, does not recompute health, a snoozed alarm stays in the unacknowledged queue, and a clear does not end it. It notifies nothing itself. Audited on this alarm. Gated by alarm:snooze, whose scope is resolved on the component tier from that permission; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not snooze on is a 403.
+Snoozes the alarm's condition, its component and dedup_key, for a duration from now (1m to 7d), so every notification any alarm of that condition would send, a raise or a clear, on any channel, is written suppressed with the reason instead, and a message already waiting to be retried is suppressed when its turn comes. Snoozing a snoozed condition replaces the deadline. It changes nothing else: it does not acknowledge, does not recompute health, a snoozed alarm stays in the unacknowledged queue, and a clear does not end it. It notifies nothing itself. Audited on this alarm. Gated by alarm:snooze, whose scope is resolved on the component tier from that permission; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not snooze on is a 403.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -1003,7 +1003,7 @@ Read an alarm's timeline
 omniglass component alarm timeline <name> <id>
 ```
 
-The alarm's history in one list, oldest first: the events that carry it (an event rule's fire event, which opened it, and its clear event, which resolved it) merged by time with its audit rows (the raise, each acknowledgement, the clear, and a rule edit that opened or resolved it, naming the editor) and the notifications its transitions queued, each at the moment it was queued with its status as it stands (#618). At one instant an event comes before the audit row it caused, and that before a notification. Gated by alarm:read; a component outside the caller's component read scope, and an alarm not on the component, are a non-disclosing 404.
+The alarm's history in one list, oldest first: the events that carry it (an event rule's fire event, which opened it, and its clear event, which resolved it) merged by time with its audit rows (the raise, each acknowledgement, the clear, each snooze and unsnooze, and a rule edit that opened or resolved it, naming the editor) and the notifications its transitions queued, each at the moment it was queued with its status as it stands (#618). At one instant an event comes before the audit row it caused, and that before a notification. Gated by alarm:read; a component outside the caller's component read scope, and an alarm not on the component, are a non-disclosing 404.
 
 Example:
 
@@ -3753,7 +3753,7 @@ Retry a failed notification
 omniglass notification retry <id>
 ```
 
-Re-queues a failed notification for a fresh run of attempts, sending the same rendered message with the same Idempotency-Key. One that is queued or sent, or one that failed before any attempt (its rule's when did not run, or its type did not render, so it holds no message), is a 409. Audited as retry. Gated by notification:retry, whose scope resolves on the component tier; a component outside the caller's component read scope is a non-disclosing 404, one it reads but may not retry on a 403.
+Re-queues a failed notification for a fresh run of attempts, sending the same rendered message with the same Idempotency-Key. One that is queued, sent or suppressed (its alarm's condition was snoozed), or one that failed before any attempt (its rule's when did not run, or its type did not render, so it holds no message), is a 409. Audited as retry. Gated by notification:retry, whose scope resolves on the component tier; a component outside the caller's component read scope is a non-disclosing 404, one it reads but may not retry on a 403.
 
 Example:
 

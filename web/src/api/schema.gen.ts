@@ -891,7 +891,7 @@ export interface paths {
         put?: never;
         /**
          * Snooze an alarm's condition
-         * @description Snoozes the alarm's condition, its component and dedup_key, for a duration from now (1m to 7d). Snoozing a snoozed condition replaces the deadline. It changes nothing else: it does not acknowledge, does not recompute health, a snoozed alarm stays in the unacknowledged queue, and a clear does not end it. It notifies nothing itself. Audited on this alarm. Gated by alarm:snooze, whose scope is resolved on the component tier from that permission; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not snooze on is a 403.
+         * @description Snoozes the alarm's condition, its component and dedup_key, for a duration from now (1m to 7d), so every notification any alarm of that condition would send, a raise or a clear, on any channel, is written suppressed with the reason instead, and a message already waiting to be retried is suppressed when its turn comes. Snoozing a snoozed condition replaces the deadline. It changes nothing else: it does not acknowledge, does not recompute health, a snoozed alarm stays in the unacknowledged queue, and a clear does not end it. It notifies nothing itself. Audited on this alarm. Gated by alarm:snooze, whose scope is resolved on the component tier from that permission; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not snooze on is a 403.
          */
         post: operations["snooze-component-alarm"];
         delete?: never;
@@ -909,7 +909,7 @@ export interface paths {
         };
         /**
          * Read an alarm's timeline
-         * @description The alarm's history in one list, oldest first: the events that carry it (an event rule's fire event, which opened it, and its clear event, which resolved it) merged by time with its audit rows (the raise, each acknowledgement, the clear, and a rule edit that opened or resolved it, naming the editor) and the notifications its transitions queued, each at the moment it was queued with its status as it stands (#618). At one instant an event comes before the audit row it caused, and that before a notification. Gated by alarm:read; a component outside the caller's component read scope, and an alarm not on the component, are a non-disclosing 404.
+         * @description The alarm's history in one list, oldest first: the events that carry it (an event rule's fire event, which opened it, and its clear event, which resolved it) merged by time with its audit rows (the raise, each acknowledgement, the clear, each snooze and unsnooze, and a rule edit that opened or resolved it, naming the editor) and the notifications its transitions queued, each at the moment it was queued with its status as it stands (#618). At one instant an event comes before the audit row it caused, and that before a notification. Gated by alarm:read; a component outside the caller's component read scope, and an alarm not on the component, are a non-disclosing 404.
          */
         get: operations["get-component-alarm-timeline"];
         put?: never;
@@ -3095,7 +3095,7 @@ export interface paths {
         put?: never;
         /**
          * Retry a failed notification
-         * @description Re-queues a failed notification for a fresh run of attempts, sending the same rendered message with the same Idempotency-Key. One that is queued or sent, or one that failed before any attempt (its rule's when did not run, or its type did not render, so it holds no message), is a 409. Audited as retry. Gated by notification:retry, whose scope resolves on the component tier; a component outside the caller's component read scope is a non-disclosing 404, one it reads but may not retry on a 403.
+         * @description Re-queues a failed notification for a fresh run of attempts, sending the same rendered message with the same Idempotency-Key. One that is queued, sent or suppressed (its alarm's condition was snoozed), or one that failed before any attempt (its rule's when did not run, or its type did not render, so it holds no message), is a 409. Audited as retry. Gated by notification:retry, whose scope resolves on the component tier; a component outside the caller's component read scope is a non-disclosing 404, one it reads but may not retry on a 403.
          */
         post: operations["retry-notification"];
         delete?: never;
@@ -5679,7 +5679,7 @@ export interface components {
              * @enum {string}
              */
             channel?: "webhook" | "inbox" | "email" | "";
-            /** @description Why a notification's last attempt failed */
+            /** @description Why a notification's last attempt failed, or why a suppressed one was held back */
             error?: string;
             /** @description The series instance (an endpoint) an event is about */
             instance?: string;
@@ -5702,7 +5702,7 @@ export interface components {
             target?: string;
             /** @description The alarm edge a notification is about: raised or cleared */
             transition?: string;
-            /** @description The event's type (e.g. condition-started), the audit action (raise, acknowledge or clear), or a notification's status as it stands (queued, sent or failed) */
+            /** @description The event's type (e.g. condition-started), the audit action (raise, acknowledge, clear, snooze or unsnooze), or a notification's status as it stands (queued, sent, failed, or suppressed when its condition was snoozed) */
             what: string;
         };
         AlarmTimelineOutputBody: {
@@ -9243,7 +9243,7 @@ export interface components {
             created_at: string;
             /** @description The notification's uuid, the Idempotency-Key its receiver sees */
             id: string;
-            /** @description Why the last attempt failed, never the URL or a credential */
+            /** @description Why the last attempt failed, or why a suppressed one was held back; never the URL or a credential */
             last_error?: string;
             /**
              * Format: int64
@@ -9269,10 +9269,10 @@ export interface components {
             /** Format: date-time */
             sent_at?: string;
             /**
-             * @description queued: on its way (its next attempt at next_attempt_at); sent: the receiver answered 2xx; failed: its last attempt failed, or it was refused before one
+             * @description queued: on its way (its next attempt at next_attempt_at); sent: the receiver answered 2xx; failed: its last attempt failed, or it was refused before one; suppressed: written but never sent, because its alarm's condition was snoozed (the reason in last_error)
              * @enum {string}
              */
-            status: "queued" | "sent" | "failed";
+            status: "queued" | "sent" | "failed" | "suppressed";
             /** @description The rendered subject */
             subject: string;
             /** @description The target it goes to, by name: a webhook, or the group or person target it reached its recipient through */
@@ -18878,7 +18878,7 @@ export interface operations {
                 /** @description Only those to this target, by name */
                 target?: string;
                 /** @description Only those in this status */
-                status?: "queued" | "sent" | "failed" | "";
+                status?: "queued" | "sent" | "failed" | "suppressed" | "";
                 /** @description At most this many, newest first (default 100) */
                 limit?: number;
             };
