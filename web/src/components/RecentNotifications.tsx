@@ -21,6 +21,9 @@ const STATUS: Record<Notification["status"], { word: string; cls: string }> = {
   queued: { word: "on its way", cls: "badge badge-sm badge-soft badge-info" },
   sent: { word: "sent", cls: "badge badge-sm badge-soft badge-success" },
   failed: { word: "failed", cls: "badge badge-sm badge-soft badge-error" },
+  // A delivery a snooze held back (#1318): what the snooze was for, muted,
+  // never a fault.
+  suppressed: { word: "held by a snooze", cls: "badge badge-sm badge-ghost" },
 };
 
 export default function RecentNotifications(p: { rule?: string; target?: string; hint: string }): JSX.Element {
