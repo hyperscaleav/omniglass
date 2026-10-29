@@ -276,7 +276,7 @@ func (p *PG) queueNotifications(ctx context.Context, tx pgx.Tx, componentID, ala
 	// with the reason instead, on every channel. A rule that failed stays
 	// failed, so a broken rule is still visible during a snooze.
 	if len(fires) > 0 {
-		reason, err := conditionSnooze(ctx, tx, alarmID)
+		reason, err := conditionSnooze(ctx, tx, alarmID, true)
 		if err != nil {
 			return err
 		}
@@ -553,7 +553,10 @@ func (p *PG) DeliverNext(ctx context.Context, send SendFunc) (bool, error) {
 	// The re-check where a row waits (#1318, the pattern of ADR-1341 point
 	// 3): a row of a condition snoozed since it was queued, a retry waiting
 	// out its backoff included, is suppressed with the reason, not sent.
-	suppressed, err := conditionSnooze(ctx, tx, ns.AlarmID)
+	// Read without the condition's lock: the send is already under way, and
+	// holding the lock across it would make an operator's snooze wait out a
+	// dead receiver's timeout.
+	suppressed, err := conditionSnooze(ctx, tx, ns.AlarmID, false)
 	if err != nil {
 		return true, err
 	}

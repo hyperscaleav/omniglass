@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
@@ -222,5 +224,78 @@ func TestTwoReplicasAnnounceOneExpiredSnoozeOnce(t *testing.T) {
 		if ns := f.list(t, storage.NotificationFilter{AlarmID: id}); len(ns) != 4 {
 			t.Errorf("alarm %s has %d rows, want its 2 raises and 2 announced once", id, len(ns))
 		}
+	}
+}
+
+// TestAVerbNeverSwallowsTheAnnouncementADeadlineOwes: a snooze whose
+// deadline passed before the sweep reached it, then unsnoozed or snoozed
+// again by hand, is still ended and announced exactly once.
+func TestAVerbNeverSwallowsTheAnnouncementADeadlineOwes(t *testing.T) {
+	for _, verb := range []string{"unsnooze", "snooze"} {
+		t.Run(verb, func(t *testing.T) {
+			f := newNotifyFixture(t)
+			a, err := f.gw.RaiseAlarm(f.ctx, "", "display-1", storage.AlarmSpec{Severity: "high", Message: "no video", DedupKey: "video"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			f.snoozeAndExpire(t, "display-1", a.ID)
+			if verb == "unsnooze" {
+				_, err = f.gw.UnsnoozeAlarm(f.ctx, "", "display-1", a.ID)
+			} else {
+				_, err = f.gw.SnoozeAlarm(f.ctx, "", "display-1", a.ID, time.Hour)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := f.gw.EndExpiredSnoozes(f.ctx, 10); err != nil {
+				t.Fatal(err)
+			}
+			if ns := f.list(t, storage.NotificationFilter{AlarmID: a.ID}); raisedRows(ns) != 4 {
+				t.Errorf("after the deadline then %s, %d raised rows, want the 2 first raises and 2 announced once", verb, raisedRows(ns))
+			}
+		})
+	}
+}
+
+// TestAHeldConditionDoesNotHoldUpTheSweep: an expired snooze whose condition
+// lock is held (a transition of it in flight) is skipped for the pass, and
+// the other expired snoozes still end in the same call.
+func TestAHeldConditionDoesNotHoldUpTheSweep(t *testing.T) {
+	f := newNotifyFixture(t)
+	held, err := f.gw.RaiseAlarm(f.ctx, "", "display-1", storage.AlarmSpec{Severity: "high", Message: "held", DedupKey: "a-held"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	free, err := f.gw.RaiseAlarm(f.ctx, "", "display-1", storage.AlarmSpec{Severity: "high", Message: "free", DedupKey: "b-free"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{held.ID, free.ID} {
+		if _, err := f.gw.SnoozeAlarm(f.ctx, "", "display-1", id, time.Hour); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := f.gw.ExportExpireSnoozes(f.ctx); err != nil {
+		t.Fatal(err)
+	}
+	conn, err := pgx.Connect(f.ctx, f.dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(f.ctx)
+	tx, err := conn.Begin(f.ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(f.ctx) }()
+	if _, err := tx.Exec(f.ctx, `select pg_advisory_xact_lock_shared(hashtextextended($1, 0))`, "alarm-snooze:"+held.ComponentID+"/a-held"); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := f.gw.EndExpiredSnoozes(f.ctx, 10); err != nil || n != 1 {
+		t.Fatalf("with one condition held the sweep ended %d (%v), want the other one", n, err)
+	}
+	_ = tx.Rollback(f.ctx)
+	if n, err := f.gw.EndExpiredSnoozes(f.ctx, 10); err != nil || n != 1 {
+		t.Fatalf("once released the sweep ended %d (%v), want the held one", n, err)
 	}
 }

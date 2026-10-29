@@ -735,7 +735,8 @@ A **notification** is one message on its way, a stateful row holding its own del
 (`queued`, `sent`, `failed`, or `suppressed`, written but never sent because its condition was
 [snoozed](#snooze-a-fact-about-a-condition)). It is written **in the same transaction as the alarm transition**, at
 the one seam every hand and rule raise and clear passes, so no transition is lost and none is
-written twice; it is rendered then, so a retry sends the same bytes and a preview is what a
+written twice (the one second set of rows is the announcement a
+[snooze's end](#snooze-a-fact-about-a-condition) makes, in that end's own transaction); it is rendered then, so a retry sends the same bytes and a preview is what a
 delivery carries. A server tick drains the due rows, one per transaction under `FOR UPDATE SKIP
 LOCKED`, the send made while the row is locked, so two replicas never send one twice outside the
 crash window between a send and its commit, and a restart loses nothing

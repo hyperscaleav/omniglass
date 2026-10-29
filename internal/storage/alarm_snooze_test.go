@@ -259,11 +259,11 @@ func TestSnoozeRefusesABadDurationAndAMiss(t *testing.T) {
 	}
 }
 
-// TestUnsnoozingAnExpiredSnoozeRecordsNothing: a snooze past its deadline the
-// sweep has not reached is no snooze in force, so ending it by hand writes no
-// unsnooze row (an unsnooze that ended nothing would read as one on the
-// timeline).
-func TestUnsnoozingAnExpiredSnoozeRecordsNothing(t *testing.T) {
+// TestUnsnoozingAnExpiredSnoozeEndsItAsTheSweepWould: a snooze past its
+// deadline the sweep has not reached was ended by its deadline, not by the
+// caller, so an unsnooze writes snooze-end from the platform (and the
+// announcement it owes), never an unsnooze that ended nothing.
+func TestUnsnoozingAnExpiredSnoozeEndsItAsTheSweepWould(t *testing.T) {
 	gw, dsn, comp, raised := ackFixture(t)
 	ctx := context.Background()
 	actor := ackActor(t, dsn, "jordan-ops")
@@ -278,7 +278,10 @@ func TestUnsnoozingAnExpiredSnoozeRecordsNothing(t *testing.T) {
 		t.Fatalf("unsnooze of an expired snooze = %+v (%v)", got, err)
 	}
 	if n := auditRows(t, dsn, "unsnooze", raised.ID); n != 0 {
-		t.Errorf("unsnoozing an expired snooze wrote %d audit rows, want none", n)
+		t.Errorf("unsnoozing an expired snooze wrote %d unsnooze rows, want none", n)
+	}
+	if n := auditRows(t, dsn, "snooze-end", raised.ID); n != 1 {
+		t.Errorf("unsnoozing an expired snooze wrote %d snooze-end rows, want the one its deadline owed", n)
 	}
 	// And a snooze after it audits no before: none was in force.
 	if _, err := gw.SnoozeAlarm(ctx, actor, comp, raised.ID, time.Hour); err != nil {

@@ -33,12 +33,17 @@ refs: [1318, 109, 618, 1341, 419, 1345]
      memberships as they stand then (a rule disabled during the snooze stays quiet; ADR-1341's
      queue-time scope check filters the people, unchanged). The end is audited: `unsnooze` on the
      alarm it was called on, naming the actor, or `snooze-end` from the platform on the condition's
-     latest alarm. A suppressed row is
+     latest alarm. A snooze past its deadline that the sweep has not reached is ended exactly so,
+     `snooze-end` and announcement included, by whichever verb touches its condition first, so an
+     unsnooze or a re-snooze in that moment never swallows what the deadline owed. A suppressed row is
      never released: the rules are judged again from scratch, so nobody gets a backlog of stale
      messages.
   4. **The deadline sweep runs on the notifier's 2s tick.** Each expired snooze is taken
      `FOR UPDATE SKIP LOCKED` and deleted in the same transaction that queues its announcement, so
-     replicas never announce one condition twice and a restart loses nothing. It moves to the time
+     replicas never announce one condition twice and a restart loses nothing. Every write to one
+     condition's snooze holds an advisory lock on the condition, and the queue seam holds it shared,
+     so a snooze waits for a transition already judged; the sweep only tries the lock and skips a
+     held condition for the rest of its pass. It moves to the time
      primitive when #419 lands, as ADR-0618 records for the drain.
 - **Refines** [ADR-0109](#adr-0109-an-alarm-carries-an-acknowledgement-and-not-a-snooze-or-a-resolve):
   its refusal of snooze rested on there being nothing to suppress, and #618 built the notification

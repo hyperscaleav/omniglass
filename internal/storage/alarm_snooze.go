@@ -97,11 +97,13 @@ func (p *PG) SnoozeAlarm(ctx context.Context, actorID, componentName, alarmID st
 	if err != nil {
 		return nil, err
 	}
+	if err := endExpiredTx(ctx, p, tx, component, key); err != nil {
+		return nil, err
+	}
 	// The deadline in force before, read under the condition's lock so two
-	// snoozes of one condition audit a true before each. A row past its
-	// deadline the sweep has not reached is no snooze in force.
+	// snoozes of one condition audit a true before each.
 	var before *time.Time
-	err = tx.QueryRow(ctx, `select case when snoozed_until > now() then snoozed_until end from alarm_snooze
+	err = tx.QueryRow(ctx, `select snoozed_until from alarm_snooze
 		where component_id = $1::uuid and dedup_key = $2 for update`, component.ID, key).Scan(&before)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return nil, fmt.Errorf("storage: read snooze: %w", err)
@@ -148,14 +150,18 @@ func (p *PG) UnsnoozeAlarm(ctx context.Context, actorID, componentName, alarmID 
 	if err != nil {
 		return nil, err
 	}
-	// A row past its deadline the sweep has not reached yet is deleted too,
-	// but it was no snooze in force, so ending it records nothing.
+	// A snooze past its deadline that the sweep has not reached was not
+	// ended by this caller: it is ended as the sweep would end it (snooze-end
+	// from the platform, and the announcement it owes), and what is left to
+	// unsnooze is nothing.
+	if err := endExpiredTx(ctx, p, tx, component, key); err != nil {
+		return nil, err
+	}
 	var until time.Time
-	var inForce bool
 	err = tx.QueryRow(ctx, `delete from alarm_snooze where component_id = $1::uuid and dedup_key = $2
-		returning snoozed_until, snoozed_until > now()`, component.ID, key).Scan(&until, &inForce)
+		returning snoozed_until`, component.ID, key).Scan(&until)
 	switch {
-	case errors.Is(err, pgx.ErrNoRows) || (err == nil && !inForce):
+	case errors.Is(err, pgx.ErrNoRows):
 	case err != nil:
 		return nil, fmt.Errorf("storage: unsnooze alarm %s: %w", alarmID, err)
 	default:
@@ -190,14 +196,14 @@ func SnoozeReason(until time.Time, by string) string {
 // condition's snooze), so the queue seam and the tick can afford it on every
 // transition and every row.
 //
-// It first takes the condition's snooze lock SHARED, to the end of the
+// With lock (the queue seam) it first takes the condition's snooze lock SHARED, to the end of the
 // caller's transaction, against the verbs' exclusive hold: a snooze cannot
 // commit between this read and the commit of the rows it judged (an inbox
 // row is delivered by that commit, so no later check could catch it), and a
 // transition of the condition waits for a snooze in flight. Shared, so
 // transitions never wait on each other. The verbs take nothing before the
 // lock and the sweep only tries it, so no order of the three can deadlock.
-func conditionSnooze(ctx context.Context, q txQuerier, alarmID string) (string, error) {
+func conditionSnooze(ctx context.Context, q txQuerier, alarmID string, lock bool) (string, error) {
 	var componentID, key string
 	err := q.QueryRow(ctx, `select component_id::text, dedup_key from alarm where id = $1::uuid`, alarmID).Scan(&componentID, &key)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -206,8 +212,10 @@ func conditionSnooze(ctx context.Context, q txQuerier, alarmID string) (string, 
 	if err != nil {
 		return "", fmt.Errorf("storage: read alarm %s: %w", alarmID, err)
 	}
-	if _, err := q.Exec(ctx, `select pg_advisory_xact_lock_shared(hashtextextended($1, 0))`, snoozeLockKey(componentID, key)); err != nil {
-		return "", fmt.Errorf("storage: lock the snooze on alarm %s: %w", alarmID, err)
+	if lock {
+		if _, err := q.Exec(ctx, `select pg_advisory_xact_lock_shared(hashtextextended($1, 0))`, snoozeLockKey(componentID, key)); err != nil {
+			return "", fmt.Errorf("storage: lock the snooze on alarm %s: %w", alarmID, err)
+		}
 	}
 	var until time.Time
 	var username, serviceName, nodeName *string
@@ -251,71 +259,101 @@ func endSnoozeTx(ctx context.Context, p *PG, tx pgx.Tx, actorID, verb, auditAlar
 	return p.queueNotificationsTx(ctx, tx, component.ID, open, TransitionRaised)
 }
 
+// endExpiredTx ends the condition's snooze if it is past its deadline, as
+// the sweep does: deleted, snooze-end audited from the platform on the
+// condition's latest alarm, and a still-raised condition announced again. A
+// verb calls it first under the condition's lock, so a snooze whose deadline
+// passed is never swallowed by a later act (an unsnooze or a re-snooze in
+// the moments before the sweep reaches it) without the announcement it owes.
+func endExpiredTx(ctx context.Context, p *PG, tx pgx.Tx, component *Component, key string) error {
+	var until time.Time
+	err := tx.QueryRow(ctx, `delete from alarm_snooze where component_id = $1::uuid and dedup_key = $2 and snoozed_until <= now()
+		returning snoozed_until`, component.ID, key).Scan(&until)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("storage: end an expired snooze: %w", err)
+	}
+	var latest string
+	err = tx.QueryRow(ctx, `select id::text from alarm where component_id = $1::uuid and dedup_key = $2
+		order by raised_at desc, id desc limit 1`, component.ID, key).Scan(&latest)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return fmt.Errorf("storage: read a snoozed condition's latest alarm: %w", err)
+	}
+	return endSnoozeTx(ctx, p, tx, "", "snooze-end", latest, component, key, until)
+}
+
 // EndExpiredSnoozes is the end-of-snooze sweep (#1318), run on the
 // notifier's tick until the time primitive (#419) exists: it ends up to max
 // snoozes past their deadline, each in its own transaction, taken FOR UPDATE
-// SKIP LOCKED (a snooze another replica, or a re-snooze, holds is skipped,
-// not waited on) and deleted in the same transaction that audits snooze-end
-// from the platform on the condition's latest alarm and announces a
-// still-raised condition again. Two replicas therefore never end one snooze
-// twice, and a restart loses nothing. It reports how many it ended.
+// SKIP LOCKED (a snooze another replica holds is skipped, not waited on) and
+// deleted in the same transaction that audits snooze-end from the platform on
+// the condition's latest alarm and announces a still-raised condition again.
+// Two replicas therefore never end one snooze twice, and a restart loses
+// nothing. A condition whose lock is held (a verb or a transition of it in
+// flight) is skipped for the rest of the pass, so it never holds up the
+// others. It reports how many it ended.
 func (p *PG) EndExpiredSnoozes(ctx context.Context, max int) (int, error) {
 	ended := 0
+	skip := []string{}
 	for ended < max {
-		ok, err := p.endNextExpiredSnooze(ctx)
-		if err != nil || !ok {
+		took, held, err := p.endNextExpiredSnooze(ctx, skip)
+		if err != nil {
 			return ended, err
 		}
-		ended++
+		switch {
+		case held != "":
+			skip = append(skip, held)
+		case !took:
+			return ended, nil
+		default:
+			ended++
+		}
 	}
 	return ended, nil
 }
 
-func (p *PG) endNextExpiredSnooze(ctx context.Context) (bool, error) {
+// endNextExpiredSnooze ends the oldest expired snooze not in skip. It
+// reports whether it ended one, or the condition (its lock key) it found
+// held and left for a later tick.
+func (p *PG) endNextExpiredSnooze(ctx context.Context, skip []string) (bool, string, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
-		return false, fmt.Errorf("storage: begin end snooze: %w", err)
+		return false, "", fmt.Errorf("storage: begin end snooze: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	var c Component
 	var key string
-	var until time.Time
-	err = tx.QueryRow(ctx, `select s.component_id::text, c.name, s.dedup_key, s.snoozed_until
+	err = tx.QueryRow(ctx, `select s.component_id::text, c.name, s.dedup_key
 		from alarm_snooze s join component c on c.id = s.component_id
-		where s.snoozed_until <= now()
+		where s.snoozed_until <= now() and not (('alarm-snooze:' || s.component_id::text || '/' || s.dedup_key) = any($1::text[]))
 		order by s.snoozed_until, s.component_id, s.dedup_key
-		for update of s skip locked limit 1`).Scan(&c.ID, &c.Name, &key, &until)
+		for update of s skip locked limit 1`, skip).Scan(&c.ID, &c.Name, &key)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return false, nil
+		return false, "", nil
 	}
 	if err != nil {
-		return false, fmt.Errorf("storage: take an expired snooze: %w", err)
+		return false, "", fmt.Errorf("storage: take an expired snooze: %w", err)
 	}
 	// The condition's lock, tried and never waited on: a verb holding it may
 	// be waiting on the row lock just taken, so waiting here could deadlock.
-	// A held lock means a snooze or unsnooze of this condition is in flight,
-	// and the next tick sees what it left.
+	// A held lock means a verb or a transition of this condition is in
+	// flight; the condition is skipped for this pass and the next tick sees
+	// what it left.
+	lockKey := snoozeLockKey(c.ID, key)
 	var locked bool
-	if err := tx.QueryRow(ctx, `select pg_try_advisory_xact_lock(hashtextextended($1, 0))`, snoozeLockKey(c.ID, key)).Scan(&locked); err != nil {
-		return false, fmt.Errorf("storage: lock an expired snooze: %w", err)
+	if err := tx.QueryRow(ctx, `select pg_try_advisory_xact_lock(hashtextextended($1, 0))`, lockKey).Scan(&locked); err != nil {
+		return false, "", fmt.Errorf("storage: lock an expired snooze: %w", err)
 	}
 	if !locked {
-		return false, nil
+		return false, lockKey, nil
 	}
-	if _, err := tx.Exec(ctx, `delete from alarm_snooze where component_id = $1::uuid and dedup_key = $2`, c.ID, key); err != nil {
-		return false, fmt.Errorf("storage: end snooze: %w", err)
-	}
-	var latest string
-	err = tx.QueryRow(ctx, `select id::text from alarm where component_id = $1::uuid and dedup_key = $2
-		order by raised_at desc, id desc limit 1`, c.ID, key).Scan(&latest)
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return false, fmt.Errorf("storage: read a snoozed condition's latest alarm: %w", err)
-	}
-	if err := endSnoozeTx(ctx, p, tx, "", "snooze-end", latest, &c, key, until); err != nil {
-		return false, err
+	if err := endExpiredTx(ctx, p, tx, &c, key); err != nil {
+		return false, "", err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return false, fmt.Errorf("storage: commit end snooze: %w", err)
+		return false, "", fmt.Errorf("storage: commit end snooze: %w", err)
 	}
-	return true, nil
+	return true, "", nil
 }
