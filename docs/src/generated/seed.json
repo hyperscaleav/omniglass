@@ -377,6 +377,12 @@
    "description": "Whether an amplifier is running (normal) or has muted its outputs and latched protect on a fault (overheating, a shorted load, DC on an output), which holds until an operator resets it."
   },
   {
+   "name": "booking-state",
+   "data_type": "string",
+   "label": "Booking State",
+   "description": "Whether a space is booked now (a meeting in progress) or free, as its scheduling service reports it."
+  },
+  {
    "name": "serial-number",
    "data_type": "string",
    "label": "Serial number",
@@ -483,6 +489,12 @@
    "data_type": "int",
    "label": "Occupancy Count",
    "description": "People detected in the space by the room's occupancy source."
+  },
+  {
+   "name": "booking-count",
+   "data_type": "int",
+   "label": "Booking Count",
+   "description": "Meetings booked in the space for the rest of the day, the one in progress included, as its scheduling service reports them."
   },
   {
    "name": "uptime",

@@ -21,6 +21,9 @@ type Store interface {
 	NodeWorklist(ctx context.Context, name string) (storage.Worklist, error)
 	// NodeSimDevices lists the components a simulator beside the node serves.
 	NodeSimDevices(ctx context.Context, name string, read scope.Set) ([]storage.SimDevice, error)
+	// NodeSimWebhooks reads the webhook subscriptions of the components the
+	// simulator serves (ADR-1370), for its device list alone.
+	NodeSimWebhooks(ctx context.Context, name string) (map[string]storage.SimWebhook, error)
 	RecordHeartbeat(ctx context.Context, name string) error
 	// RecordOrphanedBatches counts a node's batches the confinement fence
 	// orphaned (#1200), once per flush rather than per batch.
