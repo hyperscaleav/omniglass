@@ -514,6 +514,7 @@
    "name": "storage-utilization",
    "data_type": "float",
    "unit": "ratio",
+   "precision": 3,
    "label": "Storage Utilization",
    "description": "How full a component reports its local storage, as a fraction of its capacity (0 to 1)."
   },
