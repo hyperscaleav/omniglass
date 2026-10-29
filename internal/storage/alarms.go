@@ -295,17 +295,19 @@ func (p *PG) ClearAlarm(ctx context.Context, actorID, componentName, alarmID str
 	}
 
 	var cleared time.Time
+	var dedupKey string
 	if err := tx.QueryRow(ctx, `
 		update alarm set cleared_at = now(), updated_at = now()
 		where id = $1 and component_id = $2::uuid and cleared_at is null
-		returning cleared_at`, alarmID, component.ID).Scan(&cleared); err != nil {
+		returning cleared_at, dedup_key`, alarmID, component.ID).Scan(&cleared, &dedupKey); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrAlarmNotFound
 		}
 		return fmt.Errorf("storage: clear alarm %s: %w", alarmID, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "alarm", alarmID, nil,
-		map[string]any{"component": componentName, "cleared_at": cleared}); err != nil {
+	// Both images, and the condition: an alarm's audit rows outlive it (#1339).
+	if err := writeAuditRes(ctx, tx, actorID, "update", "alarm", alarmID, map[string]any{"cleared_at": nil},
+		map[string]any{"component": componentName, "dedup_key": dedupKey, "cleared_at": cleared}); err != nil {
 		return err
 	}
 	if err := p.RecomputeHealth(ctx, tx, component.ID); err != nil {
@@ -386,8 +388,8 @@ func (p *PG) AcknowledgeAlarm(ctx context.Context, actorID, componentName, alarm
 		return nil, fmt.Errorf("storage: acknowledge alarm %s: %w", alarmID, err)
 	}
 
-	if err := writeAuditRes(ctx, tx, actorID, "acknowledge", "alarm", alarmID, nil,
-		map[string]any{"component": componentName, "acknowledged_at": acked.AcknowledgedAt}); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "acknowledge", "alarm", alarmID, map[string]any{"acknowledged_at": nil},
+		map[string]any{"component": componentName, "dedup_key": acked.DedupKey, "acknowledged_at": acked.AcknowledgedAt}); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -505,7 +507,7 @@ func (p *PG) clearAlarmByDedupTx(ctx context.Context, tx pgx.Tx, actorID string,
 	if err != nil {
 		return "", fmt.Errorf("storage: clear alarm %s on %q: %w", dedupKey, component.Name, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "alarm", alarmID, nil,
+	if err := writeAuditRes(ctx, tx, actorID, "update", "alarm", alarmID, map[string]any{"cleared_at": nil},
 		map[string]any{"component": component.Name, "dedup_key": dedupKey, "cleared_at": cleared, "raised_by_rule_id": ruleID}); err != nil {
 		return "", err
 	}
