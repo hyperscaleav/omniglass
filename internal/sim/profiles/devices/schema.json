@@ -89,6 +89,11 @@
       "description": "Optional documentation fixture rendered into the device's playground. Free-form.",
       "additionalProperties": true
     },
+    "extends": {
+      "type": "string",
+      "description": "Another device profile whose surface this one carries and adds to (a control processor answers everything its touch panel does). The base's interfaces come first; one named again here keeps its protocol and port and gains this profile's routes, commands, subjects and OIDs; behaviors and computed fields append; defaults deep-merge, this profile's winning.",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
     "products": {
       "type": "array",
       "description": "Other products this profile simulates: variants of the same kind of device (the same component type) on the same driver. Each may overlay the profile's defaults with its own identity.",

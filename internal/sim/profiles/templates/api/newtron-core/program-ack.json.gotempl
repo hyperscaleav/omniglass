@@ -1,0 +1,1 @@
+{"ok": true, "program": "{{ .State | get "status" | get "program" | get "state" }}"}

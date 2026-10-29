@@ -30,6 +30,10 @@ type DeviceProfile struct {
 	// a display line in its sizes. Each may overlay the profile's defaults
 	// with its own identity. The catalog alignment test holds both rules.
 	Products []ProductVariant `yaml:"products"`
+	// Extends names a profile whose surface this one carries and adds to
+	// (#896): a control processor answers everything the touch panel does,
+	// and more. Resolved at load by extend.
+	Extends string `yaml:"extends"`
 }
 
 // ProductVariant is one more product a profile simulates.
@@ -631,6 +635,9 @@ func LoadStoreFS(fsys fs.FS) (*Store, error) {
 	}
 	if err := s.loadDevices(fsys, "devices"); err != nil {
 		return nil, fmt.Errorf("loading device profiles: %w", err)
+	}
+	if err := s.resolveExtends(); err != nil {
+		return nil, fmt.Errorf("resolving extends: %w", err)
 	}
 	if err := s.loadSystems(fsys, "systems"); err != nil {
 		return nil, fmt.Errorf("loading system profiles: %w", err)

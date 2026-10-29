@@ -1,0 +1,96 @@
+# yaml-language-server: $schema=schema.json
+# Newtron Core CP-3, Control Processor
+#
+# Newtron is the lab's fictional control-systems vendor. The Core CP-3 is
+# the rack control processor a room's touch panels talk to: it runs the
+# room's control program and drives the gear that has no network of its
+# own through control ports (relays, IR emitters, serial). A panel's
+# surface is a subset of the processor's, so this profile extends the
+# Panel 7's (#896): every face, route and NVP verb the panel answers, the
+# processor answers too, and it adds its own.
+#
+# What it adds, the processor's own state:
+#   - the control program, running or stopped (GET PROGRAM over NVP, a
+#     push on SUBSCRIBE PROGRAM, start and stop over HTTP);
+#   - the touch panels connected to it (GET PANELS);
+#   - its control ports, each online or offline;
+#   - all of it over SNMP on the Newtron arc (1.3.6.1.4.1.55510.10), the
+#     enterprise telemetry the panel's MIB-2-only agent withholds.
+
+name: newtron-core-3
+extends: newtron-panel-7
+manufacturer: Newtron
+model: "Core CP-3"
+device_type: control-processor
+slug_prefix: control-processor
+
+doc:
+  summary: "Newtron Core CP-3 rack control processor"
+  description: |
+    Rack control processor. Answers everything the Newtron touch panel
+    does (it extends the Panel 7 profile), and adds the control program's
+    state, the panels connected to it and its control ports, over NVP,
+    HTTP and SNMP.
+
+interfaces:
+  - name: http-api
+    routes:
+      - match: "POST /api/program"
+        template: api/newtron-core/program-ack.json.gotempl
+        doc: { summary: "Start or stop the control program", tags: [api, control] }
+        example: |
+          {"state": "stopped"}
+        mutations:
+          - path: status.program.state
+            value: "{{ .Request.Body.state }}"
+            enum: [running, stopped]
+
+  - name: nvp
+    subjects:
+      - match: "status.program.state"
+        path: "status.program.state"
+        publish_token: "PROGRAM"
+        push_format: "EVT PROGRAM {{ .Raw }}"
+    commands:
+      - match: "GET PROGRAM"
+        response: 'PROGRAM {{ .State | get "status" | get "program" | get "state" }}'
+      - match: "GET PANELS"
+        response: 'PANELS {{ .State | get "status" | get "panels" | get "connected" }}'
+      - match: "SUBSCRIBE PROGRAM"
+        action: subscribe
+        subject: "status.program.state"
+        token: "PROGRAM"
+        response: "OK"
+
+  - name: snmp
+    # The processor's own branch of the Newtron arc, .10: the program, the
+    # panels connected, and a control-port table (.10.3.<n>, n 1 to 4).
+    oid_map:
+      status.program.state:     "1.3.6.1.4.1.55510.10.1.0"
+      status.panels.connected:  "1.3.6.1.4.1.55510.10.2.0"
+      status.ports.relay1:      "1.3.6.1.4.1.55510.10.3.1"
+      status.ports.ir1:         "1.3.6.1.4.1.55510.10.3.2"
+      status.ports.ir2:         "1.3.6.1.4.1.55510.10.3.3"
+      status.ports.serial1:     "1.3.6.1.4.1.55510.10.3.4"
+      configuration.firmware.version: "1.3.6.1.4.1.55510.5.1.0"
+      configuration.device.serial:    "1.3.6.1.4.1.55510.5.2.0"
+
+defaults:
+  status:
+    program:
+      state: running
+    panels:
+      # The panels in the place that talk to this processor.
+      connected: 2
+    # Control ports for the gear with no network: the screen's relay, the
+    # IR emitters on the cable boxes, the serial line to the lift.
+    ports:
+      relay1: online
+      ir1: online
+      ir2: online
+      serial1: online
+  configuration:
+    device:
+      model: "Core CP-3"
+    firmware:
+      version: "6.2.0"
