@@ -183,6 +183,14 @@ browser or terminal joins the lab's network and reaches the server there. A lab 
 outside mid-recording (a container stopped or removed) fails the run saying so, never as a test
 failure or UI drift.
 
+The browser e2e tier (`make test-e2e`) and the docs screenshots (`make docs-shots`,
+`make docs-shots-check`) ride the same throwaway lab, through the same `lab.sh` (#1267), so the repo
+stands omniglass up in Docker one way. Each fits the lab to what it checks: the e2e tier's is
+seeded with the `empty` scenario, so its CRUD round-trips start from a fresh install, and the
+screenshots' runs with `--no-node`, the dev fleet without the simulated wiring and with no node
+collecting from it, so a page photographed twice is the same page. The lab's banner is a fact about
+the lab rather than the product the docs teach, so the screenshot capture hides it.
+
 **A terminal demo** is played by VHS from its own image, pinned by digest, which bundles what VHS
 drives (ttyd for the terminal, chromium to render it, ffmpeg to encode) and the fonts the house
 settings name; the recorder adds `jq` (copied from jq's own image, also pinned by digest), the
