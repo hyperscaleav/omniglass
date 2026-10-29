@@ -24,6 +24,21 @@ type backlogStore struct {
 	drops     []time.Time
 	ensureErr error
 	dropErr   error
+	// The trend compaction's answer.
+	trends   storage.TrendCompaction
+	trendErr error
+}
+
+// CompactMetricTrends records itself as a call on the lane "compact", so a
+// test reads where it ran among the prunes, and answers with trends.
+func (b *backlogStore) CompactMetricTrends(_ context.Context, maxHours, laneDays int) (storage.TrendCompaction, error) {
+	b.calls = append(b.calls, pruneCall{"compact", time.Time{}, laneDays})
+	return b.trends, b.trendErr
+}
+
+// PruneMetricTrends is the trend lane of the same store, keyed "metric_trend".
+func (b *backlogStore) PruneMetricTrends(ctx context.Context, before time.Time, limit int) (int64, error) {
+	return b.PruneSamples(ctx, "metric_trend", before, limit)
 }
 
 func (b *backlogStore) EnsureMetricPartitions(context.Context) ([]string, error) {
@@ -338,5 +353,44 @@ func TestARetentionPassRefusesANodeOverrideOutOfRange(t *testing.T) {
 		if c.lane == "node_log/error" {
 			t.Errorf("node_log/error pruned with an out-of-range override")
 		}
+	}
+}
+
+// Each pass closes the hours past the horizon into trends before it prunes
+// anything (#1276), with the metric lane's window, and prunes the trends to the
+// trend window. A compaction left behind, or failed, brings the next pass in a
+// minute; the lanes are still pruned.
+func TestRetentionPassCompactsTrendsBeforeItPrunes(t *testing.T) {
+	now := time.Date(2026, 10, 29, 12, 0, 0, 0, time.UTC)
+	store := &backlogStore{windows: defaultWindows(), backlog: map[string]int64{"metric": 3, "metric_trend": 2}}
+	rep, err := retentionPass(context.Background(), store, now, 10, 5, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(store.calls) == 0 || store.calls[0].lane != "compact" || store.calls[0].limit != 14 {
+		t.Fatalf("calls %+v, want the compaction first, with the metric window of 14 days", store.calls)
+	}
+	var trendCut time.Time
+	for _, c := range store.calls {
+		if c.lane == "metric_trend" {
+			trendCut = c.before
+		}
+	}
+	if !trendCut.Equal(now.AddDate(0, 0, -730)) || rep.Deleted["metric_trend"] != 2 {
+		t.Errorf("trend lane cut %v deleting %d, want 730 days back deleting 2", trendCut, rep.Deleted["metric_trend"])
+	}
+	if nextRetentionWait(rep) != sampleRetentionEvery {
+		t.Errorf("a pass that kept up waits %v", nextRetentionWait(rep))
+	}
+
+	behind := &backlogStore{windows: defaultWindows(), backlog: map[string]int64{}, trends: storage.TrendCompaction{Hours: 48, Behind: true}}
+	if rep, _ = retentionPass(context.Background(), behind, now, 10, 5, 0); nextRetentionWait(rep) != sampleRetentionCatchUp {
+		t.Errorf("a compaction left behind waits %v, want the catch-up", nextRetentionWait(rep))
+	}
+	failed := &backlogStore{windows: defaultWindows(), backlog: map[string]int64{"metric": 1}, trendErr: errors.New("a write outlasted the drain")}
+	rep, err = retentionPass(context.Background(), failed, now, 10, 5, 0)
+	if err == nil || rep.Deleted["metric"] != 1 || nextRetentionWait(rep) != sampleRetentionCatchUp {
+		t.Errorf("a failed compaction: err %v, metric deleted %d, wait %v; want reported, pruned, and a pass in a minute",
+			err, rep.Deleted["metric"], nextRetentionWait(rep))
 	}
 }

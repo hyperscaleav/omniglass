@@ -53,3 +53,10 @@ func ExportMetricNewestSQL() string { return metricNewestSQL("$1::bigint") }
 // ExportIsPartitionRoutingMiss is the classifier the ingest retries a write by
 // when no metric partition covers a row (#420).
 func ExportIsPartitionRoutingMiss(err error) bool { return isPartitionRoutingMiss(err) }
+
+// SetMetricTrendMark sets how far the trend compaction has closed hours
+// (#1276), so a test of the metric prune, which never passes the mark, can
+// stand the mark where it wants it.
+func (p *PG) SetMetricTrendMark(ctx context.Context, through time.Time) error {
+	return setMetricTrendMark(ctx, p.pool, through)
+}

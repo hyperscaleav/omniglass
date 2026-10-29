@@ -136,7 +136,7 @@ export const settingsSchema = {
       "format": "int64"
     },
     "trend_days": {
-      "description": "Days an hourly metric trend is kept, once trends exist (#1276)",
+      "description": "Days an hourly metric trend is kept (#1276)",
       "type": "integer",
       "minimum": 1,
       "maximum": 36500,

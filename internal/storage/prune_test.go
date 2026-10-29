@@ -41,6 +41,11 @@ func newPruneFixture(t *testing.T) *pruneFixture {
 	mustExec(t, conn, `insert into system (name) values ('prune-s1')`)
 	mustExec(t, conn, `insert into property_type (name, data_type) values ('prune-power', 'string')`)
 	mustExec(t, conn, `insert into metric_type (name, data_type) values ('prune-rtt', 'float')`)
+	// The metric prune never passes the trend compaction's mark (#1276);
+	// these tests are about the prune, so every hour reads as closed.
+	if err := gw.SetMetricTrendMark(ctx, time.Now().Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
 	return &pruneFixture{t: t, ctx: ctx, gw: gw, conn: conn, dsn: dsn}
 }
 

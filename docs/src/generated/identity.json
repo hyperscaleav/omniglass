@@ -228,6 +228,24 @@
       "labelled": false
     },
     {
+      "table": "metric_trend",
+      "shape": "id only",
+      "reason": "a metric series' trend for one hour (#1276), keyed by series and hour; nothing addresses it by name",
+      "labelled": false
+    },
+    {
+      "table": "metric_trend_dirty",
+      "shape": "id only",
+      "reason": "a closed hour a late sample landed in (#1276), keyed by series and hour; the compaction's work list, never named",
+      "labelled": false
+    },
+    {
+      "table": "metric_trend_mark",
+      "shape": "fixed key, declared by the platform",
+      "reason": "how far the trend compaction has closed hours (#1276): one row, keyed by a constant true",
+      "labelled": false
+    },
+    {
       "table": "metric_type",
       "shape": "keyspace",
       "reason": "icmp-rtt-avg, a numeric-series name referenced from drivers and templates",
