@@ -1040,6 +1040,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/components/{name}/identity-bindings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the identities a conduit component fans out
+         * @description The identity bindings of this conduit component: each value it reports under a match key (a registered property type, such as ucc-room-id) and the one system or component that value's samples land on. A component that speaks for many owners (a cloud service, a controller fronting many components) is the conduit, the path rather than the owner. Each binding is named only when its owner is inside the caller's read on its tier (system:read for a system owner, component:read for a component owner); the rest are counted in hidden, never named. Gated by component:read; a conduit outside it is a non-disclosing 404.
+         */
+        get: operations["list-identity-bindings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/components/{name}/identity-bindings/{key}/{value}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Bind an identity a conduit reports to its owner
+         * @description Ties this value, reported by the conduit component under this match key, to one owner, a system or a component, so the conduit's samples naming it land on that owner. One identity on one conduit has exactly one owner: a put naming the owner it is already bound to changes nothing, and one naming a different owner moves it. The match key must be a registered property type (422 otherwise), and the owner a component or a system other than the conduit itself (a place or a node owns no observed sample, and a value with no identity already lands on the conduit: each a 422). The value rides the path as one percent-encoded segment, so a value carrying a slash, a space or another reserved character is escaped (room%2F1) and round-trips. A binding writes onto both of its ends, so it costs a write on both: gated by component:update on the conduit, and it also needs the owner's update (component:update, or system:update for a system, refused with a 403 naming it before anything resolves). Each end resolves in its own tier's read scope and must be inside its update scope: an end outside the read scope is a non-disclosing 404, one readable but not writable a 403. A move also needs update on the owner it leaves.
+         */
+        put: operations["put-identity-binding"];
+        post?: never;
+        /**
+         * Unbind an identity a conduit reports
+         * @description Removes the binding of this value, reported by the conduit component under this match key, so its samples no longer land on the owner it named. Unbinding writes onto both ends, so it costs a write on both: gated by component:update on the conduit, and it also needs update on the binding's owner (component:update, or system:update for a system), a 403 naming it when the caller reads the owner but cannot write it. A binding whose owner the caller cannot read is a 404, as one that does not exist is: the list does not name it either.
+         */
+        delete: operations["delete-identity-binding"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/components/{name}/impairment": {
         parameters: {
             query?: never;
@@ -8135,6 +8179,36 @@ export interface components {
             must_change_password?: boolean;
             username: string;
         };
+        IdentityBindingBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/IdentityBindingBody.json
+             */
+            readonly $schema?: string;
+            /** @description Name of the conduit component: the component whose endpoint reports the identity, the path rather than the owner */
+            conduit: string;
+            /** @description The conduit component's uuid */
+            conduit_id: string;
+            /**
+             * Format: date-time
+             * @description When the binding was made
+             */
+            created_at: string;
+            /** @description The match key: a registered property type naming what kind of identity the value is (e.g. ucc-room-id) */
+            key: string;
+            /** @description The owner's uuid, the address to navigate by */
+            owner_id: string;
+            /**
+             * @description What kind of owner the identity names: a component or a system
+             * @enum {string}
+             */
+            owner_kind: "component" | "system";
+            /** @description Name of the owner the identity's values land on */
+            owner_name: string;
+            /** @description The identity value the conduit reports (e.g. the id a UCC service gives one of the rooms it reports on) */
+            value: string;
+        };
         ImpairmentFields: {
             /**
              * Format: uri
@@ -8441,6 +8515,23 @@ export interface components {
              */
             readonly $schema?: string;
             groups: components["schemas"]["GroupBody"][] | null;
+        };
+        ListIdentityBindingsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListIdentityBindingsOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The bindings whose owner the caller can read, ordered by key then value */
+            bindings: components["schemas"]["IdentityBindingBody"][] | null;
+            /** @description The conduit component, as addressed */
+            conduit: string;
+            /**
+             * Format: int64
+             * @description How many more bindings this conduit has whose owner is outside the caller's read: counted, never named
+             */
+            hidden: number;
         };
         ListInboxOutputBody: {
             /**
@@ -9831,6 +9922,24 @@ export interface components {
         PushRejection: {
             name: string;
             reason: string;
+        };
+        PutIdentityBindingInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/PutIdentityBindingInputBody.json
+             */
+            readonly $schema?: string;
+            /**
+             * @description Name or uuid of the owner the identity's values land on, or a dotted address
+             * @example hq.west.level-2.boardroom-a.$sys.av
+             */
+            owner: string;
+            /**
+             * @description What kind of owner the identity names. A component or a system; a place or a node owns no observed sample, so neither is an owner here
+             * @enum {string}
+             */
+            owner_kind: "component" | "system";
         };
         RaiseAlarmInputBody: {
             /**
@@ -14538,6 +14647,112 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["EventsOutputBody"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-identity-bindings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListIdentityBindingsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "put-identity-binding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
+                name: string;
+                /** @description The match key, a registered property type */
+                key: string;
+                /** @description The identity value the conduit reports, 1 to 256 characters */
+                value: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PutIdentityBindingInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentityBindingBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-identity-binding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
+                name: string;
+                /** @description The match key, a registered property type */
+                key: string;
+                /** @description The identity value the conduit reports, 1 to 256 characters */
+                value: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {

@@ -1816,6 +1816,77 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			parent := &cobra.Command{
+				Use:   "identity-binding",
+				Short: "Commands for the identity-binding resource",
+			}
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "delete <name> <key> <value>",
+						Short:   "Unbind an identity a conduit reports",
+						Long:    "Removes the binding of this value, reported by the conduit component under this match key, so its samples no longer land on the owner it named. Unbinding writes onto both ends, so it costs a write on both: gated by component:update on the conduit, and it also needs update on the binding's owner (component:update, or system:update for a system), a 403 naming it when the caller reads the owner but cannot write it. A binding whose owner the caller cannot read is a 404, as one that does not exist is: the list does not name it either.",
+						Example: "  omniglass component identity-binding delete ucc-service-1 ucc-room-id room-17c-415a",
+						Args:    pathArgs(3),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/components/%s/identity-bindings/%s/%s", pathSegment(args[0]), pathSegment(args[1]), pathSegment(args[2]))
+							return runAPICommand(cmd, "DELETE", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "list <name>",
+						Short:   "List the identities a conduit component fans out",
+						Long:    "The identity bindings of this conduit component: each value it reports under a match key (a registered property type, such as ucc-room-id) and the one system or component that value's samples land on. A component that speaks for many owners (a cloud service, a controller fronting many components) is the conduit, the path rather than the owner. Each binding is named only when its owner is inside the caller's read on its tier (system:read for a system owner, component:read for a component owner); the rest are counted in hidden, never named. Gated by component:read; a conduit outside it is a non-disclosing 404.",
+						Example: "  omniglass component identity-binding list ucc-service-1",
+						Args:    pathArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/components/%s/identity-bindings", pathSegment(args[0]))
+							return runAPICommand(cmd, "GET", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					var fOwner string
+					var fOwnerKind string
+					cmd := &cobra.Command{
+						Use:     "update <name> <key> <value>",
+						Short:   "Bind an identity a conduit reports to its owner",
+						Long:    "Ties this value, reported by the conduit component under this match key, to one owner, a system or a component, so the conduit's samples naming it land on that owner. One identity on one conduit has exactly one owner: a put naming the owner it is already bound to changes nothing, and one naming a different owner moves it. The match key must be a registered property type (422 otherwise), and the owner a component or a system other than the conduit itself (a place or a node owns no observed sample, and a value with no identity already lands on the conduit: each a 422). The value rides the path as one percent-encoded segment, so a value carrying a slash, a space or another reserved character is escaped (room%2F1) and round-trips. A binding writes onto both of its ends, so it costs a write on both: gated by component:update on the conduit, and it also needs the owner's update (component:update, or system:update for a system, refused with a 403 naming it before anything resolves). Each end resolves in its own tier's read scope and must be inside its update scope: an end outside the read scope is a non-disclosing 404, one readable but not writable a 403. A move also needs update on the owner it leaves.",
+						Example: "  omniglass component identity-binding update ucc-service-1 ucc-room-id room-17c-415a --owner owner --owner-kind owner_kind",
+						Args:    pathArgs(3),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/components/%s/identity-bindings/%s/%s", pathSegment(args[0]), pathSegment(args[1]), pathSegment(args[2]))
+							body := map[string]any{}
+							if cmd.Flags().Changed("owner") {
+								body["owner"] = fOwner
+							}
+							if cmd.Flags().Changed("owner-kind") {
+								body["owner_kind"] = fOwnerKind
+							}
+							return runAPICommand(cmd, "PUT", path, body)
+						},
+					}
+					cmd.Flags().StringVar(&fOwner, "owner", "", "Name or uuid of the owner the identity's values land on, or a dotted address")
+					_ = cmd.MarkFlagRequired("owner")
+					cmd.Flags().StringVar(&fOwnerKind, "owner-kind", "", "What kind of owner the identity names. A component or a system; a place or a node owns no observed sample, so neither is an owner here")
+					_ = cmd.MarkFlagRequired("owner-kind")
+					return cmd
+				}()
+				return cmd
+			}())
+			return parent
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			parent := &cobra.Command{
 				Use:   "impairment",
 				Short: "Commands for the impairment resource",
 			}

@@ -1,7 +1,7 @@
 -- migrate:up
 
 -- Identity bindings (#1385, ADR-1282). A conduit component (one that speaks
--- for many owners, a cloud service or a controller fronting many devices)
+-- for many owners, a cloud service or a controller fronting many components)
 -- reports values that each name an identity: a match key, a registered
 -- property type, and its value. A binding ties one (conduit, key, value) to
 -- exactly one owner, a system or a component, on the exclusive owner arc. A

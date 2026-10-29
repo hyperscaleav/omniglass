@@ -1189,36 +1189,80 @@ audited: a preview on the node (and on each secret it used), a run now on the en
 ## Shared-API collection: one component, many owners
 
 What is built today: a system owns the telemetry a push names it for and what a system calc rule
-derives from its members ([ADR-0422](/architecture/decisions/#adr-0422-a-system-owns-its-own-telemetry-and-a-location-owns-no-observed-sample)), and a webhook endpoint lands every post on its own
-component. A component that fans its values out to other owners is the design below. An endpoint
-stays a component's: system telemetry a node collects arrives through this fan-out, never through a
-system-owned endpoint. Its first half is built: a driver function [reads records and names each
-one's identity](#a-function-reads-records-and-names-each-ones-identity), and every sample a record
-yields carries that identity on the wire (#1386). Nothing resolves it to an owner yet, so an
-identified sample still lands on the conduit's component, as every sample does today.
+derives from its members ([ADR-0422](/architecture/decisions/#adr-0422-a-system-owns-its-own-telemetry-and-a-location-owns-no-observed-sample)), a webhook endpoint lands every post on its own
+component, and the [identity binding](#identity-binding-a-conduits-identity-tied-to-its-owner) a
+fan-out resolves through is stored, scoped and audited. A driver function [reads records and names
+each one's identity](#a-function-reads-records-and-names-each-ones-identity), and every sample a
+record yields carries that identity on the wire (#1386). A component that fans its values out to other
+owners through those bindings is the design below. An endpoint stays a component's: system telemetry
+a node collects arrives through this fan-out, never through a system-owned endpoint.
 
-:::design[Shared-API fan-out and identity binding, tracked in #1282; the discovery_rule is its own design]
+:::design[The shared-API fan-out, tracked in #1282; the discovery_rule is its own design]
 Some sources describe **many entities at once**: a SaaS / UCC platform (Zoom, Teams), a controller fronting many devices, a building gateway. The API is **one component** (one endpoint, one credential) whose data **fans out** to the entities it describes, not one component per described entity.
 
 - Its function pulls the batch in one call, **labeling each emitted sample with the external identity** it belongs to (a Zoom Room ID).
-- The function is the conduit, not the owner: ownership resolves **server-side** against a declared **identity config** (`zoom-room-id` on the target). **One primitive for pull and push**: a node polling the API and a [webhook endpoint](#push-ingress-webhooks-on-the-server) on the same component receiving posts about many owners bind through the same index, so the fan-out extends the webhook ingress rather than duplicating it.
+- The component whose endpoint ran the function is the **conduit**, not the owner: ownership resolves **server-side** against the conduit's [identity bindings](#identity-binding-a-conduits-identity-tied-to-its-owner) (`ucc-room-id` `R-415A` to the system it names). **One primitive for pull and push**: a node polling the API and a [webhook endpoint](#push-ingress-webhooks-on-the-server) on the same component receiving posts about many owners bind through the same index, so the fan-out extends the webhook ingress rather than duplicating it.
 - **The owner can be a system.** SaaS state that is telemetry *of* a room maps to **system-owned samples**; a virtual component is for the genuine *member* case (its own topology node, a `health_role`, a lifecycle). **Member -> component, telemetry -> system.**
-- **Unmatched identities are orphans**, discovery candidates (below).
+- **Unmatched identities are kept**, never dropped and never misfiled on the conduit: an identity no binding names lands on no owner and is recorded in the conduit's inbox of unbound identities, the input an operator binds from and a discovery candidate (below) ([ADR-1282](/architecture/decisions/#adr-1282-a-conduit-fans-each-identified-value-out-to-the-owner-its-binding-names-and-a-binding-costs-a-write-on-both-of-its-ends)).
 
 **Best practice**: map SaaS / cloud telemetry to system-owned samples wired into system health via a system-scoped `event_rule`; the vendor's own status is an input to that judgment, not the verdict, so corroborate a reported "offline" before downing the room ([health](/architecture/health/)).
-
-### Identity binding: the value-to-owner index
-
-Binding an externally-tagged row to an Omniglass owner is a lookup against the **value-to-owner index**: an **identity arc** on identity config, a `(property_type, value) -> owner` mapping where `property_type` is the **match key** (`zoom-room-id`) and `value` the emitted identity. The index resolves **in the cascade scope** the identity config is set at, so an identity declared at a system or location binds every member below it. A **declared identity config value wins**, falling back to the **observed identity sample** sharing the key; the [samples](/architecture/properties/) ownership-resolution machinery reads this same index.
 
 ### discovery_rule: orphans become candidates
 
 A `discovery_rule` turns the orphan stream, every emitted identity the index does not resolve (an unmatched shared-API `(property_type, value)`, plus a node's out-of-placement labels), into proposed entities: the onboarding win, no hand-mapping.
 
-- **Creates** candidate components or owners, each seeded with the identity that surfaced it (it becomes the new entity's identity arc), so the next batch resolves through the index.
+- **Creates** candidate components or owners, each seeded with the identity that surfaced it (it becomes an identity binding to the new entity), so the next batch resolves through it.
 - **Idempotent on re-discovery**: keyed on the `(property_type, value)` already bound, so a steady stream of the same orphan resolves to one candidate.
 - **Scope and standing**: a cascade **scope** and an `official` / private standing like the other rule families (`event_rule`, calc).
 :::
+
+### Identity binding: a conduit's identity tied to its owner
+
+An **identity binding** ties one value a conduit component reports under a **match key** to exactly
+one owner, a system or a component
+([ADR-1282](/architecture/decisions/#adr-1282-a-conduit-fans-each-identified-value-out-to-the-owner-its-binding-names-and-a-binding-costs-a-write-on-both-of-its-ends)).
+The match key is a registered property type (`ucc-room-id`), so every driver reporting that kind of
+identity shares one name, and the value is what the conduit reports (`R-415A`). One identity on one
+conduit has one owner; the same value on another conduit is another binding. A place or a node is no
+owner: neither owns an observed sample
+([ADR-0422](/architecture/decisions/#adr-0422-a-system-owns-its-own-telemetry-and-a-location-owns-no-observed-sample)).
+The conduit is never its own identity's owner: a value it reports with no identity already lands on
+it, so a binding naming the conduit is refused (422).
+
+A binding is a relationship with two ends, so it costs a write on both, the
+[ADR-0510](/architecture/decisions/#adr-0510-a-membership-or-a-role-assignment-costs-a-write-on-both-of-its-ends)
+rule: `component:update` on the conduit and the owner's update (`component:update`, or
+`system:update` for a system). One end alone is not enough in either direction. A principal scoped to
+a system could otherwise claim an identity that belongs to another owner and pull a conduit it cannot read onto its own
+system; a principal scoped to the conduit could write onto systems it cannot update. A move to another
+owner also costs update on the owner it leaves. Consent is given at write: a binding persists if its
+author later loses scope, as a membership does, and deleting the conduit or the owner deletes it. The
+[identity and access](/architecture/identity-access/) page has the refusal each end gives.
+
+Bindings are made under the conduit, beside the identities it reports:
+`GET /components/{name}/identity-bindings` lists them (an owner named only when the caller can read
+it, the rest counted), and `PUT` and `DELETE` on `/components/{name}/identity-bindings/{key}/{value}`
+bind and unbind one ([api](/architecture/api/)); the value is one percent-encoded path segment, so a
+value carrying a slash or a space (`room%2F1`) round-trips, through the generated CLI
+(`omniglass component identity-binding`) and the MCP tools as well. Every change is audited in its
+transaction, naming both ends.
+
+<SchemaTable
+  table="identity_binding"
+  notes={{
+    conduit_id: 'The conduit component: the path the value arrived on, not its owner',
+    property_type_id: 'The match key, a registered property type naming what kind of identity the value is',
+    value: 'The identity the conduit reports, 1 to 256 characters; unique per conduit and key',
+    owner_kind: 'component or system: the arc arm that is set',
+    component_id: 'The owning component, when owner_kind is component',
+    system_id: 'The owning system, when owner_kind is system',
+  }}
+/>
+
+The design once described this index as declared on the owner and resolved in a cascade scope, so an
+identity set at a location or system bound every member below it, with an observed identity sample as
+the fallback. Both are deferred: each widens who can place a value on an owner without the conduit
+end's consent, so each waits for its own fence and a consumer that needs it.
 
 ## Drivers: the declarative menu
 

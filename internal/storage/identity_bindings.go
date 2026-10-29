@@ -31,6 +31,10 @@ var (
 	// now. It names neither that owner nor its kind: the caller may not be able
 	// to read it.
 	ErrIdentityBindingMoveForbidden = errors.New("storage: moving an identity binding needs update on the owner it leaves")
+	// ErrIdentityBindingOwnerIsConduit is a binding whose owner is its own
+	// conduit: a fanned value never lands on the conduit it arrived through
+	// (a sample with no identity already does).
+	ErrIdentityBindingOwnerIsConduit = errors.New("storage: an identity binding's owner is not its own conduit")
 )
 
 // IdentityBindingValueMax is the longest identity value a binding holds, in
@@ -171,7 +175,7 @@ func (p *PG) ListIdentityBindings(ctx context.Context, conduit string, component
 // match key must be a registered property type. A put naming the owner the
 // identity is already bound to is a no-op and writes no audit row; one naming
 // a different owner moves the binding, which also needs update on the owner it
-// leaves.
+// leaves. The owner is never the conduit itself (ErrIdentityBindingOwnerIsConduit).
 func (p *PG) PutIdentityBinding(ctx context.Context, actorID, conduit, key, value string, owner IdentityBindingOwner, sc IdentityBindingScopes) (*IdentityBinding, error) {
 	if owner.Kind != "component" && owner.Kind != "system" {
 		return nil, ErrIdentityBindingOwnerKind
@@ -196,6 +200,9 @@ func (p *PG) PutIdentityBinding(ctx context.Context, actorID, conduit, key, valu
 	ownerID, err := resolveIdentityOwner(ctx, tx, owner, sc)
 	if err != nil {
 		return nil, err
+	}
+	if owner.Kind == "component" && ownerID == c.ID {
+		return nil, ErrIdentityBindingOwnerIsConduit
 	}
 	// Serialize writes to one identity, so two puts racing on an unbound value
 	// cannot both read "absent" and one of them fail on the unique key.
