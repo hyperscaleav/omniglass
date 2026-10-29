@@ -80,8 +80,10 @@ func TestSnoozeRecordsWhoAndUntilWhenOnTheCondition(t *testing.T) {
 		t.Fatalf("%d snooze audit rows, want 1", n)
 	}
 	who, before, after := snoozeAudit(t, dsn, "snooze", raised.ID)
-	if who != "jordan-ops" || before != nil || after["snoozed_until"] == nil || after["dedup_key"] != "no-signal" {
-		t.Errorf("snooze audit = %s %v -> %v, want jordan-ops, no before, the deadline and the condition after", who, before, after)
+	// The before image names the deadline as null: none was in force (#1339:
+	// an alarm's audit rows outlive it, so each carries both images).
+	if v, ok := before["snoozed_until"]; who != "jordan-ops" || !ok || v != nil || after["snoozed_until"] == nil || after["dedup_key"] != "no-signal" {
+		t.Errorf("snooze audit = %s %v -> %v, want jordan-ops, a null deadline before, the deadline and the condition after", who, before, after)
 	}
 
 	// The timeline reads the audit row with no change to its read.
@@ -283,18 +285,18 @@ func TestUnsnoozingAnExpiredSnoozeEndsItAsTheSweepWould(t *testing.T) {
 	if n := auditRows(t, dsn, "snooze-end", raised.ID); n != 1 {
 		t.Errorf("unsnoozing an expired snooze wrote %d snooze-end rows, want the one its deadline owed", n)
 	}
-	// And a snooze after it audits no before: none was in force.
+	// And a snooze after it audits a null deadline before: none was in force.
 	if _, err := gw.SnoozeAlarm(ctx, actor, comp, raised.ID, time.Hour); err != nil {
 		t.Fatal(err)
 	}
-	if _, before, _ := snoozeAudit(t, dsn, "snooze", raised.ID); before != nil {
+	if _, before, _ := snoozeAudit(t, dsn, "snooze", raised.ID); before["snoozed_until"] != nil {
 		t.Errorf("a snooze after an expired one audited before %v, want none", before)
 	}
 }
 
 // TestConcurrentFirstSnoozesAuditTheReplacement: two first snoozes of one
 // condition at once serialize on the condition, so exactly one of them audits
-// no before and the other audits the deadline it replaced.
+// a null deadline before and the other audits the deadline it replaced.
 func TestConcurrentFirstSnoozesAuditTheReplacement(t *testing.T) {
 	gw, dsn, comp, raised := ackFixture(t)
 	ctx := context.Background()
@@ -317,8 +319,8 @@ func TestConcurrentFirstSnoozesAuditTheReplacement(t *testing.T) {
 	}
 	defer conn.Close(ctx)
 	var withBefore, without int
-	if err := conn.QueryRow(ctx, `select count(*) filter (where old is not null and old <> 'null'::jsonb),
-		count(*) filter (where old is null or old = 'null'::jsonb)
+	if err := conn.QueryRow(ctx, `select count(*) filter (where old->>'snoozed_until' is not null),
+		count(*) filter (where old ? 'snoozed_until' and old->>'snoozed_until' is null)
 		from audit_log where verb = 'snooze' and resource_id = $1`, raised.ID).Scan(&withBefore, &without); err != nil {
 		t.Fatal(err)
 	}

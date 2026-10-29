@@ -116,10 +116,10 @@ func (p *PG) SnoozeAlarm(ctx context.Context, actorID, componentName, alarmID st
 		returning snoozed_until`, component.ID, key, d.Seconds(), actorID).Scan(&until); err != nil {
 		return nil, fmt.Errorf("storage: snooze alarm %s: %w", alarmID, err)
 	}
-	var old map[string]any
-	if before != nil {
-		old = map[string]any{"snoozed_until": before}
-	}
+	// The before image always names the deadline, null when the condition was
+	// not snoozed: an alarm's audit rows outlive it (#1339), so each says what
+	// it changed on its own.
+	old := map[string]any{"snoozed_until": before}
 	if err := writeAuditRes(ctx, tx, actorID, "snooze", "alarm", alarmID, old,
 		map[string]any{"component": component.Name, "dedup_key": key, "snoozed_until": until}); err != nil {
 		return nil, err
@@ -243,7 +243,7 @@ func conditionSnooze(ctx context.Context, q txQuerier, alarmID string, lock bool
 func endSnoozeTx(ctx context.Context, p *PG, tx pgx.Tx, actorID, verb, auditAlarmID string, component *Component, key string, until time.Time) error {
 	if auditAlarmID != "" {
 		if err := writeAuditRes(ctx, tx, actorID, verb, "alarm", auditAlarmID,
-			map[string]any{"snoozed_until": until}, map[string]any{"component": component.Name, "dedup_key": key}); err != nil {
+			map[string]any{"snoozed_until": until}, map[string]any{"component": component.Name, "dedup_key": key, "snoozed_until": nil}); err != nil {
 			return err
 		}
 	}
