@@ -18,4 +18,4 @@ and hourly, apart from collisions, and a push of the shadowed official row is re
 reason that says it is shadowed. Deleting the operator's row lets the official one resolve.
 
 The same name in the same registry still cannot coexist: the seed takes the operator's row over.
-#318 answers that by adopting the operator's row as their fork of the official one.
+#318 answers that with namespaced keys, where a bare name resolves the operator's namespace before the platform's.
