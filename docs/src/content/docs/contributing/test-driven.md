@@ -287,8 +287,8 @@ make lab-footprint                                            # the lab profile,
 make lab-footprint LAB_FOOTPRINT_ARGS="-cadence default -windows 7 -json out.json"
 ```
 
-`-cadence` takes `lab` (a learner's lab), `walkthrough` (probes on every check-in, as a
-recording's lab does) or `default` (the product's own cadence); `-json` writes the report for a
+`-cadence` takes any of the lab guide's
+[cadence profiles](/guides/lab/#what-runs-with-which-privilege); `-json` writes the report for a
 generator to render.
 
 ### Benchmarks are diagnostic, never a gate

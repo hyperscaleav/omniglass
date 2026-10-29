@@ -51,13 +51,18 @@ func UsageFromStats(s container.StatsResponse) (Usage, error) {
 }
 
 // Millicores is the CPU a container used between two readings: a thousand
-// is one full core.
-func Millicores(a, b Usage) float64 {
-	dt := b.At.Sub(a.At)
-	if dt <= 0 || b.CPUNanos < a.CPUNanos {
-		return 0
+// is one full core. A counter that went backwards means the container was
+// restarted between them (a fresh cgroup counts from zero), and the window
+// is refused rather than read as idle.
+func Millicores(a, b Usage) (float64, error) {
+	if b.CPUNanos < a.CPUNanos {
+		return 0, fmt.Errorf("its CPU counter went backwards (restarted between %s and %s?)", a.At.Format(time.TimeOnly), b.At.Format(time.TimeOnly))
 	}
-	return float64(b.CPUNanos-a.CPUNanos) / float64(dt.Nanoseconds()) * 1000
+	dt := b.At.Sub(a.At)
+	if dt <= 0 {
+		return 0, nil
+	}
+	return float64(b.CPUNanos-a.CPUNanos) / float64(dt.Nanoseconds()) * 1000, nil
 }
 
 // DBCountersQuery reads, in one row, the database counters a window
@@ -65,8 +70,8 @@ func Millicores(a, b Usage) float64 {
 // statistics, so nothing is counted by a scan), the total size of each lane
 // and of the receipts with their indexes, the database's size, and the WAL
 // position. A lane's figures sum over its partitions, so a partitioned table
-// reads the same way as a plain one (pg_partition_tree lists
-// nothing for a plain table, so the table itself is always in its lane).
+// reads the same way as a plain one (the union keeps the table itself in
+// its lane whatever pg_partition_tree lists).
 const DBCountersQuery = `with lane(name, relid) as (
     select l, t.relid from unnest(array['metric', 'property']) l,
       lateral (select relid from pg_partition_tree(l::regclass) union select l::regclass) t)
@@ -138,6 +143,11 @@ func WindowOf(db0, db1 DBCounters, use0, use1 map[string]Usage) (Window, error) 
 	if dt <= 0 {
 		return Window{}, fmt.Errorf("a window from %s to %s has no length", db0.At, db1.At)
 	}
+	// The statistics counters only grow while Postgres runs; one that went
+	// backwards means it restarted and reset them.
+	if db1.MetricRows < db0.MetricRows || db1.PropertyRows < db0.PropertyRows || db1.WALBytes < db0.WALBytes {
+		return Window{}, fmt.Errorf("the database's counters went backwards between %s and %s (Postgres restarted?)", db0.At.Format(time.TimeOnly), db1.At.Format(time.TimeOnly))
+	}
 	perMin := func(a, b int64) float64 { return float64(b-a) / dt.Minutes() }
 	perDay := func(a, b int64) float64 { return float64(b-a) / dt.Hours() * 24 }
 	w := Window{
@@ -155,8 +165,12 @@ func WindowOf(db0, db1 DBCounters, use0, use1 map[string]Usage) (Window, error) 
 		if !ok {
 			return Window{}, fmt.Errorf("the %s container was read at the window's start and not at its end", name)
 		}
+		mc, err := Millicores(a, b)
+		if err != nil {
+			return Window{}, fmt.Errorf("the %s container: %w", name, err)
+		}
 		w.Containers[name] = ContainerWindow{
-			Millicores:    Millicores(a, b),
+			Millicores:    mc,
 			WorkingSetMiB: float64(b.WorkingSetBytes()) / (1 << 20),
 		}
 	}

@@ -37,7 +37,7 @@ func run() error {
 	var (
 		bin      = flag.String("bin", "bin/omniglass", "the omniglass binary make built")
 		scenario = flag.String("scenario", lab.DefaultScenario, "the fleet the lab seeds")
-		cadence  = flag.String("cadence", lab.CadenceLab, "the node's cadence profile: lab, walkthrough or default")
+		cadence  = flag.String("cadence", lab.CadenceLab, "the node's cadence profile ("+lab.CadenceNames()+")")
 		warmup   = flag.Duration("warmup", 2*time.Minute, "how long the lab runs before the first window")
 		window   = flag.Duration("window", time.Minute, "one window's length")
 		windows  = flag.Int("windows", 5, "how many windows; each figure is their median")

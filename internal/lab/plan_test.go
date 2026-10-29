@@ -1,6 +1,9 @@
 package lab
 
 import (
+	"github.com/hyperscaleav/omniglass/internal/node"
+	"github.com/hyperscaleav/omniglass/internal/simnode"
+
 	"slices"
 	"strings"
 	"testing"
@@ -253,12 +256,15 @@ func TestPlanCadenceProfiles(t *testing.T) {
 		ephemeral bool
 		heartbeat string
 		probe     string // "" probes on every check-in
+		simPoll   string
 	}{
-		{"", false, "2s", "10s"},
-		{"", true, "2s", ""},
-		{"lab", true, "2s", "10s"},
-		{"walkthrough", false, "2s", ""},
-		{"default", true, "30s", ""},
+		{"", false, "2s", "10s", "2s"},
+		{"", true, "2s", "", "2s"},
+		{"lab", true, "2s", "10s", "2s"},
+		{"walkthrough", false, "2s", "", "2s"},
+		// The product's own: the node's and the simulator's defaults, so
+		// the profile cannot drift from what a deployment runs.
+		{"default", true, node.DefaultHeartbeat.String(), "", simnode.DefaultPoll.String()},
 	}
 	for _, c := range cases {
 		o := testOptions()
@@ -272,6 +278,9 @@ func TestPlanCadenceProfiles(t *testing.T) {
 		}
 		if got := flag(s.Node.Cmd, "--heartbeat"); got != c.heartbeat {
 			t.Errorf("cadence %q: --heartbeat %q in %v, want %s", c.cadence, got, s.Node.Cmd, c.heartbeat)
+		}
+		if got := flag(s.Node.Cmd, "--poll"); got != c.simPoll {
+			t.Errorf("cadence %q: --poll %q in %v, want %s", c.cadence, got, s.Node.Cmd, c.simPoll)
 		}
 		if got := flag(s.Node.Cmd, "--probe-every"); got != c.probe {
 			t.Errorf("cadence %q: --probe-every %q in %v, want %q", c.cadence, got, s.Node.Cmd, c.probe)

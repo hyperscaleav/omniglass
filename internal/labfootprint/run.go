@@ -192,6 +192,20 @@ func (h *harness) measure(ctx context.Context) (Report, error) {
 		run.Components, _ = strconv.Atoi(f[1])
 		run.Tasks, _ = strconv.Atoi(f[2])
 	}
+	// The reads are tried once before anything is measured, so a range the
+	// API refuses fails the run in seconds rather than after its windows.
+	series, err := h.pickSeries(ctx)
+	if err != nil {
+		return Report{}, err
+	}
+	if len(series) == 0 {
+		return Report{}, errors.New("no component has a sampled metric to read")
+	}
+	for _, hours := range h.cfg.ReadHours {
+		if err := h.readSeries(ctx, series[0], hours); err != nil {
+			return Report{}, err
+		}
+	}
 	h.say("ready: %d systems, %d components, %d enabled tasks; warming up for %s", run.Systems, run.Components, run.Tasks, h.cfg.Warmup)
 	if err := sleep(ctx, h.cfg.Warmup); err != nil {
 		return Report{}, err
@@ -219,7 +233,7 @@ func (h *harness) measure(ctx context.Context) (Report, error) {
 		db0, use0 = db1, use1
 	}
 
-	if err := h.timeReads(ctx, &run); err != nil {
+	if err := h.timeReads(ctx, &run, series); err != nil {
 		return Report{}, err
 	}
 	return Summarize(run), nil
@@ -292,14 +306,7 @@ func (h *harness) psql(ctx context.Context, q string) (string, error) {
 // timeReads holds the server and Postgres to ReadCPUs, then times each
 // picked series' read at each range through the API, as a console chart
 // reads it.
-func (h *harness) timeReads(ctx context.Context, run *Run) error {
-	series, err := h.pickSeries(ctx)
-	if err != nil {
-		return err
-	}
-	if len(series) == 0 {
-		return errors.New("no component has a sampled metric to read")
-	}
+func (h *harness) timeReads(ctx context.Context, run *Run, series []Series) error {
 	nano := int64(h.cfg.ReadCPUs * 1e9)
 	for _, key := range []string{"LAB_SERVER", "LAB_DB"} {
 		if _, err := h.dc.ContainerUpdate(ctx, h.env[key], client.ContainerUpdateOptions{
@@ -311,15 +318,23 @@ func (h *harness) timeReads(ctx context.Context, run *Run) error {
 	for _, hours := range h.cfg.ReadHours {
 		for i := 0; i < h.cfg.ReadsEach; i++ {
 			for _, s := range series {
-				u := fmt.Sprintf("%s/api/v1/components/%s/metrics/%s/samples?hours=%d&limit=2000",
-					h.env["LAB_HOST_URL"], url.PathEscape(s.Component), url.PathEscape(s.Metric), hours)
 				start := time.Now()
-				if err := h.get(ctx, u, nil); err != nil {
-					return fmt.Errorf("read %s %s over %d h: %w", s.Component, s.Metric, hours, err)
+				if err := h.readSeries(ctx, s, hours); err != nil {
+					return err
 				}
 				run.Reads[hours] = append(run.Reads[hours], time.Since(start))
 			}
 		}
+	}
+	return nil
+}
+
+// readSeries reads one series over a range, as a console chart does.
+func (h *harness) readSeries(ctx context.Context, s Series, hours int) error {
+	u := fmt.Sprintf("%s/api/v1/components/%s/metrics/%s/samples?hours=%d&limit=2000",
+		h.env["LAB_HOST_URL"], url.PathEscape(s.Component), url.PathEscape(s.Metric), hours)
+	if err := h.get(ctx, u, nil); err != nil {
+		return fmt.Errorf("read %s %s over %d h: %w", s.Component, s.Metric, hours, err)
 	}
 	return nil
 }

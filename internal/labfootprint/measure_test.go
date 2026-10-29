@@ -43,11 +43,16 @@ func TestMillicores(t *testing.T) {
 	at := time.Date(2026, 10, 29, 12, 0, 0, 0, time.UTC)
 	a := Usage{At: at, CPUNanos: 1_000_000_000}
 	b := Usage{At: at.Add(10 * time.Second), CPUNanos: 3_500_000_000}
-	if got := Millicores(a, b); !near(got, 250) {
-		t.Fatalf("millicores %v, want 250", got)
+	if got, err := Millicores(a, b); err != nil || !near(got, 250) {
+		t.Fatalf("millicores %v %v, want 250", got, err)
 	}
-	if got := Millicores(b, b); got != 0 {
-		t.Fatalf("no elapsed time: %v, want 0", got)
+	if got, err := Millicores(b, b); err != nil || got != 0 {
+		t.Fatalf("no elapsed time: %v %v, want 0", got, err)
+	}
+	// A container restarted inside the window starts a fresh cgroup, its
+	// counter from zero: the window is refused, never read as idle.
+	if _, err := Millicores(b, a); err == nil {
+		t.Fatal("a CPU counter that went backwards was read as a rate")
 	}
 }
 
@@ -111,6 +116,11 @@ func TestWindowOf(t *testing.T) {
 	}
 	if _, err := WindowOf(db1, db0, use0, use1); err == nil {
 		t.Fatal("a window that ends before it starts was accepted")
+	}
+	restarted := db1
+	restarted.MetricRows = 10
+	if _, err := WindowOf(db0, restarted, use0, use1); err == nil {
+		t.Fatal("a row counter that went backwards (Postgres restarted) was accepted")
 	}
 	if _, err := WindowOf(db0, db1, use0, map[string]Usage{}); err == nil {
 		t.Fatal("a container read at the start and not at the end was accepted")

@@ -104,7 +104,7 @@ func newLabRunCmd(version string) *cobra.Command {
 	// fleet with no node collecting from it.
 	cmd.Flags().BoolVar(&script.noNode, "no-node", false, "run no node: seed the fleet without the simulated wiring, so nothing collects (needs --ephemeral)")
 	// The lab footprint (#1277) measures a lab at a chosen cadence profile.
-	cmd.Flags().StringVar(&script.cadence, "cadence", "", "the node's cadence profile: lab, walkthrough or default (the product's own); empty is lab, or walkthrough for a throwaway lab")
+	cmd.Flags().StringVar(&script.cadence, "cadence", "", "the node's cadence profile ("+lab.CadenceNames()+"); empty is lab, or walkthrough for a throwaway lab")
 	for _, name := range []string{"ephemeral", "ready-file", "while-pid", "no-node", "cadence"} {
 		_ = cmd.Flags().MarkHidden(name)
 	}

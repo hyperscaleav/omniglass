@@ -19,6 +19,10 @@ import (
 	"net"
 	"sort"
 	"strconv"
+	"strings"
+
+	"github.com/hyperscaleav/omniglass/internal/node"
+	"github.com/hyperscaleav/omniglass/internal/simnode"
 )
 
 // Defaults for the options a user does not set.
@@ -48,10 +52,6 @@ const (
 	pgDataDir   = "/var/lib/postgresql"
 	consolePort = 8080
 	busPort     = 4222
-	// How often the simulator re-pulls its component list, whatever the
-	// cadence profile: a component added in the console answers within
-	// seconds.
-	simPoll = "2s"
 	// The unprivileged pinger needs the whole group range admitted.
 	pingGroupRange = "0 2147483647"
 )
@@ -94,6 +94,12 @@ type Cadence struct {
 	// ProbeEvery is the reachability probe interval; empty probes on every
 	// check-in.
 	ProbeEvery string
+	// SimPoll is how often the node's simulator re-pulls its component
+	// list: a lab's profiles every 2s, so a component added in the console
+	// answers within seconds; `default` at the simulator's own default, so a
+	// measurement of the product's cadence carries as little of the
+	// simulator's own traffic as it can.
+	SimPoll string
 	// For says who runs at it, in the lab guide's words.
 	For string
 }
@@ -111,16 +117,25 @@ func CadenceProfiles() []Cadence {
 	return []Cadence{
 		// A learner's lab may run for days, and a probe on every 2s check-in
 		// wrote most of its rows (#1273), so it probes every 10s.
-		{Name: CadenceLab, Heartbeat: "2s", ProbeEvery: "10s",
+		{Name: CadenceLab, Heartbeat: "2s", ProbeEvery: "10s", SimPoll: "2s",
 			For: "a learner's lab: a change in the console shows within seconds"},
 		// A script's throwaway lab lives for minutes and probes on every
 		// check-in, so a walkthrough waiting on a probe's verdict keeps its
 		// recorded budget.
-		{Name: CadenceWalkthrough, Heartbeat: "2s",
+		{Name: CadenceWalkthrough, Heartbeat: "2s", SimPoll: "2s",
 			For: "a script's throwaway lab: a walkthrough waiting on a probe's verdict sees it within seconds"},
-		{Name: CadenceDefault, Heartbeat: "30s",
+		{Name: CadenceDefault, Heartbeat: node.DefaultHeartbeat.String(), SimPoll: simnode.DefaultPoll.String(),
 			For: "the product's own defaults: what a deployment's node runs at"},
 	}
+}
+
+// CadenceNames are the profiles' names, for a flag's help.
+func CadenceNames() string {
+	var names []string
+	for _, c := range CadenceProfiles() {
+		names = append(names, c.Name)
+	}
+	return strings.Join(names, ", ")
 }
 
 // LookupCadence is the named profile. An empty name is the lab's own: a
@@ -132,14 +147,12 @@ func LookupCadence(name string, ephemeral bool) (Cadence, error) {
 			name = CadenceWalkthrough
 		}
 	}
-	var names []string
 	for _, c := range CadenceProfiles() {
 		if c.Name == name {
 			return c, nil
 		}
-		names = append(names, c.Name)
 	}
-	return Cadence{}, fmt.Errorf("--cadence %q is not a cadence profile; the profiles are %v", name, names)
+	return Cadence{}, fmt.Errorf("--cadence %q is not a cadence profile; the profiles are %s", name, CadenceNames())
 }
 
 // Owner is the process that runs a lab: the reaper removes a lab whose
@@ -396,7 +409,7 @@ func Plan(o Options) (Spec, error) {
 	}
 	spec.Node = Service{
 		Name: "node", Container: o.Project + "-node-1", Image: o.Image,
-		Cmd: append(nodeCmd, "--poll", simPoll),
+		Cmd: append(nodeCmd, "--poll", cadence.SimPoll),
 		Env: []string{
 			"OMNIGLASS_SERVER=http://server:" + strconv.Itoa(consolePort),
 			"OMNIGLASS_NODE_NAME=" + NodeName,
