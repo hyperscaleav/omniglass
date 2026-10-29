@@ -316,7 +316,7 @@ omniglass endpoint create \
 # (a poll task per poll function, a standing listen task per listener). Secret
 # inputs are references: the NAME of a secret of the declared shape, never a value.
 omniglass endpoint create \
-  --driver snmp-generic --component amp-1 --node edge-hq \
+  --driver polaris-amp-snmp --component amp-1 --node edge-hq \
   --inputs '{"host":"10.0.0.40","community":"lab-community"}'  # needs endpoint:create
 
 omniglass endpoint list

@@ -68,7 +68,7 @@ The lab then reaches "every seeded component is collected" one profile at a time
 is left is always current.
 
 A new profile lands at the class floor (#1266): the product's driver reads at least one signal of its
-class off the device's own API, beyond identity and `uptime`, beside the connection-level data every
+class off the component's own API, beyond identity and `uptime`, beside the connection-level data every
 endpoint gets. The Polaris amplifier (#898) is the pattern. Its SNMP agent answers, under the Polaris
 enterprise arc, the chassis power, the protect state an amplifier latches on a fault, the heatsink
 temperature and fan, and a channel table of output level, clip and load; the `polaris-amp-snmp`
@@ -289,8 +289,8 @@ its own beside a node, and for the Helm sidecar (#892).
 The dev seed simulates its own fleet. Every component whose product a profile serves gets an
 address in `127.60.0.0/16` (a component keeps the address it was given, and a new one takes the
 lowest address no endpoint already targets) and endpoints on the dev node, `edge-hq`. A product whose driver
-has a spec gets that driver attached: SNMP products through `snmp-generic` (with a seeded platform
-community secret), the Newtron panels through `newtron-nvp`'s line protocol, the Kestrel bars
+has a spec gets that driver attached: SNMP products through their product's SNMP driver (`snmp-generic`,
+the amplifiers' `polaris-amp-snmp`), each with the seeded platform community secret, the Newtron panels through `newtron-nvp`'s line protocol, the Kestrel bars
 through `kestrel-api` over https (a seeded basic-auth login, the bar's key pinned on first use), and
 the Tessellate sensors through `http-json` (a seeded api key in its header). The huddle's panel
 also carries its line protocol over telnet behind a login (`newtron-nvp-telnet`, the
