@@ -16,6 +16,6 @@ over the systems and components the caller may update, and the row moves up; a r
 the picker. A bound row unbinds after a confirm. Both lists poll while the card shows, so an
 identity heard for the first time appears without a reload.
 
-In the lab, binding the one identity the simulated UCC platform reports unbound (`zr-annex-1`) from the card made the
+In the lab, binding the one identity the simulated UCC platform reports unbound (`zr-boardroom-b`) from the card made the
 next poll land its call state on the chosen system, observed, its source naming the conduit and its
 endpoint ([the component guide](/guides/operator/fleet/#a-component)).
