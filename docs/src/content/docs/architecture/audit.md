@@ -35,6 +35,12 @@ drawer. See [implementation status](/architecture/status/).
   able to prove that a given uuid is the right table's. The remaining gap is narrow and known: a
   password change or reset row (`resource = 'credential'`) is keyed on its principal's uuid rather
   than the credential's own; a token's rows are keyed on the token's credential id.
+- **A row outlives its subject.** `resource_id` is stored as text and is never a foreign key, so
+  deleting or aging out the thing a row is about never deletes or rewrites the row. What makes the row
+  still worth reading is its images: an update carries the fields it moved in both `old` and `new`
+  (null on the side where a field was unset), and enough of the subject to name it. An alarm's rows
+  are the first held to it, since alarm retention (#1339) removes cleared alarms while their audit rows
+  stay ([ADR-1442](/architecture/decisions/#adr-1442-an-audit-row-outlives-its-subject-both-images-and-a-string-reference)).
 - **The actor** is resolved by IAM ([identity and access](/architecture/identity-access/)): the
   human, service, or node. The read resolves it to the actor's **identifier**, a human's username, a
   service account's name, or a node's name, through the gateway's one resolution
