@@ -253,8 +253,8 @@ func (p *PG) UpsertProduct(ctx context.Context, m Product) error {
 		return err
 	}
 	if _, err := tx.Exec(ctx, `
-		insert into product (name, label, vendor_id, driver_id, kind, parent_product_id, component_type_id, icon, label_rule, official)
-		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		insert into product (namespace, name, label, vendor_id, driver_id, kind, parent_product_id, component_type_id, icon, label_rule, official)
+		values (case when $10 then 'og' else 'local' end, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		on conflict (name) do update
 			set label      = excluded.label,
 			    vendor_id         = excluded.vendor_id,
@@ -265,7 +265,8 @@ func (p *PG) UpsertProduct(ctx context.Context, m Product) error {
 			    icon              = excluded.icon,
 			    label_rule        = excluded.label_rule,
 			    official          = excluded.official,
-			    updated_at        = now()`,
+			    updated_at        = now()
+		where product.namespace = excluded.namespace`,
 		m.Name, labelOrNull(m.Label), m.VendorID, m.DriverID, m.Kind, m.ParentProductID, componentTypeID, m.Icon, nilIfEmpty(m.LabelRule), m.Official); err != nil {
 		return fmt.Errorf("storage: upsert product %q: %w", m.Name, err)
 	}

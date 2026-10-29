@@ -55,6 +55,15 @@ func scanDriver(row pgx.Row) (*Driver, error) {
 // applies only when a field differs, and the re-derive runs only when it did,
 // so a boot does not walk every attached endpoint.
 func (p *PG) UpsertDriver(ctx context.Context, d Driver) error {
+	// An operator's driver of the name is left alone, so the shipped spec is
+	// not validated against a catalog the operator's install may hold
+	// differently (#1431).
+	var held bool
+	if err := p.pool.QueryRow(ctx, `select namespace <> 'og' from driver where name = $1`, d.Name).Scan(&held); err == nil && held && d.Official {
+		return nil
+	} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return fmt.Errorf("storage: upsert driver %q: %w", d.Name, err)
+	}
 	if err := p.validateDriverSpec(ctx, d.Spec); err != nil {
 		return fmt.Errorf("storage: upsert driver %q: %w", d.Name, err)
 	}
@@ -65,22 +74,24 @@ func (p *PG) UpsertDriver(ctx context.Context, d Driver) error {
 	defer func() { _ = tx.Rollback(ctx) }()
 	var id string
 	err = tx.QueryRow(ctx, `
-		insert into driver (name, label, version, official, spec)
-		values ($1, $2, $3, $4, $5)
+		insert into driver (namespace, name, label, version, official, spec)
+		values (case when $4 then 'og' else 'local' end, $1, $2, $3, $4, $5)
 		on conflict (name) do update
 			set label = excluded.label,
 			    version      = excluded.version,
 			    official     = excluded.official,
 			    spec         = excluded.spec,
 			    updated_at   = now()
-		where driver.label is distinct from excluded.label
+		where driver.namespace = excluded.namespace and (
+		   driver.label is distinct from excluded.label
 		   or driver.version is distinct from excluded.version
 		   or driver.official is distinct from excluded.official
 		   or driver.spec is distinct from excluded.spec
+		)
 		returning id`,
 		d.Name, labelOrNull(d.Label), d.Version, d.Official, specOrNull(d.Spec)).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil // unchanged: nothing written, nothing to re-derive
+		return nil // unchanged, or an operator's row holds the name: nothing written, nothing to re-derive
 	}
 	if err != nil {
 		return fmt.Errorf("storage: upsert driver %q: %w", d.Name, err)

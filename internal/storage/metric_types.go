@@ -88,13 +88,14 @@ func scanMetricType(row pgx.Row) (*MetricType, error) {
 // keyed by a distinct name and untouched. Mirrors UpsertPropertyType.
 func (p *PG) UpsertMetricType(ctx context.Context, mt MetricType) error {
 	_, err := p.pool.Exec(ctx, `
-		insert into metric_type (name, label, data_type, unit, "precision", fusion_policy, description, official)
-		values ($1, $2, $3, $4, $5, $6, $7, $8)
+		insert into metric_type (namespace, name, label, data_type, unit, "precision", fusion_policy, description, official)
+		values (case when $8 then 'og' else 'local' end, $1, $2, $3, $4, $5, $6, $7, $8)
 		on conflict (name) do update set
 			label = excluded.label, data_type = excluded.data_type,
 			unit = excluded.unit, "precision" = excluded."precision",
 			fusion_policy = excluded.fusion_policy, description = excluded.description,
-			official = excluded.official`,
+			official = excluded.official
+		where metric_type.namespace = excluded.namespace`,
 		mt.Name, labelOrNull(mt.Label), mt.DataType, mt.Unit, mt.Precision, mt.FusionPolicy, mt.Description, mt.Official)
 	if err != nil {
 		return fmt.Errorf("storage: upsert metric type %q: %w", mt.Name, err)

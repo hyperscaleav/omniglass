@@ -108,8 +108,8 @@ func mapSystemTypeWriteErr(err error) error {
 // re-seeding the same name updates it in place, id stable.
 func (p *PG) UpsertSystemType(ctx context.Context, st SystemType) error {
 	_, err := p.pool.Exec(ctx, `
-		insert into system_type (name, label, stem, icon, abbrev, label_rule, official, parent_id)
-		values ($1, $2, $3, $4, $5, $6, $7, $8)
+		insert into system_type (namespace, name, label, stem, icon, abbrev, label_rule, official, parent_id)
+		values (case when $7 then 'og' else 'local' end, $1, $2, $3, $4, $5, $6, $7, $8)
 		on conflict (name) do update
 			set label = excluded.label,
 			    stem         = excluded.stem,
@@ -118,7 +118,8 @@ func (p *PG) UpsertSystemType(ctx context.Context, st SystemType) error {
 			    label_rule   = excluded.label_rule,
 			    official     = excluded.official,
 			    parent_id    = excluded.parent_id,
-			    updated_at   = now()`,
+			    updated_at   = now()
+		where system_type.namespace = excluded.namespace`,
 		st.Name, labelOrNull(st.Label), st.Stem, st.Icon, st.Abbrev, nilIfEmpty(st.LabelRule), st.Official, st.ParentID)
 	if err != nil {
 		return fmt.Errorf("storage: upsert system_type %q: %w", st.Name, mapSystemTypeWriteErr(err))

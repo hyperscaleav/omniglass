@@ -140,11 +140,12 @@ func (p *PG) UpsertSecretType(ctx context.Context, st SecretType) error {
 		return fmt.Errorf("storage: marshal secret_type %q schema: %w", st.ID, err)
 	}
 	if _, err := p.pool.Exec(ctx, `
-		insert into secret_type (name, official, label, schema, default_admin_sensitive)
-		values ($1, $2, $3, $4, $5)
+		insert into secret_type (namespace, name, official, label, schema, default_admin_sensitive)
+		values (case when $2 then 'og' else 'local' end, $1, $2, $3, $4, $5)
 		on conflict (name) do update
 			set official = excluded.official, label = excluded.label,
-			    schema = excluded.schema, default_admin_sensitive = excluded.default_admin_sensitive`,
+			    schema = excluded.schema, default_admin_sensitive = excluded.default_admin_sensitive
+		where secret_type.namespace = excluded.namespace`,
 		st.Name, st.Official, labelOrNull(st.Label), schema, st.DefaultAdminSensitive); err != nil {
 		return fmt.Errorf("storage: upsert secret_type %q: %w", st.Name, err)
 	}

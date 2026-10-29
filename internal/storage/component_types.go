@@ -219,8 +219,8 @@ func mapComponentTypeWriteErr(err error) error {
 // place, id stable.
 func (p *PG) UpsertComponentType(ctx context.Context, ct ComponentType) error {
 	_, err := p.pool.Exec(ctx, `
-		insert into component_type (name, label, stem, icon, abbrev, label_rule, default_tags, official, parent_id)
-		values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		insert into component_type (namespace, name, label, stem, icon, abbrev, label_rule, default_tags, official, parent_id)
+		values (case when $8 then 'og' else 'local' end, $1, $2, $3, $4, $5, $6, $7, $8, $9)
 		on conflict (name) do update
 			set label = excluded.label,
 			    stem         = excluded.stem,
@@ -230,7 +230,8 @@ func (p *PG) UpsertComponentType(ctx context.Context, ct ComponentType) error {
 			    default_tags = excluded.default_tags,
 			    official     = excluded.official,
 			    parent_id    = excluded.parent_id,
-			    updated_at   = now()`,
+			    updated_at   = now()
+		where component_type.namespace = excluded.namespace`,
 		ct.Name, labelOrNull(ct.Label), ct.Stem, ct.Icon, ct.Abbrev, nilIfEmpty(ct.LabelRule), normalizeComponentTypeTags(ct.DefaultTags), ct.Official, ct.ParentID)
 	if err != nil {
 		return fmt.Errorf("storage: upsert component_type %q: %w", ct.Name, mapComponentTypeWriteErr(err))

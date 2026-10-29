@@ -287,14 +287,15 @@ func mapStandardWriteErr(err error) error {
 // re-running the same id updates it in place.
 func (p *PG) UpsertStandard(ctx context.Context, st Standard) error {
 	_, err := p.pool.Exec(ctx, `
-		insert into standard (name, official, label, parent_standard_id, label_rule)
-		values ($1, $2, $3, (select id from standard where name = nullif($4, '')), $5)
+		insert into standard (namespace, name, official, label, parent_standard_id, label_rule)
+		values (case when $2 then 'og' else 'local' end, $1, $2, $3, (select id from standard where name = nullif($4, '')), $5)
 		on conflict (name) do update
 			set official           = excluded.official,
 			    label       = excluded.label,
 			    parent_standard_id = excluded.parent_standard_id,
 			    label_rule         = excluded.label_rule,
-			    updated_at         = now()`,
+			    updated_at         = now()
+		where standard.namespace = excluded.namespace`,
 		st.Name, st.Official, labelOrNull(st.Label), st.ParentStandardID, nilIfEmpty(st.LabelRule))
 	if err != nil {
 		return fmt.Errorf("storage: upsert standard %q: %w", st.ID, err)

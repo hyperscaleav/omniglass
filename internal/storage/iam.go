@@ -38,14 +38,15 @@ func (p *PG) UpsertRole(ctx context.Context, r Role) error {
 		r.Inherits = []string{}
 	}
 	_, err := p.pool.Exec(ctx, `
-		insert into role (name, official, permissions, inherits, label, description)
-		values ($1, $2, $3, $4, $5, $6)
+		insert into role (namespace, name, official, permissions, inherits, label, description)
+		values (case when $2 then 'og' else 'local' end, $1, $2, $3, $4, $5, $6)
 		on conflict (name) do update
 			set official     = excluded.official,
 			    permissions  = excluded.permissions,
 			    inherits     = excluded.inherits,
 			    label = excluded.label,
-			    description  = excluded.description`,
+			    description  = excluded.description
+		where role.namespace = excluded.namespace`,
 		r.Name, r.Official, r.Permissions, r.Inherits, labelOrNull(r.Label), nullize(r.Description))
 	if err != nil {
 		return fmt.Errorf("storage: upsert role %q: %w", r.Name, err)

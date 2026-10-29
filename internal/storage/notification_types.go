@@ -89,8 +89,9 @@ func validateNotificationTemplates(subject, text *string) error {
 	return nil
 }
 
-// UpsertNotificationType installs an official type, authoritative on conflict
-// (the boot-seed bucket). The seed's templates pass the same compile check
+// UpsertNotificationType installs an official type in the og namespace,
+// authoritative over its own row only (the boot-seed bucket, #1431): an
+// operator's type of the same name is left exactly as it is. The seed's templates pass the same compile check
 // the CRUD lane does, naming the row: a seed an operator would be refused
 // stops the boot instead of shipping.
 func (p *PG) UpsertNotificationType(ctx context.Context, t NotificationType) error {
@@ -100,19 +101,12 @@ func (p *PG) UpsertNotificationType(ctx context.Context, t NotificationType) err
 	if err := validateNotificationTemplates(&t.Subject, &t.Text); err != nil {
 		return fmt.Errorf("storage: upsert notification type %q: %w", t.Name, err)
 	}
-	var holder bool
-	err := p.pool.QueryRow(ctx, `select not official from notification_type where name = $1`, t.Name).Scan(&holder)
-	if err == nil && holder {
-		return fmt.Errorf("%w: the operator notification type %q holds the name of an official one; rename it", ErrNotificationTypeExists, t.Name)
-	}
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return fmt.Errorf("storage: check notification type %q: %w", t.Name, err)
-	}
 	if _, err := p.pool.Exec(ctx, `
-		insert into notification_type (name, label, description, subject, text, official)
-		values ($1, $2, $3, $4, $5, true)
+		insert into notification_type (namespace, name, label, description, subject, text, official)
+		values ('og', $1, $2, $3, $4, $5, true)
 		on conflict (name) do update set label = excluded.label, description = excluded.description,
-			subject = excluded.subject, text = excluded.text, official = true, updated_at = now()`,
+			subject = excluded.subject, text = excluded.text, official = true, updated_at = now()
+		where notification_type.namespace = excluded.namespace`,
 		t.Name, labelOrNull(t.Label), t.Description, t.Subject, t.Text); err != nil {
 		return fmt.Errorf("storage: upsert notification type %q: %w", t.Name, err)
 	}

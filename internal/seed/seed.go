@@ -1,6 +1,8 @@
 // Package seed installs ship-with reference data idempotently on every server
 // start: the boot-seed bucket. It upserts authoritative rows (the official
-// roles) through the Storage Gateway without touching operator-created data.
+// roles) through the Storage Gateway without touching operator-created data:
+// every shipped row lands in the og namespace, and an upsert's conflict update
+// applies only to an og row (#1431).
 // This is distinct from dbmate schema migrations (pure DDL, run once) and from
 // one-time data backfills.
 package seed
@@ -480,8 +482,9 @@ type notificationTypesDoc struct {
 }
 
 // seedNotificationTypes installs the ship-with notification types (#618),
-// authoritative on conflict; a template the sandbox refuses, or a name an
-// operator's type already holds, fails the seed run naming the row.
+// authoritative over their own og rows; a template the sandbox refuses fails
+// the seed run naming the row, and an operator's type of the same name is left
+// as it is (#1431).
 func seedNotificationTypes(ctx context.Context, gw storage.Gateway) error {
 	var doc notificationTypesDoc
 	if err := yaml.Unmarshal(notificationTypesYAML, &doc); err != nil {
@@ -673,6 +676,13 @@ func seedProducts(ctx context.Context, gw storage.Gateway) error {
 			ComponentType: p.ComponentType, Icon: nz(p.Icon),
 		}); err != nil {
 			return err
+		}
+		// An operator's product holds the name, so the shipped one was not
+		// written (#1431): its contract is not the seed's to write either.
+		if held, err := gw.GetProduct(ctx, p.ID); err != nil {
+			return fmt.Errorf("seed: product %s: %w", p.ID, err)
+		} else if !held.Official {
+			continue
 		}
 		// The product's declared-property contract. Seeded through the unaudited
 		// upsert path (seed owns official rows), so a re-run is a no-op.

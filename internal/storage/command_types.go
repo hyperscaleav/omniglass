@@ -78,13 +78,14 @@ func (p *PG) UpsertCommandType(ctx context.Context, ct CommandType) error {
 		return fmt.Errorf("storage: upsert command type %q: %w", ct.Name, err)
 	}
 	_, err = p.pool.Exec(ctx, `
-		insert into command_type (name, label, description, params_schema, settle_window_seconds, target_property_type_id, target_metric_type_id, official)
-		values ($1, $2, $3, $4, $5, $6, $7, $8)
+		insert into command_type (namespace, name, label, description, params_schema, settle_window_seconds, target_property_type_id, target_metric_type_id, official)
+		values (case when $8 then 'og' else 'local' end, $1, $2, $3, $4, $5, $6, $7, $8)
 		on conflict (name) do update set
 			label = excluded.label, description = excluded.description,
 			params_schema = excluded.params_schema, settle_window_seconds = excluded.settle_window_seconds,
 			target_property_type_id = excluded.target_property_type_id,
-			target_metric_type_id = excluded.target_metric_type_id, official = excluded.official`,
+			target_metric_type_id = excluded.target_metric_type_id, official = excluded.official
+		where command_type.namespace = excluded.namespace`,
 		ct.Name, labelOrNull(ct.Label), ct.Description, schemaArg(ct.ParamsSchema), ct.SettleWindowSeconds, propID, metricID, ct.Official)
 	if err != nil {
 		return fmt.Errorf("storage: upsert command type %q: %w", ct.Name, err)

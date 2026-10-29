@@ -292,15 +292,16 @@ func (p *PG) UpsertLocationType(ctx context.Context, lt LocationType) error {
 		return fmt.Errorf("storage: upsert location_type %q: %w", lt.Name, err)
 	}
 	if _, err := p.pool.Exec(ctx, `
-		insert into location_type (name, official, label, icon, allowed_parent_types, label_rule, name_rule)
-		values ($1, $2, $3, $4, $5, $6, $7)
+		insert into location_type (namespace, name, official, label, icon, allowed_parent_types, label_rule, name_rule)
+		values (case when $2 then 'og' else 'local' end, $1, $2, $3, $4, $5, $6, $7)
 		on conflict (name) do update
 			set official             = excluded.official,
 			    label         = excluded.label,
 			    icon                 = excluded.icon,
 			    allowed_parent_types = excluded.allowed_parent_types,
 			    label_rule           = excluded.label_rule,
-			    name_rule            = excluded.name_rule`,
+			    name_rule            = excluded.name_rule
+		where location_type.namespace = excluded.namespace`,
 		lt.Name, lt.Official, labelOrNull(lt.Label), lt.Icon, normalizeAllowedParentTypes(lt.AllowedParentTypes), nilIfEmpty(lt.LabelRule), rule); err != nil {
 		return fmt.Errorf("storage: upsert location_type %q: %w", lt.Name, err)
 	}

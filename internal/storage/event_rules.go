@@ -917,10 +917,10 @@ func sameAuthoredRule(a, b EventRule) bool {
 	return pick(a) == pick(b)
 }
 
-// UpsertEventRule installs an official rule from the boot seed,
-// authoritative on conflict; an operator's rules keep distinct names and are
-// untouched. An official rule never takes over an operator's: a name an
-// operator rule already holds is refused, naming it. A re-seed that changes
+// UpsertEventRule installs an official rule from the boot seed, in the og
+// namespace and authoritative over its own row only (#1431): an operator's
+// rule of the same name is left exactly as it is, and the shipped rule is
+// neither compiled nor written. A re-seed that changes
 // nothing writes nothing (no version bump); one that inserts or changes the
 // rule settles its live state as an operator's create or edit does.
 func (p *PG) UpsertEventRule(ctx context.Context, spec EventRuleSpec) error {
@@ -933,17 +933,21 @@ func (p *PG) UpsertEventRule(ctx context.Context, spec EventRuleSpec) error {
 		return fmt.Errorf("storage: begin upsert event rule: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	// The holder is read before the shipped rule is prepared: an operator's
+	// rule of the name is left alone, so the shipped rule is never compiled
+	// against keys that rule's install may hold differently (#1431).
+	existing, err := scanEventRule(tx.QueryRow(ctx, `select `+eventRuleCols+` from event_rule where name = $1 for update`, r.Name))
+	if err == nil && !existing.Official {
+		return nil
+	}
 	if err := prepareEventRule(ctx, tx, &r, checkAll); err != nil {
 		return fmt.Errorf("storage: official event rule %q: %w", r.Name, err)
 	}
-	existing, err := scanEventRule(tx.QueryRow(ctx, `select `+eventRuleCols+` from event_rule where name = $1 for update`, r.Name))
 	var old *EventRule
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 	case err != nil:
 		return fmt.Errorf("storage: read event rule %q: %w", r.Name, err)
-	case !existing.Official:
-		return fmt.Errorf("%w: the operator rule %q holds the name of an official rule; rename it", ErrEventRuleExists, r.Name)
 	default:
 		if sameAuthoredRule(existing, r) {
 			return nil
@@ -954,16 +958,17 @@ func (p *PG) UpsertEventRule(ctx context.Context, spec EventRuleSpec) error {
 	if err != nil {
 		return err
 	}
-	upserted, err := scanEventRule(tx.QueryRow(ctx, `insert into event_rule (name, label, description, selector, sample_key, sample_lane,
+	upserted, err := scanEventRule(tx.QueryRow(ctx, `insert into event_rule (namespace, name, label, description, selector, sample_key, sample_lane,
 		fire_criteria, clear_criteria, fire_sustain, clear_sustain, severity, message, enabled, official,
 		fire_event_type_id, clear_event_type_id)
-		values ($1, $2, $3, $4, $5, $6, $7, $8, make_interval(secs => $9::float8 / 1000000), make_interval(secs => $10::float8 / 1000000), $11, $12, true, true,
+		values ('og', $1, $2, $3, $4, $5, $6, $7, $8, make_interval(secs => $9::float8 / 1000000), make_interval(secs => $10::float8 / 1000000), $11, $12, true, true,
 		$13::uuid, $14::uuid)
 		on conflict (name) do update set label = excluded.label, description = excluded.description, selector = excluded.selector,
 			sample_key = excluded.sample_key, sample_lane = excluded.sample_lane, fire_criteria = excluded.fire_criteria,
 			clear_criteria = excluded.clear_criteria, fire_sustain = excluded.fire_sustain, clear_sustain = excluded.clear_sustain,
 			severity = excluded.severity, message = excluded.message, fire_event_type_id = excluded.fire_event_type_id,
 			clear_event_type_id = excluded.clear_event_type_id, version = event_rule.version + 1, updated_at = now()
+		where event_rule.namespace = excluded.namespace
 		returning `+eventRuleCols,
 		r.Name, labelOrNull(r.Label), r.Description, sel, r.SampleKey, string(r.SampleLane), fire, clear,
 		r.FireSustain.Microseconds(), r.ClearSustain.Microseconds(), nullIfEmpty(r.Severity), r.Message,

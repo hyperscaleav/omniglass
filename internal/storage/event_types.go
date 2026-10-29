@@ -68,11 +68,12 @@ func (p *PG) UpsertEventType(ctx context.Context, et EventType) error {
 		schema = string(et.PayloadSchema)
 	}
 	_, err := p.pool.Exec(ctx, `
-		insert into event_type (name, label, description, payload_schema, official)
-		values ($1, $2, $3, $4, $5)
+		insert into event_type (namespace, name, label, description, payload_schema, official)
+		values (case when $5 then 'og' else 'local' end, $1, $2, $3, $4, $5)
 		on conflict (name) do update set
 			label = excluded.label, description = excluded.description,
-			payload_schema = excluded.payload_schema, official = excluded.official`,
+			payload_schema = excluded.payload_schema, official = excluded.official
+		where event_type.namespace = excluded.namespace`,
 		et.Name, labelOrNull(et.Label), et.Description, schema, et.Official)
 	if err != nil {
 		return fmt.Errorf("storage: upsert event type %q: %w", et.Name, err)

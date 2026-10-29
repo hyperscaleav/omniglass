@@ -217,6 +217,22 @@
       "name": "label_rule",
       "type": "text",
       "nullable": true
+     },
+     {
+      "name": "namespace",
+      "type": "text",
+      "nullable": false,
+      "default": "'local'::text"
+     }
+    ],
+    "checks": [
+     {
+      "name": "component_type_namespace_check",
+      "expr": "CHECK ((namespace ~ '^[a-z0-9][a-z0-9-]*$'::text))"
+     },
+     {
+      "name": "component_type_og_official_check",
+      "expr": "CHECK (((namespace \u003c\u003e 'og'::text) OR official))"
      }
     ],
     "uniques": [
@@ -273,6 +289,22 @@
       "name": "spec",
       "type": "jsonb",
       "nullable": true
+     },
+     {
+      "name": "namespace",
+      "type": "text",
+      "nullable": false,
+      "default": "'local'::text"
+     }
+    ],
+    "checks": [
+     {
+      "name": "driver_namespace_check",
+      "expr": "CHECK ((namespace ~ '^[a-z0-9][a-z0-9-]*$'::text))"
+     },
+     {
+      "name": "driver_og_official_check",
+      "expr": "CHECK (((namespace \u003c\u003e 'og'::text) OR official))"
      }
     ],
     "uniques": [
@@ -361,12 +393,26 @@
       "name": "label_rule",
       "type": "text",
       "nullable": true
+     },
+     {
+      "name": "namespace",
+      "type": "text",
+      "nullable": false,
+      "default": "'local'::text"
      }
     ],
     "checks": [
      {
       "name": "product_kind_check",
       "expr": "CHECK ((kind = ANY (ARRAY['device'::text, 'app'::text, 'service'::text])))"
+     },
+     {
+      "name": "product_namespace_check",
+      "expr": "CHECK ((namespace ~ '^[a-z0-9][a-z0-9-]*$'::text))"
+     },
+     {
+      "name": "product_og_official_check",
+      "expr": "CHECK (((namespace \u003c\u003e 'og'::text) OR official))"
      }
     ],
     "uniques": [
@@ -570,6 +616,22 @@
       "name": "map",
       "type": "jsonb",
       "nullable": true
+     },
+     {
+      "name": "namespace",
+      "type": "text",
+      "nullable": false,
+      "default": "'local'::text"
+     }
+    ],
+    "checks": [
+     {
+      "name": "standard_namespace_check",
+      "expr": "CHECK ((namespace ~ '^[a-z0-9][a-z0-9-]*$'::text))"
+     },
+     {
+      "name": "standard_og_official_check",
+      "expr": "CHECK (((namespace \u003c\u003e 'og'::text) OR official))"
      }
     ],
     "uniques": [
@@ -750,6 +812,22 @@
       "name": "label_rule",
       "type": "text",
       "nullable": true
+     },
+     {
+      "name": "namespace",
+      "type": "text",
+      "nullable": false,
+      "default": "'local'::text"
+     }
+    ],
+    "checks": [
+     {
+      "name": "system_type_namespace_check",
+      "expr": "CHECK ((namespace ~ '^[a-z0-9][a-z0-9-]*$'::text))"
+     },
+     {
+      "name": "system_type_og_official_check",
+      "expr": "CHECK (((namespace \u003c\u003e 'og'::text) OR official))"
      }
     ],
     "uniques": [
@@ -819,12 +897,26 @@
       "nullable": false,
       "default": "uuidv7()",
       "pk": true
+     },
+     {
+      "name": "namespace",
+      "type": "text",
+      "nullable": false,
+      "default": "'local'::text"
      }
     ],
     "checks": [
      {
       "name": "vendor_kind_check",
       "expr": "CHECK ((kind = ANY (ARRAY['manufacturer'::text, 'integrator'::text, 'developer'::text])))"
+     },
+     {
+      "name": "vendor_namespace_check",
+      "expr": "CHECK ((namespace ~ '^[a-z0-9][a-z0-9-]*$'::text))"
+     },
+     {
+      "name": "vendor_og_official_check",
+      "expr": "CHECK (((namespace \u003c\u003e 'og'::text) OR official))"
      }
     ],
     "uniques": [
@@ -1631,6 +1723,22 @@
       "nullable": false,
       "default": "uuidv7()",
       "pk": true
+     },
+     {
+      "name": "namespace",
+      "type": "text",
+      "nullable": false,
+      "default": "'local'::text"
+     }
+    ],
+    "checks": [
+     {
+      "name": "secret_type_namespace_check",
+      "expr": "CHECK ((namespace ~ '^[a-z0-9][a-z0-9-]*$'::text))"
+     },
+     {
+      "name": "secret_type_og_official_check",
+      "expr": "CHECK (((namespace \u003c\u003e 'og'::text) OR official))"
      }
     ],
     "uniques": [
@@ -2363,12 +2471,26 @@
       "name": "name_rule",
       "type": "jsonb",
       "nullable": true
+     },
+     {
+      "name": "namespace",
+      "type": "text",
+      "nullable": false,
+      "default": "'local'::text"
      }
     ],
     "checks": [
      {
       "name": "location_type_name_rule_check",
       "expr": "CHECK (((name_rule IS NULL) OR (jsonb_typeof(name_rule) = 'object'::text)))"
+     },
+     {
+      "name": "location_type_namespace_check",
+      "expr": "CHECK ((namespace ~ '^[a-z0-9][a-z0-9-]*$'::text))"
+     },
+     {
+      "name": "location_type_og_official_check",
+      "expr": "CHECK (((namespace \u003c\u003e 'og'::text) OR official))"
      }
     ],
     "uniques": [
@@ -3072,6 +3194,22 @@
       "nullable": false,
       "default": "uuidv7()",
       "pk": true
+     },
+     {
+      "name": "namespace",
+      "type": "text",
+      "nullable": false,
+      "default": "'local'::text"
+     }
+    ],
+    "checks": [
+     {
+      "name": "role_namespace_check",
+      "expr": "CHECK ((namespace ~ '^[a-z0-9][a-z0-9-]*$'::text))"
+     },
+     {
+      "name": "role_og_official_check",
+      "expr": "CHECK (((namespace \u003c\u003e 'og'::text) OR official))"
      }
     ],
     "uniques": [
@@ -3490,12 +3628,26 @@
       "type": "boolean",
       "nullable": false,
       "default": "false"
+     },
+     {
+      "name": "namespace",
+      "type": "text",
+      "nullable": false,
+      "default": "'local'::text"
      }
     ],
     "checks": [
      {
       "name": "action_rule_channels_check",
       "expr": "CHECK ((((owner_principal_id IS NULL) AND (cardinality(channels) = 0)) OR ((owner_principal_id IS NOT NULL) AND (cardinality(channels) \u003e 0) AND (channels \u003c@ ARRAY['inbox'::text, 'email'::text]))))"
+     },
+     {
+      "name": "action_rule_namespace_check",
+      "expr": "CHECK ((namespace ~ '^[a-z0-9][a-z0-9-]*$'::text))"
+     },
+     {
+      "name": "action_rule_og_official_check",
+      "expr": "CHECK (((namespace \u003c\u003e 'og'::text) OR official))"
      },
      {
       "name": "action_rule_on_check",
@@ -3826,9 +3978,23 @@
       "type": "timestamp with time zone",
       "nullable": false,
       "default": "now()"
+     },
+     {
+      "name": "namespace",
+      "type": "text",
+      "nullable": false,
+      "default": "'local'::text"
      }
     ],
     "checks": [
+     {
+      "name": "calc_rule_namespace_check",
+      "expr": "CHECK ((namespace ~ '^[a-z0-9][a-z0-9-]*$'::text))"
+     },
+     {
+      "name": "calc_rule_og_official_check",
+      "expr": "CHECK (((namespace \u003c\u003e 'og'::text) OR official))"
+     },
      {
       "name": "calc_rule_output_check",
       "expr": "CHECK ((((output_lane = 'property'::text) AND (output_property_type_id IS NOT NULL) AND (output_metric_type_id IS NULL)) OR ((output_lane = 'metric'::text) AND (output_metric_type_id IS NOT NULL) AND (output_property_type_id IS NULL))))"
@@ -4254,9 +4420,23 @@
       "nullable": true,
       "fk": true,
       "fk_target": "metric_type.id"
+     },
+     {
+      "name": "namespace",
+      "type": "text",
+      "nullable": false,
+      "default": "'local'::text"
      }
     ],
     "checks": [
+     {
+      "name": "command_type_namespace_check",
+      "expr": "CHECK ((namespace ~ '^[a-z0-9][a-z0-9-]*$'::text))"
+     },
+     {
+      "name": "command_type_og_official_check",
+      "expr": "CHECK (((namespace \u003c\u003e 'og'::text) OR official))"
+     },
      {
       "name": "command_type_target_arc_check",
       "expr": "CHECK (((target_property_type_id IS NULL) OR (target_metric_type_id IS NULL)))"
@@ -4545,6 +4725,12 @@
       "nullable": true,
       "fk": true,
       "fk_target": "event_type.id"
+     },
+     {
+      "name": "namespace",
+      "type": "text",
+      "nullable": false,
+      "default": "'local'::text"
      }
     ],
     "checks": [
@@ -4555,6 +4741,14 @@
      {
       "name": "event_rule_fire_sustain_check",
       "expr": "CHECK ((fire_sustain \u003e= '00:00:00'::interval))"
+     },
+     {
+      "name": "event_rule_namespace_check",
+      "expr": "CHECK ((namespace ~ '^[a-z0-9][a-z0-9-]*$'::text))"
+     },
+     {
+      "name": "event_rule_og_official_check",
+      "expr": "CHECK (((namespace \u003c\u003e 'og'::text) OR official))"
      },
      {
       "name": "event_rule_sample_lane_check",
@@ -4701,6 +4895,22 @@
       "type": "timestamp with time zone",
       "nullable": false,
       "default": "now()"
+     },
+     {
+      "name": "namespace",
+      "type": "text",
+      "nullable": false,
+      "default": "'local'::text"
+     }
+    ],
+    "checks": [
+     {
+      "name": "event_type_namespace_check",
+      "expr": "CHECK ((namespace ~ '^[a-z0-9][a-z0-9-]*$'::text))"
+     },
+     {
+      "name": "event_type_og_official_check",
+      "expr": "CHECK (((namespace \u003c\u003e 'og'::text) OR official))"
      }
     ],
     "uniques": [
@@ -4973,12 +5183,26 @@
       "name": "retention_days",
       "type": "integer",
       "nullable": true
+     },
+     {
+      "name": "namespace",
+      "type": "text",
+      "nullable": false,
+      "default": "'local'::text"
      }
     ],
     "checks": [
      {
       "name": "metric_type_data_type_check",
       "expr": "CHECK ((data_type = ANY (ARRAY['int'::text, 'float'::text])))"
+     },
+     {
+      "name": "metric_type_namespace_check",
+      "expr": "CHECK ((namespace ~ '^[a-z0-9][a-z0-9-]*$'::text))"
+     },
+     {
+      "name": "metric_type_og_official_check",
+      "expr": "CHECK (((namespace \u003c\u003e 'og'::text) OR official))"
      },
      {
       "name": "metric_type_retention_days_check",
@@ -5306,6 +5530,22 @@
       "type": "timestamp with time zone",
       "nullable": false,
       "default": "now()"
+     },
+     {
+      "name": "namespace",
+      "type": "text",
+      "nullable": false,
+      "default": "'local'::text"
+     }
+    ],
+    "checks": [
+     {
+      "name": "notification_type_namespace_check",
+      "expr": "CHECK ((namespace ~ '^[a-z0-9][a-z0-9-]*$'::text))"
+     },
+     {
+      "name": "notification_type_og_official_check",
+      "expr": "CHECK (((namespace \u003c\u003e 'og'::text) OR official))"
      }
     ],
     "uniques": [
@@ -5502,12 +5742,26 @@
       "name": "retention_days",
       "type": "integer",
       "nullable": true
+     },
+     {
+      "name": "namespace",
+      "type": "text",
+      "nullable": false,
+      "default": "'local'::text"
      }
     ],
     "checks": [
      {
       "name": "property_type_data_type_check",
       "expr": "CHECK ((data_type = ANY (ARRAY['string'::text, 'bool'::text, 'json'::text])))"
+     },
+     {
+      "name": "property_type_namespace_check",
+      "expr": "CHECK ((namespace ~ '^[a-z0-9][a-z0-9-]*$'::text))"
+     },
+     {
+      "name": "property_type_og_official_check",
+      "expr": "CHECK (((namespace \u003c\u003e 'og'::text) OR official))"
      },
      {
       "name": "property_type_retention_days_check",
@@ -5568,9 +5822,23 @@
       "type": "timestamp with time zone",
       "nullable": false,
       "default": "now()"
+     },
+     {
+      "name": "namespace",
+      "type": "text",
+      "nullable": false,
+      "default": "'local'::text"
      }
     ],
     "checks": [
+     {
+      "name": "severity_level_namespace_check",
+      "expr": "CHECK ((namespace ~ '^[a-z0-9][a-z0-9-]*$'::text))"
+     },
+     {
+      "name": "severity_level_og_official_check",
+      "expr": "CHECK (((namespace \u003c\u003e 'og'::text) OR official))"
+     },
      {
       "name": "severity_level_rank_check",
       "expr": "CHECK ((rank \u003e 0))"

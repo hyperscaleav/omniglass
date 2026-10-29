@@ -78,8 +78,8 @@ func scanVendor(row pgx.Row) (*Vendor, error) {
 // handle: re-seeding `boreal` updates that row in place and its id never moves.
 func (p *PG) UpsertVendor(ctx context.Context, m Vendor) error {
 	_, err := p.pool.Exec(ctx, `
-		insert into vendor (name, official, label, kind, icon, support_phone, website)
-		values ($1, $2, $3, $4, $5, $6, $7)
+		insert into vendor (namespace, name, official, label, kind, icon, support_phone, website)
+		values (case when $2 then 'og' else 'local' end, $1, $2, $3, $4, $5, $6, $7)
 		on conflict (name) do update
 			set official      = excluded.official,
 			    label  = excluded.label,
@@ -87,7 +87,8 @@ func (p *PG) UpsertVendor(ctx context.Context, m Vendor) error {
 			    icon          = excluded.icon,
 			    support_phone = excluded.support_phone,
 			    website       = excluded.website,
-			    updated_at    = now()`,
+			    updated_at    = now()
+		where vendor.namespace = excluded.namespace`,
 		m.Name, m.Official, labelOrNull(m.Label), m.Kind, m.Icon, m.SupportPhone, m.Website)
 	if err != nil {
 		return fmt.Errorf("storage: upsert vendor %q: %w", m.Name, err)
