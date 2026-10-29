@@ -48,6 +48,9 @@ var Subsystems = []Cluster{
 		// The webhook transport (#1024): a webhook endpoint's token binding,
 		// and the inbox of senders no endpoint claims.
 		"webhook_token", "unclaimed_source",
+		// identity_binding ties a conduit component's reported identity to
+		// the system or component it names (#1385, ADR-1282).
+		"identity_binding",
 	}},
 	{Name: "config", Tables: []string{
 		"setting_override", "variable",

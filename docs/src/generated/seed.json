@@ -390,6 +390,12 @@
    "data_type": "string",
    "label": "Model number",
    "description": "The manufacturer model number."
+  },
+  {
+   "name": "ucc-room-id",
+   "data_type": "string",
+   "label": "UCC room id",
+   "description": "The id a unified-communications service gives one of the rooms it reports on. A driver on the service's component reads it off each record, and an identity binding on that component ties each id to the system or component it names."
   }
  ],
  "metric_types": [
