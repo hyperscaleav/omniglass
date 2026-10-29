@@ -657,6 +657,9 @@ type Gateway interface {
 	RecordUnclaimedSources(ctx context.Context, us []UnclaimedSource) error
 	ListUnclaimedSources(ctx context.Context) ([]UnclaimedSource, error)
 	ClaimUnclaimedSource(ctx context.Context, host, transport, source string) (bool, error)
+	// ListUnboundIdentities reads a conduit's inbox of identities no binding
+	// places (#1282), scoped by component read on the conduit.
+	ListUnboundIdentities(ctx context.Context, conduitRef string, read scope.Set) ([]UnboundIdentity, error)
 	// ComponentVerdict is one component's own verdict, by its id, from its
 	// active alarms: what a component's view reads without the fleet (#934).
 	ComponentVerdict(ctx context.Context, componentID string) (string, error)

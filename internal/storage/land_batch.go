@@ -39,6 +39,10 @@ type IngestBatch struct {
 	// Nil reads them there. Read only, so a caller may share one set across
 	// batches.
 	CommandTargeted map[string]bool
+	// Unbound is what the batch heard of identities its conduit has no
+	// binding for (#1282), upserted into the conduit's inbox in the batch's
+	// transaction, so a redelivery counts nothing twice.
+	Unbound []UnboundIdentityWrite
 }
 
 // LandBatch writes one ingest batch in ONE transaction: its receipt, then
@@ -98,6 +102,11 @@ func (p *PG) LandBatch(ctx context.Context, b IngestBatch) (bool, error) {
 		}
 		if len(b.NodeLogs) > 0 {
 			if err := p.writeNodeLogs(ctx, tx, b.NodeLogs); err != nil {
+				return err
+			}
+		}
+		if len(b.Unbound) > 0 {
+			if err := writeUnboundIdentities(ctx, tx, b.Unbound); err != nil {
 				return err
 			}
 		}
