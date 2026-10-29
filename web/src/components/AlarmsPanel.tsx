@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
+import { For, Show, createMemo, createSignal, createUniqueId, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import Button from "./Button";
 import { Check, Eye, Siren } from "./icons";
@@ -76,6 +76,8 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
   const [message, setMessage] = createSignal("");
   // Each row opens its timeline in place (#950).
   const timelines = createTimelineToggles();
+  // The snooze controls' surface: one per panel, outliving its polled rows.
+  const surface = createUniqueId();
 
   async function run(write: () => Promise<void>, after?: () => void) {
     setBusy(true);
@@ -203,7 +205,7 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
                       onClick={() => void clear(a.id)}
                     />
                   </Show>
-                  <SnoozeControl component={props.component} alarm={a} allowed={!!props.canSnooze} />
+                  <SnoozeControl component={props.component} alarm={a} surface={surface} allowed={!!props.canSnooze} />
                   {timelines.button(a.id, a.message)}
                 </div>
                 <Show when={timelines.isOpen(a.id)}>
@@ -278,7 +280,7 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
                         carry one: silencing a condition that just cleared is how
                         a flapping one is quieted. */}
                     <SnoozedBadge alarm={a} />
-                    <SnoozeControl component={props.component} alarm={a} allowed={!!props.canSnooze} />
+                    <SnoozeControl component={props.component} alarm={a} surface={surface} allowed={!!props.canSnooze} />
                     {timelines.button(a.id, a.message)}
                   </div>
                   <Show when={timelines.isOpen(a.id)}>

@@ -10,11 +10,23 @@ import { describeError, fmtTime } from "../lib/format";
 
 type Snoozable = { id: string; snoozed_until?: string; snoozed_by?: string };
 
-// Which alarm's duration menu is open, by alarm id, held outside the row: an
-// alarm list that polls hands its rows new objects, so a row (and any state
-// it owned) is rebuilt every few seconds, and a menu held in the row would
-// close under the operator's pointer. One menu is open at a time anyway.
+// Which control's duration menu is open, and the last error of each, held
+// outside the row: an alarm list that polls hands its rows new objects, so a
+// row (and any state it owned) is rebuilt every few seconds, and a menu or an
+// error held in the row would vanish under the operator. The key is the
+// surface (a list-owned id from createUniqueId, which outlives its rows) plus
+// the alarm, since one alarm is often on screen twice at once (the blade's
+// Why strip and its alarms panel), and two menus opened together would
+// dismiss each other.
 const [openMenu, setOpenMenu] = createSignal<string | null>(null);
+const [errors, setErrors] = createSignal<Record<string, string>>({});
+const setError = (key: string, msg: string | null) =>
+  setErrors((prev) => {
+    const next = { ...prev };
+    if (msg) next[key] = msg;
+    else delete next[key];
+    return next;
+  });
 
 // What a snooze is, against the three acts it is mistaken for: the tooltip on
 // the control, so the difference is taught where the choice is made.
@@ -48,21 +60,22 @@ export function SnoozedBadge(props: { alarm: Snoozable }): JSX.Element {
 // alarm:snooze, never on the component's update (ADR-1318), and renders
 // nothing for a caller who may not. Unsnoozed, it opens a menu of durations;
 // snoozed, it ends the snooze early.
-export default function SnoozeButton(props: { component: string; alarm: Snoozable }): JSX.Element {
+export default function SnoozeButton(props: { component: string; alarm: Snoozable; surface: string }): JSX.Element {
   const me = useMe();
-  return <SnoozeControl component={props.component} alarm={props.alarm} allowed={can(me.data, "alarm", "snooze")} />;
+  return <SnoozeControl component={props.component} alarm={props.alarm} surface={props.surface} allowed={can(me.data, "alarm", "snooze")} />;
 }
 
 // SnoozeControl is the control itself, for a surface that already knows the
 // caller's permissions (the alarms panel takes them as props, as it does
 // canAcknowledge).
-export function SnoozeControl(props: { component: string; alarm: Snoozable; allowed: boolean }): JSX.Element {
+export function SnoozeControl(props: { component: string; alarm: Snoozable; surface: string; allowed: boolean }): JSX.Element {
   const qc = useQueryClient();
   const [busy, setBusy] = createSignal(false);
-  const [err, setErr] = createSignal<string | null>(null);
+  const key = () => `${props.surface}:${props.alarm.id}`;
+  const err = () => errors()[key()] ?? null;
   const run = async (write: () => Promise<unknown>) => {
     setBusy(true);
-    setErr(null);
+    setError(key(), null);
     setOpenMenu(null);
     try {
       await write();
@@ -73,7 +86,7 @@ export function SnoozeControl(props: { component: string; alarm: Snoozable; allo
         qc.invalidateQueries({ queryKey: [...ALARM_TIMELINE_PREFIX] }),
       ]);
     } catch (e) {
-      setErr(describeError(e));
+      setError(key(), describeError(e));
     } finally {
       setBusy(false);
     }
@@ -89,7 +102,10 @@ export function SnoozeControl(props: { component: string; alarm: Snoozable; allo
           </Button>
         }
       >
-        <Popover placement="bottom-end" gutter={4} open={openMenu() === props.alarm.id} onOpenChange={(o) => setOpenMenu(o ? props.alarm.id : null)}>
+        <Popover placement="bottom-end" gutter={4} open={openMenu() === key()} onOpenChange={(o) => {
+            if (o) setOpenMenu(key());
+            else if (openMenu() === key()) setOpenMenu(null);
+          }}>
           <Popover.Trigger class="btn btn-quiet btn-xs gap-1.5 self-center" title={err() ?? SNOOZE_TIP} disabled={busy()}>
             <Moon size={14} />
             Snooze
@@ -112,6 +128,9 @@ export function SnoozeControl(props: { component: string; alarm: Snoozable; allo
             </Popover.Content>
           </Popover.Portal>
         </Popover>
+      </Show>
+      <Show when={err()}>
+        <span role="alert" class="text-[11px] text-error">{err()}</span>
       </Show>
     </Show>
   );

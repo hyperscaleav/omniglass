@@ -7,7 +7,9 @@ import { snoozedUntilWords, timelineWhat } from "../lib/alarms";
 
 // The snooze control (#1318): a menu of durations on an unsnoozed alarm, an
 // Unsnooze on a snoozed one, nothing for a caller without alarm:snooze, and a
-// badge every reader sees.
+// badge every reader sees. Each test mounts the control twice for one alarm,
+// as the component blade does (its Why strip and its alarms panel), on two
+// surfaces.
 const operator: Me = { principal: { id: "p", kind: "human" }, permissions: ["alarm:snooze"], grants: [] };
 const viewer: Me = { principal: { id: "v", kind: "human" }, permissions: ["alarm:read"], grants: [] };
 
@@ -20,7 +22,8 @@ function mount(me: Me, alarm: { id: string; snoozed_until?: string; snoozed_by?:
   qc.setQueryData([...ME_KEY], me);
   return render(() => (
     <QueryClientProvider client={qc}>
-      <SnoozeButton component="disp-1" alarm={alarm} />
+      <SnoozeButton component="disp-1" alarm={alarm} surface="a" />
+      <SnoozeButton component="disp-1" alarm={alarm} surface="b" />
       <SnoozedBadge alarm={alarm} />
     </QueryClientProvider>
   ));
@@ -36,14 +39,18 @@ describe("SnoozeButton", () => {
       calls.push({ url: req.url, body: req.method === "POST" ? await req.json() : undefined });
       return json({ id: "a-1" });
     });
-    const { getByRole } = mount(operator, { id: "a-1" });
-    const trigger = getByRole("button", { name: /Snooze/ });
+    const { getAllByRole } = mount(operator, { id: "a-1" });
+    const trigger = getAllByRole("button", { name: /Snooze/ })[0];
     expect(trigger.getAttribute("title")).toBe(SNOOZE_TIP);
     expect(SNOOZE_TIP).toMatch(/acknowledging/);
     expect(SNOOZE_TIP).toMatch(/opting out/);
     expect(SNOOZE_TIP).toMatch(/pausing a rule/);
     fireEvent.click(trigger);
-    fireEvent.click(await screen.findByRole("button", { name: "1 hour" }));
+    await screen.findByRole("button", { name: "1 hour" });
+    await new Promise((r) => setTimeout(r, 100));
+    // One menu, the one clicked: the other mount of the same alarm stays shut.
+    expect(screen.getAllByRole("button", { name: "1 hour" })).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "1 hour" }));
     await waitFor(() => expect(calls.some((c) => c.url.includes("/components/disp-1/alarms/a-1:snooze"))).toBe(true));
     expect(calls.find((c) => c.url.includes(":snooze"))!.body).toEqual({ duration: "1h" });
   });
@@ -55,9 +62,9 @@ describe("SnoozeButton", () => {
       return json({ id: "a-1" });
     });
     const until = new Date(Date.now() + 3_600_000).toISOString();
-    const { getByRole, getByText } = mount(operator, { id: "a-1", snoozed_until: until, snoozed_by: "jordan" });
+    const { getAllByRole, getByText } = mount(operator, { id: "a-1", snoozed_until: until, snoozed_by: "jordan" });
     expect(getByText(snoozedUntilWords(until)).getAttribute("title")).toMatch(/snoozed by jordan/);
-    fireEvent.click(getByRole("button", { name: "Unsnooze" }));
+    fireEvent.click(getAllByRole("button", { name: "Unsnooze" })[0]);
     await waitFor(() => expect(urls.some((u) => u.includes("/components/disp-1/alarms/a-1:unsnooze"))).toBe(true));
   });
 
@@ -82,5 +89,19 @@ describe("snooze words", () => {
     expect(timelineWhat({ kind: "audit", what: "snooze" })).toBe("snoozed");
     expect(timelineWhat({ kind: "audit", what: "unsnooze" })).toBe("unsnoozed");
     expect(timelineWhat({ kind: "audit", what: "snooze-end" })).toBe("snooze ended");
+  });
+});
+
+describe("SnoozeButton errors", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("says a refused snooze where the operator is looking, not only in a tooltip", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+      json({ title: "Forbidden", status: 403, detail: "forbidden" }, 403),
+    );
+    const until = new Date(Date.now() + 3_600_000).toISOString();
+    const { getAllByRole, findByRole } = mount(operator, { id: "a-2", snoozed_until: until });
+    fireEvent.click(getAllByRole("button", { name: "Unsnooze" })[0]);
+    expect((await findByRole("alert")).textContent).toMatch(/forbidden/i);
   });
 });

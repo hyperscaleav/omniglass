@@ -1,4 +1,4 @@
-import { For, Show, createEffect, createMemo } from "solid-js";
+import { For, Show, createEffect, createMemo, createUniqueId } from "solid-js";
 import { useLocation, useNavigate, useParams, useSearchParams } from "@solidjs/router";
 import { useQueries, useQuery } from "@tanstack/solid-query";
 import Page from "../components/Page";
@@ -152,6 +152,7 @@ export default function ComponentLeaf() {
   const scale = useSeverity();
   // Each alarm row opens its timeline in place (#950).
   const timelines = createTimelineToggles();
+  const snoozeSurface = createUniqueId();
   const activeAlarms = createMemo(() => splitAlarms(alarmsQ.data?.alarms ?? [], scale().levels).active);
   // The strip reads red when any active alarm is at an outage level (the
   // registry's flag, #917), amber when they only degrade.
@@ -294,7 +295,7 @@ export default function ComponentLeaf() {
                             </span>
                             <SnoozedBadge alarm={a} />
                             <AcknowledgeButton component={component()?.id ?? id()} alarm={a} />
-                            <SnoozeButton component={component()?.id ?? id()} alarm={a} />
+                            <SnoozeButton component={component()?.id ?? id()} alarm={a} surface={snoozeSurface} />
                             {timelines.button(a.id, a.message)}
                           </div>
                           <Show when={timelines.isOpen(a.id)}>
