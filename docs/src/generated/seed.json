@@ -371,6 +371,36 @@
    "description": "Whether a space reads occupied or vacant by its occupancy source."
   },
   {
+   "name": "shutter-state",
+   "data_type": "string",
+   "label": "Shutter State",
+   "description": "Whether a projector's shutter is open (the image shows) or closed (the image is blanked with the light source still lit)."
+  },
+  {
+   "name": "protect-state",
+   "data_type": "string",
+   "label": "Protect State",
+   "description": "Whether an amplifier is running (normal) or has muted its outputs and latched protect on a fault (overheating, a shorted load, DC on an output), which holds until an operator resets it."
+  },
+  {
+   "name": "playback-state",
+   "data_type": "string",
+   "label": "Playback State",
+   "description": "Whether a media player is playing its content, paused on it, or stopped."
+  },
+  {
+   "name": "content-name",
+   "data_type": "string",
+   "label": "Content Name",
+   "description": "The name of the item a media player is playing, as it reports it."
+  },
+  {
+   "name": "booking-state",
+   "data_type": "string",
+   "label": "Booking State",
+   "description": "Whether a space is booked now (a meeting in progress) or free, as its scheduling service reports it."
+  },
+  {
    "name": "serial-number",
    "data_type": "string",
    "label": "Serial number",
@@ -479,6 +509,12 @@
    "description": "People detected in the space by the room's occupancy source."
   },
   {
+   "name": "booking-count",
+   "data_type": "int",
+   "label": "Booking Count",
+   "description": "Meetings booked in the space for the rest of the day, the one in progress included, as its scheduling service reports them."
+  },
+  {
    "name": "uptime",
    "data_type": "float",
    "unit": "s",
@@ -497,6 +533,50 @@
    "data_type": "int",
    "label": "Participant Count",
    "description": "The participants a component reports in its current call; 0 when no call is active."
+  },
+  {
+   "name": "audio-level",
+   "data_type": "float",
+   "unit": "dBFS",
+   "label": "Audio Level",
+   "description": "The audio level a component reports, in decibels relative to digital full scale (0 is the loudest it can carry)."
+  },
+  {
+   "name": "battery-charge",
+   "data_type": "float",
+   "unit": "ratio",
+   "precision": 3,
+   "label": "Battery Charge",
+   "description": "How charged a component reports its battery, as a fraction of full (0 to 1)."
+  },
+  {
+   "name": "light-source-hours",
+   "data_type": "float",
+   "unit": "h",
+   "label": "Light Source Hours",
+   "description": "The hours a component reports its light source (a projector's lamp or laser) has been lit."
+  },
+  {
+   "name": "temperature",
+   "data_type": "float",
+   "unit": "C",
+   "label": "Temperature",
+   "description": "The temperature a component reports of itself (its chassis, heatsink or processor), in degrees Celsius."
+  },
+  {
+   "name": "fan-speed",
+   "data_type": "float",
+   "unit": "rpm",
+   "label": "Fan Speed",
+   "description": "The speed a component reports of its cooling fan, in revolutions per minute."
+  },
+  {
+   "name": "storage-utilization",
+   "data_type": "float",
+   "unit": "ratio",
+   "precision": 3,
+   "label": "Storage Utilization",
+   "description": "How full a component reports its local storage, as a fraction of its capacity (0 to 1)."
   },
   {
    "name": "http-response-time",
@@ -2601,6 +2681,34 @@
    "polls": 1
   },
   {
+   "id": "lyra-arc-snmp",
+   "label": "Lyra Arc SNMP",
+   "version": "1.0.0",
+   "transport": "snmp",
+   "polls": 2
+  },
+  {
+   "id": "lyra-hx-snmp",
+   "label": "Lyra HX SNMP",
+   "version": "1.0.0",
+   "transport": "snmp",
+   "polls": 2
+  },
+  {
+   "id": "boreal-beam-snmp",
+   "label": "Boreal Beam SNMP",
+   "version": "1.0.0",
+   "transport": "snmp",
+   "polls": 2
+  },
+  {
+   "id": "polaris-amp-snmp",
+   "label": "Polaris Amp SNMP",
+   "version": "1.0.0",
+   "transport": "snmp",
+   "polls": 2
+  },
+  {
    "id": "kestrel-api",
    "label": "Kestrel Device API",
    "version": "1.0.0",
@@ -2666,6 +2774,13 @@
   {
    "id": "http-json",
    "label": "HTTP JSON",
+   "version": "1.0.0",
+   "transport": "http",
+   "polls": 2
+  },
+  {
+   "id": "boreal-cast-api",
+   "label": "Boreal Cast API",
    "version": "1.0.0",
    "transport": "http",
    "polls": 2
@@ -2805,7 +2920,7 @@
    "id": "boreal-beam-340",
    "label": "Boreal Beam 340",
    "vendor_id": "boreal",
-   "driver_id": "snmp-generic",
+   "driver_id": "boreal-beam-snmp",
    "component_type": "projector",
    "kind": "device"
   },
@@ -2813,7 +2928,7 @@
    "id": "boreal-cast-m1",
    "label": "Boreal Cast M1",
    "vendor_id": "boreal",
-   "driver_id": "http-json",
+   "driver_id": "boreal-cast-api",
    "component_type": "media-player",
    "kind": "device"
   },
@@ -2857,7 +2972,7 @@
    "id": "lyra-arc-a2",
    "label": "Lyra Arc A2",
    "vendor_id": "lyra",
-   "driver_id": "snmp-generic",
+   "driver_id": "lyra-arc-snmp",
    "component_type": "ceiling-mic",
    "kind": "device"
   },
@@ -2865,7 +2980,7 @@
    "id": "lyra-hx-1",
    "label": "Lyra HX-1",
    "vendor_id": "lyra",
-   "driver_id": "snmp-generic",
+   "driver_id": "lyra-hx-snmp",
    "component_type": "wireless-mic",
    "kind": "device"
   },
@@ -2928,7 +3043,7 @@
    "id": "polaris-amp-4100",
    "label": "Polaris Amp 4-100",
    "vendor_id": "polaris",
-   "driver_id": "snmp-generic",
+   "driver_id": "polaris-amp-snmp",
    "component_type": "amplifier",
    "kind": "device"
   },

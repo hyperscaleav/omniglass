@@ -215,7 +215,20 @@ func byNameSites(t *testing.T, dir string) []byNameSite {
 					if s, ok := sqlTextIn(x.(ast.Expr), consts); ok {
 						check(owner, x.Pos(), s)
 					}
-					return false // a + chain is read whole, once
+					// A + chain is read whole, once; SQL passed as a call's
+					// argument inside it (metricSeriesWhere(..., "(select ...)"))
+					// is a statement of its own.
+					ast.Inspect(x, func(m ast.Node) bool {
+						if call, ok := m.(*ast.CallExpr); ok {
+							for _, arg := range call.Args {
+								if s, ok := sqlTextIn(arg, consts); ok {
+									check(owner, arg.Pos(), s)
+								}
+							}
+						}
+						return true
+					})
+					return false
 				case *ast.CallExpr:
 					// fmt.Sprintf(format, ...): a %s in the format is where a
 					// table name is spliced in.

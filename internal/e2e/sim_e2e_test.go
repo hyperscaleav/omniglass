@@ -252,7 +252,12 @@ func e2eSimulatedRoute(t *testing.T, product string) (string, string) {
 	return "", ""
 }
 
-func e2eSimulatedProduct(t *testing.T, ctx context.Context, conn *pgx.Conn) (string, int) {
+// e2eSimulatedProduct is the first seeded product, by name, whose simulator
+// profile serves plain HTTP and every other protocol named (a caller that
+// attaches an snmp driver names snmp), with its plain-HTTP port. A caller
+// names every face it uses, so a new profile that sorts first cannot hand it
+// a product missing one.
+func e2eSimulatedProduct(t *testing.T, ctx context.Context, conn *pgx.Conn, also ...string) (string, int) {
 	t.Helper()
 	store, err := profile.LoadStoreFS(profiles.FS)
 	if err != nil {
@@ -273,15 +278,27 @@ func e2eSimulatedProduct(t *testing.T, ctx context.Context, conn *pgx.Conn) (str
 	rows.Close()
 	sort.Strings(names)
 	for _, n := range names {
-		if p, ok := store.Devices[n]; ok {
-			for _, iface := range p.Interfaces {
-				if iface.Protocol == "http" && !iface.TLS {
-					return n, iface.Port
-				}
+		p, ok := store.Devices[n]
+		if !ok {
+			continue
+		}
+		served := map[string]bool{}
+		port := 0
+		for _, iface := range p.Interfaces {
+			served[iface.Protocol] = true
+			if iface.Protocol == "http" && !iface.TLS && port == 0 {
+				port = iface.Port
 			}
 		}
+		ok = port != 0
+		for _, proto := range also {
+			ok = ok && served[proto]
+		}
+		if ok {
+			return n, port
+		}
 	}
-	t.Fatal("no seeded product has a simulator profile with plain HTTP")
+	t.Fatalf("no seeded product has a simulator profile with plain HTTP and %v", also)
 	return "", 0
 }
 

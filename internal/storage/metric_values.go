@@ -109,15 +109,16 @@ func (p *PG) EffectiveMetrics(ctx context.Context, ownerKind, ownerID string, re
 	}
 	sampled := fmt.Sprintf(`
 		latest as (
-			select distinct on (m.metric_type_id, m.instance)
-			       m.metric_type_id, m.instance, m.ts, m.id,
-			       to_jsonb(m.value) as value,
-			       case when m.provenance = 'calculated' and m.source_rule_id is not null then m.source_rule end as source_rule,
-			       m.source_rule_id::text as source_rule_id
-			from metric m
-			join inst on m.%[1]s = inst.arc
-			where m.provenance in ('observed', 'calculated')
-			order by m.metric_type_id, m.instance, m.ts desc, m.id desc
+			select distinct on (s.metric_type_id, s.instance)
+			       s.metric_type_id, s.instance, n.ts, n.id,
+			       to_jsonb(n.value) as value,
+			       case when s.provenance = 'calculated' and n.source_rule_id is not null then n.source_rule end as source_rule,
+			       n.source_rule_id::text as source_rule_id
+			from inst
+			join metric_series s on s.owner_id = inst.arc and s.owner_kind = %[3]s
+			cross join lateral (%[1]s) n
+			where s.provenance in ('observed', 'calculated')
+			order by s.metric_type_id, s.instance, n.ts desc, n.id desc
 		),
 		live as (
 			select l.*,
@@ -137,7 +138,7 @@ func (p *PG) EffectiveMetrics(ctx context.Context, ownerKind, ownerID string, re
 			from live l
 			join spread sp on sp.metric_type_id = l.metric_type_id
 			order by l.metric_type_id, l.ts desc, l.id desc
-		)`, oc.arcCol, liveInstanceSQL("l.instance", kindParam, "inst.arc", transportsParam), kindParam)
+		)`, metricNewestSQL("s.id"), liveInstanceSQL("l.instance", kindParam, "inst.arc", transportsParam), kindParam)
 
 	var q string
 	if oc.metricContractTable == "" {

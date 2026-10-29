@@ -1,0 +1,15 @@
+{
+  "device": {
+    "model": "{{ .State | get "configuration" | get "device" | get "model" }}",
+    "serial": "{{ .State | get "configuration" | get "device" | get "serial" }}",
+    "firmware": "{{ .State | get "configuration" | get "firmware" | get "version" }}",
+    "uptime": {{ .State | get "status" | get "device" | get "uptime" }},
+    "power": "{{ .State | get "status" | get "device" | get "power" }}"
+  },
+  "projector": {
+    "light_source_hours": {{ .State | get "status" | get "projector" | get "light_source_hours" }},
+    "shutter": "{{ .State | get "status" | get "projector" | get "shutter" }}",
+    "input": "{{ .State | get "status" | get "projector" | get "input" }}",
+    "temperature": {{ .State | get "status" | get "projector" | get "temperature" }}
+  }
+}

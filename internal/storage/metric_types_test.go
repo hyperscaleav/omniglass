@@ -31,7 +31,7 @@ func TestMetricTypeCRUD(t *testing.T) {
 	unit := "rpm"
 	precision := 0
 	mt, err := gw.CreateMetricType(ctx, "", storage.MetricTypeSpec{
-		Name: "fan-speed", DataType: "int", Label: "Fan speed",
+		Name: "pump-speed", DataType: "int", Label: "Pump speed",
 		Unit: &unit, Precision: &precision, Description: "Rotations per minute.",
 	})
 	if err != nil {
@@ -42,8 +42,8 @@ func TestMetricTypeCRUD(t *testing.T) {
 	}
 
 	// Get it back, numeric facts intact.
-	got, err := gw.GetMetricType(ctx, "fan-speed")
-	if err != nil || got.DataType != "int" || got.Label != "Fan speed" {
+	got, err := gw.GetMetricType(ctx, "pump-speed")
+	if err != nil || got.DataType != "int" || got.Label != "Pump speed" {
 		t.Fatalf("get: %v (%+v)", err, got)
 	}
 	if got.Unit == nil || *got.Unit != "rpm" || got.Precision == nil || *got.Precision != 0 {
@@ -59,21 +59,21 @@ func TestMetricTypeCRUD(t *testing.T) {
 	for _, m := range mts {
 		names[m.Name] = true
 	}
-	if !names["fan-speed"] || !names["icmp-rtt-avg"] || !names["tcp-open"] {
+	if !names["pump-speed"] || !names["icmp-rtt-avg"] || !names["tcp-open"] {
 		t.Fatalf("list missing metric types: %v", names)
 	}
 
 	// Update the mutable fields.
-	label, ms := "Fan Speed (RPM)", "ms"
-	if _, err := gw.UpdateMetricType(ctx, "", "fan-speed", storage.MetricTypePatch{Label: &label, Unit: &ms}); err != nil {
+	label, ms := "Pump Speed (RPM)", "ms"
+	if _, err := gw.UpdateMetricType(ctx, "", "pump-speed", storage.MetricTypePatch{Label: &label, Unit: &ms}); err != nil {
 		t.Fatalf("update: %v", err)
 	}
-	if got, _ := gw.GetMetricType(ctx, "fan-speed"); got.Label != label || got.Unit == nil || *got.Unit != "ms" {
+	if got, _ := gw.GetMetricType(ctx, "pump-speed"); got.Label != label || got.Unit == nil || *got.Unit != "ms" {
 		t.Fatalf("update not applied: %+v", got)
 	}
 
 	// A duplicate name is ErrMetricTypeExists.
-	if _, err := gw.CreateMetricType(ctx, "", storage.MetricTypeSpec{Name: "fan-speed", DataType: "int"}); !errors.Is(err, storage.ErrMetricTypeExists) {
+	if _, err := gw.CreateMetricType(ctx, "", storage.MetricTypeSpec{Name: "pump-speed", DataType: "int"}); !errors.Is(err, storage.ErrMetricTypeExists) {
 		t.Fatalf("dup err = %v, want ErrMetricTypeExists", err)
 	}
 
@@ -99,10 +99,10 @@ func TestMetricTypeCRUD(t *testing.T) {
 	}
 
 	// Delete the custom type; a re-delete is ErrMetricTypeNotFound.
-	if err := gw.DeleteMetricType(ctx, "", "fan-speed"); err != nil {
+	if err := gw.DeleteMetricType(ctx, "", "pump-speed"); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
-	if err := gw.DeleteMetricType(ctx, "", "fan-speed"); !errors.Is(err, storage.ErrMetricTypeNotFound) {
+	if err := gw.DeleteMetricType(ctx, "", "pump-speed"); !errors.Is(err, storage.ErrMetricTypeNotFound) {
 		t.Fatalf("re-delete err = %v, want ErrMetricTypeNotFound", err)
 	}
 }

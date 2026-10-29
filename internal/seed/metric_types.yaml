@@ -63,6 +63,12 @@ metric_types:
     data_type: int
     label: Occupancy Count
     description: People detected in the space by the room's occupancy source.
+  # A space's bookings, as its scheduling service pushes them (#1370): the
+  # lab's simulated booking service pushes them to a system.
+  - name: booking-count
+    data_type: int
+    label: Booking Count
+    description: Meetings booked in the space for the rest of the day, the one in progress included, as its scheduling service reports them.
   - name: uptime
     data_type: float
     unit: s
@@ -82,6 +88,47 @@ metric_types:
     data_type: int
     label: Participant Count
     description: The participants a component reports in its current call; 0 when no call is active.
+  # A microphone's input level and a wireless transmitter's battery (#894).
+  - name: audio-level
+    data_type: float
+    unit: dBFS
+    label: Audio Level
+    description: The audio level a component reports, in decibels relative to digital full scale (0 is the loudest it can carry).
+  # Dimensionless, so stored as a ratio (0..1) and shown as a percentage.
+  - name: battery-charge
+    data_type: float
+    unit: ratio
+    precision: 3
+    label: Battery Charge
+    description: How charged a component reports its battery, as a fraction of full (0 to 1).
+  # A projector's light source wears by the hour (#899): the number its
+  # service interval and replacement are planned from.
+  - name: light-source-hours
+    data_type: float
+    unit: h
+    label: Light Source Hours
+    description: The hours a component reports its light source (a projector's lamp or laser) has been lit.
+  # A component's own thermal state, read off its API (#898): one name per
+  # measurement whatever the component, the heatsink of an amplifier or the
+  # chassis of a DSP alike.
+  - name: temperature
+    data_type: float
+    unit: "C"
+    label: Temperature
+    description: The temperature a component reports of itself (its chassis, heatsink or processor), in degrees Celsius.
+  - name: fan-speed
+    data_type: float
+    unit: rpm
+    label: Fan Speed
+    description: The speed a component reports of its cooling fan, in revolutions per minute.
+  # A media player's local storage filling as content syncs down (#893).
+  # Dimensionless, so stored as a ratio (0..1) and shown as a percentage.
+  - name: storage-utilization
+    data_type: float
+    unit: ratio
+    precision: 3
+    label: Storage Utilization
+    description: How full a component reports its local storage, as a fraction of its capacity (0 to 1).
   - name: http-response-time
     data_type: float
     unit: ms

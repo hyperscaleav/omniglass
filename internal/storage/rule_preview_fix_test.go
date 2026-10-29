@@ -162,7 +162,7 @@ func TestPreviewReadsAreIndexProbes(t *testing.T) {
 	}
 	for _, tc := range []struct{ lane, index, table string }{
 		{"property", "property_series_idx", "property"},
-		{"metric", "metric_owner_idx", "metric"},
+		{"metric", "series_id_ts_id_idx", "metric_p"},
 	} {
 		for _, part := range []string{"instances", "seed", "window"} {
 			var args []any
@@ -187,7 +187,7 @@ func TestPreviewReadsAreIndexProbes(t *testing.T) {
 				plan += line + "\n"
 			}
 			rows.Close()
-			if !strings.Contains(plan, tc.index) || strings.Contains(plan, "Seq Scan on "+tc.table+" ") || strings.Contains(plan, "Seq Scan on "+tc.table+"\n") {
+			if !strings.Contains(plan, tc.index) || strings.Contains(plan, "Seq Scan on "+tc.table+" ") || strings.Contains(plan, "Seq Scan on "+tc.table+"\n") || tc.table == "metric_p" && strings.Contains(plan, "Seq Scan on metric_p") {
 				t.Errorf("the %s lane's %s read is not an index probe on %s:\n%s", tc.lane, part, tc.index, plan)
 			}
 		}

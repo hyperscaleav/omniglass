@@ -42,6 +42,9 @@ func (f fakeStore) ReconcileEventRules(context.Context, *storage.RuleReconcileSt
 func (f fakeStore) NodeSimDevices(context.Context, string, scope.Set) ([]storage.SimDevice, error) {
 	return nil, nil
 }
+func (f fakeStore) NodeSimWebhooks(context.Context, string) (map[string]storage.SimWebhook, error) {
+	return nil, nil
+}
 func (f fakeStore) NodeWorklist(context.Context, string) (storage.Worklist, error) {
 	return storage.Worklist{}, nil
 }
@@ -81,6 +84,10 @@ func (f fakeStore) PruneLogs(context.Context, string, string, time.Time, int) (i
 }
 func (f fakeStore) PruneSamples(context.Context, string, time.Time, int) (int64, error) {
 	return 0, nil
+}
+func (f fakeStore) EnsureMetricPartitions(context.Context) ([]string, error) { return nil, nil }
+func (f fakeStore) DropMetricPartitions(context.Context, time.Time) ([]string, error) {
+	return nil, nil
 }
 func (f fakeStore) PruneTelemetryReceipts(context.Context, time.Time, int) (int64, error) {
 	return 0, nil

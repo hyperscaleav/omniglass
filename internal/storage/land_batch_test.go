@@ -59,7 +59,7 @@ func (f landFixture) rows(t *testing.T) landedRows {
 	t.Helper()
 	var r landedRows
 	err := f.conn.QueryRow(context.Background(), `select
-		(select count(*) from metric),
+		(select count(*) from `+storagetest.MetricRows+` metric),
 		(select count(*) from property where provenance = 'observed'),
 		(select count(*) from event where origin = 'caught'),
 		(select count(*) from log_line),
@@ -344,7 +344,7 @@ func TestLandBatchCleansNUL(t *testing.T) {
 		(select value #>> '{}' from property where property_type_id = (select id from property_type where name = 'firmware-version')),
 		(select message from event where origin = 'caught'),
 		(select attributes->>'input' from event where origin = 'caught'),
-		(select instance from metric),
+		(select instance from `+storagetest.MetricRows+` metric),
 		(select message from node_log)`).Scan(&firmware, &message, &input, &instance, &nodeLog); err != nil {
 		t.Fatalf("read the landed rows: %v", err)
 	}

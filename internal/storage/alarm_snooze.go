@@ -81,8 +81,8 @@ func readAlarmTx(ctx context.Context, q querier, componentID, alarmID string) (*
 
 // SnoozeAlarm snoozes the condition of the alarm it is called on for d from
 // now, setting the deadline or replacing it (shorter or longer), and audits
-// the call on that alarm with the deadline before (when one was in force)
-// and after. It queues nothing: a snooze is an operator act, not a condition
+// the call on that alarm with the deadline before (null when none was in
+// force) and after. It queues nothing: a snooze is an operator act, not a condition
 // edge. A d outside [SnoozeMin, SnoozeMax] is ErrSnoozeDuration.
 func (p *PG) SnoozeAlarm(ctx context.Context, actorID, componentName, alarmID string, d time.Duration) (*Alarm, error) {
 	if d < SnoozeMin || d > SnoozeMax {
@@ -116,10 +116,10 @@ func (p *PG) SnoozeAlarm(ctx context.Context, actorID, componentName, alarmID st
 		returning snoozed_until`, component.ID, key, d.Seconds(), actorID).Scan(&until); err != nil {
 		return nil, fmt.Errorf("storage: snooze alarm %s: %w", alarmID, err)
 	}
-	var old map[string]any
-	if before != nil {
-		old = map[string]any{"snoozed_until": before}
-	}
+	// The before image always names the deadline, null when the condition was
+	// not snoozed: an alarm's audit rows outlive it (#1339), so each says what
+	// it changed on its own.
+	old := map[string]any{"snoozed_until": before}
 	if err := writeAuditRes(ctx, tx, actorID, "snooze", "alarm", alarmID, old,
 		map[string]any{"component": component.Name, "dedup_key": key, "snoozed_until": until}); err != nil {
 		return nil, err
@@ -243,7 +243,7 @@ func conditionSnooze(ctx context.Context, q txQuerier, alarmID string, lock bool
 func endSnoozeTx(ctx context.Context, p *PG, tx pgx.Tx, actorID, verb, auditAlarmID string, component *Component, key string, until time.Time) error {
 	if auditAlarmID != "" {
 		if err := writeAuditRes(ctx, tx, actorID, verb, "alarm", auditAlarmID,
-			map[string]any{"snoozed_until": until}, map[string]any{"component": component.Name, "dedup_key": key}); err != nil {
+			map[string]any{"snoozed_until": until}, map[string]any{"component": component.Name, "dedup_key": key, "snoozed_until": nil}); err != nil {
 			return err
 		}
 	}

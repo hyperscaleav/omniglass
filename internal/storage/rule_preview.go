@@ -325,6 +325,13 @@ func previewCandidates(ctx context.Context, q querier, sel EventRuleSelector, id
 // ($1 the type id, $2 the component ids) by a loose index skip on the
 // series index: one probe per instance, never a scan of the key's samples.
 func previewInstancesSQL(lane rules.Lane) string {
+	if lane == rules.LaneMetric {
+		// The candidates' component series of the key that hold a sample.
+		return `select distinct s.owner_id::text, s.instance from metric_series s
+			where s.owner_id = any($2::uuid[]) and s.owner_kind = 'component' and s.metric_type_id = $1::uuid
+			  and s.provenance in ('observed', 'calculated') and exists (select 1 from metric m where m.series_id = s.id)
+			order by 1, 2`
+	}
 	table, typeTable, _ := laneTables(lane)
 	return fmt.Sprintf(`with recursive inst(component_id, instance) as (
 			select c.id, (select s.instance from %[1]s s where s.component_id = c.id and s.%[2]s_id = $1::uuid
@@ -342,6 +349,12 @@ func previewInstancesSQL(lane rules.Lane) string {
 // within the lookback ($1 component, $2 type id, $3 instance, $4 since, $5
 // the lookback's start, $6 the probe's bound): an index probe.
 func previewSeedSQL(lane rules.Lane) string {
+	if lane == rules.LaneMetric {
+		return `select m.id, m.ts, m.value from metric_series s join metric m on m.series_id = s.id
+		where s.owner_id = $1::uuid and s.owner_kind = 'component' and s.metric_type_id = $2::uuid and s.instance = $3
+		  and s.provenance in ('observed', 'calculated') and m.ts < $4 and m.ts >= $5
+		order by m.ts desc limit $6`
+	}
 	table, typeTable, value := laneTables(lane)
 	return fmt.Sprintf(`select s.id, s.ts, %[3]s from %[1]s s
 		where s.component_id = $1::uuid and s.%[2]s_id = $2::uuid and s.instance = $3 and s.ts < $4 and s.ts >= $5
@@ -351,6 +364,12 @@ func previewSeedSQL(lane rules.Lane) string {
 // previewWindowSQL reads a series' samples in the window ($1 component, $2
 // type id, $3 instance, $4 since, $5 the bound): an index probe.
 func previewWindowSQL(lane rules.Lane) string {
+	if lane == rules.LaneMetric {
+		return `select m.id, m.ts, m.value from metric_series s join metric m on m.series_id = s.id
+		where s.owner_id = $1::uuid and s.owner_kind = 'component' and s.metric_type_id = $2::uuid and s.instance = $3
+		  and s.provenance in ('observed', 'calculated') and m.ts >= $4
+		order by m.ts desc limit $5`
+	}
 	table, typeTable, value := laneTables(lane)
 	return fmt.Sprintf(`select s.id, s.ts, %[3]s from %[1]s s
 		where s.component_id = $1::uuid and s.%[2]s_id = $2::uuid and s.instance = $3 and s.ts >= $4

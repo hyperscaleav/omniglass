@@ -184,3 +184,31 @@ func TestCalcWindowPreview(t *testing.T) {
 		t.Fatalf("a work-capped windowed preview %+v (%v), want 1 of 2, truncated", pv, err)
 	}
 }
+
+// TestASteadyMetricOutputStaysWithinRetention: the metric lane keeps no floor
+// (ADR-1275), so an output that holds steady is written again once its newest
+// row is half a day old, and a rule still producing it keeps a value within
+// any window a metric type may keep; a younger unchanged result writes nothing.
+func TestASteadyMetricOutputStaysWithinRetention(t *testing.T) {
+	r := newEvalRig(t)
+	now := time.Now()
+	r.metricAt("room-temperature", 20, now.Add(-time.Minute))
+	if _, err := r.create(windowSpec("temp-steady", 0)); err != nil {
+		t.Fatal(err)
+	}
+	r.drain()
+	r.metricAt("room-temperature", 20, now)
+	r.drain()
+	if got := r.calculated("avg-temp"); len(got) != 1 {
+		t.Fatalf("avg-temp rows %v, want one: an unchanged result inside half a day writes nothing", got)
+	}
+	if _, err := r.conn.Exec(r.ctx, `update metric set ts = ts - interval '13 hours'
+		where series_id in (select id from metric_series where provenance = 'calculated')`); err != nil {
+		t.Fatal(err)
+	}
+	r.metricAt("room-temperature", 20, now.Add(time.Second))
+	r.drain()
+	if got := r.calculated("avg-temp"); len(got) != 2 || got[0] != got[1] {
+		t.Fatalf("avg-temp rows %v, want the steady value written again past half a day", got)
+	}
+}

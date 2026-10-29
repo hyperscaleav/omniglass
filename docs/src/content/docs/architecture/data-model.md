@@ -363,10 +363,18 @@ telemetry: {
   }
   metric: {
     shape: sql_table
+  }
+  metric_declared: {
+    shape: sql_table
     id: bigint {constraint: primary_key}
     command_id: bigint {constraint: foreign_key}
-    component_id: uuid {constraint: foreign_key}
     event_id: bigint {constraint: foreign_key}
+    series_id: bigint {constraint: foreign_key}
+  }
+  metric_series: {
+    shape: sql_table
+    id: bigint {constraint: primary_key}
+    component_id: uuid {constraint: foreign_key}
     location_id: uuid {constraint: foreign_key}
     metric_type_id: uuid {constraint: foreign_key}
     node_id: uuid {constraint: foreign_key}
@@ -685,13 +693,14 @@ telemetry.event_rule_live.rule_id -> telemetry.event_rule.id
 telemetry.event_rule_state.component_id -> fleet.component.id
 telemetry.event_rule_state.rule_id -> telemetry.event_rule.id
 telemetry.log_line.component_id -> fleet.component.id
-telemetry.metric.command_id -> telemetry.command.id
-telemetry.metric.component_id -> fleet.component.id
-telemetry.metric.event_id -> telemetry.event.id
-telemetry.metric.location_id -> fleet.location.id
-telemetry.metric.metric_type_id -> telemetry.metric_type.id
-telemetry.metric.node_id -> collection.node.principal_id
-telemetry.metric.system_id -> fleet.system.id
+telemetry.metric_declared.command_id -> telemetry.command.id
+telemetry.metric_declared.event_id -> telemetry.event.id
+telemetry.metric_declared.series_id -> telemetry.metric_series.id
+telemetry.metric_series.component_id -> fleet.component.id
+telemetry.metric_series.location_id -> fleet.location.id
+telemetry.metric_series.metric_type_id -> telemetry.metric_type.id
+telemetry.metric_series.node_id -> collection.node.principal_id
+telemetry.metric_series.system_id -> fleet.system.id
 telemetry.notification.alarm_id -> telemetry.alarm.id
 telemetry.notification.component_id -> fleet.component.id
 telemetry.notification.notification_type_id -> telemetry.notification_type.id

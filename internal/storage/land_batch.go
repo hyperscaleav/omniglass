@@ -95,6 +95,21 @@ func (f *FannedRows) keyed() []keyedWrite {
 // property lane's transition locks and the series and health locks judging
 // takes. A deadlock abort retries the whole batch (sampleWrite).
 func (p *PG) LandBatch(ctx context.Context, b IngestBatch) (bool, error) {
+	landed, err := p.landBatch(ctx, b)
+	// A metric sample whose month has no partition (the roll is late, or a
+	// node's clock is far out): make the months the batch needs and land it
+	// again, once (#420). A batch that misses again is the ingest's to
+	// redeliver.
+	if isPartitionRoutingMiss(err) {
+		if perr := p.landMetricMonths(ctx, b.Metrics); perr != nil {
+			return false, errors.Join(err, perr)
+		}
+		landed, err = p.landBatch(ctx, b)
+	}
+	return landed, err
+}
+
+func (p *PG) landBatch(ctx context.Context, b IngestBatch) (bool, error) {
 	landed := false
 	err := p.sampleWrite(ctx, "land batch", func(attempt pgx.Tx) error {
 		landed = false
@@ -274,7 +289,9 @@ func (p *PG) lockAllPropertySeries(ctx context.Context, tx pgx.Tx, evs []Propert
 
 // IsRefusedWrite reports whether a write failed for a reason no retry
 // changes: its owner is gone or ambiguous, its key's writer class refuses the
-// writer, or Postgres refused its data (a data exception, a CHECK). The
+// writer, or Postgres refused its data (a data exception, a CHECK). A row no metric partition
+// covers is not refused (#420): its partition is made and the write retried,
+// so a late roll delays a batch and never drops it. The
 // ingest drops such a batch on its first delivery instead of redelivering it,
 // since a series' batches land in order and every batch behind it would wait
 // out redeliveries that cannot succeed. Any other integrity violation is not
@@ -286,6 +303,9 @@ func IsRefusedWrite(err error) bool {
 	var ambiguous *ErrAmbiguousName
 	if isOwnerNotFound(err) || errors.Is(err, ErrKeyWriterRefused) || errors.As(err, &ambiguous) {
 		return true
+	}
+	if isPartitionRoutingMiss(err) {
+		return false
 	}
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {

@@ -73,7 +73,11 @@ func TestNodeLaneConfinesNodeProbeKeysToItsEndpoint(t *testing.T) {
 	rows := func(table, key, instance string) int {
 		t.Helper()
 		var n int
-		if err := conn.QueryRow(ctx, `select count(*) from `+table+` where instance = $2
+		from := table
+		if table == "metric" {
+			from = storagetest.MetricRows + " metric"
+		}
+		if err := conn.QueryRow(ctx, `select count(*) from `+from+` where instance = $2
 			and `+table+`_type_id = (select id from `+table+`_type where name = $1)`, key, instance).Scan(&n); err != nil {
 			t.Fatalf("count %s %s[%s]: %v", table, key, instance, err)
 		}

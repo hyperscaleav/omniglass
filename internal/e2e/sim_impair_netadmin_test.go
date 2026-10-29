@@ -78,7 +78,8 @@ func TestImpairingASimulatedDeviceShowsInCollection(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer conn.Close(ctx)
-	product, port := e2eSimulatedProduct(t, ctx, conn)
+	// It attaches snmp-generic to the product below, so the pick serves snmp.
+	product, port := e2eSimulatedProduct(t, ctx, conn, "snmp")
 	if _, err := conn.Exec(ctx, `update component set product_id = (select id from product where name = $1) where name = 'sim-dev'`, product); err != nil {
 		t.Fatal(err)
 	}

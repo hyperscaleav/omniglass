@@ -1,0 +1,12 @@
+{
+  "device": {
+    "model": "{{ .State | get "configuration" | get "device" | get "model" }}",
+    "serial": "{{ .State | get "configuration" | get "device" | get "serial" }}",
+    "firmware": "{{ .State | get "configuration" | get "firmware" | get "version" }}",
+    "uptime": {{ .State | get "status" | get "device" | get "uptime" }}
+  },
+  "storage": {
+    "used_percent": {{ .State | get "status" | get "storage" | get "used_percent" }},
+    "total_gb": {{ .State | get "status" | get "storage" | get "total_gb" }}
+  }
+}

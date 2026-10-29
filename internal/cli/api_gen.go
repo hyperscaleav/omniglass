@@ -4832,7 +4832,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "setRetention <name>",
 					Short:   "Set a metric type's retention window",
-					Long:    "Sets how many days this type's samples are kept, overriding the metric lane's window (retention.metric_days), or with null returns it to the lane's. Works on an official type: a shipped type's definition is read-only, but how long an install keeps its samples is the install's, and the boot seed never resets it. The retention floor still holds: a type's latest value per series is never removed. 1 to 36,500 days. Audited as set_retention. Gated by metric_type:update and platform:update.",
+					Long:    "Sets how many days this type's samples are kept, overriding the metric lane's window (retention.metric_days), or with null returns it to the lane's. Works on an official type: a shipped type's definition is read-only, but how long an install keeps its samples is the install's, and the boot seed never resets it. A command's intended values are never removed; a series with no sample inside the window reads as no reading within retention (ADR-1275). 1 to 36,500 days. Audited as set_retention. Gated by metric_type:update and platform:update.",
 					Example: "  omniglass metric-type setRetention <name> --days <json>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -7457,7 +7457,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "add-component <name>",
 					Short:   "Add a simulated component",
-					Long:    "Creates a component of a simulated product, at the lowest free address in the simulated block (127.60.0.0/16), with the endpoint the collector reaches it through placed on the node: a driver attach where the driver's inputs are known (an SNMP attach needs the sim-community secret, else it falls back), otherwise a reachability probe on a port the profile serves, lifted as the node's simulator lifts its ports. The simulator serves it from its next pull, with no restart. Gated by simulation:update, and also needs component:create and endpoint:create, each in the caller's own scope. A node with no simulator connected is a 409, and a product no profile simulates a 422.",
+					Long:    "Creates a component of a simulated product, at the lowest free address in the simulated block (127.60.0.0/16), with the endpoint the collector reaches it through placed on the node: a driver attach where the driver's inputs are known (only when the platform secret the attach references exists, the community or the credential the face demands, else it falls back), otherwise a reachability probe on a port the profile serves, lifted as the node's simulator lifts its ports. The simulator serves it from its next pull, with no restart. Gated by simulation:update, and also needs component:create and endpoint:create, each in the caller's own scope. A node with no simulator connected is a 409, and a product no profile simulates a 422.",
 					Example: "  omniglass simulation add-component <name> --name name --product product",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {

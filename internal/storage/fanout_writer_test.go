@@ -8,6 +8,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/rules"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
 // fanFixture is a conduit (disp-1) with one identity bound to a system and a
@@ -70,7 +71,7 @@ func TestFanoutWriterIsHeldToTheConduitsBindings(t *testing.T) {
 	if err := f.gw.InsertMetricSamples(f.ctx, w, metric(f.bound, "participant-count")); err != nil {
 		t.Fatalf("a collected key on a bound owner: %v", err)
 	}
-	if n := f.count(t, `select count(*) from metric where system_id = $1 and provenance = 'observed'`, f.bound); n != 1 {
+	if n := f.count(t, `select count(*) from `+storagetest.MetricRows+` metric where system_id = $1 and provenance = 'observed'`, f.bound); n != 1 {
 		t.Fatalf("the fanned metric landed %d rows on its owner, want one observed row", n)
 	}
 	for _, c := range []struct {
@@ -88,7 +89,7 @@ func TestFanoutWriterIsHeldToTheConduitsBindings(t *testing.T) {
 			t.Errorf("%s: err = %v, want ErrKeyWriterRefused", c.name, c.err)
 		}
 	}
-	if n := f.count(t, `select count(*) from metric`); n != 1 {
+	if n := f.count(t, `select count(*) from `+storagetest.MetricRows+` metric`); n != 1 {
 		t.Errorf("a refused fan-out landed rows: %d metric rows, want the one admitted", n)
 	}
 }
@@ -134,7 +135,7 @@ func TestAStaleFanOutIsRedeliveredNotDropped(t *testing.T) {
 	if err == nil || storage.IsRefusedWrite(err) || !errors.Is(err, storage.ErrFanoutStale) {
 		t.Fatalf("a stale fan-out: err = %v (refused %v), want ErrFanoutStale, redelivered", err, storage.IsRefusedWrite(err))
 	}
-	if n := f.count(t, `select count(*) from metric`); n != 0 {
+	if n := f.count(t, `select count(*) from `+storagetest.MetricRows+` metric`); n != 0 {
 		t.Errorf("a stale batch landed %d rows", n)
 	}
 	if n := f.count(t, `select count(*) from telemetry_receipt where batch_id = 'stale'`); n != 0 {

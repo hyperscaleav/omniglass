@@ -1,6 +1,7 @@
 package storage_test
 
 import (
+	"context"
 	"encoding/json"
 	"regexp"
 	"slices"
@@ -10,9 +11,11 @@ import (
 
 	"github.com/hyperscaleav/omniglass/db"
 	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
+	"github.com/hyperscaleav/omniglass/internal/migrate"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/writerclass"
+	"github.com/jackc/pgx/v5"
 )
 
 // The one-time backfill that holds legacy rows to the one-writer ruling
@@ -35,6 +38,46 @@ func legacyBackfillSQL(t *testing.T) (up, down string) {
 		t.Fatal("the backfill has no -- migrate:down")
 	}
 	return strings.TrimPrefix(up, "-- migrate:up"), down
+}
+
+// belowNarrowMetric stands a fixture's database just below the narrow metric
+// lane (#1275): the backfill is frozen at the wide metric table it ran
+// against, so it runs there, as it did on every install.
+//
+// Rolling back below the lane also rolls back every later migration, and the
+// gateway the fixtures write through depends on some of them (the catalog
+// namespace and its search path, #318). Those are re-applied: each migration
+// newer than the lane that is not part of it, run as its own up section. A
+// migration is idempotent by house rule, so the forward migrate after the
+// backfill runs it again harmlessly.
+func belowNarrowMetric(t *testing.T, dsn string) {
+	t.Helper()
+	if err := migrate.RollbackBelow(dsn, metricNarrowVersion); err != nil {
+		t.Fatalf("roll back below the narrow metric lane: %v", err)
+	}
+	entries, err := db.FS.ReadDir("migrations")
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn, err := pgx.Connect(context.Background(), dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close(context.Background()) }()
+	for _, e := range entries {
+		version, _, _ := strings.Cut(e.Name(), "_")
+		if version <= metricWideDropVersion {
+			continue
+		}
+		raw, err := db.FS.ReadFile("migrations/" + e.Name())
+		if err != nil {
+			t.Fatal(err)
+		}
+		up, _, _ := strings.Cut(string(raw), "-- migrate:down")
+		if _, err := conn.Exec(context.Background(), strings.TrimPrefix(up, "-- migrate:up")); err != nil {
+			t.Fatalf("re-apply %s beside the wide metric lane: %v", e.Name(), err)
+		}
+	}
 }
 
 // bornUnderTheRuling are the reserved keys declared after the legacy
@@ -114,6 +157,7 @@ func TestLegacyBackfillRetiresWhatTheRulingRefuses(t *testing.T) {
 		t.Skip("integration test needs Postgres")
 	}
 	f := pinFixture(t)
+	belowNarrowMetric(t, f.dsn)
 	all := scope.Set{All: true}
 	d1 := f.componentID(t, "disp-1")
 	sys, err := f.gw.CreateSystem(f.ctx, "", storage.SystemSpec{Name: "room-1"}, all, all)
@@ -228,8 +272,10 @@ func TestLegacyBackfillRetiresWhatTheRulingRefuses(t *testing.T) {
 	if got, err := f.gw.LatestProperty(f.ctx, "disp-1", "endpoint-reachable", "ssh"); err != nil || got == nil || got.Value != "down" {
 		t.Errorf("LatestProperty = %+v (%v), want the node's down", got, err)
 	}
-	if got, err := f.gw.LatestMetricInstance(f.ctx, "disp-1", "tcp-open", "ssh"); err != nil || got == nil || got.Value != 0 {
-		t.Errorf("LatestMetricInstance = %+v (%v), want the node's 0", got, err)
+	if got := f.count(t, `select value::int from metric where component_id = '`+d1+`'
+			and metric_type_id = (select id from metric_type where name = 'tcp-open') and instance = 'ssh'
+			and provenance = 'observed' order by ts desc limit 1`); got != 0 {
+		t.Errorf("the newest observed tcp-open on ssh is %d, want the node's 0", got)
 	}
 	evs, err := f.gw.ListComponentEvents(f.ctx, "disp-1", 0, 50)
 	if err != nil {
@@ -322,6 +368,7 @@ func TestLegacyBackfillDownRestoresTheRows(t *testing.T) {
 		t.Skip("integration test needs Postgres")
 	}
 	f := pinFixture(t)
+	belowNarrowMetric(t, f.dsn)
 	d1 := f.componentID(t, "disp-1")
 	up, down := legacyBackfillSQL(t)
 	f.plantPin(t, "ssh-host-key", "ssh", "SHA256:"+strings.Repeat("p", 43))
@@ -366,6 +413,7 @@ func TestRetiredPlantedPinIsNeverRelearned(t *testing.T) {
 		t.Skip("integration test needs Postgres")
 	}
 	f := pinFixture(t)
+	belowNarrowMetric(t, f.dsn)
 	all := scope.Set{All: true}
 	d1 := f.componentID(t, "disp-1")
 	up, _ := legacyBackfillSQL(t)
@@ -436,6 +484,7 @@ func TestRetiredPlantedPinIsNeverRelearned(t *testing.T) {
 // the heal runs once over what was retired: a second heal judges nothing.
 func TestRetiredRowsReleaseTheConditionsTheyRaised(t *testing.T) {
 	r := newEdgeRig(t)
+	belowNarrowMetric(t, r.f.dsn)
 	r.rule(storage.EventRuleSpec{Name: "edge", Severity: "high", ClearEventType: "condition-ended"})
 	if _, err := r.f.gw.CreateEventRule(r.ctx, "", storage.EventRuleSpec{Name: "legacy", SampleKey: "endpoint-reachable",
 		Fire: criteria("eq", "down"), Clear: ptrCriteria(criteria("eq", "up")), FireEventType: "condition-started",
@@ -508,6 +557,7 @@ func TestPinLearnedBeforeAPlantStaysThePin(t *testing.T) {
 		t.Skip("integration test needs Postgres")
 	}
 	f := pinFixture(t)
+	belowNarrowMetric(t, f.dsn)
 	d1 := f.componentID(t, "disp-1")
 	up, _ := legacyBackfillSQL(t)
 	learned := "SHA256:" + strings.Repeat("k", 43)

@@ -15,10 +15,11 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/writerclass"
 )
 
-// sampleTable is a sample table (metric, property) or event, as SQL may name
-// it: optionally schema-qualified, optionally quoted, read whole so
-// metric_type, property_type and event_rule never match.
-const sampleTable = `(?:"?public"?\s*\.\s*)?"?(?:metric|property|event)"?`
+// sampleTable is a sample table (metric and its declared tier, property) or
+// event, as SQL may name it: optionally schema-qualified, optionally quoted,
+// read whole so metric_type, metric_series, property_type and event_rule
+// never match.
+const sampleTable = `(?:"?public"?\s*\.\s*)?"?(?:metric|metric_declared|property|event)"?`
 
 // sampleWriteSQL matches SQL that writes a sample or event row, whatever
 // follows the table: an insert (a column list, values, a select, an alias), an
@@ -173,6 +174,7 @@ var sampleMigrations = map[string]string{
 	"20260805210000_command_status_and_intended_lineage.sql": "repoints the lineage of existing intended rows onto the command that opened them (command_id); no key, value or writer changes",
 	"20261024120100_legacy_writer_backfill.sql":              "holds legacy rows to the ruling (ADR-1100): stamps the source of a declared pin its audited :retry wrote, moves rows the ruling refuses into retired_sample, and its down restores them as they were; no key or value changes",
 	"20261025130100_command_outcome_backfill.sql":            "holds the newly reserved command outcome events to their class (ADR-1155): moves those no command's outcome wrote into retired_sample, and its down restores them as they were; no key or value changes",
+	"20261029132028_metric_series_backfill.sql":              "copies every wide metric row into the narrow lane (ADR-1275), each keeping its id, type, owner, instance, provenance, source, value and lineage, and its down copies them back; no key, value or writer changes",
 }
 
 // TestMigrationsWriteNoSamples: a migration is a write path that runs outside

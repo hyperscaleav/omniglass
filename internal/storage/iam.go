@@ -1659,3 +1659,156 @@ func RolesInEffect(roles []Role) []Role {
 	}
 	return out
 }
+
+// EnsureServicePrincipal finds the service principal of that name, or creates
+// it (audited), returning its id. The trusted lane's (#1370: the lab seed's
+// simulated pusher); no route creates a service this way.
+func (p *PG) EnsureServicePrincipal(ctx context.Context, actorID, name string) (string, error) {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return "", fmt.Errorf("storage: begin ensure service: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	var pid string
+	err = tx.QueryRow(ctx, `select principal_id from service where name = $1`, name).Scan(&pid)
+	if err == nil {
+		return pid, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return "", fmt.Errorf("storage: find service %q: %w", name, err)
+	}
+	if err := tx.QueryRow(ctx, `insert into principal (kind) values ('service') returning id`).Scan(&pid); err != nil {
+		return "", fmt.Errorf("storage: create service principal: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `insert into service (principal_id, name) values ($1, $2)`, pid, name); err != nil {
+		return "", fmt.Errorf("storage: create service %q: %w", name, err)
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "create", "principal", pid, nil, map[string]string{"kind": "service", "name": name}); err != nil {
+		return "", err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return "", fmt.Errorf("storage: commit ensure service: %w", err)
+	}
+	return pid, nil
+}
+
+// SetServiceToken makes one token the service's only one, by its hash and
+// non-secret prefix: every token it held before is revoked, audited, in the
+// same transaction. False when no service has the name. The trusted lane's
+// (#1370): the lab mints its simulated pusher a token on every run, as it
+// does its node's.
+func (p *PG) SetServiceToken(ctx context.Context, actorID, name string, hash []byte, prefix string) (bool, error) {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return false, fmt.Errorf("storage: begin set service token: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	var pid string
+	err = tx.QueryRow(ctx, `select principal_id from service where name = $1`, name).Scan(&pid)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("storage: find service %q: %w", name, err)
+	}
+	rows, err := tx.Query(ctx,
+		`delete from credential where principal_id = $1 and kind = 'bearer' and purpose = $2 `+revokedCols,
+		pid, credentialPurposeToken)
+	var revoked []revokedCredential
+	if err == nil {
+		revoked, err = scanRevoked(rows)
+	}
+	if err != nil {
+		return false, fmt.Errorf("storage: revoke service tokens: %w", err)
+	}
+	if err := auditRevokedTokens(ctx, tx, actorID, revoked); err != nil {
+		return false, err
+	}
+	var credID string
+	if err := tx.QueryRow(ctx,
+		`insert into credential (principal_id, kind, secret_hash, prefix, purpose, description)
+			values ($1, 'bearer', $2, $3, $4, 'minted by the lab for this run') returning id`,
+		pid, hash, prefix, credentialPurposeToken).Scan(&credID); err != nil {
+		return false, fmt.Errorf("storage: set service token: %w", err)
+	}
+	img := credentialAuditImage{PrincipalID: pid, Prefix: prefix, Purpose: credentialPurposeToken, Description: "minted by the lab for this run"}
+	if err := writeAuditRes(ctx, tx, actorID, "create", "credential", credID, nil, img); err != nil {
+		return false, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return false, fmt.Errorf("storage: commit set service token: %w", err)
+	}
+	return true, nil
+}
+
+// ErrRoleConflict refuses EnsureRole over a role of the same name that is
+// official or holds other permissions: the trusted lane never rewrites a role.
+var ErrRoleConflict = errors.New("storage: a role of that name exists with other permissions, or is official")
+
+// EnsureRole creates an operator (non-official) role if no role has its name,
+// audited in the same transaction, and otherwise leaves it: a role of that
+// name holding exactly these permissions is the one wanted, and any other
+// (an official role, or one an operator gave other permissions) is refused
+// with ErrRoleConflict rather than overwritten. The trusted lane's (#1370:
+// the lab's pusher role); the boot seed's official roles use UpsertRole.
+func (p *PG) EnsureRole(ctx context.Context, actorID string, r Role) error {
+	if r.Permissions == nil {
+		r.Permissions = []string{}
+	}
+	if r.Inherits == nil {
+		r.Inherits = []string{}
+	}
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("storage: begin ensure role: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	var official bool
+	var perms []string
+	// A role of the name in either tier answers (#1432): a shipped one is a
+	// conflict, and an operator's is the one wanted only with these permissions.
+	err = tx.QueryRow(ctx, `select official, permissions from role where name = $1 and namespace in ('local', 'og')
+		order by official desc limit 1`, r.Name).Scan(&official, &perms)
+	if err == nil {
+		if official || !sameStrings(perms, r.Permissions) {
+			return ErrRoleConflict
+		}
+		return nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return fmt.Errorf("storage: find role %q: %w", r.Name, err)
+	}
+	var roleID string
+	if err := tx.QueryRow(ctx, `
+		insert into role (name, official, permissions, inherits, label, description)
+		values ($1, false, $2, $3, $4, $5) returning id`,
+		r.Name, r.Permissions, r.Inherits, labelOrNull(r.Label), nullize(r.Description)).Scan(&roleID); err != nil {
+		return fmt.Errorf("storage: create role %q: %w", r.Name, err)
+	}
+	img := map[string]any{"name": r.Name, "permissions": r.Permissions}
+	if err := writeAuditRes(ctx, tx, actorID, "create", "role", roleID, nil, img); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("storage: commit ensure role: %w", err)
+	}
+	return nil
+}
+
+// sameStrings reports two string sets equal, order aside.
+func sameStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	seen := map[string]int{}
+	for _, s := range a {
+		seen[s]++
+	}
+	for _, s := range b {
+		if seen[s] == 0 {
+			return false
+		}
+		seen[s]--
+	}
+	return true
+}
