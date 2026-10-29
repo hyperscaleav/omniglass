@@ -305,7 +305,10 @@ export default function ComponentLeaf() {
                 <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
               <section data-testid="leaf-identity" class="rounded-box border border-base-300 bg-base-100 p-3.5 text-sm">
                 <Eyebrow label="What it is" />
-                <dl class="mt-2 grid grid-cols-[6rem_1fr] gap-x-3 gap-y-1">
+                {/* Rows align on their first baseline (#1379), as the
+                    Vitals below do: a monospace driver or model number
+                    beside the card's text label. */}
+                <dl class="mt-2 grid grid-cols-[6rem_1fr] items-baseline gap-x-3 gap-y-1">
                   <dt class="text-base-content/50">Product</dt>
                   <dd class="flex flex-wrap items-baseline gap-x-2">
                     <span>{product() ? entityLabel(product()!) : (component()?.product ?? "no product")}</span>

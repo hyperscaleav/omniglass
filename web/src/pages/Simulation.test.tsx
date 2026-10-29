@@ -362,6 +362,15 @@ describe("the component page's Simulation section", () => {
     expect(screen.queryByTestId("leaf-simulation")).toBeNull();
   });
 
+  // A node, an address or a hit count in monospace sits on its label's
+  // baseline, not above it (#1379's review).
+  it("aligns each simulation value on its label's baseline", async () => {
+    stubFetch();
+    mount(() => <SimulationSection componentId={DISPLAY} />);
+    const section = await screen.findByTestId("leaf-simulation");
+    expect(section.querySelector("dl")?.classList.contains("items-baseline")).toBe(true);
+  });
+
   it("says where a simulated component is served and opens its drawer", async () => {
     stubFetch();
     mount(() => <SimulationSection componentId={DISPLAY} />);
