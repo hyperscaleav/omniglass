@@ -139,12 +139,15 @@ only when `egress_allow` names it, as for a webhook.
 
 Every notification joins its alarm's timeline after the edge that queued it: **notifying**
 ops-chat while it is on its way, **notified** when the receiver answered 2xx, **failed to notify**
-with the reason when it gave up. A receiver that is down is retried: 10 seconds, then doubling,
+with the reason when it gave up, **held back from** ops-chat with the reason when the alarm's
+condition was [snoozed](/guides/operator/entities/#snoozing-silencing-a-noisy-condition-for-a-while)
+(a held-back row is final: it is never sent or retried). A receiver that is down is retried: 10 seconds, then doubling,
 until the 8th failed attempt (about 21 minutes in all). A failed one carries **Retry** on the
 timeline for whoever holds `notification:retry` (operators do), or:
 
 ```bash
 omniglass notification list --status failed
+omniglass notification list --status suppressed
 omniglass notification retry <id>
 ```
 

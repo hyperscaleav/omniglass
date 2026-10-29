@@ -26,7 +26,9 @@ const KIND_CHIP: Record<string, { word: string; tip: string; cls: string }> = {
 // is read against one clock, taken when its entries land, so the order the
 // ages say is the order the lines are in. The notifications a transition
 // queued (#618) sit after the edge that caused them, reading their delivery as
-// it stands, and a failed one offers Retry to a caller who may retry it.
+// it stands, and a failed one offers Retry to a caller who may retry it. A row
+// a snooze held back reads "held back" with its reason, beside the snooze's
+// own audit lines (#1318).
 export default function AlarmTimeline(props: { component: string; alarmId: string; id?: string; label: string }): JSX.Element {
   const q = useQuery(() => ({
     queryKey: alarmTimelineKey(props.component, props.alarmId),
@@ -72,6 +74,11 @@ export default function AlarmTimeline(props: { component: string; alarmId: strin
                       </Show>
                       <Show when={e.message}>
                         <span class="min-w-0 truncate text-base-content/45">{e.message}</span>
+                      </Show>
+                      {/* A row a snooze held back (#1318) says why, muted: it is
+                          what the snooze was for, not a fault. */}
+                      <Show when={e.kind === "notification" && e.what === "suppressed" && e.error}>
+                        <span class="min-w-0 truncate text-base-content/45" title={e.error}>{e.error}</span>
                       </Show>
                       <Show when={e.kind === "notification" && e.what === "failed"}>
                         <span class="min-w-0 truncate text-error/80" title={e.error}>

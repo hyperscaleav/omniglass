@@ -17,6 +17,7 @@ import DetailGate from "../components/DetailGate";
 import PlaceCard from "../components/PlaceCard";
 import TemplateNotice from "../components/TemplateNotice";
 import AcknowledgeButton from "../components/AcknowledgeButton";
+import SnoozeButton, { SnoozedBadge } from "../components/SnoozeButton";
 import AlarmTimeline, { createTimelineToggles } from "../components/AlarmTimeline";
 import SeverityBadge from "../components/SeverityBadge";
 import { useSeverity } from "../lib/severity";
@@ -291,7 +292,9 @@ export default function ComponentLeaf() {
                             <span class="text-xs text-base-content/50">
                               {durationText(pageNow() - Date.parse(a.raised_at))} · {a.acknowledged ? "acknowledged" : "unacknowledged"}
                             </span>
+                            <SnoozedBadge alarm={a} />
                             <AcknowledgeButton component={component()?.id ?? id()} alarm={a} />
+                            <SnoozeButton component={component()?.id ?? id()} alarm={a} />
                             {timelines.button(a.id, a.message)}
                           </div>
                           <Show when={timelines.isOpen(a.id)}>

@@ -1,6 +1,7 @@
 import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import PlaceCard from "./PlaceCard";
 import AcknowledgeButton from "./AcknowledgeButton";
+import SnoozeButton, { SnoozedBadge } from "./SnoozeButton";
 import AlarmTimeline, { createTimelineToggles } from "./AlarmTimeline";
 import { useNavigate } from "@solidjs/router";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/solid-query";
@@ -256,7 +257,13 @@ function ComponentBody(props: { id: string }) {
           severity: a.severity,
           message: a.message,
           rule: a.raised_by_rule,
-          ack: <AcknowledgeButton component={props.id} alarm={a} />,
+          ack: (
+            <>
+              <SnoozedBadge alarm={a} />
+              <AcknowledgeButton component={props.id} alarm={a} />
+              <SnoozeButton component={props.id} alarm={a} />
+            </>
+          ),
           timeline: { component: props.id, alarmId: a.id },
         }))}
       />

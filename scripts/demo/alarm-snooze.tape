@@ -38,19 +38,16 @@ Wait
 Type `a=$(omniglass component alarm create panel-2 --severity high --message 'touch unresponsive' --dedup-key touch | jq -r .id)`
 Enter
 Wait
-Type `omniglass auth me notification list | jq -c '{unread, inbox: [.notifications[] | .subject]}'`
+Type `omniglass auth me notification list | jq -c '{unread, newest: .notifications[0].subject}'`
 Enter
 Wait
-Type "# Snooze the condition for an hour: not acknowledged, and the panel is still in outage"
+Type "# Snooze the condition for an hour: it is not acknowledged by that"
 Enter
 Wait
 Type `omniglass component alarm snooze panel-2 "$a" --duration 1h | jq -c '{dedup_key, snoozed_by, minutes_left: (((.snoozed_until[0:19] + "Z" | fromdateiso8601) - now) / 60 | round), acknowledged}'`
 Enter
 Wait
-Type `omniglass component alarm list panel-2 | jq -r .verdict`
-Enter
-Wait
-Type "# It flaps: clears, then comes back as a new alarm of the same condition, which reads the snooze too"
+Type "# It flaps: clears, then comes back as a new alarm of the same condition"
 Enter
 Wait
 Type `omniglass component alarm delete panel-2 "$a"`
@@ -59,13 +56,10 @@ Wait
 Type `b=$(omniglass component alarm create panel-2 --severity high --message 'touch unresponsive' --dedup-key touch | jq -r .id)`
 Enter
 Wait
-Type `omniglass component alarm list panel-2 | jq -c '.alarms[] | {dedup_key, snoozed_by}'`
-Enter
-Wait
 Type "# Both edges were written suppressed on the timeline, and nothing reached the inbox"
 Enter
 Wait
-Type `omniglass component alarm timeline panel-2 "$a" | jq -c '.entries[] | select(.what != "queued") | {kind, what, actor, transition, error}' | tail -3`
+Type `omniglass component alarm timeline panel-2 "$a" | jq -c '.entries[] | select(.what == "suppressed") | {what, transition, error}'`
 Enter
 Wait
 Type `omniglass component alarm timeline panel-2 "$b" | jq -c '.entries[] | select(.kind == "notification") | {what, transition, error}'`
