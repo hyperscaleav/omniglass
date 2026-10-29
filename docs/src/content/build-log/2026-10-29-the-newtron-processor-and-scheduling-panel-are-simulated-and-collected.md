@@ -26,4 +26,5 @@ timeline can replace.
 `newtron-core-nvp` reads what `newtron-nvp` reads plus `program-state` and `panel-count`, both new to
 the boot seed; `newtron-slate-nvp` reads `booking-state`, the property the lab's booking service
 already pushes for a system, now observed on a component too. Drivers have no composition of their
-own, so the processor's driver repeats the panel driver's polls and listeners.
+own, so the processor's driver repeats the panel driver's polls and listeners; #1441 tracks giving
+driver specs the same primitive.

@@ -22,18 +22,26 @@ func (s *Store) resolveExtends() error {
 			done[name] = true
 			return nil
 		}
-		base, ok := s.Devices[p.Extends]
-		if !ok {
+		if _, ok := s.Devices[p.Extends]; !ok {
 			return fmt.Errorf("profile %q extends %q, which is no profile", name, p.Extends)
 		}
+		// Resolve the base first, then read it: resolving replaces it.
 		if err := resolve(p.Extends, append(path, name)); err != nil {
 			return err
 		}
-		merged, err := extend(base, p)
+		merged, err := extend(s.Devices[p.Extends], p)
 		if err != nil {
 			return err
 		}
+		for _, i := range merged.Interfaces {
+			if i.Protocol == "" {
+				return fmt.Errorf("profile %q adds to interface %q, which %q does not have", name, i.Name, p.Extends)
+			}
+		}
 		if err := validateInterfaces(merged); err != nil {
+			return fmt.Errorf("profile %q: %w", name, err)
+		}
+		if err := validateComputed(merged); err != nil {
 			return fmt.Errorf("profile %q: %w", name, err)
 		}
 		s.Devices[name] = merged
@@ -50,8 +58,10 @@ func (s *Store) resolveExtends() error {
 
 // extend is p carrying base's surface. The base's interfaces come first, in
 // order; one p names again keeps the base's setup (protocol, port, auth,
-// framing) and gains p's routes, commands and subjects after the base's, and
-// p's OID map entries over the base's; p's other interfaces follow. Behaviors,
+// framing, welcome: a driver's login may read the welcome as ready) and takes
+// p's doc when p gives one; p's routes, commands and subjects replace the
+// base's of the same match in place and follow the base's when new, and p's
+// OID map entries go over the base's; p's other interfaces follow. Behaviors,
 // computed fields and overrides are the base's then p's; defaults are deep
 // merged, p's winning; a webhook subscription is p's, else the base's.
 // Identity, docs and products are p's alone.
@@ -70,9 +80,12 @@ func extend(base, p *DeviceProfile) (*DeviceProfile, error) {
 			if (add.Protocol != "" && add.Protocol != b.Protocol) || (add.Port != 0 && add.Port != b.Port) {
 				return nil, fmt.Errorf("profile %q changes inherited interface %q (%s:%d); add a face of its own instead", p.Name, b.Name, b.Protocol, b.Port)
 			}
-			merged.Routes = append(merged.Routes, add.Routes...)
-			merged.Commands = append(merged.Commands, add.Commands...)
-			merged.Subjects = append(merged.Subjects, add.Subjects...)
+			if add.Doc.Summary != "" {
+				merged.Doc = add.Doc
+			}
+			merged.Routes = mergeByMatch(merged.Routes, add.Routes, func(r Route) string { return r.Match })
+			merged.Commands = mergeByMatch(merged.Commands, add.Commands, func(c Command) string { return c.Match })
+			merged.Subjects = mergeByMatch(merged.Subjects, add.Subjects, func(sub Subject) string { return sub.Match })
 			if len(add.OIDMap) > 0 {
 				if merged.OIDMap == nil {
 					merged.OIDMap = map[string]string{}
@@ -97,6 +110,24 @@ func extend(base, p *DeviceProfile) (*DeviceProfile, error) {
 		out.Webhook = base.Webhook
 	}
 	return &out, nil
+}
+
+// mergeByMatch is base with each of add's entries replacing the base entry of
+// the same match in place, or appended after the base's when it is new.
+func mergeByMatch[T any](base, add []T, match func(T) string) []T {
+	at := map[string]int{}
+	for i, b := range base {
+		at[match(b)] = i
+	}
+	for _, a := range add {
+		if i, ok := at[match(a)]; ok {
+			base[i] = a
+			continue
+		}
+		at[match(a)] = len(base)
+		base = append(base, a)
+	}
+	return base
 }
 
 // cloneInterface copies an interface's slices and map, so appending to the

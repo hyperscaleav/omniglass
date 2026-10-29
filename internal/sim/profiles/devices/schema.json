@@ -154,9 +154,9 @@
     },
     "interface": {
       "type": "object",
+      "description": "One face. protocol is required, except on a profile that extends another, where an entry naming an inherited face adds to it and carries its protocol over (the loader refuses one that names no inherited face).",
       "required": [
-        "name",
-        "protocol"
+        "name"
       ],
       "properties": {
         "name": {

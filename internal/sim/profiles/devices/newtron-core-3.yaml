@@ -34,7 +34,12 @@ doc:
 
 interfaces:
   - name: http-api
+    doc: { summary: "Newtron HTTP API (the panel's, and the processor's program)", tags: [management, api] }
     routes:
+      # The panel's dashboard, said for what it is here.
+      - match: "GET /"
+        template: web/newtron-panel/index.gotempl
+        doc: { summary: "Processor dashboard (the control page it shares with its panels)" }
       - match: "POST /api/program"
         template: api/newtron-core/program-ack.json.gotempl
         doc: { summary: "Start or stop the control program", tags: [api, control] }
@@ -63,6 +68,7 @@ interfaces:
         response: "OK"
 
   - name: snmp
+    doc: { summary: "SNMP monitoring: MIB-2 and the processor's enterprise branch (.55510.10)", tags: [monitoring] }
     # The processor's own branch of the Newtron arc, .10: the program, the
     # panels connected, and a control-port table (.10.3.<n>, n 1 to 4).
     oid_map:

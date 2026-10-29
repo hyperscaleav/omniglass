@@ -157,3 +157,85 @@ func TestExtendsRefusesWhatItCannotResolve(t *testing.T) {
 		})
 	}
 }
+
+// A chain resolves whole whatever order the store meets it in: C extends B
+// extends A, and C carries A's faces, B's additions and its own, on every
+// load.
+func TestAnExtendsChainResolvesWhole(t *testing.T) {
+	files := map[string]string{
+		"base-panel": extendsBase,
+		"processor":  extendsProcessor,
+		"big-processor": `name: big-processor
+extends: processor
+model: "Core 5"
+interfaces:
+  - name: line
+    commands:
+      - { match: "GET RACK", response: "RACK 2" }
+`,
+	}
+	for i := 0; i < 50; i++ {
+		store, err := loadExtends(t, files)
+		if err != nil {
+			t.Fatal(err)
+		}
+		p := store.Devices["big-processor"]
+		line := ifaceNamed(p, "line")
+		if line == nil || line.Protocol != "tcp" {
+			t.Fatalf("load %d: the chain's line face = %+v, want the base's tcp face", i, line)
+		}
+		var cmds []string
+		for _, c := range line.Commands {
+			cmds = append(cmds, c.Match)
+		}
+		if got := strings.Join(cmds, ","); got != "GET INPUT,GET PROGRAM,GET RACK" {
+			t.Fatalf("load %d: line commands = %s, want each level's in order", i, got)
+		}
+		if ifaceNamed(p, "api") == nil || ifaceNamed(p, "ports") == nil {
+			t.Fatalf("load %d: the chain lost a face: %+v", i, p.Interfaces)
+		}
+	}
+}
+
+// An inherited face named again may restate its doc, and a route or command
+// it declares with an inherited match replaces that one in place, so the
+// extender says what the face is on it; its protocol and port stay locked.
+func TestAnExtenderRestatesAnInheritedFace(t *testing.T) {
+	store, err := loadExtends(t, map[string]string{"base-panel": extendsBase, "processor": strings.Replace(extendsProcessor,
+		"  - name: line\n    commands:\n      - { match: \"GET PROGRAM\", response: \"PROGRAM running\" }",
+		"  - name: line\n    doc: { summary: \"the processor's line\" }\n    commands:\n      - { match: \"GET INPUT\", response: \"INPUT y\" }\n      - { match: \"GET PROGRAM\", response: \"PROGRAM running\" }", 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	line := ifaceNamed(store.Devices["processor"], "line")
+	if line.Doc.Summary != "the processor's line" {
+		t.Errorf("doc = %q, want the extender's", line.Doc.Summary)
+	}
+	var got []string
+	for _, c := range line.Commands {
+		got = append(got, c.Match+"="+c.Response)
+	}
+	if s := strings.Join(got, ","); s != "GET INPUT=INPUT y,GET PROGRAM=PROGRAM running" {
+		t.Errorf("commands = %s, want GET INPUT replaced in place", s)
+	}
+	if base := ifaceNamed(store.Devices["base-panel"], "line"); base.Commands[0].Response != "INPUT x" || base.Doc.Summary != "" {
+		t.Errorf("the base changed: %+v", base)
+	}
+}
+
+// A face named again that the base does not have (a typo, or a face the
+// base renamed) is refused, not served as a face with no protocol; and a
+// behavior that writes an inherited computed path is refused as one on the
+// base would be.
+func TestExtendsRefusesAnOrphanFaceAndAComputedWrite(t *testing.T) {
+	_, err := loadExtends(t, map[string]string{"base-panel": extendsBase, "processor": strings.Replace(extendsProcessor,
+		"  - name: line\n    commands:", "  - name: lien\n    commands:", 1)})
+	if err == nil || !strings.Contains(err.Error(), `"lien"`) {
+		t.Errorf("an orphan face: err = %v, want one naming it", err)
+	}
+	_, err = loadExtends(t, map[string]string{"base-panel": extendsBase, "processor": strings.Replace(extendsProcessor,
+		"mutations: [{ path: status.cpu, value: \"2\" }]", "mutations: [{ path: status.device.uptime, value: \"2\" }]", 1)})
+	if err == nil || !strings.Contains(err.Error(), "status.device.uptime") {
+		t.Errorf("a write to an inherited computed path: err = %v", err)
+	}
+}
