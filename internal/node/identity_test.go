@@ -1,6 +1,7 @@
 package node
 
 import (
+	"strconv"
 	"testing"
 	"time"
 
@@ -51,5 +52,32 @@ func TestChangeMemoryTellsRecordsApart(t *testing.T) {
 	s.commitChanged("t1", first)
 	if got := s.changed("t1", []collection.Sample{ev("r1", "in-call"), ev("r2", "idle")}); len(got) != 0 {
 		t.Fatalf("an unchanged run landed %+v, want nothing", got)
+	}
+}
+
+// The change memory holds what the last run saw, never more (#1386 review):
+// a function whose identities rotate run to run keeps one run's slots, not
+// every identity it has ever heard.
+func TestChangeMemoryForgetsSlotsARunDidNotSee(t *testing.T) {
+	s := &pollSchedule{occurred: map[string]map[string]string{}}
+	for run := 0; run < 100; run++ {
+		dps := []collection.Sample{
+			{Name: "call-started", Lane: driver.LaneEvent, Text: "x", IsText: true, Identity: &driver.Identity{Key: "k", Value: "a" + strconv.Itoa(run)}},
+			{Name: "call-started", Lane: driver.LaneEvent, Text: "x", IsText: true, Identity: &driver.Identity{Key: "k", Value: "b" + strconv.Itoa(run)}},
+		}
+		s.changed("t1", dps)
+		s.commitChanged("t1", dps)
+	}
+	if n := len(s.occurred["t1"]); n != 2 {
+		t.Fatalf("memory holds %d slots after 100 rotating runs, want the last run's 2", n)
+	}
+	// What a run saw but did not land (unchanged) stays remembered.
+	same := []collection.Sample{{Name: "call-started", Lane: driver.LaneEvent, Text: "x", IsText: true, Identity: &driver.Identity{Key: "k", Value: "a99"}}}
+	if got := s.changed("t1", same); len(got) != 0 {
+		t.Fatalf("an unchanged occurrence landed again: %+v", got)
+	}
+	s.commitChanged("t1", same)
+	if got := s.changed("t1", same); len(got) != 0 {
+		t.Fatalf("an occurrence the last run saw unchanged was forgotten: %+v", got)
 	}
 }

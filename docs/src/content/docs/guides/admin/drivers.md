@@ -486,7 +486,10 @@ polls:
 
 Polled against `{"rooms":[{"id":"r1","state":"in-call"},{"id":"r2","state":"idle"}]}`, that
 function yields two `call-state` values, one naming room `r1` and one naming `r2`. An element with
-no `id` lands nothing and reports one fault naming it, while the others land. Log lines carry no
+no `id` lands nothing while the others land; however many elements miss, the run reports one fault
+counting them and naming the first ten. At most 2048 elements are read from one answer, and one
+fault says how many past that were not. A function reading `records` must declare an `identity`
+unless it emits only log lines. Log lines carry no
 identity and land as before. A save refuses a key that is not a registered property type, an
 extract the transport cannot read, and `records` on anything but a JSON body. A
 [preview](#check-preview-and-run-a-poll-now) shows each sample's identity. For now an identified

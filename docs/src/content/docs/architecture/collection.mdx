@@ -1383,19 +1383,24 @@ every room or one post naming two. A poll or a listener may declare two fields f
   body. Each element is one **record**, read as its own payload: a `jsonpath` reads from the
   element, and a `regex` reads its compact JSON. The function's emits and its identity read once
   per record. A path that misses, or lands on anything but an array, is one fault and lands
-  nothing; an empty array lands nothing and is no fault. Records ride a JSON body alone (an http
-  poll or stream of format `json`, a webhook of format `json`), refused at write anywhere else.
+  nothing; an empty array lands nothing and is no fault. At most 2048 records are read from one
+  payload; past that the rest are not read and one fault says how many. Records ride a JSON body
+  alone (an http poll or stream of format `json`, a webhook of format `json`), refused at write
+  anywhere else, and a function reading records with any metric, property or event emit must
+  declare an identity, or every record would land on the one conduit series.
 - **`identity`**: a match `key` and the `extract` that reads its value off each record (or off the
   whole payload, without `records`). The key is a registered property type a driver may write
   (`ucc-room-id`), refused at write when it is unregistered, a metric or an event type, reserved,
-  or a calc rule's output; the extract is held to the transport exactly as an emit's is. The value
-  is trimmed and bounded: empty, longer than 256 bytes, or carrying a control character, it is a
-  fault.
+  or a calc rule's output; the extract is held to the transport exactly as an emit's is. A JSON
+  number is read as its literal, so two ids past 2^53 stay two identities. The value is trimmed
+  and bounded: empty, longer than 256 bytes, or carrying a control character, it is a fault.
 
 Every metric, property and event a record yields carries its identity, onto the wire's
 `identity` field (the match key and the value) on the node's batch and on a webhook's. A record
-whose identity misses lands **nothing** (none of its samples, none of its events) and is one fault
-naming the record: a `collection-failed` for a poll, the post's raw line for a webhook. A log
+whose identity misses lands **nothing** (none of its samples, none of its events). Record faults
+collapse to one per kind per run however many records meet them (the identity missed on 10 of 30
+records, naming the first ten), so a renamed id field is one fault, not thousands: a
+`collection-failed` for a poll, the post's raw line for a webhook. A log
 line never carries an identity and always lands, since a log line stays on the conduit's component
 (a system owns none, [ADR-0422](/architecture/decisions/#adr-0422-a-system-owns-its-own-telemetry-and-a-location-owns-no-observed-sample)).
 A function that declares neither field bakes to the bytes it always did, so its task keeps its
