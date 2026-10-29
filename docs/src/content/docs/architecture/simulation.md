@@ -9,7 +9,7 @@ sidebar:
 
 Omniglass ships a device simulator in the same binary. It serves a whole fleet of fictional AV
 and IT devices, each on its own loopback address, speaking the protocols real gear speaks (HTTP
-and HTTPS, SNMP, SSH, Telnet, raw TCP line protocols and the same over TLS, UDP) from one live state per device. A
+and HTTPS, SNMP, SSH, Telnet, raw TCP line protocols and the same over TLS, UDP, WebSocket) from one live state per device. A
 collector polls a simulated device as it would hardware, and the device answers from that state:
 a write over one protocol shows in every protocol that reads what it wrote. That makes the simulator both a
 test bed (the end-to-end and screenshot harnesses get a real fleet to collect from) and a
@@ -236,7 +236,14 @@ what the simulator can do where it runs (bind ports below 1024, hold `NET_ADMIN`
 applies to ports below 1024 with `--port-offset` when it cannot bind them), and about once a second it
 publishes the hits it saw and the devices it is serving.
 
-The server accepts hits only for components it handed that node, keeps them in memory (a live
+The server accepts hits only for components it handed that node, and only by a protocol a device
+reports a hit by: `http`, `snmp`, `ssh`, `telnet`, `tcp`, `udp` and `websocket`, the wire's closed
+vocabulary beside the hit type. Two tests hold it, one to the profile schema's protocol list (less
+`icmp`, which the kernel answers, and `https`, which no face serves: https is `http` with `tls`) and
+one to the simulator's own sources, every protocol its hit emitters name and its binder serves, so
+a protocol the simulator gains fails a test until the vocabulary names it (#1366). A hit dropped for
+its protocol is told once in the server's log, naming the node and the protocol, rather than
+reading as a component with no hits. The server keeps the hits in memory (a live
 signal, not stored history), and joins them to the node's devices at
 `GET /nodes/{name}/simulation`, which the CLI reads as `omniglass node simulation <node>`. Each
 component carries a `status`, what the simulator is doing with it: `running`; `starting` (added since
