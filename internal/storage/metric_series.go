@@ -249,6 +249,15 @@ func (p *PG) DropMetricPartitions(ctx context.Context, before time.Time) ([]stri
 		}
 	}
 
+	// A month holding an hour the trend compaction has not closed stays
+	// (#1276).
+	before, err = metricPruneHorizon(ctx, conn, before)
+	if err != nil {
+		return nil, err
+	}
+	if before.IsZero() {
+		return nil, nil
+	}
 	var horizon time.Time
 	if err := conn.QueryRow(ctx, `select least($1::timestamptz,
 			now() - make_interval(days => coalesce((select max(retention_days) from metric_type), 0)))`, before).Scan(&horizon); err != nil {

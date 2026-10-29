@@ -11583,7 +11583,7 @@
           },
           "trend_days": {
             "default": 730,
-            "description": "Days an hourly metric trend is kept, once trends exist (#1276)",
+            "description": "Days an hourly metric trend is kept (#1276)",
             "format": "int64",
             "maximum": 36500,
             "minimum": 1,

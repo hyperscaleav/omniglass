@@ -867,6 +867,12 @@ type Gateway interface {
 	// DropMetricPartitions drops each month of metric wholly past before and
 	// past every type's own window, returning what it dropped (#420).
 	DropMetricPartitions(ctx context.Context, before time.Time) ([]string, error)
+	// CompactMetricTrends closes up to maxHours hours of observed metric
+	// samples into hourly trends and recomputes the closed hours a late
+	// sample dirtied (#1276); laneDays is the metric lane's window.
+	CompactMetricTrends(ctx context.Context, maxHours, laneDays int) (TrendCompaction, error)
+	// PruneMetricTrends deletes up to limit trend rows of hours before before.
+	PruneMetricTrends(ctx context.Context, before time.Time, limit int) (int64, error)
 	// MetricPartitions lists the metric table's monthly partitions.
 	MetricPartitions(ctx context.Context) ([]MetricPartition, error)
 	// PruneSamplesOfType is PruneSamples for one type with a window of its

@@ -251,6 +251,28 @@ and it lands, and a batch that misses again is redelivered, never dropped (#420)
 
 `property` is not partitioned: its rows are transitions, sparse by construction.
 
+**Hourly trends outlive the samples.** Beside the hot tier is the trend tier, `metric_trend`: one row
+per observed series per UTC hour holding the hour's count, minimum, maximum, sum, first and last
+value, so a chart beyond the hot window still draws every hour, a one-sample spike surviving as its
+hour's maximum ([ADR-1276](/architecture/decisions/#adr-1276-hourly-trends-close-an-hour-a-day-after-it-ends-and-hold-back-the-prune)).
+The retention pass writes them by **compaction**: it closes each hour that ended a day ago (the
+late-data horizon, past the node spool's replay), up to 48 hours a pass, oldest first. Calculated
+series are not compacted (they are sparse already), and properties have no trends.
+
+- **The mark.** `metric_trend_mark` holds how far hours are closed. The compaction moves it first and
+  then waits for the sample writes already in flight, so every sample lands either before the fold or
+  as a late one.
+- **A late sample recomputes its hour.** A sample landing in a closed hour (a spool replayed past the
+  horizon) marks its series' hour in `metric_trend_dirty` in its own insert, and the next compaction
+  folds that hour again from its samples. An on-time sample marks nothing. A late sample already past
+  its type's window does not reach the trend.
+- **The prune waits for the trend.** The metric prune and the month drop never pass the mark, so no
+  hour leaves the hot tier before its trend exists.
+
+Trends are kept for `retention.trend_days` (730 by default) and pruned a chunk at a time. A trend row
+costs about 145 bytes with its key, about 3.5 KB per series per day. Reading trends beyond the hot
+window is the bucketed series read (#1269).
+
 ## The lineage CHECK (the pattern)
 
 Lineage lives on the derived row, no separate execution table: a derived row *is* the evidence of its rule's run. The pointer per provenance is enforced, making "intended with no command" impossible at the storage layer. The real four-branch CHECK on `property` (on the metric lane the same rule is structural: provenance is the series', a calculated sample carries its rule, and an intended row lives in `metric_declared`, whose `command_id` is not null, so the hot tier has no command or event lineage to carry):
@@ -330,8 +352,8 @@ The server prunes the two sample tables to a window each
 ([ADR-0417](/architecture/decisions/#adr-0417-the-server-prunes-each-sample-lane-to-a-window-in-bounded-chunks)):
 `metric` to `retention.metric_days` (14 by default) and `property` to `retention.property_days`
 (90), install-wide settings an admin changes on the console's Settings page (a platform-domain
-namespace that any signed-in caller reads). `retention.trend_days` (730) waits for the hourly
-trends of #1276. Each window is whole days from 1 to 36,500. The pass runs at server start, beside
+namespace that any signed-in caller reads), and the hourly trends to `retention.trend_days` (730,
+[above](#the-narrow-metric-lane)). Each window is whole days from 1 to 36,500. The pass runs at server start, beside
 the receipt prune, and again an hour later, or a minute later while a lane is behind.
 
 Every prune goes through the **`PruneSamples`** gateway primitive, which carries the one

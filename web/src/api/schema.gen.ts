@@ -10443,7 +10443,7 @@ export interface components {
             property_days: number;
             /**
              * Format: int64
-             * @description Days an hourly metric trend is kept, once trends exist (#1276)
+             * @description Days an hourly metric trend is kept (#1276)
              * @default 730
              */
             trend_days: number;

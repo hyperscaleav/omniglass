@@ -738,6 +738,12 @@ func (UnimplementedGateway) EnsureMetricPartitions(context.Context) ([]string, e
 func (UnimplementedGateway) DropMetricPartitions(context.Context, time.Time) ([]string, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) CompactMetricTrends(context.Context, int, int) (TrendCompaction, error) {
+	return TrendCompaction{}, nil
+}
+func (UnimplementedGateway) PruneMetricTrends(context.Context, time.Time, int) (int64, error) {
+	return 0, nil
+}
 func (UnimplementedGateway) MetricPartitions(context.Context) ([]MetricPartition, error) {
 	return nil, nil
 }
