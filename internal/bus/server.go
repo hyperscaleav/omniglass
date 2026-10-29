@@ -232,7 +232,7 @@ func (s *Server) buildWorklistReply(node string) (collection.WorklistReply, erro
 	if err != nil {
 		return collection.WorklistReply{}, err
 	}
-	reply := collection.WorklistReply{ConfigGeneration: wl.ConfigGeneration}
+	reply := collection.WorklistReply{ConfigGeneration: wl.ConfigGeneration, ReportSeconds: wl.ReportSeconds}
 	for _, t := range wl.Tasks {
 		reply.Tasks = append(reply.Tasks, taskSpecOf(t))
 	}

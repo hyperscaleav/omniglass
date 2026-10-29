@@ -747,6 +747,12 @@ func (UnimplementedGateway) PruneLogs(context.Context, string, string, time.Time
 func (UnimplementedGateway) RetentionWindows(context.Context) (settings.RetentionSettings, error) {
 	return settings.RetentionSettings{}, nil
 }
+func (UnimplementedGateway) RecordWebhookCounts(context.Context, []WebhookCount) error {
+	return nil
+}
+func (UnimplementedGateway) CollectionSettings(context.Context) (settings.CollectionSettings, error) {
+	return settings.CollectionSettings{}, nil
+}
 func (UnimplementedGateway) ListTags(context.Context) ([]Tag, error) {
 	return nil, nil
 }

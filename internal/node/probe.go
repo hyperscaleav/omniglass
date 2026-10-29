@@ -39,7 +39,7 @@ type endpointParams struct {
 // never stalls the rest of the worklist. tcp and icmp are the wired probe types;
 // their samples ride the same pipeline (the ingest consumer does not branch
 // on probe type).
-func runTasks(ctx context.Context, out *telemetrySpool, node string, wl collection.WorklistReply, runner *collection.Runner, sessions *sessionManager, sched *pollSchedule, verdicts map[string]string, faultseen map[string]string, now time.Time) error {
+func runTasks(ctx context.Context, out *telemetrySpool, node string, wl collection.WorklistReply, runner *collection.Runner, sessions *sessionManager, sched *pollSchedule, verdicts map[string]string, faultseen map[string]string, report *collectionReport, now time.Time) error {
 	present := make(map[string]bool, len(wl.Tasks))
 	for _, task := range wl.Tasks {
 		present[task.ID] = true
@@ -88,8 +88,14 @@ func runTasks(ctx context.Context, out *telemetrySpool, node string, wl collecti
 				// A stateless poll on a gated endpoint is not retried under
 				// the fingerprint it was refused under (#1056 ruling).
 				faults = []error{fmt.Errorf("node: task %s: the endpoint is gated: %w", task.ID, gt.refusal())}
+				report.refused(task.EndpointID)
 			} else {
+				started := time.Now()
 				dps, faults = collectDriverTask(ctx, runner, task, sessions)
+				// The run's own account of itself (#1369): how long it took,
+				// answered or failed, and whether it failed as bookPollRun
+				// reads a failure, faulted and landed nothing.
+				report.poll(task.EndpointID, time.Since(started), !landedData(dps) && len(faults) > 0)
 				if ownRequest {
 					for _, f := range faults {
 						if terr, ok := collection.AsTerminal(f); ok {
