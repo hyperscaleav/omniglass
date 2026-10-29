@@ -2,7 +2,8 @@ import { For, Show, type JSX } from "solid-js";
 import { A } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
 import Eyebrow from "./Eyebrow";
-import { RECENT_SHOWN, listRecentNotifications, ofRule, recentNotificationsKey, type Notification } from "../lib/action_rules";
+import NotificationStatusPill from "./NotificationStatusPill";
+import { RECENT_SHOWN, listRecentNotifications, ofRule, recentNotificationsKey } from "../lib/action_rules";
 import { PILL_NEUTRAL, TRANSITION_PILL } from "../lib/subscriptions";
 import { describeError, fmtTime, rel } from "../lib/format";
 
@@ -13,17 +14,11 @@ import { describeError, fmtTime, rel } from "../lib/format";
 // alarms it is about). A target's rows are narrowed by the server; a rule's
 // are picked out of the newest RECENT_WINDOW, since the route has no rule
 // filter. It polls, so a test alarm's delivery moves from queued to sent in
-// place.
+// place. Each status wears the shared NotificationStatusPill (#1413). A
+// suppressed row's last error is why the snooze held it (#1318), not a retry,
+// so it reads plainly, muted.
 
 const POLL_MS = 10_000;
-
-const STATUS: Record<Notification["status"], { word: string; cls: string }> = {
-  queued: { word: "on its way", cls: "badge badge-sm badge-soft badge-info" },
-  sent: { word: "sent", cls: "badge badge-sm badge-soft badge-success" },
-  failed: { word: "failed", cls: "badge badge-sm badge-soft badge-error" },
-  // A snooze (#1318) deliberately held the notification back: neutral, not a failure.
-  suppressed: { word: "held back", cls: PILL_NEUTRAL },
-};
 
 export default function RecentNotifications(p: { rule?: string; target?: string; hint: string }): JSX.Element {
   const q = useQuery(() => ({
@@ -49,7 +44,7 @@ export default function RecentNotifications(p: { rule?: string; target?: string;
                       <A href={`/components/${n.component_id}`} class="truncate font-medium hover:underline">{n.component}</A>
                       <span class={TRANSITION_PILL[n.transition] ?? PILL_NEUTRAL}>{n.transition}</span>
                       <span class="ml-auto flex flex-none items-center gap-2">
-                        <span class={STATUS[n.status]?.cls ?? PILL_NEUTRAL}>{STATUS[n.status]?.word ?? n.status}</span>
+                        <NotificationStatusPill status={n.status} />
                         <span class="w-16 text-right text-[11px] tabular-nums text-base-content/50" title={fmtTime(n.created_at)}>{rel(n.created_at)}</span>
                       </span>
                     </span>
@@ -70,7 +65,7 @@ export default function RecentNotifications(p: { rule?: string; target?: string;
                         title={n.last_error}
                         data-testid="recent-notification-error"
                       >
-                        {n.status === "failed" ? n.last_error : `Retrying: ${n.last_error}`}
+                        {n.status === "queued" ? `Retrying: ${n.last_error}` : n.last_error}
                       </span>
                     </Show>
                   </li>

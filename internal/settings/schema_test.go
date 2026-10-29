@@ -70,3 +70,54 @@ func TestEveryLogBandHasARetentionWindow(t *testing.T) {
 		}
 	}
 }
+
+// A node's own logs follow the shared band window until an admin sets a node
+// override (#1350): the override declares no default, so the effective
+// document leaves it out and every band resolves to its shared window. A set
+// override moves only its own band.
+func TestANodeLogBandFollowsTheSharedWindowUntilOverridden(t *testing.T) {
+	for _, key := range []string{"node_log_debug_days", "node_log_info_days", "node_log_warning_days", "node_log_error_days"} {
+		if v, ok := Defaults()["retention"][key]; ok {
+			t.Errorf("retention.%s defaults to %v, want no default (unset follows the shared band)", key, v)
+		}
+	}
+	typed, err := Typed(Defaults())
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := typed.Retention
+	for _, band := range logline.RetentionBands() {
+		if got, want := w.NodeLogDays(band), w.LogDays(band); got != want || got == 0 {
+			t.Errorf("node_log %s window %d, want the shared %d", band, got, want)
+		}
+	}
+	w.NodeDebugLogDays = 1
+	if got := w.NodeLogDays("debug"); got != 1 {
+		t.Errorf("node_log debug window %d with the override at 1, want 1", got)
+	}
+	if got := w.LogDays("debug"); got != 3 {
+		t.Errorf("shared debug window %d after a node override, want it untouched at 3", got)
+	}
+	// A zero (only the unvalidated operator file can hold one) reads as unset.
+	w.NodeInfoLogDays = 0
+	if got := w.NodeLogDays("info"); got != w.InfoLogDays {
+		t.Errorf("node_log info window %d with the override at 0, want the shared %d", got, w.InfoLogDays)
+	}
+	if got := w.NodeLogDays("error"); got != w.ErrorLogDays {
+		t.Errorf("node_log error window %d with only debug overridden, want the shared %d", got, w.ErrorLogDays)
+	}
+}
+
+// Every node log band has an override behind it (#1350): a band added to
+// logline with no node setting would silently ignore an admin's override.
+func TestEveryLogBandHasANodeOverride(t *testing.T) {
+	w := RetentionSettings{NodeDebugLogDays: 5, NodeInfoLogDays: 6, NodeWarningLogDays: 7, NodeErrorLogDays: 8}
+	seen := map[int]bool{}
+	for _, band := range logline.RetentionBands() {
+		d := w.NodeLogDays(band)
+		if d < 5 || seen[d] {
+			t.Errorf("band %q resolves to %d, want its own node override", band, d)
+		}
+		seen[d] = true
+	}
+}

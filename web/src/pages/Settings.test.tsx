@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Settings from "./Settings";
 import { SETTINGS_KEY, type SettingsRead } from "../lib/settings";
 import { ME_KEY, type Me } from "../lib/auth";
+import { settingKeys } from "../lib/settingsValidation";
 
 // The Settings page renders the settings-engine read through the shared KVRow
 // primitive: one card per namespace, one KVRow per key. Read mode is a value scan
@@ -111,7 +112,8 @@ describe("Settings page", () => {
 
   it("drills in to the layer stack from a read row", async () => {
     mount({ values: { ui: { theme: "omniglass-light" } }, sources: { "ui.theme": "platform" }, locks: {} });
-    fireEvent.click(await screen.findByLabelText("Show resolution"));
+    // The card lists every declared key, sorted: default_landing, then theme.
+    fireEvent.click((await screen.findAllByLabelText("Show resolution"))[1]);
     expect(await screen.findByText("Layer stack")).toBeTruthy();
     expect(screen.getByText("Console override (platform)")).toBeTruthy();
   });
@@ -223,5 +225,44 @@ describe("Settings page", () => {
     expect(screen.getByText("Restore all defaults")).toBeTruthy();
     // Both halves held, so the explanation stays out of the way.
     expect(screen.queryByText(/platform:update/)).toBeNull();
+  });
+  it("lists a declared key the cascade leaves unset, as not set, and saves it", async () => {
+    // A node log window (#1350) has no declared default, so the effective
+    // document leaves it out; the page still offers it from the generated
+    // schema, or an admin could never set it from the console.
+    const calls: { url: string; body: unknown }[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const req = input instanceof Request ? input : new Request(String(input), init);
+      if (req.method === "PATCH") calls.push({ url: req.url, body: JSON.parse(await req.clone().text()) });
+      return new Response(JSON.stringify(retentionRead), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    const retentionRead: SettingsRead = {
+      values: { retention: { log_debug_days: 3 } },
+      sources: { "retention.log_debug_days": "default" },
+      locks: {},
+    };
+    mount(retentionRead);
+    expect(await screen.findByText("node_log_debug_days")).toBeTruthy();
+    expect(screen.getAllByText("not set").length).toBeGreaterThan(0);
+    enterEdit();
+    const input = screen.getByRole("textbox", { name: "node_log_debug_days" }) as HTMLInputElement;
+    expect(input.value).toBe("");
+    // A blank optional row is not set, not invalid: no error until it is typed in.
+    expect(screen.queryByText(/whole number/i)).toBeNull();
+    fireEvent.input(input, { target: { value: "1" } });
+    fireEvent.click(await screen.findByRole("button", { name: "Save" }));
+    await waitFor(() => expect(calls.length).toBe(1));
+    expect(calls[0].url).toContain("/settings/retention");
+    expect(calls[0].body).toEqual({ node_log_debug_days: 1 });
+  });
+
+  it("teaches an unset key's resolution: no level holds it, and what it follows", async () => {
+    mount({ values: { retention: { log_debug_days: 3 } }, sources: { "retention.log_debug_days": "default" }, locks: {} });
+    await screen.findByText("node_log_debug_days");
+    const row = settingKeys("retention", { log_debug_days: 3 }).indexOf("node_log_debug_days");
+    fireEvent.click(screen.getAllByLabelText("Show resolution")[row]);
+    expect(await screen.findByText(/Not set at any level/)).toBeTruthy();
+    expect(screen.getByText(/unset follows log_debug_days/)).toBeTruthy();
+    expect(screen.queryByText("effective")).toBeNull();
   });
 });

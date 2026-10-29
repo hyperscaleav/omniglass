@@ -31,7 +31,7 @@ const setError = (key: string, msg: string | null) =>
 // What a snooze is, against the three acts it is mistaken for: the tooltip on
 // the control, so the difference is taught where the choice is made.
 export const SNOOZE_TIP =
-  "Silence this condition's notifications for a while: nobody is paged, mailed or told in their inbox about it raising or clearing, and what is held back stays on the timeline. " +
+  "Silence this condition's notifications for a while: nobody is paged, mailed or told in their inbox about it raising or clearing, and what it suppresses stays on the timeline, reading snoozed. " +
   "Unlike acknowledging, it records nothing about who has seen it. Unlike opting out, it silences everyone. Unlike pausing a rule, it silences this condition alone. " +
   "If it is still raised when the snooze ends, people are told again.";
 
@@ -44,7 +44,7 @@ export function SnoozedBadge(props: { alarm: Snoozable }): JSX.Element {
       {(until) => (
         <span
           class="badge badge-snoozed badge-xs shrink-0"
-          title={`Its notifications are held back until ${fmtTime(until())}${props.alarm.snoozed_by ? `, snoozed by ${props.alarm.snoozed_by}` : ""}`}
+          title={`Its notifications are recorded, not sent, until ${fmtTime(until())}${props.alarm.snoozed_by ? `, snoozed by ${props.alarm.snoozed_by}` : ""}`}
         >
           {snoozedUntilWords(until())}
         </span>
