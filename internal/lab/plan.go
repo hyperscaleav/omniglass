@@ -120,8 +120,7 @@ type Options struct {
 	// is labeled as such, and its volumes go at teardown.
 	Ephemeral bool
 	// NoNode makes a lab whose pages hold still, for a script that
-	// photographs or drives them (the docs screenshots and the browser e2e
-	// tier, #1267): the seed lays the scenario's fleet down without the
+	// photographs them (the docs screenshots, #1267): the seed lays the scenario's fleet down without the
 	// simulated fleet's wiring and enrolls no node, so no node runs and
 	// nothing collects. Only a throwaway lab may run without one.
 	NoNode bool

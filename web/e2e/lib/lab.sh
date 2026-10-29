@@ -110,8 +110,8 @@ lab_down() {
 }
 
 # Bring the lab up and source its ready file; args are extra lab run flags
-# (--no-node, the fleet with no node collecting from it, for the browser e2e
-# tier and the docs screenshots, #1267). The lab's own status lines go to
+# (--no-node, the fleet with no node collecting from it, for the docs
+# screenshots, #1267). The lab's own status lines go to
 # stderr, prefixed with the run id. Fails, saying why, if the lab exits before
 # it is ready.
 lab_up() {

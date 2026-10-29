@@ -100,8 +100,8 @@ func newLabRunCmd(version string) *cobra.Command {
 	cmd.Flags().BoolVar(&script.ephemeral, "ephemeral", false, "a throwaway lab: its data goes when it stops (needs its own --project)")
 	cmd.Flags().StringVar(&script.readyFile, "ready-file", "", "once ready, write how to reach the lab here, as shell assignments")
 	cmd.Flags().IntVar(&script.whilePID, "while-pid", 0, "stop the lab once this process is gone")
-	// The docs screenshots and the browser e2e tier (#1267) photograph and
-	// drive pages that must hold still: a fleet with no node collecting.
+	// The docs screenshots (#1267) photograph pages that must hold still: a
+	// fleet with no node collecting from it.
 	cmd.Flags().BoolVar(&script.noNode, "no-node", false, "run no node: seed the fleet without the simulated wiring, so nothing collects (needs --ephemeral)")
 	for _, name := range []string{"ephemeral", "ready-file", "while-pid", "no-node"} {
 		_ = cmd.Flags().MarkHidden(name)
