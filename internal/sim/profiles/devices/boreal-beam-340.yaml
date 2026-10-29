@@ -1,0 +1,163 @@
+# yaml-language-server: $schema=schema.json
+# Boreal Beam 340, Laser Installation Projector
+#
+# Boreal is the lab's fictional display manufacturer. The Beam 340 is a
+# laser-phosphor installation projector for halls and lecture theatres,
+# ceiling-mounted at the back of the room. A projector is not a display:
+# its light source wears out by the hour, and it carries a shutter that
+# blanks the image without powering down. Those are what an operator
+# watches it for, so they are its monitoring face.
+#
+# Two faces, the Boreal convention (the Edge displays have the same):
+# an HTTP web admin behind HTTP Digest (admin / boreal) for control
+# (power, the shutter, the input), and SNMP on the Boreal enterprise arc
+# (1.3.6.1.4.1.55520) for monitoring. The display arc's device power
+# (.1.1.1.0) and identity (.5) are shared with the Edge; the projector's
+# own branch is .6: light-source hours, shutter, input, temperature.
+
+name: boreal-beam-340
+manufacturer: Boreal
+model: "Beam 340"
+device_type: projector
+slug_prefix: projector
+
+doc:
+  summary: "Boreal Beam 340 laser installation projector"
+  description: |
+    Laser-phosphor installation projector for halls and lecture
+    theatres. Controlled over the Boreal web admin (power, shutter,
+    input); monitored over SNMP (power, light-source hours, shutter,
+    input, temperature).
+
+interfaces:
+  - name: web-admin
+    protocol: http
+    port: 80
+    doc:
+      summary: "Web-based management"
+      tags: [management, configuration]
+    auth:
+      type: digest
+      default_user: admin
+      default_password: boreal
+      realm: "Boreal Beam Admin"
+      algorithm: MD5
+      enforce: true
+      expire_path: /api/admin/sessions/expire
+    api_surface: boreal-beam
+    routes:
+      - match: "GET /api/status"
+        template: api/boreal-beam/status.json.gotempl
+        doc: { summary: "Projector status (identity, power, light source, shutter, input)", tags: [api, status] }
+
+      - match: "POST /api/projector/power"
+        template: api/boreal-beam/power-ack.json.gotempl
+        doc: { summary: "Set projector power (on, standby)", tags: [api, control] }
+        example: |
+          {"power": "standby"}
+        mutations:
+          - path: status.device.power
+            value: "{{ .Request.Body.power }}"
+            enum: ["on", "standby"]
+
+      # The shutter blanks the image with the light source still lit: the
+      # projector stays on and warm, so the picture is back at once.
+      - match: "POST /api/projector/shutter"
+        template: api/boreal-beam/shutter-ack.json.gotempl
+        doc: { summary: "Open or close the shutter (open, closed)", tags: [api, control] }
+        example: |
+          {"shutter": "closed"}
+        mutations:
+          - path: status.projector.shutter
+            value: "{{ .Request.Body.shutter }}"
+            enum: [open, closed]
+
+      - match: "POST /api/projector/input"
+        template: api/boreal-beam/input-ack.json.gotempl
+        doc: { summary: "Switch the projector input (hdmi1, hdmi2)", tags: [api, control] }
+        example: |
+          {"input": "hdmi2"}
+        mutations:
+          - path: status.projector.input
+            value: "{{ .Request.Body.input }}"
+            enum: [hdmi1, hdmi2]
+
+      - match: "POST /api/admin/reboot"
+        template: api/boreal-beam/reboot-ack.json.gotempl
+        doc: { summary: "Reboot projector (clears uptime, opens the shutter)", tags: [api, admin] }
+        example: "{}"
+        mutations:
+          - { path: status.device.boot_epoch, value: "{{ now }}" }
+          - { path: status.projector.shutter, value: "{{ .Defaults.status.projector.shutter }}" }
+
+  - name: snmp
+    protocol: snmp
+    port: 161
+    doc:
+      summary: "SNMP monitoring"
+      tags: [monitoring]
+    api_surface: boreal-beam
+    auth:
+      community: "public"
+      refused_community: "revoked"
+    oid_map:
+      configuration.device.model:          "1.3.6.1.2.1.1.1.0"   # sysDescr
+      status.device.uptime:                "1.3.6.1.2.1.1.3.0"
+      status.device.power:                 "1.3.6.1.4.1.55520.1.1.1.0"
+      status.projector.light_source_hours: "1.3.6.1.4.1.55520.6.1.0"
+      status.projector.shutter:            "1.3.6.1.4.1.55520.6.2.0"
+      status.projector.input:              "1.3.6.1.4.1.55520.6.3.0"
+      status.projector.temperature:        "1.3.6.1.4.1.55520.6.4.0"
+      configuration.firmware.version:      "1.3.6.1.4.1.55520.5.1.0"
+      configuration.device.serial:         "1.3.6.1.4.1.55520.5.2.0"
+
+  - name: icmp
+    protocol: icmp
+    doc: { summary: "ICMP ping reachability", tags: [monitoring] }
+
+computed:
+  - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
+
+# The light source ages only while it is lit: a minute on adds a minute's
+# hours, standby adds none. A scenario timeline can run this faster to
+# walk the source toward its service threshold.
+behaviors:
+  - name: light_source_aging
+    schedule:
+      interval: 60s
+    mutations:
+      - path: status.projector.light_source_hours
+        value: '{{ if eq (.State.status.device.power | printf "%v") "on" }}{{ round 2 (add .State.status.projector.light_source_hours 0.0166667) }}{{ else }}{{ .State.status.projector.light_source_hours }}{{ end }}'
+
+  - name: temperature_drift
+    schedule:
+      interval: 60s
+    mutations:
+      - path: status.projector.temperature
+        value: "{{ sigfig 3 (clamp 30.0 48.0 (randStep 1.0 .State.status.projector.temperature)) }}"
+
+defaults:
+  status:
+    device:
+      power: "on"
+      boot_epoch: 0
+    projector:
+      # A laser source is rated for about 20,000 hours; this one is a few
+      # years into a lecture hall's timetable.
+      light_source_hours: 12480.5
+      shutter: open
+      input: hdmi1
+      temperature: 36
+    network:
+      ipv4:
+        address: ""
+        mac: ""
+  configuration:
+    device:
+      serial: ""
+      model: "Beam 340"
+      manufacturer: "Boreal"
+    firmware:
+      version: "1.12.0"
+    network:
+      hostname: ""

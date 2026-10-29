@@ -279,8 +279,8 @@ its own beside a node, and for the Helm sidecar (#892).
 The dev seed simulates its own fleet. Every component whose product a profile serves gets an
 address in `127.60.0.0/16` (a component keeps the address it was given, and a new one takes the
 lowest address no endpoint already targets) and endpoints on the dev node, `edge-hq`. A product whose driver
-has a spec gets that driver attached: SNMP products through `snmp-generic` (with a seeded platform
-community secret), the Newtron panels through `newtron-nvp`'s line protocol, the Kestrel bars
+has a spec gets that driver attached: SNMP products through their own SNMP driver where the product
+has one (`snmp-generic` otherwise), each with the seeded platform community secret, the Newtron panels through `newtron-nvp`'s line protocol, the Kestrel bars
 through `kestrel-api` over https (a seeded basic-auth login, the bar's key pinned on first use), and
 the Tessellate sensors through `http-json` (a seeded api key in its header). The huddle's panel
 also carries its line protocol over telnet behind a login (`newtron-nvp-telnet`, the

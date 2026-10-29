@@ -34,10 +34,11 @@ const (
 // references, keyed by driver: an attach is offered only to a caller who can
 // read it.
 var AttachSecret = map[string]string{
-	"snmp-generic": CommunitySecret,
-	"kestrel-api":  KestrelLoginSecret,
-	"http-json":    CensusKeySecret,
-	"ucc-rooms":    UCCTokenSecret,
+	"snmp-generic":     CommunitySecret,
+	"boreal-beam-snmp": CommunitySecret,
+	"kestrel-api":      KestrelLoginSecret,
+	"http-json":        CensusKeySecret,
+	"ucc-rooms":        UCCTokenSecret,
 }
 
 // AddressCap is how many addresses the simulated block holds: 256 third
@@ -141,9 +142,8 @@ func Plan(comps []Component, used map[string]bool, cat Catalog) ([]Device, error
 // then its products get a probe (the dev seed's test fails for a spec'd
 // driver with simulated products that is missing).
 var Attach = map[string]func(addr string, shift func(int) int) map[string]string{
-	"snmp-generic": func(addr string, shift func(int) int) map[string]string {
-		return map[string]string{"host": addr, "port": strconv.Itoa(shift(161)), "community": CommunitySecret}
-	},
+	"snmp-generic":     snmpAttach,
+	"boreal-beam-snmp": snmpAttach,
 	"newtron-nvp": func(addr string, _ func(int) int) map[string]string {
 		return map[string]string{"host": addr} // 51325, the spec's default, needs no privilege
 	},
@@ -160,6 +160,12 @@ var Attach = map[string]func(addr string, shift func(int) int) map[string]string
 	"ucc-rooms": func(addr string, shift func(int) int) map[string]string {
 		return map[string]string{"host": addr, "port": strconv.Itoa(shift(443)), "token": UCCTokenSecret}
 	},
+}
+
+// snmpAttach is an snmp driver's inputs: the device's agent on 161 (shifted
+// where the simulator lifts it) and the community secret.
+func snmpAttach(addr string, shift func(int) int) map[string]string {
+	return map[string]string{"host": addr, "port": strconv.Itoa(shift(161)), "community": CommunitySecret}
 }
 
 // probeFor picks a reachability probe from what the profile serves: HTTP
