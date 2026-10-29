@@ -218,7 +218,7 @@ footprint:
 # simulator owns one firewall table and one qdisc in it. Docker is already a
 # requirement of make test. Names carry the recipe shell's pid, so concurrent
 # runs never share a network, and the traps stop this run's containers on every
-# exit path, interrupts included (the same contract as web/e2e/lib/stack.sh);
+# exit path, interrupts included (the same contract as web/e2e/lib/lab.sh);
 # the test container is waited on in the background so a signal is handled at
 # once rather than after the tests finish. The two module/build cache volumes
 # are shared across runs on purpose.
@@ -244,10 +244,11 @@ test-netadmin:
 bench-sim:
 	go test -run '^$$' -bench BenchmarkServeThousandDevices -benchtime 3x ./internal/sim/
 
-# Browser-driven e2e of the console against the built binary: brings up the dev
-# Postgres, embeds + serves the console, mints a token, and drives it with
-# Playwright. Needs the browser once: (cd web && npx playwright install chromium).
-test-e2e:
+# Browser-driven e2e of the console against the built binary (#1267): builds
+# (make), brings up a throwaway lab of the empty scenario (web/e2e/lib/lab.sh)
+# and drives its console with Playwright in the pinned container on the lab's
+# network. Not part of make test: it builds the image and runs a lab.
+test-e2e: all
 	bash web/e2e/run.sh
 
 # The demo pipeline rides the lab (#1197): each target below builds (make),
@@ -350,11 +351,11 @@ tidy:
 dev: all
 	cd web && npm install
 
-# Capture the docs screenshots against the real console (dev stack + Playwright),
-# writing PNGs into docs/public/screenshots/ from each page's `screenshots`
-# frontmatter. Commit the regenerated images like any other generated resource.
-# Needs the Playwright browser once: (cd web && npx playwright install chromium).
-docs-shots:
+# Capture the docs screenshots against the real console (a throwaway lab with
+# no node, #1267, and Playwright in the pinned container), writing PNGs into
+# docs/public/screenshots/ from each page's `screenshots` frontmatter. Commit
+# the regenerated images like any other generated resource.
+docs-shots: all
 	bash docs/screenshots/capture.sh
 
 # Freshness gate for the screenshots, the visual sibling of `make gen`: recapture
@@ -367,7 +368,7 @@ docs-shots:
 # compares every pixel instead of through pixelmatch's perceptual threshold
 # (#774): with DOCS_SHOTS_TZ, it is how a mask is proven to hold (#1081).
 # The temp dirs are repo-relative so they land inside the capture container's mount.
-docs-shots-check:
+docs-shots-check: all
 	@tmp=.docs-shots-tmp; mkdir -p $$tmp/clean $$tmp/baseline; \
 	  DOCS_SHOTS_OUT=$$tmp/clean DOCS_SHOTS_BASELINE=$$tmp/baseline bash docs/screenshots/capture.sh && \
 	  node web/e2e/docs-shots-diff.mjs $$tmp/baseline docs/screenshots/baseline; \

@@ -60,9 +60,10 @@ jobs:
         run: make test TEST_PARALLEL="$(nproc)"
 
   # The browser e2e tier (#761): the console driven as an operator would, against
-  # the real binary, fully containerized (web/e2e/run.sh: Postgres, the server,
-  # and Playwright on one private network, no host ports). Covers the CRUD
-  # round-trips plus one smoke per console route from the route manifest
+  # the real binary, on a throwaway lab (web/e2e/run.sh on web/e2e/lib/lab.sh,
+  # #1267: Postgres, the server and Playwright on the lab's own network, the
+  # console on a loopback port Docker picks). Covers the CRUD round-trips plus
+  # one smoke per console route from the route manifest
   # (web/e2e/routes.spec.ts), so a PR cannot merge with a route that errors in a
   # real browser. No untrusted input reaches a shell: the job runs fixed make
   # targets only.
@@ -71,16 +72,15 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      # The SPA build (make build-web) runs on the host; Playwright itself runs
-      # in the pinned container the runner pulls, matching local runs exactly.
+      # make test-e2e builds the lab (make: the image and the binary, with only
+      # Docker); Playwright runs in the pinned container against the repo
+      # mounted from the runner, so it needs the web deps installed here.
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
+
+      - name: Install web deps
+        run: cd web && npm ci
 
       - name: Browser e2e (CRUD round-trips + route smoke)
         run: make test-e2e

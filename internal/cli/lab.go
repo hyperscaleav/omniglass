@@ -100,7 +100,10 @@ func newLabRunCmd(version string) *cobra.Command {
 	cmd.Flags().BoolVar(&script.ephemeral, "ephemeral", false, "a throwaway lab: its data goes when it stops (needs its own --project)")
 	cmd.Flags().StringVar(&script.readyFile, "ready-file", "", "once ready, write how to reach the lab here, as shell assignments")
 	cmd.Flags().IntVar(&script.whilePID, "while-pid", 0, "stop the lab once this process is gone")
-	for _, name := range []string{"ephemeral", "ready-file", "while-pid"} {
+	// The docs screenshots and the browser e2e tier (#1267) photograph and
+	// drive pages that must hold still: a fleet with no node collecting.
+	cmd.Flags().BoolVar(&script.noNode, "no-node", false, "run no node: seed the fleet without the simulated wiring, so nothing collects (needs --ephemeral)")
+	for _, name := range []string{"ephemeral", "ready-file", "while-pid", "no-node"} {
 		_ = cmd.Flags().MarkHidden(name)
 	}
 	return cmd
@@ -109,6 +112,7 @@ func newLabRunCmd(version string) *cobra.Command {
 // labScript are lab run's script-only settings.
 type labScript struct {
 	ephemeral bool
+	noNode    bool
 	readyFile string
 	whilePID  int
 }
@@ -177,7 +181,7 @@ func runLab(ctx context.Context, out io.Writer, version string, f labFlags) erro
 			Project: f.project, Listen: f.listen, Port: f.port, Image: choice.Ref, Scenario: sc.Name,
 			NodeToken: token, NodeTokenHash: hex.EncodeToString(hash),
 			Owner: lab.Owner{Host: host, PID: os.Getpid(), PIDNS: lab.CurrentPIDNS()}, WorkDir: wd,
-			Ephemeral: f.script.ephemeral,
+			Ephemeral: f.script.ephemeral, NoNode: f.script.noNode,
 		},
 		Image: choice, Fresh: f.fresh, PlantedFaults: plantedLabels(faults), Hold: true,
 		ReadyFile: f.script.readyFile, WhilePID: f.script.whilePID,
@@ -206,19 +210,21 @@ func dialDaemon(host string) error {
 
 func newLabSeedCmd() *cobra.Command {
 	var scenario, node, user, password string
+	var noNode bool
 	cmd := &cobra.Command{
 		Use:    "seed",
 		Short:  "The lab's one-off: migrate, mark the database as a lab's, seed it on the first run, and enroll the node",
 		Hidden: true,
 		Args:   cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runLabSeed(cmd.Context(), cmd.OutOrStdout(), scenario, node, user, password, config.Get("OMNIGLASS_LAB_NODE_TOKEN_HASH"))
+			return runLabSeed(cmd.Context(), cmd.OutOrStdout(), scenario, node, user, password, config.Get("OMNIGLASS_LAB_NODE_TOKEN_HASH"), noNode)
 		},
 	}
 	cmd.Flags().StringVar(&scenario, "scenario", lab.DefaultScenario, "the fleet to seed on the first run")
 	cmd.Flags().StringVar(&node, "node", lab.NodeName, "the node to enroll")
 	cmd.Flags().StringVar(&user, "user", lab.LoginUser, "the owner's username")
 	cmd.Flags().StringVar(&password, "password", lab.LoginPassword, "the owner's password")
+	cmd.Flags().BoolVar(&noNode, "no-node", false, "seed the fleet without the simulated wiring and enroll no node, so the lab runs none")
 	return cmd
 }
 
@@ -227,7 +233,10 @@ func newLabSeedCmd() *cobra.Command {
 // mark, marks a fresh one, seeds the fleet and the owner only on the first
 // run (a later run keeps the estate), makes sure the login works, and
 // enrolls the node with the hash of the token the lab minted for this run.
-func runLabSeed(ctx context.Context, out io.Writer, scenario, node, user, password, nodeTokenHash string) error {
+// With noNode (a throwaway lab whose pages hold still, #1267) it seeds the
+// fleet without the simulated wiring, which nothing would collect from, and
+// enrolls no node, so the lab runs none.
+func runLabSeed(ctx context.Context, out io.Writer, scenario, node, user, password, nodeTokenHash string, noNode bool) error {
 	sc, err := devseed.LookupScenario(scenario)
 	if err != nil {
 		return err
@@ -278,7 +287,7 @@ func runLabSeed(ctx context.Context, out io.Writer, scenario, node, user, passwo
 		}); err != nil {
 			return err
 		}
-		if err := devseed.RunScenario(ctx, gw, "", sc, devseed.Options{SimFleet: true}); err != nil {
+		if err := devseed.RunScenario(ctx, gw, "", sc, devseed.Options{SimFleet: !noNode}); err != nil {
 			return err
 		}
 		summary = fmt.Sprintf("the %s fleet, seeded on this lab's first run", sc.Name)
@@ -288,11 +297,15 @@ func runLabSeed(ctx context.Context, out io.Writer, scenario, node, user, passwo
 		return fmt.Errorf("this lab has no user %q to sign in as; start over with omniglass lab run --fresh", user)
 	}
 	all := scope.Set{All: true}
-	present := true
-	if _, err := gw.GetNode(ctx, node, all); errors.Is(err, storage.ErrNodeNotFound) {
-		present = false
-	} else if err != nil {
-		return err
+	// With no node to run, none is enrolled.
+	present := false
+	if !noNode {
+		present = true
+		if _, err := gw.GetNode(ctx, node, all); errors.Is(err, storage.ErrNodeNotFound) {
+			present = false
+		} else if err != nil {
+			return err
+		}
 	}
 	if present {
 		if nodeTokenHash == "" {

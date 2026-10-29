@@ -26,7 +26,8 @@
 # Usage:
 #   . web/e2e/lib/lab.sh
 #   lab_init ogwalk                # run id, traps
-#   lab_up                         # the lab, seeded with STACK_SCENARIO (default dev)
+#   lab_up [lab run flags...]      # the lab, seeded with STACK_SCENARIO (default dev);
+#                                  # flags pass through (--no-node: a fleet that holds still)
 #   lab_run <docker run args...>   # a one-shot container on the lab network
 #   lab_pw <command...>            # a Playwright container on the lab network
 #   lab_assert_intact              # fail loudly if the lab was disturbed
@@ -108,9 +109,11 @@ lab_down() {
   [ -z "${LAB_DIR:-}" ] || rmdir -- "$LAB_DIR" 2>/dev/null || true
 }
 
-# Bring the lab up and source its ready file. The lab's own status lines go
-# to stderr, prefixed with the run id. Fails, saying why, if the lab exits
-# before it is ready.
+# Bring the lab up and source its ready file; args are extra lab run flags
+# (--no-node, the fleet with no node collecting from it, for the browser e2e
+# tier and the docs screenshots, #1267). The lab's own status lines go to
+# stderr, prefixed with the run id. Fails, saying why, if the lab exits before
+# it is ready.
 lab_up() {
   [ -x "$LAB_BIN" ] || {
     echo "lab: no $LAB_BIN; run make first (it builds the binary and the image the lab runs)" >&2
@@ -122,7 +125,7 @@ lab_up() {
   # down; the lab itself ignores INT, HUP and PIPE when held for a script.
   # The prefixer ends when the lab closes its output.
   "$LAB_BIN" lab run --project "$LAB_ID" --ephemeral --port 0 --scenario "${STACK_SCENARIO:-dev}" \
-    --ready-file "$LAB_READY" --while-pid $$ > >(trap '' INT TERM HUP; sed -u "s/^/lab $LAB_ID: /" >&2) 2>&1 &
+    --ready-file "$LAB_READY" --while-pid $$ "$@" > >(trap '' INT TERM HUP; sed -u "s/^/lab $LAB_ID: /" >&2) 2>&1 &
   LAB_RUN_PID=$!
   until [ -s "$LAB_READY" ]; do
     if ! kill -0 "$LAB_RUN_PID" 2>/dev/null; then
