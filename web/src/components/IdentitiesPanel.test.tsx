@@ -180,6 +180,25 @@ describe("IdentitiesPanel", () => {
     expect(q.getByTestId("unbound-ucc-room-id-zr-annex-1")).toBeTruthy();
   });
 
+  it("reads the owners again when the one picked is gone", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "PUT") return json({ status: 404, title: "Not Found", detail: "owner system not found" }, 404);
+      if (req.url.includes("/unbound-identities")) return json(inbox);
+      if (req.url.includes("/identity-bindings")) return json(bound);
+      if (req.url.includes("/systems")) return json({ systems: systems.slice(0, 2) });
+      return json({ components });
+    });
+    const q = mount();
+    const spy = vi.spyOn(q.qc, "invalidateQueries");
+    fireEvent.click(q.getByRole("button", { name: "Bind zr-annex-1" }));
+    fireEvent.change(q.getByLabelText("Owner for zr-annex-1"), { target: { value: `system:${uuidFor("annex")}` } });
+    fireEvent.click(q.getByRole("button", { name: "Bind zr-annex-1 to the picked owner" }));
+
+    expect((await q.findByRole("alert")).textContent).toContain("Not found: the owner is gone, or outside what you can see.");
+    await waitFor(() => expect(spy.mock.calls.map((c) => JSON.stringify((c[0] as { queryKey: unknown }).queryKey))).toContain(JSON.stringify(SYSTEMS_KEY)));
+  });
+
   it("removes a binding after a confirm, and the identity reads as unbound again", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
     let del: string | undefined;

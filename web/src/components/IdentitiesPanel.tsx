@@ -129,6 +129,13 @@ export default function IdentitiesPanel(props: { component: string; canUpdate: b
       await refresh();
     } catch (e) {
       setRefusal(refusalWords(e));
+      // An owner gone since the picker filled: read the owners again, so the
+      // picker stops offering it.
+      if ((e as { status?: number } | null)?.status === 404) {
+        setPicked("");
+        void qc.invalidateQueries({ queryKey: SYSTEMS_KEY });
+        void qc.invalidateQueries({ queryKey: COMPONENTS_KEY });
+      }
     } finally {
       setBusy(false);
     }
@@ -177,12 +184,12 @@ export default function IdentitiesPanel(props: { component: string; canUpdate: b
             <Eyebrow label="Fans out to" hint="Each identity this component reported that has an owner. Its values land on that system or component, observed, with this component named as their source." />
             <Show when={bindings().length + hidden() > 0} fallback={<p class="text-base-content/60">Nothing bound yet.</p>}>
               <div class="overflow-x-auto rounded-field border border-base-300">
-                <table data-testid="identity-bindings" class="table table-sm">
+                <table data-testid="identity-bindings" class="table table-sm table-fixed">
                   <thead>
                     <tr class="text-[11px] text-base-content/50">
-                      <th class="w-32">Match key</th>
-                      <th>Value</th>
-                      <th class="w-6" aria-hidden="true" />
+                      <th class="w-36">Match key</th>
+                      <th class="w-52">Value</th>
+                      <th class="w-8" aria-hidden="true" />
                       <th>Owner</th>
                       <Show when={props.canUpdate}><th class="w-10"><span class="sr-only">Actions</span></th></Show>
                     </tr>
@@ -194,7 +201,7 @@ export default function IdentitiesPanel(props: { component: string; canUpdate: b
                           {(b) => (
                             <tr data-testid={`binding-${b().key}-${b().value}`}>
                               <td class="font-data text-xs text-base-content/60">{b().key}</td>
-                              <td class="font-data text-xs">{b().value}</td>
+                              <td class="truncate font-data text-xs" title={b().value}>{b().value}</td>
                               <td class="text-base-content/40"><ArrowRight size={13} /></td>
                               <td>
                                 <span class="inline-flex items-baseline gap-2">
@@ -234,14 +241,14 @@ export default function IdentitiesPanel(props: { component: string; canUpdate: b
             <Eyebrow label="Heard, not bound" hint="Identities this component reported that no binding places. Their values land on no owner until one is bound (the raw log line still lands here), and the next value after a bind lands on its owner. Kept for seven days after last heard." />
             <Show when={unbound().length > 0} fallback={<p class="text-base-content/60">Every identity it reported has an owner.</p>}>
               <div class="overflow-x-auto rounded-field border border-base-300">
-                <table data-testid="identity-unbound" class="table table-sm">
+                <table data-testid="identity-unbound" class="table table-sm table-fixed">
                   <thead>
                     <tr class="text-[11px] text-base-content/50">
-                      <th class="w-32">Match key</th>
-                      <th>Value</th>
-                      <th>Heard</th>
+                      <th class="w-36">Match key</th>
+                      <th class="w-52">Value</th>
+                      <th class="w-56">Heard</th>
                       <th>Keys it carried</th>
-                      <Show when={props.canUpdate}><th class="w-20"><span class="sr-only">Actions</span></th></Show>
+                      <Show when={props.canUpdate}><th class="w-24"><span class="sr-only">Actions</span></th></Show>
                     </tr>
                   </thead>
                   <tbody>
@@ -252,7 +259,7 @@ export default function IdentitiesPanel(props: { component: string; canUpdate: b
                             <>
                               <tr data-testid={`unbound-${u().key}-${u().value}`}>
                                 <td class="font-data text-xs text-base-content/60">{u().key}</td>
-                                <td class="font-data text-xs">{u().value}</td>
+                                <td class="truncate font-data text-xs" title={u().value}>{u().value}</td>
                                 <td class="text-xs text-base-content/70">
                                   <span class="tabular-nums">heard {u().count} {u().count === 1 ? "time" : "times"}</span>
                                   <span class="text-base-content/45"> · last {rel(u().last_heard_at, now())}</span>
