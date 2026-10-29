@@ -83,11 +83,12 @@ metric_types:
     label: Participant Count
     description: The participants a component reports in its current call; 0 when no call is active.
   # A media player's local storage filling as content syncs down (#893).
-  - name: storage-used
+  # Dimensionless, so stored as a ratio (0..1) and shown as a percentage.
+  - name: storage-utilization
     data_type: float
-    unit: "%"
-    label: Storage Used
-    description: How full a component reports its local storage, as a percentage of its capacity.
+    unit: ratio
+    label: Storage Utilization
+    description: How full a component reports its local storage, as a fraction of its capacity (0 to 1).
   - name: http-response-time
     data_type: float
     unit: ms

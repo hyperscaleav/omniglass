@@ -14,7 +14,7 @@ import (
 // TestNodeBorealCastReadsItsPlayback (#893): the shipped boreal-cast-api
 // driver on the simulated media player's http face, its key in a header,
 // lands the player's playback state, the item it is playing and how full
-// its storage is, beside its identity. Paused on the player, it reads
+// its storage is (a ratio), beside its identity. Paused on the player, it reads
 // paused on the next poll.
 func TestNodeBorealCastReadsItsPlayback(t *testing.T) {
 	if testing.Short() {
@@ -40,11 +40,11 @@ func TestNodeBorealCastReadsItsPlayback(t *testing.T) {
 	s.waitFor("player-1", ep.Name, "content-name", func(v string) bool { return v != "" }, "the item playing")
 	deadline := time.Now().Add(20 * time.Second)
 	for {
-		if u, ok := s.metric("player-1", ep.Name, "storage-used"); ok && u > 0 && u < 100 {
+		if u, ok := s.metric("player-1", ep.Name, "storage-utilization"); ok && u > 0 && u < 1 {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatal("the player's poll landed no storage-used")
+			t.Fatal("the player's poll landed no storage-utilization, a ratio")
 		}
 		time.Sleep(50 * time.Millisecond)
 	}

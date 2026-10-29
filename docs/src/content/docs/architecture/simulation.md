@@ -404,8 +404,8 @@ Adding a simulated component is adding a component the simulator can serve:
 --product newtron-panel-7`) creates a component of a simulated product and the endpoint the
 collector reaches it through, placed on the node. The plan is the dev seed's, made a primitive
 (`internal/simfleet`): the lowest address in `127.60.0.0/16` no endpoint already targets, a driver
-attach where the driver's inputs are known (an SNMP attach only when the `sim-community` secret
-exists for it to reference), otherwise a reachability probe on a port the profile serves, lifted
+attach where the driver's inputs are known (only when the platform secret it references, the
+community or the credential its face demands, exists), otherwise a reachability probe on a port the profile serves, lifted
 as that node's simulator lifts its ports. The simulator serves it from its next pull, with no
 restart. Changing its product among the products its profile simulates keeps its endpoints valid
 (they share a driver), and deleting the component removes it from the simulation.

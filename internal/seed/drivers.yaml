@@ -470,7 +470,8 @@ drivers:
             - { name: serial-number, extract: { jsonpath: device.serial } }
             - { name: firmware-version, extract: { jsonpath: device.firmware } }
             - { name: uptime, extract: { jsonpath: device.uptime } }
-            - { name: storage-used, extract: { jsonpath: storage.used_percent } }
+            # The player reports a percentage; the canon stores the ratio.
+            - { name: storage-utilization, extract: { jsonpath: storage.used_percent }, transform: { scale: 0.01 } }
         - name: playback
           schedule: { every: 30s }
           request: { path: /api/playback }

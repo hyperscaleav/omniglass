@@ -16,7 +16,8 @@ play, pause or stop. While it plays, a behavior steps through its four-item play
 end; paused or stopped, the item holds. Storage drifts slowly between bounds. A scenario timeline can
 stop a sign or fill its disk later.
 
-The new `boreal-cast-api` driver reads identity and `storage-used` every five minutes and
+The new `boreal-cast-api` driver reads identity and `storage-utilization` (the player's percentage, stored
+as the canon's ratio) every five minutes and
 `playback-state` and `content-name` every 30 seconds, three signals new to the boot seed's canon. The
 lab seeds the player's key as a platform secret beside the other simulated credentials, and attaches
 the driver with it; the player leaves `coverage.yaml`. The simulation page now states the attach rule
