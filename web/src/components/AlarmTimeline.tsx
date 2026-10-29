@@ -1,8 +1,9 @@
 import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import Button from "./Button";
+import NotificationStatusPill from "./NotificationStatusPill";
 import { Clock } from "./icons";
-import { ALARM_TIMELINE_POLL_MS, ageWords, alarmTimeline, alarmTimelineKey, retryNotification, timelineWhat, timelineWho } from "../lib/alarms";
+import { ALARM_TIMELINE_POLL_MS, ageWords, alarmTimeline, alarmTimelineKey, retryNotification, timelineWhat, timelineWho, type AlarmTimelineEntry } from "../lib/alarms";
 import { useMe, can } from "../lib/auth";
 import { describeError, fmtTime } from "../lib/format";
 import { createToggles } from "../lib/toggles";
@@ -26,9 +27,13 @@ const KIND_CHIP: Record<string, { word: string; tip: string; cls: string }> = {
 // is read against one clock, taken when its entries land, so the order the
 // ages say is the order the lines are in. The notifications a transition
 // queued (#618) sit after the edge that caused them, reading their delivery as
-// it stands, and a failed one offers Retry to a caller who may retry it. A row
-// a snooze held back reads "held back" with its reason, beside the snooze's
-// own audit lines (#1318).
+// it stands, and a failed one offers Retry to a caller who may retry it. A
+// notification line is a status row, not a sentence (#1413): an event or
+// audit line reads "<what> by <who>", and "by" on a notification would credit
+// its action rule with whatever happened to it (a snoozed row beside the real
+// "snoozed by alice"), so it reads its addressee, the shared status pill and
+// the action rule, labelled. A row a snooze suppressed reads "snoozed" with
+// its reason (#1318).
 export default function AlarmTimeline(props: { component: string; alarmId: string; id?: string; label: string }): JSX.Element {
   const q = useQuery(() => ({
     queryKey: alarmTimelineKey(props.component, props.alarmId),
@@ -66,29 +71,9 @@ export default function AlarmTimeline(props: { component: string; alarmId: strin
                     >
                       {(KIND_CHIP[e.kind] ?? KIND_CHIP.audit).word}
                     </span>
-                    <span class="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                      <span class="font-data text-base-content/85">{timelineWhat(e)}</span>
-                      <span class="text-base-content/55">by {timelineWho(e)}</span>
-                      <Show when={e.instance}>
-                        <span class="text-base-content/45">on <span class="font-data">{e.instance}</span></span>
-                      </Show>
-                      <Show when={e.message}>
-                        <span class="min-w-0 truncate text-base-content/45">{e.message}</span>
-                      </Show>
-                      {/* A row a snooze held back (#1318) says why, muted: it is
-                          what the snooze was for, not a fault. */}
-                      <Show when={e.kind === "notification" && e.what === "suppressed" && e.error}>
-                        <span class="min-w-0 truncate text-base-content/45" title={e.error}>{e.error}</span>
-                      </Show>
-                      <Show when={e.kind === "notification" && e.what === "failed"}>
-                        <span class="min-w-0 truncate text-error/80" title={e.error}>
-                          {e.error}{e.attempts ? ` (${e.attempts} attempts)` : ""}
-                        </span>
-                        <Show when={e.attempts ? e.notification : undefined}>
-                          {(id) => <RetryButton id={id()} component={props.component} alarmId={props.alarmId} onError={setRetryErr} />}
-                        </Show>
-                      </Show>
-                    </span>
+                    <Show when={e.kind === "notification"} fallback={<Sentence e={e} />}>
+                      <NotifyRow e={e} component={props.component} alarmId={props.alarmId} onRetryError={setRetryErr} />
+                    </Show>
                   </li>
                 )}
               </For>
@@ -97,6 +82,63 @@ export default function AlarmTimeline(props: { component: string; alarmId: strin
         )}
       </Show>
     </div>
+  );
+}
+
+// Sentence is an event or audit line: what happened, by whom (a person, the
+// rule that wrote the event, or the rule the platform acted for).
+function Sentence(props: { e: AlarmTimelineEntry }): JSX.Element {
+  return (
+    <span class="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+      <span class="font-data text-base-content/85">{timelineWhat(props.e)}</span>
+      <span class="text-base-content/55">by {timelineWho(props.e)}</span>
+      <Show when={props.e.instance}>
+        <span class="text-base-content/45">on <span class="font-data">{props.e.instance}</span></span>
+      </Show>
+      <Show when={props.e.message}>
+        <span class="min-w-0 truncate text-base-content/45">{props.e.message}</span>
+      </Show>
+    </span>
+  );
+}
+
+// NotifyRow is a notification line as a status row (#1413): its target, how
+// its delivery stands, the action rule that queued it, then the reason (a
+// snooze's, muted, as what the snooze was for; a failure's with its attempts,
+// and Retry). A row a person's own subscription wrote has no target: it is
+// addressed by the person and the channel instead ("alice (email)"), or "a
+// person" to a caller who may not see who (#1341), and then its rule is
+// withheld too, so the action rule slot is left out when empty. The rendered
+// subject rides as the addressee's hint.
+function NotifyRow(props: { e: AlarmTimelineEntry; component: string; alarmId: string; onRetryError: (msg: string | null) => void }): JSX.Element {
+  const e = () => props.e;
+  const to = () => e().target || e().recipient || (e().recipient_withheld ? "a person" : "");
+  return (
+    <span class="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+      <Show when={to()}>
+        <span class="font-data text-base-content/85" title={e().message}>
+          {to()}
+          <Show when={!e().target && e().channel}>
+            <span class="font-sans text-base-content/55"> ({e().channel})</span>
+          </Show>
+        </span>
+      </Show>
+      <NotificationStatusPill status={e().what} size="xs" />
+      <Show when={e().action_rule}>
+        <span class="text-base-content/55">action rule <span class="font-data text-base-content/70">{e().action_rule}</span></span>
+      </Show>
+      <Show when={e().what === "suppressed" && e().error}>
+        <span class="min-w-0 truncate text-base-content/45" title={e().error}>{e().error}</span>
+      </Show>
+      <Show when={e().what === "failed"}>
+        <span class="min-w-0 truncate text-error/80" title={e().error}>
+          {e().error}{e().attempts ? ` (${e().attempts} attempts)` : ""}
+        </span>
+        <Show when={e().attempts ? e().notification : undefined}>
+          {(id) => <RetryButton id={id()} component={props.component} alarmId={props.alarmId} onError={props.onRetryError} />}
+        </Show>
+      </Show>
+    </span>
   );
 }
 
