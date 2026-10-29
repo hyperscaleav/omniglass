@@ -727,6 +727,21 @@ type requestContext struct {
 	Query  map[string]string
 }
 
+// guardPatterns caches each pattern guard compiles.
+var guardPatterns sync.Map
+
+func guardPattern(pattern string) (*regexp.Regexp, error) {
+	if re, ok := guardPatterns.Load(pattern); ok {
+		return re.(*regexp.Regexp), nil
+	}
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return nil, err
+	}
+	guardPatterns.Store(pattern, re)
+	return re, nil
+}
+
 // pathSegment is what segment admits as one state-path key.
 var pathSegment = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
 
@@ -754,6 +769,23 @@ var templateFuncs = template.FuncMap{
 			return "", fmt.Errorf("%q is not a state path segment (letters, digits, - and _, at most 64)", s)
 		}
 		return s, nil
+	},
+	// guard renders nothing when v matches pattern and fails the render when
+	// it does not, so a mutation whose path carries it is written only when
+	// every field it guards is valid: the engine applies each mutation that
+	// passes on its own, and a state flag guarded by the fields it stands
+	// for is never written beside a refused one.
+	//   { path: 'status.rooms.{{ segment .Request.Body.room }}.state{{ guard "^[A-Za-z0-9-]{1,32}$" .Request.Body.id }}' }
+	"guard": func(pattern string, v any) (string, error) {
+		re, err := guardPattern(pattern)
+		if err != nil {
+			return "", err
+		}
+		s := fmt.Sprint(v)
+		if v == nil || !re.MatchString(s) {
+			return "", fmt.Errorf("%q does not match %q", s, pattern)
+		}
+		return "", nil
 	},
 	// get retrieves a key from a map. Pipeline-friendly: {{ .State | get "status" | get "device" | get "power" }}
 	"get": func(key string, m any) any {

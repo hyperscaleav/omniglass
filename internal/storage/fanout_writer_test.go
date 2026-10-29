@@ -3,6 +3,7 @@ package storage_test
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/rules"
 	"github.com/hyperscaleav/omniglass/internal/scope"
@@ -112,5 +113,50 @@ func TestResolveIdentityBindingsInOneRead(t *testing.T) {
 	}
 	if _, ok := res.Owners[storage.IdentityKey{Key: "ucc-room-id", Value: "zr-z"}]; ok {
 		t.Error("an unbound identity resolved to an owner")
+	}
+}
+
+// TestAStaleFanOutIsRedeliveredNotDropped: a binding deleted between the
+// ingest's resolve and the batch's transaction makes its fanned rows stale.
+// The batch is not refused (which would drop the conduit's own rows and
+// every other owner's with it): it fails transiently, writes nothing, and the
+// redelivery resolves the bindings afresh.
+func TestAStaleFanOutIsRedeliveredNotDropped(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	f := newFanFixture(t)
+	_, err := f.gw.LandBatch(f.ctx, storage.IngestBatch{BatchID: "stale", Writer: storage.PushWriter(),
+		Metrics: []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: f.conduit, Key: "participant-count", Value: 1}},
+		Fanned: &storage.FannedRows{Writer: storage.FanoutWriter(f.conduit), Metrics: []storage.MetricSampleWrite{
+			{OwnerKind: "system", OwnerID: f.unbound, Key: "participant-count", Value: 2, Source: "disp-1/http"}}},
+	})
+	if err == nil || storage.IsRefusedWrite(err) || !errors.Is(err, storage.ErrFanoutStale) {
+		t.Fatalf("a stale fan-out: err = %v (refused %v), want ErrFanoutStale, redelivered", err, storage.IsRefusedWrite(err))
+	}
+	if n := f.count(t, `select count(*) from metric`); n != 0 {
+		t.Errorf("a stale batch landed %d rows", n)
+	}
+	if n := f.count(t, `select count(*) from telemetry_receipt where batch_id = 'stale'`); n != 0 {
+		t.Error("a stale batch kept its receipt, so its redelivery would land nothing")
+	}
+}
+
+// TestTheInboxNeverHoldsABoundIdentity: a batch that resolved an identity
+// unbound and commits after the operator bound it does not put it back in
+// the inbox.
+func TestTheInboxNeverHoldsABoundIdentity(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	f := newFanFixture(t)
+	now := time.Now().UTC()
+	if _, err := f.gw.LandBatch(f.ctx, storage.IngestBatch{BatchID: "late", Writer: storage.PushWriter(), Unbound: []storage.UnboundIdentityWrite{
+		{ConduitID: f.conduit, Key: "ucc-room-id", Value: "zr-a", Count: 1, FirstAt: now, LastAt: now, Keys: []string{"call-state"}},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if n := f.count(t, `select count(*) from unbound_identity where value = 'zr-a'`); n != 0 {
+		t.Errorf("a bound identity was written into the inbox (%d rows)", n)
 	}
 }

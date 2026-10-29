@@ -29,3 +29,8 @@
   failed. Fix: such output is a render failure recorded on the row (`renderNotification`), and the
   whole notification write runs under a savepoint that a database error rolls back to, so it can
   never fail the transition.
+- **Fourth instance (#1388 review, fixed in the same slice):** the fan-out recorded each unbound
+  sample's raw wire name in the inbox's `keys_carried` text array before any catalog lookup, so a
+  node-lane sample named with a NUL failed the inbox upsert and, with it, the batch's one
+  transaction. Fix: only a name the lane's catalog holds is remembered (bounded at 32 per row), and
+  a received identity is held to `driver.ValidIdentity` before it reaches a read or the inbox.

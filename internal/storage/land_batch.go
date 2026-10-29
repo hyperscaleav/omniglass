@@ -50,6 +50,11 @@ type IngestBatch struct {
 	Fanned *FannedRows
 }
 
+// ErrFanoutStale marks a batch whose fanned rows name an owner the
+// conduit no longer binds: transient, so the ingest redelivers it and
+// resolves the bindings again, never a refusal that would drop the batch.
+var ErrFanoutStale = errors.New("storage: a fanned row's owner is no longer bound; resolve again")
+
 // FannedRows are a batch's fanned values, each row on its bound owner's
 // arc, at the empty instance, naming the conduit in its source, all for
 // Writer (a FanoutWriter).
@@ -120,6 +125,16 @@ func (p *PG) LandBatch(ctx context.Context, b IngestBatch) (bool, error) {
 				return err
 			}
 			fw.fanOwners = owners
+			// A row whose owner is no longer bound (an operator unbound it, or
+			// deleted the owner, after the ingest resolved it) is stale, not
+			// refused: refusing it would drop the conduit's own rows and every
+			// other owner's with it. The batch fails transiently, writing
+			// nothing, and its redelivery resolves the bindings afresh.
+			for _, r := range b.Fanned.keyed() {
+				if !owners[fanOwnerKey(r.ownerKind, r.owner)] {
+					return fmt.Errorf("%w: %s/%s", ErrFanoutStale, r.ownerKind, r.owner)
+				}
+			}
 			for k := range owners {
 				bt.arcs[k] = k[strings.IndexByte(k, 0)+1:]
 			}

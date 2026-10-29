@@ -98,10 +98,18 @@ func TestFanOutEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The account-wide platform's profile, found by its model so the test
+	// borrows no catalog name.
+	platProfile := ""
+	for name, p := range store.Devices {
+		if p.Model == "UCC Platform (account)" {
+			platProfile = name
+		}
+	}
 	engine := sim.NewEngine(store, profiles.Templates())
 	engine.SetPortMap(sim.EphemeralPorts)
 	t.Cleanup(engine.StopAll)
-	if err := engine.Sync([]sim.DeviceSnapshot{{DeviceID: "ucc-plat", Hostname: "ucc-plat", LoopbackIP: simtest.ClaimLoopback(t), ProfileName: "ucc-platform", Version: 1}}); err != nil {
+	if err := engine.Sync([]sim.DeviceSnapshot{{DeviceID: "ucc-plat", Hostname: "ucc-plat", LoopbackIP: simtest.ClaimLoopback(t), ProfileName: platProfile, Version: 1}}); err != nil {
 		t.Fatalf("serve the ucc platform: %v", err)
 	}
 	plat := engine.Devices()[0]
@@ -152,7 +160,7 @@ func TestFanOutEndToEnd(t *testing.T) {
 	waitFor(t, "the annex room in the inbox", func() bool {
 		mustJSON(t, c.do(owner, http.MethodGet, "/components/meetings-cloud/unbound-identities", nil, http.StatusOK), &inbox)
 		for _, u := range inbox.Identities {
-			if u.Key == "ucc-room-id" && u.Value == "zr-annex-1" {
+			if u.Key == "ucc-room-id" && u.Value == "zr-boardroom-b" {
 				return true
 			}
 		}
@@ -176,7 +184,7 @@ func TestFanOutEndToEnd(t *testing.T) {
 	}
 
 	// Bound over the API, the annex room's next report lands on its system.
-	bind("zr-annex-1", "annex")
+	bind("zr-boardroom-b", "annex")
 	operate("/api/rooms/report", map[string]any{})
 	waitFor(t, "annex from the next report", func() bool { return callState("annex") == "active" })
 }
