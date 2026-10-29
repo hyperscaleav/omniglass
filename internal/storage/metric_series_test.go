@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
+
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
@@ -198,5 +200,58 @@ func TestADeletedOwnersSamplesReadAsNothing(t *testing.T) {
 	}
 	if n := f.prune("metric", now.Add(-24*time.Hour), 100); n != 1 {
 		t.Fatalf("the lane prune took %d orphaned samples past the window, want 1", n)
+	}
+}
+
+// TestARoutingMissIsReadFromItsFieldsNotItsText: the classifier reads the
+// error's code, table and constraint, never its message, which a server with
+// a translated lc_messages words differently; a CHECK on the table names its
+// constraint and stays a refusal.
+func TestARoutingMissIsReadFromItsFieldsNotItsText(t *testing.T) {
+	miss := &pgconn.PgError{Code: "23514", TableName: "metric", Message: "keine Partition der Relation gefunden"}
+	if !storage.ExportIsPartitionRoutingMiss(miss) || storage.IsRefusedWrite(miss) {
+		t.Fatal("a translated routing miss was read as a refusal")
+	}
+	check := &pgconn.PgError{Code: "23514", TableName: "metric_series", ConstraintName: "metric_series_owner_arc_check"}
+	if storage.ExportIsPartitionRoutingMiss(check) || !storage.IsRefusedWrite(check) {
+		t.Fatal("a CHECK violation was read as a routing miss")
+	}
+}
+
+// TestAHalfDetachedMonthStillLands: a retention pass's concurrent detach that
+// stopped halfway (a reader held the table past its lock timeout) leaves the
+// month routing nothing; a batch carrying a sample in it finishes the detach,
+// makes the month afresh and lands, rather than missing on every delivery.
+func TestAHalfDetachedMonthStillLands(t *testing.T) {
+	f := newPruneFixture(t)
+	old := monthStart(time.Now()).AddDate(0, -4, 0)
+	if err := f.gw.MakeMetricMonths(f.ctx, old); err != nil {
+		t.Fatal(err)
+	}
+	reader := connectDSN(t, f.dsn)
+	tx, err := reader.Begin(f.ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(f.ctx, `select count(*) from metric`); err != nil {
+		t.Fatal(err)
+	}
+	mustExec(t, f.conn, `set lock_timeout = '300ms'`)
+	if _, err := f.conn.Exec(f.ctx, `alter table metric detach partition `+monthName(old)+` concurrently`); err == nil {
+		t.Fatal("the detach finished under a held reader; the test needs it halfway")
+	}
+	mustExec(t, f.conn, `reset lock_timeout`)
+	_ = tx.Rollback(f.ctx)
+	var pending bool
+	if err := f.conn.QueryRow(f.ctx, `select exists (select 1 from pg_inherits where inhdetachpending)`).Scan(&pending); err != nil || !pending {
+		t.Fatalf("no detach pending (%v)", err)
+	}
+	landed, err := f.gw.LandBatch(f.ctx, storage.IngestBatch{BatchID: "half-detached", Writer: storage.PushWriter(),
+		Metrics: []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: "prune-c1", Key: "prune-rtt", Value: 5, TS: old.Add(time.Hour)}}})
+	if err != nil || !landed {
+		t.Fatalf("a batch into a half-detached month: landed %v, err %v", landed, err)
+	}
+	if v := f.values("metric", "component"); len(v) != 1 {
+		t.Fatalf("rows %v, want the one sample landed", v)
 	}
 }

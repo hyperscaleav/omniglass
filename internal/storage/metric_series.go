@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -153,10 +152,14 @@ func (p *PG) createMetricPartition(ctx context.Context, month time.Time) (bool, 
 		if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(hashtext('metric partition roll'))`); err != nil {
 			return err
 		}
-		var attached bool
+		var attached, pending bool
 		if err := tx.QueryRow(ctx, `select exists (select 1 from pg_inherits where inhparent = 'public.metric'::regclass
-			and inhrelid = to_regclass($1))`, name).Scan(&attached); err != nil {
+			and inhrelid = to_regclass($1)), exists (select 1 from pg_inherits where inhparent = 'public.metric'::regclass
+			and inhrelid = to_regclass($1) and inhdetachpending)`, name).Scan(&attached, &pending); err != nil {
 			return err
+		}
+		if pending {
+			return errDetachPending
 		}
 		if attached {
 			return nil
@@ -170,10 +173,47 @@ func (p *PG) createMetricPartition(ctx context.Context, month time.Time) (bool, 
 		made = true
 		return nil
 	})
+	if errors.Is(err, errDetachPending) {
+		// A retention pass's detach of this month stopped halfway (a reader
+		// held the parent past its lock timeout): the month routes nothing
+		// until the detach is finished. Finish it and drop the month, then
+		// make it afresh, so a sample dated in it lands rather than missing
+		// again on every delivery.
+		if ferr := p.finishMetricDetach(ctx, metricPartitionName(month)); ferr != nil {
+			return false, fmt.Errorf("storage: create metric partition %s: %w", metricPartitionName(month), ferr)
+		}
+		return p.createMetricPartition(ctx, month)
+	}
 	if err != nil {
 		return false, fmt.Errorf("storage: create metric partition %s: %w", metricPartitionName(month), err)
 	}
 	return made, nil
+}
+
+// errDetachPending is a month whose partition is still detaching.
+var errDetachPending = errors.New("storage: metric partition still detaching")
+
+// finishMetricDetach finishes a pending detach of one month and drops it,
+// outside a transaction block (FINALIZE cannot run in one), under
+// partitionLockTimeout.
+func (p *PG) finishMetricDetach(ctx context.Context, name string) error {
+	conn, err := p.pool.Acquire(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Release()
+	if _, err := conn.Exec(ctx, fmt.Sprintf(`set lock_timeout = '%dms'`, partitionLockTimeout.Milliseconds())); err != nil {
+		return err
+	}
+	defer func() { _, _ = conn.Exec(context.Background(), `reset lock_timeout`) }()
+	ident := pgx.Identifier{"public", name}.Sanitize()
+	if _, err := conn.Exec(ctx, `alter table public.metric detach partition `+ident+` finalize`); err != nil {
+		return fmt.Errorf("finish detaching %s: %w", name, err)
+	}
+	if _, err := conn.Exec(ctx, `drop table if exists `+ident); err != nil {
+		return fmt.Errorf("drop %s: %w", name, err)
+	}
+	return nil
 }
 
 // DropMetricPartitions drops every metric partition whose whole month lies
@@ -204,11 +244,8 @@ func (p *PG) DropMetricPartitions(ctx context.Context, before time.Time) ([]stri
 		return nil, fmt.Errorf("storage: drop metric partitions: %w", err)
 	}
 	for _, name := range unfinished {
-		if _, err := conn.Exec(ctx, `alter table public.metric detach partition `+pgx.Identifier{"public", name}.Sanitize()+` finalize`); err != nil {
-			return nil, fmt.Errorf("storage: finish detaching %s: %w", name, err)
-		}
-		if _, err := conn.Exec(ctx, `drop table if exists `+pgx.Identifier{"public", name}.Sanitize()); err != nil {
-			return nil, fmt.Errorf("storage: drop %s: %w", name, err)
+		if err := p.finishMetricDetach(ctx, name); err != nil {
+			return nil, fmt.Errorf("storage: %w", err)
 		}
 	}
 
@@ -239,13 +276,14 @@ func (p *PG) DropMetricPartitions(ctx context.Context, before time.Time) ([]stri
 }
 
 // isPartitionRoutingMiss reports a write Postgres refused because no
-// partition of metric covers a row's ts (SQLSTATE 23514 with no constraint
-// named; a CHECK violation names its constraint). It is not a refusal of the
-// data: the partition is made and the write retried.
+// partition of metric covers a row's ts: SQLSTATE 23514 on the table metric
+// with no constraint named (a CHECK violation names its constraint). It reads
+// the error's fields, never its message, which a server translates under its
+// own lc_messages. It is not a refusal of the data: the partition is made and
+// the write retried.
 func isPartitionRoutingMiss(err error) bool {
 	var pgErr *pgconn.PgError
-	return errors.As(err, &pgErr) && pgErr.Code == "23514" && pgErr.ConstraintName == "" &&
-		strings.HasPrefix(pgErr.Message, "no partition of relation")
+	return errors.As(err, &pgErr) && pgErr.Code == "23514" && pgErr.ConstraintName == "" && pgErr.TableName == "metric"
 }
 
 // landMetricMonths makes the partitions a write's samples need after it

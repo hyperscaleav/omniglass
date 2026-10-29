@@ -846,7 +846,17 @@ func (p *PG) writeCalcOutput(ctx context.Context, tx pgx.Tx, r CalcRule, owner c
 		return err
 	}
 	if current != nil && current == v {
-		return nil
+		if r.OutputLane != rules.LaneMetric {
+			return nil
+		}
+		// The metric lane keeps no floor (ADR-1275): a series with no row
+		// inside its window reads as no value. An output that holds steady
+		// is written again once its newest row is calcOutputRefresh old, so
+		// a rule still producing it keeps a value within retention.
+		fresh, err := metricOutputFresh(ctx, tx, r, owner)
+		if err != nil || fresh {
+			return err
+		}
 	}
 	w := calcWriter(&sampleLineage{ruleID: r.ID, ruleName: r.Name, version: r.Version})
 	ts := time.Now().UTC()
@@ -860,6 +870,26 @@ func (p *PG) writeCalcOutput(ctx context.Context, tx pgx.Tx, r CalcRule, owner c
 	}
 	return p.writePropertySamples(ctx, tx, w, []PropertySampleWrite{{OwnerKind: owner.kind, OwnerID: owner.id, Key: r.OutputKey,
 		Value: rules.FormatCalcValue(v), Source: calcSource, TS: ts}}, false)
+}
+
+// calcOutputRefresh is how old a metric calc output's newest row may grow
+// before an unchanged result is written again: under the shortest window a
+// metric type may keep (one day), so a steady output a rule still produces
+// always has a row within retention.
+const calcOutputRefresh = 12 * time.Hour
+
+// metricOutputFresh reports whether a rule's metric output on an owner has an
+// aggregate-instance row newer than calcOutputRefresh.
+func metricOutputFresh(ctx context.Context, tx pgx.Tx, r CalcRule, owner calcOwner) (bool, error) {
+	var fresh bool
+	err := tx.QueryRow(ctx, `select exists (select 1 from metric_series s cross join lateral (`+metricNewestSQL("s.id")+`) n
+		where s.owner_id = $1::uuid and s.metric_type_id = $2::uuid and s.instance = ''
+		  and s.provenance in ('observed', 'calculated') and n.ts > now() - make_interval(secs => $3))`,
+		owner.id, r.outputID, calcOutputRefresh.Seconds()).Scan(&fresh)
+	if err != nil {
+		return false, fmt.Errorf("storage: calc output %s freshness: %w", r.OutputKey, err)
+	}
+	return fresh, nil
 }
 
 // calcSource is the source a calculated sample records; its producer is in

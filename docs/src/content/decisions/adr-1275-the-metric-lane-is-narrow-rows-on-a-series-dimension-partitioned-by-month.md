@@ -49,7 +49,10 @@ refs: [1275, 420, 1265, 1080, 1274, 417, 1417]
      (amending [ADR-0080](#adr-0080-retention-is-provenance-aware-never-declared-never-the-latest-row-per-series)):
      a quantity stores every observation, so a series still measured always has a recent row, and
      one with none inside its window reads as no reading within retention; the task's liveness
-     (#1264) will say when it was last measured.
+     (#1264) will say when it was last measured. A calc rule writes an unchanged metric output
+     again once its newest row is twelve hours old (under the shortest window a type may keep), so
+     an output a rule still produces keeps a row within retention; one whose rule is not drained
+     for longer than the window (every input transition-only and unchanged) reads as no reading.
   7. **Property is not partitioned** (#1265 open decision 2): its rows are transitions, sparse by
      construction, and its floor is unchanged. Recorded here for the architect's veto.
 - **Context:** the epic's measurements put a wide metric row at 126 bytes of heap and 91 of index

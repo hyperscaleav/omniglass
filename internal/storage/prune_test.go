@@ -21,6 +21,7 @@ type pruneFixture struct {
 	ctx  context.Context
 	gw   *storage.PG
 	conn *pgx.Conn
+	dsn  string
 }
 
 func newPruneFixture(t *testing.T) *pruneFixture {
@@ -40,7 +41,7 @@ func newPruneFixture(t *testing.T) *pruneFixture {
 	mustExec(t, conn, `insert into system (name) values ('prune-s1')`)
 	mustExec(t, conn, `insert into property_type (name, data_type) values ('prune-power', 'string')`)
 	mustExec(t, conn, `insert into metric_type (name, data_type) values ('prune-rtt', 'float')`)
-	return &pruneFixture{t: t, ctx: ctx, gw: gw, conn: conn}
+	return &pruneFixture{t: t, ctx: ctx, gw: gw, conn: conn, dsn: dsn}
 }
 
 // row inserts one sample: lane is metric or property, owner is component or

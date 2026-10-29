@@ -342,7 +342,9 @@ latest row of every series (a transition-only series still measured may hold one
 On the metric lane the floor is **the latest row within retention**
 ([ADR-1275](/architecture/decisions/#adr-1275-the-metric-lane-is-narrow-rows-on-a-series-dimension-partitioned-by-month)):
 a quantity stores every observation, so a series still measured always has a recent row, and one
-with no row inside its window reads as no reading within retention. Two refinements keep every
+with no row inside its window reads as no reading within retention. A calc rule's metric output
+holding steady is written again once its newest row is twelve hours old, for the same reason.
+Two refinements keep every
 property reader whole:
 - a row is the series' latest unless some row of its series has both a later-or-equal `ts` and a
   higher id, since the latest-value reads order by `ts` then id and the health reads by id, and a

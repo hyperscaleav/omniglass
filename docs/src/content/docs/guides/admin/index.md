@@ -104,8 +104,9 @@ omniglass property-type setRetention endpoint-reachable --days 365
 omniglass metric-type setRetention tcp-connect-time --days null    # back to metric_days
 ```
 
-The type's window shows as `retention_days` on `omniglass metric-type get`. The same floor holds: its
-latest value per series is never removed. See
+The type's window shows as `retention_days` on `omniglass metric-type get`. A property type keeps the
+floor above (its latest value per series is never removed); a metric type keeps every reading inside
+its window and none past it, so a series no longer measured shows no reading within retention. See
 [storage](/architecture/storage/#retention-what-is-kept-and-for-how-long) for how it works.
 
 ## How often an endpoint reports on itself
