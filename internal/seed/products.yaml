@@ -86,7 +86,7 @@ products:
   - id: boreal-cast-m1
     label: Boreal Cast M1
     vendor_id: boreal
-    driver_id: http-json
+    driver_id: boreal-cast-api
     kind: device
     component_type: media-player
   # Kestrel: video conferencing and cameras.

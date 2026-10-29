@@ -28,16 +28,20 @@ const (
 	// UCCTokenSecret is the simulated UCC platform's api token (#1282), the
 	// one its http api's X-UCC-Token header demands.
 	UCCTokenSecret = "sim-ucc-token"
+	// CastKeySecret is the simulated Boreal Cast media player's api key
+	// (#893), sent in the header its API demands.
+	CastKeySecret = "sim-cast-key"
 )
 
 // AttachSecret is the platform secret each driver's simulated attach
 // references, keyed by driver: an attach is offered only to a caller who can
 // read it.
 var AttachSecret = map[string]string{
-	"snmp-generic": CommunitySecret,
-	"kestrel-api":  KestrelLoginSecret,
-	"http-json":    CensusKeySecret,
-	"ucc-rooms":    UCCTokenSecret,
+	"snmp-generic":    CommunitySecret,
+	"kestrel-api":     KestrelLoginSecret,
+	"http-json":       CensusKeySecret,
+	"boreal-cast-api": CastKeySecret,
+	"ucc-rooms":       UCCTokenSecret,
 }
 
 // AddressCap is how many addresses the simulated block holds: 256 third
@@ -154,6 +158,10 @@ var Attach = map[string]func(addr string, shift func(int) int) map[string]string
 	},
 	"http-json": func(addr string, shift func(int) int) map[string]string {
 		return map[string]string{"host": addr, "port": strconv.Itoa(shift(80)), "key": CensusKeySecret}
+	},
+	// The Boreal Cast media player's http API on 80, its key in a header.
+	"boreal-cast-api": func(addr string, shift func(int) int) map[string]string {
+		return map[string]string{"host": addr, "port": strconv.Itoa(shift(80)), "key": CastKeySecret}
 	},
 	// The UCC platform's https API on 443 (#1282), its key pinned on first
 	// use, its token in the header the platform demands.

@@ -371,6 +371,18 @@
    "description": "Whether a space reads occupied or vacant by its occupancy source."
   },
   {
+   "name": "playback-state",
+   "data_type": "string",
+   "label": "Playback State",
+   "description": "Whether a media player is playing its content, paused on it, or stopped."
+  },
+  {
+   "name": "content-name",
+   "data_type": "string",
+   "label": "Content Name",
+   "description": "The name of the item a media player is playing, as it reports it."
+  },
+  {
    "name": "serial-number",
    "data_type": "string",
    "label": "Serial number",
@@ -497,6 +509,13 @@
    "data_type": "int",
    "label": "Participant Count",
    "description": "The participants a component reports in its current call; 0 when no call is active."
+  },
+  {
+   "name": "storage-used",
+   "data_type": "float",
+   "unit": "%",
+   "label": "Storage Used",
+   "description": "How full a component reports its local storage, as a percentage of its capacity."
   },
   {
    "name": "http-response-time",
@@ -2671,6 +2690,13 @@
    "polls": 2
   },
   {
+   "id": "boreal-cast-api",
+   "label": "Boreal Cast API",
+   "version": "1.0.0",
+   "transport": "http",
+   "polls": 2
+  },
+  {
    "id": "newtron-panel-web",
    "label": "Newtron Panel Web",
    "version": "1.0.0",
@@ -2813,7 +2839,7 @@
    "id": "boreal-cast-m1",
    "label": "Boreal Cast M1",
    "vendor_id": "boreal",
-   "driver_id": "http-json",
+   "driver_id": "boreal-cast-api",
    "component_type": "media-player",
    "kind": "device"
   },

@@ -50,6 +50,8 @@ func seedSimFleet(ctx context.Context, gw storage.Gateway, actorID string, portO
 			OwnerKind: "platform", Fields: map[string]string{"key": "census-lab-key"}},
 		{Name: simfleet.UCCTokenSecret, Label: "Simulated UCC platform api token", SecretType: "api-key",
 			OwnerKind: "platform", Fields: map[string]string{"key": "ucc-lab-token"}},
+		{Name: simfleet.CastKeySecret, Label: "Simulated Boreal Cast player api key", SecretType: "api-key",
+			OwnerKind: "platform", Fields: map[string]string{"key": "boreal-cast-key"}},
 	} {
 		if _, err := gw.CreateSecret(ctx, actorID, sec, all, true); err != nil && !errors.Is(err, storage.ErrSecretExists) {
 			return fmt.Errorf("devseed: create simulator secret %s: %w", sec.Name, err)

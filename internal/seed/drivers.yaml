@@ -443,6 +443,40 @@ drivers:
           request: { path: /api/occupancy }
           emits:
             - { name: occupancy-state, extract: { jsonpath: vacant }, transform: { map: { "true": vacant, "false": occupied } } }
+  - id: boreal-cast-api
+    label: Boreal Cast API
+    version: "1.0.0"
+    spec:
+      version: 1
+      # The Boreal Cast media player's JSON API over plain http on 80 (#893),
+      # every request carrying its api key in the X-Boreal-Key header:
+      # identity and storage from its status, what it is playing from its
+      # playback route.
+      transport: http
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "80" }
+        - { name: key, kind: secret, secret_type: api-key, required: true }
+      session:
+        credential: key
+        scheme: api-key
+        api_key: { in: header, name: X-Boreal-Key }
+      polls:
+        - name: status
+          schedule: { every: 5m }
+          request: { path: /api/status }
+          emits:
+            - { name: model-number, extract: { jsonpath: device.model } }
+            - { name: serial-number, extract: { jsonpath: device.serial } }
+            - { name: firmware-version, extract: { jsonpath: device.firmware } }
+            - { name: uptime, extract: { jsonpath: device.uptime } }
+            - { name: storage-used, extract: { jsonpath: storage.used_percent } }
+        - name: playback
+          schedule: { every: 30s }
+          request: { path: /api/playback }
+          emits:
+            - { name: playback-state, extract: { jsonpath: state } }
+            - { name: content-name, extract: { jsonpath: content } }
   - id: newtron-panel-web
     label: Newtron Panel Web
     version: "1.0.0"
