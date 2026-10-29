@@ -48,14 +48,10 @@ const (
 	pgDataDir   = "/var/lib/postgresql"
 	consolePort = 8080
 	busPort     = 4222
-	// The cadence every walkthrough is recorded at: a change in the console shows in the
-	// lab within seconds. The product defaults are unchanged.
-	labCadence = "2s"
-	// How often a learner's lab probes reachability (#1273). It may run for
-	// days, and a probe on every 2s check-in wrote most of its rows; a
-	// script's throwaway lab lives for minutes and probes on every check-in,
-	// so a walkthrough waiting on a probe's verdict keeps its recorded budget.
-	labProbeEvery = "10s"
+	// How often the simulator re-pulls its component list, whatever the
+	// cadence profile: a component added in the console answers within
+	// seconds.
+	simPoll = "2s"
 	// The unprivileged pinger needs the whole group range admitted.
 	pingGroupRange = "0 2147483647"
 )
@@ -84,6 +80,67 @@ const (
 	LabelLabEphemeral     = "omniglass.lab.ephemeral"
 	composeVersionClaimed = "2.0.0"
 )
+
+// Cadence is a cadence profile (#1277): how often the lab's node checks in
+// and probes reachability. The lab's own profiles keep a change in the
+// console visible within seconds; `default` runs the node at the product's
+// own defaults, so the lab footprint can measure what a real deployment
+// costs beside what a lab does.
+type Cadence struct {
+	Name string
+	// Heartbeat is the node's check-in interval: every collection task runs
+	// at it unless its driver declares a slower schedule.
+	Heartbeat string
+	// ProbeEvery is the reachability probe interval; empty probes on every
+	// check-in.
+	ProbeEvery string
+	// For says who runs at it, in the lab guide's words.
+	For string
+}
+
+// The cadence profiles, by name.
+const (
+	CadenceLab         = "lab"
+	CadenceWalkthrough = "walkthrough"
+	CadenceDefault     = "default"
+)
+
+// CadenceProfiles are the profiles a lab runs at, in the order the docs list
+// them.
+func CadenceProfiles() []Cadence {
+	return []Cadence{
+		// A learner's lab may run for days, and a probe on every 2s check-in
+		// wrote most of its rows (#1273), so it probes every 10s.
+		{Name: CadenceLab, Heartbeat: "2s", ProbeEvery: "10s",
+			For: "a learner's lab: a change in the console shows within seconds"},
+		// A script's throwaway lab lives for minutes and probes on every
+		// check-in, so a walkthrough waiting on a probe's verdict keeps its
+		// recorded budget.
+		{Name: CadenceWalkthrough, Heartbeat: "2s",
+			For: "a script's throwaway lab: a walkthrough waiting on a probe's verdict sees it within seconds"},
+		{Name: CadenceDefault, Heartbeat: "30s",
+			For: "the product's own defaults: what a deployment's node runs at"},
+	}
+}
+
+// LookupCadence is the named profile. An empty name is the lab's own: a
+// learner's lab runs at `lab`, a throwaway lab at `walkthrough`.
+func LookupCadence(name string, ephemeral bool) (Cadence, error) {
+	if name == "" {
+		name = CadenceLab
+		if ephemeral {
+			name = CadenceWalkthrough
+		}
+	}
+	var names []string
+	for _, c := range CadenceProfiles() {
+		if c.Name == name {
+			return c, nil
+		}
+		names = append(names, c.Name)
+	}
+	return Cadence{}, fmt.Errorf("--cadence %q is not a cadence profile; the profiles are %v", name, names)
+}
 
 // Owner is the process that runs a lab: the reaper removes a lab whose
 // owner on this host is gone (killed too hard to tear down).
@@ -124,6 +181,9 @@ type Options struct {
 	// simulated fleet's wiring and enrolls no node, so no node runs and
 	// nothing collects. Only a throwaway lab may run without one.
 	NoNode bool
+	// Cadence names the node's cadence profile (CadenceProfiles); empty is
+	// the lab's own.
+	Cadence string
 }
 
 // Mount is a named volume mounted into a container.
@@ -239,6 +299,10 @@ func Plan(o Options) (Spec, error) {
 	if o.Ephemeral && o.Project == DefaultProject {
 		return Spec{}, fmt.Errorf("a throwaway lab removes its data when it stops, so it needs a --project of its own, never %s", DefaultProject)
 	}
+	cadence, err := LookupCadence(o.Cadence, o.Ephemeral)
+	if err != nil {
+		return Spec{}, err
+	}
 	if o.NoNode && !o.Ephemeral {
 		return Spec{}, fmt.Errorf("a lab with no node is a script's, so it needs --ephemeral: a learner's lab keeps its fleet, and one seeded without the simulated wiring would never collect")
 	}
@@ -326,13 +390,13 @@ func Plan(o Options) (Spec, error) {
 		Role: "The control plane and the console, in lab mode. Its console is the one published port; " +
 			"its bus listens on the lab network for the node.",
 	}
-	nodeCmd := []string{"node", "run", "--simulate", "--impairments", "--heartbeat", labCadence}
-	if !o.Ephemeral {
-		nodeCmd = append(nodeCmd, "--probe-every", labProbeEvery)
+	nodeCmd := []string{"node", "run", "--simulate", "--impairments", "--heartbeat", cadence.Heartbeat}
+	if cadence.ProbeEvery != "" {
+		nodeCmd = append(nodeCmd, "--probe-every", cadence.ProbeEvery)
 	}
 	spec.Node = Service{
 		Name: "node", Container: o.Project + "-node-1", Image: o.Image,
-		Cmd: append(nodeCmd, "--poll", labCadence),
+		Cmd: append(nodeCmd, "--poll", simPoll),
 		Env: []string{
 			"OMNIGLASS_SERVER=http://server:" + strconv.Itoa(consolePort),
 			"OMNIGLASS_NODE_NAME=" + NodeName,

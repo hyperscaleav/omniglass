@@ -234,3 +234,52 @@ func TestPlanNoNode(t *testing.T) {
 		t.Fatalf("a throwaway lab with no node: the seed runs %v, want --no-node", s.Seed.Cmd)
 	}
 }
+
+// A cadence profile (#1277) names how often the lab's node checks in and
+// probes, so the lab footprint can measure a lab at the product's default
+// cadence beside the lab's own. A lab given none keeps the cadence it has
+// always run at, an unknown one is refused, and each profile lands on the
+// node's command line as its heartbeat and probe interval.
+func TestPlanCadenceProfiles(t *testing.T) {
+	flag := func(cmd []string, name string) string {
+		i := slices.Index(cmd, name)
+		if i < 0 || i+1 >= len(cmd) {
+			return ""
+		}
+		return cmd[i+1]
+	}
+	cases := []struct {
+		cadence   string
+		ephemeral bool
+		heartbeat string
+		probe     string // "" probes on every check-in
+	}{
+		{"", false, "2s", "10s"},
+		{"", true, "2s", ""},
+		{"lab", true, "2s", "10s"},
+		{"walkthrough", false, "2s", ""},
+		{"default", true, "30s", ""},
+	}
+	for _, c := range cases {
+		o := testOptions()
+		o.Cadence = c.cadence
+		if c.ephemeral {
+			o.Project, o.Ephemeral = "foot-1", true
+		}
+		s, err := Plan(o)
+		if err != nil {
+			t.Fatalf("cadence %q: %v", c.cadence, err)
+		}
+		if got := flag(s.Node.Cmd, "--heartbeat"); got != c.heartbeat {
+			t.Errorf("cadence %q: --heartbeat %q in %v, want %s", c.cadence, got, s.Node.Cmd, c.heartbeat)
+		}
+		if got := flag(s.Node.Cmd, "--probe-every"); got != c.probe {
+			t.Errorf("cadence %q: --probe-every %q in %v, want %q", c.cadence, got, s.Node.Cmd, c.probe)
+		}
+	}
+	o := testOptions()
+	o.Cadence = "fast"
+	if _, err := Plan(o); err == nil || !strings.Contains(err.Error(), "walkthrough") {
+		t.Fatalf("an unknown cadence: %v, want a refusal listing the profiles", err)
+	}
+}
