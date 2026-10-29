@@ -643,7 +643,10 @@ promise:
   binding and also needs update on the owner it leaves, refused with a 403 that names neither that
   owner nor its kind, since the caller may not read it. The list is a read of the conduit, so it names
   an owner only inside the caller's read on its tier and counts the rest, and a delete of a binding
-  whose owner the caller cannot read is the same 404 as one that does not exist. Neither end alone is
+  whose owner the caller cannot read is the same 404 as one that does not exist. One fact does pass,
+  and it is accepted: a put naming an identity already bound to an owner the caller cannot read is
+  refused with the move 403, so the caller learns that the identity is bound, never to whom (the
+  list's hidden count already says the conduit has bindings it cannot see). Neither end alone is
   enough: a principal scoped to one system could otherwise claim an identity that belongs to another owner and pull a conduit
   it cannot read onto its system, and one scoped to the conduit could write onto systems it cannot
   update.

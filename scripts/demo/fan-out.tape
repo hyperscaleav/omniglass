@@ -13,6 +13,9 @@ Wait
 Type `c='hq.$comp.ucc-platform'`
 Enter
 Wait
+Type `huddle='hq.west.level-2.huddle.$sys.huddle'; board_a='hq.west.level-2.boardroom-a.$sys.boardroom'; board_b='hq.west.level-2.boardroom-b.$sys.boardroom'`
+Enter
+Wait
 Type "# Its identity bindings: which system each of its room ids is"
 Enter
 Wait
@@ -21,7 +24,7 @@ Enter
 Wait
 
 Hide
-Type `demo_until 120 'omniglass system property list huddle-north | jq -e "[.properties[] | select(.property_type_name == \"call-state\" and .reconciliation.is != null)] | length > 0"'`
+Type `demo_until 120 'omniglass system property list "$huddle" | jq -e "[.properties[] | select(.property_type_name == \"call-state\" and .reconciliation.is != null)] | length > 0"'`
 Enter
 Wait@130s
 Type "clear"
@@ -31,7 +34,7 @@ Show
 Type "# The node polled the room list once: each room's call state landed on its own system"
 Enter
 Wait
-Type `for s in boardroom-a huddle-north; do omniglass system property sample list "$s" call-state --limit 1 | jq -c --arg s "$s" '.samples[0] | {system: $s, value, instance, source}'; done`
+Type `for s in "$board_a" "$huddle"; do omniglass system property sample list "$s" call-state --limit 1 | jq -c --arg s "$s" '.samples[0] | {system: $s, value, instance, source}'; done`
 Enter
 Wait
 Type "# Nothing about a room landed on the conduit itself"
@@ -55,7 +58,7 @@ Wait
 Type "# Bind it to its system: this costs update on the conduit and on the system"
 Enter
 Wait
-Type `omniglass component identity-binding update "$c" ucc-room-id zr-annex-1 --owner-kind system --owner lab-pod-a | jq -c '{key, value, owner: .owner_name}'`
+Type `omniglass component identity-binding update "$c" ucc-room-id zr-boardroom-b --owner-kind system --owner "$board_b" | jq -c '{key, value, owner: .owner_name}'`
 Enter
 Wait
 Type `omniglass component unbound-identity list "$c" | jq -c '.identities | length'`
@@ -77,13 +80,13 @@ Type `omniglass component simulation fire "$c" --surface http-api --method POST 
 Enter
 Wait
 Hide
-Type `demo_until 30 'omniglass system property sample list lab-pod-a call-state --limit 1 | jq -e ".samples | length > 0"'`
+Type `demo_until 30 'omniglass system property sample list "$board_b" call-state --limit 1 | jq -e ".samples | length > 0"'`
 Enter
 Wait@40s
 Show
 Type "# The newly bound room's value landed on its system, through the same fan-out"
 Enter
 Wait
-Type `omniglass system property sample list lab-pod-a call-state --limit 1 | jq -c '.samples[0] | {value, instance, source}'`
+Type `omniglass system property sample list "$board_b" call-state --limit 1 | jq -c '.samples[0] | {value, instance, source}'`
 Enter
 Wait

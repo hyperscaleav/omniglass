@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/seed"
@@ -355,5 +356,77 @@ func TestIdentityBindingRefusesTheConduitAsOwner(t *testing.T) {
 	}
 	if n := f.count(t, ctx, `select count(*) from identity_binding`); n != 0 {
 		t.Fatalf("bindings = %d, want none", n)
+	}
+}
+
+// A match key a binding uses cannot be deleted from under it: the delete is
+// refused with an error that counts the bindings holding it, not a raw
+// foreign-key failure.
+func TestIdentityBindingKeyCannotBeDeletedWhileBound(t *testing.T) {
+	ctx := context.Background()
+	f := newBindingFixture(t, ctx)
+	if _, err := f.gw.CreatePropertyType(ctx, "", storage.PropertyTypeSpec{Name: "amp-channel", DataType: "string", Label: "Amp channel"}); err != nil {
+		t.Fatalf("create key: %v", err)
+	}
+	for _, v := range []string{"1", "2"} {
+		if _, err := f.gw.PutIdentityBinding(ctx, "", "ucc-cloud", "amp-channel", v, sysOwner("room-a"), f.allScopes()); err != nil {
+			t.Fatalf("put: %v", err)
+		}
+	}
+	err := f.gw.DeletePropertyType(ctx, "", "amp-channel")
+	var inUse *storage.IdentityKeyInUseError
+	if !errors.As(err, &inUse) || inUse.Key != "amp-channel" || inUse.Bindings != 2 {
+		t.Fatalf("delete a bound key = %v, want IdentityKeyInUseError counting 2 bindings", err)
+	}
+	for _, v := range []string{"1", "2"} {
+		if err := f.gw.DeleteIdentityBinding(ctx, "", "ucc-cloud", "amp-channel", v, f.allScopes()); err != nil {
+			t.Fatalf("unbind: %v", err)
+		}
+	}
+	if err := f.gw.DeletePropertyType(ctx, "", "amp-channel"); err != nil {
+		t.Fatalf("delete an unbound key: %v", err)
+	}
+}
+
+// A delete takes the same per-identity lock a put does, so a move racing a
+// delete is serialized rather than updating a row the delete removed. Held
+// from another connection, the lock must keep the delete waiting.
+func TestIdentityBindingDeleteTakesTheIdentityLock(t *testing.T) {
+	ctx := context.Background()
+	f := newBindingFixture(t, ctx)
+	if _, err := f.gw.PutIdentityBinding(ctx, "", "ucc-cloud", "ucc-room-id", "R-1", sysOwner("room-a"), f.allScopes()); err != nil {
+		t.Fatalf("put: %v", err)
+	}
+	conn, err := pgx.Connect(ctx, f.dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer conn.Close(ctx)
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(hashtextextended('identity_binding/' || $1 || '/' ||
+		(select id from property_type where name = 'ucc-room-id')::text || '/' || $2, 0))`, f.ids["ucc-cloud"], "R-1"); err != nil {
+		t.Fatalf("hold lock: %v", err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- f.gw.DeleteIdentityBinding(ctx, "", "ucc-cloud", "ucc-room-id", "R-1", f.allScopes()) }()
+	select {
+	case err := <-done:
+		_ = tx.Rollback(ctx)
+		t.Fatalf("delete finished (%v) while the identity's lock was held; it must take the lock", err)
+	case <-time.After(500 * time.Millisecond):
+	}
+	if err := tx.Rollback(ctx); err != nil {
+		t.Fatalf("release: %v", err)
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("delete after the lock released: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("delete still waiting after the lock released")
 	}
 }

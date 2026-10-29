@@ -152,7 +152,7 @@ func TestFanOutEndToEnd(t *testing.T) {
 	waitFor(t, "the annex room in the inbox", func() bool {
 		mustJSON(t, c.do(owner, http.MethodGet, "/components/meetings-cloud/unbound-identities", nil, http.StatusOK), &inbox)
 		for _, u := range inbox.Identities {
-			if u.Key == "ucc-room-id" && u.Value == "zr-annex-1" {
+			if u.Key == "ucc-room-id" && u.Value == "zr-boardroom-b" {
 				return true
 			}
 		}
@@ -176,7 +176,7 @@ func TestFanOutEndToEnd(t *testing.T) {
 	}
 
 	// Bound over the API, the annex room's next report lands on its system.
-	bind("zr-annex-1", "annex")
+	bind("zr-boardroom-b", "annex")
 	operate("/api/rooms/report", map[string]any{})
 	waitFor(t, "annex from the next report", func() bool { return callState("annex") == "active" })
 }

@@ -9,6 +9,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // Identity binding sentinels (#1385, ADR-1282).
@@ -16,7 +17,10 @@ var (
 	// ErrIdentityBindingNotFound is a delete naming no binding the caller may
 	// see: none on this conduit for the key and value, or one whose owner is
 	// outside the caller's read on its tier (the list counts that one without
-	// naming it, so a delete does not name it either).
+	// naming it, so a delete does not name it either). A put on such an
+	// identity is the move refusal instead, which tells the caller the
+	// identity is bound but never to whom: accepted, since the list's hidden
+	// count already says the conduit has bindings the caller cannot see.
 	ErrIdentityBindingNotFound = errors.New("storage: identity binding not found")
 	// ErrIdentityBindingKeyUnregistered is a match key that is no registered
 	// property type: the key is typed and shared by every driver reporting it.
@@ -206,7 +210,7 @@ func (p *PG) PutIdentityBinding(ctx context.Context, actorID, conduit, key, valu
 	}
 	// Serialize writes to one identity, so two puts racing on an unbound value
 	// cannot both read "absent" and one of them fail on the unique key.
-	if err := lockAdvisory(ctx, tx, "identity_binding/"+c.ID+"/"+keyID+"/"+value); err != nil {
+	if err := lockAdvisory(ctx, tx, identityLockKey(c.ID, keyID, value)); err != nil {
 		return nil, err
 	}
 	before, err := scanIdentityBinding(tx.QueryRow(ctx, `select `+identityBindingCols+identityBindingFrom+`
@@ -248,9 +252,15 @@ func (p *PG) PutIdentityBinding(ctx context.Context, actorID, conduit, key, valu
 			return nil, ErrIdentityBindingMoveForbidden
 		}
 		verb, id = "update", before.ID
-		if _, err := tx.Exec(ctx, `update identity_binding set owner_kind = $2, component_id = $3, system_id = $4 where id = $1`,
-			id, owner.Kind, componentID, systemID); err != nil {
+		tag, err := tx.Exec(ctx, `update identity_binding set owner_kind = $2, component_id = $3, system_id = $4 where id = $1`,
+			id, owner.Kind, componentID, systemID)
+		if err != nil {
 			return nil, fmt.Errorf("storage: move identity binding: %w", err)
+		}
+		// The identity lock makes this unreachable today; if the row went
+		// anyway, say so cleanly rather than failing the read-back below.
+		if tag.RowsAffected() == 0 {
+			return nil, ErrIdentityBindingNotFound
 		}
 	}
 	after, err := scanIdentityBinding(tx.QueryRow(ctx, `select `+identityBindingCols+identityBindingFrom+` where b.id = $1`, id))
@@ -287,9 +297,21 @@ func (p *PG) DeleteIdentityBinding(ctx context.Context, actorID, conduit, key, v
 	if err != nil {
 		return err
 	}
+	keyID, err := identityKeyID(ctx, tx, key)
+	if errors.Is(err, ErrIdentityBindingKeyUnregistered) {
+		return ErrIdentityBindingNotFound // no such key, so no binding under it
+	}
+	if err != nil {
+		return err
+	}
+	// The same per-identity lock a put takes, so a delete and a moving put
+	// serialize: without it the put could read the row, the delete remove it,
+	// and the put's move update nothing.
+	if err := lockAdvisory(ctx, tx, identityLockKey(c.ID, keyID, value)); err != nil {
+		return err
+	}
 	before, err := scanIdentityBinding(tx.QueryRow(ctx, `select `+identityBindingCols+identityBindingFrom+`
-		where b.conduit_id = $1 and pt.name = $2 and b.value = $3
-		for update of b`, c.ID, key, value))
+		where b.conduit_id = $1 and b.property_type_id = $2 and b.value = $3`, c.ID, keyID, value))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrIdentityBindingNotFound
 	}
@@ -321,6 +343,32 @@ func (p *PG) DeleteIdentityBinding(ctx context.Context, actorID, conduit, key, v
 		return fmt.Errorf("storage: commit delete identity binding: %w", err)
 	}
 	return nil
+}
+
+// identityLockKey is the advisory lock every write to one identity takes.
+func identityLockKey(conduitID, keyID, value string) string {
+	return "identity_binding/" + conduitID + "/" + keyID + "/" + value
+}
+
+// identityKeyInUse counts the bindings holding a match key, for a property
+// type delete to refuse with (nil when none do).
+func identityKeyInUse(ctx context.Context, q txQuerier, key string) error {
+	var n int
+	if err := q.QueryRow(ctx, `select count(*) from identity_binding b join property_type pt on pt.id = b.property_type_id
+		where pt.name = $1`, key).Scan(&n); err != nil {
+		return fmt.Errorf("storage: count identity bindings on %q: %w", key, err)
+	}
+	if n > 0 {
+		return &IdentityKeyInUseError{Key: key, Bindings: n}
+	}
+	return nil
+}
+
+// isIdentityKeyFK reports whether err is the match key's foreign key refusing
+// a property type delete.
+func isIdentityKeyFK(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.ConstraintName == "identity_binding_property_type_id_fkey"
 }
 
 func validIdentityValue(value string) error {
@@ -403,4 +451,17 @@ func identityOwnerForbidden(kind string) error {
 		return ErrComponentForbidden
 	}
 	return ErrSystemForbidden
+}
+
+// IdentityKeyInUseError is a delete of a property type that identity
+// bindings still use as their match key. It counts them rather than naming
+// their conduits: the registry delete carries no component scope to judge
+// which conduits the caller may read.
+type IdentityKeyInUseError struct {
+	Key      string
+	Bindings int
+}
+
+func (e *IdentityKeyInUseError) Error() string {
+	return fmt.Sprintf("%d identity binding(s) use %q as their match key; unbind them before deleting it", e.Bindings, e.Key)
 }

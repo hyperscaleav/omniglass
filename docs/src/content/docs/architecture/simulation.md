@@ -387,7 +387,7 @@ reaches state only as one path key (a template's `segment` function refuses any 
 shipped `ucc-rooms` driver polls the room list as records and the `ucc-webhook` driver's
 room-naming listeners read the posts, each declaring the `ucc-room-id` identity. The dev fleet
 carries the platform at headquarters with both endpoints and binds four of its rooms to their
-systems; its fifth room, `zr-annex-1`, is bound to nothing, so its values land in the conduit's
+systems; its fifth room, `zr-boardroom-b`, is bound to nothing, so its values land in the conduit's
 unbound inbox until an operator binds it ([ADR-1282](/architecture/decisions/#adr-1282-a-conduit-fans-each-identified-value-out-to-the-owner-its-binding-names-and-a-binding-costs-a-write-on-both-of-its-ends)).
 The lab's per-room UCC services stay beside it until #1390 retires them.
 
