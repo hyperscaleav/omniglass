@@ -141,6 +141,14 @@
       ]
     },
     {
+      "id": "snooze-an-alarm",
+      "title": "Snooze an alarm",
+      "description": "Silence a noisy alarm's notifications for an hour from its component's page, read the snooze on its timeline, and end it early.",
+      "setup": [
+        "omniglass component alarm create panel-2 --dedup-key walkthrough-snooze --message \"Touch input lost\" --severity high"
+      ]
+    },
+    {
       "id": "start-from-template",
       "title": "Start a system from a template",
       "description": "From a place, create a new system from a template instead of from scratch, read what the template creates, and land on a system that is yours, with nothing pointing back at the template.",
