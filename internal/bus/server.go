@@ -55,6 +55,7 @@ type Server struct {
 	stopPrune       context.CancelFunc // ends the receipt retention pass
 	stopRetention   context.CancelFunc // ends the sample retention pass (#417)
 	orphans         *orphanTally       // the node lane's orphaned batches, warned and counted (#1200)
+	unboundWarn     unboundWarner      // a conduit's unbound identities, warned once per window (#1282)
 	registry        registryCache      // the ingest sample registry, kept until a catalog changes (#1279)
 	stopOrphanFlush context.CancelFunc // ends the orphan count's flush
 	sweepStop       sync.Once

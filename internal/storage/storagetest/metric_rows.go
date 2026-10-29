@@ -17,14 +17,15 @@ import (
 // subquery to alias: each hot-tier sample and each declared row beside its
 // series' columns (id, ts, owner_kind, component_id, system_id, location_id,
 // node_id, metric_type_id, instance, value, provenance, source, source_rule,
-// source_rule_version, source_rule_id, event_id, command_id).
+// source_rule_version, source_rule_id, event_id, command_id, source_conduit_id).
 const MetricRows = `(select m.id, m.ts, s.owner_kind, s.component_id, s.system_id, s.location_id, s.node_id,
 		s.metric_type_id, s.instance, m.value, s.provenance, s.source, m.source_rule, m.source_rule_version,
-		m.source_rule_id, null::bigint as event_id, null::bigint as command_id
+		m.source_rule_id, null::bigint as event_id, null::bigint as command_id, s.source_conduit_id
 	from metric m join metric_series s on s.id = m.series_id
 	union all
 	select d.id, d.ts, s.owner_kind, s.component_id, s.system_id, s.location_id, s.node_id,
-		s.metric_type_id, s.instance, d.value, s.provenance, s.source, null, null, null, d.event_id, d.command_id
+		s.metric_type_id, s.instance, d.value, s.provenance, s.source, null, null, null, d.event_id, d.command_id,
+		s.source_conduit_id
 	from metric_declared d join metric_series s on s.id = d.series_id)`
 
 // wideMetricCols is every column of the wide shape a planted row may name,
@@ -93,7 +94,8 @@ func WideMetricInsert(cols, rows string) string {
 		coalesce(component_id, system_id, location_id, node_id) as owner_id from w),
 	known as (select s.id, s.owner_id, s.metric_type_id, s.instance, s.provenance, s.source
 		from k join metric_series s on s.owner_id = k.owner_id and s.metric_type_id = k.metric_type_id
-			and s.instance = k.instance and s.provenance = k.provenance and s.source = k.source and s.collector_node_id is null),
+			and s.instance = k.instance and s.provenance = k.provenance and s.source = k.source and s.collector_node_id is null
+			and s.source_conduit_id is null),
 	fresh as (insert into metric_series (metric_type_id, owner_kind, component_id, system_id, location_id, node_id, instance, provenance, source)
 		select metric_type_id, owner_kind, component_id, system_id, location_id, node_id, instance, provenance, source from k
 		where not exists (select 1 from known n where n.owner_id = k.owner_id and n.metric_type_id = k.metric_type_id

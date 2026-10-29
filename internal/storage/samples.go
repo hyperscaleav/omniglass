@@ -224,7 +224,8 @@ func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs
 	// metricInsertSQL lands metric samples in one statement: $1..$7 are the
 	// samples' ts, owner kinds, owner ids, type names, instances, values and
 	// sources, in the batch's order; $8 the provenance, $9..$11 a calculated
-	// sample's rule lineage, $12 the collecting node (null for none).
+	// sample's rule lineage, $12 the collecting node (null for none), $13 a
+	// fanned sample's conduit (source_conduit_id, #1282; null for none).
 	//
 	// Each sample's series is found by its key, or started in the same statement
 	// when the batch is its first sample. A series another transaction started
@@ -244,16 +245,17 @@ func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs
 		from k join metric_series s on s.owner_id = k.owner and s.metric_type_id = k.type_id
 			and s.instance = k.instance and s.provenance = $8::text and s.source = k.source
 			and s.collector_node_id is not distinct from $12::uuid
+			and s.source_conduit_id is not distinct from $13::uuid
 	),
 	fresh as (
 		insert into metric_series (metric_type_id, owner_kind, component_id, system_id, location_id, node_id,
-			instance, provenance, source, collector_node_id)
+			instance, provenance, source, collector_node_id, source_conduit_id)
 		select k.type_id, k.owner_kind,
 			case when k.owner_kind = 'component' then k.owner end,
 			case when k.owner_kind = 'system' then k.owner end,
 			case when k.owner_kind = 'location' then k.owner end,
 			case when k.owner_kind = 'node' then k.owner end,
-			k.instance, $8::text, k.source, $12::uuid
+			k.instance, $8::text, k.source, $12::uuid, $13::uuid
 		from k
 		where not exists (select 1 from known n where n.owner_id = k.owner and n.metric_type_id = k.type_id
 			and n.instance = k.instance and n.source = k.source)
@@ -289,7 +291,7 @@ func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs
 			instances[j], values[j], sources[j] = evs[i].Instance, evs[i].Value, evs[i].Source
 		}
 		_, err := tx.Exec(ctx, metricInsertSQL,
-			ts, kinds, owners, keys, instances, values, sources, provenance, sourceRule, sourceVersion, sourceRuleID, collector)
+			ts, kinds, owners, keys, instances, values, sources, provenance, sourceRule, sourceVersion, sourceRuleID, collector, w.sourceConduit())
 		if err != nil {
 			named := make([]string, 0, len(idx))
 			for _, i := range idx {
@@ -337,7 +339,7 @@ func (p *PG) LatestMetric(ctx context.Context, componentRef, key string) (*Metri
 	}
 	var dp MetricSample
 	err = p.pool.QueryRow(ctx, `
-		select n.ts, s.owner_kind, mt.name, s.instance, n.value, s.provenance, s.source
+		select n.ts, s.owner_kind, mt.name, s.instance, n.value, s.provenance, `+sourceRendered("s")+`
 		from metric_series s
 		join metric_type mt on mt.id = s.metric_type_id
 		cross join lateral (`+metricNewestSQL("s.id")+`) n
@@ -370,7 +372,7 @@ func (p *PG) LatestMetricInstance(ctx context.Context, componentRef, key, instan
 	}
 	var dp MetricSample
 	err = p.pool.QueryRow(ctx, `
-		select n.ts, s.owner_kind, mt.name, s.instance, n.value, s.provenance, s.source
+		select n.ts, s.owner_kind, mt.name, s.instance, n.value, s.provenance, `+sourceRendered("s")+`
 		from metric_series s
 		join metric_type mt on mt.id = s.metric_type_id
 		cross join lateral (`+metricNewestSQL("s.id")+`) n
@@ -403,7 +405,7 @@ func (p *PG) ListMetricSeries(ctx context.Context, ownerKind, ownerRef, key stri
 	// and calculated samples and the declared tier's intended rows.
 	bound, args := tsSince("x.ts", window, arc, key, limit, ownerKind)
 	rows, err := p.pool.Query(ctx, fmt.Sprintf(`
-		select x.ts, s.owner_kind, mt.name, s.instance, x.value, s.provenance, s.source
+		select x.ts, s.owner_kind, mt.name, s.instance, x.value, s.provenance, `+sourceRendered("s")+`
 		from metric_series s
 		join metric_type mt on mt.id = s.metric_type_id
 		cross join lateral (

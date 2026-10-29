@@ -164,6 +164,12 @@
       "labelled": true
     },
     {
+      "table": "identity_binding",
+      "shape": "id only",
+      "reason": "a conduit's identity tied to its owner, addressed by its conduit, match key and value; nothing names it",
+      "labelled": false
+    },
+    {
       "table": "impersonation_session",
       "shape": "id only",
       "labelled": false
@@ -431,6 +437,12 @@
       "reason": "a publisher-minted batch id (the subject a batch arrived on and its Nats-Msg-Id, ADR-0311), not a name: it identifies one landed ingest batch for as long as its horizon keeps it",
       "labelled": false,
       "no_label": "no operator surface of its own: only the ingest's conflict check reads a receipt, and nothing renders a receipt row for a label to appear on"
+    },
+    {
+      "table": "unbound_identity",
+      "shape": "id only",
+      "reason": "an identity a conduit reported that no binding places, one row per conduit, match key and value; read as the conduit's list, never addressed by name",
+      "labelled": false
     },
     {
       "table": "unclaimed_source",

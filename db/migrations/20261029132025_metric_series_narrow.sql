@@ -38,6 +38,9 @@ END $$;
 -- recorded); a task that moves to another node starts a new series of the
 -- same logical key (type, owner, instance, provenance), which readers merge.
 -- It is a record, not a reference: a deleted node leaves its series' history.
+-- source_conduit_id is a fanned series' conduit (#1282), by id beside its
+-- source text, so a read renders the conduit's current name; no foreign key,
+-- as on the wide table.
 CREATE TABLE IF NOT EXISTS public.metric_series (
     id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     metric_type_id uuid NOT NULL REFERENCES public.metric_type(id) ON DELETE CASCADE,
@@ -51,6 +54,7 @@ CREATE TABLE IF NOT EXISTS public.metric_series (
     provenance text NOT NULL,
     source text DEFAULT ''::text NOT NULL,
     collector_node_id uuid,
+    source_conduit_id uuid,
     CONSTRAINT metric_series_owner_kind_check CHECK ((owner_kind = ANY (ARRAY['component'::text, 'system'::text, 'location'::text, 'node'::text]))),
     CONSTRAINT metric_series_owner_arc_check CHECK ((((owner_kind = 'component'::text) AND (component_id IS NOT NULL) AND (system_id IS NULL) AND (location_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'system'::text) AND (system_id IS NOT NULL) AND (component_id IS NULL) AND (location_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'location'::text) AND (location_id IS NOT NULL) AND (component_id IS NULL) AND (system_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'node'::text) AND (node_id IS NOT NULL) AND (component_id IS NULL) AND (system_id IS NULL) AND (location_id IS NULL)))),
     CONSTRAINT metric_series_provenance_check CHECK ((provenance = ANY (ARRAY['observed'::text, 'calculated'::text, 'intended'::text])))
@@ -58,7 +62,7 @@ CREATE TABLE IF NOT EXISTS public.metric_series (
 -- The series key, leading with the owner so it is also the logical key's
 -- index: every series of one owner, or of one owner's type, is a prefix read.
 CREATE UNIQUE INDEX IF NOT EXISTS metric_series_key ON public.metric_series
-    (owner_id, metric_type_id, instance, provenance, source, collector_node_id) NULLS NOT DISTINCT;
+    (owner_id, metric_type_id, instance, provenance, source, collector_node_id, source_conduit_id) NULLS NOT DISTINCT;
 -- Every series of one type, across owners (an event rule's reconcile, a type's
 -- retention window, a type's delete).
 CREATE INDEX IF NOT EXISTS metric_series_type_idx ON public.metric_series (metric_type_id);

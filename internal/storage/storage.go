@@ -657,6 +657,12 @@ type Gateway interface {
 	RecordUnclaimedSources(ctx context.Context, us []UnclaimedSource) error
 	ListUnclaimedSources(ctx context.Context) ([]UnclaimedSource, error)
 	ClaimUnclaimedSource(ctx context.Context, host, transport, source string) (bool, error)
+	// ListUnboundIdentities reads a conduit's inbox of identities no binding
+	// places (#1282), scoped by component read on the conduit.
+	ListUnboundIdentities(ctx context.Context, conduitRef string, read scope.Set) ([]UnboundIdentity, error)
+	// ResolveIdentityBindings resolves the identities one ingest batch names
+	// against its conduit's bindings in one read (#1282), in system mode.
+	ResolveIdentityBindings(ctx context.Context, conduitID string, ids []IdentityKey) (*IdentityResolution, error)
 	// ComponentVerdict is one component's own verdict, by its id, from its
 	// active alarms: what a component's view reads without the fleet (#934).
 	ComponentVerdict(ctx context.Context, componentID string) (string, error)
@@ -892,6 +898,16 @@ type Gateway interface {
 	AddMember(ctx context.Context, actorID, systemName, componentName string, read, action, componentRead, componentAction scope.Set) error
 	RemoveMember(ctx context.Context, actorID, systemName, componentName string, read, action, componentRead, componentAction scope.Set) error
 	SetPrimaryMember(ctx context.Context, actorID, systemName, componentName string, read, action, componentRead, componentAction scope.Set) error
+
+	// Identity bindings (#1385, ADR-1282): a conduit component's reported value
+	// under a match key, tied to the one system or component it names. A binding
+	// has two ends and costs a write on both: the conduit resolves in
+	// componentRead then componentUpdate, the owner in its own tier's read then
+	// update, and a move also needs update on the owner it leaves. The list
+	// names an owner only inside the caller's read on its tier and counts the rest.
+	ListIdentityBindings(ctx context.Context, conduit string, componentRead, systemRead scope.Set) (*IdentityBindingList, error)
+	PutIdentityBinding(ctx context.Context, actorID, conduit, key, value string, owner IdentityBindingOwner, sc IdentityBindingScopes) (*IdentityBinding, error)
+	DeleteIdentityBinding(ctx context.Context, actorID, conduit, key, value string, sc IdentityBindingScopes) error
 
 	// The role tier: a system's roles resolve from its standard (inherited) and its
 	// own ad-hoc declarations; assignment refuses a component whose product's

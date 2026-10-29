@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS public.metric_wide (
     metric_type_id uuid CONSTRAINT metric_property_type_id_not_null NOT NULL,
     command_id bigint,
     source_rule_id uuid,
+    source_conduit_id uuid,
     CONSTRAINT metric_lineage_check CHECK ((((provenance = 'observed'::text) AND (event_id IS NULL) AND (command_id IS NULL)) OR ((provenance = 'calculated'::text) AND (source_rule IS NOT NULL) AND (event_id IS NULL) AND (command_id IS NULL)) OR ((provenance = 'intended'::text) AND (command_id IS NOT NULL) AND (source_rule IS NULL)))),
     CONSTRAINT metric_owner_arc_check CHECK ((((owner_kind = 'component'::text) AND (component_id IS NOT NULL) AND (system_id IS NULL) AND (location_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'system'::text) AND (system_id IS NOT NULL) AND (component_id IS NULL) AND (location_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'location'::text) AND (location_id IS NOT NULL) AND (component_id IS NULL) AND (system_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'node'::text) AND (node_id IS NOT NULL) AND (component_id IS NULL) AND (system_id IS NULL) AND (location_id IS NULL)))),
     CONSTRAINT metric_owner_kind_check CHECK ((owner_kind = ANY (ARRAY['component'::text, 'system'::text, 'location'::text, 'node'::text]))),

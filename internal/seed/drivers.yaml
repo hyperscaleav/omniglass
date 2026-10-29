@@ -550,3 +550,61 @@ drivers:
               attributes:
                 meeting: { extract: { jsonpath: meeting } }
             - { name: call-state, extract: { jsonpath: event }, transform: { map: { meeting.ended: idle } } }
+        # The account-wide platform's posts (#1282, ADR-1282): each names the
+        # room it is about by id, so the driver declares an identity and the
+        # ingest lands the call on the system or component bound to that room
+        # on this component (the conduit). A room nobody bound lands in the
+        # conduit's unbound inbox. The per-room posts above name no identity
+        # and land on this component, as before.
+        - name: room-meeting-started
+          match: { header: { name: X-UCC-Event, equals: room.meeting.started } }
+          identity: { key: ucc-room-id, extract: { jsonpath: room_id } }
+          emits:
+            - name: call-started
+              message: { value: "Meeting started" }
+              attributes:
+                meeting: { extract: { jsonpath: meeting } }
+            - { name: call-state, extract: { jsonpath: event }, transform: { map: { room.meeting.started: active } } }
+        - name: room-meeting-ended
+          match: { header: { name: X-UCC-Event, equals: room.meeting.ended } }
+          identity: { key: ucc-room-id, extract: { jsonpath: room_id } }
+          emits:
+            - { name: call-ended, message: { value: "Meeting ended" } }
+            - { name: call-state, extract: { jsonpath: event }, transform: { map: { room.meeting.ended: idle } } }
+        # The batched report names every room at once: one record per room.
+        - name: rooms-state
+          match: { header: { name: X-UCC-Event, equals: rooms.state } }
+          records: rooms
+          identity: { key: ucc-room-id, extract: { jsonpath: room_id } }
+          emits:
+            - { name: call-state, extract: { jsonpath: state }, transform: { map: { in-call: active, idle: idle } } }
+  - id: ucc-rooms
+    label: UCC Rooms
+    version: "1.0.0"
+    spec:
+      version: 1
+      # The account-wide meeting platform's room list (#1282): one poll of
+      # GET /api/rooms reads every room on the account, one record per room,
+      # each naming its room by id, so each room's call state and
+      # participant count land on the system or component bound to that id
+      # on this component (the conduit). The platform answers over https on
+      # 443, its key pinned on first use, every request carrying its token.
+      transport: https
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "443" }
+        - { name: tls-mode, kind: string, default: pin }
+        - { name: token, kind: secret, secret_type: api-key, required: true }
+      session:
+        credential: token
+        scheme: api-key
+        api_key: { in: header, name: X-UCC-Token }
+      polls:
+        - name: rooms
+          schedule: { every: 30s }
+          request: { path: /api/rooms }
+          records: rooms
+          identity: { key: ucc-room-id, extract: { jsonpath: id } }
+          emits:
+            - { name: call-state, extract: { jsonpath: state }, transform: { map: { in-call: active, idle: idle } } }
+            - { name: participant-count, extract: { jsonpath: participants } }

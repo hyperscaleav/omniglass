@@ -193,7 +193,7 @@ func (p *PG) IssueCommand(ctx context.Context, actorID, ownerKind, ownerID, comm
 			metricSQL := fmt.Sprintf(`with series as (
 					insert into metric_series (metric_type_id, owner_kind, %s, instance, provenance, source)
 					values ((select id from metric_type where name = $3), $1, $2, $4, 'intended', 'command')
-					on conflict (owner_id, metric_type_id, instance, provenance, source, collector_node_id)
+					on conflict (owner_id, metric_type_id, instance, provenance, source, collector_node_id, source_conduit_id)
 						do update set source = excluded.source
 					returning id)
 				insert into metric_declared (series_id, value, event_id, command_id)

@@ -214,6 +214,11 @@ func (p *PG) DeletePropertyType(ctx context.Context, actorID, name string) error
 		}
 		return fmt.Errorf("storage: audit image property_type %q: %w", name, err)
 	}
+	// A match key identity bindings hold is refused with a count (#1385); the
+	// FK's RESTRICT stays the backstop for a bind racing this delete.
+	if err := identityKeyInUse(ctx, tx, name); err != nil {
+		return err
+	}
 	// A savepoint, so a refused delete leaves the transaction readable for
 	// naming the calc rules that hold the key.
 	if _, err := tx.Exec(ctx, `savepoint type_delete`); err != nil {
@@ -223,6 +228,11 @@ func (p *PG) DeletePropertyType(ctx context.Context, actorID, name string) error
 		if _, rerr := tx.Exec(ctx, `rollback to savepoint type_delete`); rerr == nil {
 			if inUse := calcOutputInUse(ctx, tx, rules.LaneProperty, name, err); inUse != nil {
 				return inUse
+			}
+			if isIdentityKeyFK(err) {
+				if inUse := identityKeyInUse(ctx, tx, name); inUse != nil {
+					return inUse
+				}
 			}
 		}
 		return fmt.Errorf("storage: delete property %q: %w", name, err)

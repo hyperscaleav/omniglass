@@ -39,6 +39,45 @@ type IngestBatch struct {
 	// Nil reads them there. Read only, so a caller may share one set across
 	// batches.
 	CommandTargeted map[string]bool
+	// Unbound is what the batch heard of identities its conduit has no
+	// binding for (#1282), upserted into the conduit's inbox in the batch's
+	// transaction, so a redelivery counts nothing twice.
+	Unbound []UnboundIdentityWrite
+	// Fanned is the batch's values a conduit fans out to the owners its
+	// identity bindings name (#1282, ADR-1282), landed in the same
+	// transaction under the fan-out writer. Nil on a batch that names no
+	// bound identity, which then costs exactly what it did before.
+	Fanned *FannedRows
+}
+
+// ErrFanoutStale marks a batch whose fanned rows name an owner the
+// conduit no longer binds: transient, so the ingest redelivers it and
+// resolves the bindings again, never a refusal that would drop the batch.
+var ErrFanoutStale = errors.New("storage: a fanned row's owner is no longer bound; resolve again")
+
+// FannedRows are a batch's fanned values, each row on its bound owner's
+// arc, at the empty instance, naming the conduit in its source, all for
+// Writer (a FanoutWriter).
+type FannedRows struct {
+	Writer     KeyWriter
+	Metrics    []MetricSampleWrite
+	Properties []PropertySampleWrite
+	Events     []EventWrite
+}
+
+// fannedKeyed is every fanned row as the writer check reads it.
+func (f *FannedRows) keyed() []keyedWrite {
+	var out []keyedWrite
+	for _, r := range f.Metrics {
+		out = append(out, keyedWrite{key: r.Key, ownerKind: r.OwnerKind, owner: r.OwnerID})
+	}
+	for _, r := range f.Properties {
+		out = append(out, keyedWrite{key: r.Key, ownerKind: r.OwnerKind, owner: r.OwnerID})
+	}
+	for _, r := range f.Events {
+		out = append(out, keyedWrite{key: r.Key, ownerKind: r.OwnerKind, owner: r.OwnerID})
+	}
+	return out
 }
 
 // LandBatch writes one ingest batch in ONE transaction: its receipt, then
@@ -88,8 +127,44 @@ func (p *PG) landBatch(ctx context.Context, b IngestBatch) (bool, error) {
 				return nil // landed before: a redelivery or a retry
 			}
 		}
+		// The fanned rows' fence first: one read of which owners the conduit
+		// has bound, held on the writer for every lane, and each bound owner's
+		// arc known without a read of its own (a binding's owner exists, by
+		// its foreign key), so a batch about many owners resolves them in one
+		// statement however many there are.
+		fw := KeyWriter{}
+		if b.Fanned != nil {
+			fw = b.Fanned.Writer
+			owners, err := fanBinding(ctx, tx, fw.Component, b.Fanned.keyed())
+			if err != nil {
+				return err
+			}
+			fw.fanOwners = owners
+			// A row whose owner is no longer bound (an operator unbound it, or
+			// deleted the owner, after the ingest resolved it) is stale, not
+			// refused: refusing it would drop the conduit's own rows and every
+			// other owner's with it. The batch fails transiently, writing
+			// nothing, and its redelivery resolves the bindings afresh.
+			for _, r := range b.Fanned.keyed() {
+				if !owners[fanOwnerKey(r.ownerKind, r.owner)] {
+					return fmt.Errorf("%w: %s/%s", ErrFanoutStale, r.ownerKind, r.owner)
+				}
+			}
+			for k := range owners {
+				bt.arcs[k] = k[strings.IndexByte(k, 0)+1:]
+			}
+		}
 		if err := p.lockInOrder(ctx, tx, b); err != nil {
 			return err
+		}
+		// The property lane's transition locks across the conduit's own rows
+		// and its fanned ones, taken once in one sorted order, so two batches
+		// whose own and fanned series cross never take them in opposite
+		// orders.
+		if b.Fanned != nil && len(b.Fanned.Properties) > 0 && len(b.Properties) > 0 {
+			if err := p.lockAllPropertySeries(ctx, tx, append(append([]PropertySampleWrite(nil), b.Properties...), b.Fanned.Properties...)); err != nil {
+				return err
+			}
 		}
 		if len(b.Properties) > 0 {
 			if err := p.writePropertySamples(ctx, tx, b.Writer, b.Properties, true); err != nil {
@@ -106,6 +181,23 @@ func (p *PG) landBatch(ctx context.Context, b IngestBatch) (bool, error) {
 				return err
 			}
 		}
+		if f := b.Fanned; f != nil {
+			if len(f.Properties) > 0 {
+				if err := p.writePropertySamples(ctx, tx, fw, f.Properties, true); err != nil {
+					return err
+				}
+			}
+			if len(f.Metrics) > 0 {
+				if err := p.writeMetricSamples(ctx, tx, fw, f.Metrics); err != nil {
+					return err
+				}
+			}
+			if len(f.Events) > 0 {
+				if err := p.writeEvents(ctx, tx, fw, f.Events); err != nil {
+					return err
+				}
+			}
+		}
 		if len(b.LogLines) > 0 {
 			if err := p.writeLogLines(ctx, tx, b.LogLines); err != nil {
 				return err
@@ -113,6 +205,11 @@ func (p *PG) landBatch(ctx context.Context, b IngestBatch) (bool, error) {
 		}
 		if len(b.NodeLogs) > 0 {
 			if err := p.writeNodeLogs(ctx, tx, b.NodeLogs); err != nil {
+				return err
+			}
+		}
+		if len(b.Unbound) > 0 {
+			if err := writeUnboundIdentities(ctx, tx, b.Unbound); err != nil {
 				return err
 			}
 		}
@@ -135,8 +232,13 @@ func (p *PG) landBatch(ctx context.Context, b IngestBatch) (bool, error) {
 // row, the reverse of a rule edit's order (the row FOR UPDATE, then health),
 // and the two would deadlock.
 func (p *PG) lockInOrder(ctx context.Context, tx pgx.Tx, b IngestBatch) error {
-	keys := append(sampleKeys(b.Properties, func(e PropertySampleWrite) string { return e.Key }),
-		sampleKeys(b.Metrics, func(e MetricSampleWrite) string { return e.Key })...)
+	props, metrics := b.Properties, b.Metrics
+	if b.Fanned != nil {
+		props = append(append([]PropertySampleWrite(nil), props...), b.Fanned.Properties...)
+		metrics = append(append([]MetricSampleWrite(nil), metrics...), b.Fanned.Metrics...)
+	}
+	keys := append(sampleKeys(props, func(e PropertySampleWrite) string { return e.Key }),
+		sampleKeys(metrics, func(e MetricSampleWrite) string { return e.Key })...)
 	if len(keys) == 0 {
 		return nil
 	}
@@ -158,17 +260,31 @@ func (p *PG) lockInOrder(ctx context.Context, tx pgx.Tx, b IngestBatch) error {
 		marks.add(ownerKind, arc, lane, key)
 		return nil
 	}
-	for _, ev := range b.Properties {
+	for _, ev := range props {
 		if err := mark(ev.OwnerKind, ev.OwnerID, rules.LaneProperty, ev.Key); err != nil {
 			return err
 		}
 	}
-	for _, ev := range b.Metrics {
+	for _, ev := range metrics {
 		if err := mark(ev.OwnerKind, ev.OwnerID, rules.LaneMetric, ev.Key); err != nil {
 			return err
 		}
 	}
 	return p.markCalcPending(ctx, tx, marks, b.Writer.rule())
+}
+
+// lockAllPropertySeries takes the transition lock of every property series
+// in evs, in one sorted order, each owner's arc resolved through the batch.
+func (p *PG) lockAllPropertySeries(ctx context.Context, tx pgx.Tx, evs []PropertySampleWrite) error {
+	arcs := make([]string, len(evs))
+	for i, ev := range evs {
+		arc, err := p.ownerArcValue(ctx, tx, ev.OwnerKind, ev.OwnerID)
+		if err != nil {
+			return fmt.Errorf("storage: land batch: owner %s/%s: %w", ev.OwnerKind, ev.OwnerID, err)
+		}
+		arcs[i] = arc
+	}
+	return lockPropertySeries(ctx, tx, evs, arcs)
 }
 
 // IsRefusedWrite reports whether a write failed for a reason no retry

@@ -8,8 +8,9 @@
 -- before this has none. The copy only runs into empty narrow tables, so a
 -- repeat copies nothing; the count check then still holds.
 
-INSERT INTO public.metric_series (metric_type_id, owner_kind, component_id, system_id, location_id, node_id, instance, provenance, source)
-SELECT DISTINCT metric_type_id, owner_kind, component_id, system_id, location_id, node_id, instance, provenance, source
+INSERT INTO public.metric_series (metric_type_id, owner_kind, component_id, system_id, location_id, node_id, instance, provenance, source,
+    source_conduit_id)
+SELECT DISTINCT metric_type_id, owner_kind, component_id, system_id, location_id, node_id, instance, provenance, source, source_conduit_id
 FROM public.metric_wide
 ON CONFLICT DO NOTHING;
 
@@ -21,6 +22,7 @@ JOIN public.metric_series s
   ON s.owner_id = COALESCE(w.component_id, w.system_id, w.location_id, w.node_id)
  AND s.metric_type_id = w.metric_type_id AND s.instance = w.instance
  AND s.provenance = w.provenance AND s.source = w.source AND s.collector_node_id IS NULL
+ AND COALESCE(s.source_conduit_id, '00000000-0000-0000-0000-000000000000') = COALESCE(w.source_conduit_id, '00000000-0000-0000-0000-000000000000')
 WHERE w.provenance IN ('observed', 'calculated')
   AND NOT EXISTS (SELECT 1 FROM public.metric LIMIT 1);
 
@@ -32,6 +34,7 @@ JOIN public.metric_series s
   ON s.owner_id = COALESCE(w.component_id, w.system_id, w.location_id, w.node_id)
  AND s.metric_type_id = w.metric_type_id AND s.instance = w.instance
  AND s.provenance = w.provenance AND s.source = w.source AND s.collector_node_id IS NULL
+ AND COALESCE(s.source_conduit_id, '00000000-0000-0000-0000-000000000000') = COALESCE(w.source_conduit_id, '00000000-0000-0000-0000-000000000000')
 WHERE w.provenance = 'intended'
   AND NOT EXISTS (SELECT 1 FROM public.metric_declared LIMIT 1);
 
@@ -60,18 +63,18 @@ END $$;
 -- beside it. A declared row takes a fresh id, since the two narrow tables'
 -- ids are only unique each within its own.
 INSERT INTO public.metric_wide (id, ts, owner_kind, component_id, system_id, location_id, node_id, metric_type_id,
-    instance, value, provenance, source, source_rule, source_rule_version, source_rule_id)
+    instance, value, provenance, source, source_rule, source_rule_version, source_rule_id, source_conduit_id)
 OVERRIDING SYSTEM VALUE
 SELECT m.id, m.ts, s.owner_kind, s.component_id, s.system_id, s.location_id, s.node_id, s.metric_type_id,
-    s.instance, m.value, s.provenance, s.source, m.source_rule, m.source_rule_version, m.source_rule_id
+    s.instance, m.value, s.provenance, s.source, m.source_rule, m.source_rule_version, m.source_rule_id, s.source_conduit_id
 FROM public.metric m JOIN public.metric_series s ON s.id = m.series_id
 WHERE NOT EXISTS (SELECT 1 FROM public.metric_wide LIMIT 1);
 SELECT setval('public.metric_wide_id_seq',
   GREATEST((SELECT COALESCE(max(id), 0) FROM public.metric_wide), (SELECT last_value FROM public.metric_wide_id_seq), 1));
 INSERT INTO public.metric_wide (ts, owner_kind, component_id, system_id, location_id, node_id, metric_type_id,
-    instance, value, provenance, source, event_id, command_id)
+    instance, value, provenance, source, event_id, command_id, source_conduit_id)
 SELECT d.ts, s.owner_kind, s.component_id, s.system_id, s.location_id, s.node_id, s.metric_type_id,
-    s.instance, d.value, s.provenance, s.source, d.event_id, d.command_id
+    s.instance, d.value, s.provenance, s.source, d.event_id, d.command_id, s.source_conduit_id
 FROM public.metric_declared d JOIN public.metric_series s ON s.id = d.series_id
 WHERE NOT EXISTS (SELECT 1 FROM public.metric_wide w WHERE w.provenance = 'intended');
 DELETE FROM public.metric_declared;
