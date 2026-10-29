@@ -1,0 +1,21 @@
+# Keep a node's own logs for a day (#1350): a node's self-logs follow the
+# shared log windows until an admin gives a band a window of its own. Set the
+# node debug window to one day on the Settings page; a component's debug lines
+# keep the shared three days, and the server's next retention pass prunes the
+# node's debug lines older than a day.
+title: Keep a node's own logs for a day
+description: Give a node's own debug log lines a window of their own, one day, on the Settings page, while a component's debug lines keep the shared three days.
+steps:
+  - goto: /settings
+    caption: The retention card says how many days each kind of data is kept. A node's own log windows read not set, so a node's lines follow the shared ones.
+  - click: { role: button, name: Edit }
+    caption: Edit turns each value into a field. A field that is not set stays blank, not an error.
+  - type: { target: { role: textbox, name: node_log_debug_days, exact: true }, text: '1' }
+    caption: Keep a node's debug lines for a day. log_debug_days, the shared window, stays at 3 for a component's.
+  - click: { role: button, name: Save }
+    caption: Save it. The server's next retention pass prunes a node's debug lines by the new window.
+  - click: { role: button, name: Done }
+    caption: Done returns the page to reading.
+  - wait: { text: Set in console }
+    caption: The node's debug window now comes from the console. Restoring it puts a node's lines back on the shared window.
+    poster: true
