@@ -9,6 +9,7 @@ import BladeStack from "../components/BladeStack";
 import EventsPanel from "../components/EventsPanel";
 import LogsPanel from "../components/LogsPanel";
 import CommandsPanel from "../components/CommandsPanel";
+import IdentitiesPanel from "../components/IdentitiesPanel";
 import { BladesContext, createBladeController } from "../lib/blades";
 import { fleetRegistry } from "../lib/fleetBlades";
 import HealthBadge from "../components/HealthBadge";
@@ -516,6 +517,17 @@ export default function ComponentLeaf() {
                 </ul>
               </Show>
             </section>
+            {/* A component that speaks for many owners (a conduit, #1389):
+                the identities it fans out and the ones it heard unbound. It
+                renders nothing on a component that speaks only for itself. */}
+            <Show when={component()}>
+              {(c) => (
+                <IdentitiesPanel
+                  component={c().id}
+                  canUpdate={can(me.data, "component", "update") && (Array.isArray(c().actions) ? c().actions!.includes("update") : true)}
+                />
+              )}
+            </Show>
             {/* A simulated component says so, with its live hits (#890). */}
             <Show when={component()}>{(c) => <SimulationSection componentId={c().id} />}</Show>
               </div>

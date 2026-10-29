@@ -133,6 +133,15 @@ message MetricSample {
   // labels are sample-specific dimensional metadata (e.g. the reason). Not
   // persisted in this checkpoint.
   map<string, string> labels = 5;
+
+  // identity is the record's identity a driver function read (#1386,
+  // ADR-1282): a match key and its value, naming the owner the sample is
+  // about rather than the conduit component that collected it. It is a
+  // claim, never an owner: the server resolves it only against the identity
+  // bindings of the conduit the batch is already confined to (the node lane's
+  // task, the webhook's endpoint). The push route never sets it. Unset, the
+  // sample lands on the conduit as before.
+  Identity identity = 6;
 }
 
 // PropertySample is one categorical observation: a registered property_type name
@@ -157,6 +166,9 @@ message PropertySample {
 
   // labels follow the same rule as MetricSample.labels.
   map<string, string> labels = 5;
+
+  // identity follows the same rule as MetricSample.identity.
+  Identity identity = 6;
 }
 
 // EventSample is one natively caught occurrence: a registered event_type name
@@ -179,6 +191,18 @@ message EventSample {
 
   // instance follows the same rule as MetricSample.instance.
   string instance = 5;
+
+  // identity follows the same rule as MetricSample.identity.
+  Identity identity = 6;
+}
+
+// Identity is a record's identity (#1386): the match key, a registered
+// property_type name (e.g. "ucc-room-id"), and the value the record carried
+// for it. Owner-side resolution reads it against the conduit's identity
+// bindings alone.
+message Identity {
+  string key = 1;
+  string value = 2;
 }
 
 // LogLine is one raw log line off the ingest lane (ADR-0066): untyped text, not a

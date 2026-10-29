@@ -126,12 +126,10 @@ func runTasks(ctx context.Context, out *telemetrySpool, node string, wl collecti
 			if n := clampedCount(dps); n > 0 {
 				slog.Info("payload time ahead of arrival, landed at arrival", "facility", "collection", "task", task.ID, "count", n, "window", driver.ClampWindow.String())
 			}
-			dps = sched.changed(task.ID, dps)
-			if len(dps) == 0 {
-				continue
-			}
-			if err := publishBatch(out, node, task.ID, dps); err != nil {
-				return err
+			if landed := sched.changed(task.ID, dps); len(landed) > 0 {
+				if err := publishBatch(out, node, task.ID, landed); err != nil {
+					return err
+				}
 			}
 			sched.commitChanged(task.ID, dps)
 			continue
@@ -689,10 +687,11 @@ func buildBatch(taskID, node string, dps []collection.Sample) *ogv1.TelemetryBat
 			// A driver's event (#1145): its message and payload, validated
 			// against the event type at ingest.
 			ev.Events = append(ev.Events, &ogv1.EventSample{
-				Name:    d.Name,
-				Message: strings.ToValidUTF8(d.Text, "\uFFFD"),
-				Payload: d.Attributes,
-				Ts:      ts,
+				Name:     d.Name,
+				Message:  strings.ToValidUTF8(d.Text, "\uFFFD"),
+				Payload:  d.Attributes,
+				Ts:       ts,
+				Identity: collection.WireIdentity(d.Identity),
 			})
 			continue
 		case driver.LaneLog:
@@ -717,14 +716,16 @@ func buildBatch(taskID, node string, dps []collection.Sample) *ogv1.TelemetryBat
 				ValueJson: string(vj),
 				Ts:        ts,
 				Labels:    validLabels(d.Labels),
+				Identity:  collection.WireIdentity(d.Identity),
 			})
 			continue
 		}
 		ev.Metrics = append(ev.Metrics, &ogv1.MetricSample{
-			Name:   d.Name,
-			Value:  d.Value,
-			Ts:     ts,
-			Labels: validLabels(d.Labels),
+			Name:     d.Name,
+			Value:    d.Value,
+			Ts:       ts,
+			Labels:   validLabels(d.Labels),
+			Identity: collection.WireIdentity(d.Identity),
 		})
 	}
 	return ev

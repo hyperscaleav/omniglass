@@ -397,6 +397,20 @@ omniglass system property list huddle-1 | jq -c '.properties[] | {property_type_
 omniglass system property sample list huddle-1 video-input                             # needs system:read
 ```
 
+A component that speaks for many owners (a cloud service, a controller fronting many components) is a
+**conduit**: each value its driver identifies lands on the system or component an identity binding
+names ([shared-API collection](/architecture/collection/#shared-api-collection-one-component-many-owners)).
+Bind, list and unbind under the conduit; a binding costs update on the conduit and on the owner.
+What it reported that no binding places waits in its unbound inbox:
+
+```sh
+omniglass component identity-binding list 'hq.$comp.meetings-cloud'                       # needs component:read
+omniglass component identity-binding update 'hq.$comp.meetings-cloud' ucc-room-id zr-boardroom-b \
+  --owner-kind system --owner 'hq.west.level-2.boardroom-b.$sys.boardroom'               # needs component:update and system:update
+omniglass component identity-binding delete 'hq.$comp.meetings-cloud' ucc-room-id zr-boardroom-b
+omniglass component unbound-identity list 'hq.$comp.meetings-cloud'                        # needs component:read
+```
+
 ## Secrets
 
 The [secret](/architecture/variables/) commands are generated like every other resource. `secret`

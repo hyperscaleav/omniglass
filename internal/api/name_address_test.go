@@ -61,6 +61,8 @@ var referenceFields = map[string]string{
 	"key_id": "key",
 	// The calc rule that writes a key (#1019), by name beside its uuid.
 	"rule_id": "rule",
+	// An identity binding's conduit component (#1385), by name beside its uuid.
+	"conduit_id": "conduit",
 }
 
 // registryNameRefs is the reverse direction: a response that names a renameable

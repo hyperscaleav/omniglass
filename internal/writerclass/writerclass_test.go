@@ -101,7 +101,7 @@ func TestAdmits(t *testing.T) {
 		Platform:         {Process},
 		CommandLifecycle: {Command},
 		Calc:             {CalcRule, Operator},
-		Collected:        {Node, Push, Command, CommandReply, Operator, EventRule},
+		Collected:        {Node, Push, Fanout, Command, CommandReply, Operator, EventRule},
 	}
 	for _, c := range Classes() {
 		for _, w := range Writers() {
@@ -184,6 +184,9 @@ func TestRefusalNamesKeyAndWriter(t *testing.T) {
 		{CommandLifecycle, CommandIssued, Node, "", "a command's issue"},
 		{Calc, "avg-temp", Push, "temp-avg", "the calc rule temp-avg"},
 		{Collected, "video-input", CalcRule, "", "calc-rule"},
+		{NodeProbe, "tcp-open", Fanout, "", "only the node"},
+		{Calc, "avg-temp", Fanout, "temp-avg", "the calc rule temp-avg"},
+		{Platform, Health, Fanout, "", "the health rollup"},
 	} {
 		got := Refusal(tc.c, tc.key, tc.w, tc.rule)
 		if !strings.Contains(got, tc.key) || !strings.Contains(got, tc.want) {
