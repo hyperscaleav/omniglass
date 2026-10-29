@@ -417,6 +417,14 @@ telemetry: {
 }
 
 collection: {
+  identity_binding: {
+    shape: sql_table
+    id: uuid {constraint: primary_key}
+    component_id: uuid {constraint: foreign_key}
+    conduit_id: uuid {constraint: foreign_key}
+    property_type_id: uuid {constraint: foreign_key}
+    system_id: uuid {constraint: foreign_key}
+  }
   node: {
     shape: sql_table
     principal_id: uuid {constraint: primary_key}
@@ -541,6 +549,10 @@ catalog.standard_metric.standard_id -> catalog.standard.id
 catalog.standard_property.property_type_id -> telemetry.property_type.id
 catalog.standard_property.standard_id -> catalog.standard.id
 catalog.system_type.parent_id -> catalog.system_type.id
+collection.identity_binding.component_id -> fleet.component.id
+collection.identity_binding.conduit_id -> fleet.component.id
+collection.identity_binding.property_type_id -> telemetry.property_type.id
+collection.identity_binding.system_id -> fleet.system.id
 collection.node.location_id -> fleet.location.id
 collection.node.principal_id -> identity.principal.id
 collection.node_log.node_id -> collection.node.principal_id

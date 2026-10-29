@@ -1192,7 +1192,10 @@ What is built today: a system owns the telemetry a push names it for and what a 
 derives from its members ([ADR-0422](/architecture/decisions/#adr-0422-a-system-owns-its-own-telemetry-and-a-location-owns-no-observed-sample)), and a webhook endpoint lands every post on its own
 component. A component that fans its values out to other owners is the design below. An endpoint
 stays a component's: system telemetry a node collects arrives through this fan-out, never through a
-system-owned endpoint.
+system-owned endpoint. Its first half is built: a driver function [reads records and names each
+one's identity](#a-function-reads-records-and-names-each-ones-identity), and every sample a record
+yields carries that identity on the wire (#1386). Nothing resolves it to an owner yet, so an
+identified sample still lands on the conduit's component, as every sample does today.
 
 :::design[Shared-API fan-out and identity binding, tracked in #1282; the discovery_rule is its own design]
 Some sources describe **many entities at once**: a SaaS / UCC platform (Zoom, Teams), a controller fronting many devices, a building gateway. The API is **one component** (one endpoint, one credential) whose data **fans out** to the entities it describes, not one component per described entity.
@@ -1369,6 +1372,50 @@ simulator: the Newtron panel's input push lands as the `video-input` property an
 change no listener claims as a raw log line, none of them in the node's self-logs; the Kestrel
 bar's feed reports a call starting and ending as named events, which `kestrel-api` lands as
 `call-started` and `call-ended` carrying the call's id.
+
+### A function reads records and names each one's identity
+
+Built (#1386, [ADR-1282](/architecture/decisions/#adr-1282-a-conduit-fans-each-identified-value-out-to-the-owner-its-binding-names-and-a-binding-costs-a-write-on-both-of-its-ends)):
+a service that speaks for many owners answers about all of them at once, one request listing
+every room or one post naming two. A poll or a listener may declare two fields for that:
+
+- **`records`**: a dotted path (the `jsonpath` grammar, object keys only) to an array in the JSON
+  body. Each element is one **record**, read as its own payload: a `jsonpath` reads from the
+  element, and a `regex` reads its compact JSON. The function's emits and its identity read once
+  per record. A path that misses, or lands on anything but an array, is one fault and lands
+  nothing; an empty array lands nothing and is no fault. Records ride a JSON body alone (an http
+  poll or stream of format `json`, a webhook of format `json`), refused at write anywhere else.
+- **`identity`**: a match `key` and the `extract` that reads its value off each record (or off the
+  whole payload, without `records`). The key is a registered property type a driver may write
+  (`ucc-room-id`), refused at write when it is unregistered, a metric or an event type, reserved,
+  or a calc rule's output; the extract is held to the transport exactly as an emit's is. The value
+  is trimmed and bounded: empty, longer than 256 bytes, or carrying a control character, it is a
+  fault.
+
+Every metric, property and event a record yields carries its identity, onto the wire's
+`identity` field (the match key and the value) on the node's batch and on a webhook's. A record
+whose identity misses lands **nothing** (none of its samples, none of its events) and is one fault
+naming the record: a `collection-failed` for a poll, the post's raw line for a webhook. A log
+line never carries an identity and always lands, since a log line stays on the conduit's component
+(a system owns none, [ADR-0422](/architecture/decisions/#adr-0422-a-system-owns-its-own-telemetry-and-a-location-owns-no-observed-sample)).
+A function that declares neither field bakes to the bytes it always did, so its task keeps its
+content hash. A [preview](#on-demand-validate-preview-and-run-a-poll-now) shows each sample's
+identity, so a spec is written against which room each value is about.
+
+```yaml
+polls:
+  - name: rooms
+    schedule: { every: 30s }
+    request: { path: /rooms }                       # {"rooms":[{"id":"r1","state":"in-call"}, ...]}
+    records: rooms
+    identity: { key: ucc-room-id, extract: { jsonpath: id } }
+    emits:
+      - { name: call-state, extract: { jsonpath: state } }   # one per room, each naming its room
+```
+
+The identity is a claim, never an owner: on the wire it names an identity, and only the bindings
+of the conduit the batch is already confined to may turn it into one. The push route has no
+identity field.
 
 ## Storage
 

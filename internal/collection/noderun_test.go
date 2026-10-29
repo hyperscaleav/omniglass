@@ -76,6 +76,12 @@ func TestRunSampleOf(t *testing.T) {
 	if e.Lane != "event" || e.Text != "pressed" || e.Value != nil {
 		t.Errorf("event = %+v", e)
 	}
+	// A record's identity (#1386) crosses too, so a preview shows which
+	// owner each sample is about; an unidentified sample carries none.
+	id := collection.RunSampleOf(collection.Sample{Name: "call-state", Text: "idle", IsText: true, Identity: &driver.Identity{Key: "ucc-room-id", Value: "r2"}})
+	if id.Identity == nil || id.Identity.Key != "ucc-room-id" || id.Identity.Value != "r2" || p.Identity != nil {
+		t.Errorf("identified = %+v, unidentified = %+v", id, p)
+	}
 	if got := collection.RunSubject("edge-hq"); got != "og.v1.run.edge-hq" {
 		t.Errorf("RunSubject = %q", got)
 	}

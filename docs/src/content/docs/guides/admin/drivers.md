@@ -462,6 +462,38 @@ Minting a driver is admin-gated; the picker that consumes it lives on the
 [product](/guides/admin/products/) create and edit forms. The same operations are `omniglass driver
 list/get/create/update/delete` from the CLI (see the [CLI reference](/reference/cli/)).
 
+## Records and identity: one answer about many owners
+
+A cloud service or a controller fronting many devices answers about all of them at once: one
+request lists every room, one webhook post names two. A poll or a listener reads such an answer
+with two fields:
+
+- `records` names the array in the JSON body (`rooms`, or `data.rooms`). Each element is read as
+  its own payload, so every emit (and the identity) reads once per element.
+- `identity` names the **match key**, a registered property type such as `ucc-room-id`, and the
+  extract that reads its value off each element.
+
+```yaml
+polls:
+  - name: rooms
+    schedule: { every: 30s }
+    request: { path: /rooms }
+    records: rooms
+    identity: { key: ucc-room-id, extract: { jsonpath: id } }
+    emits:
+      - { name: call-state, extract: { jsonpath: state } }
+```
+
+Polled against `{"rooms":[{"id":"r1","state":"in-call"},{"id":"r2","state":"idle"}]}`, that
+function yields two `call-state` values, one naming room `r1` and one naming `r2`. An element with
+no `id` lands nothing and reports one fault naming it, while the others land. Log lines carry no
+identity and land as before. A save refuses a key that is not a registered property type, an
+extract the transport cannot read, and `records` on anything but a JSON body. A
+[preview](#check-preview-and-run-a-poll-now) shows each sample's identity. For now an identified
+value still lands on the component the endpoint belongs to; landing it on the room's system, once an
+operator binds the room's id to that system, is the next part of [shared-API
+collection](/architecture/collection/#shared-api-collection-one-component-many-owners).
+
 ## Check, preview, and run a poll now
 
 Three commands take the guesswork out of writing a spec, each a route an agent can call as an

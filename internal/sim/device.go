@@ -19,6 +19,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -726,6 +727,9 @@ type requestContext struct {
 	Query  map[string]string
 }
 
+// pathSegment is what segment admits as one state-path key.
+var pathSegment = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
+
 // templateFuncs provides helper functions available in all templates.
 var templateFuncs = template.FuncMap{
 	// now returns the current Unix epoch in seconds. Used by reboot/reset
@@ -739,6 +743,17 @@ var templateFuncs = template.FuncMap{
 			return "{}"
 		}
 		return string(b)
+	},
+	// segment passes a request value through as one state-path segment, or
+	// fails the render when it is not one (letters, digits, - and _, at
+	// most 64), so a path built from a request ({{ segment .Request.Body.room }})
+	// can name only a key, never reach into another path with a dot.
+	"segment": func(v any) (string, error) {
+		s, _ := v.(string)
+		if !pathSegment.MatchString(s) {
+			return "", fmt.Errorf("%q is not a state path segment (letters, digits, - and _, at most 64)", s)
+		}
+		return s, nil
 	},
 	// get retrieves a key from a map. Pipeline-friendly: {{ .State | get "status" | get "device" | get "power" }}
 	"get": func(key string, m any) any {

@@ -1,0 +1,160 @@
+# yaml-language-server: $schema=schema.json
+# UCC Platform, the meeting platform's account-wide cloud service (#1282)
+#
+# One cloud service that speaks for every room on the account: the shape
+# of a real meeting platform's admin plane, where one API key reads every
+# room and one webhook subscription hears about all of them. It is the
+# proving sim for the fan-out (ADR-1282): a driver polling GET /api/rooms
+# reads the room list as records, each naming its room by id, and the
+# webhook posts name the room in their body, so each value lands on the
+# system its room id is bound to and an unbound room lands in the
+# conduit's inbox. The lab's per-room ucc-service instances stay beside it
+# (their retirement is #1390).
+#
+# Course datapoints (HTTP, token auth):
+#   status.rooms.<id>.state    , idle or in-call
+#   status.rooms.<id>.meeting  , the meeting in progress, empty when idle
+#   status.rooms.<id>.participants , people in the meeting
+#
+# Auth: header token (X-UCC-Token). public_paths exempts the dashboard.
+
+name: ucc-platform
+manufacturer: Shinra Cloud
+model: "UCC Platform (account)"
+device_type: cloud-service
+slug_prefix: ucc-plat
+
+doc:
+  summary: "Account-wide meeting platform: every room's call state over one API and one webhook"
+  description: |
+    The meeting platform's account-wide admin plane. One API key reads
+    every room's meeting state (GET /api/rooms), and one webhook
+    subscription posts each room's meeting start and end, and a batched
+    state report naming several rooms at once. HTTP + ICMP only.
+  tags: [cloud, ucc, service, fan-out]
+
+interfaces:
+  - name: http-api
+    protocol: http
+    port: 443
+    tls: true
+    doc:
+      summary: "UCC platform admin HTTP API + dashboard"
+      tags: [management, api, cloud]
+    auth:
+      type: header
+      header: "X-UCC-Token"
+      api_key: "ucc-lab-token"
+      enforce: true
+      public_paths: ["/"]
+    api_surface: ucc-platform
+    routes:
+      - match: "GET /"
+        template: web/ucc-platform/index.gotempl
+        doc: { summary: "UCC platform dashboard: every room on the account" }
+
+      - match: "GET /api/rooms"
+        template: api/ucc-platform/rooms.json.gotempl
+        doc: { summary: "Every room on the account with its meeting state", tags: [api, rooms] }
+
+      # The webhook subscription (#1024): where the platform posts its room
+      # events and how each post is signed, as on ucc-service.
+      - match: "POST /api/webhooks"
+        template: api/ucc-platform/ack.json.gotempl
+        doc: { summary: "Subscribe a webhook receiver to every room's meeting events", tags: [api, webhook] }
+        example: |
+          {"url": "https://omniglass.example/api/v1/webhooks/TOKEN", "scheme": "hmac", "secret": "ucc-lab-signing-key"}
+        mutations:
+          - { path: configuration.webhook.target_url, value: "{{ .Request.Body.url }}", pattern: '^(https?://\S{1,1000})?$' }
+          - { path: configuration.webhook.scheme, value: '{{ or .Request.Body.scheme "hmac" }}', enum: [hmac, token, basic, none] }
+          - { path: configuration.webhook.secret, value: '{{ or .Request.Body.secret "" }}' }
+          - { path: configuration.webhook.fault, value: '{{ or .Request.Body.fault "" }}', enum: ["", bad-signature, stale, redeliver] }
+
+      # A meeting starts in one room: the room's state flips and the
+      # platform posts room.meeting.started naming the room by id. A room
+      # id the account has not seen yet joins it (a room added on the
+      # platform), which is how an unbound room is heard.
+      - match: "POST /api/rooms/meetings/start"
+        template: api/ucc-platform/ack.json.gotempl
+        doc: { summary: "Start a meeting in a room (posts room.meeting.started)", tags: [api, meeting, webhook] }
+        example: |
+          {"room": "zr-huddle-north", "id": "m-2001", "participants": 4}
+        mutations:
+          - { path: 'status.rooms.{{ segment .Request.Body.room }}.state', value: in-call }
+          - { path: 'status.rooms.{{ segment .Request.Body.room }}.meeting', value: "{{ .Request.Body.id }}", pattern: "^[A-Za-z0-9-]{1,32}$" }
+          - { path: 'status.rooms.{{ segment .Request.Body.room }}.participants', value: '{{ or .Request.Body.participants 1 }}', pattern: "^[0-9]{1,3}$" }
+        emit:
+          url: '{{ .State | get "configuration" | get "webhook" | get "target_url" }}'
+          body: '{"event":"room.meeting.started","room_id":"{{ .Request.Body.room }}","meeting":"{{ .Request.Body.id }}","ts":{{ now }}}'
+          headers: { X-UCC-Event: room.meeting.started }
+          sign: &ucc-sign
+            scheme: '{{ .State | get "configuration" | get "webhook" | get "scheme" }}'
+            secret: '{{ .State | get "configuration" | get "webhook" | get "secret" }}'
+            fault: '{{ .State | get "configuration" | get "webhook" | get "fault" }}'
+            header: X-UCC-Signature
+            prefix: "sha256="
+            timestamp: X-UCC-Timestamp
+            delivery: X-UCC-Delivery
+
+      - match: "POST /api/rooms/meetings/end"
+        template: api/ucc-platform/ack.json.gotempl
+        doc: { summary: "End the meeting in a room (posts room.meeting.ended)", tags: [api, meeting, webhook] }
+        example: |
+          {"room": "zr-huddle-north"}
+        mutations:
+          - { path: 'status.rooms.{{ segment .Request.Body.room }}.state', value: idle }
+          - { path: 'status.rooms.{{ segment .Request.Body.room }}.meeting', value: "" }
+          - { path: 'status.rooms.{{ segment .Request.Body.room }}.participants', value: 0 }
+        emit:
+          url: '{{ .State | get "configuration" | get "webhook" | get "target_url" }}'
+          body: '{"event":"room.meeting.ended","room_id":"{{ .Request.Body.room }}","ts":{{ now }}}'
+          headers: { X-UCC-Event: room.meeting.ended }
+          sign: *ucc-sign
+
+      # The batched report: one post naming every room on the account and
+      # its state, as a platform's periodic digest does (read as records).
+      - match: "POST /api/rooms/report"
+        template: api/ucc-platform/ack.json.gotempl
+        doc: { summary: "Post one batched state report naming every room (posts rooms.state)", tags: [api, rooms, webhook] }
+        example: "{}"
+        emit:
+          url: '{{ .State | get "configuration" | get "webhook" | get "target_url" }}'
+          body: '{"event":"rooms.state","rooms":[{{ $sep := "" }}{{ range $id, $r := (.State | get "status" | get "rooms") }}{{ $sep }}{"room_id":"{{ $id }}","state":"{{ index $r "state" }}"}{{ $sep = "," }}{{ end }}],"ts":{{ now }}}'
+          headers: { X-UCC-Event: rooms.state }
+          sign: *ucc-sign
+
+  - name: icmp
+    protocol: icmp
+    doc: { summary: "ICMP ping reachability", tags: [monitoring] }
+
+computed:
+  - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
+
+# The rooms on the account. The dev seed binds the first four ids to the
+# lab's conference systems; zr-annex-1 is a room the platform knows and
+# nobody bound, so its values land in the conduit's unbound inbox until an
+# operator binds it.
+defaults:
+  status:
+    device:
+      boot_epoch: 0
+    rooms:
+      zr-boardroom-a: { name: "Boardroom A", state: idle, meeting: "", participants: 0 }
+      zr-huddle-north: { name: "Huddle North", state: in-call, meeting: "m-1001", participants: 3 }
+      zr-briefing-av: { name: "Briefing", state: idle, meeting: "", participants: 0 }
+      zr-auditorium-av: { name: "Auditorium", state: idle, meeting: "", participants: 0 }
+      zr-annex-1: { name: "Annex 1", state: in-call, meeting: "m-1002", participants: 2 }
+  configuration:
+    device:
+      serial: ""
+      model: "UCC Platform (account)"
+      manufacturer: "Shinra Cloud"
+    firmware:
+      version: "cloud-2026.10"
+    network:
+      hostname: ""
+    webhook:
+      target_url: ""
+      scheme: hmac
+      secret: ""
+      fault: ""

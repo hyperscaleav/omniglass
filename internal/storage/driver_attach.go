@@ -384,6 +384,20 @@ func bakeEmits(emits []driver.Emit, cat catalogMaps) ([]driver.BakedEmit, error)
 	return out, nil
 }
 
+// bakeIdentity re-checks a function's identity key at attach (#1386): it was
+// a registered property type at spec write, and a catalog row deleted since
+// is the one path here, so attaching refuses naming it rather than baking a
+// key no binding can be made for.
+func bakeIdentity(id *driver.IdentitySpec, cat catalogMaps) error {
+	if id == nil {
+		return nil
+	}
+	if lane, ok := cat.LaneOf(id.Key); !ok || lane != driver.LaneProperty {
+		return fmt.Errorf("%w: identity key %q is no longer a registered property type", ErrAttachInvalid, id.Key)
+	}
+	return nil
+}
+
 // derivedTask is one task a driver spec derives on an endpoint: its content
 // hash id, its mode, and its baked spec.
 type derivedTask struct {
@@ -411,10 +425,14 @@ func derivedDriverTasks(endpointID string, d *Driver, sp *driver.Spec, cat catal
 		if err != nil {
 			return nil, err
 		}
+		if err := bakeIdentity(p.Identity, cat); err != nil {
+			return nil, err
+		}
 		sched, req := p.Schedule, p.Request
 		if err := add("poll", driver.BakedFunction{
 			Driver: d.Name, Version: d.Version, Function: p.Name,
 			Schedule: &sched, Request: &req, Emits: emits,
+			Records: p.Records, Identity: p.Identity,
 		}); err != nil {
 			return nil, err
 		}
@@ -424,10 +442,14 @@ func derivedDriverTasks(endpointID string, d *Driver, sp *driver.Spec, cat catal
 		if err != nil {
 			return nil, err
 		}
+		if err := bakeIdentity(l.Identity, cat); err != nil {
+			return nil, err
+		}
 		match := l.Match
 		if err := add("listen", driver.BakedFunction{
 			Driver: d.Name, Version: d.Version, Function: l.Name,
 			Arm: l.Arm, Match: &match, Emits: emits, Unmatched: sp.Unmatched, Log: l.Log,
+			Records: l.Records, Identity: l.Identity,
 		}); err != nil {
 			return nil, err
 		}

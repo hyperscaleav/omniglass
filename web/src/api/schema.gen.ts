@@ -10478,7 +10478,15 @@ export interface components {
              */
             took_ms: number;
         };
+        RunIdentity: {
+            /** @description The match key, a registered property type */
+            key: string;
+            /** @description The value the record carried for it */
+            value: string;
+        };
         RunSample: {
+            /** @description The identity the sample's record carried (a match key and its value), when its function declares one; the server lands it on the owner the conduit's binding names */
+            identity?: components["schemas"]["RunIdentity"];
             /** @description The sample's labels, its instance among them */
             labels?: {
                 [key: string]: string;

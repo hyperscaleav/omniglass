@@ -881,6 +881,16 @@ type Gateway interface {
 	RemoveMember(ctx context.Context, actorID, systemName, componentName string, read, action, componentRead, componentAction scope.Set) error
 	SetPrimaryMember(ctx context.Context, actorID, systemName, componentName string, read, action, componentRead, componentAction scope.Set) error
 
+	// Identity bindings (#1385, ADR-1282): a conduit component's reported value
+	// under a match key, tied to the one system or component it names. A binding
+	// has two ends and costs a write on both: the conduit resolves in
+	// componentRead then componentUpdate, the owner in its own tier's read then
+	// update, and a move also needs update on the owner it leaves. The list
+	// names an owner only inside the caller's read on its tier and counts the rest.
+	ListIdentityBindings(ctx context.Context, conduit string, componentRead, systemRead scope.Set) (*IdentityBindingList, error)
+	PutIdentityBinding(ctx context.Context, actorID, conduit, key, value string, owner IdentityBindingOwner, sc IdentityBindingScopes) (*IdentityBinding, error)
+	DeleteIdentityBinding(ctx context.Context, actorID, conduit, key, value string, sc IdentityBindingScopes) error
+
 	// The role tier: a system's roles resolve from its standard (inherited) and its
 	// own ad-hoc declarations; assignment refuses a component whose product's
 	// component_type is not one the role's typed-slot guard accepts (#626).

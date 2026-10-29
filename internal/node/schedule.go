@@ -216,8 +216,19 @@ func (s *pollSchedule) commitChanged(taskID string, landed []collection.Sample) 
 
 // occurrenceSlot names the emit an occurrence came from: its index in the
 // poll's function, since two log lines share a name ("") and two events may
-// share a type.
-func occurrenceSlot(d collection.Sample) string { return d.Lane + "\x00" + strconv.Itoa(d.Emit) }
+// share a type; and, for a function reading records (#1386), the record's
+// identity (or, with none, its index), so two rooms' events are remembered
+// apart.
+func occurrenceSlot(d collection.Sample) string {
+	slot := d.Lane + "\x00" + strconv.Itoa(d.Emit)
+	if d.Identity != nil {
+		return slot + "\x00" + d.Identity.Key + "\x00" + d.Identity.Value
+	}
+	if d.Record > 0 {
+		return slot + "\x00#" + strconv.Itoa(d.Record)
+	}
+	return slot
+}
 
 // occurrenceContent is what an occurrence says, its time aside.
 func occurrenceContent(d collection.Sample) string {

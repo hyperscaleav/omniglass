@@ -48,6 +48,8 @@ func seedSimFleet(ctx context.Context, gw storage.Gateway, actorID string, portO
 			OwnerKind: "platform", Fields: map[string]string{"username": "admin", "password": "kestrel"}},
 		{Name: simfleet.CensusKeySecret, Label: "Simulated Tessellate sensor api key", SecretType: "api-key",
 			OwnerKind: "platform", Fields: map[string]string{"key": "census-lab-key"}},
+		{Name: simfleet.UCCTokenSecret, Label: "Simulated UCC platform api token", SecretType: "api-key",
+			OwnerKind: "platform", Fields: map[string]string{"key": "ucc-lab-token"}},
 	} {
 		if _, err := gw.CreateSecret(ctx, actorID, sec, all, true); err != nil && !errors.Is(err, storage.ErrSecretExists) {
 			return fmt.Errorf("devseed: create simulator secret %s: %w", sec.Name, err)
@@ -291,6 +293,38 @@ func seedSimEndpoints(ctx context.Context, gw storage.Gateway, actorID string, d
 			if _, err := gw.RetryEndpoint(ctx, actorID, created.ID, storage.RetryPin{HostKey: se.HostKey}, all, all); err != nil {
 				return fmt.Errorf("devseed: pin the host key of the simulated %s endpoint on %s: %w", se.Driver, se.Component, err)
 			}
+		}
+	}
+	return nil
+}
+
+// IdentityBinding is one fixture binding: a conduit component's identity tied
+// to the system it names (#1282).
+type IdentityBinding struct {
+	Conduit string `yaml:"conduit"`
+	Key     string `yaml:"key"`
+	Value   string `yaml:"value"`
+	System  string `yaml:"system"`
+}
+
+// seedIdentityBindings ties the simulated conduit's identities to their
+// systems through the gateway's own binding write, each by the uuids the
+// seed made (a component name is unique only in its placement). A re-put to
+// the same owner is a no-op, so a re-seed writes nothing.
+func seedIdentityBindings(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, compIDs, sysIDs map[string]string) error {
+	all := scope.Set{All: true}
+	sc := storage.IdentityBindingScopes{ComponentRead: all, ComponentUpdate: all, SystemRead: all, SystemUpdate: all}
+	for _, b := range doc.SimIdentityBindings {
+		conduit, ok := compIDs[b.Conduit]
+		if !ok {
+			return fmt.Errorf("devseed: identity binding names conduit %q, which the fleet has no component for", b.Conduit)
+		}
+		sys, ok := sysIDs[b.System]
+		if !ok {
+			return fmt.Errorf("devseed: identity binding names system %q, which the fleet has none of", b.System)
+		}
+		if _, err := gw.PutIdentityBinding(ctx, actorID, conduit, b.Key, b.Value, storage.IdentityBindingOwner{Kind: "system", Name: sys}, sc); err != nil {
+			return fmt.Errorf("devseed: bind %s %s=%s to %s: %w", b.Conduit, b.Key, b.Value, b.System, err)
 		}
 	}
 	return nil
