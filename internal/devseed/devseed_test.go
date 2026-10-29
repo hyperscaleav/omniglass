@@ -1694,11 +1694,36 @@ func TestSeededFleetIsSimulated(t *testing.T) {
 			t.Errorf("no %s attach in the simulated fleet", driver)
 		}
 	}
+	// The UCC platform's rooms are bound to their systems (#1282): four
+	// bindings on the conduit, the fifth room left unbound on purpose.
+	bindings := func() map[string]string {
+		got := map[string]string{}
+		rows, err := conn.Query(ctx, `select b.value, l.name from identity_binding b join component c on c.id = b.conduit_id
+			join system s on s.id = b.system_id join location l on l.id = s.location_id where c.name = 'ucc-platform'`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var v, sys string
+			if err := rows.Scan(&v, &sys); err != nil {
+				t.Fatal(err)
+			}
+			got[v] = sys
+		}
+		return got
+	}
+	if got := bindings(); len(got) != 4 || got["zr-huddle-north"] != "huddle" || got["zr-boardroom-b"] != "" {
+		t.Errorf("ucc-platform's bindings = %v, want its four bound rooms (by their place) and zr-boardroom-b unbound", got)
+	}
 	if err := devseed.Run(ctx, gw, ""); err != nil {
 		t.Fatalf("second run: %v", err)
 	}
 	if after := count(); after != before {
 		t.Fatalf("a second run changed the simulated endpoints: %d to %d", before, after)
+	}
+	if got := bindings(); len(got) != 4 {
+		t.Errorf("a second run changed the bindings: %v", got)
 	}
 }
 

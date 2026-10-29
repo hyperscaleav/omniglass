@@ -376,6 +376,21 @@ shipped `ucc-webhook` driver maps them; the dev fleet carries the service at hea
 webhook endpoint, which a subscription to the endpoint's URL and the fleet's signing key
 (`sim-ucc-signing`) brings to life ([ADR-1024](/architecture/decisions/#adr-1024-omniglass-receives-webhooks-on-the-server-and-a-webhook-token-is-a-sealed-secret)).
 
+The **UCC platform** (`ucc-platform`) is the same vendor's account-wide plane, the face the
+[fan-out](/architecture/collection/#shared-api-collection-one-component-many-owners) is proven
+against (#1282): one service that speaks for every room on the account. Its room list answers
+every room's meeting state and participant count in one read, its meeting routes name the room by
+id (`room.meeting.started` and `room.meeting.ended`), and a report route posts one batched
+`rooms.state` naming every room at once, each signed as the UCC service signs. A room id the
+account has not seen joins it, the way a room added on the platform would, and a request's room id
+reaches state only as one path key (a template's `segment` function refuses any other). The
+shipped `ucc-rooms` driver polls the room list as records and the `ucc-webhook` driver's
+room-naming listeners read the posts, each declaring the `ucc-room-id` identity. The dev fleet
+carries the platform at headquarters with both endpoints and binds four of its rooms to their
+systems; its fifth room, `zr-boardroom-b`, is bound to nothing, so its values land in the conduit's
+unbound inbox until an operator binds it ([ADR-1282](/architecture/decisions/#adr-1282-a-conduit-fans-each-identified-value-out-to-the-owner-its-binding-names-and-a-binding-costs-a-write-on-both-of-its-ends)).
+The lab's per-room UCC services stay beside it until #1390 retires them.
+
 ## Adding a simulated component
 
 Adding a simulated component is adding a component the simulator can serve:
