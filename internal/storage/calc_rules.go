@@ -264,15 +264,31 @@ type sampleKey struct {
 	name      string
 }
 
-// resolveSampleKey finds a key by name, in the property registry, else the
-// metric registry (the order resolveRuleLane takes), or by id in either.
+// resolveSampleKey finds a key by name, in the catalog the ingest registry
+// resolves the name to (the same rule resolveRuleLane takes: an operator's row
+// shadows an official one, #1307), or by id in either.
 func resolveSampleKey(ctx context.Context, q querier, ref string) (sampleKey, bool, error) {
 	col := "name"
 	if isUUID(ref) {
 		col = "id::text"
 	}
 	var k sampleKey
-	err := q.QueryRow(ctx, `select id::text, name, data_type from property_type where `+col+` = $1`, ref).Scan(&k.id, &k.name, &k.dataType)
+	inProperty, inMetric := true, true
+	if col == "name" {
+		holders, err := nameHolders(ctx, q, ref)
+		if err != nil {
+			return k, false, err
+		}
+		lane, _, _ := ResolveNameLane(ref, holders)
+		inProperty, inMetric = lane == "property", lane == "metric"
+	}
+	if !inProperty && !inMetric {
+		return k, false, nil
+	}
+	err := pgx.ErrNoRows
+	if inProperty {
+		err = q.QueryRow(ctx, `select id::text, name, data_type from property_type where `+col+` = $1`, ref).Scan(&k.id, &k.name, &k.dataType)
+	}
 	if err == nil {
 		k.lane = rules.LaneProperty
 		k.valueType = rules.ValueTypeFor(k.lane, k.dataType)
@@ -281,7 +297,9 @@ func resolveSampleKey(ctx context.Context, q querier, ref string) (sampleKey, bo
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return k, false, fmt.Errorf("storage: resolve sample key %q: %w", ref, err)
 	}
-	err = q.QueryRow(ctx, `select id::text, name from metric_type where `+col+` = $1`, ref).Scan(&k.id, &k.name)
+	if inMetric {
+		err = q.QueryRow(ctx, `select id::text, name from metric_type where `+col+` = $1`, ref).Scan(&k.id, &k.name)
+	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return k, false, nil
 	}
