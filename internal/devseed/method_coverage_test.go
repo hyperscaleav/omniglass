@@ -14,23 +14,6 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/transport"
 )
 
-// methodGap is a collection method the lab does not exercise yet, and the
-// issue that adds it. An unbuilt one is not in the binary at all (no driver,
-// no registry transport) and is listed so the gap is said out loud.
-type methodGap struct {
-	issue   string
-	unbuilt bool
-}
-
-// methodGaps are the collection methods no healthy lab component exercises,
-// each with its issue (#1370). A method the lab gains fails here as stale.
-var methodGaps = map[string]methodGap{
-	"websocket":     {issue: "#1414"},                // a plain-ws face and a driver
-	"push-listener": {issue: "#1148", unbuilt: true}, // the shared push listener
-	"syslog":        {issue: "#1149", unbuilt: true},
-	"snmp-trap":     {issue: "#1150", unbuilt: true},
-}
-
 // TestEveryCollectionMethodRunsOnAHealthyLabComponent holds the lab to "every
 // built collection method runs healthy" (#1370, #1266), the per-method twin of
 // the per-product coverage test. With the simulated fleet seeded, every
@@ -127,24 +110,24 @@ func TestEveryCollectionMethodRunsOnAHealthyLabComponent(t *testing.T) {
 	sort.Strings(names)
 	exercised := 0
 	for _, n := range names {
-		gap, gapped := methodGaps[n]
+		gap, gapped := devseed.MethodGaps[n]
 		switch {
 		case len(by[n]) > 0 && gapped:
-			t.Errorf("%s %s is exercised now (%s): drop it from methodGaps (%s)", methods[n], n, strings.Join(by[n], ", "), gap.issue)
+			t.Errorf("%s %s is exercised now (%s): drop it from devseed.MethodGaps (%s)", methods[n], n, strings.Join(by[n], ", "), gap.Issue)
 		case len(by[n]) > 0:
 			exercised++
-		case gapped && gap.unbuilt:
-			t.Errorf("%s %s is built now: methodGaps still calls it unbuilt (%s)", methods[n], n, gap.issue)
+		case gapped && gap.Unbuilt:
+			t.Errorf("%s %s is built now: MethodGaps still calls it unbuilt (%s)", methods[n], n, gap.Issue)
 		case !gapped:
-			t.Errorf("%s %s runs on no healthy simulated lab component: attach it in the dev fleet (fixtures.yaml sim_endpoints), or list it in methodGaps with its issue", methods[n], n)
+			t.Errorf("%s %s runs on no healthy simulated lab component: attach it in the dev fleet (fixtures.yaml sim_endpoints), or list it in devseed.MethodGaps with its issue", methods[n], n)
 		}
 	}
-	for n, gap := range methodGaps {
-		if _, known := methods[n]; !known && !gap.unbuilt {
-			t.Errorf("methodGaps lists %s (%s), which is no driver or transport: delete its line", n, gap.issue)
+	for n, gap := range devseed.MethodGaps {
+		if _, known := methods[n]; !known && !gap.Unbuilt {
+			t.Errorf("MethodGaps lists %s (%s), which is no driver or transport: delete its line", n, gap.Issue)
 		}
 	}
-	t.Logf("%d of %d collection methods run healthy in the dev lab; %d listed as gaps", exercised, len(methods), len(methodGaps))
+	t.Logf("%d of %d collection methods run healthy in the dev lab; %d listed as gaps", exercised, len(methods), len(devseed.MethodGaps))
 }
 
 // readsCollectedValues reports a driver that reads values off the device: a
