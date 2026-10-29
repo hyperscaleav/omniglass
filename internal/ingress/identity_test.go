@@ -75,7 +75,7 @@ func TestARecordFaultRidesTheRawLine(t *testing.T) {
 		}
 	}
 	b := ingress.Batch("comp-1", "webhook", r)
-	if len(b.GetLogs()) != 1 || !strings.Contains(string(b.GetLogs()[0].GetAttributes()), "record 1") {
+	if len(b.GetLogs()) != 1 || !strings.Contains(string(b.GetLogs()[0].GetAttributes()), "1 of 2 records (records 1)") {
 		t.Fatalf("logs %v, want the raw line carrying the record's fault", b.GetLogs())
 	}
 	if b.GetLogs()[0].GetMessage() != body {

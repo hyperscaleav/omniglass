@@ -120,12 +120,10 @@ func runTasks(ctx context.Context, out *telemetrySpool, node string, wl collecti
 			if n := clampedCount(dps); n > 0 {
 				slog.Info("payload time ahead of arrival, landed at arrival", "facility", "collection", "task", task.ID, "count", n, "window", driver.ClampWindow.String())
 			}
-			dps = sched.changed(task.ID, dps)
-			if len(dps) == 0 {
-				continue
-			}
-			if err := publishBatch(out, node, task.ID, dps); err != nil {
-				return err
+			if landed := sched.changed(task.ID, dps); len(landed) > 0 {
+				if err := publishBatch(out, node, task.ID, landed); err != nil {
+					return err
+				}
 			}
 			sched.commitChanged(task.ID, dps)
 			continue

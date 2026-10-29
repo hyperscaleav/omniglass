@@ -200,18 +200,27 @@ func (s *pollSchedule) changed(taskID string, dps []collection.Sample) []collect
 	return out
 }
 
-// commitChanged records the occurrences a run landed, once published, so a
-// run whose publish failed fires them again next time.
-func (s *pollSchedule) commitChanged(taskID string, landed []collection.Sample) {
-	for _, d := range landed {
+// commitChanged records what a run saw, once its landing published, so a run
+// whose publish failed fires its occurrences again next time. seen is the
+// run's whole sample set, not only what landed: the memory is rebuilt from it,
+// so an occurrence the run saw unchanged stays remembered and a slot the run
+// did not see is dropped. A function whose identities rotate (#1386) holds
+// one run's slots, never every identity it has heard.
+func (s *pollSchedule) commitChanged(taskID string, seen []collection.Sample) {
+	next := map[string]string{}
+	for _, d := range seen {
 		if d.Lane != driver.LaneEvent && d.Lane != driver.LaneLog {
 			continue
 		}
-		if s.occurred[taskID] == nil {
-			s.occurred[taskID] = map[string]string{}
-		}
-		s.occurred[taskID][occurrenceSlot(d)] = occurrenceContent(d)
+		next[occurrenceSlot(d)] = occurrenceContent(d)
 	}
+	if len(next) == 0 {
+		// A run that saw no occurrence (a failed fetch lands nothing) leaves
+		// the memory as it was, so the next good run does not fire again
+		// what it already landed. The memory stays one run's size.
+		return
+	}
+	s.occurred[taskID] = next
 }
 
 // occurrenceSlot names the emit an occurrence came from: its index in the
