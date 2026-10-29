@@ -463,7 +463,7 @@ func (p *PG) CreateGroupGrant(ctx context.Context, actorID, groupRef string, spe
 
 	var gid string
 	err = tx.QueryRow(ctx,
-		`insert into principal_grant (group_id, role_id, scope_kind, scope_id, scope_op) values ($1, (select id from role where `+registryRefCol(spec.Role)+` = $2), $3, $4, $5) returning id`,
+		`insert into principal_grant (group_id, role_id, scope_kind, scope_id, scope_op) values ($1, (select id from `+refRows("role", spec.Role)+` role where `+registryRefCol(spec.Role)+` = $2), $3, $4, $5) returning id`,
 		groupID, spec.Role, spec.ScopeKind, nullize(spec.ScopeID), spec.ScopeOp).Scan(&gid)
 	if err != nil {
 		return nil, mapGrantWriteErr(err)

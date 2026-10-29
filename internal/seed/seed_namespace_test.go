@@ -59,6 +59,7 @@ func TestEveryOfficialCatalogIsNamespacedAndTheSeedWritesOnlyOg(t *testing.T) {
 	tables := officialTables(t, ctx, conn)
 
 	seeded := 0
+	countOfficial := map[string]int{}
 	for _, table := range tables {
 		id := pgx.Identifier{table}.Sanitize()
 		var stray, unofficialOg, n int
@@ -76,6 +77,7 @@ func TestEveryOfficialCatalogIsNamespacedAndTheSeedWritesOnlyOg(t *testing.T) {
 			t.Errorf("%s: %d og rows not official", table, unofficialOg)
 		}
 		seeded += n
+		countOfficial[table] = n
 	}
 	if seeded == 0 {
 		t.Fatal("the seed shipped no official row: nothing was tested")
@@ -128,6 +130,41 @@ func TestEveryOfficialCatalogIsNamespacedAndTheSeedWritesOnlyOg(t *testing.T) {
 
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatalf("a release meeting the operator's rows must still boot: %v", err)
+	}
+
+	// The shipped rows are back in og beside the operator's (#1432), and a bare
+	// name resolves to the operator's: local shadows og. A role refuses the
+	// ambiguity instead, so its bare name resolves to nothing; severity levels
+	// keep one row per name (overridden, never shadowed), so none is written.
+	for _, table := range tables {
+		id := pgx.Identifier{table}.Sanitize()
+		var og, shadowedOg int
+		if err := conn.QueryRow(ctx, `select count(*) filter (where namespace = 'og'),
+			count(*) filter (where namespace = 'og' and exists (
+				select 1 from `+id+` l where l.namespace = 'local' and l.name = t.name))
+			from `+id+` t`).Scan(&og, &shadowedOg); err != nil {
+			t.Fatalf("%s: count og rows: %v", table, err)
+		}
+		if table == "severity_level" {
+			if og != 0 {
+				t.Errorf("severity_level: %d og levels beside the operator's of the same names, want none", og)
+			}
+			continue
+		}
+		if og != shadowedOg || og != countOfficial[table] {
+			t.Errorf("%s: %d og rows (%d beside an operator's of the same name), want the %d shipped", table, og, shadowedOg, countOfficial[table])
+		}
+		var reached, local int
+		if err := conn.QueryRow(ctx, `select count(*), count(*) filter (where namespace = 'local') from `+table+`_in_effect()`).Scan(&reached, &local); err != nil {
+			t.Fatalf("%s: read the search path: %v", table, err)
+		}
+		want := countOfficial[table]
+		if table == "role" {
+			want = 0
+		}
+		if reached != want || local != want {
+			t.Errorf("%s: a bare name reaches %d rows (%d local), want %d, all the operator's", table, reached, local, want)
+		}
 	}
 
 	for _, table := range snapshotted {

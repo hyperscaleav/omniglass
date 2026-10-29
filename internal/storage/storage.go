@@ -404,7 +404,7 @@ type Gateway interface {
 	RenderSystemDraftLabel(ctx context.Context, draft SystemLabelDraft, create, locationRead scope.Set) (DraftLabel, error)
 	RenderLocationDraftLabel(ctx context.Context, draft LocationLabelDraft, create scope.Set) (DraftLabel, error)
 
-	UpsertComponentType(ctx context.Context, ct ComponentType) error
+	UpsertComponentType(ctx context.Context, ct ComponentType) (uuid.UUID, error)
 	ListComponentTypes(ctx context.Context) ([]ComponentType, error)
 	GetComponentType(ctx context.Context, ref string) (*ComponentType, error)
 	CreateComponentType(ctx context.Context, actorID string, ct ComponentType) (*ComponentType, error)
@@ -421,7 +421,7 @@ type Gateway interface {
 	// counterpart of component_type and a different question from standard,
 	// which stays the blueprint a system conforms to.
 	// ResolveSystemTypeFacts walks the tree in Go; no DB logic.
-	UpsertSystemType(ctx context.Context, st SystemType) error
+	UpsertSystemType(ctx context.Context, st SystemType) (uuid.UUID, error)
 	ListSystemTypes(ctx context.Context) ([]SystemType, error)
 	GetSystemType(ctx context.Context, ref string) (*SystemType, error)
 	CreateSystemType(ctx context.Context, actorID string, st SystemType) (*SystemType, error)

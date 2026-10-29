@@ -19,7 +19,10 @@ type MetricType struct {
 	// ID is the uuid primary key; Name is the renameable handle (ADR-0062). A
 	// metric type is addressed by name on the wire, and the id is the stable form
 	// the contract and telemetry foreign keys store.
-	ID           string
+	ID string
+	// Namespace is who named the type (#318, ADR-0318): og for the
+	// platform's, local for the operator's, or another the operator chose.
+	Namespace    string
 	Name         string
 	Label        string
 	DataType     string
@@ -70,12 +73,12 @@ type MetricTypePatch struct {
 }
 
 var metricTypeCols = `id, name, coalesce(label, ''), data_type, unit, "precision", fusion_policy, description, official, retention_days, ` +
-	calcWriterCol("output_metric_type_id", "metric_type")
+	calcWriterCol("output_metric_type_id", "metric_type") + `, namespace`
 
 func scanMetricType(row pgx.Row) (*MetricType, error) {
 	var mt MetricType
 	var writer []byte
-	if err := row.Scan(&mt.ID, &mt.Name, &mt.Label, &mt.DataType, &mt.Unit, &mt.Precision, &mt.FusionPolicy, &mt.Description, &mt.Official, &mt.RetentionDays, &writer); err != nil {
+	if err := row.Scan(&mt.ID, &mt.Name, &mt.Label, &mt.DataType, &mt.Unit, &mt.Precision, &mt.FusionPolicy, &mt.Description, &mt.Official, &mt.RetentionDays, &writer, &mt.Namespace); err != nil {
 		return nil, err
 	}
 	mt.WrittenBy = parseCalcWriter(writer)
@@ -90,12 +93,11 @@ func (p *PG) UpsertMetricType(ctx context.Context, mt MetricType) error {
 	_, err := p.pool.Exec(ctx, `
 		insert into metric_type (namespace, name, label, data_type, unit, "precision", fusion_policy, description, official)
 		values (case when $8 then 'og' else 'local' end, $1, $2, $3, $4, $5, $6, $7, $8)
-		on conflict (name) do update set
+		on conflict (namespace, name) do update set
 			label = excluded.label, data_type = excluded.data_type,
 			unit = excluded.unit, "precision" = excluded."precision",
 			fusion_policy = excluded.fusion_policy, description = excluded.description,
-			official = excluded.official
-		where metric_type.namespace = excluded.namespace`,
+			official = excluded.official`,
 		mt.Name, labelOrNull(mt.Label), mt.DataType, mt.Unit, mt.Precision, mt.FusionPolicy, mt.Description, mt.Official)
 	if err != nil {
 		return fmt.Errorf("storage: upsert metric type %q: %w", mt.Name, err)
@@ -128,7 +130,7 @@ func (p *PG) GetMetricType(ctx context.Context, name string) (*MetricType, error
 	if err := RejectAddressForm("metric_type", name); err != nil {
 		return nil, err
 	}
-	mt, err := scanMetricType(p.pool.QueryRow(ctx, `select `+metricTypeCols+` from metric_type where name = $1`, name))
+	mt, err := scanMetricType(p.pool.QueryRow(ctx, `select `+metricTypeCols+` from metric_type_in_effect() metric_type where name = $1`, name))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrMetricTypeNotFound
 	}
@@ -146,7 +148,7 @@ func guardMetricTypeMutable(ctx context.Context, q querier, name string) error {
 		return err
 	}
 	var official bool
-	err := q.QueryRow(ctx, `select official from metric_type where name = $1`, name).Scan(&official)
+	err := q.QueryRow(ctx, `select official from metric_type_in_effect() metric_type where name = $1`, name).Scan(&official)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrMetricTypeNotFound
 	}
@@ -180,8 +182,8 @@ func (p *PG) CreateMetricType(ctx context.Context, actorID string, spec MetricTy
 	// it here where the operator can still choose a different one.
 	var clash bool
 	if err := tx.QueryRow(ctx,
-		`select exists (select 1 from property_type where name = $1)
-		     or exists (select 1 from event_type where name = $1)`, spec.Name).Scan(&clash); err != nil {
+		`select exists (select 1 from property_type_in_effect() property_type where name = $1)
+		     or exists (select 1 from event_type_in_effect() event_type where name = $1)`, spec.Name).Scan(&clash); err != nil {
 		return nil, fmt.Errorf("storage: check registry clash for %q: %w", spec.Name, err)
 	}
 	if clash {
@@ -237,11 +239,11 @@ func (p *PG) UpdateMetricType(ctx context.Context, actorID, name string, patch M
 			description  = coalesce($3, description),
 			unit         = coalesce($4, unit),
 			"precision"  = coalesce($5, "precision")
-		where name = $1`,
+		where id = (select id from metric_type_in_effect() metric_type where name = $1)`,
 		name, labelVal, patch.Description, patch.Unit, patch.Precision, setLabel); err != nil {
 		return nil, fmt.Errorf("storage: update metric type %q: %w", name, err)
 	}
-	mt, err := scanMetricType(tx.QueryRow(ctx, `select `+metricTypeCols+` from metric_type where name = $1`, name))
+	mt, err := scanMetricType(tx.QueryRow(ctx, `select `+metricTypeCols+` from metric_type_in_effect() metric_type where name = $1`, name))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrMetricTypeNotFound
@@ -287,7 +289,7 @@ func (p *PG) DeleteMetricType(ctx context.Context, actorID, name string) error {
 	if _, err := tx.Exec(ctx, `savepoint type_delete`); err != nil {
 		return fmt.Errorf("storage: savepoint: %w", err)
 	}
-	if _, err := tx.Exec(ctx, `delete from metric_type where name = $1`, name); err != nil {
+	if _, err := tx.Exec(ctx, `delete from metric_type where id = (select id from metric_type_in_effect() metric_type where name = $1)`, name); err != nil {
 		if _, rerr := tx.Exec(ctx, `rollback to savepoint type_delete`); rerr == nil {
 			if inUse := calcOutputInUse(ctx, tx, rules.LaneMetric, name, err); inUse != nil {
 				return inUse

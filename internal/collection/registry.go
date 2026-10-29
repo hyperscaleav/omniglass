@@ -68,32 +68,48 @@ func NewRegistry(metricTypes []storage.MetricType, propertyTypes []storage.Prope
 			eventTypes[i].WriterClass = writerclass.Of(eventTypes[i].Name, false)
 		}
 	}
+	// A row built by hand names no namespace: it is the platform's when
+	// official and the operator's otherwise, as the backfill placed every row
+	// (#1431).
+	for i := range metricTypes {
+		metricTypes[i].Namespace = namespaceOf(metricTypes[i].Namespace, metricTypes[i].Official)
+	}
+	for i := range propertyTypes {
+		propertyTypes[i].Namespace = namespaceOf(propertyTypes[i].Namespace, propertyTypes[i].Official)
+	}
+	for i := range eventTypes {
+		eventTypes[i].Namespace = namespaceOf(eventTypes[i].Namespace, eventTypes[i].Official)
+	}
 
-	// Who holds each name: the lane, and whether the row is official.
+	// Who holds each name: the lane and the namespace.
 	holders := map[string][]storage.NameHolder{}
 	for _, mt := range metricTypes {
-		holders[mt.Name] = append(holders[mt.Name], storage.NameHolder{Lane: "metric", Official: mt.Official})
+		holders[mt.Name] = append(holders[mt.Name], storage.NameHolder{Lane: "metric", Namespace: mt.Namespace})
 	}
 	for _, pt := range propertyTypes {
-		holders[pt.Name] = append(holders[pt.Name], storage.NameHolder{Lane: "property", Official: pt.Official})
+		holders[pt.Name] = append(holders[pt.Name], storage.NameHolder{Lane: "property", Namespace: pt.Namespace})
 	}
 	for _, et := range eventTypes {
-		holders[et.Name] = append(holders[et.Name], storage.NameHolder{Lane: "event", Official: et.Official})
+		holders[et.Name] = append(holders[et.Name], storage.NameHolder{Lane: "event", Namespace: et.Namespace})
 	}
 	// The lane each name resolves on (storage.ResolveNameLane, the one rule every
 	// reader of a name shares); none for a collision.
-	winner := make(map[string]string, len(holders))
+	winner := make(map[string]storage.NameHolder, len(holders))
 	var collisions, shadowed []string
 	for name, hs := range holders {
-		lane, isShadowed, ok := storage.ResolveNameLane(name, hs)
+		h, isShadowed, ok := storage.ResolveNameLane(name, hs)
 		switch {
 		case !ok:
-			collisions = append(collisions, name)
+			// A name only another namespace holds is no collision: a bare
+			// name simply does not reach it.
+			if reachable(hs) {
+				collisions = append(collisions, name)
+			}
 		case isShadowed:
-			winner[name] = lane
+			winner[name] = h
 			shadowed = append(shadowed, name)
 		default:
-			winner[name] = lane
+			winner[name] = h
 		}
 	}
 	slices.Sort(collisions)
@@ -103,17 +119,17 @@ func NewRegistry(metricTypes []storage.MetricType, propertyTypes []storage.Prope
 	properties := make(map[string]storage.PropertyType, len(propertyTypes))
 	events := make(map[string]storage.EventType, len(eventTypes))
 	for _, mt := range metricTypes {
-		if winner[mt.Name] == "metric" {
+		if winner[mt.Name] == (storage.NameHolder{Lane: "metric", Namespace: mt.Namespace}) {
 			metrics[mt.Name] = mt
 		}
 	}
 	for _, pt := range propertyTypes {
-		if winner[pt.Name] == "property" {
+		if winner[pt.Name] == (storage.NameHolder{Lane: "property", Namespace: pt.Namespace}) {
 			properties[pt.Name] = pt
 		}
 	}
 	for _, et := range eventTypes {
-		if winner[et.Name] == "event" {
+		if winner[et.Name] == (storage.NameHolder{Lane: "event", Namespace: et.Namespace}) {
 			events[et.Name] = et
 		}
 	}
@@ -153,4 +169,27 @@ func (r Registry) Property(name string) (storage.PropertyType, bool) {
 func (r Registry) Event(name string) (storage.EventType, bool) {
 	et, ok := r.events[name]
 	return et, ok
+}
+
+// namespaceOf is a row's namespace, derived from official for a row built by
+// hand that names none.
+func namespaceOf(namespace string, official bool) string {
+	switch {
+	case namespace != "":
+		return namespace
+	case official:
+		return storage.NamespaceOG
+	}
+	return storage.NamespaceLocal
+}
+
+// reachable reports whether a bare name could reach any of these holders: only
+// local and og answer one.
+func reachable(hs []storage.NameHolder) bool {
+	for _, h := range hs {
+		if h.Namespace == storage.NamespaceLocal || h.Namespace == storage.NamespaceOG {
+			return true
+		}
+	}
+	return false
 }

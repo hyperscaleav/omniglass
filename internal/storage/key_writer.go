@@ -203,7 +203,7 @@ func keyWriters(ctx context.Context, q querier, lane writeLane, keys []string) (
 	if lane == writeProperty {
 		col, table = "output_property_type_id", "property_type"
 	}
-	rows, err := q.Query(ctx, `select t.name, c.id::text, c.name from calc_rule c join `+table+` t on t.id = c.`+col+`
+	rows, err := q.Query(ctx, `select t.name, c.id::text, c.name from calc_rule c join `+catalogRows(table, "")+` t on t.id = c.`+col+`
 		where t.name = any($1)`, lookup)
 	if err != nil {
 		return nil, fmt.Errorf("storage: read the writers of %v: %w", lookup, err)

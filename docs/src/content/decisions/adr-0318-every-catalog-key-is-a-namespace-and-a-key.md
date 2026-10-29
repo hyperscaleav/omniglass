@@ -36,9 +36,28 @@ refs: [318, 1431, 1432, 1433, 1434, 1307, 144]
     the dotted address's. The pair in columns needs no separator at all.
   - **A namespace segment that defaults to the platform's.** A bare create lands in `local`, so a
     namespace called `default` would name the wrong side.
-- **Built so far:** the columns, the `og`/`local` backfill, and the seed writing only `og` (#1431).
-  Uniqueness stays on `name` until the search path lands (#1432). Until then an operator's row that
-  holds a shipped name keeps it and the shipped row is not written on that install, nor are its
-  children (a product's contract); a shipped row that names it (a child type's parent, a product's
-  driver) binds to the operator's row, which #1432 ends by resolving the seed's references inside
-  `og`. A severity rank a differently named operator level holds still stops the boot.
+- **Built so far:**
+  - **The columns** (#1431): `namespace` on the 18 catalogs, backfilled from `official`; the seed writes
+    only `og`.
+  - **The search path** (#1432). Uniqueness is `(namespace, name)` on every catalog but
+    `severity_level`, and the seed upserts on it, so a shipped name an operator holds lands beside
+    theirs. `<table>_in_effect()` is what a bare name reaches (local, then the og rows local does not
+    shadow, across the three signal catalogs for those), and every by-name read in the storage
+    package goes through it, `refRows` (by uuid any row, by name the search path) or `catalogRows`
+    (one namespace), held by `TestNoByNameLookupSkipsTheSearchPath`, a scan of the package's SQL. A
+    shipped row's references (a product's vendor, driver and type, a child type's parent, a command's
+    target, a rule's key and events, a product's contract) resolve inside `og`, and a shipped driver
+    validates against `og`.
+  - **Rulings (#318, 2026-10-29):** a role refuses ambiguity rather than shadow (a name both `local`
+    and `og` hold reaches neither, so its holders lose the role, never gain the wrong one; operators
+    have no role-create path yet, and exact role references come with one), and severity levels are
+    overridden, never shadowed, keeping names and ranks unique install-wide.
+  - **Divergences, logged:** a grant naming an ambiguous role is refused as an unknown role (422)
+    rather than the ruling's 409 naming both, since operators cannot create a role yet; a shipped
+    rule or command type is validated against `og` at seed, but at run time follows the search path
+    like every reader, so a rule on a shadowed key judges the operator's series; which command types
+    target a key matches any row of its name, since a shipped command type's target is pinned in
+    `og`; and the reserved-key exception `ResolveNameLane` makes is not yet in `<table>_in_effect()`
+    (#1447).
+  - **An operator's own create or rename never takes a name `og` holds** (a trigger raises the
+    name's unique violation, as before): a shadow arises only from a release.

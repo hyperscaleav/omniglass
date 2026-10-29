@@ -55,6 +55,13 @@ func (c catalogMaps) WriterClass(name string) writerclass.Class {
 // property and event catalogs as emit lanes (an event type's payload schema
 // beside it, #1145), the command types, the secret types.
 func loadDriverCatalog(ctx context.Context, q querier) (catalogMaps, error) {
+	return loadDriverCatalogIn(ctx, q, "")
+}
+
+// loadDriverCatalogIn reads the catalogs a spec validates against in one
+// namespace (a shipped driver against og, the catalog it shipped with), or
+// along the search path when namespace is empty (#1432).
+func loadDriverCatalogIn(ctx context.Context, q querier, namespace string) (catalogMaps, error) {
 	cat := catalogMaps{
 		lanes:     map[string]string{},
 		schemas:   map[string][]byte{},
@@ -63,11 +70,11 @@ func loadDriverCatalog(ctx context.Context, q querier) (catalogMaps, error) {
 		calcOwned: map[string]bool{},
 	}
 	rows, err := q.Query(ctx, `
-		select name, 'metric', official, null::jsonb from metric_type
+		select name, 'metric', namespace, null::jsonb from metric_type
 		union all
-		select name, 'property', official, null::jsonb from property_type
+		select name, 'property', namespace, null::jsonb from property_type
 		union all
-		select name, 'event', official, payload_schema from event_type`)
+		select name, 'event', namespace, payload_schema from event_type`)
 	if err != nil {
 		return cat, fmt.Errorf("storage: load emit catalogs: %w", err)
 	}
@@ -78,12 +85,12 @@ func loadDriverCatalog(ctx context.Context, q querier) (catalogMaps, error) {
 		var name string
 		var h NameHolder
 		var schema []byte
-		if err := rows.Scan(&name, &h.Lane, &h.Official, &schema); err != nil {
+		if err := rows.Scan(&name, &h.Lane, &h.Namespace, &schema); err != nil {
 			return cat, fmt.Errorf("storage: scan emit catalog: %w", err)
 		}
 		held[name] = append(held[name], h)
 		if h.Lane == "event" && len(schema) > 0 {
-			eventSchemas[name] = schema
+			eventSchemas[h.Namespace+"/"+name] = schema
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -94,21 +101,24 @@ func loadDriverCatalog(ctx context.Context, q querier) (catalogMaps, error) {
 	// nothing (a collision) is left out, so a spec naming it is refused rather
 	// than validated against a lane ingest would not write.
 	for name, hs := range held {
-		lane, _, ok := ResolveNameLane(name, hs)
+		h, _, ok := ResolveNameLane(name, hs)
+		if namespace != "" {
+			h, ok = ResolveNameIn(namespace, hs)
+		}
 		if !ok {
 			continue
 		}
-		cat.lanes[name] = lane
-		if lane == "event" {
-			if s, has := eventSchemas[name]; has {
+		cat.lanes[name] = h.Lane
+		if h.Lane == "event" {
+			if s, has := eventSchemas[h.Namespace+"/"+name]; has {
 				cat.schemas[name] = s
 			}
 		}
 	}
 	for sql, into := range map[string]map[string]bool{
-		`select name from command_type`: cat.commands,
-		`select name from secret_type`:  cat.secrets,
-		calcOwnedNamesSQL:               cat.calcOwned,
+		`select name from ` + catalogRows("command_type", namespace) + ` t`: cat.commands,
+		`select name from ` + catalogRows("secret_type", namespace) + ` t`:  cat.secrets,
+		calcOwnedNamesSQL: cat.calcOwned,
 	} {
 		rows, err := q.Query(ctx, sql)
 		if err != nil {
@@ -135,6 +145,12 @@ func loadDriverCatalog(ctx context.Context, q querier) (catalogMaps, error) {
 // catalogs. A nil/empty spec passes: a stub row is legal, it just cannot be
 // attached.
 func (p *PG) validateDriverSpec(ctx context.Context, raw []byte) error {
+	return p.validateDriverSpecIn(ctx, raw, "")
+}
+
+// validateDriverSpecIn validates against one namespace's catalogs, or the
+// search path when namespace is empty.
+func (p *PG) validateDriverSpecIn(ctx context.Context, raw []byte, namespace string) error {
 	if len(raw) == 0 {
 		return nil
 	}
@@ -142,7 +158,7 @@ func (p *PG) validateDriverSpec(ctx context.Context, raw []byte) error {
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrSpecInvalid, err)
 	}
-	cat, err := loadDriverCatalog(ctx, p.pool)
+	cat, err := loadDriverCatalogIn(ctx, p.pool, namespace)
 	if err != nil {
 		return err
 	}
@@ -359,7 +375,7 @@ func attachParams(effective map[string]string) map[string]string {
 // starts after waits for the attach, whose endpoint its re-derive then sees
 // (#823). Without it an attach racing an update kept the old spec for good.
 func loadDriverRef(ctx context.Context, q querier, ref string) (*Driver, error) {
-	d, err := scanDriver(q.QueryRow(ctx, `select `+driverCols+` from driver where `+registryRefCol(ref)+` = $1 for share`, ref))
+	d, err := scanDriver(q.QueryRow(ctx, `select `+driverCols+` from driver where id = (select r.id from `+refRows("driver", ref)+` r where r.`+registryRefCol(ref)+` = $1) for share`, ref))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrTypeNotFound
 	}

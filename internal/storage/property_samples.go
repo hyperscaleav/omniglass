@@ -144,14 +144,14 @@ func (p *PG) writePropertySamples(ctx context.Context, tx pgx.Tx, w KeyWriter, e
 				select 1 from (
 					select value from property
 					where owner_kind = $2 and %s = $3
-					  and property_type_id = (select id from property_type where name = $4)
+					  and property_type_id = (select id from property_type_in_effect() property_type where name = $4)
 					  and instance = $5 and provenance = $7
 					order by ts desc, id desc
 					limit 1) latest
 				where latest.value = to_jsonb($6::text))`, col)
 		}
 		sql := fmt.Sprintf(`insert into property (ts, owner_kind, %s, property_type_id, instance, value, provenance, source, source_rule, source_rule_version, source_rule_id, source_conduit_id)
-			select $1::timestamptz, $2::text, $3::uuid, (select id from property_type where name = $4::text), $5::text, to_jsonb($6::text),
+			select $1::timestamptz, $2::text, $3::uuid, (select id from property_type_in_effect() property_type where name = $4::text), $5::text, to_jsonb($6::text),
 				$7::text, $8::text, $9::text, $10::bigint, $11::uuid, $12::uuid%s
 			returning id`, col, guard)
 		var id int64
@@ -238,7 +238,7 @@ func (p *PG) LatestProperty(ctx context.Context, componentRef, key, instance str
 			(select p.name from property_type p where p.id = property.property_type_id), instance, value #>> '{}', provenance, `+sourceRendered("property")+`
 		from property
 		where component_id = $1::uuid
-		  and property_type_id = (select id from property_type where name = $2) and instance = $3
+		  and property_type_id = (select id from property_type_in_effect() property_type where name = $2) and instance = $3
 		  and provenance = 'observed'
 		order by ts desc, id desc
 		limit 1`, c.ID, key, instance).Scan(&dp.TS, &dp.OwnerKind, &dp.Key, &dp.Instance, &dp.Value, &dp.Provenance, &dp.Source)
@@ -273,7 +273,7 @@ func (p *PG) PropertyTransitions(ctx context.Context, componentRef, key, instanc
 			(select p.name from property_type p where p.id = property.property_type_id), instance, value #>> '{}', provenance, `+sourceRendered("property")+`
 		from property
 		where component_id = $1::uuid
-		  and property_type_id = (select id from property_type where name = $2) and instance = $3
+		  and property_type_id = (select id from property_type_in_effect() property_type where name = $2) and instance = $3
 		  and provenance = 'observed' and %s
 		order by ts asc`, bound), args...)
 	if err != nil {
@@ -312,7 +312,7 @@ func (p *PG) ListPropertySeries(ctx context.Context, ownerKind, ownerRef, key st
 			(select pt.name from property_type pt where pt.id = property.property_type_id), instance, value #>> '{}', provenance, `+sourceRendered("property")+`
 		from property
 		where %s = $1::uuid
-		  and property_type_id = (select id from property_type where name = $2)
+		  and property_type_id = (select id from property_type_in_effect() property_type where name = $2)
 		  and %s
 		order by ts desc
 		limit $3`, col, bound), args...)

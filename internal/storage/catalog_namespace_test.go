@@ -53,3 +53,52 @@ func TestAnOperatorsCatalogRowIsLocalAndOgIsOfficialOnly(t *testing.T) {
 		t.Errorf("a namespace that is not one kebab segment: err %v, want vendor_namespace_check", err)
 	}
 }
+
+// The search path (#1432): a release that ships a name an operator already
+// holds writes its row beside theirs, a bare name reaches the operator's, and
+// deleting theirs lets the shipped one answer. An operator's own create never
+// takes a shipped name: a shadow arises only from a release.
+func TestABareNameReachesTheOperatorsRowAndTheShippedOneWaits(t *testing.T) {
+	ctx := context.Background()
+	gw := storagetest.NewDB(t)
+
+	// A signal catalog.
+	if _, err := gw.CreateMetricType(ctx, "", storage.MetricTypeSpec{Name: "fan-speed", DataType: "int"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := gw.UpsertMetricType(ctx, storage.MetricType{Name: "fan-speed", DataType: "float", Official: true}); err != nil {
+		t.Fatalf("a release shipping a name the operator holds: %v", err)
+	}
+	got, err := gw.GetMetricType(ctx, "fan-speed")
+	if err != nil || got.Namespace != "local" || got.DataType != "int" {
+		t.Fatalf("a bare name reads %+v (%v), want the operator's int", got, err)
+	}
+	if err := gw.DeleteMetricType(ctx, "", "fan-speed"); err != nil {
+		t.Fatalf("delete the operator's: %v", err)
+	}
+	got, err = gw.GetMetricType(ctx, "fan-speed")
+	if err != nil || got.Namespace != "og" || got.DataType != "float" {
+		t.Fatalf("after the operator's is deleted the bare name reads %+v (%v), want the shipped float", got, err)
+	}
+	if _, err := gw.CreateMetricType(ctx, "", storage.MetricTypeSpec{Name: "fan-speed", DataType: "int"}); !errors.Is(err, storage.ErrMetricTypeExists) {
+		t.Errorf("an operator's create of a shipped name: err %v, want ErrMetricTypeExists", err)
+	}
+
+	// An ordinary catalog.
+	if _, err := gw.CreateVendor(ctx, "", storage.Vendor{Name: "acme", Kind: "manufacturer", Label: "Mine"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := gw.UpsertVendor(ctx, storage.Vendor{Name: "acme", Kind: "manufacturer", Label: "Shipped", Official: true}); err != nil {
+		t.Fatalf("a release shipping a vendor the operator holds: %v", err)
+	}
+	v, err := gw.GetVendor(ctx, "acme")
+	if err != nil || v.Label != "Mine" || v.Official {
+		t.Fatalf("a bare vendor name reads %+v (%v), want the operator's", v, err)
+	}
+	if err := gw.DeleteVendor(ctx, "", "acme"); err != nil {
+		t.Fatalf("delete the operator's vendor: %v", err)
+	}
+	if v, err = gw.GetVendor(ctx, "acme"); err != nil || v.Label != "Shipped" || !v.Official {
+		t.Fatalf("after the operator's vendor is deleted the bare name reads %+v (%v), want the shipped one", v, err)
+	}
+}

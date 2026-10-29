@@ -15,7 +15,7 @@ import (
 var (
 	metricTypeListSQL   = `select ` + metricTypeCols + ` from metric_type`
 	propertyTypeListSQL = `select ` + propertyCols + ` from property_type`
-	eventTypeListSQL    = `select id, name, coalesce(label, ''), description, payload_schema, official from event_type`
+	eventTypeListSQL    = `select id, name, coalesce(label, ''), description, payload_schema, official, namespace from event_type`
 	// commandTargetedSQL is the property types some command type targets: the
 	// observations settlement has to look at (#1299 keeps it with the registry).
 	commandTargetedSQL = `select distinct pt.name from command_type ct join property_type pt on pt.id = ct.target_property_type_id`

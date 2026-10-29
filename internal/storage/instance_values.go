@@ -36,17 +36,17 @@ import (
 func latestObservedPerInstanceSQL(lane, value, col string) string {
 	return fmt.Sprintf(`with recursive inst(instance) as (
 			(select instance from %[1]s
-				where owner_kind = $1 and %[3]s = $2 and %[1]s_type_id = (select id from %[1]s_type where name = $3)
+				where owner_kind = $1 and %[3]s = $2 and %[1]s_type_id = (select k.id from %[1]s_type_in_effect() k where k.name = $3)
 				order by instance limit 1)
 			union all
 			select (select x.instance from %[1]s x
-					where x.owner_kind = $1 and x.%[3]s = $2 and x.%[1]s_type_id = (select id from %[1]s_type where name = $3)
+					where x.owner_kind = $1 and x.%[3]s = $2 and x.%[1]s_type_id = (select k.id from %[1]s_type_in_effect() k where k.name = $3)
 					  and x.instance > inst.instance
 					order by x.instance limit 1)
 				from inst where inst.instance is not null)
 		select n.value, n.ts, n.provenance, i.instance from inst i,
 			lateral (select %[2]s as value, ts, provenance, id from %[1]s
-				where owner_kind = $1 and %[3]s = $2 and %[1]s_type_id = (select id from %[1]s_type where name = $3)
+				where owner_kind = $1 and %[3]s = $2 and %[1]s_type_id = (select k.id from %[1]s_type_in_effect() k where k.name = $3)
 				  and instance = i.instance and provenance = 'observed'
 				order by ts desc, id desc limit 1) n
 		where i.instance is not null and n.value is not null
@@ -96,9 +96,9 @@ func latestIntendedSQL(col string) string {
 			(select distinct c.instance from command c
 				where c.owner_kind = $1 and c.%[2]s = $2
 				  and c.command_type_id in (select ct.id from command_type ct
-					where ct.target_property_type_id = (select id from property_type where name = $3))) i,
+					where ct.target_property_type_id in (select id from property_type where name = $3))) i,
 			lateral (select %[1]s as value, ts, provenance, id from property
-				where owner_kind = $1 and %[2]s = $2 and property_type_id = (select id from property_type where name = $3)
+				where owner_kind = $1 and %[2]s = $2 and property_type_id = (select id from property_type_in_effect() property_type where name = $3)
 				  and instance = i.instance and provenance = 'intended'
 				order by ts desc, id desc limit 1) n
 		where n.value is not null

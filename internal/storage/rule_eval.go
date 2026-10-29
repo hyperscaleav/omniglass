@@ -132,7 +132,7 @@ func (e *ruleEvaluator) typeID(ctx context.Context, tx pgx.Tx, name string) (uui
 		return id, true
 	}
 	var s string
-	if err := tx.QueryRow(ctx, `select id::text from component_type where name = $1`, name).Scan(&s); err != nil {
+	if err := tx.QueryRow(ctx, `select id::text from component_type_in_effect() component_type where name = $1`, name).Scan(&s); err != nil {
 		return uuid.UUID{}, false
 	}
 	id, err := uuid.Parse(s)
@@ -355,7 +355,7 @@ func (e *ruleEvaluator) judge(ctx context.Context, tx pgx.Tx, lane rules.Lane, o
 		table, typeTable = "metric", "metric_type"
 	}
 	var stale bool
-	if err := tx.QueryRow(ctx, fmt.Sprintf(`select exists (select 1 from %s s join %s t on t.id = s.%s_id
+	if err := tx.QueryRow(ctx, fmt.Sprintf(`select exists (select 1 from %s s join %s_in_effect() t on t.id = s.%s_id
 		where s.component_id = $1::uuid and t.name = $2 and s.instance = $3 and s.ts > $4)`, table, typeTable, typeTable),
 		ownerID, key, instance, ts).Scan(&stale); err != nil {
 		return nil, fmt.Errorf("storage: rule newest check: %w", err)
@@ -493,7 +493,7 @@ func newestSamples(ctx context.Context, tx pgx.Tx, lane rules.Lane, key, compone
 	}
 	table, typeTable, value := laneTables(lane)
 	q := fmt.Sprintf(`select distinct on (s.component_id, s.instance) s.component_id::text, s.instance, %s
-		from %s s join %s t on t.id = s.%s_id
+		from %s s join %s_in_effect() t on t.id = s.%s_id
 		where t.name = $1 and s.component_id is not null`, value, table, typeTable, typeTable)
 	args := []any{key}
 	rows, err := tx.Query(ctx, q+` order by s.component_id, s.instance, s.ts desc, s.id desc`, args...)
@@ -517,7 +517,7 @@ func newestSamples(ctx context.Context, tx pgx.Tx, lane rules.Lane, key, compone
 func newestOfSeries(ctx context.Context, tx pgx.Tx, lane rules.Lane, key, componentID, instance string) ([]seriesSample, error) {
 	_, typeTable, _ := laneTables(lane)
 	var typeID string
-	err := tx.QueryRow(ctx, `select id::text from `+typeTable+` where name = $1`, key).Scan(&typeID)
+	err := tx.QueryRow(ctx, `select t.id::text from `+catalogRows(typeTable, "")+` t where t.name = $1`, key).Scan(&typeID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -686,7 +686,7 @@ func writeRuleEvent(ctx context.Context, tx pgx.Tx, r EventRule, eventType strin
 	}
 	if _, err := tx.Exec(ctx, `insert into event (owner_kind, component_id, event_type_id, instance, origin, message, attributes,
 			provenance, source, source_rule, source_rule_version, derived_by_rule_id, alarm_id)
-		values ('component', $1::uuid, (select id from event_type where name = $2), $3, 'derived', $4, $5::jsonb,
+		values ('component', $1::uuid, (select id from event_type_in_effect() event_type where name = $2), $3, 'derived', $4, $5::jsonb,
 			'observed', 'rule', $6, $7, $8::uuid, $9::uuid)`,
 		comp.ID, eventType, instance, ruleMessage(r), string(b), r.Name, r.Version, r.ID, nullIfEmpty(alarmID)); err != nil {
 		return fmt.Errorf("storage: rule %s event %s on %s: %w", r.Name, eventType, comp.Name, err)

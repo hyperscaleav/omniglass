@@ -80,15 +80,14 @@ func (p *PG) UpsertVendor(ctx context.Context, m Vendor) error {
 	_, err := p.pool.Exec(ctx, `
 		insert into vendor (namespace, name, official, label, kind, icon, support_phone, website)
 		values (case when $2 then 'og' else 'local' end, $1, $2, $3, $4, $5, $6, $7)
-		on conflict (name) do update
+		on conflict (namespace, name) do update
 			set official      = excluded.official,
 			    label  = excluded.label,
 			    kind          = excluded.kind,
 			    icon          = excluded.icon,
 			    support_phone = excluded.support_phone,
 			    website       = excluded.website,
-			    updated_at    = now()
-		where vendor.namespace = excluded.namespace`,
+			    updated_at    = now()`,
 		m.Name, m.Official, labelOrNull(m.Label), m.Kind, m.Icon, m.SupportPhone, m.Website)
 	if err != nil {
 		return fmt.Errorf("storage: upsert vendor %q: %w", m.Name, err)
@@ -125,7 +124,7 @@ func (p *PG) ListVendors(ctx context.Context) ([]Vendor, error) {
 
 // GetVendor resolves one vendor by id. An unknown id is ErrTypeNotFound.
 func (p *PG) GetVendor(ctx context.Context, id string) (*Vendor, error) {
-	m, err := scanVendor(p.pool.QueryRow(ctx, `select `+vendorCols+` from vendor where `+registryRefCol(id)+` = $1`, id))
+	m, err := scanVendor(p.pool.QueryRow(ctx, `select `+vendorCols+` from `+refRows("vendor", id)+` vendor where `+registryRefCol(id)+` = $1`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrTypeNotFound
 	}
@@ -197,7 +196,7 @@ func (p *PG) UpdateVendor(ctx context.Context, actorID, id string, patch VendorP
 			support_phone = coalesce($5, support_phone),
 			website       = coalesce($6, website),
 			updated_at    = now()
-		where `+registryRefCol(id)+` = $1
+		where id = (select id from `+refRows("vendor", id)+` t where `+registryRefCol(id)+` = $1)
 		returning `+vendorCols,
 		id, labelVal, patch.Kind, patch.Icon, patch.SupportPhone, patch.Website, setLabel))
 	if err != nil {
@@ -241,7 +240,7 @@ func (p *PG) DeleteVendor(ctx context.Context, actorID, id string) error {
 		}
 		return fmt.Errorf("storage: audit image vendor %q: %w", id, err)
 	}
-	if _, err := tx.Exec(ctx, `delete from vendor where `+registryRefCol(id)+` = $1`, id); err != nil {
+	if _, err := tx.Exec(ctx, `delete from vendor where id = (select id from `+refRows("vendor", id)+` t where `+registryRefCol(id)+` = $1)`, id); err != nil {
 		return fmt.Errorf("storage: delete vendor %q: %w", id, err)
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "delete", "vendor", auditImageID(before), before, nil); err != nil {

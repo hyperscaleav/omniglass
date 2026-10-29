@@ -149,8 +149,8 @@ func getActionRule(ctx context.Context, q querier, ref, owner string, forUpdate 
 	if owner != "" && !isUUID(owner) {
 		return nil, ErrActionRuleNotFound
 	}
-	r, err := scanActionRule(q.QueryRow(ctx, `select `+actionRuleCols+actionRuleFrom+` where r.`+registryRefCol(ref)+` = $1
-		and r.owner_principal_id is not distinct from nullif($2, '')::uuid`+lock, ref, owner))
+	r, err := scanActionRule(q.QueryRow(ctx, `select `+actionRuleCols+actionRuleFrom+` where r.id = (select x.id from `+refRows("action_rule", ref)+` x where x.`+registryRefCol(ref)+` = $1
+		and x.owner_principal_id is not distinct from nullif($2, '')::uuid)`+lock, ref, owner))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrActionRuleNotFound
 	}

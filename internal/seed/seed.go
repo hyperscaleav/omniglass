@@ -596,18 +596,15 @@ func seedComponentTypes(ctx context.Context, gw storage.Gateway) error {
 			}
 			parentID = &pid
 		}
-		if err := gw.UpsertComponentType(ctx, storage.ComponentType{
+		id, err := gw.UpsertComponentType(ctx, storage.ComponentType{
 			Name: ct.ID, Official: true, Label: ct.Label,
 			Stem: nz(ct.Stem), Icon: nz(ct.Icon), Abbrev: nz(ct.Abbrev),
 			DefaultTags: ct.DefaultTags, ParentID: parentID,
-		}); err != nil {
+		})
+		if err != nil {
 			return fmt.Errorf("seed: component_type %s: %w", ct.ID, err)
 		}
-		got, err := gw.GetComponentType(ctx, ct.ID)
-		if err != nil {
-			return fmt.Errorf("seed: component_type %s: reload after upsert: %w", ct.ID, err)
-		}
-		resolved[ct.ID] = got.ID
+		resolved[ct.ID] = id
 	}
 	return nil
 }
@@ -638,17 +635,14 @@ func seedSystemTypes(ctx context.Context, gw storage.Gateway) error {
 			}
 			parentID = &pid
 		}
-		if err := gw.UpsertSystemType(ctx, storage.SystemType{
+		id, err := gw.UpsertSystemType(ctx, storage.SystemType{
 			Name: st.ID, Official: true, Label: st.Label,
 			Stem: nz(st.Stem), Icon: nz(st.Icon), Abbrev: nz(st.Abbrev), ParentID: parentID,
-		}); err != nil {
+		})
+		if err != nil {
 			return fmt.Errorf("seed: system_type %s: %w", st.ID, err)
 		}
-		got, err := gw.GetSystemType(ctx, st.ID)
-		if err != nil {
-			return fmt.Errorf("seed: system_type %s: reload after upsert: %w", st.ID, err)
-		}
-		resolved[st.ID] = got.ID
+		resolved[st.ID] = id
 	}
 	return nil
 }
@@ -677,13 +671,6 @@ func seedProducts(ctx context.Context, gw storage.Gateway) error {
 		}); err != nil {
 			return err
 		}
-		// An operator's product holds the name, so the shipped one was not
-		// written (#1431): its contract is not the seed's to write either.
-		if held, err := gw.GetProduct(ctx, p.ID); err != nil {
-			return fmt.Errorf("seed: product %s: %w", p.ID, err)
-		} else if !held.Official {
-			continue
-		}
 		// The product's declared-property contract. Seeded through the unaudited
 		// upsert path (seed owns official rows), so a re-run is a no-op.
 		for _, prop := range p.Properties {
@@ -693,6 +680,7 @@ func seedProducts(ctx context.Context, gw storage.Gateway) error {
 			}
 			if err := gw.UpsertProductProperty(ctx, p.ID, storage.ProductPropertySpec{
 				PropertyTypeName: prop.Name, DefaultValue: def, Required: prop.Required,
+				ResolveIn: storage.NamespaceOG,
 			}); err != nil {
 				return fmt.Errorf("seed: product %s property %s: %w", p.ID, prop.Name, err)
 			}

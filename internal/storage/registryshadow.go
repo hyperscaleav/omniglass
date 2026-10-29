@@ -103,7 +103,7 @@ func shadowRowID(id string) (uuid.UUID, error) {
 // forks share, which makes it the mutex.
 func lockRegistryRow(ctx context.Context, tx pgx.Tx, table, ref string) error {
 	var one int
-	err := tx.QueryRow(ctx, `select 1 from `+table+` where `+registryRefCol(ref)+` = $1 for update`, ref).Scan(&one)
+	err := tx.QueryRow(ctx, `select 1 from `+table+` where id = (select r.id from `+refRows(table, ref)+` r where r.`+registryRefCol(ref)+` = $1) for update`, ref).Scan(&one)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrTypeNotFound
 	}

@@ -429,7 +429,7 @@ func draftedLabel(eng *label.Engine, rule string, data label.Data, name string, 
 // table is a compile-time constant at every call site, never operator input.
 func registryID(ctx context.Context, q querier, table, ref string, notFound error) (string, error) {
 	var id string
-	err := q.QueryRow(ctx, `select id from `+table+` where `+registryRefCol(ref)+` = $1`, ref).Scan(&id)
+	err := q.QueryRow(ctx, `select id from `+refRows(table, ref)+` t where `+registryRefCol(ref)+` = $1`, ref).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", notFound
 	}

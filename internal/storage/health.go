@@ -461,10 +461,10 @@ func recordHealth(ctx context.Context, q txQuerier, ownerKind, ownerID string, v
 	// a different one writes; the same value writes nothing.
 	owner := ownerArcExpr(ownerKind)
 	sql := fmt.Sprintf(`insert into property (ts, owner_kind, %[1]s, property_type_id, instance, value, provenance, source_rule)
-		select clock_timestamp(), $1::text, %[3]s, (select id from property_type where name = $3::text), '', to_jsonb($4::text), 'calculated', $5::text
+		select clock_timestamp(), $1::text, %[3]s, (select id from property_type_in_effect() property_type where name = $3::text), '', to_jsonb($4::text), 'calculated', $5::text
 		where $4::text is distinct from (
 			select value #>> '{}' from property
-			where %[1]s = %[3]s and property_type_id = (select id from property_type where name = $3::text) and instance = ''
+			where %[1]s = %[3]s and property_type_id = (select id from property_type_in_effect() property_type where name = $3::text) and instance = ''
 			  and provenance = 'calculated'
 			order by id desc
 			limit 1)`, col, col, owner)
@@ -568,7 +568,7 @@ func (p *PG) systemsStaffedBy(ctx context.Context, q txQuerier, componentID stri
 // recomputeChain, which needs the id to lock and record each system without
 // re-deriving one from a name #627 no longer guarantees is unique.
 func (p *PG) conformingSystems(ctx context.Context, q txQuerier, standardID string) ([]ownerRef, error) {
-	rows, err := q.Query(ctx, `select id, name from system where standard_id = (select id from standard where name = $1 or id::text = $1) order by name`, standardID)
+	rows, err := q.Query(ctx, `select id, name from system where standard_id = (select id from standard where id::text = $1 or id = (select e.id from standard_in_effect() e where e.name = $1)) order by name`, standardID)
 	if err != nil {
 		return nil, fmt.Errorf("storage: conforming systems %q: %w", standardID, err)
 	}
@@ -653,7 +653,7 @@ func (p *PG) locationVerdict(ctx context.Context, q txQuerier, locationID string
 		)
 		select distinct on (sd.system_id) sd.value #>> '{}'
 		from property sd
-		where sd.property_type_id = (select id from property_type where name = $2)
+		where sd.property_type_id = (select id from property_type_in_effect() property_type where name = $2)
 		  and sd.provenance = 'calculated'
 		  and sd.system_id in (select id from system where location_id in (select id from subtree))
 		order by sd.system_id, sd.id desc`, locationID, healthKey)
@@ -727,7 +727,7 @@ func (p *PG) SystemVerdicts(ctx context.Context, read scope.Set) ([]SystemVerdic
 		latest as (
 			select distinct on (v.system_id) v.system_id, v.value #>> '{}' as verdict
 			from property v
-			where v.property_type_id = (select id from property_type where name = `+key+`)
+			where v.property_type_id = (select id from property_type_in_effect() property_type where name = `+key+`)
 			  and v.provenance = 'calculated'
 			  and v.system_id in (select id from sys)
 			order by v.system_id, v.id desc
@@ -1109,7 +1109,7 @@ func (p *PG) subtreeSystemHealth(ctx context.Context, q txQuerier, locationID st
 		)
 		select s.name, coalesce((
 			select sd.value #>> '{}' from property sd
-			where sd.system_id = s.id and sd.property_type_id = (select id from property_type where name = $2) and sd.instance = ''
+			where sd.system_id = s.id and sd.property_type_id = (select id from property_type_in_effect() property_type where name = $2) and sd.instance = ''
 			  and sd.provenance = 'calculated'
 			order by sd.id desc
 			limit 1
@@ -1145,7 +1145,7 @@ func healthTransitions(ctx context.Context, q txQuerier, ownerKind, ownerID stri
 	}
 	bound, args := tsSince("ts", window, ownerID, healthKey)
 	sql := fmt.Sprintf(`select ts, value #>> '{}' from property
-		where %s = %s and property_type_id = (select id from property_type where name = $2) and instance = ''
+		where %s = %s and property_type_id = (select id from property_type_in_effect() property_type where name = $2) and instance = ''
 		  and provenance = 'calculated' and %s
 		order by ts asc, id asc`, col, ownerArcExprN(ownerKind, 1), bound)
 	rows, err := q.Query(ctx, sql, args...)

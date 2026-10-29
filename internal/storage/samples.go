@@ -241,7 +241,7 @@ func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs
 				mt.id, u.instance, u.value, $8, u.source, $9, $10, $11::uuid, $12::uuid
 			from unnest($1::timestamptz[], $2::text[], $3::text[], $4::text[], $5::text[], $6::float8[], $7::text[])
 				with ordinality as u(ts, owner_kind, owner, key, instance, value, source, ord)
-			left join metric_type mt on mt.name = u.key
+			left join metric_type_in_effect() mt on mt.name = u.key
 			order by u.ord`,
 			ts, kinds, owners, keys, instances, values, sources, provenance, sourceRule, sourceVersion, sourceRuleID, w.sourceConduit())
 		if err != nil {
@@ -261,7 +261,7 @@ func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs
 		if carried[metricSeriesKey(ev, arcs[i])] > 1 {
 			col, _ := ownerColumn(ev.OwnerKind)
 			sql := fmt.Sprintf(`insert into metric (ts, owner_kind, %s, metric_type_id, instance, value, provenance, source, source_rule, source_rule_version, source_rule_id, source_conduit_id)
-				values ($1, $2, $3, (select id from metric_type where name = $4), $5, $6, $7, $8, $9, $10, $11::uuid, $12::uuid)`, col)
+				values ($1, $2, $3, (select id from metric_type_in_effect() metric_type where name = $4), $5, $6, $7, $8, $9, $10, $11::uuid, $12::uuid)`, col)
 			if _, err := tx.Exec(ctx, sql, ts, ev.OwnerKind, arcs[i], ev.Key, ev.Instance, ev.Value, provenance, ev.Source, sourceRule, sourceVersion, sourceRuleID, w.sourceConduit()); err != nil {
 				return fmt.Errorf("storage: insert sample %s/%s: %w", ev.OwnerID, ev.Key, err)
 			}
@@ -298,7 +298,7 @@ func (p *PG) LatestMetric(ctx context.Context, componentRef, key string) (*Metri
 			(select m.name from metric_type m where m.id = metric.metric_type_id), instance, value, provenance, `+sourceRendered("metric")+`
 		from metric
 		where component_id = $1::uuid
-		  and metric_type_id = (select id from metric_type where name = $2)
+		  and metric_type_id = (select id from metric_type_in_effect() metric_type where name = $2)
 		  and provenance = 'observed'
 		order by ts desc
 		limit 1`, c.ID, key).Scan(&dp.TS, &dp.OwnerKind, &dp.Key, &dp.Instance, &dp.Value, &dp.Provenance, &dp.Source)
@@ -332,7 +332,7 @@ func (p *PG) LatestMetricInstance(ctx context.Context, componentRef, key, instan
 			(select m.name from metric_type m where m.id = metric.metric_type_id), instance, value, provenance, `+sourceRendered("metric")+`
 		from metric
 		where component_id = $1::uuid
-		  and metric_type_id = (select id from metric_type where name = $2) and instance = $3
+		  and metric_type_id = (select id from metric_type_in_effect() metric_type where name = $2) and instance = $3
 		  and provenance = 'observed'
 		order by ts desc
 		limit 1`, c.ID, key, instance).Scan(&dp.TS, &dp.OwnerKind, &dp.Key, &dp.Instance, &dp.Value, &dp.Provenance, &dp.Source)
@@ -364,7 +364,7 @@ func (p *PG) ListMetricSeries(ctx context.Context, ownerKind, ownerRef, key stri
 			(select m.name from metric_type m where m.id = metric.metric_type_id), instance, value, provenance, `+sourceRendered("metric")+`
 		from metric
 		where %s = $1::uuid
-		  and metric_type_id = (select id from metric_type where name = $2)
+		  and metric_type_id = (select id from metric_type_in_effect() metric_type where name = $2)
 		  and %s
 		order by ts desc
 		limit $3`, col, bound), args...)

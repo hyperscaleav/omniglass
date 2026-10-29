@@ -49,7 +49,9 @@ const maxComponentTypeDepth = 32
 // together is "yours, overriding shipped". Forked is derived at read time from
 // the presence of a registry_shadow row, never stored on the registry itself.
 type ComponentType struct {
-	ID          uuid.UUID
+	ID uuid.UUID
+	// Namespace is who named the type (#318): og for the platform's.
+	Namespace   string
 	Name        string
 	Label       string
 	Stem        *string
@@ -76,7 +78,7 @@ type ComponentTypePatch struct {
 	DefaultTags *[]string
 }
 
-const componentTypeCols = `id, name, coalesce(label, ''), stem, icon, abbrev, label_rule, default_tags, official, parent_id`
+const componentTypeCols = `id, name, coalesce(label, ''), stem, icon, abbrev, label_rule, default_tags, official, parent_id, namespace`
 
 // componentTypeRegistry is this registry's key in registry_shadow, the first
 // adopter of the fork primitive (registryshadow.go).
@@ -87,13 +89,13 @@ const componentTypeRegistry = "component_type"
 // left join on the row's own uuid, so an unforked row reads exactly as before
 // and a forked one carries the image scanComponentTypeResolved overlays.
 const componentTypeResolved = `
-	select ct.id, ct.name, coalesce(ct.label, ''), ct.stem, ct.icon, ct.abbrev, ct.label_rule, ct.default_tags, ct.official, ct.parent_id, s.image
+	select ct.id, ct.name, coalesce(ct.label, ''), ct.stem, ct.icon, ct.abbrev, ct.label_rule, ct.default_tags, ct.official, ct.parent_id, ct.namespace, s.image
 	from component_type ct
 	left join registry_shadow s on s.registry = '` + componentTypeRegistry + `' and s.row_id = ct.id`
 
 func scanComponentType(row pgx.Row) (*ComponentType, error) {
 	var ct ComponentType
-	if err := row.Scan(&ct.ID, &ct.Name, &ct.Label, &ct.Stem, &ct.Icon, &ct.Abbrev, &ct.LabelRule, &ct.DefaultTags, &ct.Official, &ct.ParentID); err != nil {
+	if err := row.Scan(&ct.ID, &ct.Name, &ct.Label, &ct.Stem, &ct.Icon, &ct.Abbrev, &ct.LabelRule, &ct.DefaultTags, &ct.Official, &ct.ParentID, &ct.Namespace); err != nil {
 		return nil, err
 	}
 	return &ct, nil
@@ -105,7 +107,7 @@ func scanComponentType(row pgx.Row) (*ComponentType, error) {
 func scanComponentTypeResolved(row pgx.Row) (*ComponentType, error) {
 	var ct ComponentType
 	var image []byte
-	if err := row.Scan(&ct.ID, &ct.Name, &ct.Label, &ct.Stem, &ct.Icon, &ct.Abbrev, &ct.LabelRule, &ct.DefaultTags, &ct.Official, &ct.ParentID, &image); err != nil {
+	if err := row.Scan(&ct.ID, &ct.Name, &ct.Label, &ct.Stem, &ct.Icon, &ct.Abbrev, &ct.LabelRule, &ct.DefaultTags, &ct.Official, &ct.ParentID, &ct.Namespace, &image); err != nil {
 		return nil, err
 	}
 	resolved, err := applyComponentTypeImage(ct, image)
@@ -216,12 +218,14 @@ func mapComponentTypeWriteErr(err error) error {
 
 // UpsertComponentType installs or updates a component_type by name, the
 // boot-seed phase's write. Idempotent: re-seeding the same name updates it in
-// place, id stable.
-func (p *PG) UpsertComponentType(ctx context.Context, ct ComponentType) error {
-	_, err := p.pool.Exec(ctx, `
+// place, id stable. It returns the row's id, so the seed names the row it wrote
+// rather than whichever row a bare name resolves to (#1432).
+func (p *PG) UpsertComponentType(ctx context.Context, ct ComponentType) (uuid.UUID, error) {
+	var id uuid.UUID
+	err := p.pool.QueryRow(ctx, `
 		insert into component_type (namespace, name, label, stem, icon, abbrev, label_rule, default_tags, official, parent_id)
 		values (case when $8 then 'og' else 'local' end, $1, $2, $3, $4, $5, $6, $7, $8, $9)
-		on conflict (name) do update
+		on conflict (namespace, name) do update
 			set label = excluded.label,
 			    stem         = excluded.stem,
 			    icon         = excluded.icon,
@@ -231,12 +235,12 @@ func (p *PG) UpsertComponentType(ctx context.Context, ct ComponentType) error {
 			    official     = excluded.official,
 			    parent_id    = excluded.parent_id,
 			    updated_at   = now()
-		where component_type.namespace = excluded.namespace`,
-		ct.Name, labelOrNull(ct.Label), ct.Stem, ct.Icon, ct.Abbrev, nilIfEmpty(ct.LabelRule), normalizeComponentTypeTags(ct.DefaultTags), ct.Official, ct.ParentID)
+		returning id`,
+		ct.Name, labelOrNull(ct.Label), ct.Stem, ct.Icon, ct.Abbrev, nilIfEmpty(ct.LabelRule), normalizeComponentTypeTags(ct.DefaultTags), ct.Official, ct.ParentID).Scan(&id)
 	if err != nil {
-		return fmt.Errorf("storage: upsert component_type %q: %w", ct.Name, mapComponentTypeWriteErr(err))
+		return uuid.Nil, fmt.Errorf("storage: upsert component_type %q: %w", ct.Name, mapComponentTypeWriteErr(err))
 	}
-	return nil
+	return id, nil
 }
 
 // ListComponentTypes returns every component_type, ordered alphabetically by
@@ -281,7 +285,7 @@ func (p *PG) ListComponentTypes(ctx context.Context) ([]ComponentType, error) {
 // holds) and gets theirs if they have one, the shipped row otherwise. The
 // namespace is not part of the address and never reaches a caller.
 func (p *PG) GetComponentType(ctx context.Context, ref string) (*ComponentType, error) {
-	ct, err := scanComponentTypeResolved(p.pool.QueryRow(ctx, componentTypeResolved+` where ct.`+registryRefCol(ref)+` = $1`, ref))
+	ct, err := scanComponentTypeResolved(p.pool.QueryRow(ctx, componentTypeResolved+` where ct.id = (select r.id from `+refRows("component_type", ref)+` r where r.`+registryRefCol(ref)+` = $1)`, ref))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrTypeNotFound
 	}
@@ -402,7 +406,7 @@ func (p *PG) UpdateComponentType(ctx context.Context, actorID, ref string, patch
 	if err := lockRegistryRow(ctx, tx, "component_type", ref); err != nil {
 		return nil, err
 	}
-	current, err := scanComponentTypeResolved(tx.QueryRow(ctx, componentTypeResolved+` where ct.`+registryRefCol(ref)+` = $1`, ref))
+	current, err := scanComponentTypeResolved(tx.QueryRow(ctx, componentTypeResolved+` where ct.id = (select r.id from `+refRows("component_type", ref)+` r where r.`+registryRefCol(ref)+` = $1)`, ref))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTypeNotFound
@@ -451,7 +455,7 @@ func (p *PG) UpdateComponentType(ctx context.Context, actorID, ref string, patch
 			label_rule   = case when $6::text is null then label_rule else nullif($6::text, '') end,
 			default_tags = coalesce($7, default_tags),
 			updated_at   = now()
-		where `+registryRefCol(ref)+` = $1
+		where id = (select id from `+refRows("component_type", ref)+` t where `+registryRefCol(ref)+` = $1)
 		returning `+componentTypeCols,
 		ref, labelVal, patch.Stem, patch.Icon, patch.Abbrev, patch.LabelRule, tags, setLabel))
 	if err != nil {
@@ -559,7 +563,7 @@ func (p *PG) RestoreComponentType(ctx context.Context, actorID, ref string) (*Co
 	if err := lockRegistryRow(ctx, tx, "component_type", ref); err != nil {
 		return nil, err
 	}
-	current, err := scanComponentTypeResolved(tx.QueryRow(ctx, componentTypeResolved+` where ct.`+registryRefCol(ref)+` = $1`, ref))
+	current, err := scanComponentTypeResolved(tx.QueryRow(ctx, componentTypeResolved+` where ct.id = (select r.id from `+refRows("component_type", ref)+` r where r.`+registryRefCol(ref)+` = $1)`, ref))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTypeNotFound

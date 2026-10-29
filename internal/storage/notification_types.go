@@ -104,9 +104,8 @@ func (p *PG) UpsertNotificationType(ctx context.Context, t NotificationType) err
 	if _, err := p.pool.Exec(ctx, `
 		insert into notification_type (namespace, name, label, description, subject, text, official)
 		values ('og', $1, $2, $3, $4, $5, true)
-		on conflict (name) do update set label = excluded.label, description = excluded.description,
-			subject = excluded.subject, text = excluded.text, official = true, updated_at = now()
-		where notification_type.namespace = excluded.namespace`,
+		on conflict (namespace, name) do update set label = excluded.label, description = excluded.description,
+			subject = excluded.subject, text = excluded.text, official = true, updated_at = now()`,
 		t.Name, labelOrNull(t.Label), t.Description, t.Subject, t.Text); err != nil {
 		return fmt.Errorf("storage: upsert notification type %q: %w", t.Name, err)
 	}
@@ -140,7 +139,7 @@ func getNotificationType(ctx context.Context, q querier, ref string) (*Notificat
 	if err := RejectAddressForm("notification_type", ref); err != nil {
 		return nil, err
 	}
-	t, err := scanNotificationType(q.QueryRow(ctx, `select `+notificationTypeCols+` from notification_type where `+registryRefCol(ref)+` = $1`, ref))
+	t, err := scanNotificationType(q.QueryRow(ctx, `select `+notificationTypeCols+` from `+refRows("notification_type", ref)+` notification_type where `+registryRefCol(ref)+` = $1`, ref))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotificationTypeNotFound
 	}
@@ -188,7 +187,7 @@ func lockMutableNotificationType(ctx context.Context, tx pgx.Tx, ref string) (*N
 	if err := RejectAddressForm("notification_type", ref); err != nil {
 		return nil, err
 	}
-	t, err := scanNotificationType(tx.QueryRow(ctx, `select `+notificationTypeCols+` from notification_type where `+registryRefCol(ref)+` = $1 for update`, ref))
+	t, err := scanNotificationType(tx.QueryRow(ctx, `select `+notificationTypeCols+` from notification_type where id = (select r.id from `+refRows("notification_type", ref)+` r where r.`+registryRefCol(ref)+` = $1) for update`, ref))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotificationTypeNotFound
 	}

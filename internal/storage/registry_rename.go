@@ -83,7 +83,7 @@ func (p *PG) RenameRegistry(ctx context.Context, actorID, table, ref, newName st
 
 	var rowID, oldName string
 	var official bool
-	err = tx.QueryRow(ctx, `select id, name, official from `+table+` where `+registryRefCol(ref)+` = $1 for update`, ref).
+	err = tx.QueryRow(ctx, `select id, name, official from `+table+` where id = (select r.id from `+refRows(table, ref)+` r where r.`+registryRefCol(ref)+` = $1) for update`, ref).
 		Scan(&rowID, &oldName, &official)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", ErrTypeNotFound
@@ -151,7 +151,7 @@ func carryLocationTypeName(ctx context.Context, tx pgx.Tx, _, oldName, newName s
 	if _, err := tx.Exec(ctx, `
 		update location_type
 		set allowed_parent_types = array_replace(allowed_parent_types, $1, $2)
-		where $1 = any(allowed_parent_types)`, oldName, newName); err != nil {
+		where $1 = any(allowed_parent_types) and namespace <> 'og'`, oldName, newName); err != nil {
 		return fmt.Errorf("storage: carry location_type rename into allowed_parent_types: %w", err)
 	}
 	if _, err := tx.Exec(ctx, `

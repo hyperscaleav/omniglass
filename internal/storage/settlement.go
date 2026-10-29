@@ -271,7 +271,7 @@ func (p *PG) intendedSeries(ctx context.Context, q querier, ct *CommandType, own
 	sql := fmt.Sprintf(`select coalesce((select `+commandSeriesSQL+` from command c where c.id = s.command_id), '')
 		from %[1]s s
 		where s.owner_kind = $1 and s.%[3]s = $2
-		  and s.%[1]s_type_id = (select id from %[2]s where name = $3)
+		  and s.%[1]s_type_id = (select k.id from %[2]s_in_effect() k where k.name = $3)
 		  and s.instance = $4 and s.provenance = 'intended'
 		order by s.ts desc, s.id desc
 		limit 1`, lane, catalog, col)
@@ -313,7 +313,7 @@ func (p *PG) settleOnObservation(ctx context.Context, q txQuerier, ownerKind, ar
 	}
 	rows.Close()
 	for _, name := range types {
-		ct, err := scanCommandType(q.QueryRow(ctx, `select `+commandTypeCols+` from command_type where name = $1`, name))
+		ct, err := scanCommandType(q.QueryRow(ctx, `select `+commandTypeCols+` from command_type_in_effect() command_type where name = $1`, name))
 		if err != nil {
 			return fmt.Errorf("storage: command type %s: %w", name, err)
 		}
@@ -487,7 +487,7 @@ func (p *PG) latestMetricValue(ctx context.Context, q querier, ownerKind, ownerI
 	}
 	sql := fmt.Sprintf(`select value, ts, provenance from metric
 		where owner_kind = $1 and %s = $2
-		  and metric_type_id = (select id from metric_type where name = $3)
+		  and metric_type_id = (select id from metric_type_in_effect() metric_type where name = $3)
 		  and instance = $4 and provenance = $5
 		order by ts desc, id desc
 		limit 1`, col)

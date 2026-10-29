@@ -66,7 +66,7 @@ type addSimSystemOutput struct {
 // simDrivers maps each product to its driver.
 func simDrivers(products []storage.Product) map[string]string {
 	drivers := map[string]string{}
-	for _, p := range products {
+	for _, p := range storage.InEffect(products, func(p storage.Product) (string, string) { return p.Namespace, p.Name }) {
 		if p.DriverName != nil {
 			drivers[p.Name] = *p.DriverName
 		}
@@ -125,8 +125,9 @@ func planSimSystem(ctx context.Context, gw storage.Gateway, standard string, sto
 	if err != nil {
 		return simfleet.SystemPlan{}, huma.Error500InternalServerError("list component types")
 	}
+	// By name, as a bare name reaches them (#1432): one row per name.
 	typeIDs := map[string]storage.ComponentType{}
-	for _, t := range types {
+	for _, t := range storage.InEffect(types, func(t storage.ComponentType) (string, string) { return t.Namespace, t.Name }) {
 		typeIDs[t.Name] = t
 	}
 	in := make([]simfleet.Role, 0, len(roles))
@@ -192,7 +193,7 @@ func registerSimSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 		if err != nil {
 			return nil, huma.Error500InternalServerError("list products")
 		}
-		plan, err := planSimSystem(ctx, gw, in.Standard, store, products)
+		plan, err := planSimSystem(ctx, gw, in.Standard, store, productsInEffect(products))
 		if err != nil {
 			return nil, err
 		}
@@ -245,7 +246,7 @@ func registerSimSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 		if err != nil {
 			return nil, huma.Error500InternalServerError("list products")
 		}
-		plan, err := planSimSystem(ctx, gw, in.Body.Standard, store, products)
+		plan, err := planSimSystem(ctx, gw, in.Body.Standard, store, productsInEffect(products))
 		if err != nil {
 			return nil, err
 		}
@@ -328,4 +329,10 @@ func registerSimSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 		}
 		return out, nil
 	})
+}
+
+// productsInEffect is the products a bare name reaches (#1432), one row per
+// name, for a planner that addresses products by name.
+func productsInEffect(products []storage.Product) []storage.Product {
+	return storage.InEffect(products, func(p storage.Product) (string, string) { return p.Namespace, p.Name })
 }

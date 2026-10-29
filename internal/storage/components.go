@@ -433,7 +433,7 @@ func (p *PG) createComponentTx(ctx context.Context, tx pgx.Tx, actorID string, s
 	var productID *string
 	if spec.ProductName != nil {
 		var pid string
-		err := tx.QueryRow(ctx, `select id from product where `+registryRefCol(*spec.ProductName)+` = $1`, *spec.ProductName).Scan(&pid)
+		err := tx.QueryRow(ctx, `select id from `+refRows("product", *spec.ProductName)+` product where `+registryRefCol(*spec.ProductName)+` = $1`, *spec.ProductName).Scan(&pid)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrProductNotFound
 		} else if err != nil {
@@ -491,7 +491,7 @@ func (p *PG) createComponentTx(ctx context.Context, tx pgx.Tx, actorID string, s
 	// classification is resolvable.
 	c, err := scanComponent(tx.QueryRow(ctx, `
 		insert into component (name, label, parent_id, location_id, product_id, name_generated, ordinal, label_generated)
-		values ($1, $2, $3, $4, coalesce($5::uuid, (select id from product where name = 'generic-device')), $6, $7, $8)
+		values ($1, $2, $3, $4, coalesce($5::uuid, (select id from product where namespace = 'og' and name = 'generic-device')), $6, $7, $8)
 		returning `+componentCols,
 		name, labelOrNull(spec.Label), parentID, locationID, productID, generated, ordinal, strings.TrimSpace(spec.Label) == ""))
 	if err != nil {
@@ -569,7 +569,7 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 	var patchProductID *string
 	if patch.ProductName != nil && *patch.ProductName != "" {
 		var pid string
-		err := tx.QueryRow(ctx, `select id from product where `+registryRefCol(*patch.ProductName)+` = $1`, *patch.ProductName).Scan(&pid)
+		err := tx.QueryRow(ctx, `select id from `+refRows("product", *patch.ProductName)+` product where `+registryRefCol(*patch.ProductName)+` = $1`, *patch.ProductName).Scan(&pid)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrProductNotFound
 		} else if err != nil {
@@ -660,7 +660,7 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 			-- the gateway directly.
 			product_id   = case
 				when $3::text is null then product_id
-				when $3 = '' then (select id from product where name = 'generic-device')
+				when $3 = '' then (select id from product where namespace = 'og' and name = 'generic-device')
 				else $4::uuid
 			end,
 			updated_at   = now()

@@ -17,7 +17,9 @@ type PropertyType struct {
 	// ID is the uuid primary key; Name is the renameable handle (ADR-0062). A
 	// property is addressed by name on the wire, and the id is the stable form the
 	// contract and telemetry foreign keys store.
-	ID           string
+	ID string
+	// Namespace is who named the property (#318): og, local, or another.
+	Namespace    string
 	Name         string
 	Label        string
 	DataType     string
@@ -49,11 +51,10 @@ func (p *PG) UpsertPropertyType(ctx context.Context, prop PropertyType) error {
 	_, err := p.pool.Exec(ctx, `
 		insert into property_type (namespace, name, label, data_type, validation, fusion_policy, description, official)
 		values (case when $7 then 'og' else 'local' end, $1, $2, $3, $4, $5, $6, $7)
-		on conflict (name) do update set
+		on conflict (namespace, name) do update set
 			label = excluded.label, data_type = excluded.data_type,
 			validation = excluded.validation, fusion_policy = excluded.fusion_policy,
-			description = excluded.description, official = excluded.official
-		where property_type.namespace = excluded.namespace`,
+			description = excluded.description, official = excluded.official`,
 		prop.Name, labelOrNull(prop.Label), prop.DataType, prop.Validation, prop.FusionPolicy, prop.Description, prop.Official)
 	if err != nil {
 		return fmt.Errorf("storage: upsert property %q: %w", prop.Name, err)

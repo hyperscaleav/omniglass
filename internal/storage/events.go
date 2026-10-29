@@ -126,7 +126,7 @@ func (p *PG) writeEvents(ctx context.Context, tx pgx.Tx, w KeyWriter, evs []Even
 			origin = "caught"
 		}
 		sql := fmt.Sprintf(`insert into event (ts, owner_kind, %s, event_type_id, instance, origin, message, attributes, provenance, source, source_conduit_id)
-			values ($1, $2, $3, (select id from event_type where name = $4), $5, $6, $7, $8, 'observed', $9, $10::uuid)`, col)
+			values ($1, $2, $3, (select id from event_type_in_effect() event_type where name = $4), $5, $6, $7, $8, 'observed', $9, $10::uuid)`, col)
 		if _, err := tx.Exec(ctx, sql, ts, ev.OwnerKind, arcs[i], ev.Key, ev.Instance, origin, ev.Message, attrs, ev.Source, w.sourceConduit()); err != nil {
 			return fmt.Errorf("storage: insert event %s/%s: %w", ev.OwnerID, ev.Key, err)
 		}

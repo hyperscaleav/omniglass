@@ -237,8 +237,8 @@
     ],
     "uniques": [
      {
-      "name": "component_type_name_key",
-      "definition": "CREATE UNIQUE INDEX component_type_name_key ON public.component_type USING btree (name)"
+      "name": "component_type_namespace_name_key",
+      "definition": "CREATE UNIQUE INDEX component_type_namespace_name_key ON public.component_type USING btree (namespace, name)"
      }
     ]
    },
@@ -309,8 +309,8 @@
     ],
     "uniques": [
      {
-      "name": "driver_name_key",
-      "definition": "CREATE UNIQUE INDEX driver_name_key ON public.driver USING btree (name)"
+      "name": "driver_namespace_name_key",
+      "definition": "CREATE UNIQUE INDEX driver_namespace_name_key ON public.driver USING btree (namespace, name)"
      }
     ]
    },
@@ -417,8 +417,8 @@
     ],
     "uniques": [
      {
-      "name": "product_name_key",
-      "definition": "CREATE UNIQUE INDEX product_name_key ON public.product USING btree (name)"
+      "name": "product_namespace_name_key",
+      "definition": "CREATE UNIQUE INDEX product_namespace_name_key ON public.product USING btree (namespace, name)"
      }
     ]
    },
@@ -636,8 +636,8 @@
     ],
     "uniques": [
      {
-      "name": "standard_name_key",
-      "definition": "CREATE UNIQUE INDEX standard_name_key ON public.standard USING btree (name)"
+      "name": "standard_namespace_name_key",
+      "definition": "CREATE UNIQUE INDEX standard_namespace_name_key ON public.standard USING btree (namespace, name)"
      }
     ]
    },
@@ -832,8 +832,8 @@
     ],
     "uniques": [
      {
-      "name": "system_type_name_key",
-      "definition": "CREATE UNIQUE INDEX system_type_name_key ON public.system_type USING btree (name)"
+      "name": "system_type_namespace_name_key",
+      "definition": "CREATE UNIQUE INDEX system_type_namespace_name_key ON public.system_type USING btree (namespace, name)"
      }
     ]
    },
@@ -921,8 +921,8 @@
     ],
     "uniques": [
      {
-      "name": "vendor_name_key",
-      "definition": "CREATE UNIQUE INDEX vendor_name_key ON public.vendor USING btree (name)"
+      "name": "vendor_namespace_name_key",
+      "definition": "CREATE UNIQUE INDEX vendor_namespace_name_key ON public.vendor USING btree (namespace, name)"
      }
     ]
    }
@@ -1743,8 +1743,8 @@
     ],
     "uniques": [
      {
-      "name": "secret_type_name_key",
-      "definition": "CREATE UNIQUE INDEX secret_type_name_key ON public.secret_type USING btree (name)"
+      "name": "secret_type_namespace_name_key",
+      "definition": "CREATE UNIQUE INDEX secret_type_namespace_name_key ON public.secret_type USING btree (namespace, name)"
      }
     ]
    },
@@ -2495,8 +2495,8 @@
     ],
     "uniques": [
      {
-      "name": "location_type_name_key",
-      "definition": "CREATE UNIQUE INDEX location_type_name_key ON public.location_type USING btree (name)"
+      "name": "location_type_namespace_name_key",
+      "definition": "CREATE UNIQUE INDEX location_type_namespace_name_key ON public.location_type USING btree (namespace, name)"
      }
     ]
    },
@@ -3214,8 +3214,8 @@
     ],
     "uniques": [
      {
-      "name": "role_name_key",
-      "definition": "CREATE UNIQUE INDEX role_name_key ON public.role USING btree (name)"
+      "name": "role_namespace_name_key",
+      "definition": "CREATE UNIQUE INDEX role_namespace_name_key ON public.role USING btree (namespace, name)"
      }
     ]
    },
@@ -3661,7 +3661,7 @@
      },
      {
       "name": "action_rule_platform_name_key",
-      "definition": "CREATE UNIQUE INDEX action_rule_platform_name_key ON public.action_rule USING btree (name) WHERE (owner_principal_id IS NULL)"
+      "definition": "CREATE UNIQUE INDEX action_rule_platform_name_key ON public.action_rule USING btree (namespace, name) WHERE (owner_principal_id IS NULL)"
      }
     ]
    },
@@ -4014,8 +4014,8 @@
     ],
     "uniques": [
      {
-      "name": "calc_rule_name_key",
-      "definition": "CREATE UNIQUE INDEX calc_rule_name_key ON public.calc_rule USING btree (name)"
+      "name": "calc_rule_namespace_name_key",
+      "definition": "CREATE UNIQUE INDEX calc_rule_namespace_name_key ON public.calc_rule USING btree (namespace, name)"
      }
     ]
    },
@@ -4444,8 +4444,8 @@
     ],
     "uniques": [
      {
-      "name": "command_type_name_key",
-      "definition": "CREATE UNIQUE INDEX command_type_name_key ON public.command_type USING btree (name)"
+      "name": "command_type_namespace_name_key",
+      "definition": "CREATE UNIQUE INDEX command_type_namespace_name_key ON public.command_type USING btree (namespace, name)"
      }
     ]
    },
@@ -4757,8 +4757,8 @@
     ],
     "uniques": [
      {
-      "name": "event_rule_name_key",
-      "definition": "CREATE UNIQUE INDEX event_rule_name_key ON public.event_rule USING btree (name)"
+      "name": "event_rule_namespace_name_key",
+      "definition": "CREATE UNIQUE INDEX event_rule_namespace_name_key ON public.event_rule USING btree (namespace, name)"
      }
     ]
    },
@@ -4915,8 +4915,8 @@
     ],
     "uniques": [
      {
-      "name": "event_type_name_key",
-      "definition": "CREATE UNIQUE INDEX event_type_name_key ON public.event_type USING btree (name)"
+      "name": "event_type_namespace_name_key",
+      "definition": "CREATE UNIQUE INDEX event_type_namespace_name_key ON public.event_type USING btree (namespace, name)"
      }
     ]
    },
@@ -5211,8 +5211,8 @@
     ],
     "uniques": [
      {
-      "name": "metric_type_handle_key",
-      "definition": "CREATE UNIQUE INDEX metric_type_handle_key ON public.metric_type USING btree (name)"
+      "name": "metric_type_namespace_name_key",
+      "definition": "CREATE UNIQUE INDEX metric_type_namespace_name_key ON public.metric_type USING btree (namespace, name)"
      }
     ]
    },
@@ -5550,8 +5550,8 @@
     ],
     "uniques": [
      {
-      "name": "notification_type_name_key",
-      "definition": "CREATE UNIQUE INDEX notification_type_name_key ON public.notification_type USING btree (name)"
+      "name": "notification_type_namespace_name_key",
+      "definition": "CREATE UNIQUE INDEX notification_type_namespace_name_key ON public.notification_type USING btree (namespace, name)"
      }
     ]
    },
@@ -5770,8 +5770,8 @@
     ],
     "uniques": [
      {
-      "name": "property_type_handle_key",
-      "definition": "CREATE UNIQUE INDEX property_type_handle_key ON public.property_type USING btree (name)"
+      "name": "property_type_namespace_name_key",
+      "definition": "CREATE UNIQUE INDEX property_type_namespace_name_key ON public.property_type USING btree (namespace, name)"
      }
     ]
    },
