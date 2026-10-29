@@ -529,6 +529,9 @@ func (UnimplementedGateway) WithSimAddressLock(_ context.Context, fn func() erro
 func (UnimplementedGateway) NodeSimDevices(context.Context, string, scope.Set) ([]SimDevice, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) NodeSimWebhooks(context.Context, string) (map[string]SimWebhook, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) ResolveTaskOwner(context.Context, string, string) (TaskOwner, bool, error) {
 	return TaskOwner{}, false, nil
 }
@@ -1194,3 +1197,11 @@ func (UnimplementedGateway) TestPersonalRule(context.Context, string, string, Ru
 func (UnimplementedGateway) SetRuleOptOut(context.Context, string, string, string, bool) (*ActionRule, error) {
 	return nil, ErrActionRuleNotFound
 }
+
+func (UnimplementedGateway) EnsureServicePrincipal(context.Context, string, string) (string, error) {
+	return "", nil
+}
+func (UnimplementedGateway) SetServiceToken(context.Context, string, string, []byte, string) (bool, error) {
+	return false, nil
+}
+func (UnimplementedGateway) EnsureRole(context.Context, string, Role) error { return nil }

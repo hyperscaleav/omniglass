@@ -148,6 +148,11 @@ property_types:
     validation: { enum: [occupied, vacant] }
     label: Occupancy State
     description: Whether a space reads occupied or vacant by its occupancy source.
+  - name: booking-state
+    data_type: string
+    validation: { enum: [booked, free] }
+    label: Booking State
+    description: Whether a space is booked now (a meeting in progress) or free, as its scheduling service reports it.
   # Declared attribute properties: the starter set a field draws from.
   - name: serial-number
     data_type: string

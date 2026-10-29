@@ -56,6 +56,7 @@ func TestIntegrationLabOnARealDaemon(t *testing.T) {
 		return Config{
 			Options: Options{Project: project, Listen: DefaultListen, Port: 0, Image: DevImage, Scenario: DefaultScenario,
 				NodeToken: "lab-it-node-token", NodeTokenHash: tokenHash("lab-it-node-token"),
+				PushToken: "lab-it-push-token", PushTokenHash: tokenHash("lab-it-push-token"), PushTokenPrefix: "labitpsh",
 				Owner: Owner{Host: host, PID: pid, PIDNS: CurrentPIDNS()}},
 			Image:         SelectImage(labels[VersionLabel], ""),
 			PlantedFaults: []string{"Panel SNMP", "Panel SSH", "Panel console"},
@@ -135,6 +136,25 @@ func TestIntegrationLabOnARealDaemon(t *testing.T) {
 		}
 		if err := getJSON(ctx, client, lab.BaseURL+"/api/v1/auth/status", &st); err != nil || !st.Lab {
 			t.Fatalf("auth/status lab = %v (%v), want true", st.Lab, err)
+		}
+	})
+
+	// Every built collection method runs healthy (#1370): after the
+	// warm-up (a simulated service's first webhook post can take two
+	// minutes), each driver and transport is up on a component that is no
+	// planted fault, a driver with values of its own landed, and a system
+	// holds the booking service's push.
+	t.Run("every collection method runs healthy on both tiers", func(t *testing.T) {
+		deadline := time.Now().Add(4 * time.Minute)
+		for {
+			missing, err := methodsExercised(ctx, client, lab.BaseURL, cfg(os.Getpid()).PlantedFaults)
+			if err == nil && len(missing) == 0 {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("after the warm-up, not exercised: %v (%v)", missing, err)
+			}
+			time.Sleep(10 * time.Second)
 		}
 	})
 

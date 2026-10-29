@@ -81,6 +81,24 @@ type SimDevice struct {
 	Address     string `json:"address"`
 	// Impairment is what the operator has broken on the device, if anything.
 	Impairment *SimImpairment `json:"impairment,omitempty"`
+	// Webhook is where the simulated device posts its webhooks, for a
+	// device whose component holds a webhook endpoint (ADR-1370): the
+	// simulator plays the external service, so it holds what that service
+	// would, the endpoint's path (its token) and the secret it signs with.
+	// Handed out only by a lab-marked database, only for a component in the
+	// simulated block, and only on this list; never a node's worklist.
+	Webhook *SimWebhook `json:"webhook,omitempty"`
+}
+
+// SimWebhook is a simulated device's webhook subscription: the path on the
+// server it posts to (the simulator prefixes the server URL it already
+// reaches), and how each post is signed, as the device's own subscribe
+// route takes it (scheme hmac, token, basic or none; secret the hmac key,
+// the token, or user:password).
+type SimWebhook struct {
+	Path   string `json:"path"`
+	Scheme string `json:"scheme"`
+	Secret string `json:"secret,omitempty"`
 }
 
 // SimImpairment is what is wrong with a simulated device: unplugged (dark
