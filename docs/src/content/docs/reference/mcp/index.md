@@ -21,7 +21,7 @@ Each tool says what a client may assume of it, from one rule over the route's me
 
 A tool that is not read-only and not destructive adds something (a create).
 
-62 tools.
+63 tools.
 
 | Tool | What it does | Gate | Assume |
 |---|---|---|---|
@@ -45,6 +45,7 @@ A tool that is not read-only and not destructive adds something (a create).
 | [`list-component-properties`](#list-component-properties) | List a component's properties and where each stands | `component:read` | read-only, idempotent |
 | [`list-component-property-series`](#list-component-property-series) | Read one property series' change history | `component:read` | read-only, idempotent |
 | [`get-component-reachability`](#get-component-reachability) | Read a component's per-endpoint reachability | `component:read` | read-only, idempotent |
+| [`list-unbound-identities`](#list-unbound-identities) | List the identities a conduit reported that no binding places | `component:read` | read-only, idempotent |
 | [`create-component-from-template`](#create-component-from-template) | Start a component from a template | `component:create` | adds |
 | [`list-drivers`](#list-drivers) | List drivers | `driver:read` | read-only, idempotent |
 | [`create-driver`](#create-driver) | Create a driver | `driver:create` | adds |
@@ -392,6 +393,20 @@ Composes, per endpoint, the latest reachability verdict, the probe-layer signals
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `name` | string | yes | The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
+
+## `list-unbound-identities`
+
+List the identities a conduit reported that no binding places
+
+A component that speaks for many owners (a conduit) lands each value its driver identifies on the owner an identity binding names; a value naming an identity it has no binding for lands on no owner and is kept here, one row per match key and value (a count, first and last heard, the keys it carried), bounded at 1024 per conduit with the least recently heard evicted, and aged out after seven days. Binding one (PUT .../identity-bindings/{key}/{value}) makes the next value naming it land on its owner. Gated by component:read; an out-of-scope conduit is a non-disclosing 404.
+
+- Route: `GET /api/v1/components/{name}/unbound-identities`
+- Gate: `component:read`
+- Assume: read-only, idempotent
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes | The conduit component's name, or a dotted address (e.g. hq.$comp.meetings-cloud) |
 
 ## `create-component-from-template`
 

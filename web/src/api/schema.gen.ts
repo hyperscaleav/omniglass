@@ -1312,6 +1312,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/components/{name}/unbound-identities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the identities a conduit reported that no binding places
+         * @description A component that speaks for many owners (a conduit) lands each value its driver identifies on the owner an identity binding names; a value naming an identity it has no binding for lands on no owner and is kept here, one row per match key and value (a count, first and last heard, the keys it carried), bounded at 1024 per conduit with the least recently heard evicted, and aged out after seven days. Binding one (PUT .../identity-bindings/{key}/{value}) makes the next value naming it land on its owner. Gated by component:read; an out-of-scope conduit is a non-disclosing 404.
+         */
+        get: operations["list-unbound-identities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/components/{name}:listTags": {
         parameters: {
             query?: never;
@@ -11759,6 +11779,41 @@ export interface components {
              */
             theme: "omniglass-dark" | "omniglass-light";
         };
+        UnboundIdentitiesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UnboundIdentitiesOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The conduit component */
+            component: string;
+            /** @description The identities it reported that no binding places, most recently heard first */
+            identities: components["schemas"]["UnboundIdentityBody"][] | null;
+        };
+        UnboundIdentityBody: {
+            /**
+             * Format: int64
+             * @description How many samples named it, across the window it has been heard in
+             */
+            count: number;
+            /**
+             * Format: date-time
+             * @description When the conduit first reported it unbound
+             */
+            first_heard_at: string;
+            /** @description The match key: the property type the driver's identity names (e.g. ucc-room-id) */
+            key: string;
+            /** @description The metric, property and event keys its samples carried, which a binding would land on its owner */
+            keys_carried: string[] | null;
+            /**
+             * Format: date-time
+             * @description When the conduit last reported it
+             */
+            last_heard_at: string;
+            /** @description The identity's value as the conduit reported it */
+            value: string;
+        };
         UnclaimedSourceBody: {
             /**
              * Format: int64
@@ -15201,6 +15256,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SimOperationResult"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-unbound-identities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The conduit component's name, or a dotted address (e.g. hq.$comp.meetings-cloud) */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnboundIdentitiesOutputBody"];
                 };
             };
             /** @description Error */

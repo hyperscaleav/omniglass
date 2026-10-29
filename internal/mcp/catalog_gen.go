@@ -233,6 +233,17 @@ var catalog = []tooldef.Def{
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"name\":{\"description\":\"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)\",\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"}",
 	},
 	{
+		Name:        "list-unbound-identities",
+		Title:       "List the identities a conduit reported that no binding places",
+		Description: "A component that speaks for many owners (a conduit) lands each value its driver identifies on the owner an identity binding names; a value naming an identity it has no binding for lands on no owner and is kept here, one row per match key and value (a count, first and last heard, the keys it carried), bounded at 1024 per conduit with the least recently heard evicted, and aged out after seven days. Binding one (PUT .../identity-bindings/{key}/{value}) makes the next value naming it land on its owner. Gated by component:read; an out-of-scope conduit is a non-disclosing 404.",
+		Method:      "GET",
+		Path:        "/components/{name}/unbound-identities",
+		Permission:  "component:read",
+		PathParams:  []string{"name"},
+		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
+		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"name\":{\"description\":\"The conduit component's name, or a dotted address (e.g. hq.$comp.meetings-cloud)\",\"examples\":[\"hq.$comp.meetings-cloud\"],\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"}",
+	},
+	{
 		Name:        "create-component-from-template",
 		Title:       "Start a component from a template",
 		Description: "Creates one component from a component template at a place: its product and the template's declared values, and, when the inputs carry an address (host), its endpoint attached through the driver with the template's preset under your inputs. A secret input names a secret you may read, resolved as an attach resolves it. One transaction, every piece in your own scope with its own audit row carrying from_template; nothing points back at the template. Gated by component:create; declared values also need component:update and an attach endpoint:create. A place outside your location scope is a 404, an unknown template a 404, inputs with no address or an attach with no node a 422.",

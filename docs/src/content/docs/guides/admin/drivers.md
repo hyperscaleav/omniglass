@@ -492,10 +492,24 @@ fault says how many past that were not. A function reading `records` must declar
 unless it emits only log lines. Log lines carry no
 identity and land as before. A save refuses a key that is not a registered property type, an
 extract the transport cannot read, and `records` on anything but a JSON body. A
-[preview](#check-preview-and-run-a-poll-now) shows each sample's identity. For now an identified
-value still lands on the component the endpoint belongs to; landing it on the room's system, once an
-operator binds the room's id to that system, is the next part of [shared-API
-collection](/architecture/collection/#shared-api-collection-one-component-many-owners).
+[preview](#check-preview-and-run-a-poll-now) shows each sample's identity.
+
+An identified value lands on the system or component its identity is **bound** to on this
+component, never on the component itself ([shared-API
+collection](/architecture/collection/#shared-api-collection-one-component-many-owners)). Bind an
+identity where its values arrive, on the conduit component:
+
+```bash
+omniglass component identity-binding update hq.\$comp.meetings-cloud ucc-room-id zr-huddle-north \
+  --owner-kind system --owner huddle-north
+```
+
+Until it is bound, its values land on no owner and wait in the component's unbound inbox
+(`omniglass component unbound-identity list hq.\$comp.meetings-cloud`), where each row shows the
+match key, the value, how often it was heard and the keys it carried; binding it makes the next value
+land on its owner. A binding costs update on both ends: on the conduit component and on the owner.
+Only collected keys fan out, and a fanned value lands at the owner's own (empty) instance, its
+source naming the conduit and its endpoint (`meetings-cloud/http`).
 
 ## Check, preview, and run a poll now
 
