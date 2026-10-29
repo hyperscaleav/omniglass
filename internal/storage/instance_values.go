@@ -54,6 +54,18 @@ func latestObservedPerInstanceSQL(lane, value, col string) string {
 		order by n.ts desc, n.id desc`, lane, value, col, liveInstanceSQL("i.instance", "$1", "$2", "$4"))
 }
 
+// latestObservedMetricPerInstanceSQL is latestObservedPerInstanceSQL on the
+// metric lane (#1275): the owner's observed series of the key, each one's
+// newest sample a probe of its own, the newest per live instance (an
+// instance has a series per source and collecting node), newest first.
+var latestObservedMetricPerInstanceSQL = `select x.value, x.ts, x.provenance, x.instance from (
+		select distinct on (s.instance) n.value, n.ts, n.id, s.provenance, s.instance
+		from metric_series s cross join lateral (` + metricNewestSQL("s.id") + `) n
+		where ` + metricSeriesWhere("s", "$1", "$2::uuid", "(select id from metric_type where name = $3)") + `
+		  and s.provenance = 'observed' and ` + liveInstanceSQL("s.instance", "$1", "$2::uuid", "$4") + `
+		order by s.instance, n.ts desc, n.id desc) x
+	order by x.ts desc, x.id desc`
+
 // liveInstanceSQL is the one test of whether an observed instance is live
 // (ADR-0456), the predicate every owner-level read that reduces across
 // instances applies, so no reader can draw the line elsewhere. A live instance
@@ -154,8 +166,7 @@ func readPropertyValues(ctx context.Context, q querier, ownerID, key, sql string
 // ownerID is an already-resolved arc on every path that reaches it
 // (settlement), so it resolves scope-blind like latestMetricValue.
 func (p *PG) latestObservedMetricValues(ctx context.Context, q querier, ownerKind, ownerID, key string) ([]CurrentValue, error) {
-	col, err := ownerColumn(ownerKind)
-	if err != nil {
+	if _, err := ownerColumn(ownerKind); err != nil {
 		return nil, err
 	}
 	arc, err := p.ownerArcValue(ctx, q, ownerKind, ownerID)
@@ -164,7 +175,7 @@ func (p *PG) latestObservedMetricValues(ctx context.Context, q querier, ownerKin
 	} else if err != nil {
 		return nil, err
 	}
-	rows, err := q.Query(ctx, latestObservedPerInstanceSQL("metric", "value", col), ownerKind, arc, key, transportNames())
+	rows, err := q.Query(ctx, latestObservedMetricPerInstanceSQL, ownerKind, arc, key, transportNames())
 	if err != nil {
 		return nil, fmt.Errorf("storage: latest metric values %s/%s: %w", ownerID, key, err)
 	}

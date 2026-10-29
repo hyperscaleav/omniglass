@@ -5,6 +5,7 @@ package node_test
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 	"net/http"
 	"strings"
 	"testing"
@@ -91,7 +92,7 @@ func TestOnDemandRunsOverTheWire(t *testing.T) {
 		}
 		defer conn.Close(s.ctx)
 		var n int64
-		if err := conn.QueryRow(s.ctx, `select (select count(*) from property) + (select count(*) from metric)`).Scan(&n); err != nil {
+		if err := conn.QueryRow(s.ctx, `select (select count(*) from property) + (select count(*) from `+storagetest.MetricRows+` metric)`).Scan(&n); err != nil {
 			t.Fatal(err)
 		}
 		return n

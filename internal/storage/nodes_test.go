@@ -467,7 +467,7 @@ func TestDeleteNode(t *testing.T) {
 		t.Errorf("node tag bindings = %d, want 0 (cascade)", n)
 	}
 	// The component's own telemetry survives (owner arc = component, not the node).
-	if n := count(`select count(*) from metric where owner_kind = 'component'`); n != 1 {
+	if n := count(`select count(*) from ` + storagetest.MetricRows + ` metric where owner_kind = 'component'`); n != 1 {
 		t.Errorf("component samples = %d, want 1 (must survive the node delete)", n)
 	}
 }

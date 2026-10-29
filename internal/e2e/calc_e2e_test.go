@@ -129,11 +129,11 @@ func TestCalcRuleEndToEnd(t *testing.T) {
 	// Collect until the probe has reached the simulated device.
 	waitForWithin(t, 60*time.Second, "the node's tcp probe to reach the simulated device", func() bool {
 		_, _ = cli("node", "run", "--server", server, "--name", "edge-c", "--token", nodeTok, "--once")
-		return scalarInt(`select count(*) from metric m join metric_type t on t.id = m.metric_type_id
+		return scalarInt(`select count(*) from `+storagetest.MetricRows+` m join metric_type t on t.id = m.metric_type_id
 			where t.name = 'tcp-open' and m.value = 1 and m.component_id = (select id from component where name = 'calc-dev')`) > 0
 	})
 	waitFor(t, "the calc tick to write port-open-peak as a calculated sample", func() bool {
-		return scalarInt(`select count(*) from metric m join metric_type t on t.id = m.metric_type_id
+		return scalarInt(`select count(*) from `+storagetest.MetricRows+` m join metric_type t on t.id = m.metric_type_id
 			where t.name = 'port-open-peak' and m.provenance = 'calculated' and m.source_rule = 'port-open'
 			and m.source_rule_version = 1 and m.value = 1 and m.instance = ''`) > 0
 	})

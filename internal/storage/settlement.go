@@ -264,17 +264,25 @@ func (p *PG) intendedSeries(ctx context.Context, q querier, ct *CommandType, own
 	if err != nil {
 		return "", err
 	}
-	lane, catalog, key := "property", "property_type", ct.TargetPropertyType
-	if ct.TargetMetricType != "" {
-		lane, catalog, key = "metric", "metric_type", ct.TargetMetricType
-	}
+	key := ct.TargetPropertyType
 	sql := fmt.Sprintf(`select coalesce((select `+commandSeriesSQL+` from command c where c.id = s.command_id), '')
-		from %[1]s s
-		where s.owner_kind = $1 and s.%[3]s = $2
-		  and s.%[1]s_type_id = (select id from %[2]s where name = $3)
+		from property s
+		where s.owner_kind = $1 and s.%[1]s = $2
+		  and s.property_type_id = (select id from property_type where name = $3)
 		  and s.instance = $4 and s.provenance = 'intended'
 		order by s.ts desc, s.id desc
-		limit 1`, lane, catalog, col)
+		limit 1`, col)
+	if ct.TargetMetricType != "" {
+		// The metric lane's intended rows are its declared tier (#1275).
+		key = ct.TargetMetricType
+		sql = `select coalesce((select ` + commandSeriesSQL + ` from command c where c.id = d.command_id), '')
+		from metric_series s
+		join metric_declared d on d.series_id = s.id
+		where ` + metricSeriesWhere("s", "$1", "$2::uuid", "(select id from metric_type where name = $3)") + `
+		  and s.instance = $4 and s.provenance = 'intended'
+		order by d.ts desc, d.id desc
+		limit 1`
+	}
 	var series string
 	err = q.QueryRow(ctx, sql, ownerKind, arc, key, instance).Scan(&series)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -424,7 +432,7 @@ func (p *PG) commandIntendedValue(ctx context.Context, q querier, ct *CommandTyp
 	switch {
 	case ct.TargetMetricType != "":
 		var v float64
-		err := q.QueryRow(ctx, `select value, ts from metric where command_id = $1 order by ts desc, id desc limit 1`,
+		err := q.QueryRow(ctx, `select value, ts from metric_declared where command_id = $1 order by ts desc, id desc limit 1`,
 			commandID).Scan(&v, &cv.TS)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
@@ -475,8 +483,7 @@ func (p *PG) latestTargetValue(ctx context.Context, q querier, ct *CommandType, 
 // text so the settlement comparison is float equality. ownerID is resolved
 // once, folding an unknown owner to nil (see latestValue in current_values.go).
 func (p *PG) latestMetricValue(ctx context.Context, q querier, ownerKind, ownerID, key, instance, provenance string) (*CurrentValue, error) {
-	col, err := ownerColumn(ownerKind)
-	if err != nil {
+	if _, err := ownerColumn(ownerKind); err != nil {
 		return nil, err
 	}
 	arc, err := p.ownerArcValue(ctx, q, ownerKind, ownerID)
@@ -485,12 +492,19 @@ func (p *PG) latestMetricValue(ctx context.Context, q querier, ownerKind, ownerI
 	} else if err != nil {
 		return nil, err
 	}
-	sql := fmt.Sprintf(`select value, ts, provenance from metric
-		where owner_kind = $1 and %s = $2
-		  and metric_type_id = (select id from metric_type where name = $3)
-		  and instance = $4 and provenance = $5
-		order by ts desc, id desc
-		limit 1`, col)
+	// The newest row of every series of the key's (a series per source and
+	// collecting node), from the tier the provenance lives in: the declared
+	// tier for intended rows, the hot tier for the rest (#1275).
+	newest := metricNewestSQL("s.id")
+	if provenance == "intended" {
+		newest = `select d.ts, d.id, d.value from metric_declared d where d.series_id = s.id order by d.ts desc, d.id desc limit 1`
+	}
+	sql := `select n.value, n.ts, s.provenance from metric_series s
+		cross join lateral (` + newest + `) n
+		where ` + metricSeriesWhere("s", "$1", "$2::uuid", "(select id from metric_type where name = $3)") + `
+		  and s.instance = $4 and s.provenance = $5
+		order by n.ts desc, n.id desc
+		limit 1`
 	var (
 		cv CurrentValue
 		v  float64

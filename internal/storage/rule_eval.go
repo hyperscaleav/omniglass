@@ -350,14 +350,18 @@ func (e *ruleEvaluator) stampJudged(ctx context.Context, tx pgx.Tx) error {
 //
 // It returns the ids of the rules that judged the sample.
 func (e *ruleEvaluator) judge(ctx context.Context, tx pgx.Tx, lane rules.Lane, ownerID, key, instance string, ts time.Time, value any) ([]string, error) {
-	table, typeTable := "property", "property_type"
+	newer := `select exists (select 1 from property s join property_type t on t.id = s.property_type_id
+		where s.component_id = $1::uuid and t.name = $2 and s.instance = $3 and s.ts > $4)`
 	if lane == rules.LaneMetric {
-		table, typeTable = "metric", "metric_type"
+		// The metric lane's samples are its hot tier: a command's intended
+		// row (the declared tier) is not an observation and judges nothing
+		// (#1275).
+		newer = `select exists (select 1 from metric_series s join metric_type t on t.id = s.metric_type_id
+			join metric m on m.series_id = s.id
+			where s.owner_id = $1::uuid and s.owner_kind = 'component' and t.name = $2 and s.instance = $3 and m.ts > $4)`
 	}
 	var stale bool
-	if err := tx.QueryRow(ctx, fmt.Sprintf(`select exists (select 1 from %s s join %s t on t.id = s.%s_id
-		where s.component_id = $1::uuid and t.name = $2 and s.instance = $3 and s.ts > $4)`, table, typeTable, typeTable),
-		ownerID, key, instance, ts).Scan(&stale); err != nil {
+	if err := tx.QueryRow(ctx, newer, ownerID, key, instance, ts).Scan(&stale); err != nil {
 		return nil, fmt.Errorf("storage: rule newest check: %w", err)
 	}
 	if stale {
@@ -478,6 +482,13 @@ func laneTables(lane rules.Lane) (table, typeTable, value string) {
 // (component, type, instance, ts desc) index, never a scan of the key's
 // history (TestSeriesNewestIsAnIndexProbe).
 func seriesNewestSQL(lane rules.Lane, component, typeID, instance string) string {
+	if lane == rules.LaneMetric {
+		// Every series of the key on the component's instance (one per
+		// provenance, source and collecting node), each one probe.
+		return fmt.Sprintf(`select n.value from metric_series s cross join lateral (%[4]s) n
+		where s.owner_id = %[1]s and s.owner_kind = 'component' and s.metric_type_id = %[2]s and s.instance = %[3]s
+		order by n.ts desc, n.id desc limit 1`, component, typeID, instance, metricNewestSQL("s.id"))
+	}
 	table, typeTable, value := laneTables(lane)
 	return fmt.Sprintf(`select %[3]s as value from %[1]s s
 		where s.component_id = %[4]s and s.%[2]s_id = %[5]s and s.instance = %[6]s
@@ -494,9 +505,19 @@ func newestSamples(ctx context.Context, tx pgx.Tx, lane rules.Lane, key, compone
 	table, typeTable, value := laneTables(lane)
 	q := fmt.Sprintf(`select distinct on (s.component_id, s.instance) s.component_id::text, s.instance, %s
 		from %s s join %s t on t.id = s.%s_id
-		where t.name = $1 and s.component_id is not null`, value, table, typeTable, typeTable)
+		where t.name = $1 and s.component_id is not null`, value, table, typeTable, typeTable) +
+		` order by s.component_id, s.instance, s.ts desc, s.id desc`
+	if lane == rules.LaneMetric {
+		// Each component series' newest sample, one probe a series rather
+		// than a read of the key's history.
+		q = `select distinct on (s.owner_id, s.instance) s.owner_id::text, s.instance, n.value
+			from metric_series s join metric_type t on t.id = s.metric_type_id
+			cross join lateral (` + metricNewestSQL("s.id") + `) n
+			where t.name = $1 and s.owner_kind = 'component'
+			order by s.owner_id, s.instance, n.ts desc, n.id desc`
+	}
 	args := []any{key}
-	rows, err := tx.Query(ctx, q+` order by s.component_id, s.instance, s.ts desc, s.id desc`, args...)
+	rows, err := tx.Query(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("storage: newest samples of %s: %w", key, err)
 	}
@@ -1263,8 +1284,23 @@ func (st *RuleReconcileState) settle(k ruleSeries, err error) (dropped bool) {
 // for RuleReconcileRetries passes, never by rereading its range, so one
 // series that keeps failing cannot widen every later pass.
 func (p *PG) ReconcileEventRules(ctx context.Context, st *RuleReconcileState) error {
+	// The newest metric id past the last mark, found through the id block
+	// range index (the metric table has no id btree, #1275); a fresh state
+	// starts from the id sequence's last value, past which nothing can be.
+	since := st.marks[0].Metric
+	if !st.started {
+		if err := p.pool.QueryRow(ctx, `select coalesce(pg_sequence_last_value(pg_get_serial_sequence('public.metric', 'id')), 0)`).
+			Scan(&since); err != nil {
+			return fmt.Errorf("storage: rule reconcile marks: %w", err)
+		}
+		since = max(0, since-RuleReconcileLookback)
+	}
+	if st.started && st.marks[1].Metric < since {
+		since = st.marks[1].Metric
+	}
 	var to RuleMark
-	if err := p.pool.QueryRow(ctx, `select coalesce((select max(id) from property), 0), coalesce((select max(id) from metric), 0)`).
+	if err := p.pool.QueryRow(ctx, `select coalesce((select max(id) from property), 0),
+			coalesce((select max(id) from metric where id > $1), $1)`, since).
 		Scan(&to.Property, &to.Metric); err != nil {
 		return fmt.Errorf("storage: rule reconcile marks: %w", err)
 	}
@@ -1327,12 +1363,22 @@ func (p *PG) ReconcileEventRules(ctx context.Context, st *RuleReconcileState) er
 // streak.
 func ruleCandidates(ctx context.Context, q querier, lane rules.Lane, from, to int64) ([]ruleCandidate, error) {
 	table, typeTable, _ := laneTables(lane)
-	rows, err := q.Query(ctx, fmt.Sprintf(`with touched as (
-			select distinct s.component_id, s.%[2]s_id as type_id, s.instance
+	touched := fmt.Sprintf(`select distinct s.component_id, s.%[2]s_id as type_id, s.instance
 			from %[1]s s
 			where s.id > $2 and s.id <= $3 and s.component_id is not null
 			and s.%[2]s_id in (select t.id from %[2]s t join event_rule r on r.sample_key = t.name
-				where r.enabled and r.sample_lane = $1)
+				where r.enabled and r.sample_lane = $1)`, table, typeTable)
+	if lane == rules.LaneMetric {
+		// The samples past the mark, found through the id block range index
+		// in each month, and the component series they belong to.
+		touched = `select distinct s.owner_id as component_id, s.metric_type_id as type_id, s.instance
+			from metric m join metric_series s on s.id = m.series_id
+			where m.id > $2 and m.id <= $3 and s.owner_kind = 'component'
+			and s.metric_type_id in (select t.id from metric_type t join event_rule r on r.sample_key = t.name
+				where r.enabled and r.sample_lane = $1)`
+	}
+	rows, err := q.Query(ctx, fmt.Sprintf(`with touched as (
+			%[6]s
 		)
 		select %[3]s, tc.component_id::text, tc.instance, n.value,
 			(exists (select 1 from event_rule_condition c where c.rule_id = r.id and c.component_id = tc.component_id
@@ -1349,7 +1395,7 @@ func ruleCandidates(ctx context.Context, q querier, lane rules.Lane, from, to in
 		cross join lateral (%[4]s) n
 		left join event_rule_state st on st.rule_id = r.id and st.component_id = tc.component_id and st.instance = tc.instance`,
 		table, typeTable, ruleCols("r."), seriesNewestSQL(lane, "tc.component_id", "tc.type_id", "tc.instance"),
-		ruleAlarmOn("r.id", "tc.instance")), string(lane), from, to)
+		ruleAlarmOn("r.id", "tc.instance"), touched), string(lane), from, to)
 	if err != nil {
 		return nil, fmt.Errorf("storage: rule reconcile scan: %w", err)
 	}
