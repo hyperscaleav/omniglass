@@ -71,7 +71,9 @@ func Route(fns []*driver.BakedFunction, msg driver.Message, at time.Time) Routed
 // Batch is a routed message as the batch the push lane carries: owned by the
 // endpoint's component, every sample and the raw line under the endpoint's
 // name, its source the transport. The lane's writer admits only collected
-// keys (ADR-0161), whatever a driver emits.
+// keys (ADR-0161), whatever a driver emits. A sample's identity (#1386) rides
+// beside it, a claim the ingest resolves only against the endpoint
+// component's bindings; the raw line carries none.
 func Batch(componentID, endpoint string, r Routed) *ogv1.TelemetryBatch {
 	b := &ogv1.TelemetryBatch{
 		Owner:  &ogv1.Owner{Kind: "component", Ref: componentID},
@@ -88,15 +90,18 @@ func Batch(componentID, endpoint string, r Routed) *ogv1.TelemetryBatch {
 		}
 		switch {
 		case d.Lane == driver.LaneEvent:
-			b.Events = append(b.Events, &ogv1.EventSample{Name: d.Name, Instance: endpoint, Message: valid(d.Text), Payload: d.Attributes, Ts: ts})
+			b.Events = append(b.Events, &ogv1.EventSample{Name: d.Name, Instance: endpoint, Message: valid(d.Text), Payload: d.Attributes, Ts: ts,
+				Identity: collection.WireIdentity(d.Identity)})
 		case d.Lane == driver.LaneLog:
 			b.Logs = append(b.Logs, &ogv1.LogLine{Message: valid(d.Text), Severity: d.Severity, Facility: valid(d.Facility),
 				Source: valid(d.Source), Attributes: d.Attributes, Instance: endpoint, Ts: ts})
 		case d.IsText:
 			vj, _ := json.Marshal(d.Text)
-			b.Properties = append(b.Properties, &ogv1.PropertySample{Name: d.Name, Instance: endpoint, ValueJson: string(vj), Ts: ts})
+			b.Properties = append(b.Properties, &ogv1.PropertySample{Name: d.Name, Instance: endpoint, ValueJson: string(vj), Ts: ts,
+				Identity: collection.WireIdentity(d.Identity)})
 		default:
-			b.Metrics = append(b.Metrics, &ogv1.MetricSample{Name: d.Name, Instance: endpoint, Value: d.Value, Ts: ts})
+			b.Metrics = append(b.Metrics, &ogv1.MetricSample{Name: d.Name, Instance: endpoint, Value: d.Value, Ts: ts,
+				Identity: collection.WireIdentity(d.Identity)})
 		}
 	}
 	return b

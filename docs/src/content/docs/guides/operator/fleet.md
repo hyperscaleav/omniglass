@@ -393,6 +393,30 @@ udp or snmp endpoint has nothing to send, so it needs a driver). A stale sample 
 healthy node points at the component or the network path, not at collection. An offline node
 says nothing about the component. This card is the one place a node appears on these pages.
 
+**Identities** appears only on a component that speaks for many owners, a **conduit** (a cloud
+service reporting every room it runs, a controller fronting many components). Each value it reports
+names an identity, a match key and its value (`ucc-room-id` `zr-boardroom-a`), and an identity
+binding ties that identity to the system or component it is about, so its values land there and
+not on the conduit
+([shared-API collection](/architecture/collection/#shared-api-collection-one-component-many-owners)).
+The card lists the two halves, with a count of each beside its label. **Fans out to** is every
+binding: the key, the value, and the owner as a link to its page; an owner you cannot read is
+counted (**and 2 more you cannot see**) and never named. **Heard, not bound** is every identity the
+conduit reported that no binding places, with how many times it was heard, when it was last heard
+and the keys its values carried. Those values land on no owner until a binding is made (the raw log
+line of a webhook post still lands on the conduit), and the list keeps an identity for seven days
+after it was last heard.
+
+**Bind** on an unbound row opens a picker in place: choose the system or component its values land
+on and confirm, and the row moves up to Fans out to; the next value naming it lands on that owner,
+observed, with the conduit named as its source. The picker offers only owners you may update, and
+the button shows only when you may update the conduit, because a binding writes onto both of its
+ends and costs update on both. When the server refuses, the row says why in plain words: **Not
+allowed** (a permission one end lacks, named), **Not found** (the owner is gone, or outside what you
+can see) or **Not a valid binding** (the rules refuse it, such as a place or a node as the owner).
+The X on a bound row unbinds it after a confirm, and its next value waits under Heard, not bound
+again. The CLI does the same with `omniglass component identity-binding` (`list`, `update`, `delete`) and `omniglass component unbound-identity list`.
+
 The component's view refreshes on its own while it is open: its Collection, Vitals, and its alarms
 with the verdict they make every 5 seconds, the node behind Collection every 10, so an endpoint you
 just added, or a component going down, shows up without a reload. It reads only this component and

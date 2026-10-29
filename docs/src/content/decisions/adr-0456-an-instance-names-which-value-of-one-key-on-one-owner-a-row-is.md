@@ -19,7 +19,11 @@ refs: [456, 430, 1020]
      refused whole with a 422 naming the instance and listing the owner's endpoint names (at most
      ten, then a count), checked once per batch; a sender reporting for the owner as a whole names
      none. A command's reply read
-     as an observation lands on the endpoint it was dispatched over. *Declared*: the operator. Every
+     as an observation lands on the endpoint it was dispatched over. **Amended (#1282):** a value a
+     conduit fans out to another owner is observed at the empty instance, its observer named in
+     `source` as `<conduit component>/<endpoint>`, since the conduit's endpoint is no endpoint of
+     that owner and would read as a retired observer
+     ([ADR-1282](#adr-1282-a-conduit-fans-each-identified-value-out-to-the-owner-its-binding-names-and-a-binding-costs-a-write-on-both-of-its-ends)). *Declared*: the operator. Every
      shipped route (a component's, a system's and a location's properties) declares owner-level,
      the empty instance, and a per-instance declaration waits for a surface that addresses
      instances; the one declared row already written under an endpoint is a key pin
