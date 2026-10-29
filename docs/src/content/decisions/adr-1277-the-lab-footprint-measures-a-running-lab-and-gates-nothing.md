@@ -16,7 +16,8 @@ refs: [1277, 1272, 1265]
      highest window, because on a shared host the spread is part of the reading.
   2. **The lab's cadence is a named profile.** `lab` (a learner's: check in every 2 s, probe
      every 10 s), `walkthrough` (a script's throwaway lab: probe on every check-in) and
-     `default` (the product's 30 s). A lab given none runs as before. The flag is hidden: it is
+     `default` (the node's and the simulator's own defaults, read from their constants so the
+     profile cannot drift from them). A lab given none runs as before. The flag is hidden: it is
      for the harness and scripts.
   3. **What is read, and from where.** CPU and memory from each container's cgroup v2 counters
      as the Engine's stats report them; the working set is anonymous plus shared memory, never
