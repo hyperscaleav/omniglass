@@ -12,7 +12,7 @@ const deref = (s) => (s && s.$ref ? schemas[s.$ref.split("/").pop()] : s);
 const body = schemas.SettingsReadOutputBody;
 const settingsSchema = deref(body.properties.values);
 
-const keep = ["type", "enum", "pattern", "minLength", "maxLength", "minimum", "maximum", "format"];
+const keep = ["description", "type", "enum", "pattern", "minLength", "maxLength", "minimum", "maximum", "format"];
 const constraint = (propSchema) => {
   const s = deref(propSchema);
   const c = {};

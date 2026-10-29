@@ -8583,6 +8583,30 @@ components:
           maximum: 36500
           minimum: 1
           type: integer
+        node_log_debug_days:
+          description: Days a node's own debug log line is kept; unset follows log_debug_days
+          format: int64
+          maximum: 36500
+          minimum: 1
+          type: integer
+        node_log_error_days:
+          description: Days a node's own error, critical, alert or emergency log line is kept; unset follows log_error_days
+          format: int64
+          maximum: 36500
+          minimum: 1
+          type: integer
+        node_log_info_days:
+          description: Days a node's own info or notice log line, or one with no severity, is kept; unset follows log_info_days
+          format: int64
+          maximum: 36500
+          minimum: 1
+          type: integer
+        node_log_warning_days:
+          description: Days a node's own warning log line is kept; unset follows log_warning_days
+          format: int64
+          maximum: 36500
+          minimum: 1
+          type: integer
         property_days:
           default: 90
           description: Days a property transition is kept, unless its type keeps its own (a property type's retention_days)

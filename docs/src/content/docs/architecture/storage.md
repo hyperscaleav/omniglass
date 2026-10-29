@@ -378,7 +378,11 @@ The same pass keeps the two log tables, a component's `log_line` and a node's `n
 severity band (`logline.RetentionBands`): `retention.log_debug_days` (3 by default) for debug,
 `log_info_days` (14) for info and notice, `log_warning_days` (30) for warning, and
 `log_error_days` (90) for error, critical, alert and emergency. A line with no severity is kept with
-info. A log line has no floor: it is not a series' value, and an event that named one as its source
+info. A node's own logs may keep a band for a window of their own: `retention.node_log_debug_days`,
+`node_log_info_days`, `node_log_warning_days` and `node_log_error_days` are unset by default, and while
+one is unset `node_log` follows the shared band; once an admin sets one, the pass prunes that band of
+`node_log` by it and `log_line` still by the shared window (#1350). A per-node window, through the
+cascade with a node as its leaf, waits for #1351. A log line has no floor: it is not a series' value, and an event that named one as its source
 keeps itself and drops the link (`event.source_log_line_id` is `on delete set null`).
 - **Searched, not walked.** Each band's prune searches exactly the rows it may delete, through the
   table's `(severity, ts)` index, or its `(ts)` index for lines with no severity, ordered as that
@@ -402,7 +406,7 @@ floor, chunking and index probe ([ADR-0417](/architecture/decisions/#adr-0417-th
 ## Partitioning and retention
 
 - **Append-only tables are range-partitioned by `ts`** (native declarative partitioning, rolled by the server: no `pg_partman`, no `pg_cron`). The firehose (`metric`) is the partitioning-critical one, and is built ([above](#the-narrow-metric-lane)); `event`, `log_line` and `node_log` are not yet. `property` is not partitioned: sparse by construction.
-- **Retention is per table**, set by policy: `metric` short, `property` longer, `audit_log` longest (compliance), `internal_log` short, and `log_line` / `node_log` keyed on their own axes (`severity` / `facility` are indexed precisely so retention and routing can discriminate). On-row lineage ages out with its sample, and a `log_line` aged out from under an event leaves `event.source_log_line_id` null (`on delete set null`), never deleting the event. Per-table defaults are **cascade-resolved** ([cascade](/architecture/cascade/)) with an install-wide `platform` binding. Every path over the sample tables obeys the `PruneSamples` floor above; a log line has none. (Built for the sample lanes as one install-wide window per lane, and for the log tables as one per severity band, in the platform-domain `retention` namespace, not cascade-resolved: [ADR-0417](/architecture/decisions/#adr-0417-the-server-prunes-each-sample-lane-to-a-window-in-bounded-chunks).)
+- **Retention is per table**, set by policy: `metric` short, `property` longer, `audit_log` longest (compliance), `internal_log` short, and `log_line` / `node_log` keyed on their own axes (`severity` / `facility` are indexed precisely so retention and routing can discriminate). On-row lineage ages out with its sample, and a `log_line` aged out from under an event leaves `event.source_log_line_id` null (`on delete set null`), never deleting the event. Per-table defaults are **cascade-resolved** ([cascade](/architecture/cascade/)) with an install-wide `platform` binding. Every path over the sample tables obeys the `PruneSamples` floor above; a log line has none. (Built for the sample lanes as one install-wide window per lane, and for the log tables as one per severity band (with an optional install-wide override per band for `node_log`, #1350), in the platform-domain `retention` namespace, not cascade-resolved: [ADR-0417](/architecture/decisions/#adr-0417-the-server-prunes-each-sample-lane-to-a-window-in-bounded-chunks).)
 - **The `raw_sample` buffer** ([collection](/architecture/collection/)) is range-partitioned by `ts` and cold-tierable like the metric partitions, on a short retention: bounded, sampled, short-lived, not a telemetry table.
 - **Views are not partitioned** (bounded by fleet size, not time), computed from the underlying tables, never the source of truth.
 
