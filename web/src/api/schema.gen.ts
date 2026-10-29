@@ -11844,12 +11844,17 @@ export interface components {
         };
         Transport: {
             built: boolean;
+            built_in?: string[] | null;
+            credential_built_in?: string[] | null;
             description: string;
             held: boolean;
             line: boolean;
+            listen_built_in?: string[] | null;
             name: string;
+            poll_built_in?: string[] | null;
             push?: boolean;
             rung?: string;
+            session_built_in?: string[] | null;
             tls?: boolean;
         };
         UISettings: {

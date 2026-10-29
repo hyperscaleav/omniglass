@@ -140,6 +140,21 @@ webhook:
 computed:
   - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
 
+
+# The platform's periodic digest (#1371): every minute it posts the batched
+# report the report route posts, so a subscribed webhook endpoint hears from
+# it without anyone firing a route, as a real platform's digest arrives on
+# its own schedule. Configured-off (no post) until it is subscribed.
+behaviors:
+  - name: rooms_report
+    schedule:
+      interval: 60s
+    emit:
+      url: '{{ .State | get "configuration" | get "webhook" | get "target_url" }}'
+      body: '{"event":"rooms.state","rooms":[{{ $sep := "" }}{{ range $id, $r := (.State | get "status" | get "rooms") }}{{ $sep }}{"room_id":"{{ $id }}","state":"{{ index $r "state" }}"}{{ $sep = "," }}{{ end }}],"ts":{{ now }}}'
+      headers: { X-UCC-Event: rooms.state }
+      sign: *ucc-sign
+
 # The rooms on the account. The dev seed binds the first four ids to the
 # lab's conference systems; zr-boardroom-b is a room the platform knows and
 # nobody bound, so its values land in the conduit's unbound inbox until an

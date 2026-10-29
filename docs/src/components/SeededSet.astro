@@ -258,6 +258,29 @@ if (nested && tree.length !== rows.length) {
         ))}
       </tbody>
     </table>
+  ) : kind === 'transports' ? (
+    <table class="seeded-set">
+      <thead><tr><th>Name</th><th>Description</th><th>Built-in keys every endpoint carries (and what an attach adds)</th></tr></thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr>
+            <td><code>{r.name}</code>{r.built === false ? ' (declared, not built)' : ''}</td>
+            <td>{r.description ?? ''}</td>
+            <td>
+              {(r.built_in ?? []).map((k) => <><code>{k}</code>{' '}</>)}
+              {[
+                ['a driver holding a session', r.session_built_in],
+                ['a credential', r.credential_built_in],
+                ['polls', r.poll_built_in],
+                ['listeners', r.listen_built_in],
+              ].filter(([, ks]) => ks?.length).map(([when, ks]) => (
+                <div>with {when}: {ks.map((k) => <><code>{k}</code>{' '}</>)}</div>
+              ))}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   ) : (
     <table class="seeded-set">
       <thead><tr><th>Name</th><th>Description</th></tr></thead>

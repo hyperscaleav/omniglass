@@ -11173,18 +11173,48 @@ components:
       properties:
         built:
           type: boolean
+        built_in:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        credential_built_in:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         description:
           type: string
         held:
           type: boolean
         line:
           type: boolean
+        listen_built_in:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         name:
           type: string
+        poll_built_in:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         push:
           type: boolean
         rung:
           type: string
+        session_built_in:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         tls:
           type: boolean
       required:

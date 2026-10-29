@@ -195,3 +195,39 @@ func TestSeededFleetHoldsAPusherOnOneSystem(t *testing.T) {
 		t.Fatalf("a second run changed the pusher's grants: %v", got)
 	}
 }
+
+// The telemetry gaps (#1371) name what the dev fleet places: a collected gap a
+// product some component is on, a system gap a fixture system. The live check
+// fails an entry once its owners meet their tier; this one fails a typo.
+func TestTelemetryGapsNameWhatTheFleetPlaces(t *testing.T) {
+	dev, err := devseed.LookupScenario("dev")
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, err := dev.Doc()
+	if err != nil {
+		t.Fatal(err)
+	}
+	products := map[string]bool{"generic-device": false}
+	for _, c := range append(append([]devseed.Component(nil), doc.Components...), doc.SimComponents...) {
+		if c.Product == "" {
+			products["generic-device"] = true // a productless component lands on the generic product
+			continue
+		}
+		products[c.Product] = true
+	}
+	for p := range devseed.CollectedGaps {
+		if !products[p] {
+			t.Errorf("CollectedGaps lists %s, which no dev-fleet component is on", p)
+		}
+	}
+	systems := map[string]bool{}
+	for _, s := range doc.Systems {
+		systems[s.Key] = true
+	}
+	for k := range devseed.SystemGaps {
+		if !systems[k] {
+			t.Errorf("SystemGaps lists %s, which is no dev-fleet system", k)
+		}
+	}
+}

@@ -61,6 +61,13 @@ type factsTransport struct {
 	Description string `json:"description,omitempty"`
 	Held        bool   `json:"held"`
 	Built       bool   `json:"built"`
+	// The built-in keys its endpoints always carry (#1371), and what an
+	// attach adds.
+	BuiltIn           []string `json:"built_in,omitempty"`
+	SessionBuiltIn    []string `json:"session_built_in,omitempty"`
+	CredentialBuiltIn []string `json:"credential_built_in,omitempty"`
+	PollBuiltIn       []string `json:"poll_built_in,omitempty"`
+	ListenBuiltIn     []string `json:"listen_built_in,omitempty"`
 }
 
 // factsLabelRule is one global label rule (#682) as the docs render it: the
@@ -312,7 +319,9 @@ func FactsJSON() ([]byte, error) {
 	}
 
 	for _, tr := range transport.All() {
-		doc.Transports = append(doc.Transports, factsTransport{Name: tr.Name, Description: tr.Description, Held: tr.Held, Built: tr.Built})
+		doc.Transports = append(doc.Transports, factsTransport{Name: tr.Name, Description: tr.Description, Held: tr.Held, Built: tr.Built,
+			BuiltIn: tr.BuiltIn, SessionBuiltIn: tr.SessionBuiltIn, CredentialBuiltIn: tr.CredentialBuiltIn,
+			PollBuiltIn: tr.PollBuiltIn, ListenBuiltIn: tr.ListenBuiltIn})
 	}
 
 	var lts locationTypesDoc

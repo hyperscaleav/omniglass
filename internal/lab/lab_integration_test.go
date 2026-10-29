@@ -77,6 +77,7 @@ func TestIntegrationLabOnARealDaemon(t *testing.T) {
 		return l, out.String()
 	}
 
+	started := time.Now()
 	lab, _ := up(cfg(os.Getpid()))
 	client, err := runner(eng, io.Discard, host).signIn(ctx, lab.BaseURL)
 	if err != nil {
@@ -155,6 +156,32 @@ func TestIntegrationLabOnARealDaemon(t *testing.T) {
 				t.Fatalf("after the warm-up, not exercised: %v (%v)", missing, err)
 			}
 			time.Sleep(10 * time.Second)
+		}
+	})
+
+	// Every component and every system has telemetry of its own (#1371):
+	// after the warm-up, each endpoint carries its transport's built-in set,
+	// each component a live collected value beyond identity and uptime, and
+	// each system a live value of its own, but for the known gaps, none of
+	// which may be met already.
+	t.Run("every component and system has telemetry on its tiers", func(t *testing.T) {
+		gaps, err := labTelemetryGaps(DefaultScenario)
+		if err != nil {
+			t.Fatal(err)
+		}
+		deadline := time.Now().Add(4 * time.Minute)
+		for {
+			missing, stale, err := telemetryEverywhere(ctx, client, lab.BaseURL, started, cfg(os.Getpid()).PlantedFaults, gaps)
+			if err == nil && len(missing) == 0 && len(stale) == 0 {
+				return
+			}
+			if err == nil && len(stale) > 0 {
+				t.Fatalf("known gaps now met, drop them (devseed CollectedGaps or SystemGaps, or coverage.yaml):\n%s", strings.Join(stale, "\n"))
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("after the warm-up, short of telemetry (%v):\n%s", err, strings.Join(missing, "\n"))
+			}
+			time.Sleep(15 * time.Second)
 		}
 	})
 
