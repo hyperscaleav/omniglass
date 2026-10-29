@@ -68,11 +68,22 @@ type RunSample struct {
 	Text   string            `json:"text,omitempty" doc:"A property's value, or an event's or log line's message"`
 	Labels map[string]string `json:"labels,omitempty" doc:"The sample's labels, its instance among them"`
 	TS     time.Time         `json:"ts" doc:"When the sample was taken"`
+	// Identity is the record's identity a driver function read (#1386).
+	Identity *RunIdentity `json:"identity,omitempty" doc:"The identity the sample's record carried (a match key and its value), when its function declares one; the server lands it on the owner the conduit's binding names"`
+}
+
+// RunIdentity is a sample's identity on the run wire (#1386).
+type RunIdentity struct {
+	Key   string `json:"key" doc:"The match key, a registered property type"`
+	Value string `json:"value" doc:"The value the record carried for it"`
 }
 
 // RunSampleOf maps a collected sample onto the run wire.
 func RunSampleOf(s Sample) RunSample {
 	out := RunSample{Name: s.Name, Lane: s.Lane, Labels: s.Labels, TS: s.TS}
+	if s.Identity != nil {
+		out.Identity = &RunIdentity{Key: s.Identity.Key, Value: s.Identity.Value}
+	}
 	if s.IsText || s.Lane != "" {
 		out.Text = s.Text
 	} else {

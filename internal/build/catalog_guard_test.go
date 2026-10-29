@@ -40,6 +40,9 @@ func TestTestsDoNotBorrowTheSeedCatalog(t *testing.T) {
 		// shipped template names shipped products (#1326 to #1328).
 		"internal/template/from_template_test.go": true,
 		"internal/api/from_template_e2e_test.go":  true,
+		// Pins the shipped UCC drivers to the simulated platform's own
+		// answer, so naming the shipped product is what it tests (#1282).
+		"internal/seed/ucc_drivers_test.go": true,
 	}
 
 	raw, err := seed.FactsJSON()

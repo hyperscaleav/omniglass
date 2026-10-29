@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 	// The zone database rides the binary, so a payload time read in a
 	// declared zone parses on a node whose image carries none.
 	_ "time/tzdata"
@@ -50,6 +52,11 @@ type BakedFunction struct {
 	Arm      []string    `json:"arm,omitempty"`
 	Match    *Match      `json:"match,omitempty"`
 	Emits    []BakedEmit `json:"emits"`
+	// Records and Identity are the function's (#1386), omitted when unset so
+	// a function declaring neither bakes to the bytes it always did and its
+	// task keeps its content hash.
+	Records  string        `json:"records,omitempty"`
+	Identity *IdentitySpec `json:"identity,omitempty"`
 	// Unmatched rides listen tasks: the spec's unmatched-line policy (#817).
 	Unmatched string `json:"unmatched,omitempty"`
 	// Log rides a push transport's listen tasks: whether a claimed message
@@ -136,6 +143,11 @@ type Emitted struct {
 	// that share a name (two log lines, two of one event type) wherever an
 	// emit is remembered (a plain poll's change memory).
 	Emit int
+	// Record is the record's index in its function's records (#1386), zero
+	// when the function reads none; Identity is the identity the record
+	// read, nil on a log line and on a function declaring none.
+	Record   int
+	Identity *Identity
 }
 
 // ClampWindow is how far ahead of its arrival a payload's time may claim to
@@ -149,22 +161,251 @@ const ClampWindow = 5 * time.Minute
 // silently dropping it or shipping a wrong-lane sample. The two lists are
 // independent: a payload missing one emit still lands the rest.
 func (fn *BakedFunction) Interpret(p Payload, ts time.Time) ([]Emitted, []error) {
+	prefix := fmt.Sprintf("driver: %s/%s", fn.Driver, fn.Function)
+	if fn.Records == "" {
+		out, rf := fn.interpretRecord(p, ts, 0)
+		var faults []error
+		if rf.identity != nil {
+			faults = append(faults, fmt.Errorf("%s identity %q: %w; the record lands nothing", prefix, fn.Identity.Key, rf.identity))
+		}
+		for _, ef := range rf.emits {
+			faults = append(faults, fmt.Errorf("%s emit %q: %w", prefix, fn.Emits[ef.emit].label(), ef.err))
+		}
+		return out, faults
+	}
+	records, err := recordsOf(p.JSON, fn.Records)
+	if err != nil {
+		return nil, []error{fmt.Errorf("%s records %q: %w; nothing landed", prefix, fn.Records, err)}
+	}
+	var capped error
+	if len(records) > MaxRecords {
+		capped = fmt.Errorf("%s records %q hold %d records, past the cap of %d: the first %d were read and the last %d not read", prefix, fn.Records, len(records), MaxRecords, MaxRecords, len(records)-MaxRecords)
+		records = records[:MaxRecords]
+	}
+	var out []Emitted
+	missed := faultTally{}
+	emitFaults := map[int]*faultTally{}
+	for i, rec := range records {
+		e, rf := fn.interpretRecord(recordPayload(rec), ts, i)
+		out = append(out, e...)
+		if rf.identity != nil {
+			missed.add(i, rf.identity)
+		}
+		for _, ef := range rf.emits {
+			if emitFaults[ef.emit] == nil {
+				emitFaults[ef.emit] = &faultTally{}
+			}
+			emitFaults[ef.emit].add(i, ef.err)
+		}
+	}
+	// One fault per kind per run, however many records share it: ten
+	// thousand records with a renamed id field are one fault, not a flood
+	// of collection-failed events or one unbounded raw-line attribute.
+	var faults []error
+	if missed.count > 0 {
+		faults = append(faults, fmt.Errorf("%s identity %q missed on %d of %d records (%s): %w; those records land nothing", prefix, fn.Identity.Key, missed.count, len(records), missed.which(), missed.first))
+	}
+	for i, em := range fn.Emits {
+		if t := emitFaults[i]; t != nil {
+			faults = append(faults, fmt.Errorf("%s emit %q faulted on %d of %d records (%s): %w", prefix, em.label(), t.count, len(records), t.which(), t.first))
+		}
+	}
+	if capped != nil {
+		faults = append(faults, capped)
+	}
+	return out, faults
+}
+
+// MaxRecords bounds the records one payload yields for one function: a
+// record multiplies every emit, so past it the rest are not read and one
+// fault says how many.
+const MaxRecords = 2048
+
+// faultRecordsShown is how many record numbers a collapsed fault lists.
+const faultRecordsShown = 10
+
+// faultTally is one kind of fault across a payload's records: how many
+// records met it, the first few (1-based), and the first error, which
+// stands for the rest.
+type faultTally struct {
+	count int
+	shown []int
+	first error
+}
+
+func (t *faultTally) add(record int, err error) {
+	if t.count == 0 {
+		t.first = err
+	}
+	t.count++
+	if len(t.shown) < faultRecordsShown {
+		t.shown = append(t.shown, record+1)
+	}
+}
+
+// which names the records a fault met: the first few, and how many more.
+func (t *faultTally) which() string {
+	parts := make([]string, len(t.shown))
+	for i, n := range t.shown {
+		parts[i] = strconv.Itoa(n)
+	}
+	s := "records " + strings.Join(parts, ", ")
+	if more := t.count - len(t.shown); more > 0 {
+		s += fmt.Sprintf(", and %d more", more)
+	}
+	return s
+}
+
+// recordFaults is what one record did not yield: its identity's fault (the
+// record then landed nothing but its log lines), and each emit's.
+type recordFaults struct {
+	identity error
+	emits    []emitFault
+}
+
+type emitFault struct {
+	emit int
+	err  error
+}
+
+// interpretRecord reads one record (the whole payload when the function
+// declares no records): its identity, then every emit. A record whose
+// identity does not resolve lands nothing but its log lines (a log line
+// never fans out and carries no identity).
+func (fn *BakedFunction) interpretRecord(p Payload, ts time.Time, record int) ([]Emitted, recordFaults) {
 	if p.docs == nil {
 		p.docs = &parsedDocs{}
 	}
 	var out []Emitted
-	var faults []error
+	var rf recordFaults
+	var id *Identity
+	if fn.Identity != nil {
+		v, err := identityValue(fn.Identity.Key, fn.Identity.Extract, p)
+		if err != nil {
+			rf.identity = err
+		} else {
+			id = &Identity{Key: fn.Identity.Key, Value: v}
+		}
+	}
 	for i, em := range fn.Emits {
+		if rf.identity != nil && em.Lane != LaneLog {
+			continue
+		}
 		e, landed, err := interpretEmit(em, p, ts)
 		if err != nil {
-			faults = append(faults, fmt.Errorf("driver: %s/%s emit %q: %w", fn.Driver, fn.Function, em.label(), err))
+			rf.emits = append(rf.emits, emitFault{emit: i, err: err})
 		}
 		if landed {
-			e.Emit = i
+			e.Emit, e.Record = i, record
+			if em.Lane != LaneLog {
+				e.Identity = id
+			}
 			out = append(out, e)
 		}
 	}
-	return out, faults
+	return out, rf
+}
+
+// MaxIdentityValue bounds an identity's key and value: a match key's value
+// an operator binds and reads, not a payload.
+const MaxIdentityValue = 256
+
+// ValidIdentity holds an identity to its bounds: a key and a value each
+// non-empty, already trimmed, at most MaxIdentityValue bytes, valid UTF-8
+// and free of control characters. The engine reads every identity through
+// it, and a server that receives one off the wire can hold it to the same.
+func ValidIdentity(id Identity) error {
+	if err := boundedText(id.Key); err != nil {
+		return fmt.Errorf("the key %w", err)
+	}
+	if err := boundedText(id.Value); err != nil {
+		return fmt.Errorf("the value %w", err)
+	}
+	return nil
+}
+
+func boundedText(v string) error {
+	switch {
+	case v == "":
+		return fmt.Errorf("is empty")
+	case strings.TrimSpace(v) != v:
+		return fmt.Errorf("carries leading or trailing space")
+	case len(v) > MaxIdentityValue:
+		return fmt.Errorf("is %d bytes, longer than %d", len(v), MaxIdentityValue)
+	case !utf8.ValidString(v):
+		return fmt.Errorf("is not valid UTF-8")
+	}
+	for _, r := range v {
+		if r < 0x20 || r == 0x7f {
+			return fmt.Errorf("carries a control character")
+		}
+	}
+	return nil
+}
+
+// identityValue reads a record's identity value: located like an emit's
+// value (a JSON number as its literal, so two ids past 2^53 stay two),
+// trimmed, and held to ValidIdentity.
+func identityValue(key string, ex Extract, p Payload) (string, error) {
+	var raw string
+	var err error
+	if ex.JSONPath != "" {
+		raw, err = jsonLiteral(p.JSON, ex.JSONPath)
+	} else {
+		raw, err = locate(ex, p)
+	}
+	if err != nil {
+		return "", err
+	}
+	v := strings.TrimSpace(raw)
+	if err := ValidIdentity(Identity{Key: key, Value: v}); err != nil {
+		return "", err
+	}
+	return v, nil
+}
+
+// recordsOf walks a dotted path (the jsonpath grammar) into a JSON document
+// and returns the array it lands on, each element as its own compact JSON. A
+// path that misses or lands on anything but an array is an error; an empty
+// array is no records, and no error.
+func recordsOf(doc []byte, path string) ([][]byte, error) {
+	if len(doc) == 0 {
+		return nil, fmt.Errorf("the response carries no JSON body")
+	}
+	cur := json.RawMessage(doc)
+	for _, step := range strings.Split(path, ".") {
+		var obj map[string]json.RawMessage
+		if err := json.Unmarshal(cur, &obj); err != nil || obj == nil {
+			if !json.Valid(cur) {
+				return nil, fmt.Errorf("the response is not JSON")
+			}
+			return nil, fmt.Errorf("the path steps through a non-object")
+		}
+		next, ok := obj[step]
+		if !ok {
+			return nil, fmt.Errorf("the response has no key %q", step)
+		}
+		cur = next
+	}
+	var elems []json.RawMessage
+	if err := json.Unmarshal(cur, &elems); err != nil || elems == nil {
+		return nil, fmt.Errorf("the path lands on a non-array")
+	}
+	out := make([][]byte, 0, len(elems))
+	for _, el := range elems {
+		var buf bytes.Buffer
+		if err := json.Compact(&buf, el); err != nil {
+			return nil, fmt.Errorf("a record is not JSON: %v", err)
+		}
+		out = append(out, buf.Bytes())
+	}
+	return out, nil
+}
+
+// recordPayload is one record as its own payload: its compact JSON is both
+// the JSON a jsonpath reads and the text a regex reads.
+func recordPayload(rec []byte) Payload {
+	return Payload{JSON: rec, Text: string(rec), Body: rec, Format: FormatJSON}
 }
 
 // label names a baked emit in a fault: its key, or "log" for a log line.
@@ -605,14 +846,32 @@ func locate(ex Extract, p Payload) (string, error) {
 
 // jsonPath walks a dotted path into a JSON document (the declared thin cut of
 // JSONPath: object keys only, no filters or wildcards) and renders the leaf as
-// a string.
+// a string. A number renders through float64, as an emit's value always has.
 func jsonPath(doc []byte, path string) (string, error) {
+	return jsonLeaf(doc, path, false)
+}
+
+// jsonLiteral is jsonPath with a number kept as its literal, so a large
+// integer (an id past 2^53) reads exactly as the payload wrote it.
+func jsonLiteral(doc []byte, path string) (string, error) {
+	return jsonLeaf(doc, path, true)
+}
+
+func jsonLeaf(doc []byte, path string, literal bool) (string, error) {
 	if len(doc) == 0 {
 		return "", fmt.Errorf("the response carries no JSON body")
 	}
 	var cur any
-	if err := json.Unmarshal(doc, &cur); err != nil {
+	dec := json.NewDecoder(bytes.NewReader(doc))
+	if literal {
+		dec.UseNumber()
+	}
+	if err := dec.Decode(&cur); err != nil {
 		return "", fmt.Errorf("the response is not JSON: %v", err)
+	}
+	// One document, as json.Unmarshal holds it: trailing data is not JSON.
+	if _, err := dec.Token(); err != io.EOF {
+		return "", fmt.Errorf("the response is not JSON: data after the document")
 	}
 	for _, step := range strings.Split(path, ".") {
 		obj, ok := cur.(map[string]any)
@@ -627,6 +886,8 @@ func jsonPath(doc []byte, path string) (string, error) {
 	switch v := cur.(type) {
 	case string:
 		return v, nil
+	case json.Number:
+		return v.String(), nil
 	case float64:
 		return strconv.FormatFloat(v, 'f', -1, 64), nil
 	case bool:
