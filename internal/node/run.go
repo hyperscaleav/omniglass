@@ -15,6 +15,11 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
+// DefaultHeartbeat is how often a node checks in, and runs every task that
+// declares no slower schedule, when it is not told otherwise: the product's
+// own cadence (the lab's `default` cadence profile runs at it).
+const DefaultHeartbeat = 30 * time.Second
+
 // worklistTimeout bounds a single worklist request-reply.
 const worklistTimeout = 5 * time.Second
 
@@ -307,7 +312,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	// its declared schedule rather than every heartbeat (#822).
 	heartbeat := cfg.HeartbeatEvery
 	if heartbeat <= 0 {
-		heartbeat = 30 * time.Second
+		heartbeat = DefaultHeartbeat
 	}
 	sched := newPollSchedule(heartbeat)
 

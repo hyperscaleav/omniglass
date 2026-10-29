@@ -99,7 +99,9 @@ on **Admin > Settings**, each from 1 to 36,500 days:
 
 Three things are never removed, however old:
 - a declared value (an operator's assertion is the truth, not a sample);
-- the latest row of every series, so a quiet device still shows its current value;
+- the latest property value of every series, so a value that has not changed in months still shows
+  (a metric is measured every check, so a metric series still collected always has a recent
+  reading; one past its window shows no reading within retention);
 - the value a command set out to write, which its history reads back.
 A change to a window takes effect at the next pass. Events and alarms are not removed yet (#1159,
 #1339), and neither is the audit log (#1340).
@@ -114,8 +116,9 @@ omniglass property-type setRetention endpoint-reachable --days 365
 omniglass metric-type setRetention tcp-connect-time --days null    # back to metric_days
 ```
 
-The type's window shows as `retention_days` on `omniglass metric-type get`. The same floor holds: its
-latest value per series is never removed. See
+The type's window shows as `retention_days` on `omniglass metric-type get`. A property type keeps the
+floor above (its latest value per series is never removed); a metric type keeps every reading inside
+its window and none past it, so a series no longer measured shows no reading within retention. See
 [storage](/architecture/storage/#retention-what-is-kept-and-for-how-long) for how it works.
 
 ## How often an endpoint reports on itself

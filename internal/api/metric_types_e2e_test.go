@@ -45,7 +45,7 @@ func TestMetricTypeAPI(t *testing.T) {
 
 	// Register a custom metric type with its numeric facts.
 	created := c.do(ownerTok, http.MethodPost, "/metric-types", map[string]any{
-		"name": "fan-speed", "data_type": "int", "label": "Fan speed",
+		"name": "pump-speed", "data_type": "int", "label": "Pump speed",
 		"unit": "rpm", "precision": 0,
 	}, http.StatusCreated)
 	var mt struct {
@@ -56,12 +56,12 @@ func TestMetricTypeAPI(t *testing.T) {
 		Official  bool   `json:"official"`
 	}
 	json.Unmarshal(created, &mt)
-	if mt.Name != "fan-speed" || mt.DataType != "int" || mt.Unit != "rpm" || mt.Precision == nil || *mt.Precision != 0 || mt.Official {
+	if mt.Name != "pump-speed" || mt.DataType != "int" || mt.Unit != "rpm" || mt.Precision == nil || *mt.Precision != 0 || mt.Official {
 		t.Fatalf("created = %+v", mt)
 	}
 
 	// Get it back.
-	c.do(ownerTok, http.MethodGet, "/metric-types/fan-speed", nil, http.StatusOK)
+	c.do(ownerTok, http.MethodGet, "/metric-types/pump-speed", nil, http.StatusOK)
 
 	// List includes the custom type and the seeded official ones.
 	var listed struct {
@@ -74,19 +74,19 @@ func TestMetricTypeAPI(t *testing.T) {
 	for _, m := range listed.MetricTypes {
 		names[m.Name] = true
 	}
-	if !names["fan-speed"] || !names["icmp-rtt-avg"] || !names["tcp-open"] {
+	if !names["pump-speed"] || !names["icmp-rtt-avg"] || !names["tcp-open"] {
 		t.Fatalf("list missing metric types: %v", names)
 	}
 
 	// Update a mutable field.
-	c.do(ownerTok, http.MethodPatch, "/metric-types/fan-speed", map[string]any{"label": "Fan Speed (RPM)"}, http.StatusOK)
+	c.do(ownerTok, http.MethodPatch, "/metric-types/pump-speed", map[string]any{"label": "Pump Speed (RPM)"}, http.StatusOK)
 
 	// A malformed name is a 422, and so is a non-numeric data type (the enum).
 	c.do(ownerTok, http.MethodPost, "/metric-types", map[string]any{"name": "Bad-Name", "data_type": "int"}, http.StatusUnprocessableEntity)
 	c.do(ownerTok, http.MethodPost, "/metric-types", map[string]any{"name": "power-state", "data_type": "string"}, http.StatusUnprocessableEntity)
 
 	// A duplicate name is a 409.
-	c.do(ownerTok, http.MethodPost, "/metric-types", map[string]any{"name": "fan-speed", "data_type": "int"}, http.StatusConflict)
+	c.do(ownerTok, http.MethodPost, "/metric-types", map[string]any{"name": "pump-speed", "data_type": "int"}, http.StatusConflict)
 
 	// An official (seeded) metric type is read-only (409).
 	c.do(ownerTok, http.MethodPatch, "/metric-types/tcp-open", map[string]any{"label": "x"}, http.StatusConflict)
@@ -96,7 +96,7 @@ func TestMetricTypeAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodGet, "/metric-types/nope", nil, http.StatusNotFound)
 
 	// Delete the custom type.
-	c.do(ownerTok, http.MethodDelete, "/metric-types/fan-speed", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodDelete, "/metric-types/pump-speed", nil, http.StatusNoContent)
 
 	// An ungranted principal is forbidden to create.
 	noneTok := principalWithGrants(t, ctx, dsn, "nometrics", nil)

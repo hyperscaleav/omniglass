@@ -148,6 +148,14 @@ property_types:
     validation: { enum: [occupied, vacant] }
     label: Occupancy State
     description: Whether a space reads occupied or vacant by its occupancy source.
+  - name: protect-state
+    data_type: string
+    validation: { enum: [normal, protect] }
+    label: Protect State
+    description: >-
+      Whether an amplifier is running (normal) or has muted its outputs and
+      latched protect on a fault (overheating, a shorted load, DC on an output),
+      which holds until an operator resets it.
   - name: booking-state
     data_type: string
     validation: { enum: [booked, free] }

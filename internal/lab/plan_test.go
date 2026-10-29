@@ -1,6 +1,9 @@
 package lab
 
 import (
+	"github.com/hyperscaleav/omniglass/internal/node"
+	"github.com/hyperscaleav/omniglass/internal/simnode"
+
 	"slices"
 	"strings"
 	"testing"
@@ -261,5 +264,62 @@ func TestPlanNoNode(t *testing.T) {
 	}
 	if !slices.Contains(s.Seed.Cmd, "--no-node") {
 		t.Fatalf("a throwaway lab with no node: the seed runs %v, want --no-node", s.Seed.Cmd)
+	}
+}
+
+// A cadence profile (#1277) names how often the lab's node checks in and
+// probes, so the lab footprint can measure a lab at the product's default
+// cadence beside the lab's own. A lab given none keeps the cadence it has
+// always run at, an unknown one is refused, and each profile lands on the
+// node's command line as its heartbeat and probe interval.
+func TestPlanCadenceProfiles(t *testing.T) {
+	flag := func(cmd []string, name string) string {
+		i := slices.Index(cmd, name)
+		if i < 0 || i+1 >= len(cmd) {
+			return ""
+		}
+		return cmd[i+1]
+	}
+	cases := []struct {
+		cadence   string
+		ephemeral bool
+		heartbeat string
+		probe     string // "" takes the platform's collection.probe_seconds (#1373)
+		simPoll   string
+	}{
+		{"", false, "2s", "10s", "2s"},
+		// A walkthrough probes on every check-in, said outright: a node
+		// with no interval of its own takes the platform's 30s (#1373).
+		{"", true, "2s", "2s", "2s"},
+		{"lab", true, "2s", "10s", "2s"},
+		{"walkthrough", false, "2s", "2s", "2s"},
+		// The product's own: the node's and the simulator's defaults, so
+		// the profile cannot drift from what a deployment runs.
+		{"default", true, node.DefaultHeartbeat.String(), "", simnode.DefaultPoll.String()},
+	}
+	for _, c := range cases {
+		o := testOptions()
+		o.Cadence = c.cadence
+		if c.ephemeral {
+			o.Project, o.Ephemeral = "foot-1", true
+		}
+		s, err := Plan(o)
+		if err != nil {
+			t.Fatalf("cadence %q: %v", c.cadence, err)
+		}
+		if got := flag(s.Node.Cmd, "--heartbeat"); got != c.heartbeat {
+			t.Errorf("cadence %q: --heartbeat %q in %v, want %s", c.cadence, got, s.Node.Cmd, c.heartbeat)
+		}
+		if got := flag(s.Node.Cmd, "--poll"); got != c.simPoll {
+			t.Errorf("cadence %q: --poll %q in %v, want %s", c.cadence, got, s.Node.Cmd, c.simPoll)
+		}
+		if got := flag(s.Node.Cmd, "--probe-every"); got != c.probe {
+			t.Errorf("cadence %q: --probe-every %q in %v, want %q", c.cadence, got, s.Node.Cmd, c.probe)
+		}
+	}
+	o := testOptions()
+	o.Cadence = "fast"
+	if _, err := Plan(o); err == nil || !strings.Contains(err.Error(), "walkthrough") {
+		t.Fatalf("an unknown cadence: %v, want a refusal listing the profiles", err)
 	}
 }

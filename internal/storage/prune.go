@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/hyperscaleav/omniglass/internal/settings"
 )
 
@@ -128,6 +130,9 @@ func (p *PG) pruneSamples(ctx context.Context, lane, typeID string, days int, be
 	if limit <= 0 {
 		return 0, fmt.Errorf("storage: prune samples: limit %d, want at least 1", limit)
 	}
+	if lane == "metric" {
+		return p.pruneMetricSamples(ctx, typeID, days, before, limit)
+	}
 	var total int64
 	for _, arc := range sampleArcs {
 		if total >= int64(limit) {
@@ -140,6 +145,63 @@ func (p *PG) pruneSamples(ctx context.Context, lane, typeID string, days int, be
 		tag, err := p.pool.Exec(ctx, pruneSamplesSQL(lane, arc, typeID != ""), args...)
 		if err != nil {
 			return total, fmt.Errorf("storage: prune %s samples owned by a %s: %w", lane, arc, err)
+		}
+		total += tag.RowsAffected()
+	}
+	return total, nil
+}
+
+// pruneMetricSampleSQL deletes at most $2 samples older than $1 from one
+// metric partition (part, a sanitized name), each statement short. The lane's
+// prune (typed false) takes every sample whose type has no window of its own,
+// and every sample whose series is gone (its owner deleted); a typed prune
+// ($3, one type's id) takes that type's samples, series by series through the
+// series index, and only while the type's window is still $4, the days the
+// pass read.
+//
+// The metric lane keeps no floor (ADR-1275, amending ADR-0080): a series
+// keeps the latest row within retention, and one with none reads as no
+// reading within retention. Every observation of a quantity is stored, so a
+// series still measured always has a recent row; a command's intended rows,
+// the declared tier, are in metric_declared, which no prune touches. The
+// chosen rows are deleted by ctid, a TID scan of the one partition.
+func pruneMetricSampleSQL(part string, typed bool) string {
+	if typed {
+		return `delete from ` + part + ` where ctid = any(array(
+			select m.ctid from metric_series s
+			cross join lateral (select x.ctid from ` + part + ` x where x.series_id = s.id and x.ts < $1 limit $2) m
+			where s.metric_type_id = $3::uuid and $4::int = (select retention_days from metric_type where id = $3::uuid)
+			limit $2))`
+	}
+	return `delete from ` + part + ` where ctid = any(array(
+		select m.ctid from ` + part + ` m
+		where m.ts < $1 and not exists (select 1 from metric_series s join metric_type t on t.id = s.metric_type_id
+			where s.id = m.series_id and t.retention_days is not null)
+		limit $2))`
+}
+
+// pruneMetricSamples is pruneSamples on the metric lane: the partitions that
+// begin before the cutoff, oldest first, a statement each until limit rows
+// are deleted. A month wholly past every window is dropped whole by
+// DropMetricPartitions; this keeps the window exact inside the months that
+// remain.
+func (p *PG) pruneMetricSamples(ctx context.Context, typeID string, days int, before time.Time, limit int) (int64, error) {
+	parts, err := metricPartitions(ctx, p.pool)
+	if err != nil {
+		return 0, err
+	}
+	var total int64
+	for _, part := range parts {
+		if total >= int64(limit) || !part.From.Before(before) {
+			break
+		}
+		args := []any{before, int64(limit) - total}
+		if typeID != "" {
+			args = append(args, typeID, days)
+		}
+		tag, err := p.pool.Exec(ctx, pruneMetricSampleSQL(pgx.Identifier{"public", part.Name}.Sanitize(), typeID != ""), args...)
+		if err != nil {
+			return total, fmt.Errorf("storage: prune metric samples in %s: %w", part.Name, err)
 		}
 		total += tag.RowsAffected()
 	}

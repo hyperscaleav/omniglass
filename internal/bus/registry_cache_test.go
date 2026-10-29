@@ -67,7 +67,7 @@ func TestRegistryFollowsTheCatalogBetweenBatches(t *testing.T) {
 	rows := func() int {
 		t.Helper()
 		var n int
-		if err := conn.QueryRow(ctx, `select count(*) from metric m join metric_type mt on mt.id = m.metric_type_id
+		if err := conn.QueryRow(ctx, `select count(*) from `+storagetest.MetricRows+` m join metric_type mt on mt.id = m.metric_type_id
 			where mt.name = 'cache-probe'`).Scan(&n); err != nil {
 			t.Fatalf("count: %v", err)
 		}

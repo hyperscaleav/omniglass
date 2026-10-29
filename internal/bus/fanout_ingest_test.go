@@ -171,7 +171,7 @@ func (f *fanIngest) landed(t *testing.T) []string {
 		select s.name, t.name, p.value #>> '{}', p.instance, p.source, p.provenance from property p
 			join system s on s.id = p.system_id join property_type t on t.id = p.property_type_id where p.provenance = 'observed'
 		union all
-		select s.name, t.name, m.value::text, m.instance, m.source, m.provenance from metric m
+		select s.name, t.name, m.value::text, m.instance, m.source, m.provenance from `+storagetest.MetricRows+` m
 			join system s on s.id = m.system_id join metric_type t on t.id = m.metric_type_id where m.provenance = 'observed'`)
 	if err != nil {
 		t.Fatal(err)
@@ -216,7 +216,7 @@ func TestBothArrivalsFanOutTheSameRows(t *testing.T) {
 		}
 		f.deliver(t, subject, ev, "")
 		got[lane] = f.landed(t)
-		if n := f.count(t, `select count(*) from metric where component_id = $1`, f.conduit); n != 1 {
+		if n := f.count(t, `select count(*) from `+storagetest.MetricRows+` metric where component_id = $1`, f.conduit); n != 1 {
 			t.Errorf("%s: the conduit holds %d metric rows, want its one unidentified sample", lane, n)
 		}
 		if n := f.count(t, `select count(*) from property where component_id = $1`, f.conduit); n != 0 {
@@ -282,7 +282,7 @@ func TestFanOutFollowsTheBindings(t *testing.T) {
 	if n := f.count(t, `select count(*) from property p join system s on s.id = p.system_id where s.name = 'room-c' and p.provenance = 'observed'`); n != 1 {
 		t.Errorf("after binding, room-c holds %d call-state rows, want one", n)
 	}
-	if n := f.count(t, `select count(*) from metric m join metric_type t on t.id = m.metric_type_id where t.name = 'tcp-open'`); n != 0 {
+	if n := f.count(t, `select count(*) from `+storagetest.MetricRows+` m join metric_type t on t.id = m.metric_type_id where t.name = 'tcp-open'`); n != 0 {
 		t.Errorf("a node-probe key under a bound identity landed %d rows", n)
 	}
 
@@ -291,7 +291,7 @@ func TestFanOutFollowsTheBindings(t *testing.T) {
 	}
 	subject, ev = f.nodeLane(rooms("zr-x"))
 	f.deliver(t, subject, ev, "")
-	if n := f.count(t, `select count(*) from metric m join system s on s.id = m.system_id where s.name = 'room-c'`); n != 1 {
+	if n := f.count(t, `select count(*) from `+storagetest.MetricRows+` m join system s on s.id = m.system_id where s.name = 'room-c'`); n != 1 {
 		t.Errorf("after unbinding, room-c holds %d metric rows, want the one landed while bound", n)
 	}
 	inbox, _ = f.gw.ListUnboundIdentities(f.ctx, "meetings-cloud", scope.Set{All: true})
@@ -364,7 +364,7 @@ func TestFanOutResolvesOwnersInOneRead(t *testing.T) {
 		t.Errorf("a batch of 200 identified records issued %d statements, a batch of 3 issued %d: the fan-out reads per owner\n%s",
 			many, three, strings.Join(counter.Summary(), "\n"))
 	}
-	if n := f.count(t, `select count(*) from metric m join system s on s.id = m.system_id`); n != 2*3+2*200 {
+	if n := f.count(t, `select count(*) from `+storagetest.MetricRows+` m join system s on s.id = m.system_id`); n != 2*3+2*200 {
 		t.Errorf("landed %d fanned metric rows, want %d", n, 2*3+2*200)
 	}
 }

@@ -86,7 +86,7 @@ func (p *PG) PendingNodeCommands(ctx context.Context, node string) ([]CommandDel
 				c.id, ct.name as command_type, c.params, i.id as endpoint_id, i.transport,
 				i.params as endpoint_params, i.node_name, d.spec,
 				(select pr.value from property pr where pr.command_id = c.id and pr.provenance = 'intended' order by pr.ts desc limit 1) as intended_prop,
-				(select m.value from metric m where m.command_id = c.id and m.provenance = 'intended' order by m.ts desc limit 1) as intended_metric
+				(select m.value from metric_declared m where m.command_id = c.id order by m.ts desc limit 1) as intended_metric
 			from command c
 			join command_type ct on ct.id = c.command_type_id
 			join endpoint i on i.component = c.component_id and i.driver_id is not null

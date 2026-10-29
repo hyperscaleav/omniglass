@@ -259,7 +259,7 @@ func TestCommandStatusRecording(t *testing.T) {
 			eventID *int64
 		)
 		if err := conn.QueryRow(ctx,
-			`select value, event_id from metric where command_id = $1 and provenance = 'intended'`, cmd.ID).Scan(&got, &eventID); err != nil {
+			`select value, event_id from `+storagetest.MetricRows+` metric where command_id = $1 and provenance = 'intended'`, cmd.ID).Scan(&got, &eventID); err != nil {
 			t.Fatalf("intended metric row for command %d: %v", cmd.ID, err)
 		}
 		if got != 50 || eventID == nil || *eventID != cmd.CausedEventID {

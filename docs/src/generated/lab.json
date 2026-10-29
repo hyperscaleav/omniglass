@@ -192,5 +192,25 @@
       "description": "Author an event rule's criteria as an expression, see a mistake pointed at by line and column, fix it, preview what the rule would have done over the last day, and save it.",
       "setup": []
     }
+  ],
+  "cadences": [
+    {
+      "name": "lab",
+      "heartbeat": "2s",
+      "probe_every": "10s",
+      "for": "a learner's lab: a change in the console shows within seconds"
+    },
+    {
+      "name": "walkthrough",
+      "heartbeat": "2s",
+      "probe_every": "2s",
+      "for": "a script's throwaway lab: a walkthrough waiting on a probe's verdict sees it within seconds"
+    },
+    {
+      "name": "default",
+      "heartbeat": "30s",
+      "probe_every": "every check-in",
+      "for": "the product's own defaults: what a deployment's node runs at"
+    }
   ]
 }

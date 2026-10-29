@@ -215,6 +215,20 @@ func (s *Server) subscribe() error {
 	s.startRuleReconcile()
 	s.startCalcTick()
 
+	// The metric table holds a partition for this month and the next two
+	// before anything is ingested (#420): a sample whose month has none would
+	// be retried until one exists, so the boot makes sure, and refuses to
+	// start ingest when it cannot.
+	pctx, pdone := context.WithTimeout(context.Background(), partitionBootTimeout)
+	created, err := s.store.EnsureMetricPartitions(pctx)
+	pdone()
+	if err != nil {
+		return fmt.Errorf("bus: metric partitions: %w", err)
+	}
+	if len(created) > 0 {
+		slog.Info("metric partitions created", "facility", "retention", "created", created)
+	}
+
 	// The telemetry ingest path: a JetStream stream + durable consumer over the
 	// same internal client. It carries the node -> server sample flow.
 	if err := s.startTelemetryConsumer(); err != nil {
@@ -373,6 +387,9 @@ func (s *Server) publishTelemetry(ctx context.Context, b *ogv1.TelemetryBatch, i
 		wait *= 2
 	}
 }
+
+// partitionBootTimeout bounds the boot's check of the metric partitions.
+const partitionBootTimeout = time.Minute
 
 // receiptPruneEvery is how often the server deletes telemetry receipts past
 // receiptHorizon; receiptPruneTimeout bounds one pass.

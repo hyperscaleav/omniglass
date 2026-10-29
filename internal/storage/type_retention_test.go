@@ -2,14 +2,13 @@ package storage_test
 
 import (
 	"errors"
+	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest/accesspath"
 )
 
 func days(n int) *int { return &n }
@@ -78,8 +77,7 @@ func TestARetentionOverrideSurvivesTheBootSeed(t *testing.T) {
 
 // TestPruneSamplesHonorsATypesOverride: a type with an override leaves its
 // lane's default window and is pruned by its own, shorter or longer. The lane
-// prune skips it; the type's own prune takes it to its window. The floor holds
-// either way.
+// prune skips it; the type's own prune takes it to its window.
 func TestPruneSamplesHonorsATypesOverride(t *testing.T) {
 	f := newPruneFixture(t)
 	for _, name := range []string{"rt-short", "rt-default", "rt-long"} {
@@ -94,8 +92,11 @@ func TestPruneSamplesHonorsATypesOverride(t *testing.T) {
 	now := time.Now().UTC()
 	row := func(typ string, age time.Duration) {
 		t.Helper()
-		mustExec(t, f.conn, `insert into metric (ts, owner_kind, component_id, metric_type_id, instance, provenance, value)
-			values ($1, 'component', (select id from component where name = 'prune-c1'), (select id from metric_type where name = $2), '', 'observed', 1)`,
+		if err := f.gw.MakeMetricMonths(f.ctx, now.Add(-age)); err != nil {
+			t.Fatal(err)
+		}
+		mustExec(t, f.conn, storagetest.WideMetricInsert(`ts, owner_kind, component_id, metric_type_id, instance, provenance, value`,
+			`values ($1, 'component', (select id from component where name = 'prune-c1'), (select id from metric_type where name = $2), '', 'observed', 1)`),
 			now.Add(-age), typ)
 	}
 	for _, typ := range []string{"rt-short", "rt-default", "rt-long"} {
@@ -106,7 +107,7 @@ func TestPruneSamplesHonorsATypesOverride(t *testing.T) {
 	count := func(typ string) int {
 		t.Helper()
 		var n int
-		if err := f.conn.QueryRow(f.ctx, `select count(*) from metric where metric_type_id = (select id from metric_type where name = $1)`, typ).Scan(&n); err != nil {
+		if err := f.conn.QueryRow(f.ctx, `select count(*) from `+storagetest.MetricRows+` metric where metric_type_id = (select id from metric_type where name = $1)`, typ).Scan(&n); err != nil {
 			t.Fatal(err)
 		}
 		return n
@@ -141,33 +142,6 @@ func TestPruneSamplesHonorsATypesOverride(t *testing.T) {
 	}
 	got := strconv.Itoa(count("rt-short")) + "," + strconv.Itoa(count("rt-default")) + "," + strconv.Itoa(count("rt-long"))
 	if got != "1,2,3" {
-		t.Fatalf("rows left (short, default, long) = %s, want 1,2,3: short keeps its latest, default its 5-day and latest, long all three", got)
-	}
-}
-
-// TestATypedPruneSearchesItsTypesRows: a type's own prune finds its old rows by
-// its type through an index, not by reading every old row of the lane, which an
-// override prune would otherwise do every pass, once per type, on a table full of
-// other types' rows still inside their lane's window. For a metric a system or a
-// location owns that is metric_arc_owner_idx, which leads with the type; its
-// partial predicate (component_id is null) must be provable from the statement
-// (the 2026-10-28 review: 4,756 buffers a call without it, 4 with it).
-func TestATypedPruneSearchesItsTypesRows(t *testing.T) {
-	f := newPruneFixture(t)
-	stmts := storage.ExportPruneSamplesOfTypeSQL("metric")
-	for _, arc := range []string{"system", "location"} {
-		plan, err := accesspath.Explain(f.ctx, f.conn, stmts[arc], time.Now(), 10, "00000000-0000-0000-0000-000000000000", 3)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var found bool
-		for _, s := range plan.Scans("metric") {
-			if s.Alias == "c" && s.Index == "metric_arc_owner_idx" && strings.Contains(s.Cond, "metric_type_id") {
-				found = true
-			}
-		}
-		if !found {
-			t.Errorf("the typed metric prune on a %s does not search its type's rows through metric_arc_owner_idx:\n\t%s", arc, plan)
-		}
+		t.Fatalf("rows left (short, default, long) = %s, want 1,2,3: short keeps its hour-old row, default its 5-day and hour-old, long all three", got)
 	}
 }
