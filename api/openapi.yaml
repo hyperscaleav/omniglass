@@ -8905,9 +8905,25 @@ components:
         - samples
         - took_ms
       type: object
+    RunIdentity:
+      additionalProperties: false
+      properties:
+        key:
+          description: The match key, a registered property type
+          type: string
+        value:
+          description: The value the record carried for it
+          type: string
+      required:
+        - key
+        - value
+      type: object
     RunSample:
       additionalProperties: false
       properties:
+        identity:
+          $ref: "#/components/schemas/RunIdentity"
+          description: The identity the sample's record carried (a match key and its value), when its function declares one; the server lands it on the owner the conduit's binding names
         labels:
           additionalProperties:
             type: string

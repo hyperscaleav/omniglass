@@ -361,7 +361,28 @@ type Poll struct {
 	Name     string   `json:"name"`
 	Schedule Schedule `json:"schedule"`
 	Request  Request  `json:"request"`
-	Emits    []Emit   `json:"emits"`
+	// Records and Identity read a response about many owners (#1386): see
+	// Listener.
+	Records  string        `json:"records,omitempty"`
+	Identity *IdentitySpec `json:"identity,omitempty"`
+	Emits    []Emit        `json:"emits"`
+}
+
+// IdentitySpec is a function's identity (#1386, ADR-1282): the match key (a
+// registered property type, such as a cloud service's room id) and the
+// extract that reads its value off each record. Every metric, property and
+// event a record yields carries the identity it read, which the server
+// resolves only against the bindings of the conduit the batch is confined
+// to; a log line carries none.
+type IdentitySpec struct {
+	Key     string  `json:"key"`
+	Extract Extract `json:"extract"`
+}
+
+// Identity is a resolved identity: the match key and the value a record
+// carried for it.
+type Identity struct {
+	Key, Value string
 }
 
 // Match classifies an unsolicited inbound payload to its listener: exactly
@@ -386,7 +407,15 @@ type Listener struct {
 	Name  string   `json:"name"`
 	Arm   []string `json:"arm,omitempty"`
 	Match Match    `json:"match"`
-	Emits []Emit   `json:"emits"`
+	// Records is a dotted JSON path (the jsonpath grammar) to an array in a
+	// JSON body (#1386): each element is one record, read as its own payload,
+	// and the function's emits and identity read once per record. Absent,
+	// the whole payload is the one record.
+	Records string `json:"records,omitempty"`
+	// Identity names each record's owner-side identity (#1386); absent,
+	// samples carry none and land on the conduit as before.
+	Identity *IdentitySpec `json:"identity,omitempty"`
+	Emits    []Emit        `json:"emits"`
 	// Log is whether a message this listener claims also lands as its raw
 	// log line (decision 5 of #1146): true when absent, on a push transport
 	// alone, so the component's own words stay searchable; false where a
@@ -681,6 +710,12 @@ func (s *Spec) Validate(cat Catalog) error {
 		if err := validateEmits("poll", p.Name, p.Emits, cat); err != nil {
 			return err
 		}
+		if err := validateIdentity("poll", p.Name, p.Identity, p.Records, cat); err != nil {
+			return err
+		}
+		if p.Records != "" && (!IsHTTP(s.Transport) || p.Request.FormatOf() != FormatJSON) {
+			return fmt.Errorf("driver: poll %q declares records, which read an array out of a JSON body; a %s answer is not one (records ride an http poll of format json)", p.Name, pollAnswer(s.Transport, p.Request))
+		}
 		if IsWebSocket(s.Transport) {
 			if err := validateFrameRequest(fmt.Sprintf("poll %q", p.Name), p.Request); err != nil {
 				return err
@@ -749,6 +784,28 @@ func (s *Spec) Validate(cat Catalog) error {
 		}
 		if err := validateEmits("listener", l.Name, l.Emits, cat); err != nil {
 			return err
+		}
+		if err := validateIdentity("listener", l.Name, l.Identity, l.Records, cat); err != nil {
+			return err
+		}
+		if l.Records != "" && (stream == nil || stream.FormatOf() != FormatJSON) {
+			body := s.Transport + " message"
+			if stream != nil {
+				body = stream.FormatOf() + " body"
+			}
+			return fmt.Errorf("driver: listener %q declares records, which read an array out of a JSON body; a %s is not one (records ride a webhook or an http stream of format json)", l.Name, body)
+		}
+		if stream != nil && l.Identity != nil {
+			what := fmt.Sprintf("listener %q identity %q", l.Name, l.Identity.Key)
+			var err error
+			if transport.IsPush(s.Transport) {
+				err = checkWebhookEmit(what, l.Identity.Extract, stream.FormatOf())
+			} else {
+				err = checkHTTPEmit(what, l.Identity.Extract, *stream)
+			}
+			if err != nil {
+				return err
+			}
 		}
 		if stream != nil {
 			for _, e := range l.Emits {
@@ -874,6 +931,63 @@ func (s *Spec) Validate(cat Catalog) error {
 	}
 	if err := s.validateSNMPCommunity(); err != nil {
 		return err
+	}
+	return nil
+}
+
+// pollAnswer names what a poll's answer is, for a refusal: an http
+// response's format, or the transport's own answer.
+func pollAnswer(tr string, r Request) string {
+	if IsHTTP(tr) {
+		return r.FormatOf()
+	}
+	return tr
+}
+
+// validateIdentity holds a function's identity and records to their shape
+// (#1386, ADR-1282): the identity names a key and reads it through exactly
+// one extract, and records is a dotted path with no empty step. With a
+// catalog the key must be a registered property type a driver may write (a
+// collected key, ADR-0161), since the server resolves it against bindings
+// keyed by property type; without one, structure only. The transport binding
+// of the identity's extract is the caller's, as an emit's is.
+func validateIdentity(family, fn string, id *IdentitySpec, records string, cat Catalog) error {
+	if records != "" {
+		for _, step := range strings.Split(records, ".") {
+			if step == "" {
+				return fmt.Errorf("driver: %s %q records %q has an empty step; write a dotted path of object keys to the array", family, fn, records)
+			}
+		}
+	}
+	if id == nil {
+		return nil
+	}
+	if strings.TrimSpace(id.Key) == "" {
+		return fmt.Errorf("driver: %s %q identity names no key (a registered property type)", family, fn)
+	}
+	if err := emittable(id.Key); err != nil {
+		return fmt.Errorf("driver: %s %q identity may not be keyed by %w", family, fn, err)
+	}
+	if n := id.Extract.count(); n != 1 {
+		return fmt.Errorf("driver: %s %q identity %q needs exactly one extract kind, has %d", family, fn, id.Key, n)
+	}
+	if id.Extract.Regex != "" {
+		if _, err := regexp.Compile(id.Extract.Regex); err != nil {
+			return fmt.Errorf("driver: %s %q identity %q has an uncompilable regex: %v", family, fn, id.Key, err)
+		}
+	}
+	if cat == nil {
+		return nil
+	}
+	lane, ok := cat.LaneOf(id.Key)
+	if !ok {
+		return fmt.Errorf("driver: %s %q identity key %q is not a registered property type", family, fn, id.Key)
+	}
+	if lane != LaneProperty {
+		return fmt.Errorf("driver: %s %q identity key %q is a %s type; an identity key is a registered property type", family, fn, id.Key, lane)
+	}
+	if c := cat.WriterClass(id.Key); c != writerclass.Collected {
+		return fmt.Errorf("driver: %s %q identity may not be keyed by %q: %s", family, fn, id.Key, writerclass.Refusal(c, id.Key, writerclass.Node, ""))
 	}
 	return nil
 }
@@ -1152,6 +1266,10 @@ func checkPollShape(tr string, p Poll) error {
 				all = append(all, located{em.label(), ex})
 			}
 		}
+	}
+	// The identity is read off the same answer, held to the same binding.
+	if p.Identity != nil {
+		all = append(all, located{"identity " + p.Identity.Key, p.Identity.Extract})
 	}
 	switch tr {
 	case "snmp":
