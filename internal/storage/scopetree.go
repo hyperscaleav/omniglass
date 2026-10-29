@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/hyperscaleav/omniglass/internal/scope"
@@ -266,6 +267,10 @@ type readFilter struct {
 	With string
 	Args []any
 	pred func(col string) string
+	// cte is With's one recursive expansion without its leading "with
+	// recursive", so two filters over different tiers can share one WITH
+	// (joinReadFilters); empty when the filter needs none.
+	cte string
 }
 
 // Pred is the WHERE fragment admitting col when its row is in scope.
@@ -276,6 +281,13 @@ func (f readFilter) Pred(col string) string { return f.pred(col) }
 // and a rooted scope admits each subtree root's descendants and each self
 // root.
 func newReadFilter(tbl scopeTable, read scope.Set, first int) readFilter {
+	return newNamedReadFilter(tbl, read, first, "vis")
+}
+
+// newNamedReadFilter is newReadFilter with its expansion named cte, so a query
+// reading rows that hang off two tiers (an identity binding's owner is a
+// component or a system) can filter each in its own tier's read scope.
+func newNamedReadFilter(tbl scopeTable, read scope.Set, first int, cte string) readFilter {
 	if read.All {
 		return readFilter{pred: func(string) string { return "true" }}
 	}
@@ -285,15 +297,33 @@ func newReadFilter(tbl scopeTable, read scope.Set, first int) readFilter {
 	}
 	t := string(tbl)
 	r, s := strconv.Itoa(first), strconv.Itoa(first+1)
-	return readFilter{
-		With: `with recursive vis(id) as (
+	body := cte + `(id) as (
 			select id from ` + t + ` where id = any($` + r + `::uuid[])
 			union all
-			select t.id from ` + t + ` t join vis on t.parent_id = vis.id
-		) cycle id set is_cycle using path `,
+			select t.id from ` + t + ` t join ` + cte + ` on t.parent_id = ` + cte + `.id
+		) cycle id set is_cycle using path `
+	return readFilter{
+		With: `with recursive ` + body,
 		Args: []any{roots, selfIDs},
+		cte:  body,
 		pred: func(col string) string {
-			return `(` + col + ` in (select id from vis) or ` + col + ` = any($` + s + `::uuid[]))`
+			return `(` + col + ` in (select id from ` + cte + `) or ` + col + ` = any($` + s + `::uuid[]))`
 		},
 	}
+}
+
+// joinReadFilters is the one leading WITH for several named filters (each
+// built with its own cte name and its own argument positions), empty when none
+// needs an expansion.
+func joinReadFilters(fs ...readFilter) string {
+	var ctes []string
+	for _, f := range fs {
+		if f.cte != "" {
+			ctes = append(ctes, f.cte)
+		}
+	}
+	if len(ctes) == 0 {
+		return ""
+	}
+	return `with recursive ` + strings.Join(ctes, ", ")
 }

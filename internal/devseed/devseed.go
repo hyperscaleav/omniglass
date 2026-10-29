@@ -47,6 +47,9 @@ type Doc struct {
 	SimSecrets        []SimSecret       `yaml:"sim_secrets"`
 	SimEndpoints      []SimEndpoint     `yaml:"sim_endpoints"`
 	SimComponents     []Component       `yaml:"sim_components"`
+	// SimIdentityBindings tie the simulated conduit's room ids to the
+	// systems they are the rooms of (#1282).
+	SimIdentityBindings []IdentityBinding `yaml:"sim_identity_bindings"`
 }
 
 // SimSecret is a platform secret the simulated fleet's endpoints reference
@@ -751,6 +754,9 @@ func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, op
 		return err
 	}
 	if err := seedSimEndpoints(ctx, gw, actorID, base, compIDs, opts.SimPortOffset); err != nil {
+		return err
+	}
+	if err := seedIdentityBindings(ctx, gw, actorID, base, compIDs, sysIDs); err != nil {
 		return err
 	}
 	// The breadth RTT series, after the endpoints they are the node's account

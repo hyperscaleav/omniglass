@@ -327,3 +327,36 @@ func TestCollectDriverPollHTTPRefusedAndFaulted(t *testing.T) {
 		t.Fatalf("faults %v sent %+v", faults, f.sent)
 	}
 }
+
+// A polled room list (#1386): records "rooms" and identity ucc-room-id read
+// each room as its own record, so one poll yields one identified sample per
+// room, each carrying its identity to the batch.
+func TestCollectDriverPollHTTPRecordsCarryIdentity(t *testing.T) {
+	f := &fakeHTTPFetcher{ans: collection.HTTPAnswer{Status: 200, Body: []byte(`{"rooms":[{"id":"r1","state":"in-call"},{"id":"r2","state":"idle"}]}`)}}
+	task := httpPollTask()
+	task.Auth, task.Secrets = nil, nil
+	task.Fn = &driver.BakedFunction{
+		Driver: "ucc-api", Function: "rooms",
+		Request:  &driver.Request{Path: "/rooms"},
+		Records:  "rooms",
+		Identity: &driver.IdentitySpec{Key: "ucc-room-id", Extract: driver.Extract{JSONPath: "id"}},
+		Emits:    []driver.BakedEmit{{Name: "call-state", Lane: "property", Extract: driver.Extract{JSONPath: "state"}}},
+	}
+	dps, faults := (&collection.Runner{HTTPFetch: f}).CollectDriverPoll(context.Background(), task)
+	if len(faults) != 0 {
+		t.Fatalf("faults %v", faults)
+	}
+	got := map[string]string{}
+	for _, d := range dps {
+		if d.Name != "call-state" {
+			continue
+		}
+		if d.Identity == nil || d.Identity.Key != "ucc-room-id" {
+			t.Fatalf("sample %+v carries no identity", d)
+		}
+		got[d.Identity.Value] = d.Text
+	}
+	if len(got) != 2 || got["r1"] != "in-call" || got["r2"] != "idle" {
+		t.Fatalf("call-state by room = %v (samples %+v)", got, dps)
+	}
+}

@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ .Hostname }}, UCC Platform</title>
+<style>
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; background: #0f1020; color: #dfe2f2; margin: 0; }
+  .bar { background: #07081a; color: #fff; padding: 14px 24px; }
+  .bar .brand { font-weight: 700; letter-spacing: 0.06em; color: #8a7bff; }
+  main { max-width: 720px; margin: 24px auto; padding: 0 16px; }
+  .row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 14px; border-bottom: 1px solid #23264a; }
+  .k { color: #8b8fc0; }
+</style>
+</head>
+<body>
+<div class="bar"><span class="brand">SHINRA UCC</span> &middot; {{ .Hostname }} &middot; every room on the account</div>
+<main>
+{{- range $id, $r := (.State | get "status" | get "rooms") }}
+  <div class="row"><span class="k">{{ index $r "name" }} ({{ $id }})</span><span>{{ index $r "state" }}</span></div>
+{{- end }}
+</main>
+<script>
+  // apiURL() resolves absolute "/api/..." paths against the page's own
+  // path, the convention every device page keeps (read-only today).
+  function apiURL(path) {
+    if (!path.startsWith('/')) return path;
+    const base = location.pathname.replace(/\/$/, '');
+    return base + path;
+  }
+</script>
+</body>
+</html>

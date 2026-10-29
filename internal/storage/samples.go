@@ -232,18 +232,18 @@ func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs
 			instances[j], values[j], sources[j] = evs[i].Instance, evs[i].Value, evs[i].Source
 		}
 		_, err := tx.Exec(ctx, `insert into metric (ts, owner_kind, component_id, system_id, location_id, node_id,
-				metric_type_id, instance, value, provenance, source, source_rule, source_rule_version, source_rule_id)
+				metric_type_id, instance, value, provenance, source, source_rule, source_rule_version, source_rule_id, source_conduit_id)
 			select u.ts, u.owner_kind,
 				case when u.owner_kind = 'component' then u.owner::uuid end,
 				case when u.owner_kind = 'system' then u.owner::uuid end,
 				case when u.owner_kind = 'location' then u.owner::uuid end,
 				case when u.owner_kind = 'node' then u.owner::uuid end,
-				mt.id, u.instance, u.value, $8, u.source, $9, $10, $11::uuid
+				mt.id, u.instance, u.value, $8, u.source, $9, $10, $11::uuid, $12::uuid
 			from unnest($1::timestamptz[], $2::text[], $3::text[], $4::text[], $5::text[], $6::float8[], $7::text[])
 				with ordinality as u(ts, owner_kind, owner, key, instance, value, source, ord)
 			left join metric_type mt on mt.name = u.key
 			order by u.ord`,
-			ts, kinds, owners, keys, instances, values, sources, provenance, sourceRule, sourceVersion, sourceRuleID)
+			ts, kinds, owners, keys, instances, values, sources, provenance, sourceRule, sourceVersion, sourceRuleID, w.sourceConduit())
 		if err != nil {
 			named := make([]string, 0, len(idx))
 			for _, i := range idx {
@@ -260,9 +260,9 @@ func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs
 		ts := stamps[i]
 		if carried[metricSeriesKey(ev, arcs[i])] > 1 {
 			col, _ := ownerColumn(ev.OwnerKind)
-			sql := fmt.Sprintf(`insert into metric (ts, owner_kind, %s, metric_type_id, instance, value, provenance, source, source_rule, source_rule_version, source_rule_id)
-				values ($1, $2, $3, (select id from metric_type where name = $4), $5, $6, $7, $8, $9, $10, $11::uuid)`, col)
-			if _, err := tx.Exec(ctx, sql, ts, ev.OwnerKind, arcs[i], ev.Key, ev.Instance, ev.Value, provenance, ev.Source, sourceRule, sourceVersion, sourceRuleID); err != nil {
+			sql := fmt.Sprintf(`insert into metric (ts, owner_kind, %s, metric_type_id, instance, value, provenance, source, source_rule, source_rule_version, source_rule_id, source_conduit_id)
+				values ($1, $2, $3, (select id from metric_type where name = $4), $5, $6, $7, $8, $9, $10, $11::uuid, $12::uuid)`, col)
+			if _, err := tx.Exec(ctx, sql, ts, ev.OwnerKind, arcs[i], ev.Key, ev.Instance, ev.Value, provenance, ev.Source, sourceRule, sourceVersion, sourceRuleID, w.sourceConduit()); err != nil {
 				return fmt.Errorf("storage: insert sample %s/%s: %w", ev.OwnerID, ev.Key, err)
 			}
 		}
@@ -295,7 +295,7 @@ func (p *PG) LatestMetric(ctx context.Context, componentRef, key string) (*Metri
 	var dp MetricSample
 	err = p.pool.QueryRow(ctx, `
 		select ts, owner_kind,
-			(select m.name from metric_type m where m.id = metric.metric_type_id), instance, value, provenance, source
+			(select m.name from metric_type m where m.id = metric.metric_type_id), instance, value, provenance, `+sourceRendered("metric")+`
 		from metric
 		where component_id = $1::uuid
 		  and metric_type_id = (select id from metric_type where name = $2)
@@ -329,7 +329,7 @@ func (p *PG) LatestMetricInstance(ctx context.Context, componentRef, key, instan
 	var dp MetricSample
 	err = p.pool.QueryRow(ctx, `
 		select ts, owner_kind,
-			(select m.name from metric_type m where m.id = metric.metric_type_id), instance, value, provenance, source
+			(select m.name from metric_type m where m.id = metric.metric_type_id), instance, value, provenance, `+sourceRendered("metric")+`
 		from metric
 		where component_id = $1::uuid
 		  and metric_type_id = (select id from metric_type where name = $2) and instance = $3
@@ -361,7 +361,7 @@ func (p *PG) ListMetricSeries(ctx context.Context, ownerKind, ownerRef, key stri
 	bound, args := tsSince("ts", window, arc, key, limit)
 	rows, err := p.pool.Query(ctx, fmt.Sprintf(`
 		select ts, owner_kind,
-			(select m.name from metric_type m where m.id = metric.metric_type_id), instance, value, provenance, source
+			(select m.name from metric_type m where m.id = metric.metric_type_id), instance, value, provenance, `+sourceRendered("metric")+`
 		from metric
 		where %s = $1::uuid
 		  and metric_type_id = (select id from metric_type where name = $2)

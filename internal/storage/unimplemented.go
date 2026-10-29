@@ -854,6 +854,15 @@ func (UnimplementedGateway) RemoveMember(context.Context, string, string, string
 func (UnimplementedGateway) SetPrimaryMember(context.Context, string, string, string, scope.Set, scope.Set, scope.Set, scope.Set) error {
 	return nil
 }
+func (UnimplementedGateway) ListIdentityBindings(context.Context, string, scope.Set, scope.Set) (*IdentityBindingList, error) {
+	return &IdentityBindingList{}, nil
+}
+func (UnimplementedGateway) PutIdentityBinding(context.Context, string, string, string, string, IdentityBindingOwner, IdentityBindingScopes) (*IdentityBinding, error) {
+	return &IdentityBinding{}, nil
+}
+func (UnimplementedGateway) DeleteIdentityBinding(context.Context, string, string, string, string, IdentityBindingScopes) error {
+	return nil
+}
 func (UnimplementedGateway) AssignRole(context.Context, string, string, string, string, scope.Set, scope.Set, scope.Set, scope.Set) error {
 	return nil
 }
@@ -1042,6 +1051,12 @@ func (UnimplementedGateway) RecordUnclaimedSources(context.Context, []UnclaimedS
 	return nil
 }
 func (UnimplementedGateway) ListUnclaimedSources(context.Context) ([]UnclaimedSource, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ResolveIdentityBindings(context.Context, string, []IdentityKey) (*IdentityResolution, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ListUnboundIdentities(context.Context, string, scope.Set) ([]UnboundIdentity, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) ClaimUnclaimedSource(context.Context, string, string, string) (bool, error) {

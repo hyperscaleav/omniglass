@@ -150,12 +150,12 @@ func (p *PG) writePropertySamples(ctx context.Context, tx pgx.Tx, w KeyWriter, e
 					limit 1) latest
 				where latest.value = to_jsonb($6::text))`, col)
 		}
-		sql := fmt.Sprintf(`insert into property (ts, owner_kind, %s, property_type_id, instance, value, provenance, source, source_rule, source_rule_version, source_rule_id)
+		sql := fmt.Sprintf(`insert into property (ts, owner_kind, %s, property_type_id, instance, value, provenance, source, source_rule, source_rule_version, source_rule_id, source_conduit_id)
 			select $1::timestamptz, $2::text, $3::uuid, (select id from property_type where name = $4::text), $5::text, to_jsonb($6::text),
-				$7::text, $8::text, $9::text, $10::bigint, $11::uuid%s
+				$7::text, $8::text, $9::text, $10::bigint, $11::uuid, $12::uuid%s
 			returning id`, col, guard)
 		var id int64
-		err := tx.QueryRow(ctx, sql, ts, ev.OwnerKind, arcs[i], ev.Key, ev.Instance, ev.Value, provenance, ev.Source, sourceRule, sourceVersion, sourceRuleID).Scan(&id)
+		err := tx.QueryRow(ctx, sql, ts, ev.OwnerKind, arcs[i], ev.Key, ev.Instance, ev.Value, provenance, ev.Source, sourceRule, sourceVersion, sourceRuleID, w.sourceConduit()).Scan(&id)
 		if errors.Is(err, pgx.ErrNoRows) {
 			continue // an unchanged value: the series is transition-only
 		} else if err != nil {
@@ -235,7 +235,7 @@ func (p *PG) LatestProperty(ctx context.Context, componentRef, key, instance str
 	var dp PropertySample
 	err = p.pool.QueryRow(ctx, `
 		select ts, owner_kind,
-			(select p.name from property_type p where p.id = property.property_type_id), instance, value #>> '{}', provenance, source
+			(select p.name from property_type p where p.id = property.property_type_id), instance, value #>> '{}', provenance, `+sourceRendered("property")+`
 		from property
 		where component_id = $1::uuid
 		  and property_type_id = (select id from property_type where name = $2) and instance = $3
@@ -270,7 +270,7 @@ func (p *PG) PropertyTransitions(ctx context.Context, componentRef, key, instanc
 	bound, args := tsSince("ts", window, c.ID, key, instance)
 	rows, err := p.pool.Query(ctx, fmt.Sprintf(`
 		select ts, owner_kind,
-			(select p.name from property_type p where p.id = property.property_type_id), instance, value #>> '{}', provenance, source
+			(select p.name from property_type p where p.id = property.property_type_id), instance, value #>> '{}', provenance, `+sourceRendered("property")+`
 		from property
 		where component_id = $1::uuid
 		  and property_type_id = (select id from property_type where name = $2) and instance = $3
@@ -309,7 +309,7 @@ func (p *PG) ListPropertySeries(ctx context.Context, ownerKind, ownerRef, key st
 	bound, args := tsSince("ts", window, arc, key, limit)
 	rows, err := p.pool.Query(ctx, fmt.Sprintf(`
 		select ts, owner_kind,
-			(select pt.name from property_type pt where pt.id = property.property_type_id), instance, value #>> '{}', provenance, source
+			(select pt.name from property_type pt where pt.id = property.property_type_id), instance, value #>> '{}', provenance, `+sourceRendered("property")+`
 		from property
 		where %s = $1::uuid
 		  and property_type_id = (select id from property_type where name = $2)
