@@ -259,6 +259,24 @@ describe("the leaf's dispatch facts (#786)", () => {
     expect(within(card).getByText("6.1")).toBeTruthy();
   });
 
+  // #1379: a vitals row reads as one line. The label is the card's text and
+  // the value smaller monospace; a grid row stretches its cells and starts
+  // each at the top, which lifts the value above its label, so the grid
+  // aligns every row on its first baseline instead.
+  it("a vitals value shares its label's baseline", () => {
+    mount();
+    const list = screen.getByTestId("leaf-vitals").querySelector("dl");
+    expect(list?.classList.contains("items-baseline")).toBe(true);
+  });
+
+  // The same rows in the identity card above it: a monospace driver or
+  // model number beside the card's text label (#1379's review).
+  it("an identity value shares its label's baseline", () => {
+    mount();
+    const list = screen.getByTestId("leaf-identity").querySelector("dl");
+    expect(list?.classList.contains("items-baseline")).toBe(true);
+  });
+
   // #1020: a metric two endpoints collect shows the newest sample, and its
   // row says which endpoint that is and of how many, with a tooltip saying
   // why, and opens to each endpoint's latest. A single-instance metric reads
