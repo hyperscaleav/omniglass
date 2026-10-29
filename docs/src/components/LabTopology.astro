@@ -6,16 +6,17 @@
 // not create.
 //
 // Usage: <LabTopology /> for the containers, <LabTopology part="volumes" />
-// for the named volumes that hold the lab's data.
+// for the named volumes that hold the lab's data, <LabTopology
+// part="cadences" /> for the cadence profiles the node runs at.
 import facts from '../generated/lab.json';
 
 interface Props {
-  part?: 'containers' | 'volumes';
+  part?: 'containers' | 'volumes' | 'cadences';
 }
 
 const { part = 'containers' } = Astro.props;
-if (!facts.containers.length || !facts.volumes.length) {
-  throw new Error('LabTopology: lab.json has no containers or no volumes; run make gen');
+if (!facts.containers.length || !facts.volumes.length || !facts.cadences?.length) {
+  throw new Error('LabTopology: lab.json has no containers, volumes or cadences; run make gen');
 }
 
 // The planner names the omniglass image by its role; which image that is
@@ -71,6 +72,29 @@ const privilege = (c: (typeof facts.containers)[number]) => {
             </td>
             <td>{c.publish ? <code>{c.publish}</code> : 'nothing'}</td>
             <td>{c.role}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  ) : part === 'cadences' ? (
+    <table class="lab-topology">
+      <thead>
+        <tr>
+          <th>Profile</th>
+          <th>Checks in</th>
+          <th>Probes reachability</th>
+          <th>For</th>
+        </tr>
+      </thead>
+      <tbody>
+        {facts.cadences.map((c) => (
+          <tr>
+            <td>
+              <code>{c.name}</code>
+            </td>
+            <td>every {c.heartbeat}</td>
+            <td>{c.probe_every === 'every check-in' ? c.probe_every : `every ${c.probe_every}`}</td>
+            <td>{c.for}</td>
           </tr>
         ))}
       </tbody>

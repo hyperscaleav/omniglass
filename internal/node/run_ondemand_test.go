@@ -47,7 +47,7 @@ func TestOnDemandRunsOverTheWire(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	prof := loginProfile(t, store, "digest")
+	prof := loginProfile(t, store, "digest", "POST /api/display/power")
 	auth := faceAuth(store, prof)
 	s := newHTTPStack(t, "edge-run", nil, func(st *profile.Store) []string { return []string{prof} })
 	ip, port := s.ips[prof], panelPort(t, s.devices[prof], "http")
