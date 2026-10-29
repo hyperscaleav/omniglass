@@ -127,3 +127,75 @@ func TestRegistryNoCollisionsIsEmpty(t *testing.T) {
 		t.Fatalf("Collisions() = %v, want none", got)
 	}
 }
+
+// A name an official row and an operator's row both hold, in different catalogs
+// (#1307): a release shipped a name an operator had already coined. The official
+// row is the platform's and always stays, but on this install the operator's
+// shadows it at ingest, so the operator's series keep landing where they did and
+// nothing is refused. Shadowed() names it so it is visible.
+func TestAnOperatorsNameShadowsAnOfficialOneInAnotherCatalog(t *testing.T) {
+	cases := []struct {
+		what                            string
+		metrics                         []storage.MetricType
+		properties                      []storage.PropertyType
+		events                          []storage.EventType
+		wantMetric, wantProp, wantEvent bool
+	}{
+		{"official metric, operator property",
+			[]storage.MetricType{{Name: "x", Official: true}}, []storage.PropertyType{{Name: "x"}}, nil, false, true, false},
+		{"official property, operator metric",
+			[]storage.MetricType{{Name: "x"}}, []storage.PropertyType{{Name: "x", Official: true}}, nil, true, false, false},
+		{"official event, operator property",
+			nil, []storage.PropertyType{{Name: "x"}}, []storage.EventType{{Name: "x", Official: true}}, false, true, false},
+		{"official metric, operator event",
+			[]storage.MetricType{{Name: "x", Official: true}}, nil, []storage.EventType{{Name: "x"}}, false, false, true},
+	}
+	for _, c := range cases {
+		reg := collection.NewRegistry(c.metrics, c.properties, c.events)
+		if got := reg.Collisions(); len(got) != 0 {
+			t.Errorf("%s: Collisions() = %v, want none: the operator's row wins", c.what, got)
+		}
+		if got := reg.Shadowed(); len(got) != 1 || got[0] != "x" {
+			t.Errorf("%s: Shadowed() = %v, want [x]", c.what, got)
+		}
+		_, m := reg.Metric("x")
+		_, p := reg.Property("x")
+		_, e := reg.Event("x")
+		if m != c.wantMetric || p != c.wantProp || e != c.wantEvent {
+			t.Errorf("%s: x resolves metric %v property %v event %v, want %v %v %v", c.what, m, p, e, c.wantMetric, c.wantProp, c.wantEvent)
+		}
+	}
+}
+
+// The shadow is one operator row over official ones. Two official rows is a
+// release bug and two operator rows is a create the fence should have refused;
+// an operator row among several is ambiguous: each still resolves to nothing.
+func TestOnlyAnUnambiguousOperatorRowShadows(t *testing.T) {
+	for _, c := range []struct {
+		what       string
+		metrics    []storage.MetricType
+		properties []storage.PropertyType
+		events     []storage.EventType
+	}{
+		{"two official rows", []storage.MetricType{{Name: "x", Official: true}}, []storage.PropertyType{{Name: "x", Official: true}}, nil},
+		{"two operator rows", []storage.MetricType{{Name: "x"}}, []storage.PropertyType{{Name: "x"}}, nil},
+		{"two operator rows over an official one", []storage.MetricType{{Name: "x"}}, []storage.PropertyType{{Name: "x"}}, []storage.EventType{{Name: "x", Official: true}}},
+	} {
+		reg := collection.NewRegistry(c.metrics, c.properties, c.events)
+		if got := reg.Collisions(); len(got) != 1 || got[0] != "x" {
+			t.Errorf("%s: Collisions() = %v, want [x]", c.what, got)
+		}
+		if got := reg.Shadowed(); len(got) != 0 {
+			t.Errorf("%s: Shadowed() = %v, want none", c.what, got)
+		}
+		if _, ok := reg.Metric("x"); ok {
+			t.Errorf("%s: x resolved on the metric lane", c.what)
+		}
+		if _, ok := reg.Property("x"); ok {
+			t.Errorf("%s: x resolved on the property lane", c.what)
+		}
+		if _, ok := reg.Event("x"); ok {
+			t.Errorf("%s: x resolved on the event lane", c.what)
+		}
+	}
+}

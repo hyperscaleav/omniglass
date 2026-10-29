@@ -1,0 +1,22 @@
+---
+title: "An operator's row shadows an official row of the same name in another registry"
+date: 2026-10-29
+status: "Accepted"
+summary: "The platform always owns its official rows: the boot seed upserts every one and never skips or fails on a name an operator holds. A name an official row holds in one ingest registry and an operator's row holds in another resolves, at ingest, to the operator's row (private shadows official), so the operator's series keep landing where they did and nothing is refused. The registry reports the shadowed name on a rebuild and hourly. Two operator rows, two official rows, or an operator row among several still resolve to nothing. The namespace tiering of #318 is the general form of this rule"
+refs: [1307, 457, 318, 1298]
+---
+
+- **Date:** 2026-10-29 | **Status:** Accepted | **Pages:** [samples](/architecture/properties/)
+- **Decision:** (#1307, ruled 2026-10-29.)
+  1. **The seed is unchanged: official rows always land.** The ship-with upserts stay authoritative; a name an operator holds in another registry neither skips the shipped row nor stops the boot. The row is the platform's, and every shipped rule, product and standard that names it keeps resolving against it.
+  2. **The shadow lives in resolution.** `collection.NewRegistry` resolves a name held in more than one catalog when exactly one holder is an operator's row and the rest are official: the operator's row wins. `Registry.Shadowed()` names those, and the ingest registry cache reports them on a rebuild and hourly (never per batch), apart from collisions.
+  3. **Everything else is still a collision.** Two official rows (a release bug, also held by `sharedRegistryNames`), two operator rows (a create the fence refuses), or an operator row among several: the name resolves to nothing and is reported, as before.
+  4. **The remedy is the operator's, and optional.** Renaming their row (`POST /<registry>/{id}:rename`) lets the official one resolve; until then their data is exactly where it was.
+- **Context:** an operator's custom property `x`, then a release that seeds a metric `x`, left `x` in two catalogs: it resolved on no lane and every sample carrying it was refused (logged at registry build and hourly since #1298). The create routes refuse a cross-catalog name (#457), so the seed was the one path in. A first answer skipped the shipped row with a warning; it was withdrawn because the platform's rows are always its own, a skipped row fails any shipped rule that names the key (found while testing it), and an operator with a stale official holder had no remedy. The namespace tiering in #318 (official, community and private, private shadowing official) is the general design; this is the rule it implies, for the one case that exists today.
+- **Limits:**
+  - A name held in the same registry (an operator's custom metric `x` and a shipped metric `x`) still cannot coexist: the table is unique by name, and the authoritative upsert takes the row over. That needs #318's `(namespace, id)` key.
+  - The shadowed official row exists but is unreachable by its bare name on that install until the operator renames theirs; a lane-specific read still sees it. The console does not mark it yet.
+- **Not chosen:**
+  - **Skipping the shipped row and warning.** It leaves the platform's catalog incomplete and breaks shipped content that names the key.
+  - **Refusing to boot or migrate.** An operator's earlier valid choice would block an upgrade, and the fix (a rename) is an API call.
+  - **The official row displacing the operator's.** It would silently change the meaning of everything that pushes or drives by that name.

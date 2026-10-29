@@ -79,11 +79,14 @@ func (c *registryCache) get(ctx context.Context, store Store) (collection.Regist
 	return c.reg, c.targeted, nil
 }
 
-// warnCollisions logs the registry's collisions if it has any and they were
-// not logged within collisionReminder. A rebuilt registry is logged at once.
+// warnCollisions logs the registry's collisions and its shadowed names if it
+// has any and they were not logged within collisionReminder. A rebuilt registry
+// is logged at once. A collision is refused until one side is deleted; a
+// shadowed name (#1307) is not refused, since the operator's row resolves, but
+// it changes what the name means on this install, so it is said too.
 func (c *registryCache) warnCollisions() {
-	clashes := c.reg.Collisions()
-	if len(clashes) == 0 {
+	clashes, shadowed := c.reg.Collisions(), c.reg.Shadowed()
+	if len(clashes) == 0 && len(shadowed) == 0 {
 		return
 	}
 	now := time.Now
@@ -99,6 +102,12 @@ func (c *registryCache) warnCollisions() {
 	if c.log != nil {
 		log = c.log
 	}
-	log.Warn("registry name collision: samples using these names are refused until one side is deleted",
-		"names", clashes)
+	if len(clashes) > 0 {
+		log.Warn("registry name collision: samples using these names are refused until one side is deleted",
+			"names", clashes)
+	}
+	if len(shadowed) > 0 {
+		log.Warn("a ship-with registry name is shadowed by an operator's row in another catalog: samples using it land on the operator's, and the official row waits until the operator renames theirs",
+			"names", shadowed)
+	}
 }
