@@ -110,7 +110,11 @@ func TestASystemOwnsItsPushedTelemetry(t *testing.T) {
 	defer conn.Close(ctx)
 	for _, tbl := range []string{"metric", "property", "event"} {
 		var n int
-		if err := conn.QueryRow(ctx, `select count(*) from `+tbl+` where owner_kind = 'system' and system_id = (select id from system where name = 'huddle-1') and provenance = 'observed' and instance = ''`).Scan(&n); err != nil {
+		from := tbl
+		if tbl == "metric" {
+			from = storagetest.MetricRows + " metric"
+		}
+		if err := conn.QueryRow(ctx, `select count(*) from `+from+` where owner_kind = 'system' and system_id = (select id from system where name = 'huddle-1') and provenance = 'observed' and instance = ''`).Scan(&n); err != nil {
 			t.Fatalf("count %s: %v", tbl, err)
 		}
 		if n != 1 {

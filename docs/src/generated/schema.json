@@ -4659,8 +4659,12 @@
      {
       "name": "id",
       "type": "bigint",
-      "nullable": false,
-      "pk": true
+      "nullable": false
+     },
+     {
+      "name": "series_id",
+      "type": "bigint",
+      "nullable": false
      },
      {
       "name": "ts",
@@ -4669,37 +4673,9 @@
       "default": "now()"
      },
      {
-      "name": "owner_kind",
-      "type": "text",
-      "nullable": false
-     },
-     {
-      "name": "instance",
-      "type": "text",
-      "nullable": false,
-      "default": "''::text"
-     },
-     {
       "name": "value",
       "type": "double precision",
       "nullable": false
-     },
-     {
-      "name": "provenance",
-      "type": "text",
-      "nullable": false,
-      "default": "'observed'::text"
-     },
-     {
-      "name": "source",
-      "type": "text",
-      "nullable": false,
-      "default": "''::text"
-     },
-     {
-      "name": "source_rule",
-      "type": "text",
-      "nullable": true
      },
      {
       "name": "source_rule_version",
@@ -4707,11 +4683,78 @@
       "nullable": true
      },
      {
+      "name": "source_rule",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "source_rule_id",
+      "type": "uuid",
+      "nullable": true
+     }
+    ]
+   },
+   "metric_declared": {
+    "columns": [
+     {
+      "name": "id",
+      "type": "bigint",
+      "nullable": false,
+      "pk": true
+     },
+     {
+      "name": "series_id",
+      "type": "bigint",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "metric_series.id"
+     },
+     {
+      "name": "ts",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "value",
+      "type": "double precision",
+      "nullable": false
+     },
+     {
       "name": "event_id",
       "type": "bigint",
       "nullable": true,
       "fk": true,
       "fk_target": "event.id"
+     },
+     {
+      "name": "command_id",
+      "type": "bigint",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "command.id"
+     }
+    ]
+   },
+   "metric_series": {
+    "columns": [
+     {
+      "name": "id",
+      "type": "bigint",
+      "nullable": false,
+      "pk": true
+     },
+     {
+      "name": "metric_type_id",
+      "type": "uuid",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "metric_type.id"
+     },
+     {
+      "name": "owner_kind",
+      "type": "text",
+      "nullable": false
      },
      {
       "name": "component_id",
@@ -4742,41 +4785,51 @@
       "fk_target": "node.principal_id"
      },
      {
-      "name": "metric_type_id",
+      "name": "owner_id",
       "type": "uuid",
+      "nullable": true
+     },
+     {
+      "name": "instance",
+      "type": "text",
       "nullable": false,
-      "fk": true,
-      "fk_target": "metric_type.id"
+      "default": "''::text"
      },
      {
-      "name": "command_id",
-      "type": "bigint",
-      "nullable": true,
-      "fk": true,
-      "fk_target": "command.id"
+      "name": "provenance",
+      "type": "text",
+      "nullable": false
      },
      {
-      "name": "source_rule_id",
+      "name": "source",
+      "type": "text",
+      "nullable": false,
+      "default": "''::text"
+     },
+     {
+      "name": "collector_node_id",
       "type": "uuid",
       "nullable": true
      }
     ],
     "checks": [
      {
-      "name": "metric_lineage_check",
-      "expr": "CHECK ((((provenance = 'observed'::text) AND (event_id IS NULL) AND (command_id IS NULL)) OR ((provenance = 'calculated'::text) AND (source_rule IS NOT NULL) AND (event_id IS NULL) AND (command_id IS NULL)) OR ((provenance = 'intended'::text) AND (command_id IS NOT NULL) AND (source_rule IS NULL))))"
-     },
-     {
-      "name": "metric_owner_arc_check",
+      "name": "metric_series_owner_arc_check",
       "expr": "CHECK ((((owner_kind = 'component'::text) AND (component_id IS NOT NULL) AND (system_id IS NULL) AND (location_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'system'::text) AND (system_id IS NOT NULL) AND (component_id IS NULL) AND (location_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'location'::text) AND (location_id IS NOT NULL) AND (component_id IS NULL) AND (system_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'node'::text) AND (node_id IS NOT NULL) AND (component_id IS NULL) AND (system_id IS NULL) AND (location_id IS NULL))))"
      },
      {
-      "name": "metric_owner_kind_check",
+      "name": "metric_series_owner_kind_check",
       "expr": "CHECK ((owner_kind = ANY (ARRAY['component'::text, 'system'::text, 'location'::text, 'node'::text])))"
      },
      {
-      "name": "metric_provenance_check",
+      "name": "metric_series_provenance_check",
       "expr": "CHECK ((provenance = ANY (ARRAY['observed'::text, 'calculated'::text, 'intended'::text])))"
+     }
+    ],
+    "uniques": [
+     {
+      "name": "metric_series_key",
+      "definition": "CREATE UNIQUE INDEX metric_series_key ON public.metric_series USING btree (owner_id, metric_type_id, instance, provenance, source, collector_node_id) NULLS NOT DISTINCT"
      }
     ]
    },

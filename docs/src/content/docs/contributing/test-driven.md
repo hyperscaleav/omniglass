@@ -237,14 +237,17 @@ It holds five things and reports the rest:
 - **Rows per observation on each lane**, exact. A metric stores every observation; a property
   stores transitions only, so a steady window writes no property rows.
 - **Metric rows per full heap page**, exact, after `VACUUM`. Density rather than a page count,
-  so a fleet that grows by a few endpoints moves nothing unless a row does.
+  so a fleet that grows by a few endpoints moves nothing unless a row does. The metric table is
+  partitioned by month ([storage](/architecture/storage/#the-narrow-metric-lane)), so its bytes are
+  summed over its partitions.
 - **The metric table's index definitions**, exact, so an added, dropped or re-keyed index
   fails by name.
 - **Index bytes per stored metric row**, bounded, measured after `REINDEX`. A live index's page
   splits follow the fleet's component uuids, which the dev seed mints at random, so its size
   differs from run to run by about a fifth; a rebuilt index is the same every run, and the
   bound sits just over it.
-- Reported only: the live index size, receipt bytes per batch, and **WAL bytes per
+- Reported only: the live index size, receipt bytes per batch, the `metric_series` rows and
+  bytes (one per series, not per sample), and **WAL bytes per
   observation**, which moves with checkpoint timing and is the cost a replica or a WAL archive
   pays. Wall-clock time is `BenchmarkIngestFootprint`'s, in `make bench`.
 

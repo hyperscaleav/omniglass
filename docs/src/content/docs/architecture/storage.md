@@ -18,7 +18,11 @@ shared scoped-tree and scoped-CRUD primitives. Scope arrives at the gateway as a
 per-call `scope.Set` argument; seed and system callers pass an all-scope set. An ingest batch
 lands in one transaction under its receipt (`telemetry_receipt`), so a redelivery lands each row
 once while `metric` / `property` carry no uniqueness key of their own
-([ADR-0311](/architecture/decisions/#adr-0311-a-telemetry-batch-lands-once-in-one-transaction-under-its-receipt)). Current values are derived
+([ADR-0311](/architecture/decisions/#adr-0311-a-telemetry-batch-lands-once-in-one-transaction-under-its-receipt)).
+The metric lane is narrow and partitioned by month: a sample row is `(id, series_id, ts, value)`,
+what it is a sample of is one `metric_series` row, and a command's intended rows live apart in
+`metric_declared` ([below](#the-narrow-metric-lane),
+[ADR-1275](/architecture/decisions/#adr-1275-the-metric-lane-is-narrow-rows-on-a-series-dimension-partitioned-by-month)). Current values are derived
 from the series (latest row per series); the maintained latest-value cache retired
 ([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)),
 and the server prunes `metric` and `property` samples to their retention windows above the
@@ -209,9 +213,47 @@ The immutable, append-only records: the lineage targets and what a backtest read
 - the **`collection_log`** companion (the cheap per-run execution record).
 :::
 
+## The narrow metric lane
+
+The metric lane stores every observation of a quantity, so its row is the one the volume is
+made of, and most of a wide row was the series it belongs to, repeated on every sample
+([ADR-1275](/architecture/decisions/#adr-1275-the-metric-lane-is-narrow-rows-on-a-series-dimension-partitioned-by-month)).
+The lane is three tables:
+
+- **`metric_series`**: one row per series, keyed by an integer: the type, the owner arc (with
+  `owner_id`, the arc's one filled column), the instance, the provenance, the source, and
+  `collector_node_id`, the node whose task collected it. Its unique key leads with the owner, so
+  it is also the **logical key**'s index: every reader asks for an owner's series of a type
+  (`type, owner, instance, provenance`) and merges the series it finds, one per source and
+  collecting node, so a task that moves to another node still reads as one series. Deleting an
+  owner or a type removes its series (`on delete cascade`).
+- **`metric`**, the hot tier: `(id, series_id, ts, value)`, plus a calculated sample's rule
+  lineage in nullable columns that cost nothing when empty. Observed and calculated samples only.
+  Range partitioned by month on `ts` from birth, with one btree, `(series_id, ts desc, id desc)`,
+  and block range indexes on `id` and `ts`. It has no primary key and no foreign key to the
+  series: a deleted owner's samples are invisible to every reader (each joins the series) and
+  leave with their month or the next retention pass.
+- **`metric_declared`**, the declared tier: a command's intended rows, with their command and
+  event lineage, never pruned.
+
+A batch lands its metric lane in one statement still ([ADR-1274](/architecture/decisions/#adr-1274-a-batch-lands-its-metric-lane-in-one-statement-except-a-series-it-carries-twice)):
+the statement finds each sample's series, or starts it, and inserts the samples. A series'
+newest sample is an index probe of each month's series index, newest month first, stopping at
+the first that holds one. The `make footprint` harness measures the row at about 60 bytes of
+heap and 40 of index after `REINDEX` (126 and 91 before).
+
+**Partitions roll by the server.** The server keeps a partition for this month and the next two:
+it checks at boot, before its ingest starts, and refuses to start when it cannot, and again on
+every retention pass. A partition is created detached and then attached, so the parent is held
+only at `SHARE UPDATE EXCLUSIVE`, under a five-second lock timeout. A sample whose month has no
+partition (a late roll, a node clock far out) is not a refused write: the batch's months are made
+and it lands, and a batch that misses again is redelivered, never dropped (#420). A month is UTC.
+
+`property` is not partitioned: its rows are transitions, sparse by construction.
+
 ## The lineage CHECK (the pattern)
 
-Lineage lives on the derived row, no separate execution table: a derived row *is* the evidence of its rule's run. The pointer per provenance is enforced, making "intended with no command" impossible at the storage layer. The real four-branch CHECK on `property` (the metric lane carries the same CHECK minus the declared arm, since no declared-metric writer exists yet):
+Lineage lives on the derived row, no separate execution table: a derived row *is* the evidence of its rule's run. The pointer per provenance is enforced, making "intended with no command" impossible at the storage layer. The real four-branch CHECK on `property` (on the metric lane the same rule is structural: provenance is the series', a calculated sample carries its rule, and an intended row lives in `metric_declared`, whose `command_id` is not null, so the hot tier has no command or event lineage to carry):
 
 ```sql
 CHECK (
@@ -294,9 +336,14 @@ the receipt prune, and again an hour later, or a minute later while a lane is be
 
 Every prune goes through the **`PruneSamples`** gateway primitive, which carries the one
 non-negotiable rule ([ADR-0080](/architecture/decisions/#adr-0080-retention-is-provenance-aware-never-declared-never-the-latest-row-per-series)):
-it deletes series rows older than a cutoff **except** any `declared` row (an operator's
-assertion is the whole truth however old, not a sample) and **except** the latest row of every
-series (a prune must not erase a current value). Two refinements keep every reader whole:
+it deletes series rows older than a cutoff **except** any `declared` or intended row (an operator's
+assertion is the whole truth however old, not a sample) and, on the property lane, **except** the
+latest row of every series (a transition-only series still measured may hold one row for months).
+On the metric lane the floor is **the latest row within retention**
+([ADR-1275](/architecture/decisions/#adr-1275-the-metric-lane-is-narrow-rows-on-a-series-dimension-partitioned-by-month)):
+a quantity stores every observation, so a series still measured always has a recent row, and one
+with no row inside its window reads as no reading within retention. Two refinements keep every
+property reader whole:
 - a row is the series' latest unless some row of its series has both a later-or-equal `ts` and a
   higher id, since the latest-value reads order by `ts` then id and the health reads by id, and a
   clock that stepped back (#801) makes the two disagree;
@@ -308,17 +355,22 @@ the row out of service into `retired_sample` and keeps it, so nothing true is lo
 reason.
 
 It is bounded so a large backlog never holds the database. A call deletes at most a chunk of
-rows, one owner arc per statement and each its own short transaction. The cutoff applies first.
-Each old row's check for a newer row of its series is a scalar subquery limited to one row, which
-stays a per-row index search (an `EXISTS` can be flattened into a hash over the whole table). That
-search goes through `metric_owner_idx` and `property_series_idx` for a component, the property
-owner indexes for a system or a location, and `metric_arc_owner_idx` for a metric a system or a
-location owns. A pass removes at most 40 chunks of 5,000 rows a lane and names any lane it left
-behind, and the next pass comes a minute later.
+rows, each statement its own short transaction. The cutoff applies first. On the property lane a
+statement takes one owner arc, and each old row's check for a newer row of its series is a scalar
+subquery limited to one row, which stays a per-row index search (an `EXISTS` can be flattened into
+a hash over the whole table) through `property_series_idx` for a component and the owner indexes
+for a system or a location. On the metric lane a statement takes one month, oldest first, and
+deletes the rows it chose by TID; a type with a window of its own walks its series and searches
+each one's old rows through the series index. A pass removes at most 40 chunks of 5,000 rows a
+lane and names any lane it left behind, and the next pass comes a minute later.
 
-Finding the old rows reads every page the `ts` BRIN cannot rule out. Pruned pages are reused by
-new rows, which widens their ranges for good, so over time a pass's last chunk reads much of the
-table: hence the hourly steady state, until `ts` partitioning (#420) drops whole partitions instead.
+**A month past every window is dropped whole.** Before the chunks, the pass drops each metric
+month that lies wholly before the metric window and before every type's own window, so a type kept
+longer keeps its months. It detaches the month `CONCURRENTLY` (waiting for the readers already in it
+rather than queueing every reader behind an exclusive lock) and then drops it, and finishes a detach
+an earlier pass left halfway. The chunked prune keeps the window exact inside the months that remain.
+On the property lane, finding the old rows reads every page the `ts` BRIN cannot rule out, which
+reused pages widen over time: hence the hourly steady state.
 
 The same pass keeps the two log tables, a component's `log_line` and a node's `node_log`, by
 severity band (`logline.RetentionBands`): `retention.log_debug_days` (3 by default) for debug,
@@ -343,15 +395,11 @@ its samples is the install's. The boot seed never writes it. The lane's own prun
 overridden type, and the pass gives each one a lane of its own, pruned to its window with the same
 floor, chunking and index probe ([ADR-0417](/architecture/decisions/#adr-0417-the-server-prunes-each-sample-lane-to-a-window-in-bounded-chunks)).
 
-Not yet:
-- **The floor's amendment** to "the latest row within retention" waits for `ts` partitioning
-  (#420), which a dropped partition needs.
-
-::::design[Target design: partitioning is tracked in #420, retention in #417, and the `raw_sample` buffer in #430]
+::::design[Target design: the metric lane is partitioned (#1275); the other append-only tables are tracked in #1417, and the `raw_sample` buffer in #430]
 
 ## Partitioning and retention
 
-- **Append-only tables are range-partitioned by `ts`** (native declarative partitioning; `pg_partman` where the provider permits, else a documented manual roll). The firehose (`metric`) is the partitioning-critical one.
+- **Append-only tables are range-partitioned by `ts`** (native declarative partitioning, rolled by the server: no `pg_partman`, no `pg_cron`). The firehose (`metric`) is the partitioning-critical one, and is built ([above](#the-narrow-metric-lane)); `event`, `log_line` and `node_log` are not yet. `property` is not partitioned: sparse by construction.
 - **Retention is per table**, set by policy: `metric` short, `property` longer, `audit_log` longest (compliance), `internal_log` short, and `log_line` / `node_log` keyed on their own axes (`severity` / `facility` are indexed precisely so retention and routing can discriminate). On-row lineage ages out with its sample, and a `log_line` aged out from under an event leaves `event.source_log_line_id` null (`on delete set null`), never deleting the event. Per-table defaults are **cascade-resolved** ([cascade](/architecture/cascade/)) with an install-wide `platform` binding. Every path over the sample tables obeys the `PruneSamples` floor above; a log line has none. (Built for the sample lanes as one install-wide window per lane, and for the log tables as one per severity band, in the platform-domain `retention` namespace, not cascade-resolved: [ADR-0417](/architecture/decisions/#adr-0417-the-server-prunes-each-sample-lane-to-a-window-in-bounded-chunks).)
 - **The `raw_sample` buffer** ([collection](/architecture/collection/)) is range-partitioned by `ts` and cold-tierable like the metric partitions, on a short retention: bounded, sampled, short-lived, not a telemetry table.
 - **Views are not partitioned** (bounded by fleet size, not time), computed from the underlying tables, never the source of truth.
