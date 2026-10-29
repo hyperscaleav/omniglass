@@ -14,8 +14,11 @@ yields one identified record per room.
 Every metric, property and event a record yields carries its identity onto the wire: the
 `og.v1.TelemetryBatch` metric, property and event samples gained an `identity` field (the match key
 and the value), set by the node's batch builder for a polled or a held-session listener and by the
-webhook's batch for a post. A record whose identity misses lands nothing and is one fault naming
-the record. Log lines never carry an identity. The driver preview shows each sample's identity.
+webhook's batch for a post. A record whose identity misses lands nothing and is a fault naming
+the record; record faults collapse to one per kind per run, and one payload yields at most 2048
+records. A JSON number identity keeps its literal, so ids past 2^53 never collide, and
+`driver.ValidIdentity` holds the bounds a server can recheck on a received identity. Log lines
+never carry an identity. The driver preview shows each sample's identity.
 
 At write, the key must be a registered property type a driver may write, the identity's extract is
 held to the transport as an emit's is, and `records` is refused on anything but a JSON body. A

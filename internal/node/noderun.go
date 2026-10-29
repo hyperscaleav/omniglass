@@ -166,7 +166,8 @@ func previewExcerpt(payload driver.Payload, cred *driver.HTTPCredential, secretV
 // change memory a scheduled run keeps (an event or a log line that has not
 // changed since the last run, either kind, is not landed again). The caller
 // commits the landing to that memory once it has published, as a scheduled
-// run does, so a landing that failed to publish is offered again. Metrics and
+// run does (from the run's whole sample set), so a landing that failed to
+// publish is offered again. Metrics and
 // properties pass whole.
 func landableRun(sched *pollSchedule, taskID string, dps []collection.Sample) []collection.Sample {
 	return sched.changed(taskID, dps)
@@ -219,8 +220,8 @@ func runNowTask(ctx context.Context, out *telemetrySpool, node string, runner *c
 		if err := publishBatch(out, node, task.ID, landed); err != nil {
 			return collection.RunReply{Error: "the node could not publish the run's samples: " + err.Error()}
 		}
-		sched.commitChanged(task.ID, landed)
 	}
+	sched.commitChanged(task.ID, dps)
 	for _, s := range dps {
 		res.Samples = append(res.Samples, collection.RunSampleOf(s))
 	}

@@ -2,6 +2,7 @@ package driver_test
 
 import (
 	"encoding/json"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -63,7 +64,7 @@ func TestARecordWhoseIdentityMissesLandsNothing(t *testing.T) {
 	)
 	body := `{"rooms":[{"state":"in-call"},{"id":"r2","state":"idle"}]}`
 	emitted, faults := fn.Interpret(jsonPayload(body), time.Now())
-	if len(faults) != 1 || !strings.Contains(faults[0].Error(), "record 1") || !strings.Contains(faults[0].Error(), "ucc-room-id") {
+	if len(faults) != 1 || !strings.Contains(faults[0].Error(), "1 of 2 records (records 1)") || !strings.Contains(faults[0].Error(), "ucc-room-id") {
 		t.Fatalf("faults %v, want one naming record 1 and its identity key", faults)
 	}
 	var samples, logs int
@@ -316,5 +317,139 @@ func TestIdentityAndRecordsRefusals(t *testing.T) {
 				t.Fatalf("err = %v, want a refusal naming %q", err, tc.want)
 			}
 		})
+	}
+}
+
+// A large numeric id is read as its literal (#1386 review): two ids past
+// 2^53 that a float64 would collapse stay two identities.
+func TestALargeNumericIdentityKeepsItsLiteral(t *testing.T) {
+	body := `{"rooms":[{"id":9007199254740993,"state":"in-call"},{"id":9007199254740992,"state":"idle"}]}`
+	emitted, faults := roomsFunction().Interpret(jsonPayload(body), time.Now())
+	if len(faults) != 0 || len(emitted) != 2 {
+		t.Fatalf("emitted %+v faults %v", emitted, faults)
+	}
+	if emitted[0].Identity.Value != "9007199254740993" || emitted[1].Identity.Value != "9007199254740992" {
+		t.Fatalf("identities %q and %q, want each id's literal", emitted[0].Identity.Value, emitted[1].Identity.Value)
+	}
+	// Without records too.
+	fn := roomsFunction()
+	fn.Records = ""
+	emitted, _ = fn.Interpret(jsonPayload(`{"id":9007199254740993,"state":"idle"}`), time.Now())
+	if len(emitted) != 1 || emitted[0].Identity.Value != "9007199254740993" {
+		t.Fatalf("emitted %+v, want the id's literal", emitted)
+	}
+}
+
+func TestValidIdentity(t *testing.T) {
+	ok := []driver.Identity{{Key: "ucc-room-id", Value: "r1"}, {Key: "ucc-room-id", Value: strings.Repeat("a", 256)}, {Key: "k", Value: "Raum Süd"}}
+	for _, id := range ok {
+		if err := driver.ValidIdentity(id); err != nil {
+			t.Errorf("ValidIdentity(%q) = %v, want nil", id, err)
+		}
+	}
+	bad := []driver.Identity{
+		{Key: "", Value: "r1"},
+		{Key: "ucc-room-id", Value: ""},
+		{Key: "ucc-room-id", Value: " r1"},
+		{Key: "ucc-room-id", Value: "r1\t"},
+		{Key: "ucc-room-id", Value: strings.Repeat("a", 257)},
+		{Key: "ucc-room-id", Value: "r\x01"},
+		{Key: "ucc-room-id", Value: "r\x7f"},
+		{Key: "ucc-room-id", Value: "\xff\xfe"},
+		{Key: "ucc\nroom", Value: "r1"},
+	}
+	for _, id := range bad {
+		if err := driver.ValidIdentity(id); err == nil {
+			t.Errorf("ValidIdentity(%q) = nil, want a refusal", id)
+		}
+	}
+}
+
+// Record faults collapse to one per function per run (#1386 review): ten
+// thousand records with a renamed id field are one fault, not ten thousand.
+func TestRecordFaultsCollapseToOnePerFunction(t *testing.T) {
+	var b strings.Builder
+	b.WriteString(`{"rooms":[`)
+	for i := 0; i < 30; i++ {
+		if i > 0 {
+			b.WriteString(",")
+		}
+		switch {
+		case i%3 == 0:
+			b.WriteString(`{"room_id":"x","state":"idle"}`) // identity misses
+		case i%3 == 1:
+			b.WriteString(`{"id":"r` + strings.Repeat("1", i) + `"}`) // state misses
+		default:
+			b.WriteString(`{"id":"ok` + strings.Repeat("2", i) + `","state":"idle"}`)
+		}
+	}
+	b.WriteString(`]}`)
+	emitted, faults := roomsFunction().Interpret(jsonPayload(b.String()), time.Now())
+	if len(emitted) != 10 {
+		t.Fatalf("emitted %d, want the ten whole records", len(emitted))
+	}
+	if len(faults) != 2 {
+		t.Fatalf("faults %v, want one for the identity and one for the emit", faults)
+	}
+	id, em := faults[0].Error(), faults[1].Error()
+	if !strings.Contains(id, `identity "ucc-room-id" missed on 10 of 30 records (records 1, 4, 7, 10, 13, 16, 19, 22, 25, 28)`) {
+		t.Fatalf("identity fault %q", id)
+	}
+	if !strings.Contains(em, `emit "call-state" faulted on 10 of 30 records (records 2, 5, 8, 11, 14, 17, 20, 23, 26, 29)`) {
+		t.Fatalf("emit fault %q", em)
+	}
+	// Past ten, the list says how many more.
+	b.Reset()
+	b.WriteString(`{"rooms":[`)
+	for i := 0; i < 25; i++ {
+		if i > 0 {
+			b.WriteString(",")
+		}
+		b.WriteString(`{"state":"idle"}`)
+	}
+	b.WriteString(`]}`)
+	_, faults = roomsFunction().Interpret(jsonPayload(b.String()), time.Now())
+	if len(faults) != 1 || !strings.Contains(faults[0].Error(), "25 of 25 records (records 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, and 15 more)") || len(faults[0].Error()) > 400 {
+		t.Fatalf("faults %v, want one bounded fault", faults)
+	}
+}
+
+// A payload's records are capped (#1386 review): past MaxRecords the rest
+// are not read, and one fault says how many were dropped.
+func TestRecordsAreCapped(t *testing.T) {
+	n := driver.MaxRecords + 2
+	var b strings.Builder
+	b.WriteString(`{"rooms":[`)
+	for i := 0; i < n; i++ {
+		if i > 0 {
+			b.WriteString(",")
+		}
+		b.WriteString(`{"id":"r` + strconv.Itoa(i) + `","state":"idle"}`)
+	}
+	b.WriteString(`]}`)
+	emitted, faults := roomsFunction().Interpret(jsonPayload(b.String()), time.Now())
+	if len(emitted) != driver.MaxRecords {
+		t.Fatalf("emitted %d, want the cap %d", len(emitted), driver.MaxRecords)
+	}
+	if len(faults) != 1 || !strings.Contains(faults[0].Error(), "2 not read") {
+		t.Fatalf("faults %v, want one naming the 2 records not read", faults)
+	}
+}
+
+// Records without an identity would land every record's samples on one
+// conduit series, so a function reading records with a sample emit must
+// name an identity (#1386 review); one emitting only log lines need not.
+func TestRecordsWithoutIdentityRefused(t *testing.T) {
+	s := identifiedHTTPSpec()
+	s.Polls[3].Identity = nil
+	if err := s.Validate(identityCatalog()); err == nil || !strings.Contains(err.Error(), "identity") || !strings.Contains(err.Error(), "records") {
+		t.Fatalf("err = %v, want records without an identity refused", err)
+	}
+	if err := s.Validate(nil); err == nil {
+		t.Fatal("refused only with a catalog; the shape alone decides it")
+	}
+	s.Polls[3].Emits = []driver.Emit{{Log: &driver.LogEmit{}}}
+	if err := s.Validate(identityCatalog()); err != nil {
+		t.Fatalf("records with only log emits refused: %v", err)
 	}
 }

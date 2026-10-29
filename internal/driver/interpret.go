@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"regexp"
 	"strconv"
@@ -160,52 +161,139 @@ const ClampWindow = 5 * time.Minute
 // silently dropping it or shipping a wrong-lane sample. The two lists are
 // independent: a payload missing one emit still lands the rest.
 func (fn *BakedFunction) Interpret(p Payload, ts time.Time) ([]Emitted, []error) {
+	prefix := fmt.Sprintf("driver: %s/%s", fn.Driver, fn.Function)
 	if fn.Records == "" {
-		return fn.interpretRecord(p, ts, 0, fmt.Sprintf("driver: %s/%s", fn.Driver, fn.Function))
+		out, rf := fn.interpretRecord(p, ts, 0)
+		var faults []error
+		if rf.identity != nil {
+			faults = append(faults, fmt.Errorf("%s identity %q: %w; the record lands nothing", prefix, fn.Identity.Key, rf.identity))
+		}
+		for _, ef := range rf.emits {
+			faults = append(faults, fmt.Errorf("%s emit %q: %w", prefix, fn.Emits[ef.emit].label(), ef.err))
+		}
+		return out, faults
 	}
 	records, err := recordsOf(p.JSON, fn.Records)
 	if err != nil {
-		return nil, []error{fmt.Errorf("driver: %s/%s records %q: %w; nothing landed", fn.Driver, fn.Function, fn.Records, err)}
+		return nil, []error{fmt.Errorf("%s records %q: %w; nothing landed", prefix, fn.Records, err)}
+	}
+	var capped error
+	if len(records) > MaxRecords {
+		capped = fmt.Errorf("%s records %q hold %d records, past the cap of %d: the first %d were read and the last %d not read", prefix, fn.Records, len(records), MaxRecords, MaxRecords, len(records)-MaxRecords)
+		records = records[:MaxRecords]
 	}
 	var out []Emitted
-	var faults []error
+	missed := faultTally{}
+	emitFaults := map[int]*faultTally{}
 	for i, rec := range records {
-		e, f := fn.interpretRecord(recordPayload(rec), ts, i, fmt.Sprintf("driver: %s/%s record %d", fn.Driver, fn.Function, i+1))
+		e, rf := fn.interpretRecord(recordPayload(rec), ts, i)
 		out = append(out, e...)
-		faults = append(faults, f...)
+		if rf.identity != nil {
+			missed.add(i, rf.identity)
+		}
+		for _, ef := range rf.emits {
+			if emitFaults[ef.emit] == nil {
+				emitFaults[ef.emit] = &faultTally{}
+			}
+			emitFaults[ef.emit].add(i, ef.err)
+		}
+	}
+	// One fault per kind per run, however many records share it: ten
+	// thousand records with a renamed id field are one fault, not a flood
+	// of collection-failed events or one unbounded raw-line attribute.
+	var faults []error
+	if missed.count > 0 {
+		faults = append(faults, fmt.Errorf("%s identity %q missed on %d of %d records (%s): %w; those records land nothing", prefix, fn.Identity.Key, missed.count, len(records), missed.which(), missed.first))
+	}
+	for i, em := range fn.Emits {
+		if t := emitFaults[i]; t != nil {
+			faults = append(faults, fmt.Errorf("%s emit %q faulted on %d of %d records (%s): %w", prefix, em.label(), t.count, len(records), t.which(), t.first))
+		}
+	}
+	if capped != nil {
+		faults = append(faults, capped)
 	}
 	return out, faults
+}
+
+// MaxRecords bounds the records one payload yields for one function: a
+// record multiplies every emit, so past it the rest are not read and one
+// fault says how many.
+const MaxRecords = 2048
+
+// faultRecordsShown is how many record numbers a collapsed fault lists.
+const faultRecordsShown = 10
+
+// faultTally is one kind of fault across a payload's records: how many
+// records met it, the first few (1-based), and the first error, which
+// stands for the rest.
+type faultTally struct {
+	count int
+	shown []int
+	first error
+}
+
+func (t *faultTally) add(record int, err error) {
+	if t.count == 0 {
+		t.first = err
+	}
+	t.count++
+	if len(t.shown) < faultRecordsShown {
+		t.shown = append(t.shown, record+1)
+	}
+}
+
+// which names the records a fault met: the first few, and how many more.
+func (t *faultTally) which() string {
+	parts := make([]string, len(t.shown))
+	for i, n := range t.shown {
+		parts[i] = strconv.Itoa(n)
+	}
+	s := "records " + strings.Join(parts, ", ")
+	if more := t.count - len(t.shown); more > 0 {
+		s += fmt.Sprintf(", and %d more", more)
+	}
+	return s
+}
+
+// recordFaults is what one record did not yield: its identity's fault (the
+// record then landed nothing but its log lines), and each emit's.
+type recordFaults struct {
+	identity error
+	emits    []emitFault
+}
+
+type emitFault struct {
+	emit int
+	err  error
 }
 
 // interpretRecord reads one record (the whole payload when the function
 // declares no records): its identity, then every emit. A record whose
 // identity does not resolve lands nothing but its log lines (a log line
-// never fans out and carries no identity), and is one fault; prefix names
-// the function, and the record, in every fault.
-func (fn *BakedFunction) interpretRecord(p Payload, ts time.Time, record int, prefix string) ([]Emitted, []error) {
+// never fans out and carries no identity).
+func (fn *BakedFunction) interpretRecord(p Payload, ts time.Time, record int) ([]Emitted, recordFaults) {
 	if p.docs == nil {
 		p.docs = &parsedDocs{}
 	}
 	var out []Emitted
-	var faults []error
+	var rf recordFaults
 	var id *Identity
-	identified := true
 	if fn.Identity != nil {
-		v, err := identityValue(fn.Identity.Extract, p)
+		v, err := identityValue(fn.Identity.Key, fn.Identity.Extract, p)
 		if err != nil {
-			identified = false
-			faults = append(faults, fmt.Errorf("%s identity %q: %w; the record lands nothing", prefix, fn.Identity.Key, err))
+			rf.identity = err
 		} else {
 			id = &Identity{Key: fn.Identity.Key, Value: v}
 		}
 	}
 	for i, em := range fn.Emits {
-		if !identified && em.Lane != LaneLog {
+		if rf.identity != nil && em.Lane != LaneLog {
 			continue
 		}
 		e, landed, err := interpretEmit(em, p, ts)
 		if err != nil {
-			faults = append(faults, fmt.Errorf("%s emit %q: %w", prefix, em.label(), err))
+			rf.emits = append(rf.emits, emitFault{emit: i, err: err})
 		}
 		if landed {
 			e.Emit, e.Record = i, record
@@ -215,35 +303,63 @@ func (fn *BakedFunction) interpretRecord(p Payload, ts time.Time, record int, pr
 			out = append(out, e)
 		}
 	}
-	return out, faults
+	return out, rf
 }
 
-// MaxIdentityValue bounds an identity's value: it is a match key's value an
-// operator binds and reads, not a payload.
+// MaxIdentityValue bounds an identity's key and value: a match key's value
+// an operator binds and reads, not a payload.
 const MaxIdentityValue = 256
 
+// ValidIdentity holds an identity to its bounds: a key and a value each
+// non-empty, already trimmed, at most MaxIdentityValue bytes, valid UTF-8
+// and free of control characters. The engine reads every identity through
+// it, and a server that receives one off the wire can hold it to the same.
+func ValidIdentity(id Identity) error {
+	if err := boundedText(id.Key); err != nil {
+		return fmt.Errorf("the key %w", err)
+	}
+	if err := boundedText(id.Value); err != nil {
+		return fmt.Errorf("the value %w", err)
+	}
+	return nil
+}
+
+func boundedText(v string) error {
+	switch {
+	case v == "":
+		return fmt.Errorf("is empty")
+	case strings.TrimSpace(v) != v:
+		return fmt.Errorf("carries leading or trailing space")
+	case len(v) > MaxIdentityValue:
+		return fmt.Errorf("is %d bytes, longer than %d", len(v), MaxIdentityValue)
+	case !utf8.ValidString(v):
+		return fmt.Errorf("is not valid UTF-8")
+	}
+	for _, r := range v {
+		if r < 0x20 || r == 0x7f {
+			return fmt.Errorf("carries a control character")
+		}
+	}
+	return nil
+}
+
 // identityValue reads a record's identity value: located like an emit's
-// value, trimmed, and bounded (not empty, at most MaxIdentityValue bytes,
-// valid UTF-8 with no control character), so a binding's value is always a
-// short printable string.
-func identityValue(ex Extract, p Payload) (string, error) {
-	raw, err := locate(ex, p)
+// value (a JSON number as its literal, so two ids past 2^53 stay two),
+// trimmed, and held to ValidIdentity.
+func identityValue(key string, ex Extract, p Payload) (string, error) {
+	var raw string
+	var err error
+	if ex.JSONPath != "" {
+		raw, err = jsonLiteral(p.JSON, ex.JSONPath)
+	} else {
+		raw, err = locate(ex, p)
+	}
 	if err != nil {
 		return "", err
 	}
 	v := strings.TrimSpace(raw)
-	switch {
-	case v == "":
-		return "", fmt.Errorf("the value is empty")
-	case len(v) > MaxIdentityValue:
-		return "", fmt.Errorf("the value is %d bytes, longer than %d", len(v), MaxIdentityValue)
-	case !utf8.ValidString(v):
-		return "", fmt.Errorf("the value is not valid UTF-8")
-	}
-	for _, r := range v {
-		if r < 0x20 || r == 0x7f {
-			return "", fmt.Errorf("the value carries a control character")
-		}
+	if err := ValidIdentity(Identity{Key: key, Value: v}); err != nil {
+		return "", err
 	}
 	return v, nil
 }
@@ -730,14 +846,32 @@ func locate(ex Extract, p Payload) (string, error) {
 
 // jsonPath walks a dotted path into a JSON document (the declared thin cut of
 // JSONPath: object keys only, no filters or wildcards) and renders the leaf as
-// a string.
+// a string. A number renders through float64, as an emit's value always has.
 func jsonPath(doc []byte, path string) (string, error) {
+	return jsonLeaf(doc, path, false)
+}
+
+// jsonLiteral is jsonPath with a number kept as its literal, so a large
+// integer (an id past 2^53) reads exactly as the payload wrote it.
+func jsonLiteral(doc []byte, path string) (string, error) {
+	return jsonLeaf(doc, path, true)
+}
+
+func jsonLeaf(doc []byte, path string, literal bool) (string, error) {
 	if len(doc) == 0 {
 		return "", fmt.Errorf("the response carries no JSON body")
 	}
 	var cur any
-	if err := json.Unmarshal(doc, &cur); err != nil {
+	dec := json.NewDecoder(bytes.NewReader(doc))
+	if literal {
+		dec.UseNumber()
+	}
+	if err := dec.Decode(&cur); err != nil {
 		return "", fmt.Errorf("the response is not JSON: %v", err)
+	}
+	// One document, as json.Unmarshal holds it: trailing data is not JSON.
+	if _, err := dec.Token(); err != io.EOF {
+		return "", fmt.Errorf("the response is not JSON: data after the document")
 	}
 	for _, step := range strings.Split(path, ".") {
 		obj, ok := cur.(map[string]any)
@@ -752,6 +886,8 @@ func jsonPath(doc []byte, path string) (string, error) {
 	switch v := cur.(type) {
 	case string:
 		return v, nil
+	case json.Number:
+		return v.String(), nil
 	case float64:
 		return strconv.FormatFloat(v, 'f', -1, 64), nil
 	case bool:

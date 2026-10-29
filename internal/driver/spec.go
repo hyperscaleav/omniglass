@@ -710,7 +710,7 @@ func (s *Spec) Validate(cat Catalog) error {
 		if err := validateEmits("poll", p.Name, p.Emits, cat); err != nil {
 			return err
 		}
-		if err := validateIdentity("poll", p.Name, p.Identity, p.Records, cat); err != nil {
+		if err := validateIdentity("poll", p.Name, p.Identity, p.Records, p.Emits, cat); err != nil {
 			return err
 		}
 		if p.Records != "" && (!IsHTTP(s.Transport) || p.Request.FormatOf() != FormatJSON) {
@@ -785,7 +785,7 @@ func (s *Spec) Validate(cat Catalog) error {
 		if err := validateEmits("listener", l.Name, l.Emits, cat); err != nil {
 			return err
 		}
-		if err := validateIdentity("listener", l.Name, l.Identity, l.Records, cat); err != nil {
+		if err := validateIdentity("listener", l.Name, l.Identity, l.Records, l.Emits, cat); err != nil {
 			return err
 		}
 		if l.Records != "" && (stream == nil || stream.FormatOf() != FormatJSON) {
@@ -946,12 +946,22 @@ func pollAnswer(tr string, r Request) string {
 
 // validateIdentity holds a function's identity and records to their shape
 // (#1386, ADR-1282): the identity names a key and reads it through exactly
-// one extract, and records is a dotted path with no empty step. With a
+// one extract, records is a dotted path with no empty step, and a function
+// reading records with any sample emit declares an identity. With a
 // catalog the key must be a registered property type a driver may write (a
 // collected key, ADR-0161), since the server resolves it against bindings
 // keyed by property type; without one, structure only. The transport binding
 // of the identity's extract is the caller's, as an emit's is.
-func validateIdentity(family, fn string, id *IdentitySpec, records string, cat Catalog) error {
+func validateIdentity(family, fn string, id *IdentitySpec, records string, emits []Emit, cat Catalog) error {
+	if records != "" && id == nil {
+		// Without an identity every record's samples would land on one
+		// conduit series, each record overwriting the last.
+		for _, em := range emits {
+			if em.Log == nil {
+				return fmt.Errorf("driver: %s %q declares records and emits %q with no identity, so every record would land on the one conduit series; declare an identity, or emit only log lines", family, fn, em.Name)
+			}
+		}
+	}
 	if records != "" {
 		for _, step := range strings.Split(records, ".") {
 			if step == "" {
