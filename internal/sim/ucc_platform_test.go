@@ -72,7 +72,7 @@ func readRooms(t *testing.T, d *Device) map[string]string {
 func TestTheUCCPlatformSpeaksForManyRooms(t *testing.T) {
 	d := uccPlatform(t)
 	rooms := readRooms(t, d)
-	if len(rooms) != 5 || rooms["zr-huddle-north"] != "in-call" || rooms["zr-boardroom-a"] != "idle" || rooms["zr-annex-1"] != "in-call" {
+	if len(rooms) != 5 || rooms["zr-huddle-north"] != "in-call" || rooms["zr-boardroom-a"] != "idle" || rooms["zr-boardroom-b"] != "in-call" {
 		t.Fatalf("rooms = %v, want the five seeded rooms with their state", rooms)
 	}
 
@@ -152,5 +152,28 @@ func TestTheUCCPlatformSpeaksForManyRooms(t *testing.T) {
 	}
 	if _, ok := readRooms(t, d)["a"]; ok {
 		t.Error("a refused room id still wrote state")
+	}
+}
+
+// TestARefusedStartLeavesTheRoomListReadable: a start whose meeting id or
+// participant count is refused writes no room a read cannot render, so the
+// room list stays valid JSON and the poll keeps every room.
+func TestARefusedStartLeavesTheRoomListReadable(t *testing.T) {
+	d := uccPlatform(t)
+	for _, body := range []string{`{"room":"zr-new"}`, `{"room":"zr-new","id":"m 1"}`, `{"room":"zr-new","id":"m-1","participants":1000}`} {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/api/rooms/meetings/start", bytes.NewBufferString(body))
+		req.Header.Set("X-UCC-Token", "ucc-lab-token")
+		d.ServeHTTP(rec, req)
+		if rec.Code == http.StatusOK {
+			t.Errorf("start %s was accepted", body)
+		}
+		raw := uccCall(t, d, http.MethodGet, "/api/rooms", "")
+		if !json.Valid(raw) {
+			t.Fatalf("after start %s the room list is not JSON: %s", body, raw)
+		}
+		if readRooms(t, d)["zr-new"] == "in-call" {
+			t.Errorf("a refused start %s left the room reading in a call", body)
+		}
 	}
 }

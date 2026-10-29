@@ -2172,13 +2172,15 @@ sim_components:
   # speaks for every room, polled by ucc-rooms and posting room-naming
   # webhooks, the conduit the bindings below fan out from.
   - key: ucc-platform
+    name: ucc-platform
+    label: Meeting platform (account)
     product: ucc-platform
     location: hq
 
 # The fan-out's identity bindings (#1282, ADR-1282): each room id the
 # simulated ucc-platform reports, tied on that conduit to the system it is
 # the room of, so each room's call state lands on its own system. The
-# platform's fifth room (zr-annex-1) is bound to nothing on purpose: its
+# platform's fifth room (zr-boardroom-b) is bound to nothing on purpose: its
 # values land in the conduit's unbound inbox until an operator binds it.
 sim_identity_bindings:
   - { conduit: ucc-platform, key: ucc-room-id, value: zr-boardroom-a, system: boardroom-a }

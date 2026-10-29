@@ -80,9 +80,12 @@ interfaces:
         example: |
           {"room": "zr-huddle-north", "id": "m-2001", "participants": 4}
         mutations:
-          - { path: 'status.rooms.{{ segment .Request.Body.room }}.state', value: in-call }
+          # The engine applies each mutation that passes on its own, so the
+          # room's state is guarded by the fields it stands for: a refused
+          # meeting id or count never leaves a room reading in a call.
           - { path: 'status.rooms.{{ segment .Request.Body.room }}.meeting', value: "{{ .Request.Body.id }}", pattern: "^[A-Za-z0-9-]{1,32}$" }
           - { path: 'status.rooms.{{ segment .Request.Body.room }}.participants', value: '{{ or .Request.Body.participants 1 }}', pattern: "^[0-9]{1,3}$" }
+          - { path: 'status.rooms.{{ segment .Request.Body.room }}.state{{ guard "^[A-Za-z0-9-]{1,32}$" .Request.Body.id }}{{ guard "^[0-9]{1,3}$" (or .Request.Body.participants 1) }}', value: in-call }
         emit:
           url: '{{ .State | get "configuration" | get "webhook" | get "target_url" }}'
           body: '{"event":"room.meeting.started","room_id":"{{ .Request.Body.room }}","meeting":"{{ .Request.Body.id }}","ts":{{ now }}}'
@@ -131,7 +134,7 @@ computed:
   - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
 
 # The rooms on the account. The dev seed binds the first four ids to the
-# lab's conference systems; zr-annex-1 is a room the platform knows and
+# lab's conference systems; zr-boardroom-b is a room the platform knows and
 # nobody bound, so its values land in the conduit's unbound inbox until an
 # operator binds it.
 defaults:
@@ -143,7 +146,7 @@ defaults:
       zr-huddle-north: { name: "Huddle North", state: in-call, meeting: "m-1001", participants: 3 }
       zr-briefing-av: { name: "Briefing", state: idle, meeting: "", participants: 0 }
       zr-auditorium-av: { name: "Auditorium", state: idle, meeting: "", participants: 0 }
-      zr-annex-1: { name: "Annex 1", state: in-call, meeting: "m-1002", participants: 2 }
+      zr-boardroom-b: { name: "Boardroom B", state: in-call, meeting: "m-1002", participants: 2 }
   configuration:
     device:
       serial: ""
