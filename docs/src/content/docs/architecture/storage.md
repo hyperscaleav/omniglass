@@ -11,7 +11,7 @@ This page describes **how storage works**: the patterns every other leaf's entit
 
 :::note[Partial]
 Built today: the Storage Gateway as the only door to the database, dbmate migrations (run-once,
-embedded, idempotent, and refused by an older binary), the per-action scope predicate and the in-transaction `audit_log` write, the
+embedded, idempotent, refused by an older binary, and serialized across concurrent runs), the per-action scope predicate and the in-transaction `audit_log` write, the
 writer-class check on every sample and event write, with legacy rows held to it
 ([below](#every-key-has-one-writer)), and the
 shared scoped-tree and scoped-CRUD primitives. Scope arrives at the gateway as an explicit
@@ -100,6 +100,15 @@ database's newest applied migration with the newest the binary embeds. A databas
 migrated stops an older image with an error naming both versions (`ErrSchemaAhead`), rather than
 booting on columns it does not know. An applied version below the binary's head that it no longer
 embeds (a chain collapsed into one init, #388) is history, not a newer schema, and passes.
+
+Migrators take turns. Two servers booting after one upgrade, or a server racing a `migrate` run,
+would otherwise apply the same pending migration twice and the loser would fail on a duplicate
+object. Every migrate holds a Postgres advisory lock (`migrate.LockKey`) from that guard through its
+last migration, so the first run migrates and the others wait, then guard the schema the first one
+left and find nothing to do. The guard sits inside the lock on purpose: a run that judged the schema
+before waiting could boot an older image on a schema a newer one moved meanwhile. The wait is
+bounded (five minutes, dbmate's default), and dbmate's own lock on the migrating connection still
+keeps two runs' migrations apart if the outer lock's connection drops.
 
 A change that both reshapes the schema and needs default rows for the shape to be usable never mixes
 the two in one migration. Three buckets, never conflated:

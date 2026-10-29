@@ -61,8 +61,9 @@ newest migration the schema carries stops at `migrate`. Roll back the image only
 together with the database backup taken before the upgrade, or roll forward.
 
 Both `migrate` and `bootstrap` are safe to re-run on every rollout. At
-`server.replicas` > 1 in production, run `migrate` as a separate one-shot Job
-instead, to avoid concurrent migrators.
+`server.replicas` > 1 each replica's `migrate` runs, but they take turns on a
+Postgres advisory lock: the first applies the pending migrations and the others
+wait for it, then find nothing left to do.
 
 ## Values
 
