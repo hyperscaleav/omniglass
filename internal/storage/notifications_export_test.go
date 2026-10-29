@@ -63,3 +63,23 @@ func (p *PG) ExportDueNow(ctx context.Context) error {
 	_, err := p.pool.Exec(ctx, `update notification set next_attempt_at = now() where status = 'queued'`)
 	return err
 }
+
+// ExportServicePrincipal creates a service account principal named name and,
+// when group is set, adds it to that group: a non-human member a group
+// target's expansion must skip.
+func (p *PG) ExportServicePrincipal(ctx context.Context, name, group string) (string, error) {
+	var id string
+	if err := p.pool.QueryRow(ctx, `insert into principal (kind) values ('service') returning id::text`).Scan(&id); err != nil {
+		return "", err
+	}
+	if _, err := p.pool.Exec(ctx, `insert into service (principal_id, name) values ($1, $2)`, id, name); err != nil {
+		return "", err
+	}
+	if group != "" {
+		if _, err := p.pool.Exec(ctx, `insert into principal_group_member (group_id, principal_id)
+			select id, $2 from principal_group where name = $1`, group, id); err != nil {
+			return "", err
+		}
+	}
+	return id, nil
+}

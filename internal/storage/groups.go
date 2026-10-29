@@ -271,7 +271,17 @@ func (p *PG) DeleteGroup(ctx context.Context, actorID, groupRef string, action s
 	if err != nil {
 		return notFoundOr(err, ErrGroupNotFound)
 	}
+	// A notification target that notifies the group holds it (#1341): the
+	// refusal names the target, as a bound secret's does.
+	if err := boundTarget(ctx, tx, "principal_group_id", groupID, "principal group"); err != nil {
+		return err
+	}
 	if _, err := tx.Exec(ctx, `delete from principal_group where id = $1`, groupID); err != nil {
+		if isForeignKeyViolation(err) {
+			if berr := boundTarget(ctx, p.pool, "principal_group_id", groupID, "principal group"); berr != nil {
+				return berr
+			}
+		}
 		return fmt.Errorf("storage: delete group: %w", err)
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "delete", "principal_group", groupID, before, nil); err != nil {

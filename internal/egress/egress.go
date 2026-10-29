@@ -127,6 +127,17 @@ func (p Policy) addrAllowed(a netip.Addr) bool {
 	return false
 }
 
+// Names reports whether the allow list names host itself (a host name it
+// lists, or an address inside a range it lists): the test plain http, and a
+// mail relay without TLS, are each admitted on.
+func (p Policy) Names(host string) bool {
+	if p.hostAllowed(host) {
+		return true
+	}
+	a, err := netip.ParseAddr(host)
+	return err == nil && p.addrAllowed(normalize(a)) && !IsMetadata(a)
+}
+
 // metadata are the cloud instance metadata addresses: refused whatever the
 // allow list says.
 var metadata = []netip.Addr{
@@ -247,11 +258,7 @@ func (p Policy) CheckURL(raw string) (*url.URL, error) {
 	case "https":
 		return u, nil
 	case "http":
-		host := u.Hostname()
-		if p.hostAllowed(host) {
-			return u, nil
-		}
-		if a, err := netip.ParseAddr(host); err == nil && p.addrAllowed(normalize(a)) && !IsMetadata(a) {
+		if p.Names(u.Hostname()) {
 			return u, nil
 		}
 		return nil, fmt.Errorf("%w: plain http is only for a destination the egress allow list names; use https", ErrRefused)
@@ -276,16 +283,35 @@ type Options struct {
 	ResponseTimeout time.Duration
 }
 
+// DialContext dials addr (host:port) under the policy: the address check
+// runs in Control, on the socket about to connect, so what is judged is the
+// address actually dialed, after every name lookup, and a name that resolves
+// somewhere else at dial time is judged where it goes. It is the one dial
+// every outbound connection makes: the HTTP client below, and the mail
+// relay's SMTP session (#1317), which is not HTTP but goes through the same
+// contract.
+func (p Policy) DialContext(ctx context.Context, opts Options, network, addr string) (net.Conn, error) {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, err
+	}
+	d := net.Dialer{Timeout: DialTimeout, Resolver: opts.Resolver}
+	d.Control = func(_, address string, _ syscall.RawConn) error {
+		ap, err := netip.ParseAddrPort(address)
+		if err != nil {
+			return fmt.Errorf("%w: unreadable address %q", ErrRefused, address)
+		}
+		return p.CheckAddr(host, ap.Addr())
+	}
+	return d.DialContext(ctx, network, addr)
+}
+
 // New returns a client under policy.
 func New(policy Policy, opts Options) *Client {
-	dialer := &net.Dialer{Timeout: DialTimeout, Resolver: opts.Resolver}
 	respTimeout, total := ResponseTimeout, TotalTimeout
 	if opts.ResponseTimeout > 0 {
 		respTimeout, total = opts.ResponseTimeout, opts.ResponseTimeout
 	}
-	// The address check runs in Control, on the socket about to connect: the
-	// resolved address, after every name lookup, so what is judged is what is
-	// dialed. The host is carried in by the dial below.
 	transport := &http.Transport{
 		Proxy:                  nil,
 		ForceAttemptHTTP2:      true,
@@ -295,19 +321,7 @@ func New(policy Policy, opts Options) *Client {
 		DisableKeepAlives:      true,
 		TLSClientConfig:        &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: opts.RootCAs},
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-			host, _, err := net.SplitHostPort(addr)
-			if err != nil {
-				return nil, err
-			}
-			d := *dialer
-			d.Control = func(_, address string, _ syscall.RawConn) error {
-				ap, err := netip.ParseAddrPort(address)
-				if err != nil {
-					return fmt.Errorf("%w: unreadable address %q", ErrRefused, address)
-				}
-				return policy.CheckAddr(host, ap.Addr())
-			}
-			return d.DialContext(ctx, network, addr)
+			return policy.DialContext(ctx, opts, network, addr)
 		},
 	}
 	return &Client{
@@ -426,6 +440,10 @@ func scrub(s string, secrets []string) string {
 	}
 	return s
 }
+
+// Reason words a transport error for a failed send's record: a refusal as
+// it stands, a TLS failure, a timeout, a failed connection.
+func Reason(err error) string { return reason(err) }
 
 // reason words a transport error without the URL (which may itself be a
 // credential: a chat incoming-webhook URL is one).

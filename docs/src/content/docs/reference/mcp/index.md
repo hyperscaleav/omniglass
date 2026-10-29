@@ -21,11 +21,12 @@ Each tool says what a client may assume of it, from one rule over the route's me
 
 A tool that is not read-only and not destructive adds something (a create).
 
-58 tools.
+59 tools.
 
 | Tool | What it does | Gate | Assume |
 |---|---|---|---|
 | [`get-auth-me`](#get-auth-me) | The authenticated principal, its permissions, and grants | authn only | read-only, idempotent |
+| [`list-auth-me-notifications`](#list-auth-me-notifications) | List your inbox | `notification:read` | read-only, idempotent |
 | [`list-component-types`](#list-component-types) | List component types | `component_type:read` | read-only, idempotent |
 | [`list-components`](#list-components) | List components in scope | `component:read` | read-only, idempotent |
 | [`create-component`](#create-component) | Create a component | `component:create` | adds |
@@ -94,6 +95,21 @@ Returns the caller's principal, flattened permissions (a UI hint and the fast-re
 - Gate: authn only
 - Assume: read-only, idempotent
 - Arguments: none
+
+## `list-auth-me-notifications`
+
+List your inbox
+
+The caller's own console inbox: the notifications addressed to them on the inbox channel, newest first, with the unread count. Self-scoped (never another principal's), and scoped again by the caller's component read scope as it stands now, so an entry about a component they can no longer read is gone. Gated by notification:read.
+
+- Route: `GET /api/v1/auth/me/notifications`
+- Gate: `notification:read`
+- Assume: read-only, idempotent
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `limit` | integer | no | At most this many, newest first (default 100) |
+| `unread` | boolean | no | Only the entries not yet read |
 
 ## `list-component-types`
 
@@ -679,7 +695,7 @@ Renders the type's subject and text (or a draft of either, sent in the body) aga
 
 List notifications
 
-The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. Gated by notification:read.
+The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. A row addressed to a person names them only to that person and to holders of principal:read:admin. Gated by notification:read.
 
 - Route: `GET /api/v1/notifications`
 - Gate: `notification:read`

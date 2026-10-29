@@ -128,7 +128,19 @@ func (p *PG) attachPrincipalProfiles(ctx context.Context, ids []string, at map[s
 // group's, oldest first within a group) with the owner prepended so a page's rows
 // arrive grouped; assembly then appends in that order.
 func (p *PG) attachPrincipalGrants(ctx context.Context, ids []string, at map[string]*Principal) error {
-	rows, err := p.pool.Query(ctx,
+	return eachPrincipalGrant(ctx, p.pool, ids, func(owner string, g Grant) {
+		if pr, ok := at[owner]; ok {
+			pr.Grants = append(pr.Grants, g)
+		}
+	})
+}
+
+// eachPrincipalGrant reads the effective grants of every principal in ids in
+// one statement, over any querier, so a caller inside a transaction (the
+// notification queue's recipient filter, #1341) reads exactly what the
+// directory reads, and calls fn for each in the order described above.
+func eachPrincipalGrant(ctx context.Context, q querier, ids []string, fn func(owner string, g Grant)) error {
+	rows, err := q.Query(ctx,
 		`select o.owner, g.id, (select name from role where id = g.role_id), g.scope_kind, g.scope_id, g.scope_op,
 		        g.group_id, coalesce(pg.label, pg.name)
 		   from (select id as grant_id, principal_id as owner
@@ -151,9 +163,7 @@ func (p *PG) attachPrincipalGrants(ctx context.Context, ids []string, at map[str
 		if err := rows.Scan(&owner, &g.ID, &g.Role, &g.ScopeKind, &g.ScopeID, &g.ScopeOp, &g.GroupID, &g.GroupName); err != nil {
 			return fmt.Errorf("storage: scan grant: %w", err)
 		}
-		if pr, ok := at[owner]; ok {
-			pr.Grants = append(pr.Grants, g)
-		}
+		fn(owner, g)
 	}
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("storage: grants: %w", err)

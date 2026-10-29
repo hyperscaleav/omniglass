@@ -201,10 +201,10 @@ func registerPrincipalGroupRoutes(api huma.API, a *authenticator, gw storage.Gat
 		Path:          "/principal-groups/{group}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a principal group",
-		Description:   "Removes a group and, by cascade, its memberships and grants. Gated by principal_group:delete (all-scope).",
+		Description:   "Removes a group and, by cascade, its memberships and grants. A group a notification target notifies cannot be deleted (a 409): the refusal names the target to a caller who reads targets. Gated by principal_group:delete (all-scope).",
 	}, "principal_group", "delete"), func(ctx context.Context, in *groupPathInput) (*struct{}, error) {
 		if err := gw.DeleteGroup(ctx, actorID(ctx), in.Group, a.scopeFor(ctx, "principal_group", "delete")); err != nil {
-			return nil, mapPrincipalErr(err)
+			return nil, mapBoundErr(ctx, a, err)
 		}
 		return nil, nil
 	})

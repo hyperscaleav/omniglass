@@ -26,7 +26,7 @@ func TestAlarmTimeline(t *testing.T) {
 	r.observe("tcp", "up")
 
 	bar := scalar(t, r.f.conn, `select id::text from component where name = 'bar-1'`)
-	got, err := r.f.gw.AlarmTimeline(r.ctx, bar, alarm)
+	got, err := r.f.gw.AlarmTimeline(r.ctx, bar, alarm, storage.RecipientView{All: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +57,7 @@ func TestAlarmTimeline(t *testing.T) {
 	// Any form of the id reads the same timeline: Postgres takes an uppercase
 	// or braced uuid, so the audit half must match on the canonical form too.
 	for _, form := range []string{strings.ToUpper(alarm), "{" + alarm + "}"} {
-		again, err := r.f.gw.AlarmTimeline(r.ctx, bar, form)
+		again, err := r.f.gw.AlarmTimeline(r.ctx, bar, form, storage.RecipientView{All: true})
 		if err != nil || len(again) != len(want) {
 			t.Errorf("the timeline by %q = %d entries (%v), want %d", form, len(again), err, len(want))
 		}
@@ -68,7 +68,7 @@ func TestAlarmTimeline(t *testing.T) {
 	if err := r.f.gw.DeleteEventRule(r.ctx, "", "timed", r.f.all); err != nil {
 		t.Fatal(err)
 	}
-	after, err := r.f.gw.AlarmTimeline(r.ctx, bar, alarm)
+	after, err := r.f.gw.AlarmTimeline(r.ctx, bar, alarm, storage.RecipientView{All: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +83,7 @@ func TestAlarmTimeline(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, c := range []struct{ component, id string }{{elsewhere.ID, alarm}, {bar, "not-a-uuid"}, {bar, "01a15700-0000-7000-8000-000000000000"}} {
-		if _, err := r.f.gw.AlarmTimeline(r.ctx, c.component, c.id); !errors.Is(err, storage.ErrAlarmNotFound) {
+		if _, err := r.f.gw.AlarmTimeline(r.ctx, c.component, c.id, storage.RecipientView{All: true}); !errors.Is(err, storage.ErrAlarmNotFound) {
 			t.Errorf("timeline of %s on %s: err %v, want ErrAlarmNotFound", c.id, c.component, err)
 		}
 	}

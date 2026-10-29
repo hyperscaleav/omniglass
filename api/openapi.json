@@ -82,6 +82,10 @@
               "null"
             ]
           },
+          "opt_out_allowed": {
+            "description": "Whether a member of a group it targets may opt out of it for themselves (:optOut); false by default, so an on-call page cannot be opted out of unless an admin allows it",
+            "type": "boolean"
+          },
           "targets": {
             "description": "The notification targets it sends to, by name",
             "items": {
@@ -106,6 +110,7 @@
           "name",
           "on",
           "targets",
+          "opt_out_allowed",
           "enabled",
           "official",
           "created_at",
@@ -437,6 +442,16 @@
             "format": "int64",
             "type": "integer"
           },
+          "channel": {
+            "description": "How a notification travels: webhook, a person's inbox, or email",
+            "enum": [
+              "webhook",
+              "inbox",
+              "email",
+              ""
+            ],
+            "type": "string"
+          },
           "error": {
             "description": "Why a notification's last attempt failed",
             "type": "string"
@@ -461,6 +476,14 @@
           "notification": {
             "description": "A notification's uuid, what :retry names",
             "type": "string"
+          },
+          "recipient": {
+            "description": "The person a notification is addressed to, by username: shown to that person and to holders of principal:read:admin",
+            "type": "string"
+          },
+          "recipient_withheld": {
+            "description": "True when a notification is addressed to a person whose name the caller may not see",
+            "type": "boolean"
           },
           "rule": {
             "description": "The event rule the entry belongs to, by name: the rule that wrote the event, or the rule the platform acted for",
@@ -2216,6 +2239,10 @@
               "null"
             ]
           },
+          "opt_out_allowed": {
+            "description": "Let a member of a group it targets opt out of it for themselves (default false)",
+            "type": "boolean"
+          },
           "targets": {
             "description": "The notification targets to send to, by name or uuid",
             "items": {
@@ -3298,14 +3325,37 @@
             "readOnly": true,
             "type": "string"
           },
+          "addresses": {
+            "description": "An email target's recipient addresses",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "channels": {
+            "description": "A group or person target's channels: inbox, email",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
           "enabled": {
             "description": "Whether deliveries go to it (default true)",
             "type": "boolean"
           },
           "kind": {
-            "description": "The channel kind",
+            "description": "The target kind",
             "enum": [
-              "webhook"
+              "webhook",
+              "email",
+              "principal_group",
+              "principal"
             ],
             "type": "string"
           },
@@ -3318,20 +3368,26 @@
             "minLength": 1,
             "type": "string"
           },
+          "principal": {
+            "description": "A principal target's person, by username or uuid; binding one takes principal:read:admin",
+            "type": "string"
+          },
+          "principal_group": {
+            "description": "A principal_group target's group, by name or uuid; binding one takes principal_group:read:admin",
+            "type": "string"
+          },
           "secret": {
             "description": "A platform secret, by name or uuid, of type hmac-key (signs each body) or bearer-token (sent as Authorization: Bearer)",
             "type": "string"
           },
           "url": {
-            "description": "The destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is",
-            "minLength": 1,
+            "description": "A webhook's destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is",
             "type": "string"
           }
         },
         "required": [
           "name",
-          "kind",
-          "url"
+          "kind"
         ],
         "type": "object"
       },
@@ -3373,6 +3429,83 @@
           "name",
           "subject",
           "text"
+        ],
+        "type": "object"
+      },
+      "CreatePersonalRuleInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/CreatePersonalRuleInputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "channels": {
+            "description": "How it tells you: inbox, email (your directory email)",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "description": {
+            "description": "What it is for",
+            "type": "string"
+          },
+          "enabled": {
+            "description": "Whether it fires (default true)",
+            "type": "boolean"
+          },
+          "label": {
+            "description": "A human label",
+            "type": "string"
+          },
+          "name": {
+            "description": "The rule's name (lowercase kebab), unique among your own rules",
+            "minLength": 1,
+            "type": "string"
+          },
+          "notification_type": {
+            "description": "The notification type to send, by name or uuid; absent sends the official one for the transition",
+            "type": "string"
+          },
+          "on": {
+            "description": "The alarm transitions it fires on: raised, cleared, or both",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "targets": {
+            "description": "Refused when set (a 422): a personal rule tells you alone and names no target",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "when": {
+            "description": "A predicate over the alarm facts (component, place, severity, severity_rank, message, rule, ...); absent always holds. Judged only for alarms on components you can read",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "on",
+          "channels"
         ],
         "type": "object"
       },
@@ -6859,6 +6992,39 @@
         ],
         "type": "object"
       },
+      "ListInboxOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/ListInboxOutputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "notifications": {
+            "items": {
+              "$ref": "#/components/schemas/NotificationBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "unread": {
+            "description": "How many entries the caller has not read, over the same scope",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "notifications",
+          "unread"
+        ],
+        "type": "object"
+      },
       "ListLocationTypeMetricsOutputBody": {
         "additionalProperties": false,
         "properties": {
@@ -7153,6 +7319,33 @@
         },
         "required": [
           "notifications"
+        ],
+        "type": "object"
+      },
+      "ListPersonalRulesOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/ListPersonalRulesOutputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "action_rules": {
+            "items": {
+              "$ref": "#/components/schemas/PersonalRuleBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "action_rules"
         ],
         "type": "object"
       },
@@ -8257,6 +8450,29 @@
         ],
         "type": "object"
       },
+      "MarkAllReadOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/MarkAllReadOutputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "marked": {
+            "description": "How many entries were marked read",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "marked"
+        ],
+        "type": "object"
+      },
       "MeOutputBody": {
         "additionalProperties": false,
         "properties": {
@@ -8738,6 +8954,15 @@
             "format": "int64",
             "type": "integer"
           },
+          "channel": {
+            "description": "How it travels: a webhook post, a person's console inbox (delivered by its own commit), or email",
+            "enum": [
+              "webhook",
+              "inbox",
+              "email"
+            ],
+            "type": "string"
+          },
           "component": {
             "description": "The alarm's component, by name",
             "type": "string"
@@ -8773,6 +8998,19 @@
             "description": "The notification type that rendered it, by name",
             "type": "string"
           },
+          "read_at": {
+            "description": "When its recipient read it, for an inbox entry",
+            "format": "date-time",
+            "type": "string"
+          },
+          "recipient": {
+            "description": "The person it is addressed to, by username: shown to that person and to holders of principal:read:admin, withheld from everyone else (see recipient_withheld)",
+            "type": "string"
+          },
+          "recipient_withheld": {
+            "description": "True when the row is addressed to a person whose name the caller may not see",
+            "type": "boolean"
+          },
           "sent_at": {
             "format": "date-time",
             "type": "string"
@@ -8791,7 +9029,7 @@
             "type": "string"
           },
           "target": {
-            "description": "The target it goes to, by name",
+            "description": "The target it goes to, by name: a webhook, or the group or person target it reached its recipient through",
             "type": "string"
           },
           "text": {
@@ -8816,6 +9054,7 @@
           "action_rule",
           "notification_type",
           "target",
+          "channel",
           "subject",
           "text",
           "status",
@@ -8837,11 +9076,37 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "mail_from": {
+            "description": "The From address of an email notification (Omniglass <alerts@example.com>)",
+            "type": "string"
+          },
+          "mail_relay": {
+            "description": "The SMTP relay email notifications go through, host:port (smtp.example.com:587). Empty turns email off. An internal relay is reached only when egress_allow names it",
+            "type": "string"
+          },
+          "mail_secret": {
+            "description": "A platform basic-auth secret, by name, the relay session authenticates with; empty sends without authenticating. Setting it, or moving mail_relay while one is set, takes the right to reveal that secret",
+            "type": "string"
+          },
+          "mail_security": {
+            "default": "starttls",
+            "description": "How the session to the relay is protected: starttls (the relay must offer it), tls (implicit TLS, port 465), or none, admitted only for a relay egress_allow names (a lab's mail sim)",
+            "enum": [
+              "starttls",
+              "tls",
+              "none"
+            ],
+            "type": "string"
           }
         },
         "required": [
           "console_url",
-          "egress_allow"
+          "egress_allow",
+          "mail_relay",
+          "mail_security",
+          "mail_from",
+          "mail_secret"
         ],
         "type": "object"
       },
@@ -8857,6 +9122,16 @@
             "readOnly": true,
             "type": "string"
           },
+          "addresses": {
+            "description": "An email target's recipients: a shared mailbox, sent through the install's mail relay",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
           "auth": {
             "description": "How a send proves itself: hmac signs each body with the bound hmac-key (X-Omniglass-Signature), bearer presents the bound bearer-token, none sends unsigned",
             "enum": [
@@ -8865,6 +9140,16 @@
               "bearer"
             ],
             "type": "string"
+          },
+          "channels": {
+            "description": "The channels a group or person target delivers on: inbox (the console inbox) and email (each person's directory email)",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
           },
           "created_at": {
             "format": "date-time",
@@ -8879,9 +9164,12 @@
             "type": "string"
           },
           "kind": {
-            "description": "The channel kind: webhook posts a signed JSON envelope to the URL",
+            "description": "The target kind: webhook posts a signed JSON envelope to the URL; email sends to fixed addresses through the install's mail relay; principal_group reaches every human member of a group, read at each alarm transition; principal reaches one person. A person is told only about alarms on components they can read",
             "enum": [
-              "webhook"
+              "webhook",
+              "email",
+              "principal_group",
+              "principal"
             ],
             "type": "string"
           },
@@ -8889,6 +9177,22 @@
             "type": "string"
           },
           "name": {
+            "type": "string"
+          },
+          "principal": {
+            "description": "The person a principal target reaches, by username; shown to a caller who reads the principal directory (principal:read:admin, all-scope)",
+            "type": "string"
+          },
+          "principal_group": {
+            "description": "The group a principal_group target reaches, by name; shown to a caller who reads the group directory (principal_group:read:admin, all-scope)",
+            "type": "string"
+          },
+          "principal_group_id": {
+            "description": "The group's uuid",
+            "type": "string"
+          },
+          "principal_id": {
+            "description": "The person's uuid",
             "type": "string"
           },
           "secret": {
@@ -8904,7 +9208,7 @@
             "type": "string"
           },
           "url": {
-            "description": "The destination, masked to its scheme and host (the path and query often carry a credential); :reveal returns it whole",
+            "description": "A webhook's destination, masked to its scheme and host (the path and query often carry a credential); :reveal returns it whole",
             "type": "string"
           }
         },
@@ -8912,7 +9216,6 @@
           "id",
           "name",
           "kind",
-          "url",
           "auth",
           "enabled",
           "created_at",
@@ -8977,6 +9280,33 @@
         ],
         "type": "object"
       },
+      "OptOutOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/OptOutOutputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "action_rule": {
+            "description": "The rule, by name",
+            "type": "string"
+          },
+          "opted_out": {
+            "description": "Whether you are now opted out of it",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "action_rule",
+          "opted_out"
+        ],
+        "type": "object"
+      },
       "OwnerStruct": {
         "additionalProperties": false,
         "properties": {
@@ -8997,6 +9327,88 @@
         "required": [
           "kind",
           "ref"
+        ],
+        "type": "object"
+      },
+      "PersonalRuleBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/PersonalRuleBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "channels": {
+            "description": "How it tells you: inbox (your console inbox), email (your directory email)",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "enabled": {
+            "description": "Whether it fires; a paused rule queues nothing",
+            "type": "boolean"
+          },
+          "id": {
+            "description": "The rule's uuid, the stable form of name",
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "name": {
+            "description": "The rule's name, unique among your own rules",
+            "type": "string"
+          },
+          "notification_type": {
+            "description": "The notification type it sends, by name; absent sends the official one for the transition",
+            "type": "string"
+          },
+          "notification_type_id": {
+            "description": "That type's uuid",
+            "type": "string"
+          },
+          "on": {
+            "description": "The alarm transitions it fires on: raised, cleared, or both",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "when": {
+            "description": "The predicate over the alarm facts (the action expression site); absent always holds",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "on",
+          "channels",
+          "enabled",
+          "created_at",
+          "updated_at"
         ],
         "type": "object"
       },
@@ -11382,6 +11794,56 @@
           "component",
           "component_id",
           "since"
+        ],
+        "type": "object"
+      },
+      "RuleMatchBody": {
+        "additionalProperties": false,
+        "properties": {
+          "alarm": {
+            "description": "The alarm's uuid",
+            "type": "string"
+          },
+          "at": {
+            "description": "When that edge happened",
+            "format": "date-time",
+            "type": "string"
+          },
+          "component": {
+            "description": "The alarm's component, by name",
+            "type": "string"
+          },
+          "error": {
+            "description": "Why the when did not run, when it did not",
+            "type": "string"
+          },
+          "matched": {
+            "description": "Whether the rule would have told you",
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string"
+          },
+          "transition": {
+            "description": "The edge judged",
+            "enum": [
+              "raised",
+              "cleared"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "alarm",
+          "component",
+          "severity",
+          "message",
+          "transition",
+          "at",
+          "matched"
         ],
         "type": "object"
       },
@@ -14239,6 +14701,39 @@
         ],
         "type": "object"
       },
+      "TestDraftInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/TestDraftInputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "limit": {
+            "description": "How many of your most recent alarms to judge (default 20)",
+            "format": "int64",
+            "maximum": 50,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "on": {
+            "description": "The transitions to judge (default raised)",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "when": {
+            "description": "The predicate to judge (default always)",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "TestNotificationTargetOutputBody": {
         "additionalProperties": false,
         "properties": {
@@ -14268,6 +14763,67 @@
         "required": [
           "ok",
           "status"
+        ],
+        "type": "object"
+      },
+      "TestPersonalRuleInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/TestPersonalRuleInputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "limit": {
+            "description": "How many of your most recent alarms to judge (default 20)",
+            "format": "int64",
+            "maximum": 50,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "on": {
+            "description": "A draft of the transitions to judge with, in place of the rule's own",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "when": {
+            "description": "A draft of the predicate to judge with, in place of the rule's own",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "TestPersonalRuleOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/TestPersonalRuleOutputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "matches": {
+            "description": "Your most recent alarms on components you can read, newest first, each transition the rule fires on that the alarm has had",
+            "items": {
+              "$ref": "#/components/schemas/RuleMatchBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "matches"
         ],
         "type": "object"
       },
@@ -14413,6 +14969,10 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "opt_out_allowed": {
+            "description": "Let a member of a group it targets opt out of it; false withdraws every opt-out from the next transition",
+            "type": "boolean"
           },
           "targets": {
             "description": "The targets (replaces the set)",
@@ -14931,6 +15491,20 @@
             "readOnly": true,
             "type": "string"
           },
+          "addresses": {
+            "description": "An email target's recipient addresses",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "channels": {
+            "description": "A group or person target's channels: inbox, email",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "enabled": {
             "description": "Whether deliveries go to it",
             "type": "boolean"
@@ -14976,6 +15550,55 @@
           },
           "text": {
             "description": "The body text template",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UpdatePersonalRuleInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/UpdatePersonalRuleInputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "channels": {
+            "description": "How it tells you (replaces the set)",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "description": {
+            "description": "What it is for",
+            "type": "string"
+          },
+          "enabled": {
+            "description": "Whether it fires: false pauses it, true resumes it from the next transition",
+            "type": "boolean"
+          },
+          "label": {
+            "description": "A human label (empty clears it)",
+            "type": "string"
+          },
+          "notification_type": {
+            "description": "The type to send (empty returns to the official one per transition)",
+            "type": "string"
+          },
+          "on": {
+            "description": "The transitions it fires on (replaces the set)",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "when": {
+            "description": "The predicate (empty always holds)",
             "type": "string"
           }
         },
@@ -15866,6 +16489,90 @@
         "x-omniglass-permission": "rule:update"
       }
     },
+    "/action-rules/{name}:optIn": {
+      "post": {
+        "description": "Undoes your opt-out of a platform action rule; always allowed. Idempotent and audited. Gated by notification:subscribe.",
+        "operationId": "opt-in-action-rule",
+        "parameters": [
+          {
+            "description": "The rule's name or uuid",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "description": "The rule's name or uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OptOutOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Opt yourself back in to a group notification",
+        "x-omniglass-permission": "notification:subscribe"
+      }
+    },
+    "/action-rules/{name}:optOut": {
+      "post": {
+        "description": "Stops a platform action rule telling you through a group it targets, for you alone. Only a rule an admin marked opt_out_allowed (a 409 otherwise); a rule that names you directly still tells you. Idempotent and audited. Gated by notification:subscribe.",
+        "operationId": "opt-out-action-rule",
+        "parameters": [
+          {
+            "description": "The rule's name or uuid",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "description": "The rule's name or uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OptOutOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Opt yourself out of a group notification",
+        "x-omniglass-permission": "notification:subscribe"
+      }
+    },
     "/audit-log": {
       "get": {
         "description": "Recent audit-trail events, newest first, each with the actor and, for an impersonated action, the real actor behind it. Read-only; gated by audit:read:admin (admin/owner only, since the audit trail is admin-sensitive).",
@@ -16113,6 +16820,289 @@
         "summary": "Update your own profile"
       }
     },
+    "/auth/me/action-rules": {
+      "get": {
+        "description": "Your own personal action rules, by name. Self-scoped. Gated by notification:subscribe.",
+        "operationId": "list-auth-me-action-rules",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListPersonalRulesOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List your alarm subscriptions",
+        "x-omniglass-permission": "notification:subscribe"
+      },
+      "post": {
+        "description": "Creates a personal action rule: on which alarm transitions, when, what to send, and on which of your channels (inbox, email). It tells you alone and names no target (targets is a 422), and it only ever matches an alarm on a component you can read at that moment, judged before its when runs. A taken name among your rules, or a 51st rule, is a 409. Audited. Gated by notification:subscribe.",
+        "operationId": "create-auth-me-action-rule",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePersonalRuleInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonalRuleBody"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Subscribe yourself to alarms",
+        "x-omniglass-permission": "notification:subscribe"
+      }
+    },
+    "/auth/me/action-rules/{name}": {
+      "delete": {
+        "description": "Deletes one of your own personal action rules; what it already sent keeps its name. Another user's is a 404. Audited. Gated by notification:subscribe.",
+        "operationId": "delete-auth-me-action-rule",
+        "parameters": [
+          {
+            "description": "Your rule's name or uuid",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "description": "Your rule's name or uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Unsubscribe: delete one of your alarm subscriptions",
+        "x-omniglass-permission": "notification:subscribe"
+      },
+      "get": {
+        "description": "One of your own personal action rules, by name or uuid; another user's is a 404. Gated by notification:subscribe.",
+        "operationId": "get-auth-me-action-rule",
+        "parameters": [
+          {
+            "description": "Your rule's name or uuid",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "description": "Your rule's name or uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonalRuleBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Get one of your alarm subscriptions",
+        "x-omniglass-permission": "notification:subscribe"
+      },
+      "patch": {
+        "description": "Patches one of your own personal action rules (an absent field is unchanged); enabled false pauses it. Another user's is a 404. Audited. Gated by notification:subscribe.",
+        "operationId": "update-auth-me-action-rule",
+        "parameters": [
+          {
+            "description": "Your rule's name or uuid",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "description": "Your rule's name or uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePersonalRuleInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonalRuleBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Change or pause one of your alarm subscriptions",
+        "x-omniglass-permission": "notification:subscribe"
+      }
+    },
+    "/auth/me/action-rules/{name}:test": {
+      "post": {
+        "description": "Judges one of your own personal action rules, or a draft of its on and when, against your most recent alarms on components you can read: for each transition it fires on, whether it would have told you. Writes and sends nothing. Another user's rule is a 404. Gated by notification:subscribe.",
+        "operationId": "test-auth-me-action-rule",
+        "parameters": [
+          {
+            "description": "Your rule's name or uuid",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "description": "Your rule's name or uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestPersonalRuleInputBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestPersonalRuleOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Test one of your alarm subscriptions against your recent alarms",
+        "x-omniglass-permission": "notification:subscribe"
+      }
+    },
+    "/auth/me/action-rules:testDraft": {
+      "post": {
+        "description": "Judges a draft's on (default raised) and when (default always) against your most recent alarms on components you can read, before it is saved: for each transition, whether it would have told you. Writes and sends nothing. Gated by notification:subscribe.",
+        "operationId": "test-auth-me-action-rules-draft",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestDraftInputBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestPersonalRuleOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Test a draft alarm subscription against your recent alarms",
+        "x-omniglass-permission": "notification:subscribe"
+      }
+    },
     "/auth/me/avatar": {
       "get": {
         "description": "Returns the caller's profile picture as a base64-encoded JPEG. Requires authentication; self-scoped. No picture is a 404.",
@@ -16140,6 +17130,134 @@
           }
         },
         "summary": "Get your own profile picture"
+      }
+    },
+    "/auth/me/notifications": {
+      "get": {
+        "description": "The caller's own console inbox: the notifications addressed to them on the inbox channel, newest first, with the unread count. Self-scoped (never another principal's), and scoped again by the caller's component read scope as it stands now, so an entry about a component they can no longer read is gone. Gated by notification:read.",
+        "operationId": "list-auth-me-notifications",
+        "parameters": [
+          {
+            "description": "Only the entries not yet read",
+            "explode": false,
+            "in": "query",
+            "name": "unread",
+            "schema": {
+              "description": "Only the entries not yet read",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "At most this many, newest first (default 100)",
+            "explode": false,
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "description": "At most this many, newest first (default 100)",
+              "format": "int64",
+              "maximum": 500,
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListInboxOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List your inbox",
+        "x-omniglass-mcp": {},
+        "x-omniglass-permission": "notification:read"
+      }
+    },
+    "/auth/me/notifications/{id}:markRead": {
+      "post": {
+        "description": "Marks one of the caller's own inbox entries read (one already read keeps its first read time). An entry that is not the caller's, or about a component outside their component read scope, is a non-disclosing 404. Audited. Gated by notification:read.",
+        "operationId": "mark-read-auth-me-notification",
+        "parameters": [
+          {
+            "description": "The notification's uuid",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "The notification's uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Mark an inbox entry read",
+        "x-omniglass-permission": "notification:read"
+      }
+    },
+    "/auth/me/notifications:markAllRead": {
+      "post": {
+        "description": "Marks every unread entry in the caller's own inbox read, over the same scope the inbox reads, and says how many. Audited as one row. Gated by notification:read.",
+        "operationId": "mark-all-read-auth-me-notifications",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarkAllReadOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Mark every inbox entry read",
+        "x-omniglass-permission": "notification:read"
       }
     },
     "/auth/me/sessions": {
@@ -23100,7 +24218,7 @@
         "x-omniglass-permission": "notification_target:read"
       },
       "post": {
-        "description": "Adds a destination a notification can be sent to: a channel kind (webhook), its URL and, optionally, the platform secret it signs or authenticates with. Binding a secret takes the right to reveal it (secret:reveal, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not reveal a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.",
+        "description": "Adds a destination a notification can be sent to: a webhook, its URL and, optionally, the platform secret it signs or authenticates with; or people, a principal_group (every human member, read at each alarm transition) or one principal, on the channels named. A person is told only about an alarm on a component their own component read scope admits. Binding a group takes principal_group:read:admin and binding a person principal:read:admin (a 403 without it), since the target reaches whoever they name. Binding a secret takes the right to reveal it (secret:reveal, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not reveal a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.",
         "operationId": "create-notification-target",
         "requestBody": {
           "content": {
@@ -23307,7 +24425,7 @@
     },
     "/notification-targets/{name}:test": {
       "post": {
-        "description": "Sends one synthetic message (transition test, about no alarm) to the target through the egress contract, signed or authenticated as a delivery would be, and answers what the receiver said. Records nothing but its audit row (the result, never the URL). A disabled target is still tested. Gated by notification_target:test with an all-scope grant.",
+        "description": "Sends one synthetic message (transition test, about no alarm) to a webhook or email target through the egress contract, signed or authenticated as a delivery would be (an email through the install's mail relay), and answers what the receiver said; a group or person target is a 422, since people are told only about alarms. Records nothing but its audit row (the result, never the URL). A disabled target is still tested. Gated by notification_target:test with an all-scope grant.",
         "operationId": "test-notification-target",
         "parameters": [
           {
@@ -23647,7 +24765,7 @@
     },
     "/notifications": {
       "get": {
-        "description": "The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. Gated by notification:read.",
+        "description": "The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. A row addressed to a person names them only to that person and to holders of principal:read:admin. Gated by notification:read.",
         "operationId": "list-notification",
         "parameters": [
           {
@@ -23881,7 +24999,7 @@
     },
     "/principal-groups/{group}": {
       "delete": {
-        "description": "Removes a group and, by cascade, its memberships and grants. Gated by principal_group:delete (all-scope).",
+        "description": "Removes a group and, by cascade, its memberships and grants. A group a notification target notifies cannot be deleted (a 409): the refusal names the target to a caller who reads targets. Gated by principal_group:delete (all-scope).",
         "operationId": "delete-group",
         "parameters": [
           {
@@ -25099,7 +26217,7 @@
     },
     "/principals/{id}:purge": {
       "post": {
-        "description": "Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. Gated by principal:purge:admin (admin-sensitive, all-scope), and the principal must be archived first.",
+        "description": "Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. A person a notification target notifies cannot be purged (a 409; the refusal names the target to a caller who reads targets). Gated by principal:purge:admin (admin-sensitive, all-scope), and the principal must be archived first.",
         "operationId": "purge-principal",
         "parameters": [
           {

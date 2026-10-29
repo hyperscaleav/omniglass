@@ -27,6 +27,7 @@ func generatedCommands() []*cobra.Command {
 				var fName string
 				var fNotificationType string
 				var fOn string
+				var fOptOutAllowed bool
 				var fTargets string
 				var fWhen string
 				cmd := &cobra.Command{
@@ -56,6 +57,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("on") {
 							body["on"] = jsonOrString(fOn)
 						}
+						if cmd.Flags().Changed("opt-out-allowed") {
+							body["opt_out_allowed"] = fOptOutAllowed
+						}
 						if cmd.Flags().Changed("targets") {
 							body["targets"] = jsonOrString(fTargets)
 						}
@@ -73,6 +77,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fNotificationType, "notification-type", "", "The notification type to send, by name or uuid; absent sends the official one for the transition")
 				cmd.Flags().StringVar(&fOn, "on", "", "The alarm transitions it fires on: raised, cleared, or both. Acknowledging an alarm is never one")
 				_ = cmd.MarkFlagRequired("on")
+				cmd.Flags().BoolVar(&fOptOutAllowed, "opt-out-allowed", false, "Let a member of a group it targets opt out of it for themselves (default false)")
 				cmd.Flags().StringVar(&fTargets, "targets", "", "The notification targets to send to, by name or uuid")
 				_ = cmd.MarkFlagRequired("targets")
 				cmd.Flags().StringVar(&fWhen, "when", "", "A predicate over the alarm facts at the action expression site (component, place, severity, severity_rank, message, transition, rule, ...; see /expressions:validate with site action); absent always holds. A refusal is a 422 with its line and column")
@@ -133,11 +138,46 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "optIn <name>",
+					Short:   "Opt yourself back in to a group notification",
+					Long:    "Undoes your opt-out of a platform action rule; always allowed. Idempotent and audited. Gated by notification:subscribe.",
+					Example: "  omniglass action-rule optIn <name>",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/action-rules/%s:optIn", pathSegment(args[0]))
+						return runAPICommand(cmd, "POST", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "optOut <name>",
+					Short:   "Opt yourself out of a group notification",
+					Long:    "Stops a platform action rule telling you through a group it targets, for you alone. Only a rule an admin marked opt_out_allowed (a 409 otherwise); a rule that names you directly still tells you. Idempotent and audited. Gated by notification:subscribe.",
+					Example: "  omniglass action-rule optOut <name>",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/action-rules/%s:optOut", pathSegment(args[0]))
+						return runAPICommand(cmd, "POST", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
 				var fDescription string
 				var fEnabled bool
 				var fLabel string
 				var fNotificationType string
 				var fOn string
+				var fOptOutAllowed bool
 				var fTargets string
 				var fWhen string
 				cmd := &cobra.Command{
@@ -164,6 +204,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("on") {
 							body["on"] = jsonOrString(fOn)
 						}
+						if cmd.Flags().Changed("opt-out-allowed") {
+							body["opt_out_allowed"] = fOptOutAllowed
+						}
 						if cmd.Flags().Changed("targets") {
 							body["targets"] = jsonOrString(fTargets)
 						}
@@ -178,6 +221,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label (empty clears it)")
 				cmd.Flags().StringVar(&fNotificationType, "notification-type", "", "The type to send (empty returns to the official one per transition)")
 				cmd.Flags().StringVar(&fOn, "on", "", "The transitions it fires on (replaces the set)")
+				cmd.Flags().BoolVar(&fOptOutAllowed, "opt-out-allowed", false, "Let a member of a group it targets opt out of it; false withdraws every opt-out from the next transition")
 				cmd.Flags().StringVar(&fTargets, "targets", "", "The targets (replaces the set)")
 				cmd.Flags().StringVar(&fWhen, "when", "", "The predicate (empty always holds)")
 				return cmd
@@ -377,6 +421,321 @@ func generatedCommands() []*cobra.Command {
 				}
 				return cmd
 			}()
+			cmd.AddCommand(func() *cobra.Command {
+				parent := &cobra.Command{
+					Use:   "action-rule",
+					Short: "Commands for the action-rule resource",
+				}
+				parent.AddCommand(func() *cobra.Command {
+					cmd := func() *cobra.Command {
+						var fChannels string
+						var fDescription string
+						var fEnabled bool
+						var fLabel string
+						var fName string
+						var fNotificationType string
+						var fOn string
+						var fTargets string
+						var fWhen string
+						cmd := &cobra.Command{
+							Use:     "create",
+							Short:   "Subscribe yourself to alarms",
+							Long:    "Creates a personal action rule: on which alarm transitions, when, what to send, and on which of your channels (inbox, email). It tells you alone and names no target (targets is a 422), and it only ever matches an alarm on a component you can read at that moment, judged before its when runs. A taken name among your rules, or a 51st rule, is a 409. Audited. Gated by notification:subscribe.",
+							Example: "  omniglass auth me action-rule create --channels <json> --name name --on <json>",
+							Args:    pathArgs(0),
+							RunE: func(cmd *cobra.Command, args []string) error {
+								path := fmt.Sprintf("/api/v1/auth/me/action-rules")
+								body := map[string]any{}
+								if cmd.Flags().Changed("channels") {
+									body["channels"] = jsonOrString(fChannels)
+								}
+								if cmd.Flags().Changed("description") {
+									body["description"] = fDescription
+								}
+								if cmd.Flags().Changed("enabled") {
+									body["enabled"] = fEnabled
+								}
+								if cmd.Flags().Changed("label") {
+									body["label"] = fLabel
+								}
+								if cmd.Flags().Changed("name") {
+									body["name"] = fName
+								}
+								if cmd.Flags().Changed("notification-type") {
+									body["notification_type"] = fNotificationType
+								}
+								if cmd.Flags().Changed("on") {
+									body["on"] = jsonOrString(fOn)
+								}
+								if cmd.Flags().Changed("targets") {
+									body["targets"] = jsonOrString(fTargets)
+								}
+								if cmd.Flags().Changed("when") {
+									body["when"] = fWhen
+								}
+								return runAPICommand(cmd, "POST", path, body)
+							},
+						}
+						cmd.Flags().StringVar(&fChannels, "channels", "", "How it tells you: inbox, email (your directory email)")
+						_ = cmd.MarkFlagRequired("channels")
+						cmd.Flags().StringVar(&fDescription, "description", "", "What it is for")
+						cmd.Flags().BoolVar(&fEnabled, "enabled", false, "Whether it fires (default true)")
+						cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
+						cmd.Flags().StringVar(&fName, "name", "", "The rule's name (lowercase kebab), unique among your own rules")
+						_ = cmd.MarkFlagRequired("name")
+						cmd.Flags().StringVar(&fNotificationType, "notification-type", "", "The notification type to send, by name or uuid; absent sends the official one for the transition")
+						cmd.Flags().StringVar(&fOn, "on", "", "The alarm transitions it fires on: raised, cleared, or both")
+						_ = cmd.MarkFlagRequired("on")
+						cmd.Flags().StringVar(&fTargets, "targets", "", "Refused when set (a 422): a personal rule tells you alone and names no target")
+						cmd.Flags().StringVar(&fWhen, "when", "", "A predicate over the alarm facts (component, place, severity, severity_rank, message, rule, ...); absent always holds. Judged only for alarms on components you can read")
+						return cmd
+					}()
+					return cmd
+				}())
+				parent.AddCommand(func() *cobra.Command {
+					cmd := func() *cobra.Command {
+						cmd := &cobra.Command{
+							Use:     "delete <name>",
+							Short:   "Unsubscribe: delete one of your alarm subscriptions",
+							Long:    "Deletes one of your own personal action rules; what it already sent keeps its name. Another user's is a 404. Audited. Gated by notification:subscribe.",
+							Example: "  omniglass auth me action-rule delete <name>",
+							Args:    pathArgs(1),
+							RunE: func(cmd *cobra.Command, args []string) error {
+								path := fmt.Sprintf("/api/v1/auth/me/action-rules/%s", pathSegment(args[0]))
+								return runAPICommand(cmd, "DELETE", path, nil)
+							},
+						}
+						return cmd
+					}()
+					return cmd
+				}())
+				parent.AddCommand(func() *cobra.Command {
+					cmd := func() *cobra.Command {
+						cmd := &cobra.Command{
+							Use:     "get <name>",
+							Short:   "Get one of your alarm subscriptions",
+							Long:    "One of your own personal action rules, by name or uuid; another user's is a 404. Gated by notification:subscribe.",
+							Example: "  omniglass auth me action-rule get <name>",
+							Args:    pathArgs(1),
+							RunE: func(cmd *cobra.Command, args []string) error {
+								path := fmt.Sprintf("/api/v1/auth/me/action-rules/%s", pathSegment(args[0]))
+								return runAPICommand(cmd, "GET", path, nil)
+							},
+						}
+						return cmd
+					}()
+					return cmd
+				}())
+				parent.AddCommand(func() *cobra.Command {
+					cmd := func() *cobra.Command {
+						cmd := &cobra.Command{
+							Use:     "list",
+							Short:   "List your alarm subscriptions",
+							Long:    "Your own personal action rules, by name. Self-scoped. Gated by notification:subscribe.",
+							Example: "  omniglass auth me action-rule list",
+							Args:    pathArgs(0),
+							RunE: func(cmd *cobra.Command, args []string) error {
+								path := fmt.Sprintf("/api/v1/auth/me/action-rules")
+								return runAPICommand(cmd, "GET", path, nil)
+							},
+						}
+						return cmd
+					}()
+					return cmd
+				}())
+				parent.AddCommand(func() *cobra.Command {
+					cmd := func() *cobra.Command {
+						var fLimit int
+						var fOn string
+						var fWhen string
+						cmd := &cobra.Command{
+							Use:     "test <name>",
+							Short:   "Test one of your alarm subscriptions against your recent alarms",
+							Long:    "Judges one of your own personal action rules, or a draft of its on and when, against your most recent alarms on components you can read: for each transition it fires on, whether it would have told you. Writes and sends nothing. Another user's rule is a 404. Gated by notification:subscribe.",
+							Example: "  omniglass auth me action-rule test <name>",
+							Args:    pathArgs(1),
+							RunE: func(cmd *cobra.Command, args []string) error {
+								path := fmt.Sprintf("/api/v1/auth/me/action-rules/%s:test", pathSegment(args[0]))
+								body := map[string]any{}
+								if cmd.Flags().Changed("limit") {
+									body["limit"] = fLimit
+								}
+								if cmd.Flags().Changed("on") {
+									body["on"] = jsonOrString(fOn)
+								}
+								if cmd.Flags().Changed("when") {
+									body["when"] = fWhen
+								}
+								return runAPICommand(cmd, "POST", path, body)
+							},
+						}
+						cmd.Flags().IntVar(&fLimit, "limit", 0, "How many of your most recent alarms to judge (default 20)")
+						cmd.Flags().StringVar(&fOn, "on", "", "A draft of the transitions to judge with, in place of the rule's own")
+						cmd.Flags().StringVar(&fWhen, "when", "", "A draft of the predicate to judge with, in place of the rule's own")
+						return cmd
+					}()
+					return cmd
+				}())
+				parent.AddCommand(func() *cobra.Command {
+					cmd := func() *cobra.Command {
+						var fLimit int
+						var fOn string
+						var fWhen string
+						cmd := &cobra.Command{
+							Use:     "testDraft",
+							Short:   "Test a draft alarm subscription against your recent alarms",
+							Long:    "Judges a draft's on (default raised) and when (default always) against your most recent alarms on components you can read, before it is saved: for each transition, whether it would have told you. Writes and sends nothing. Gated by notification:subscribe.",
+							Example: "  omniglass auth me action-rule testDraft",
+							Args:    pathArgs(0),
+							RunE: func(cmd *cobra.Command, args []string) error {
+								path := fmt.Sprintf("/api/v1/auth/me/action-rules:testDraft")
+								body := map[string]any{}
+								if cmd.Flags().Changed("limit") {
+									body["limit"] = fLimit
+								}
+								if cmd.Flags().Changed("on") {
+									body["on"] = jsonOrString(fOn)
+								}
+								if cmd.Flags().Changed("when") {
+									body["when"] = fWhen
+								}
+								return runAPICommand(cmd, "POST", path, body)
+							},
+						}
+						cmd.Flags().IntVar(&fLimit, "limit", 0, "How many of your most recent alarms to judge (default 20)")
+						cmd.Flags().StringVar(&fOn, "on", "", "The transitions to judge (default raised)")
+						cmd.Flags().StringVar(&fWhen, "when", "", "The predicate to judge (default always)")
+						return cmd
+					}()
+					return cmd
+				}())
+				parent.AddCommand(func() *cobra.Command {
+					cmd := func() *cobra.Command {
+						var fChannels string
+						var fDescription string
+						var fEnabled bool
+						var fLabel string
+						var fNotificationType string
+						var fOn string
+						var fWhen string
+						cmd := &cobra.Command{
+							Use:     "update <name>",
+							Short:   "Change or pause one of your alarm subscriptions",
+							Long:    "Patches one of your own personal action rules (an absent field is unchanged); enabled false pauses it. Another user's is a 404. Audited. Gated by notification:subscribe.",
+							Example: "  omniglass auth me action-rule update <name>",
+							Args:    pathArgs(1),
+							RunE: func(cmd *cobra.Command, args []string) error {
+								path := fmt.Sprintf("/api/v1/auth/me/action-rules/%s", pathSegment(args[0]))
+								body := map[string]any{}
+								if cmd.Flags().Changed("channels") {
+									body["channels"] = jsonOrString(fChannels)
+								}
+								if cmd.Flags().Changed("description") {
+									body["description"] = fDescription
+								}
+								if cmd.Flags().Changed("enabled") {
+									body["enabled"] = fEnabled
+								}
+								if cmd.Flags().Changed("label") {
+									body["label"] = fLabel
+								}
+								if cmd.Flags().Changed("notification-type") {
+									body["notification_type"] = fNotificationType
+								}
+								if cmd.Flags().Changed("on") {
+									body["on"] = jsonOrString(fOn)
+								}
+								if cmd.Flags().Changed("when") {
+									body["when"] = fWhen
+								}
+								return runAPICommand(cmd, "PATCH", path, body)
+							},
+						}
+						cmd.Flags().StringVar(&fChannels, "channels", "", "How it tells you (replaces the set)")
+						cmd.Flags().StringVar(&fDescription, "description", "", "What it is for")
+						cmd.Flags().BoolVar(&fEnabled, "enabled", false, "Whether it fires: false pauses it, true resumes it from the next transition")
+						cmd.Flags().StringVar(&fLabel, "label", "", "A human label (empty clears it)")
+						cmd.Flags().StringVar(&fNotificationType, "notification-type", "", "The type to send (empty returns to the official one per transition)")
+						cmd.Flags().StringVar(&fOn, "on", "", "The transitions it fires on (replaces the set)")
+						cmd.Flags().StringVar(&fWhen, "when", "", "The predicate (empty always holds)")
+						return cmd
+					}()
+					return cmd
+				}())
+				return parent
+			}())
+			cmd.AddCommand(func() *cobra.Command {
+				parent := &cobra.Command{
+					Use:   "notification",
+					Short: "Commands for the notification resource",
+				}
+				parent.AddCommand(func() *cobra.Command {
+					cmd := func() *cobra.Command {
+						var qUnread bool
+						var qLimit int
+						cmd := &cobra.Command{
+							Use:     "list",
+							Short:   "List your inbox",
+							Long:    "The caller's own console inbox: the notifications addressed to them on the inbox channel, newest first, with the unread count. Self-scoped (never another principal's), and scoped again by the caller's component read scope as it stands now, so an entry about a component they can no longer read is gone. Gated by notification:read.",
+							Example: "  omniglass auth me notification list",
+							Args:    pathArgs(0),
+							RunE: func(cmd *cobra.Command, args []string) error {
+								path := fmt.Sprintf("/api/v1/auth/me/notifications")
+								q := url.Values{}
+								if cmd.Flags().Changed("unread") {
+									q.Set("unread", fmt.Sprintf("%v", qUnread))
+								}
+								if cmd.Flags().Changed("limit") {
+									q.Set("limit", fmt.Sprintf("%v", qLimit))
+								}
+								if enc := q.Encode(); enc != "" {
+									path += "?" + enc
+								}
+								return runAPICommand(cmd, "GET", path, nil)
+							},
+						}
+						cmd.Flags().BoolVar(&qUnread, "unread", false, "Only the entries not yet read")
+						cmd.Flags().IntVar(&qLimit, "limit", 0, "At most this many, newest first (default 100)")
+						return cmd
+					}()
+					return cmd
+				}())
+				parent.AddCommand(func() *cobra.Command {
+					cmd := func() *cobra.Command {
+						cmd := &cobra.Command{
+							Use:     "markAllRead",
+							Short:   "Mark every inbox entry read",
+							Long:    "Marks every unread entry in the caller's own inbox read, over the same scope the inbox reads, and says how many. Audited as one row. Gated by notification:read.",
+							Example: "  omniglass auth me notification markAllRead",
+							Args:    pathArgs(0),
+							RunE: func(cmd *cobra.Command, args []string) error {
+								path := fmt.Sprintf("/api/v1/auth/me/notifications:markAllRead")
+								return runAPICommand(cmd, "POST", path, nil)
+							},
+						}
+						return cmd
+					}()
+					return cmd
+				}())
+				parent.AddCommand(func() *cobra.Command {
+					cmd := func() *cobra.Command {
+						cmd := &cobra.Command{
+							Use:     "markRead <id>",
+							Short:   "Mark an inbox entry read",
+							Long:    "Marks one of the caller's own inbox entries read (one already read keeps its first read time). An entry that is not the caller's, or about a component outside their component read scope, is a non-disclosing 404. Audited. Gated by notification:read.",
+							Example: "  omniglass auth me notification markRead <id>",
+							Args:    pathArgs(1),
+							RunE: func(cmd *cobra.Command, args []string) error {
+								path := fmt.Sprintf("/api/v1/auth/me/notifications/%s:markRead", pathSegment(args[0]))
+								return runAPICommand(cmd, "POST", path, nil)
+							},
+						}
+						return cmd
+					}()
+					return cmd
+				}())
+				return parent
+			}())
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
@@ -4715,7 +5074,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List notifications",
-					Long:    "The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. Gated by notification:read.",
+					Long:    "The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. A row addressed to a person names them only to that person and to holders of principal:read:admin. Gated by notification:read.",
 					Example: "  omniglass notification list",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -4773,21 +5132,31 @@ func generatedCommands() []*cobra.Command {
 		}
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var fAddresses string
+				var fChannels string
 				var fEnabled bool
 				var fKind string
 				var fLabel string
 				var fName string
+				var fPrincipal string
+				var fPrincipalGroup string
 				var fSecret string
 				var fUrl string
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create a notification target",
-					Long:    "Adds a destination a notification can be sent to: a channel kind (webhook), its URL and, optionally, the platform secret it signs or authenticates with. Binding a secret takes the right to reveal it (secret:reveal, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not reveal a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.",
-					Example: "  omniglass notification-target create --kind kind --name name --url url",
+					Long:    "Adds a destination a notification can be sent to: a webhook, its URL and, optionally, the platform secret it signs or authenticates with; or people, a principal_group (every human member, read at each alarm transition) or one principal, on the channels named. A person is told only about an alarm on a component their own component read scope admits. Binding a group takes principal_group:read:admin and binding a person principal:read:admin (a 403 without it), since the target reaches whoever they name. Binding a secret takes the right to reveal it (secret:reveal, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not reveal a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.",
+					Example: "  omniglass notification-target create --kind kind --name name",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/notification-targets")
 						body := map[string]any{}
+						if cmd.Flags().Changed("addresses") {
+							body["addresses"] = jsonOrString(fAddresses)
+						}
+						if cmd.Flags().Changed("channels") {
+							body["channels"] = jsonOrString(fChannels)
+						}
 						if cmd.Flags().Changed("enabled") {
 							body["enabled"] = fEnabled
 						}
@@ -4800,6 +5169,12 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
 						}
+						if cmd.Flags().Changed("principal") {
+							body["principal"] = fPrincipal
+						}
+						if cmd.Flags().Changed("principal-group") {
+							body["principal_group"] = fPrincipalGroup
+						}
 						if cmd.Flags().Changed("secret") {
 							body["secret"] = fSecret
 						}
@@ -4809,15 +5184,18 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
+				cmd.Flags().StringVar(&fAddresses, "addresses", "", "An email target's recipient addresses")
+				cmd.Flags().StringVar(&fChannels, "channels", "", "A group or person target's channels: inbox, email")
 				cmd.Flags().BoolVar(&fEnabled, "enabled", false, "Whether deliveries go to it (default true)")
-				cmd.Flags().StringVar(&fKind, "kind", "", "The channel kind")
+				cmd.Flags().StringVar(&fKind, "kind", "", "The target kind")
 				_ = cmd.MarkFlagRequired("kind")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
 				cmd.Flags().StringVar(&fName, "name", "", "The target's name (lowercase kebab)")
 				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().StringVar(&fPrincipal, "principal", "", "A principal target's person, by username or uuid; binding one takes principal:read:admin")
+				cmd.Flags().StringVar(&fPrincipalGroup, "principal-group", "", "A principal_group target's group, by name or uuid; binding one takes principal_group:read:admin")
 				cmd.Flags().StringVar(&fSecret, "secret", "", "A platform secret, by name or uuid, of type hmac-key (signs each body) or bearer-token (sent as Authorization: Bearer)")
-				cmd.Flags().StringVar(&fUrl, "url", "", "The destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is")
-				_ = cmd.MarkFlagRequired("url")
+				cmd.Flags().StringVar(&fUrl, "url", "", "A webhook's destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is")
 				return cmd
 			}()
 			return cmd
@@ -4895,7 +5273,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "test <name>",
 					Short:   "Send a test notification to a target",
-					Long:    "Sends one synthetic message (transition test, about no alarm) to the target through the egress contract, signed or authenticated as a delivery would be, and answers what the receiver said. Records nothing but its audit row (the result, never the URL). A disabled target is still tested. Gated by notification_target:test with an all-scope grant.",
+					Long:    "Sends one synthetic message (transition test, about no alarm) to a webhook or email target through the egress contract, signed or authenticated as a delivery would be (an email through the install's mail relay), and answers what the receiver said; a group or person target is a 422, since people are told only about alarms. Records nothing but its audit row (the result, never the URL). A disabled target is still tested. Gated by notification_target:test with an all-scope grant.",
 					Example: "  omniglass notification-target test <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -4909,6 +5287,8 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var fAddresses string
+				var fChannels string
 				var fEnabled bool
 				var fLabel string
 				var fSecret string
@@ -4922,6 +5302,12 @@ func generatedCommands() []*cobra.Command {
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/notification-targets/%s", pathSegment(args[0]))
 						body := map[string]any{}
+						if cmd.Flags().Changed("addresses") {
+							body["addresses"] = jsonOrString(fAddresses)
+						}
+						if cmd.Flags().Changed("channels") {
+							body["channels"] = jsonOrString(fChannels)
+						}
 						if cmd.Flags().Changed("enabled") {
 							body["enabled"] = fEnabled
 						}
@@ -4937,6 +5323,8 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "PATCH", path, body)
 					},
 				}
+				cmd.Flags().StringVar(&fAddresses, "addresses", "", "An email target's recipient addresses")
+				cmd.Flags().StringVar(&fChannels, "channels", "", "A group or person target's channels: inbox, email")
 				cmd.Flags().BoolVar(&fEnabled, "enabled", false, "Whether deliveries go to it")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label (empty clears it)")
 				cmd.Flags().StringVar(&fSecret, "secret", "", "A platform secret by name or uuid; empty unbinds it")
@@ -5422,7 +5810,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "purge <id>",
 					Short:   "Purge a principal",
-					Long:    "Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. Gated by principal:purge:admin (admin-sensitive, all-scope), and the principal must be archived first.",
+					Long:    "Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. A person a notification target notifies cannot be purged (a 409; the refusal names the target to a caller who reads targets). Gated by principal:purge:admin (admin-sensitive, all-scope), and the principal must be archived first.",
 					Example: "  omniglass principal purge <id>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -5660,7 +6048,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "delete <group>",
 					Short:   "Delete a principal group",
-					Long:    "Removes a group and, by cascade, its memberships and grants. Gated by principal_group:delete (all-scope).",
+					Long:    "Removes a group and, by cascade, its memberships and grants. A group a notification target notifies cannot be deleted (a 409): the refusal names the target to a caller who reads targets. Gated by principal_group:delete (all-scope).",
 					Example: "  omniglass principal-group delete night-shift",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {

@@ -46,6 +46,9 @@ export default function ExpressionField(p: {
   ownerKind?: "component" | "system";
   // What to say while there is no key to check against.
   needsKey?: string;
+  // A site whose bindings no sample key types (action: an action rule's when
+  // reads the alarm's fixed facts), so the field checks with no key at all.
+  keyless?: boolean;
   // The verdict, so a form can refuse a source that does not compile: true
   // when it compiles, false when it does not (or is empty, has no key to be
   // checked against, could not be checked, or the editor did not load),
@@ -77,7 +80,8 @@ export default function ExpressionField(p: {
   let checked = "";
 
   const request = (source: string, key: string): ValidateExpression => {
-    const body: ValidateExpression = { site: p.site, source, key };
+    const body: ValidateExpression = { site: p.site, source };
+    if (key) body.key = key;
     if (p.inputs) body.inputs = p.inputs.filter((i) => i.alias && i.key);
     if (p.ownerKind) body.owner_kind = p.ownerKind;
     return body;
@@ -91,7 +95,7 @@ export default function ExpressionField(p: {
     on([() => p.sampleKey, () => JSON.stringify(p.inputs ?? null), () => p.ownerKind, () => p.site], ([key]) => {
       clearTimeout(vocabTimer);
       const n = ++vocabSeq;
-      if (!key) {
+      if (!key && !p.keyless) {
         setVocab(null);
         return;
       }
@@ -113,7 +117,7 @@ export default function ExpressionField(p: {
     on([() => p.value, () => p.sampleKey, () => JSON.stringify(p.inputs ?? null), () => p.ownerKind, () => p.site], ([source, key]) => {
       clearTimeout(timer);
       const n = ++seq;
-      if (!key || !source.trim()) {
+      if ((!key && !p.keyless) || !source.trim()) {
         setCheck(null);
         setFailed(null);
         verdict(false);
@@ -131,6 +135,15 @@ export default function ExpressionField(p: {
         } catch (e) {
           if (n !== seq) return;
           setCheck(null);
+          // A keyless site's own route may be open to a caller the checker
+          // is not (a subscription is notification:subscribe, the checker
+          // rule:read): the field then says it could not check, and leaves the
+          // verdict to the server, which judges the source when it is saved.
+          if (p.keyless && (e as { status?: number } | null)?.status === 403) {
+            setFailed("Not checked here: the server judges it when you save or test.");
+            verdict(true);
+            return;
+          }
           setFailed(describeError(e));
           verdict(false);
         }
@@ -237,7 +250,7 @@ export default function ExpressionField(p: {
         <Show when={unloaded()}>
           <span class="text-[11px] text-error">The expression editor did not load; reload the page to edit this expression.</span>
         </Show>
-        <Show when={!p.sampleKey}>
+        <Show when={!p.sampleKey && !p.keyless}>
           <span class="text-[11px] text-base-content/50">{p.needsKey ?? "Choose what the rule reads to check this expression."}</span>
         </Show>
         <Show when={failed()}>{(m) => <span class="text-[11px] text-error">{m()}</span>}</Show>

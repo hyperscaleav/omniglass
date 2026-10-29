@@ -269,6 +269,30 @@ describe("ExpressionField", () => {
     expect(calls.length).toBe(0);
     expect(screen.getByText(/Choose what the rule reads/)).toBeTruthy();
   });
+
+  // The action site (an action rule's when, #1355) is typed by the alarm's
+  // fixed facts, not by a sample key: a keyless field checks with no key sent.
+  it("checks a keyless site with no key at all", async () => {
+    const { calls, checks } = mount("value > 40", "", false, { keyless: true, site: "action" });
+    await waitFor(() => expect(calls.some((c) => c.source === "value > 40")).toBe(true));
+    expect(calls.every((c) => !("key" in c))).toBe(true);
+    await waitFor(() => expect(checks.at(-1)).toBe(true));
+    expect(screen.queryByText(/Choose what the rule reads/)).toBeNull();
+  });
+
+  // A subscriber may hold notification:subscribe without the checker's
+  // rule:read: a refused check leaves the verdict to the server rather than
+  // blocking a form the server would accept.
+  it("leaves a keyless site to the server when the checker is refused", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+      new Response(JSON.stringify({ status: 403, detail: "forbidden" }), { status: 403, headers: { "Content-Type": "application/json" } }));
+    const checks: (boolean | undefined)[] = [];
+    render(() => (
+      <ExpressionField site="action" keyless sampleKey="" value="severity_rank >= 40" onInput={() => {}} label="When" debounce={10} onCheck={(ok) => checks.push(ok)} />
+    ));
+    await waitFor(() => expect(checks.at(-1)).toBe(true));
+    expect(screen.getByText(/Not checked here/)).toBeTruthy();
+  });
 });
 
 describe("ExpressionField's verdict", () => {

@@ -34,6 +34,11 @@ type AlarmTimelineEntry struct {
 	Target         string
 	Attempts       int
 	Error          string
+	// Channel is the notification's channel (#1341); Recipient the person it
+	// is addressed to, withheld as the RecipientView says.
+	Channel   string
+	Personal  bool
+	Recipient string
 }
 
 // auditAlarmAction words an alarm audit row's verb as the timeline reads
@@ -63,7 +68,7 @@ func auditAlarmAction(verb string) string {
 // hand-raised alarm has none), the rule's current name. Each event line keeps
 // the name it was written under, so a rule renamed mid-episode (#977) shows
 // its old name on the fire event and its new one on the clear.
-func (p *PG) AlarmTimeline(ctx context.Context, componentID, alarmID string) ([]AlarmTimelineEntry, error) {
+func (p *PG) AlarmTimeline(ctx context.Context, componentID, alarmID string, view RecipientView) ([]AlarmTimelineEntry, error) {
 	parsed, err := uuid.Parse(alarmID)
 	if err != nil {
 		return nil, ErrAlarmNotFound
@@ -86,19 +91,22 @@ func (p *PG) AlarmTimeline(ctx context.Context, componentID, alarmID string) ([]
 	// A notification sits at the moment it was queued (the transition's own
 	// transaction, so the same instant as the edge that caused it, after it),
 	// reading its status as it stands.
-	rows, err := p.pool.Query(ctx, `select at, kind, what, actor, rule, instance, message, nid, transition, target, attempts, error from (
+	rows, err := p.pool.Query(ctx, `select at, kind, what, actor, rule, instance, message, nid, transition, target, attempts, error,
+			channel, personal, recipient, rid from (
 			select e.ts as at, 'event' as kind, t.name as what, '' as actor, coalesce(e.source_rule, '') as rule,
-				e.instance, e.message, 0 as rank, e.id as tiebreak, '' as nid, '' as transition, '' as target, 0 as attempts, '' as error
+				e.instance, e.message, 0 as rank, e.id as tiebreak, '' as nid, '' as transition, '' as target, 0 as attempts, '' as error,
+				'' as channel, false as personal, '' as recipient, '' as rid
 			from event e join event_type t on t.id = e.event_type_id
 			where e.alarm_id = $1::uuid
 			union all
 			select l.ts, 'audit', l.verb, coalesce(l.actor_username, ''), '', '', coalesce(l.new->>'Message', ''), 1, l.seq,
-				'', '', '', 0, ''
+				'', '', '', 0, '', '', false, '', ''
 			from audit_log l
 			where l.resource = 'alarm' and l.resource_id = $2
 			union all
 			select n.created_at, 'notification', n.status, '', n.rule_name, '', n.subject, 2, 0,
-				n.id::text, n.transition, n.target_name, n.attempts, coalesce(n.last_error, '')
+				n.id::text, n.transition, n.target_name, n.attempts, coalesce(n.last_error, ''),
+				n.channel, n.recipient_name is not null, coalesce(n.recipient_name, ''), coalesce(n.recipient_principal_id::text, '')
 			from notification n
 			where n.alarm_id = $1::uuid
 		) x order by at, rank, tiebreak, nid`, alarmID, alarmID)
@@ -109,9 +117,15 @@ func (p *PG) AlarmTimeline(ctx context.Context, componentID, alarmID string) ([]
 	out := []AlarmTimelineEntry{}
 	for rows.Next() {
 		var e AlarmTimelineEntry
+		var rid string
 		if err := rows.Scan(&e.At, &e.Kind, &e.What, &e.Actor, &e.Rule, &e.Instance, &e.Message,
-			&e.NotificationID, &e.Transition, &e.Target, &e.Attempts, &e.Error); err != nil {
+			&e.NotificationID, &e.Transition, &e.Target, &e.Attempts, &e.Error, &e.Channel, &e.Personal, &e.Recipient, &rid); err != nil {
 			return nil, fmt.Errorf("storage: scan alarm %s timeline: %w", alarmID, err)
+		}
+		if e.Personal {
+			n := Notification{Personal: true, Recipient: e.Recipient, RecipientID: rid, Target: e.Target, Rule: e.Rule, LastError: e.Error}
+			view.withhold(&n)
+			e.Recipient, e.Rule, e.Error = n.Recipient, n.Rule, n.LastError
 		}
 		if e.Kind == "audit" {
 			e.What = auditAlarmAction(e.What)

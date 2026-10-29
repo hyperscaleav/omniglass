@@ -1477,12 +1477,21 @@ func (p *PG) PurgePrincipal(ctx context.Context, actorID, principalID string, ac
 	if archivedAt == nil {
 		return ErrNotArchived
 	}
+	// A notification target that notifies this person holds them (#1341).
+	if err := boundTarget(ctx, tx, "principal_id", principalID, "principal"); err != nil {
+		return err
+	}
 	// Audit the purge before the row is gone; the actor is the purger (unaffected by
 	// the delete), and the resource id is a plain text value, not a foreign key.
 	if err := writeAuditRes(ctx, tx, actorID, "purge", "principal", principalID, nil, nil); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx, `delete from principal where id = $1`, principalID); err != nil {
+		if isForeignKeyViolation(err) {
+			if berr := boundTarget(ctx, p.pool, "principal_id", principalID, "principal"); berr != nil {
+				return berr
+			}
+		}
 		return fmt.Errorf("storage: purge principal: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {

@@ -247,6 +247,12 @@ telemetry: {
     shape: sql_table
     id: uuid {constraint: primary_key}
     notification_type_id: uuid {constraint: foreign_key}
+    owner_principal_id: uuid {constraint: foreign_key}
+  }
+  action_rule_opt_out: {
+    shape: sql_table
+    principal_id: uuid {constraint: primary_key}
+    rule_id: uuid {constraint: primary_key}
   }
   action_rule_target: {
     shape: sql_table
@@ -370,12 +376,15 @@ telemetry: {
     alarm_id: uuid {constraint: foreign_key}
     component_id: uuid {constraint: foreign_key}
     notification_type_id: uuid {constraint: foreign_key}
+    recipient_principal_id: uuid {constraint: foreign_key}
     rule_id: uuid {constraint: foreign_key}
     target_id: uuid {constraint: foreign_key}
   }
   notification_target: {
     shape: sql_table
     id: uuid {constraint: primary_key}
+    principal_group_id: uuid {constraint: foreign_key}
+    principal_id: uuid {constraint: foreign_key}
     secret_id: uuid {constraint: foreign_key}
   }
   notification_type: {
@@ -600,6 +609,9 @@ identity.system_role_product.role_id -> identity.system_role.id
 identity.system_role_type.component_type_id -> catalog.component_type.id
 identity.system_role_type.role_id -> identity.system_role.id
 telemetry.action_rule.notification_type_id -> telemetry.notification_type.id
+telemetry.action_rule.owner_principal_id -> identity.principal.id
+telemetry.action_rule_opt_out.principal_id -> identity.principal.id
+telemetry.action_rule_opt_out.rule_id -> telemetry.action_rule.id
 telemetry.action_rule_target.rule_id -> telemetry.action_rule.id
 telemetry.action_rule_target.target_id -> telemetry.notification_target.id
 telemetry.alarm.acknowledged_by -> identity.principal.id
@@ -655,8 +667,11 @@ telemetry.metric.system_id -> fleet.system.id
 telemetry.notification.alarm_id -> telemetry.alarm.id
 telemetry.notification.component_id -> fleet.component.id
 telemetry.notification.notification_type_id -> telemetry.notification_type.id
+telemetry.notification.recipient_principal_id -> identity.principal.id
 telemetry.notification.rule_id -> telemetry.action_rule.id
 telemetry.notification.target_id -> telemetry.notification_target.id
+telemetry.notification_target.principal_group_id -> identity.principal_group.id
+telemetry.notification_target.principal_id -> identity.principal.id
 telemetry.notification_target.secret_id -> config.secret.id
 telemetry.property.command_id -> telemetry.command.id
 telemetry.property.component_id -> fleet.component.id

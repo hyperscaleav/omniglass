@@ -927,7 +927,8 @@ type Gateway interface {
 	// AlarmTimeline reads one alarm's events and audit rows merged by time
 	// (#950), on a component by the uuid the caller resolved in scope; an
 	// alarm not on the component is ErrAlarmNotFound.
-	AlarmTimeline(ctx context.Context, componentID, alarmID string) ([]AlarmTimelineEntry, error)
+	// A person-addressed notification's recipient is withheld as view says.
+	AlarmTimeline(ctx context.Context, componentID, alarmID string, view RecipientView) ([]AlarmTimelineEntry, error)
 	ListAlarms(ctx context.Context, componentName string, filter AlarmFilter) ([]Alarm, error)
 	// The health reads: the current verdict, why it is what it is, and the
 	// recorded transitions at or after since (a zero since is the whole history).
@@ -1009,8 +1010,9 @@ type Gateway interface {
 	// sensitive: reads carry it for the API to mask, the reveal audits it.
 	ListNotificationTargets(ctx context.Context, read scope.Set) ([]NotificationTarget, error)
 	GetNotificationTarget(ctx context.Context, ref string, read scope.Set) (*NotificationTarget, error)
-	// Binding a secret takes the caller's right to reveal it (SecretUse).
-	CreateNotificationTarget(ctx context.Context, actorID string, spec NotificationTargetSpec, create scope.Set, use SecretUse) (*NotificationTarget, error)
+	// Binding a secret takes the caller's right to reveal it (SecretUse);
+	// binding a group or a person the principal directory's read (PeopleUse).
+	CreateNotificationTarget(ctx context.Context, actorID string, spec NotificationTargetSpec, create scope.Set, use SecretUse, people PeopleUse) (*NotificationTarget, error)
 	UpdateNotificationTarget(ctx context.Context, actorID, ref string, patch NotificationTargetPatch, action scope.Set, use SecretUse) (*NotificationTarget, error)
 	DeleteNotificationTarget(ctx context.Context, actorID, ref string, action scope.Set) error
 	RevealNotificationTargetURL(ctx context.Context, actorID, ref string, action scope.Set) (string, error)
@@ -1020,17 +1022,39 @@ type Gateway interface {
 	AuditTargetTest(ctx context.Context, actorID, targetID string, status int, ok bool, reason string) error
 	// EgressPolicy reads the install's egress allow list.
 	EgressPolicy(ctx context.Context) (egress.Policy, error)
+	// MailRelay reads the install's mail relay for a :test send (#1317).
+	MailRelay(ctx context.Context) (*MailRelay, string, error)
+	// MergePatchNotificationSettings patches the notification namespace,
+	// judging the mail relay's secret binding on the result (the reveal right).
+	MergePatchNotificationSettings(ctx context.Context, actorID string, patch map[string]any, use SecretUse) (*SettingOverride, error)
 	// The action rule (#618): reads registry-shaped, writes all-scope.
 	ListActionRules(ctx context.Context) ([]ActionRule, error)
 	GetActionRule(ctx context.Context, ref string) (*ActionRule, error)
 	CreateActionRule(ctx context.Context, actorID string, spec ActionRuleSpec, create scope.Set) (*ActionRule, error)
 	UpdateActionRule(ctx context.Context, actorID, ref string, patch ActionRulePatch, action scope.Set) (*ActionRule, error)
 	DeleteActionRule(ctx context.Context, actorID, ref string, action scope.Set) error
+	// Personal action rules (#1353): the owner's alone, every query carrying
+	// the ownership predicate; another's rule is ErrActionRuleNotFound.
+	ListPersonalRules(ctx context.Context, ownerID string) ([]ActionRule, error)
+	GetPersonalRule(ctx context.Context, ownerID, ref string) (*ActionRule, error)
+	CreatePersonalRule(ctx context.Context, actorID, ownerID string, spec PersonalRuleSpec) (*ActionRule, error)
+	UpdatePersonalRule(ctx context.Context, actorID, ownerID, ref string, patch PersonalRulePatch) (*ActionRule, error)
+	DeletePersonalRule(ctx context.Context, actorID, ownerID, ref string) error
+	TestPersonalRule(ctx context.Context, ownerID, ref string, draft RuleDraft, read scope.Set, limit int) ([]RuleMatch, error)
+	// Group opt-out (#1354): a person opts out of a platform rule that
+	// allows it, or back in.
+	SetRuleOptOut(ctx context.Context, actorID, principalID, ref string, out bool) (*ActionRule, error)
 	// The notification delivery rows (#618): every read scoped by the
 	// alarm's component; the drain takes one due row per call.
-	ListNotifications(ctx context.Context, f NotificationFilter, read scope.Set) ([]Notification, error)
-	GetNotification(ctx context.Context, id string, read scope.Set) (*Notification, error)
-	RetryNotification(ctx context.Context, actorID, id string, read, action scope.Set) (*Notification, error)
+	// A person-addressed row's recipient is withheld as view says (#1341).
+	ListNotifications(ctx context.Context, f NotificationFilter, read scope.Set, view RecipientView) ([]Notification, error)
+	GetNotification(ctx context.Context, id string, read scope.Set, view RecipientView) (*Notification, error)
+	RetryNotification(ctx context.Context, actorID, id string, read, action scope.Set, view RecipientView) (*Notification, error)
+	// The inbox (#1341): the caller's own inbox rows, scoped by their
+	// component read scope at read; another's entry is not found.
+	ListInbox(ctx context.Context, principalID string, f InboxFilter, read scope.Set) (*Inbox, error)
+	MarkInboxRead(ctx context.Context, actorID, principalID, id string, read scope.Set) (*Notification, error)
+	MarkInboxAllRead(ctx context.Context, actorID, principalID string, read scope.Set) (int, error)
 	DeliverNext(ctx context.Context, send SendFunc) (bool, error)
 	NotificationBacklog(ctx context.Context) (int, error)
 

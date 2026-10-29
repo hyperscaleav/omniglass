@@ -231,8 +231,12 @@ export function lookupNav(pathname: string): NavMeta {
 export function sectionLabel(pathname: string): string {
   const path = relative(pathname);
   // Profile is reached from the sidebar footer, not a nav item, so it has no
-  // navByPath entry; label it explicitly so the top bar reads "Profile".
+  // navByPath entry; label it explicitly so the top bar reads "Profile". Its
+  // subscriptions page (#1355) reads as an address within it, and the inbox,
+  // reached from the top bar's bell, labels itself the same way.
   if (path === "/profile") return "Profile";
+  if (path === "/profile/subscriptions") return "Profile · Alarm subscriptions";
+  if (path === "/inbox") return "Inbox";
   let label = "";
   let best = -1;
   for (const [p, meta] of Object.entries(navByPath)) {

@@ -39,8 +39,11 @@ human has seen an incident, orthogonal to whether it is still raised. **Snooze**
 not built, and the reasons are in that section. The [notification](#notifications) lane (#618):
 **notification types** previewed against a real alarm, **webhook targets** sent through the egress
 primitive, the **action rule** with its one `notify` step, and the **notification** delivery row a
-server tick sends, on the alarm's timeline with a retry. Flows, grouping and the other channel kinds
-are still design.
+server tick sends, on the alarm's timeline with a retry. **People as recipients** (#1341): a
+**principal group** or a **person** as a target, told in their console **inbox** and by **email**
+through the install's mail relay, each only about the alarms they can read, and **personal action
+rules**, a user's own subscription to the alarms they can see. Flows, grouping and the
+other channel kinds are still design.
 See [implementation status](/architecture/status/).
 :::
 
@@ -475,7 +478,10 @@ route, so an author sees what a receiver gets and what a template can read.
 A `notification_target` names a **channel kind**, a destination and, optionally, the credential it
 proves itself with. The kinds are a code-declared enum published through the API; `webhook` is
 the first, and it reaches people through the tools they already watch (a chat incoming webhook, a
-paging service) without a mail relay. Email (#1317) and other channel kinds are later. A target
+paging service) without a mail relay. An `email` target is a fixed set of addresses, a shared
+mailbox ([below](#email-a-shared-mailbox-and-a-persons-directory-email)). A target can also name
+people: a `principal_group` or one `principal` ([below](#people-group-and-person-targets-and-the-inbox)).
+Other channel kinds are later. A target
 is **platform-owned and admin-only**: an egress destination holding a credential reference, so
 `notification_target` is a sensitive resource off the viewer floor, every route takes an
 all-scope `notification_target:*` grant, and nothing below admin holds one.
@@ -515,6 +521,115 @@ scrubbed of the URL and every credential first. https always, plain http only to
 the allow list names; TLS verified; a redirect is the receiver's answer, never followed; every
 phase bounded (dial, handshake, the response's headers, the whole exchange); no proxy from the
 environment.
+
+### People: group and person targets, and the inbox
+
+A target can name people instead of a channel (#1341): a **`principal_group`** target reaches every
+member of a group, and a **`principal`** target one person, each on the **channels** it names (`inbox`,
+the console inbox, and `email`, each person's directory email). They ride the rule's targets exactly as a webhook does, so "the on-call group gets
+every critical alarm" is an action rule whose target is the group:
+
+```bash
+omniglass notification-target create --name on-call-page --kind principal_group \
+  --principal-group on-call --channels '["inbox"]'
+omniglass action-rule create --name page-on-call --on '["raised"]' \
+  --when 'severity_rank >= 50' --targets '["on-call-page"]'
+```
+
+**The group is expanded at the transition**, not when the rule is written: the alarm's own transaction
+reads the membership as it stands, so a member added later is told on the next alarm and a removed one
+is not, with no rule edited. Recipients are people: only active, unarchived **human** members are told
+(a service account or a node in the group is skipped). Each person gets **one row per channel**, with
+their own delivery state; a person one rule reaches twice (two of its groups, or a group and directly)
+is told once.
+
+**Nobody is told about an alarm they could not read.** At the transition each candidate is kept only
+when their own component read scope, resolved from their grants exactly as a request of theirs would be,
+admits the alarm's component. The check is set-based (the members, all their grants, the role index and
+one walk up the component's ancestry, then a pure resolve per person), so it costs the same for a group
+of two or two hundred, and it runs under the notification savepoint, so it can never fail the
+transition ([ADR-1341](/architecture/decisions/#adr-1341-a-person-is-told-about-an-alarm-only-while-they-can-read-it-groups-expand-at-queue-time-scope-is-checked-there-and-again-at-delivery)).
+
+**The inbox** is a person's own `inbox` rows: delivered by their own commit (written `sent`, never
+drained by the tick), each with a `read_at`. `GET /auth/me/notifications` lists the caller's entries,
+newest first, with the unread count; `POST /auth/me/notifications/{id}:markRead` and
+`POST /auth/me/notifications:markAllRead` mark them, audited, and only the caller's own (another's entry
+is a 404). Every inbox read is **scoped again** by the caller's component read scope as it stands, so an
+entry about a component they have since lost is gone from their inbox.
+
+**Who is named.** A person-addressed row is visible wherever its alarm is (`/notifications`, the
+alarm's timeline), so the alarm's history stays whole, but its recipient is named only to that person
+and to holders of `principal:read:admin`; everyone else reads it as withheld
+([identity and access](/architecture/identity-access/#people-as-notification-audiences)). Binding a group or a person to a
+target takes `principal_group:read:admin` or `principal:read:admin` on top of
+`notification_target:create`, as binding a secret takes the right to reveal it, and a group or person a
+target names cannot be deleted from under it: the refusal names the target.
+
+### Email: a shared mailbox, and a person's directory email
+
+Email goes through **the install's mail relay** (#1317), set in the `notification` settings namespace:
+`mail_relay` (host:port; empty turns email off), `mail_security` (`starttls`, the default, which the
+relay must offer; `tls`, implicit TLS; or `none`), `mail_from`, and `mail_secret`, a **platform
+`basic-auth` secret** the session authenticates with. The relay is judged by the same egress contract a
+webhook is, on the address actually dialed (the session dials through the egress primitive's one
+dial): an internal relay only when `egress_allow` names it, a metadata address never, and `none` only
+for a relay the allow list names (a lab's mail sim). A credential never crosses an unencrypted session
+to anything but loopback. A settings patch whose **result** binds a `mail_secret` (whichever layer
+binds it, the operator file included) and changes that secret or the relay takes the right to reveal
+that secret, judged inside the patch's own transaction, as binding a secret to a target does.
+
+Two kinds of row travel by email. An **`email` target** sends to its `addresses`, admin-owned like a
+webhook. A **person's email row** (a group or person target with the `email` channel) sends to the
+person's **directory email** (`human.email`, admin-set or synced from the identity provider), resolved
+at send. Before it sends, the tick **judges the recipient again**, inside the row's own transaction:
+they are still an active human, still a member of the group the row came through, and their component
+read scope as it stands still admits the alarm's component; otherwise the row fails at once with the
+plain reason (`the recipient no longer reads the alarm's component`, `the recipient is no longer a
+member of the target's group`, `the recipient has no directory email`, `the target no longer delivers by
+email`) rather than mailing a person who lost the
+alarm while it waited out a retry
+([ADR-1341](/architecture/decisions/#adr-1341-a-person-is-told-about-an-alarm-only-while-they-can-read-it-groups-expand-at-queue-time-scope-is-checked-there-and-again-at-delivery)).
+The message is plain text, the rendered subject and text, its `Message-ID` the row's uuid and its date
+the row's own, so every attempt and a `:retry` carry the same bytes. A relay that refuses is retried
+with the same backoff as a webhook, and `:test` on an email target sends one synthetic message.
+
+**Opting out of a group page.** An admin may mark a platform rule `opt_out_allowed` (default false,
+so an on-call page cannot be opted out of unless an admin says so); a member of a group it targets may
+then opt out of it for themselves with `POST /action-rules/{name}:optOut`, and back in with `:optIn`
+(`notification:subscribe`, audited, #1354). An opt-out skips that person when the rule's group targets
+expand, and a pending email of theirs from that rule fails at send; a target that names them directly
+still tells them (a person a rule reaches both directly and through a group is attributed to the
+direct target), and taking `opt_out_allowed` back off withdraws every opt-out, recorded on the rule's
+audit row, so allowing it again starts from none. Snooze (#1318), not opt-out, is the answer for one noisy alarm.
+
+### Personal action rules: subscribing yourself
+
+A user can subscribe themselves (#1353): a **personal action rule** is an `action_rule` with an
+owner (`owner_principal_id`) and the **channels** it tells its owner on, and no targets: its only
+recipient is its owner. It is the owner's alone, created, paused, edited, tested and deleted under
+`/auth/me/action-rules` with `notification:subscribe`, which `viewer` carries so every person who can
+see alarms can subscribe; another user's rule is a 404 on every verb, `/action-rules` lists platform
+rules only, and a personal rule goes with its owner when they are purged. Names are unique per owner,
+and a person owns at most 50 (every rule is judged inside every alarm transition). An owner who loses
+`notification:subscribe` is told nothing more by their rules, and a notification type an admin deletes
+releases a personal rule naming it to the official type rather than being held by it.
+
+```bash
+omniglass auth me action-rule create --name my-boardroom --on '["raised"]' \
+  --when 'place == "Boardroom" && severity_rank >= 40' --channels '["inbox","email"]'
+omniglass auth me action-rule test my-boardroom --when 'severity_rank >= 50'
+```
+
+**It never matches outside its owner's scope.** At the transition the owner's component read scope
+is judged first, set-based with every other owner; an alarm on a component they cannot read is
+skipped before the rule's `when` runs, so neither a delivery nor the `when`'s own result (a failure
+is a row too) can tell them anything about it
+([ADR-1341](/architecture/decisions/#adr-1341-a-person-is-told-about-an-alarm-only-while-they-can-read-it-groups-expand-at-queue-time-scope-is-checked-there-and-again-at-delivery),
+decision 4). Its email rows are judged again at send like any person's. `:test` judges the rule, or a
+draft of its `on` and `when` (`POST /auth/me/action-rules:testDraft` judges a draft not yet saved), against the owner's most recent alarms on components they can read and
+says which it would have told them about; it writes and sends nothing. A personal rule's row is read
+like any person-addressed row, and its rule name, which can say whose it is, is withheld with the
+recipient, as is any person-addressed row's failure reason (a relay's refusal can quote the address).
 
 ### The `action_rule`: when a message is sent
 
@@ -572,7 +687,7 @@ alarm reads are: a principal never sees a message about a component outside its 
 What an `action_rule` raises and runs beyond the built `notify` step; stateful, holding its own
 state directly:
 
-- **kinds**: `notify` to an in-app inbox, `email` (#1317), a `webhook` action with a per-target
+- **kinds**: a `webhook` action with a per-target
   body, `run` (execute a command; edge realization in [templates](/architecture/templates/) /
   [nodes](/architecture/nodes/));
 - a **multistep** action is a **flow**, carrying workflow state (current step, waiting, branches).
@@ -725,18 +840,27 @@ registries, the `action_rule` and the targets it sends to (`action_rule_target`)
   notes={{
     on_transitions: 'The alarm transitions it fires on: raised, cleared, or both (a CHECK holds the set)',
     when_expr: 'The predicate at the action expression site; empty always holds',
-    notification_type_id: 'The type it sends (ON DELETE RESTRICT); NULL sends the official one for the transition',
+    notification_type_id: 'The type it sends (ON DELETE RESTRICT, held by a platform rule; a personal rule is released to NULL when the type is deleted); NULL sends the official one for the transition',
     official: 'The rule-row discipline; no official action rule ships',
+    opt_out_allowed: 'Whether a member of a group it targets may opt out of it (default false)',
+    owner_principal_id: 'A personal rule\'s owner, its only recipient (ON DELETE CASCADE); NULL is a platform rule',
+    channels: 'A personal rule\'s channels (inbox, email); empty for a platform rule, which has targets',
   }}
 />
 
 <SchemaTable table="action_rule_target" notes={{ target_id: 'A target it sends to; a target a rule names cannot be deleted (RESTRICT)' }} />
 
+<SchemaTable table="action_rule_opt_out" notes={{ principal_id: 'A person who opted out of the rule for themselves; read only while the rule is opt_out_allowed' }} />
+
 <SchemaTable
   table="notification_target"
   notes={{
-    kind: 'The channel kind, a code-declared enum (webhook)',
-    url: 'The destination; masked on every read, revealed whole under an audit row',
+    kind: 'The target kind, a code-declared enum: webhook, email, principal_group or principal; a CHECK holds each kind to its own columns',
+    addresses: 'An email target\'s recipients, a shared mailbox; empty for every other kind',
+    url: 'A webhook\'s destination; masked on every read, revealed whole under an audit row. NULL for a person target',
+    principal_group_id: 'The group a principal_group target reaches, expanded at every transition (ON DELETE RESTRICT)',
+    principal_id: 'The person a principal target reaches (ON DELETE RESTRICT)',
+    channels: 'The channels a person target delivers on (inbox, email); empty for a webhook or an email target',
     secret_id: 'The platform hmac-key or bearer-token secret it signs or authenticates with; a bound secret cannot be deleted (RESTRICT)',
   }}
 />
@@ -750,6 +874,10 @@ registries, the `action_rule` and the targets it sends to (`action_rule_target`)
     facts: 'The alarm facts the templates rendered over, sent as the envelope\'s facts',
     status: 'queued, sent or failed; the partial index on due queued rows is what the tick drains',
     next_attempt_at: 'When the tick next tries a queued row: now, then 10s doubling after each failure',
+    channel: 'How it travels: webhook, inbox (delivered by its commit) or email',
+    recipient_principal_id: 'The person it is addressed to; ON DELETE SET NULL, recipient_name keeping who it was',
+    recipient_name: 'The recipient by username, kept after a purge; withheld on read from all but the recipient and principal:read:admin',
+    read_at: 'When its recipient read an inbox entry',
   }}
 />
 

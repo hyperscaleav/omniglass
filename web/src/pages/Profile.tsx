@@ -1,13 +1,15 @@
 import { Show, For, createSignal, createEffect, createResource } from "solid-js";
+import { A } from "@solidjs/router";
+import InfoTip from "../components/InfoTip";
 import PasswordField from "../components/PasswordField";
 import Button from "../components/Button";
 import Drawer from "../components/Drawer";
 import { useFormActions } from "../lib/formactions";
 import SessionsList from "../components/SessionsList";
 import { passwordError, isPasswordPolicyMessage, tokenTtlError } from "../lib/validate";
-import { useMe, useUpdateProfile, useChangePassword, setMyAvatar, removeMyAvatar, fetchMyAvatar } from "../lib/auth";
+import { can, useMe, useUpdateProfile, useChangePassword, setMyAvatar, removeMyAvatar, fetchMyAvatar } from "../lib/auth";
 import { useSessions, useRevokeSession, useRevokeAllSelfSessions, createSelfToken, type Session } from "../lib/sessions";
-import { Check, Copy, Key, LogOut, Plus, Save, Trash } from "../components/icons";
+import { Bell, Check, Copy, Key, LogOut, Plus, Save, Trash } from "../components/icons";
 
 // Profile is the signed-in operator's own account surface: edit your label
 // and email, change your password, and (pedagogically) see the identity model you
@@ -407,6 +409,25 @@ export default function Profile() {
             </div>
           </div>
         </div>
+
+        {/* Alarm subscriptions: the door to the caller's own action rules (#1355). */}
+        <Show when={can(me.data, "notification", "subscribe")}>
+          <div class="card border border-base-300 bg-base-200" data-testid="profile-subscriptions">
+            <div class="card-body flex-row items-center justify-between gap-3">
+              <div class="flex items-center gap-1.5">
+                <h2 class="card-title text-base">Alarm subscriptions</h2>
+                <InfoTip
+                  label="Alarm subscriptions"
+                  text="Rules you write for yourself: when an alarm on a component you can read is raised or cleared, you are told in your inbox or by email."
+                />
+              </div>
+              <A href="/profile/subscriptions" class="btn btn-quiet btn-sm gap-1.5">
+                <Bell size={15} />
+                Manage subscriptions
+              </A>
+            </div>
+          </div>
+        </Show>
 
         {/* Sessions: the browsers and devices the caller is signed in from, each revocable. */}
         <div class="card border border-base-300 bg-base-200">
