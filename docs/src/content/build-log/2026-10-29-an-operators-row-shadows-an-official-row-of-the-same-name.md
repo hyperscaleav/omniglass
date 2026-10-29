@@ -17,5 +17,5 @@ reserved key held twice is never shadowed. The registry cache reports a shadowed
 and hourly, apart from collisions, and a push of the shadowed official row is refused with a
 reason that says it is shadowed. Deleting the operator's row lets the official one resolve.
 
-The same name in the same registry still cannot coexist; that needs the `(namespace, id)` key of
-#318.
+The same name in the same registry still cannot coexist: the seed takes the operator's row over.
+#318 answers that by adopting the operator's row as their fork of the official one.
