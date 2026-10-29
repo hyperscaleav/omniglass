@@ -72,9 +72,9 @@ interfaces:
 computed:
   - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
 
-# The input level rides speech in the place it hears: it moves every few
+# The input level rides speech where it hears: it moves every few
 # seconds within a talker's range, a behavior a scenario can drive (a
-# meeting starting, a silent room).
+# meeting starting, a silent place).
 behaviors:
   - name: level_drift
     schedule:
@@ -111,6 +111,6 @@ defaults:
       model: "HX-1"
       manufacturer: "Lyra"
     firmware:
-      version: "lyra-hx-11"
+      version: "1.4.2"
     network:
       hostname: ""

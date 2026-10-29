@@ -3,8 +3,8 @@
 #
 # Lyra is the lab's fictional microphone vendor. The Arc A2 is a ceiling
 # array microphone, powered and connected over one network cable, that
-# feeds a room's DSP over the network. An operator watches it for mute
-# and for a level that says it hears the room.
+# feeds its DSP over the network. An operator watches it for mute
+# and for a level that says it hears the place it is in.
 
 name: lyra-arc-a2
 manufacturer: Lyra
@@ -71,9 +71,9 @@ interfaces:
 computed:
   - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
 
-# The input level rides speech in the place it hears: it moves every few
+# The input level rides speech where it hears: it moves every few
 # seconds within a talker's range, a behavior a scenario can drive (a
-# meeting starting, a silent room).
+# meeting starting, a silent place).
 behaviors:
   - name: level_drift
     schedule:
@@ -99,6 +99,6 @@ defaults:
       model: "Arc A2"
       manufacturer: "Lyra"
     firmware:
-      version: "lyra-arc-a21"
+      version: "2.6.0"
     network:
       hostname: ""
