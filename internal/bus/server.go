@@ -467,7 +467,8 @@ func (s *Server) subscribeSim() error {
 			return // read failed; drop, the simulator re-pulls
 		}
 		// The webhook subscriptions of the components it simulates
-		// (ADR-1370): only here, on the list only a simulator pulls.
+		// (ADR-1370): only here, and only from a lab-marked database for a
+		// component in the simulated block (the gateway's fence).
 		hooks, err := s.store.NodeSimWebhooks(context.Background(), node)
 		if err != nil {
 			return // read failed; drop, the simulator re-pulls

@@ -733,6 +733,7 @@ type Gateway interface {
 	// (#1370): a service principal found or created by name, and its one
 	// token, replacing any before it.
 	EnsureServicePrincipal(ctx context.Context, actorID, name string) (string, error)
+	EnsureRole(ctx context.Context, actorID string, r Role) error
 	SetServiceToken(ctx context.Context, actorID, name string, hash []byte, prefix string) (bool, error)
 	NodeSimDevices(ctx context.Context, name string, read scope.Set) ([]SimDevice, error)
 	// NodeSimWebhooks reads the webhook subscription of each simulated

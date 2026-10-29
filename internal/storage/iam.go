@@ -1715,3 +1715,72 @@ func (p *PG) SetServiceToken(ctx context.Context, actorID, name string, hash []b
 	}
 	return true, nil
 }
+
+// ErrRoleConflict refuses EnsureRole over a role of the same name that is
+// official or holds other permissions: the trusted lane never rewrites a role.
+var ErrRoleConflict = errors.New("storage: a role of that name exists with other permissions, or is official")
+
+// EnsureRole creates an operator (non-official) role if no role has its name,
+// audited in the same transaction, and otherwise leaves it: a role of that
+// name holding exactly these permissions is the one wanted, and any other
+// (an official role, or one an operator gave other permissions) is refused
+// with ErrRoleConflict rather than overwritten. The trusted lane's (#1370:
+// the lab's pusher role); the boot seed's official roles use UpsertRole.
+func (p *PG) EnsureRole(ctx context.Context, actorID string, r Role) error {
+	if r.Permissions == nil {
+		r.Permissions = []string{}
+	}
+	if r.Inherits == nil {
+		r.Inherits = []string{}
+	}
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("storage: begin ensure role: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	var official bool
+	var perms []string
+	err = tx.QueryRow(ctx, `select official, permissions from role where name = $1`, r.Name).Scan(&official, &perms)
+	if err == nil {
+		if official || !sameStrings(perms, r.Permissions) {
+			return ErrRoleConflict
+		}
+		return nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return fmt.Errorf("storage: find role %q: %w", r.Name, err)
+	}
+	var roleID string
+	if err := tx.QueryRow(ctx, `
+		insert into role (name, official, permissions, inherits, label, description)
+		values ($1, false, $2, $3, $4, $5) returning id`,
+		r.Name, r.Permissions, r.Inherits, labelOrNull(r.Label), nullize(r.Description)).Scan(&roleID); err != nil {
+		return fmt.Errorf("storage: create role %q: %w", r.Name, err)
+	}
+	img := map[string]any{"name": r.Name, "permissions": r.Permissions}
+	if err := writeAuditRes(ctx, tx, actorID, "create", "role", roleID, nil, img); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("storage: commit ensure role: %w", err)
+	}
+	return nil
+}
+
+// sameStrings reports two string sets equal, order aside.
+func sameStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	seen := map[string]int{}
+	for _, s := range a {
+		seen[s]++
+	}
+	for _, s := range b {
+		if seen[s] == 0 {
+			return false
+		}
+		seen[s]--
+	}
+	return true
+}

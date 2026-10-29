@@ -22,11 +22,13 @@ import (
 // TestSimlistCarriesAWebhookSubscriptionToTheSimulatorAlone proves the fence
 // of ADR-1370. The simulator plays the external SaaS that posts to a webhook
 // endpoint, so it holds what that SaaS would: the endpoint's path (its token)
-// and the key it signs with. Those ride only the simulator's device list
-// (the simlist, pulled only by a node running the simulator), only for a
-// simulated component (one its node's endpoints reach on a loopback address).
-// A real device's webhook is never handed out, and the node's own worklist,
-// which every node pulls, carries neither the token nor the key.
+// and the key it signs with. Any node credential may pull its simlist, so the
+// fence is server-held facts the node cannot assert: the database carries the
+// lab mark (only the lab's trusted seed sets it), and the component sits in
+// the simulated block (127.60.0.0/16, which only the seed allocates). A
+// database with no lab mark hands out nothing; a real device's webhook, or
+// one on another loopback address, never; and the node's own worklist
+// carries neither the token nor the key.
 func TestSimlistCarriesAWebhookSubscriptionToTheSimulatorAlone(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server")
@@ -50,9 +52,10 @@ func TestSimlistCarriesAWebhookSubscriptionToTheSimulatorAlone(t *testing.T) {
 	}
 	const key = "ucc-signing-key-1370"
 	node := "node-a"
-	// ucc-sim is simulated (its probe reaches a loopback address); ucc-real
-	// is a real service on the network, webhook and all.
-	for name, target := range map[string]string{"ucc-sim": "127.21.0.7:443", "ucc-real": "10.20.30.40:443"} {
+	// ucc-sim is simulated (its probe reaches the simulated block); ucc-real
+	// is a real service on the network, webhook and all; ucc-local is a
+	// service on the node's own host, a loopback address outside the block.
+	for name, target := range map[string]string{"ucc-sim": "127.60.0.7:443", "ucc-real": "10.20.30.40:443", "ucc-local": "127.0.0.1:8443"} {
 		if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: name}, all, all, all, all); err != nil {
 			t.Fatal(err)
 		}
@@ -92,27 +95,43 @@ func TestSimlistCarriesAWebhookSubscriptionToTheSimulatorAlone(t *testing.T) {
 	}
 	defer nc.Close()
 
-	msg, err := nc.Request(collection.SimlistSubject("node-a"), []byte(`{}`), 3*time.Second)
-	if err != nil {
-		t.Fatalf("simlist request: %v", err)
+	pull := func() ([]byte, map[string]*collection.SimWebhook) {
+		t.Helper()
+		msg, err := nc.Request(collection.SimlistSubject("node-a"), []byte(`{}`), 3*time.Second)
+		if err != nil {
+			t.Fatalf("simlist request: %v", err)
+		}
+		var reply collection.SimlistReply
+		if err := json.Unmarshal(msg.Data, &reply); err != nil {
+			t.Fatal(err)
+		}
+		got := map[string]*collection.SimWebhook{}
+		for _, d := range reply.Devices {
+			got[d.Name] = d.Webhook
+		}
+		return msg.Data, got
 	}
-	var reply collection.SimlistReply
-	if err := json.Unmarshal(msg.Data, &reply); err != nil {
+
+	// No lab mark: a node's simlist hands out no subscription at all.
+	if data, got := pull(); got["ucc-sim"] != nil || strings.Contains(string(data), simTok) || strings.Contains(string(data), key) {
+		t.Fatalf("with no lab mark the simlist carries a subscription: %s", data)
+	}
+
+	if err := gw.MarkLab(ctx); err != nil {
 		t.Fatal(err)
 	}
-	got := map[string]*collection.SimWebhook{}
-	for _, d := range reply.Devices {
-		got[d.Name] = d.Webhook
-	}
+	data, got := pull()
 	want := collection.SimWebhook{Path: "/api/v1/webhooks/" + simTok, Scheme: "hmac", Secret: key}
 	if w := got["ucc-sim"]; w == nil || *w != want {
 		t.Fatalf("the simulated service's subscription = %+v, want %+v", w, want)
 	}
-	if w, listed := got["ucc-real"]; !listed || w != nil {
-		t.Fatalf("the real service: listed %v, subscription %+v; want it listed (its address is not the simulator's to serve) with no subscription", listed, w)
+	for _, other := range []string{"ucc-real", "ucc-local"} {
+		if w, listed := got[other]; !listed || w != nil {
+			t.Fatalf("%s: listed %v, subscription %+v; want it listed with no subscription", other, listed, w)
+		}
 	}
-	if strings.Contains(string(msg.Data), realTok) {
-		t.Fatal("the simlist carries the real service's webhook token")
+	if strings.Contains(string(data), realTok) || strings.Contains(string(data), token("ucc-local")) {
+		t.Fatal("the simlist carries a webhook token of a component outside the simulated block")
 	}
 
 	// The worklist, which a node pulls whether or not it simulates, carries

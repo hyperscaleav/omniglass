@@ -8,6 +8,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
+	"github.com/jackc/pgx/v5"
 )
 
 // A service principal the trusted lane keeps (#1370: the lab's simulated
@@ -47,5 +48,48 @@ func TestAServiceKeepsOneTokenTheTrustedLaneSets(t *testing.T) {
 	}
 	if ok, err := gw.SetServiceToken(ctx, "", "nobody", first, "0a0b0c0d"); err != nil || ok {
 		t.Fatalf("a token for an unknown service: %v, %v; want false, nil", ok, err)
+	}
+}
+
+// The trusted lane ensures an operator role it needs (#1370's pusher role):
+// created once, audited, and never rewritten. A role of that name already
+// holding other permissions, or an official one, is refused rather than
+// overwritten.
+func TestEnsureRoleCreatesOnceAndNeverOverwrites(t *testing.T) {
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gw.Close()
+	pusher := storage.Role{Name: "pusher", Permissions: []string{"telemetry:push"}, Label: "Pusher"}
+	for i := 0; i < 2; i++ {
+		if err := gw.EnsureRole(ctx, "", pusher); err != nil {
+			t.Fatalf("ensure %d: %v", i, err)
+		}
+	}
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(ctx)
+	var audits int
+	if err := conn.QueryRow(ctx, `select count(*) from audit_log where resource = 'role' and verb = 'create'`).Scan(&audits); err != nil {
+		t.Fatal(err)
+	}
+	if audits != 1 {
+		t.Fatalf("%d role create audit rows, want 1", audits)
+	}
+	wider := pusher
+	wider.Permissions = []string{"telemetry:push", "component:read"}
+	if err := gw.EnsureRole(ctx, "", wider); !errors.Is(err, storage.ErrRoleConflict) {
+		t.Fatalf("ensuring a role whose permissions differ: %v, want ErrRoleConflict", err)
+	}
+	if err := gw.UpsertRole(ctx, storage.Role{Name: "viewer", Official: true, Permissions: []string{"*:read"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := gw.EnsureRole(ctx, "", storage.Role{Name: "viewer", Permissions: []string{"*:read"}}); !errors.Is(err, storage.ErrRoleConflict) {
+		t.Fatalf("ensuring over an official role: %v, want ErrRoleConflict", err)
 	}
 }

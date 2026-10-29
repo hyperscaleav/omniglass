@@ -29,7 +29,7 @@ const PusherRole = "telemetry-pusher"
 // one grant, scoped to that system alone. Idempotent; its token is the lab's
 // to set on each run (storage.SetServiceToken).
 func GrantPusher(ctx context.Context, gw storage.Gateway, actorID, service, systemID string) error {
-	if err := gw.UpsertRole(ctx, storage.Role{
+	if err := gw.EnsureRole(ctx, actorID, storage.Role{
 		Name: PusherRole, Permissions: []string{"telemetry:push"}, Label: "Telemetry pusher",
 		Description: "An integration that only reports data: pushes telemetry to the owners its grant scopes, and reads nothing else.",
 	}); err != nil {

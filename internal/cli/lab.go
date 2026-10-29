@@ -325,7 +325,7 @@ func runLabSeed(ctx context.Context, out io.Writer, scenario, node, user, passwo
 		if _, err := gw.SetEnrollmentToken(ctx, "", node, nodeTokenHash, all); err != nil {
 			return err
 		}
-		if err := setPushToken(ctx, gw, push); err != nil {
+		if err := setPushToken(ctx, out, gw, push); err != nil {
 			return err
 		}
 	}
@@ -359,7 +359,7 @@ func labSeedGate(ctx context.Context, dsn string) error {
 // setPushToken gives the simulated pusher (#1370) this run's token, replacing
 // the last run's, so the simulator beside the node can push with it. A fleet
 // with no pusher, or a run with no token, sets none.
-func setPushToken(ctx context.Context, gw storage.Gateway, push pushCredential) error {
+func setPushToken(ctx context.Context, out io.Writer, gw storage.Gateway, push pushCredential) error {
 	if push.Hash == "" {
 		return nil
 	}
@@ -374,8 +374,14 @@ func setPushToken(ctx context.Context, gw storage.Gateway, push pushCredential) 
 	if err != nil {
 		return fmt.Errorf("lab seed: OMNIGLASS_LAB_PUSH_TOKEN_HASH: %w", err)
 	}
-	if _, err := gw.SetServiceToken(ctx, "", doc.SimPusher.Service, hash, push.Prefix); err != nil {
+	ok, err := gw.SetServiceToken(ctx, "", doc.SimPusher.Service, hash, push.Prefix)
+	if err != nil {
 		return err
+	}
+	if !ok {
+		// A lab kept from before the pusher (#1370): its fleet was seeded
+		// without one, and a kept lab is never seeded again.
+		fmt.Fprintf(out, "note: this lab's fleet predates the simulated booking service (%s), so nothing pushes; omniglass lab run --fresh adds it\n", doc.SimPusher.Service)
 	}
 	return nil
 }

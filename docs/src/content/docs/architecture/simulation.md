@@ -428,9 +428,11 @@ the endpoint's path and the secret its scheme signs with, and the simulator call
 subscribe route (a profile's `webhook.subscribe`, a POST taking `url`, `scheme` and `secret`) with
 the server URL it already reaches plus that path, as the service's admin would. It does so once per
 device and subscription, and again for a restarted device, whose state began again from its
-defaults. The fence: the list rides only the simulator's pull, never a node's worklist, and only for
-a component its node's endpoints reach on a loopback address, so a real device's webhook is never
-handed out. The UCC service's meeting behavior then posts `meeting.started` every minute, so a lab's
+defaults. The fence is two facts the server holds and a node cannot assert: the database carries
+the lab mark, and the component sits in the simulated block (`127.60.0.0/16`), which only the seed
+allocates. A database with no lab mark hands out nothing (outside a lab, `make dev` included, a
+service is subscribed by hand through its subscribe route), a real device's webhook is never handed
+out, and a node's worklist never carries one. The UCC service's meeting behavior then posts `meeting.started` every minute, so a lab's
 webhook endpoint is heard within its first two minutes.
 
 The **UCC platform** (`ucc-platform`) is the same vendor's account-wide plane, the face the

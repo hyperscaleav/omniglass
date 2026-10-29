@@ -1195,3 +1195,4 @@ func (UnimplementedGateway) EnsureServicePrincipal(context.Context, string, stri
 func (UnimplementedGateway) SetServiceToken(context.Context, string, string, []byte, string) (bool, error) {
 	return false, nil
 }
+func (UnimplementedGateway) EnsureRole(context.Context, string, Role) error { return nil }

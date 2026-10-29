@@ -107,21 +107,35 @@ type SimWebhook struct {
 	Secret string
 }
 
-// NodeSimWebhooks reads, for each component the node's simulator serves (an
-// endpoint on the node targets a loopback address), the subscription of its
-// webhook endpoint, keyed by component id (ADR-1370). The simulator plays the
-// external service that posts to it, so it is handed what that service would
-// hold: a real device on the network (no loopback endpoint) never appears.
-// It runs as the server's own read for the simulator's device list, which
-// the node's subject grant has already confined to its own node.
+// simulatedBlock is the address block the dev seed and the simulated fleet's
+// plan allocate simulated components from (internal/simfleet), and nothing
+// else does.
+var simulatedBlock = &net.IPNet{IP: net.IPv4(127, 60, 0, 0), Mask: net.CIDRMask(16, 32)}
+
+// NodeSimWebhooks reads, for each simulated component on the node, the
+// subscription of its webhook endpoint, keyed by component id (ADR-1370). The
+// simulator plays the external service that posts to it, so it is handed what
+// that service would hold. Any node credential may pull its device list, so
+// the fence is two facts the server holds and a node cannot assert: the
+// database carries the lab mark (set only by the lab's trusted seed), and the
+// component's address is in the simulated block, which only the seed
+// allocates. A database with no lab mark hands out nothing, and a component on
+// the network or on any other address never appears.
 func (p *PG) NodeSimWebhooks(ctx context.Context, name string) (map[string]SimWebhook, error) {
+	st, err := p.LabState(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !st.Marked {
+		return nil, nil
+	}
 	devices, err := p.NodeSimDevices(ctx, name, scope.Set{All: true})
 	if err != nil {
 		return nil, err
 	}
 	simulated := map[string]bool{}
 	for _, d := range devices {
-		if ip := net.ParseIP(d.Address); ip != nil && ip.IsLoopback() {
+		if ip := net.ParseIP(d.Address); ip != nil && simulatedBlock.Contains(ip) {
 			simulated[d.ComponentID] = true
 		}
 	}

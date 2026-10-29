@@ -85,8 +85,8 @@ type SimDevice struct {
 	// device whose component holds a webhook endpoint (ADR-1370): the
 	// simulator plays the external service, so it holds what that service
 	// would, the endpoint's path (its token) and the secret it signs with.
-	// It rides only this list, which only a simulator pulls, and only for a
-	// device the simulator serves; never a node's worklist.
+	// Handed out only by a lab-marked database, only for a component in the
+	// simulated block, and only on this list; never a node's worklist.
 	Webhook *SimWebhook `json:"webhook,omitempty"`
 }
 

@@ -11,7 +11,7 @@ form (`newtron-panel-web`), the healthy twins of the ssh and telnet faults, and 
 A simulated device's ssh host key is now derived from its id, so a pinned key survives a simulator
 restart. The simulator subscribes a simulated service to its webhook endpoint from the device list
 ([ADR-1370](/architecture/decisions/#adr-1370-the-simulator-plays-the-saas-so-it-holds-a-webhook-endpoints-token-and-key)),
-fenced to the simulator's pull and its own components, so the UCC service's posts arrive from the
+fenced to a lab-marked database and the simulated address block, so the UCC service's posts arrive from the
 start. A simulated booking service pushes the boardroom system's `booking-count` and
 `booking-state` through `POST /telemetry:push`, as a service principal holding `telemetry:push`
 alone on that one system, its token minted per lab run like the node's.
