@@ -13,7 +13,7 @@ import (
 // recorders and the probe, and stay out of a learner's help.
 func TestLabRunScriptFlagsAreHidden(t *testing.T) {
 	cmd := newLabRunCmd("test")
-	for _, name := range []string{"project", "ephemeral", "ready-file", "while-pid"} {
+	for _, name := range []string{"project", "ephemeral", "ready-file", "while-pid", "no-node"} {
 		f := cmd.Flags().Lookup(name)
 		if f == nil {
 			t.Errorf("lab run has no --%s", name)

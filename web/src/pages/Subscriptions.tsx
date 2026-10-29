@@ -18,7 +18,9 @@ import { describeError, fmtTime, rel } from "../lib/format";
 import { useFormActions } from "../lib/formactions";
 import {
   CHANNELS,
+  PILL_NEUTRAL,
   SUBSCRIPTION_CAP,
+  TRANSITION_PILL,
   TRANSITIONS,
   draftErrors,
   draftFrom,
@@ -251,12 +253,6 @@ export default function Subscriptions(): JSX.Element {
     </Page>
   );
 }
-
-const PILL_NEUTRAL = "badge badge-sm badge-ghost";
-const TRANSITION_PILL: Record<string, string> = {
-  raised: "badge badge-sm badge-soft badge-warning",
-  cleared: "badge badge-sm badge-healthy",
-};
 
 // The drawer body: renders inside the Drawer so it binds the drawer's rail.
 // Its test judges the draft's on and when, saved or not.

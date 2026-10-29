@@ -119,6 +119,11 @@ type Options struct {
 	// recorders and the probe, #1197) rather than a learner: every resource
 	// is labeled as such, and its volumes go at teardown.
 	Ephemeral bool
+	// NoNode makes a lab whose pages hold still, for a script that
+	// photographs them (the docs screenshots, #1267): the seed lays the scenario's fleet down without the
+	// simulated fleet's wiring and enrolls no node, so no node runs and
+	// nothing collects. Only a throwaway lab may run without one.
+	NoNode bool
 }
 
 // Mount is a named volume mounted into a container.
@@ -234,6 +239,9 @@ func Plan(o Options) (Spec, error) {
 	if o.Ephemeral && o.Project == DefaultProject {
 		return Spec{}, fmt.Errorf("a throwaway lab removes its data when it stops, so it needs a --project of its own, never %s", DefaultProject)
 	}
+	if o.NoNode && !o.Ephemeral {
+		return Spec{}, fmt.Errorf("a lab with no node is a script's, so it needs --ephemeral: a learner's lab keeps its fleet, and one seeded without the simulated wiring would never collect")
+	}
 	owner := map[string]string{
 		LabelLab: o.Project, LabelLabHost: o.Owner.Host, LabelLabPID: strconv.Itoa(o.Owner.PID), LabelLabPIDNS: o.Owner.PIDNS,
 		LabelComposeProject: o.Project,
@@ -288,10 +296,14 @@ func Plan(o Options) (Spec, error) {
 		Labels: svc("db", false),
 		Role:   "Postgres, the lab's own database. On the lab network only, never published.",
 	}
+	seedCmd := []string{"lab", "seed", "--scenario", o.Scenario, "--node", NodeName,
+		"--user", LoginUser, "--password", LoginPassword}
+	if o.NoNode {
+		seedCmd = append(seedCmd, "--no-node")
+	}
 	spec.Seed = Service{
 		Name: "seed", Container: o.Project + "-seed-run-1", Image: o.Image,
-		Cmd: []string{"lab", "seed", "--scenario", o.Scenario, "--node", NodeName,
-			"--user", LoginUser, "--password", LoginPassword},
+		Cmd:    seedCmd,
 		Env:    append(append([]string{}, appEnv...), "OMNIGLASS_LAB_NODE_TOKEN_HASH="+o.NodeTokenHash),
 		Mounts: []Mount{{Volume: volData, Target: dataDir}},
 		OneOff: true,

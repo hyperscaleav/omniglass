@@ -25,6 +25,12 @@
       "labelled": false
     },
     {
+      "table": "alarm_snooze",
+      "shape": "id only",
+      "reason": "a snooze on an alarm condition, keyed by component and dedup key; it is set and ended through an alarm, never named",
+      "labelled": false
+    },
+    {
       "table": "audit_log",
       "shape": "id only",
       "labelled": false

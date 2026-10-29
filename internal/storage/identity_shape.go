@@ -170,8 +170,9 @@ var IdentityShapes = map[string]TableIdentity{
 			"nothing renders a receipt row for a label to appear on"},
 
 	// Id only.
-	"alarm":     {Shape: ShapeIDOnly},
-	"audit_log": {Shape: ShapeIDOnly}, "command": {Shape: ShapeIDOnly},
+	"alarm":        {Shape: ShapeIDOnly},
+	"alarm_snooze": {Shape: ShapeIDOnly, Reason: "a snooze on an alarm condition, keyed by component and dedup key; it is set and ended through an alarm, never named"},
+	"audit_log":    {Shape: ShapeIDOnly}, "command": {Shape: ShapeIDOnly},
 	"credential": {Shape: ShapeIDOnly},
 	"event":      {Shape: ShapeIDOnly}, "impersonation_session": {Shape: ShapeIDOnly},
 	"location_type_metric": {Shape: ShapeIDOnly}, "location_type_property": {Shape: ShapeIDOnly},

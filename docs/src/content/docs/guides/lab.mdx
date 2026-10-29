@@ -202,6 +202,12 @@ command itself; here is when you would reach for each:
 - `--image` runs an omniglass image of your choosing, with a warning: a lab whose server and binary
   disagree is yours to debug.
 
+A few more flags are hidden from the help because they are for scripts, not for you: the repo's
+own browser tests, docs screenshots, demo recorders and probe each bring up a throwaway lab of their
+own through them (a project of its own whose data goes when it stops, held for the script, or one
+whose fleet has no node collecting from it, so the pages the docs photograph hold still). The
+[demos guide](/contributing/demos/) says how the repo uses them.
+
 **Which image runs.** A binary built by `make` runs the `omniglass:dev` image the same `make` built:
 the image carries its build id in the OCI label `org.opencontainers.image.version`, and the lab
 refuses an image whose label is not its own build id, saying to run `make`. The lab never builds

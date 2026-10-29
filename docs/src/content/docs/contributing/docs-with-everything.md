@@ -162,7 +162,8 @@ screenshots:
 ```
 
 That frontmatter is the **single source**: `make docs-shots` reads it from every page, drives
-the real console (the same binary an operator runs, never a mock), and writes
+the real console (the same binary an operator runs, never a mock, served by a throwaway lab with
+no node collecting, so the pages hold still; the capture hides the lab's banner), and writes
 `public/screenshots/<id>.png`; the directive renders the figure from the same entry. So the
 capture list and the embed cannot drift, a `#id` with no frontmatter entry (or no captured
 image) **fails the build**, and adding a screenshot is a frontmatter edit, not a code change.

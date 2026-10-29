@@ -1,4 +1,4 @@
-import { For, Show, createEffect, createMemo } from "solid-js";
+import { For, Show, createEffect, createMemo, createUniqueId } from "solid-js";
 import { useLocation, useNavigate, useParams, useSearchParams } from "@solidjs/router";
 import { useQueries, useQuery } from "@tanstack/solid-query";
 import Page from "../components/Page";
@@ -18,6 +18,7 @@ import DetailGate from "../components/DetailGate";
 import PlaceCard from "../components/PlaceCard";
 import TemplateNotice from "../components/TemplateNotice";
 import AcknowledgeButton from "../components/AcknowledgeButton";
+import SnoozeButton, { SnoozedBadge } from "../components/SnoozeButton";
 import AlarmTimeline, { createTimelineToggles } from "../components/AlarmTimeline";
 import SeverityBadge from "../components/SeverityBadge";
 import { useSeverity } from "../lib/severity";
@@ -152,6 +153,7 @@ export default function ComponentLeaf() {
   const scale = useSeverity();
   // Each alarm row opens its timeline in place (#950).
   const timelines = createTimelineToggles();
+  const snoozeSurface = createUniqueId();
   const activeAlarms = createMemo(() => splitAlarms(alarmsQ.data?.alarms ?? [], scale().levels).active);
   // The strip reads red when any active alarm is at an outage level (the
   // registry's flag, #917), amber when they only degrade.
@@ -292,7 +294,9 @@ export default function ComponentLeaf() {
                             <span class="text-xs text-base-content/50">
                               {durationText(pageNow() - Date.parse(a.raised_at))} · {a.acknowledged ? "acknowledged" : "unacknowledged"}
                             </span>
+                            <SnoozedBadge alarm={a} />
                             <AcknowledgeButton component={component()?.id ?? id()} alarm={a} />
+                            <SnoozeButton component={component()?.id ?? id()} alarm={a} surface={snoozeSurface} />
                             {timelines.button(a.id, a.message)}
                           </div>
                           <Show when={timelines.isOpen(a.id)}>

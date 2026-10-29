@@ -1,0 +1,27 @@
+# Snooze an alarm (#1318, #1383): an operator silences a noisy alarm's
+# condition for an hour from its component's page, sees the snooze on the
+# alarm and on its timeline, and ends it early. Touch Panel 2 holds a High
+# alarm raised off camera.
+title: Snooze an alarm
+description: Silence a noisy alarm's notifications for an hour from its component's page, read the snooze on its timeline, and end it early.
+setup:
+  - post: /components/panel-2/alarms
+    body: { severity: high, message: Touch input lost, dedup_key: walkthrough-snooze }
+steps:
+  - goto: /components/panel-2
+    caption: Touch Panel 2 has a High alarm, and every rule that watches it pages someone on each raise and clear.
+  - click: '[data-testid="leaf-alarms"] >> role=button[name="Snooze"]'
+    caption: Snooze silences the alarm's condition for a while. Unlike acknowledging, it says nothing about who has looked.
+  - click: { role: button, name: 1 hour }
+    caption: An hour. Every notification about this condition, on any channel, is held back until then.
+  - wait: { selector: '[data-testid="leaf-alarms"] >> text=snoozed until' }
+    caption: The alarm wears its snooze. It is still raised and still unacknowledged; only its notifications are quiet.
+    poster: true
+  - click: { role: button, name: Timeline of Touch input lost }
+    caption: Its timeline records who snoozed it and when, and would show each message it held back.
+  - wait: { selector: 'role=list[name="Timeline of Touch input lost"] >> text="snoozed"' }
+    caption: The snooze is an audit line, beside the raise.
+  - click: '[data-testid="leaf-alarms"] >> role=button[name="Unsnooze"]'
+    caption: End it early. If the condition is still raised, the people its rules reach are told again.
+  - wait: { selector: '[data-testid="leaf-alarms"] >> role=button[name="Snooze"]' }
+    caption: Unsnoozed, and the timeline records that too.

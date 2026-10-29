@@ -1,6 +1,7 @@
-import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
+import { For, Show, createMemo, createSignal, createUniqueId, type JSX } from "solid-js";
 import PlaceCard from "./PlaceCard";
 import AcknowledgeButton from "./AcknowledgeButton";
+import SnoozeButton, { SnoozedBadge } from "./SnoozeButton";
 import AlarmTimeline, { createTimelineToggles } from "./AlarmTimeline";
 import { useNavigate } from "@solidjs/router";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/solid-query";
@@ -233,6 +234,9 @@ function ComponentBody(props: { id: string }) {
   const primarySystem = () => served()[0];
   const placeId = () => row()?.location_id ?? primarySystem()?.location ?? null;
 
+  // The Why strip's snooze surface: the blade's alarms panel shows the same
+  // alarms at once, with its own.
+  const snoozeSurface = createUniqueId();
   const { destructive, err } = useDelete({
     kindLabel: "component",
     id: props.id,
@@ -256,7 +260,13 @@ function ComponentBody(props: { id: string }) {
           severity: a.severity,
           message: a.message,
           rule: a.raised_by_rule,
-          ack: <AcknowledgeButton component={props.id} alarm={a} />,
+          ack: (
+            <>
+              <SnoozedBadge alarm={a} />
+              <AcknowledgeButton component={props.id} alarm={a} />
+              <SnoozeButton component={props.id} alarm={a} surface={snoozeSurface} />
+            </>
+          ),
           timeline: { component: props.id, alarmId: a.id },
         }))}
       />

@@ -880,6 +880,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/components/{name}/alarms/{id}:snooze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Snooze an alarm's condition
+         * @description Snoozes the alarm's condition, its component and dedup_key, for a duration from now (1m to 7d), so every notification any alarm of that condition would send, a raise or a clear, on any channel, is written suppressed with the reason instead, and a message already waiting to be retried is suppressed when its turn comes. Snoozing a snoozed condition replaces the deadline. It changes nothing else: it does not acknowledge, does not recompute health, a snoozed alarm stays in the unacknowledged queue, and a clear does not end it. It notifies nothing itself. When the snooze ends, at its deadline or by :unsnooze, with an alarm of the condition still raised, that alarm is announced again as raised to whoever the action rules reach then. Audited on this alarm. Gated by alarm:snooze, whose scope is resolved on the component tier from that permission; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not snooze on is a 403.
+         */
+        post: operations["snooze-component-alarm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/components/{name}/alarms/{id}:timeline": {
         parameters: {
             query?: never;
@@ -889,11 +909,31 @@ export interface paths {
         };
         /**
          * Read an alarm's timeline
-         * @description The alarm's history in one list, oldest first: the events that carry it (an event rule's fire event, which opened it, and its clear event, which resolved it) merged by time with its audit rows (the raise, each acknowledgement, the clear, and a rule edit that opened or resolved it, naming the editor) and the notifications its transitions queued, each at the moment it was queued with its status as it stands (#618). At one instant an event comes before the audit row it caused, and that before a notification. Gated by alarm:read; a component outside the caller's component read scope, and an alarm not on the component, are a non-disclosing 404.
+         * @description The alarm's history in one list, oldest first: the events that carry it (an event rule's fire event, which opened it, and its clear event, which resolved it) merged by time with its audit rows (the raise, each acknowledgement, the clear, each snooze, unsnooze and snooze-end, and a rule edit that opened or resolved it, naming the editor) and the notifications its transitions queued, each at the moment it was queued with its status as it stands (#618). At one instant an event comes before the audit row it caused, and that before a notification. Gated by alarm:read; a component outside the caller's component read scope, and an alarm not on the component, are a non-disclosing 404.
          */
         get: operations["get-component-alarm-timeline"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/components/{name}/alarms/{id}:unsnooze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * End an alarm's condition's snooze
+         * @description Ends the snooze on the alarm's condition early, exactly as its deadline passing would: if an alarm of the condition is still raised, it is announced again as raised to whoever the action rules reach now. Audited on this alarm, naming the caller. Unsnoozing a condition that is not snoozed is a 200 that writes nothing. Gated by alarm:snooze, resolved as :snooze is.
+         */
+        post: operations["unsnooze-component-alarm"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3119,7 +3159,7 @@ export interface paths {
         put?: never;
         /**
          * Retry a failed notification
-         * @description Re-queues a failed notification for a fresh run of attempts, sending the same rendered message with the same Idempotency-Key. One that is queued or sent, or one that failed before any attempt (its rule's when did not run, or its type did not render, so it holds no message), is a 409. Audited as retry. Gated by notification:retry, whose scope resolves on the component tier; a component outside the caller's component read scope is a non-disclosing 404, one it reads but may not retry on a 403.
+         * @description Re-queues a failed notification for a fresh run of attempts, sending the same rendered message with the same Idempotency-Key. One that is queued, sent or suppressed (its alarm's condition was snoozed), or one that failed before any attempt (its rule's when did not run, or its type did not render, so it holds no message), is a 409. Audited as retry. Gated by notification:retry, whose scope resolves on the component tier; a component outside the caller's component read scope is a non-disclosing 404, one it reads but may not retry on a 403.
          */
         post: operations["retry-notification"];
         delete?: never;
@@ -5670,6 +5710,13 @@ export interface components {
             raised_by_rule_id?: string;
             /** @description The severity level the alarm was raised at, by name (see /severity-levels) */
             severity: string;
+            /** @description Who snoozed the condition, by name; empty while it is not snoozed, or once that principal has been purged (the audit log keeps the name) */
+            snoozed_by?: string;
+            /**
+             * Format: date-time
+             * @description Until when the alarm's condition (component and dedup_key) is snoozed: its notifications are written suppressed until then. Null while it is not snoozed. Independent of acknowledged and cleared_at
+             */
+            snoozed_until?: string;
         };
         AlarmFactBody: {
             /** @description The key a template reads it by ({{.Name}}) */
@@ -5696,7 +5743,7 @@ export interface components {
              * @enum {string}
              */
             channel?: "webhook" | "inbox" | "email" | "";
-            /** @description Why a notification's last attempt failed */
+            /** @description Why a notification's last attempt failed, or why a suppressed one was held back */
             error?: string;
             /** @description The series instance (an endpoint) an event is about */
             instance?: string;
@@ -5719,7 +5766,7 @@ export interface components {
             target?: string;
             /** @description The alarm edge a notification is about: raised or cleared */
             transition?: string;
-            /** @description The event's type (e.g. condition-started), the audit action (raise, acknowledge or clear), or a notification's status as it stands (queued, sent or failed) */
+            /** @description The event's type (e.g. condition-started), the audit action (raise, acknowledge, clear, snooze, unsnooze, or snooze-end when a snooze reached its deadline), or a notification's status as it stands (queued, sent, failed, or suppressed when its condition was snoozed) */
             what: string;
         };
         AlarmTimelineOutputBody: {
@@ -9315,7 +9362,7 @@ export interface components {
             created_at: string;
             /** @description The notification's uuid, the Idempotency-Key its receiver sees */
             id: string;
-            /** @description Why the last attempt failed, never the URL or a credential */
+            /** @description Why the last attempt failed, or why a suppressed one was held back; never the URL or a credential */
             last_error?: string;
             /**
              * Format: int64
@@ -9341,10 +9388,10 @@ export interface components {
             /** Format: date-time */
             sent_at?: string;
             /**
-             * @description queued: on its way (its next attempt at next_attempt_at); sent: the receiver answered 2xx; failed: its last attempt failed, or it was refused before one
+             * @description queued: on its way (its next attempt at next_attempt_at); sent: the receiver answered 2xx; failed: its last attempt failed, or it was refused before one; suppressed: written but never sent, because its alarm's condition was snoozed (the reason in last_error)
              * @enum {string}
              */
-            status: "queued" | "sent" | "failed";
+            status: "queued" | "sent" | "failed" | "suppressed";
             /** @description The rendered subject */
             subject: string;
             /** @description The target it goes to, by name: a webhook, or the group or person target it reached its recipient through */
@@ -11111,6 +11158,16 @@ export interface components {
             impairments: components["schemas"]["SimImpairmentStatus"];
             /** Format: date-time */
             last_seen?: string;
+        };
+        SnoozeAlarmInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SnoozeAlarmInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description How long from now the condition stays snoozed, from 1m to 7d: a duration such as 15m, 1h, 4h or 24h, or whole days such as 7d. Snoozing a snoozed condition replaces its deadline, shorter or longer */
+            duration: string;
         };
         StandardBody: {
             /**
@@ -14442,6 +14499,44 @@ export interface operations {
             };
         };
     };
+    "snooze-component-alarm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
+                name: string;
+                /** @description The alarm id: any alarm of the condition to snooze */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SnoozeAlarmInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlarmBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "get-component-alarm-timeline": {
         parameters: {
             query?: never;
@@ -14463,6 +14558,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AlarmTimelineOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "unsnooze-component-alarm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
+                name: string;
+                /** @description The alarm id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlarmBody"];
                 };
             };
             /** @description Error */
@@ -19068,7 +19197,7 @@ export interface operations {
                 /** @description Only those to this target, by name */
                 target?: string;
                 /** @description Only those in this status */
-                status?: "queued" | "sent" | "failed" | "";
+                status?: "queued" | "sent" | "failed" | "suppressed" | "";
                 /** @description At most this many, newest first (default 100) */
                 limit?: number;
             };

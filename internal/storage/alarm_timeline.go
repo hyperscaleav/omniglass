@@ -18,8 +18,9 @@ type AlarmTimelineEntry struct {
 	At time.Time
 	// Kind is "event", "audit" or "notification".
 	Kind string
-	// What is the event's type, the audit row's action (raise, clear or
-	// acknowledge), or a notification's status (queued, sent or failed).
+	// What is the event's type, the audit row's action (raise, clear,
+	// acknowledge, snooze, unsnooze or snooze-end), or a notification's
+	// status (queued, sent, failed or suppressed).
 	What string
 	// Actor is the person who acted, by name; "" when the platform did (a
 	// rule's evaluator), and then Rule names the rule it acted for.

@@ -1,6 +1,19 @@
 ---
 title: Notifications
 description: "Send an alarm to a chat channel, a group's inbox or email: the targets, the action rule that sends to them, the message it carries, and how a delivery reads on the alarm's timeline."
+screenshots:
+  - id: notification-target-new
+    path: /web/notification-targets
+    steps:
+      - action: click
+        selector: "button:has-text('New target')"
+    alt: "A new notification target: its kind (webhook, email, group or person), its label and name, the webhook URL it posts to, and the platform secret it signs with."
+  - id: action-rule-new
+    path: /web/action-rules
+    steps:
+      - action: click
+        selector: "button:has-text('New action rule')"
+    alt: "A new action rule: the transitions it sends on, its when written in the expression editor with the alarm facts it may name, the targets it sends to, and the message it sends."
 ---
 
 import SeededSet from '../../../../components/SeededSet.astro';
@@ -14,10 +27,13 @@ to a chat channel**. Three pieces take part, each answering one question
 - an **action rule** says *when* (on which transitions, under which predicate);
 - a **notification type** says *what* (the subject and text, rendered over the alarm's facts).
 
-Targets are admin-only (`notification_target:*`): a target is a destination the server sends to,
-holding a credential, and its URL is often itself a credential. Action rules ride `rule:*`, written
-with an all-scope grant. Notification types are a catalog an operator writes
-(`notification_type:create,update`).
+All three live in the console on **Catalog, under Actions**: **Notifications** (the types),
+**Action rules** and **Targets**, side by side. Targets are admin-only (`notification_target:*`): a
+target is a destination the server sends to, holding a credential, and its URL is often itself a
+credential, so the Targets entry is not shown to anyone else. Action rules ride `rule:*`: anyone who
+reads rules sees them, and writing one takes an all-scope grant. Notification types are a catalog an
+operator writes (`notification_type:create,update`). Every step below is also a CLI command, shown
+beside it.
 
 ## 1. Open the destination
 
@@ -37,8 +53,22 @@ for a destination the list names; anything else is `https`, its certificate veri
 ## 2. Make the target
 
 Store the signing key as a **platform** secret of the `hmac-key` type (or a `bearer-token`, for a
-receiver that expects `Authorization: Bearer`), then point a webhook target at the URL with it.
-Binding a secret takes the right to reveal it.
+receiver that expects `Authorization: Bearer`) on **Admin, Secrets**. Then, on **Catalog, under
+Actions: Targets**, choose **New target**: kind **Webhook**, a name, the URL, and the secret in
+**Signed with** (or none, to send unsigned). Binding a secret takes the right to reveal it.
+
+::screenshot{#notification-target-new}
+
+The new target's panel opens. **Send a test** sends one synthetic message (transition `test`)
+exactly as a delivery would, and shows what the receiver said: **Delivered: the receiver answered
+200**, or why not (`the receiver answered 401`, an address the allow list does not name, a
+certificate that does not verify, a host that does not resolve). The URL reads masked from then on,
+to its scheme and host; **Reveal** shows it whole, and every reveal writes an audit row of its own.
+**Edit** changes the label, the URL (left blank, it keeps the stored one) or the secret, and
+**Disable** stops deliveries to it while keeping it. The panel also names the rules that send to the
+target, since one a rule still sends to cannot be deleted, and lists what was recently sent to it.
+
+The same from the CLI:
 
 ```bash
 omniglass secret create --name ops-chat-signing --owner-kind platform --secret-type hmac-key \
@@ -48,11 +78,8 @@ omniglass notification-target create --name ops-chat --kind webhook \
 omniglass notification-target test ops-chat
 ```
 
-`test` sends one synthetic message (transition `test`) exactly as a delivery would, and answers
-what the receiver said: `{"ok": true, "status": 200}`, or a reason (`the receiver answered 401`,
-an address the allow list does not name, a certificate that does not verify). The target's URL
-reads masked from then on; `omniglass notification-target reveal ops-chat` returns it, under an
-audit row of its own.
+`test` answers `{"ok": true, "status": 200}`, or `ok: false` with the reason, and
+`omniglass notification-target reveal ops-chat` returns the URL whole, audited the same way.
 
 Each delivery is a JSON envelope (the rendered subject and text, the alarm's id, its facts, a
 version), signed over the exact bytes sent: an `X-Omniglass-Signature: sha256=<hex>` hmac over the
@@ -63,7 +90,17 @@ the same on every attempt, so a receiver can drop a redelivery.
 
 An action rule sends on an alarm's `raised`, `cleared`, or both, when its predicate holds. The
 predicate reads the alarm's facts (`component`, `place`, `severity`, `severity_rank`, `message`,
-`rule`, ...); `severity_rank >= 40` is high and above.
+`rule`, ...); `severity_rank >= 40` is high and above. On **Catalog, under Actions: Action rules**,
+choose **New action rule**: the transitions, the **When** (checked as you type, each fact it may name
+listed beneath with its type, a mistake pointed at by line and column; empty sends on every alarm),
+the targets to send to, and optionally a notification type.
+
+::screenshot{#action-rule-new}
+
+The rule's panel shows what it sends and to whom, and its **recent notifications**: each message's
+component, edge, target and how its delivery stands (on its way, sent, or failed with the reason),
+picked from the newest 500 notifications you can see. **Disable** pauses the rule and **Enable**
+resumes it. From the CLI:
 
 ```bash
 omniglass action-rule create --name page-ops --on '["raised","cleared"]' \
@@ -72,7 +109,7 @@ omniglass action-rule create --name page-ops --on '["raised","cleared"]' \
 
 `omniglass action-rule update page-ops --enabled=false` pauses the rule (nothing queues while it
 is off; what it already queued still delivers), and `--enabled=true` resumes it from the next
-transition. Without a `--notification-type`, a raise sends the official `alarm-raised` message and a clear the
+transition, exactly as the panel's switch does. Without a `--notification-type`, a raise sends the official `alarm-raised` message and a clear the
 official `alarm-cleared` one. Acknowledging an alarm never sends anything; clearing one does,
 whoever clears it.
 
@@ -94,6 +131,9 @@ group, and a `principal` target one person, on the channels it names. `inbox` is
 (the bell in the shell); `email` is each person's directory email, sent through the install's mail
 relay (below). Binding a group takes `principal_group:read:admin` and binding a person
 `principal:read:admin`, both admin's.
+
+On the Targets page these are the **Group** and **Person** kinds, each with the channels it tells
+on; neither takes a test, since people are told only about alarms.
 
 ```bash
 omniglass notification-target create --name on-call-page --kind principal_group \
@@ -139,12 +179,15 @@ only when `egress_allow` names it, as for a webhook.
 
 Every notification joins its alarm's timeline after the edge that queued it: **notifying**
 ops-chat while it is on its way, **notified** when the receiver answered 2xx, **failed to notify**
-with the reason when it gave up. A receiver that is down is retried: 10 seconds, then doubling,
+with the reason when it gave up, **held back from** ops-chat with the reason when the alarm's
+condition was [snoozed](/guides/operator/entities/#snoozing-silencing-a-noisy-condition-for-a-while)
+(a held-back row is final: it is never sent or retried). A receiver that is down is retried: 10 seconds, then doubling,
 until the 8th failed attempt (about 21 minutes in all). A failed one carries **Retry** on the
 timeline for whoever holds `notification:retry` (operators do), or:
 
 ```bash
 omniglass notification list --status failed
+omniglass notification list --status suppressed
 omniglass notification retry <id>
 ```
 

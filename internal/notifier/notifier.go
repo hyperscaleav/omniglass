@@ -8,7 +8,8 @@
 // ADR-0148 chose for calc rules, not the CDC-to-JetStream sender the
 // alarms-and-actions page designs: the notification must commit with the
 // alarm, and the CDC publisher (#430) is unbuilt; when it lands the drain can
-// move behind it without changing the row.
+// move behind it without changing the row. The same tick ends expired alarm
+// snoozes (#1318, ADR-1318) until the time primitive (#419) lands.
 package notifier
 
 import (
@@ -36,6 +37,7 @@ const (
 // Store is the slice of the Storage Gateway the tick uses.
 type Store interface {
 	DeliverNext(ctx context.Context, send storage.SendFunc) (bool, error)
+	EndExpiredSnoozes(ctx context.Context, max int) (int, error)
 	EgressPolicy(ctx context.Context) (egress.Policy, error)
 }
 
@@ -52,10 +54,20 @@ func New(store Store, opts egress.Options) *Notifier {
 	return &Notifier{store: store, opts: opts, now: time.Now}
 }
 
-// Pass delivers up to max due notifications and reports how many it took
-// (sent or not). The egress policy is read once per pass; an allow list that
-// does not parse fails every send of the pass with the reason.
+// Pass ends the snoozes past their deadline, then delivers up to max due
+// notifications and reports how many it took (sent or not). The sweep runs
+// here, on the drain's tick, until the time primitive (#419) exists
+// (ADR-1318), and first, so a condition announced again at the end of its
+// snooze is delivered in the same pass. The egress policy is read once per
+// pass; an allow list that does not parse fails every send of the pass with
+// the reason.
 func (n *Notifier) Pass(ctx context.Context, max int) (int, error) {
+	// A sweep that fails is logged and the drain still runs: a snooze left
+	// past its deadline only waits for the next tick, while a stalled drain
+	// would hold back every other notification.
+	if _, err := n.store.EndExpiredSnoozes(ctx, max); err != nil && ctx.Err() == nil {
+		slog.Warn("the end-of-snooze sweep failed", "facility", "notify", "error", err.Error())
+	}
 	pol, perr := n.store.EgressPolicy(ctx)
 	client := egress.New(pol, n.opts)
 	mailer := mail.New(pol, n.opts)

@@ -158,8 +158,9 @@ Coded pages with rich interaction, all reading through views:
   ([time](/architecture/time/)).
 - **Alarm drill-down**: the alarm, its triggering sample and history, the actions it fired, and the
   acknowledgement (built today on the component's Alarms panel, not on a drill-down of its own).
-  Snooze and resolve controls are **not** part of this: both were refused, with reasons, in
+  A resolve control is **not** part of this: it was refused, with a reason, in
   [ADR-0109](/architecture/decisions/#adr-0109-an-alarm-carries-an-acknowledgement-and-not-a-snooze-or-a-resolve).
+  Snooze, refused there until there was a notification to suppress, is its own feature (#1318).
 - **Inventory and topology**: navigable location / system / component trees,
   [health](/architecture/health/) (`status-grid`) at each level.
 - **Event exploration**: the event log by entity / time / category, with the audit trail.
@@ -210,7 +211,9 @@ group completing the sentence (Catalog, under Locations: Types). The organizing 
 teach: **Telemetry is what you receive, Actions is what you send or run**; an event is a record of
 a happening (caught from the fleet or caused by the platform), never an outbound message, which
 is why Events sits in Telemetry while Rules, Commands, and Notifications (#618) sit in
-Actions.
+Actions, with the action rules that say when a message is sent and the targets it goes to beside
+them (#1346). Targets is the one Actions entry off the read floor: `notification_target` is a
+sensitive resource, so only an admin sees it.
 
 **Values is its own top-level group**: values set on fleet entities and resolved
 down the cascade, a distinct genus from the entities themselves. **Config is the CI store** (desired

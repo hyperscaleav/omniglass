@@ -18,6 +18,15 @@ export type Transition = (typeof TRANSITIONS)[number];
 export const CHANNELS = ["inbox", "email"] as const;
 export type Channel = (typeof CHANNELS)[number];
 
+// The pills a transition and a neutral fact wear, on every surface that lists
+// action rules or what they sent (the subscriptions page, the platform action
+// rules and their recent notifications).
+export const PILL_NEUTRAL = "badge badge-sm badge-ghost";
+export const TRANSITION_PILL: Record<string, string> = {
+  raised: "badge badge-sm badge-soft badge-warning",
+  cleared: "badge badge-sm badge-healthy",
+};
+
 export const SUBSCRIPTIONS_KEY = ["auth", "me", "action-rules"] as const;
 
 // A person may own at most this many (the server refuses the next with a 409).
