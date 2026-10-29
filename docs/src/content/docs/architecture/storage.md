@@ -324,7 +324,11 @@ The same pass keeps the two log tables, a component's `log_line` and a node's `n
 severity band (`logline.RetentionBands`): `retention.log_debug_days` (3 by default) for debug,
 `log_info_days` (14) for info and notice, `log_warning_days` (30) for warning, and
 `log_error_days` (90) for error, critical, alert and emergency. A line with no severity is kept with
-info. A log line has no floor: it is not a series' value, and an event that named one as its source
+info. A node's own logs may keep a band for a window of their own: `retention.node_log_debug_days`,
+`node_log_info_days`, `node_log_warning_days` and `node_log_error_days` are unset by default, and while
+one is unset `node_log` follows the shared band; once an admin sets one, the pass prunes that band of
+`node_log` by it and `log_line` still by the shared window (#1350). A per-node window, through the
+cascade with a node as its leaf, waits for #1351. A log line has no floor: it is not a series' value, and an event that named one as its source
 keeps itself and drops the link (`event.source_log_line_id` is `on delete set null`).
 - **Searched, not walked.** Each band's prune searches exactly the rows it may delete, through the
   table's `(severity, ts)` index, or its `(ts)` index for lines with no severity, ordered as that

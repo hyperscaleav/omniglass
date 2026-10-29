@@ -83,6 +83,30 @@ export const settingsSchema = {
       "maximum": 36500,
       "format": "int64"
     },
+    "node_log_debug_days": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 36500,
+      "format": "int64"
+    },
+    "node_log_error_days": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 36500,
+      "format": "int64"
+    },
+    "node_log_info_days": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 36500,
+      "format": "int64"
+    },
+    "node_log_warning_days": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 36500,
+      "format": "int64"
+    },
     "property_days": {
       "type": "integer",
       "minimum": 1,

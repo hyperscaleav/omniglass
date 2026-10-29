@@ -84,6 +84,18 @@ on **Admin > Settings**, each from 1 to 36,500 days:
   - `log_info_days`, 14 by default, which also covers notice and a line with no severity;
   - `log_warning_days`, 30 by default;
   - `log_error_days`, 90 by default, which also covers critical, alert and emergency.
+- Your nodes' own logs, if you want them kept for a different window than your components' lines:
+  `node_log_debug_days`, `node_log_info_days`, `node_log_warning_days` and `node_log_error_days`.
+  Each reads **not set** until you set it, and while it is not set a node's lines of that severity
+  follow the shared window above. Restore one to go back to the shared window. Drop a node's debug
+  chatter after a day while keeping a component's for three, say, or keep a node's for a month
+  while chasing a node problem. Over the API it is a merge patch, where a `null` restores the
+  shared window (the CLI's `setting update` cannot send a body yet, #1333):
+
+  ```sh
+  curl -X PATCH "$OMNIGLASS_SERVER/api/v1/settings/retention" -H "Authorization: Bearer $OMNIGLASS_TOKEN" \
+    -H 'Content-Type: application/merge-patch+json' -d '{"node_log_debug_days": 1}'
+  ```
 
 Three things are never removed, however old:
 - a declared value (an operator's assertion is the truth, not a sample);

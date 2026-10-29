@@ -10288,6 +10288,26 @@ export interface components {
             metric_days: number;
             /**
              * Format: int64
+             * @description Days a node's own debug log line is kept; unset follows log_debug_days
+             */
+            node_log_debug_days?: number;
+            /**
+             * Format: int64
+             * @description Days a node's own error, critical, alert or emergency log line is kept; unset follows log_error_days
+             */
+            node_log_error_days?: number;
+            /**
+             * Format: int64
+             * @description Days a node's own info or notice log line, or one with no severity, is kept; unset follows log_info_days
+             */
+            node_log_info_days?: number;
+            /**
+             * Format: int64
+             * @description Days a node's own warning log line is kept; unset follows log_warning_days
+             */
+            node_log_warning_days?: number;
+            /**
+             * Format: int64
              * @description Days a property transition is kept, unless its type keeps its own (a property type's retention_days)
              * @default 90
              */

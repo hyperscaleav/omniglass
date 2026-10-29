@@ -10,7 +10,7 @@ import {
   useRestoreNamespace,
   useRestoreAllDefaults,
 } from "../lib/settings";
-import { constraintFor, isList, listText, validateField, wireValue } from "../lib/settingsValidation";
+import { constraintFor, isList, listText, settingKeys, validateField, wireValue } from "../lib/settingsValidation";
 
 // Settings is the Admin platform-settings surface (issue #271). It resolves the
 // effective settings document from the cascade (the declared defaults, the operator
@@ -156,7 +156,7 @@ export default function Settings() {
                     </Show>
                   </div>
                   <div class="overflow-hidden rounded-box border border-base-300 bg-base-100">
-                    <For each={Object.keys(data().values[namespace]).sort()}>
+                    <For each={settingKeys(namespace, data().values[namespace])}>
                       {(key, i) => (
                         <SettingRow
                           first={i() === 0}
