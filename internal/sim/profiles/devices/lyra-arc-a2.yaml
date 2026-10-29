@@ -1,0 +1,104 @@
+# yaml-language-server: $schema=schema.json
+# Lyra Arc A2, Ceiling Array Microphone
+#
+# Lyra is the lab's fictional microphone vendor. The Arc A2 is a ceiling
+# array microphone, powered and connected over one network cable, that
+# feeds a room's DSP over the network. An operator watches it for mute
+# and for a level that says it hears the room.
+
+name: lyra-arc-a2
+manufacturer: Lyra
+model: "Arc A2"
+device_type: ceiling-mic
+slug_prefix: ceiling-mic
+
+doc:
+  summary: "Lyra Arc A2, ceiling array microphone"
+  description: |
+    Monitored over SNMP on the Lyra enterprise arc (mute and the input
+    level); muted and unmuted over a small HTTP API behind the Lyra
+    header key.
+
+interfaces:
+  - name: http-api
+    protocol: http
+    port: 80
+    doc: { summary: "Lyra control API", tags: [management, api] }
+    auth:
+      type: header
+      header: "X-Lyra-Key"
+      api_key: "lyra-lab-key"
+      enforce: true
+    api_surface: lyra-mic
+    routes:
+      - match: "GET /api/status"
+        template: api/lyra-mic/status.json.gotempl
+        doc: { summary: "Microphone identity and state", tags: [api, status] }
+
+      - match: "POST /api/mute"
+        template: api/lyra-mic/mute-ack.json.gotempl
+        doc: { summary: "Mute or unmute the microphone", tags: [api, control] }
+        example: |
+          {"mute": true}
+        mutations:
+          - path: status.mic.mute
+            value: "{{ .Request.Body.mute }}"
+            enum: ["true", "false"]
+
+  - name: snmp
+    protocol: snmp
+    port: 161
+    doc: { summary: "SNMP monitoring", tags: [monitoring] }
+    api_surface: lyra-mic
+    auth:
+      community: "public"
+      refused_community: "revoked"
+    # The Lyra arc, 1.3.6.1.4.1.55530: the microphone at .1 (mute, the
+    # input level in dBFS) and identity at .5; the wireless link's .2
+    # is the HX-1's alone.
+    oid_map:
+      configuration.device.model:     "1.3.6.1.2.1.1.1.0"   # sysDescr
+      status.device.uptime:           "1.3.6.1.2.1.1.3.0"
+      status.mic.mute:                "1.3.6.1.4.1.55530.1.1.0"
+      status.mic.level_db:            "1.3.6.1.4.1.55530.1.2.0"
+      configuration.firmware.version: "1.3.6.1.4.1.55530.5.1.0"
+      configuration.device.serial:    "1.3.6.1.4.1.55530.5.2.0"
+
+  - name: icmp
+    protocol: icmp
+    doc: { summary: "ICMP ping reachability", tags: [monitoring] }
+
+computed:
+  - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
+
+# The input level rides speech in the place it hears: it moves every few
+# seconds within a talker's range, a behavior a scenario can drive (a
+# meeting starting, a silent room).
+behaviors:
+  - name: level_drift
+    schedule:
+      interval: 15s
+    mutations:
+      - path: status.mic.level_db
+        value: "{{ round 1 (clamp -70.0 -20.0 (randStep 4.0 .State.status.mic.level_db)) }}"
+
+defaults:
+  status:
+    device:
+      boot_epoch: 0
+    mic:
+      mute: false
+      level_db: -42
+    network:
+      ipv4:
+        address: ""
+        mac: ""
+  configuration:
+    device:
+      serial: ""
+      model: "Arc A2"
+      manufacturer: "Lyra"
+    firmware:
+      version: "lyra-arc-a21"
+    network:
+      hostname: ""

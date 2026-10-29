@@ -8,8 +8,6 @@ unsimulated:
   generic-service: "#1363: the dev fleet's recording service, a software service to watch over https"
   kestrel-gaze-p2: "#897: a PTZ camera, not a video bar"
   kestrel-relay-c1: "#897: a codec, not a video bar"
-  lyra-arc-a2: "#894: no Lyra profile yet"
-  lyra-hx-1: "#894: no Lyra profile yet"
   meridian-mx-84: "#895: no Meridian profile yet"
   meridian-xl-1: "#895: no Meridian profile yet"
   newtron-core-3: "#896: a control processor; the panel's surface is a subset of it"
