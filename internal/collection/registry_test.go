@@ -199,3 +199,23 @@ func TestOnlyAnUnambiguousOperatorRowShadows(t *testing.T) {
 		}
 	}
 }
+
+// A reserved key (the node's or the platform's own) is never shadowed: held in two
+// catalogs it resolves to nothing, so an operator row that appears beside a key a
+// later release reserves cannot take the official probe key's place.
+func TestAReservedKeyIsNeverShadowed(t *testing.T) {
+	reg := collection.NewRegistry(
+		[]storage.MetricType{{Name: "icmp-reachable", Official: true}},
+		[]storage.PropertyType{{Name: "icmp-reachable"}},
+		nil,
+	)
+	if got := reg.Collisions(); len(got) != 1 || got[0] != "icmp-reachable" {
+		t.Errorf("Collisions() = %v, want [icmp-reachable]", got)
+	}
+	if got := reg.Shadowed(); len(got) != 0 {
+		t.Errorf("Shadowed() = %v, want none", got)
+	}
+	if _, ok := reg.Property("icmp-reachable"); ok {
+		t.Error("an operator row took a reserved key")
+	}
+}

@@ -70,40 +70,31 @@ func NewRegistry(metricTypes []storage.MetricType, propertyTypes []storage.Prope
 	}
 
 	// Who holds each name: the lane, and whether the row is official.
-	type holder struct {
-		lane     string
-		official bool
-	}
-	holders := map[string][]holder{}
+	holders := map[string][]storage.NameHolder{}
 	for _, mt := range metricTypes {
-		holders[mt.Name] = append(holders[mt.Name], holder{"metric", mt.Official})
+		holders[mt.Name] = append(holders[mt.Name], storage.NameHolder{Lane: "metric", Official: mt.Official})
 	}
 	for _, pt := range propertyTypes {
-		holders[pt.Name] = append(holders[pt.Name], holder{"property", pt.Official})
+		holders[pt.Name] = append(holders[pt.Name], storage.NameHolder{Lane: "property", Official: pt.Official})
 	}
 	for _, et := range eventTypes {
-		holders[et.Name] = append(holders[et.Name], holder{"event", et.Official})
+		holders[et.Name] = append(holders[et.Name], storage.NameHolder{Lane: "event", Official: et.Official})
 	}
-	// The lane each name resolves on; none for a collision.
+	// The lane each name resolves on (storage.ResolveNameLane, the one rule every
+	// reader of a name shares); none for a collision.
 	winner := make(map[string]string, len(holders))
 	var collisions, shadowed []string
 	for name, hs := range holders {
-		if len(hs) == 1 {
-			winner[name] = hs[0].lane
-			continue
-		}
-		var operators []holder
-		for _, h := range hs {
-			if !h.official {
-				operators = append(operators, h)
-			}
-		}
-		if len(operators) == 1 {
-			winner[name] = operators[0].lane
+		lane, isShadowed, ok := storage.ResolveNameLane(name, hs)
+		switch {
+		case !ok:
+			collisions = append(collisions, name)
+		case isShadowed:
+			winner[name] = lane
 			shadowed = append(shadowed, name)
-			continue
+		default:
+			winner[name] = lane
 		}
-		collisions = append(collisions, name)
 	}
 	slices.Sort(collisions)
 	slices.Sort(shadowed)
@@ -139,6 +130,9 @@ func (r Registry) Collisions() []string { return r.collisions }
 // operator's row holds in another: each resolves to the operator's row, and the
 // official one waits until the operator renames theirs (#1307).
 func (r Registry) Shadowed() []string { return r.shadowed }
+
+// IsShadowed reports a name an operator's row shadows an official row of (#1307).
+func (r Registry) IsShadowed(name string) bool { return slices.Contains(r.shadowed, name) }
 
 // Metric resolves name on the metric lane (reject-not-project: false means the
 // sample carrying it is refused by name).

@@ -63,33 +63,47 @@ func loadDriverCatalog(ctx context.Context, q querier) (catalogMaps, error) {
 		calcOwned: map[string]bool{},
 	}
 	rows, err := q.Query(ctx, `
-		select name, 'metric', null::jsonb from metric_type
+		select name, 'metric', official, null::jsonb from metric_type
 		union all
-		select name, 'property', null::jsonb from property_type
+		select name, 'property', official, null::jsonb from property_type
 		union all
-		select name, 'event', payload_schema from event_type`)
+		select name, 'event', official, payload_schema from event_type`)
 	if err != nil {
 		return cat, fmt.Errorf("storage: load emit catalogs: %w", err)
 	}
 	defer rows.Close()
+	held := map[string][]NameHolder{}
+	eventSchemas := map[string][]byte{}
 	for rows.Next() {
-		var name, lane string
+		var name string
+		var h NameHolder
 		var schema []byte
-		if err := rows.Scan(&name, &lane, &schema); err != nil {
+		if err := rows.Scan(&name, &h.Lane, &h.Official, &schema); err != nil {
 			return cat, fmt.Errorf("storage: scan emit catalog: %w", err)
 		}
-		// The three ingest catalogs share one namespace (a create is refused
-		// when a sibling holds the name); first write wins if a stranger ever
-		// collides, and validation still resolves.
-		if _, dup := cat.lanes[name]; !dup {
-			cat.lanes[name] = lane
-			if len(schema) > 0 {
-				cat.schemas[name] = schema
-			}
+		held[name] = append(held[name], h)
+		if h.Lane == "event" && len(schema) > 0 {
+			eventSchemas[name] = schema
 		}
 	}
 	if err := rows.Err(); err != nil {
 		return cat, fmt.Errorf("storage: read emit catalogs: %w", err)
+	}
+	// A name resolves to the catalog the ingest registry resolves it to (an
+	// operator's row shadows an official one, #1307). A name that resolves to
+	// nothing (a collision) is left out, so a spec naming it is refused rather
+	// than validated against a lane ingest would not write.
+	for name, hs := range held {
+		lane, _, ok := ResolveNameLane(name, hs)
+		if !ok {
+			continue
+		}
+		cat.lanes[name] = lane
+		if lane == "event" {
+			if s, has := eventSchemas[name]; has {
+				cat.schemas[name] = s
+			}
+		}
 	}
 	for sql, into := range map[string]map[string]bool{
 		`select name from command_type`: cat.commands,
