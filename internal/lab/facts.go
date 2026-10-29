@@ -22,6 +22,7 @@ type Facts struct {
 	Containers   []FactService `json:"containers"`
 	Volumes      []FactVolume  `json:"volumes"`
 	Walkthroughs []Walkthrough `json:"walkthroughs"`
+	Cadences     []FactCadence `json:"cadences"`
 }
 
 // FactService is one row of the topology table.
@@ -35,6 +36,14 @@ type FactService struct {
 	Publish  string   `json:"publish"`
 	RunsOnce bool     `json:"runs_once"`
 	Role     string   `json:"role"`
+}
+
+// FactCadence is one cadence profile the lab's node runs at.
+type FactCadence struct {
+	Name       string `json:"name"`
+	Heartbeat  string `json:"heartbeat"`
+	ProbeEvery string `json:"probe_every"`
+	For        string `json:"for"`
 }
 
 // FactVolume is one named volume the lab keeps.
@@ -124,6 +133,13 @@ func FactsJSON(walkthroughs fs.FS) ([]byte, error) {
 	}
 	for _, v := range spec.Volumes {
 		f.Volumes = append(f.Volumes, FactVolume{Name: v.Name, Holds: v.Holds})
+	}
+	for _, c := range CadenceProfiles() {
+		probe := c.ProbeEvery
+		if probe == "" {
+			probe = "every check-in"
+		}
+		f.Cadences = append(f.Cadences, FactCadence{Name: c.Name, Heartbeat: c.Heartbeat, ProbeEvery: probe, For: c.For})
 	}
 	names, err := fs.Glob(walkthroughs, "*.yaml")
 	if err != nil {
