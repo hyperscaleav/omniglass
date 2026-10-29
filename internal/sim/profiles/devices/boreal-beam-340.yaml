@@ -11,8 +11,9 @@
 # Two faces, the Boreal convention (the Edge displays have the same):
 # an HTTP web admin behind HTTP Digest (admin / boreal) for control
 # (power, the shutter, the input), and SNMP on the Boreal enterprise arc
-# (1.3.6.1.4.1.55520) for monitoring. The display arc's device power
-# (.1.1.1.0) and identity (.5) are shared with the Edge; the projector's
+# (1.3.6.1.4.1.55520) for monitoring. The power state (.1.1.1.0) and the
+# serial (.5.2.0) sit where the Edge keeps them; firmware at .5.1.0 is the
+# Beam's own (the Edge withholds it from SNMP on purpose). The projector's
 # own branch is .6: light-source hours, shutter, input, temperature.
 
 name: boreal-beam-340
@@ -127,7 +128,7 @@ behaviors:
       interval: 60s
     mutations:
       - path: status.projector.light_source_hours
-        value: '{{ if eq (.State.status.device.power | printf "%v") "on" }}{{ round 2 (add .State.status.projector.light_source_hours 0.0166667) }}{{ else }}{{ .State.status.projector.light_source_hours }}{{ end }}'
+        value: '{{ if eq (.State.status.device.power | printf "%v") "on" }}{{ round 4 (add .State.status.projector.light_source_hours 0.0166667) }}{{ else }}{{ .State.status.projector.light_source_hours }}{{ end }}'
 
   - name: temperature_drift
     schedule:

@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"strings"
 	"testing"
@@ -177,8 +178,8 @@ func TestBorealBeamControlOverHTTP(t *testing.T) {
 
 	resp := beamDo(t, d, http.MethodPost, "/api/projector/shutter", `{"shutter": "ajar"}`, true)
 	resp.Body.Close()
-	if resp.StatusCode < 400 {
-		t.Errorf("shutter %q: status %d, want a refusal", "ajar", resp.StatusCode)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("shutter %q: status %d, want 400, the enum's refusal", "ajar", resp.StatusCode)
 	}
 	if v := beamSNMP(t, d, beamOIDShutter)[beamOIDShutter]; v != "closed" {
 		t.Errorf("SNMP shutter after a refused write = %q, want closed", v)
@@ -213,8 +214,10 @@ func TestBorealBeamLightSourceAgesWhileLit(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		d.tickBehavior(aging)
 	}
-	if lit := hours(); lit <= start || lit > start+0.06 {
-		t.Fatalf("hours after three lit minutes = %v from %v, want about 0.05 more", lit, start)
+	// Three lit minutes are three sixtieths of an hour, kept to the
+	// ten-thousandth, so an hour of ticks adds an hour.
+	if lit := hours(); math.Abs(lit-start-0.05) > 0.001 {
+		t.Fatalf("hours after three lit minutes = %v from %v, want 0.05 more", lit, start)
 	}
 	beamJSON(t, d, http.MethodPost, "/api/projector/power", `{"power": "standby"}`)
 	before := hours()

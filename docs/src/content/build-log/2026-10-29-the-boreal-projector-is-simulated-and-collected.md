@@ -10,7 +10,7 @@ of its own and a driver in place of `snmp-generic`, which read only `sysDescr` a
 
 The profile follows the Boreal convention the Edge displays set. A web admin behind HTTP Digest
 reports the projector's state as JSON and sets its power, its shutter and its input; SNMP on the
-Boreal enterprise arc answers the same state, the device power where every Boreal agent keeps it and
+Boreal enterprise arc answers the same state, the power state where every Boreal agent keeps it and
 the projector's own branch at `.55520.6`: light-source hours, shutter, input and temperature. The
 light source ages only while it is lit, a minute's hours a minute, a behavior a scenario timeline can
 run faster to walk the source toward its service threshold.
