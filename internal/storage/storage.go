@@ -729,6 +729,11 @@ type Gateway interface {
 	SweepCommandSettlements(ctx context.Context) error
 	// NodeSimDevices lists the components a simulator beside the node serves,
 	// within the component read scope.
+	// EnsureServicePrincipal and SetServiceToken are the trusted lane's
+	// (#1370): a service principal found or created by name, and its one
+	// token, replacing any before it.
+	EnsureServicePrincipal(ctx context.Context, actorID, name string) (string, error)
+	SetServiceToken(ctx context.Context, actorID, name string, hash []byte, prefix string) (bool, error)
 	NodeSimDevices(ctx context.Context, name string, read scope.Set) ([]SimDevice, error)
 	// NodeSimWebhooks reads the webhook subscription of each simulated
 	// component on the node (ADR-1370), keyed by component id: only for the

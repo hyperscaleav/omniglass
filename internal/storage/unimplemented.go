@@ -1188,3 +1188,10 @@ func (UnimplementedGateway) TestPersonalRule(context.Context, string, string, Ru
 func (UnimplementedGateway) SetRuleOptOut(context.Context, string, string, string, bool) (*ActionRule, error) {
 	return nil, ErrActionRuleNotFound
 }
+
+func (UnimplementedGateway) EnsureServicePrincipal(context.Context, string, string) (string, error) {
+	return "", nil
+}
+func (UnimplementedGateway) SetServiceToken(context.Context, string, string, []byte, string) (bool, error) {
+	return false, nil
+}

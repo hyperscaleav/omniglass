@@ -112,7 +112,14 @@ type Options struct {
 	// re-enrolls its node every time, so it stores no node secret.
 	NodeToken     string
 	NodeTokenHash string
-	Owner         Owner
+	// PushToken is the simulated pusher's token (#1370), minted per run the
+	// same way: the node's simulator holds it, and the seed sets the
+	// pusher's credential from its hash and non-secret prefix. Empty, the
+	// simulator pushes nothing.
+	PushToken       string
+	PushTokenHash   string
+	PushTokenPrefix string
+	Owner           Owner
 	// WorkDir is reported to compose as the project's working directory.
 	WorkDir string
 	// Ephemeral makes a throwaway lab, for a script (the demo pipeline's
@@ -303,8 +310,9 @@ func Plan(o Options) (Spec, error) {
 	}
 	spec.Seed = Service{
 		Name: "seed", Container: o.Project + "-seed-run-1", Image: o.Image,
-		Cmd:    seedCmd,
-		Env:    append(append([]string{}, appEnv...), "OMNIGLASS_LAB_NODE_TOKEN_HASH="+o.NodeTokenHash),
+		Cmd: seedCmd,
+		Env: append(append([]string{}, appEnv...), "OMNIGLASS_LAB_NODE_TOKEN_HASH="+o.NodeTokenHash,
+			"OMNIGLASS_LAB_PUSH_TOKEN_HASH="+o.PushTokenHash, "OMNIGLASS_LAB_PUSH_TOKEN_PREFIX="+o.PushTokenPrefix),
 		Mounts: []Mount{{Volume: volData, Target: dataDir}},
 		OneOff: true,
 		Labels: svc("seed", true),
@@ -337,6 +345,7 @@ func Plan(o Options) (Spec, error) {
 			"OMNIGLASS_SERVER=http://server:" + strconv.Itoa(consolePort),
 			"OMNIGLASS_NODE_NAME=" + NodeName,
 			"OMNIGLASS_NODE_TOKEN=" + o.NodeToken,
+			"OMNIGLASS_SIM_PUSH_TOKEN=" + o.PushToken,
 		},
 		// Distroless grants an added capability to root only, so the node
 		// runs as root inside its own container, to hold NET_ADMIN for the

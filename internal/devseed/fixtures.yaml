@@ -2233,3 +2233,14 @@ sim_identity_bindings:
   - { conduit: ucc-platform, key: ucc-room-id, value: zr-huddle-north, system: huddle-north }
   - { conduit: ucc-platform, key: ucc-room-id, value: zr-briefing-av, system: briefing-av }
   - { conduit: ucc-platform, key: ucc-room-id, value: zr-auditorium-av, system: auditorium-av }
+
+# A first-party pusher (#1370): the simulated booking service, a scheduling
+# platform's integration that posts a place's bookings (booking-count,
+# booking-state) to POST /telemetry:push, owned by the place's system. A
+# service principal holding telemetry:push alone, scoped to that one system,
+# so it can push nowhere else and read nothing. The lab mints its token on
+# every run, as it does the node's, and the simulator beside the node pushes
+# with it. A push has no endpoint, so it counts on its collected tier alone.
+sim_pusher:
+  service: sim-booking-service
+  system: boardroom-a

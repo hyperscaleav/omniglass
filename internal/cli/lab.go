@@ -169,6 +169,11 @@ func runLab(ctx context.Context, out io.Writer, version string, f labFlags) erro
 	if err != nil {
 		return err
 	}
+	// The simulated pusher's token (#1370), minted per run like the node's.
+	pushToken, pushHash, pushPrefix, err := auth.NewBearerToken()
+	if err != nil {
+		return err
+	}
 	host, _ := os.Hostname()
 	wd, _ := os.Getwd()
 	r := &lab.Runner{
@@ -180,6 +185,7 @@ func runLab(ctx context.Context, out io.Writer, version string, f labFlags) erro
 		Options: lab.Options{
 			Project: f.project, Listen: f.listen, Port: f.port, Image: choice.Ref, Scenario: sc.Name,
 			NodeToken: token, NodeTokenHash: hex.EncodeToString(hash),
+			PushToken: pushToken, PushTokenHash: hex.EncodeToString(pushHash), PushTokenPrefix: pushPrefix,
 			Owner: lab.Owner{Host: host, PID: os.Getpid(), PIDNS: lab.CurrentPIDNS()}, WorkDir: wd,
 			Ephemeral: f.script.ephemeral, NoNode: f.script.noNode,
 		},
@@ -217,7 +223,8 @@ func newLabSeedCmd() *cobra.Command {
 		Hidden: true,
 		Args:   cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runLabSeed(cmd.Context(), cmd.OutOrStdout(), scenario, node, user, password, config.Get("OMNIGLASS_LAB_NODE_TOKEN_HASH"), noNode)
+			return runLabSeed(cmd.Context(), cmd.OutOrStdout(), scenario, node, user, password, config.Get("OMNIGLASS_LAB_NODE_TOKEN_HASH"), noNode,
+				pushCredential{Hash: config.Get("OMNIGLASS_LAB_PUSH_TOKEN_HASH"), Prefix: config.Get("OMNIGLASS_LAB_PUSH_TOKEN_PREFIX")})
 		},
 	}
 	cmd.Flags().StringVar(&scenario, "scenario", lab.DefaultScenario, "the fleet to seed on the first run")
@@ -236,7 +243,11 @@ func newLabSeedCmd() *cobra.Command {
 // With noNode (a throwaway lab whose pages hold still, #1267) it seeds the
 // fleet without the simulated wiring, which nothing would collect from, and
 // enrolls no node, so the lab runs none.
-func runLabSeed(ctx context.Context, out io.Writer, scenario, node, user, password, nodeTokenHash string, noNode bool) error {
+// pushCredential is the simulated pusher's token for this run (#1370): its
+// hash and non-secret prefix, never the token itself. Empty, none is set.
+type pushCredential struct{ Hash, Prefix string }
+
+func runLabSeed(ctx context.Context, out io.Writer, scenario, node, user, password, nodeTokenHash string, noNode bool, push pushCredential) error {
 	sc, err := devseed.LookupScenario(scenario)
 	if err != nil {
 		return err
@@ -314,6 +325,9 @@ func runLabSeed(ctx context.Context, out io.Writer, scenario, node, user, passwo
 		if _, err := gw.SetEnrollmentToken(ctx, "", node, nodeTokenHash, all); err != nil {
 			return err
 		}
+		if err := setPushToken(ctx, gw, push); err != nil {
+			return err
+		}
 	}
 	fmt.Fprintln(out, lab.FormatSeedResult(lab.SeedResult{Node: present, Summary: summary}))
 	return nil
@@ -340,4 +354,28 @@ func labSeedGate(ctx context.Context, dsn string) error {
 		return err
 	}
 	return storage.CheckLabMark(true, st.Marked, st.HoldsData)
+}
+
+// setPushToken gives the simulated pusher (#1370) this run's token, replacing
+// the last run's, so the simulator beside the node can push with it. A fleet
+// with no pusher, or a run with no token, sets none.
+func setPushToken(ctx context.Context, gw storage.Gateway, push pushCredential) error {
+	if push.Hash == "" {
+		return nil
+	}
+	doc, err := devseed.Fixtures()
+	if err != nil {
+		return err
+	}
+	if doc.SimPusher == nil {
+		return nil
+	}
+	hash, err := hex.DecodeString(push.Hash)
+	if err != nil {
+		return fmt.Errorf("lab seed: OMNIGLASS_LAB_PUSH_TOKEN_HASH: %w", err)
+	}
+	if _, err := gw.SetServiceToken(ctx, "", doc.SimPusher.Service, hash, push.Prefix); err != nil {
+		return err
+	}
+	return nil
 }

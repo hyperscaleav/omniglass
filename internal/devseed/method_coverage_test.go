@@ -162,3 +162,53 @@ func readsCollectedValues(spec *driver.Spec) bool {
 	}
 	return false
 }
+
+// TestSeededFleetHoldsAPusherOnOneSystem proves the simulated fleet carries
+// its first-party pusher (#1370): the booking service, holding the pusher
+// role (telemetry:push alone) on the HQ boardroom's system alone, with no
+// token until the lab mints one. A second run adds no grant.
+func TestSeededFleetHoldsAPusherOnOneSystem(t *testing.T) {
+	if testing.Short() {
+		t.Skip("needs Postgres")
+	}
+	ctx, conn, gw := seededFleet(t)
+	grants := func() []string {
+		t.Helper()
+		rows, err := conn.Query(ctx, `
+			select r.name || ' ' || r.permissions::text || ' ' || g.scope_kind || ' ' || g.scope_op || ' ' || l.name
+			from service s join principal_grant g on g.principal_id = s.principal_id
+			join role r on r.id = g.role_id
+			left join system y on y.id::text = g.scope_id::text left join location l on l.id = y.location_id
+			where s.name = 'sim-booking-service'`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer rows.Close()
+		var out []string
+		for rows.Next() {
+			var g string
+			if err := rows.Scan(&g); err != nil {
+				t.Fatal(err)
+			}
+			out = append(out, g)
+		}
+		return out
+	}
+	want := devseed.PusherRole + " {telemetry:push} system self boardroom-a"
+	if got := grants(); len(got) != 1 || got[0] != want {
+		t.Fatalf("the pusher's grants = %v, want [%s]", got, want)
+	}
+	var tokens int
+	if err := conn.QueryRow(ctx, `select count(*) from credential c join service s on s.principal_id = c.principal_id where s.name = 'sim-booking-service'`).Scan(&tokens); err != nil {
+		t.Fatal(err)
+	}
+	if tokens != 0 {
+		t.Fatalf("the seeded pusher holds %d tokens, want none until the lab mints one", tokens)
+	}
+	if err := devseed.Run(ctx, gw, ""); err != nil {
+		t.Fatal(err)
+	}
+	if got := grants(); len(got) != 1 {
+		t.Fatalf("a second run changed the pusher's grants: %v", got)
+	}
+}
