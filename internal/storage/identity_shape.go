@@ -202,6 +202,7 @@ var IdentityShapes = map[string]TableIdentity{
 	"notification":         {Shape: ShapeIDOnly, Reason: "one message on its way, keyed by its uuid (the Idempotency-Key a receiver sees); nothing addresses it by name"},
 	"webhook_token":        {Shape: ShapeIDOnly, Reason: "a webhook endpoint's token binding, keyed by the endpoint's uuid and found by the token's digest; nothing addresses it by name"},
 	"unclaimed_source":     {Shape: ShapeIDOnly, Reason: "a sender no endpoint claims, one row per listener host, transport and source address; read as a list, never addressed by name"},
+	"identity_binding":     {Shape: ShapeIDOnly, Reason: "a conduit's identity tied to its owner, addressed by its conduit, match key and value; nothing names it"},
 	"system_role_product":  {Shape: ShapeIDOnly}, "system_role_type": {Shape: ShapeIDOnly},
 	"tag_binding": {Shape: ShapeIDOnly},
 	// registry_shadow holds an operator's version of a shipped registry row

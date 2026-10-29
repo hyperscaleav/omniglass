@@ -836,6 +836,81 @@
    }
   },
   "collection": {
+   "identity_binding": {
+    "columns": [
+     {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false,
+      "default": "uuidv7()",
+      "pk": true
+     },
+     {
+      "name": "conduit_id",
+      "type": "uuid",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "component.id"
+     },
+     {
+      "name": "property_type_id",
+      "type": "uuid",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "property_type.id"
+     },
+     {
+      "name": "value",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "owner_kind",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "component_id",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "component.id"
+     },
+     {
+      "name": "system_id",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "system.id"
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     }
+    ],
+    "checks": [
+     {
+      "name": "identity_binding_owner_arc",
+      "expr": "CHECK ((((owner_kind = 'component'::text) AND (component_id IS NOT NULL) AND (system_id IS NULL)) OR ((owner_kind = 'system'::text) AND (system_id IS NOT NULL) AND (component_id IS NULL))))"
+     },
+     {
+      "name": "identity_binding_owner_kind_check",
+      "expr": "CHECK ((owner_kind = ANY (ARRAY['component'::text, 'system'::text])))"
+     },
+     {
+      "name": "identity_binding_value_check",
+      "expr": "CHECK (((char_length(value) \u003e= 1) AND (char_length(value) \u003c= 256)))"
+     }
+    ],
+    "uniques": [
+     {
+      "name": "identity_binding_identity_key",
+      "definition": "CREATE UNIQUE INDEX identity_binding_identity_key ON public.identity_binding USING btree (conduit_id, property_type_id, value)"
+     }
+    ]
+   },
    "node": {
     "columns": [
      {

@@ -848,6 +848,15 @@ func (UnimplementedGateway) RemoveMember(context.Context, string, string, string
 func (UnimplementedGateway) SetPrimaryMember(context.Context, string, string, string, scope.Set, scope.Set, scope.Set, scope.Set) error {
 	return nil
 }
+func (UnimplementedGateway) ListIdentityBindings(context.Context, string, scope.Set, scope.Set) (*IdentityBindingList, error) {
+	return &IdentityBindingList{}, nil
+}
+func (UnimplementedGateway) PutIdentityBinding(context.Context, string, string, string, string, IdentityBindingOwner, IdentityBindingScopes) (*IdentityBinding, error) {
+	return &IdentityBinding{}, nil
+}
+func (UnimplementedGateway) DeleteIdentityBinding(context.Context, string, string, string, string, IdentityBindingScopes) error {
+	return nil
+}
 func (UnimplementedGateway) AssignRole(context.Context, string, string, string, string, scope.Set, scope.Set, scope.Set, scope.Set) error {
 	return nil
 }
