@@ -8197,8 +8197,6 @@ export interface components {
             created_at: string;
             /** @description The match key: a registered property type naming what kind of identity the value is (e.g. ucc-room-id) */
             key: string;
-            /** @description Name of the owner the identity's values land on */
-            owner: string;
             /** @description The owner's uuid, the address to navigate by */
             owner_id: string;
             /**
@@ -8206,6 +8204,8 @@ export interface components {
              * @enum {string}
              */
             owner_kind: "component" | "system";
+            /** @description Name of the owner the identity's values land on */
+            owner_name: string;
             /** @description The identity value the conduit reports (e.g. the id a UCC service gives one of the rooms it reports on) */
             value: string;
         };

@@ -4725,9 +4725,6 @@ components:
         key:
           description: "The match key: a registered property type naming what kind of identity the value is (e.g. ucc-room-id)"
           type: string
-        owner:
-          description: Name of the owner the identity's values land on
-          type: string
         owner_id:
           description: The owner's uuid, the address to navigate by
           type: string
@@ -4736,6 +4733,9 @@ components:
           enum:
             - component
             - system
+          type: string
+        owner_name:
+          description: Name of the owner the identity's values land on
           type: string
         value:
           description: The identity value the conduit reports (e.g. the id a UCC service gives one of the rooms it reports on)
@@ -4746,7 +4746,7 @@ components:
         - key
         - value
         - owner_kind
-        - owner
+        - owner_name
         - owner_id
         - created_at
       type: object

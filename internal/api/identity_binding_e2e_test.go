@@ -21,7 +21,7 @@ type bindingWire struct {
 	Key       string `json:"key"`
 	Value     string `json:"value"`
 	OwnerKind string `json:"owner_kind"`
-	Owner     string `json:"owner"`
+	Owner     string `json:"owner_name"`
 	OwnerID   string `json:"owner_id"`
 }
 

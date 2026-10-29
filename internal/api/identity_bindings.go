@@ -20,7 +20,7 @@ type identityBindingBody struct {
 	Key       string    `json:"key" doc:"The match key: a registered property type naming what kind of identity the value is (e.g. ucc-room-id)"`
 	Value     string    `json:"value" doc:"The identity value the conduit reports (e.g. the id a UCC service gives one of the rooms it reports on)"`
 	OwnerKind string    `json:"owner_kind" enum:"component,system" doc:"What kind of owner the identity names: a component or a system"`
-	Owner     string    `json:"owner" doc:"Name of the owner the identity's values land on"`
+	OwnerName string    `json:"owner_name" doc:"Name of the owner the identity's values land on"`
 	OwnerID   string    `json:"owner_id" doc:"The owner's uuid, the address to navigate by"`
 	CreatedAt time.Time `json:"created_at" doc:"When the binding was made"`
 }
@@ -28,7 +28,7 @@ type identityBindingBody struct {
 func toIdentityBindingBody(b storage.IdentityBinding) identityBindingBody {
 	return identityBindingBody{
 		Conduit: b.ConduitName, ConduitID: b.ConduitID, Key: b.Key, Value: b.Value,
-		OwnerKind: b.OwnerKind, Owner: b.OwnerName, OwnerID: b.OwnerID, CreatedAt: b.CreatedAt,
+		OwnerKind: b.OwnerKind, OwnerName: b.OwnerName, OwnerID: b.OwnerID, CreatedAt: b.CreatedAt,
 	}
 }
 
