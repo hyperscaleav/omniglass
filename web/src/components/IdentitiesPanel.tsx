@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, createUniqueId, type JSX } from "solid-js";
 import { A } from "@solidjs/router";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import Button from "./Button";
@@ -17,6 +17,7 @@ import {
   identityRowKey,
   listIdentityBindings,
   listUnboundIdentities,
+  mayUpdateOwner,
   ownerChoices,
   refusalWords,
   unbindIdentity,
@@ -58,23 +59,22 @@ export default function IdentitiesPanel(props: { component: string; canUpdate: b
   const now = createClock(CLOCK_TICK_MS);
   // Both reads poll while the panel shows (the inbox moves as the conduit
   // reports), and neither polls on a component that speaks only for itself.
-  const poll = () =>
-    hasContent(
-      qc.getQueryData<IdentityBindings>(identityBindingsKey(props.component)),
-      qc.getQueryData<UnboundIdentities>(unboundIdentitiesKey(props.component)),
-    )
-      ? LEAF_POLL_MS
-      : false;
+  // Whether to poll is one reactive fact over both reads, read by both
+  // queries' options, so the read that answered first re-applies its
+  // interval when the other lands (a read of the cache from inside the
+  // interval is recomputed only when that query's own data moves).
+  const [live, setLive] = createSignal(false);
   const bindingsQ = useQuery(() => ({
     queryKey: identityBindingsKey(props.component),
     queryFn: () => listIdentityBindings(props.component),
-    refetchInterval: poll,
+    refetchInterval: live() ? LEAF_POLL_MS : false,
   }));
   const unboundQ = useQuery(() => ({
     queryKey: unboundIdentitiesKey(props.component),
     queryFn: () => listUnboundIdentities(props.component),
-    refetchInterval: poll,
+    refetchInterval: live() ? LEAF_POLL_MS : false,
   }));
+  createEffect(() => setLive(hasContent(bindingsQ.data, unboundQ.data)));
   const systems = useQuery(() => ({ queryKey: SYSTEMS_KEY, queryFn: listSystems }));
   const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents }));
 
@@ -94,6 +94,15 @@ export default function IdentitiesPanel(props: { component: string; canUpdate: b
     return hit ? entityLabel(hit) : b.owner_name;
   };
   const ownerHref = (b: IdentityBinding) => (b.owner_kind === "system" ? `/systems/${b.owner_id}` : `/components/${b.owner_id}`);
+  // An unbind writes onto the owner as well as the conduit, so it shows only
+  // where the owner's own row says the caller may update it; an owner the
+  // console has not listed gets no unbind.
+  const canUnbind = (b: IdentityBinding) => {
+    if (!props.canUpdate) return false;
+    const rows: { id: string; actions?: string[] }[] = b.owner_kind === "system" ? (systems.data ?? []) : (components.data ?? []);
+    const hit = rows.find((r) => r.id === b.owner_id);
+    return !!hit && mayUpdateOwner(me.data, b.owner_kind, hit.actions);
+  };
   const conduitId = () => (components.data ?? []).find((c) => c.id === props.component || c.name === props.component)?.id ?? props.component;
   const choices = createMemo(() => ownerChoices(systems.data ?? [], components.data ?? [], conduitId(), me.data));
 
@@ -149,7 +158,12 @@ export default function IdentitiesPanel(props: { component: string; canUpdate: b
       await unbindIdentity(props.component, b.key, b.value);
       await refresh();
     } catch (e) {
-      setUnbindRefusal(`${b.value}: ${refusalWords(e)}`);
+      if ((e as { status?: number } | null)?.status === 404) {
+        setUnbindRefusal(`${b.value}: This binding is already gone, or its owner is outside what you can see.`);
+        void refresh();
+      } else {
+        setUnbindRefusal(`${b.value}: ${refusalWords(e)}`);
+      }
     } finally {
       setBusy(false);
     }
@@ -211,7 +225,9 @@ export default function IdentitiesPanel(props: { component: string; canUpdate: b
                               </td>
                               <Show when={props.canUpdate}>
                                 <td class="text-right">
+                                  <Show when={canUnbind(b())}>
                                   <Button square size="xs" icon={X} label={`Unbind ${b().value}`} title="Unbind" disabled={busy()} onClick={() => void unbind(b())} />
+                                  </Show>
                                 </td>
                               </Show>
                             </tr>
@@ -255,7 +271,9 @@ export default function IdentitiesPanel(props: { component: string; canUpdate: b
                     <For each={unboundKeys()}>
                       {(key) => (
                         <Show when={unboundByKey().get(key)}>
-                          {(u) => (
+                          {(u) => {
+                            const pickerId = createUniqueId();
+                            return (
                             <>
                               <tr data-testid={`unbound-${u().key}-${u().value}`}>
                                 <td class="font-data text-xs text-base-content/60">{u().key}</td>
@@ -278,7 +296,7 @@ export default function IdentitiesPanel(props: { component: string; canUpdate: b
                                       icon={Plus}
                                       label={`Bind ${u().value}`}
                                       expanded={open() === key}
-                                      controls={`bind-${u().key}-${u().value}`}
+                                      controls={`bind-picker-${pickerId}`}
                                       onClick={() => openPicker(key)}
                                     >
                                       Bind
@@ -287,7 +305,7 @@ export default function IdentitiesPanel(props: { component: string; canUpdate: b
                                 </Show>
                               </tr>
                               <Show when={props.canUpdate && open() === key}>
-                                <tr id={`bind-${u().key}-${u().value}`} data-testid={`bind-row-${u().value}`} class="bg-base-200/60">
+                                <tr id={`bind-picker-${pickerId}`} data-testid={`bind-row-${u().value}`} class="bg-base-200/60">
                                   <td colSpan={5}>
                                     <div class="flex flex-col gap-1.5">
                                       <div class="flex flex-wrap items-center gap-1.5">
@@ -332,7 +350,8 @@ export default function IdentitiesPanel(props: { component: string; canUpdate: b
                                 </tr>
                               </Show>
                             </>
-                          )}
+                            );
+                          }}
                         </Show>
                       )}
                     </For>

@@ -67,9 +67,14 @@ export const identityRowKey = (key: string, value: string) => `${key}\u0000${val
 // with no identity already lands there), each kind sorted by what it reads as.
 // The server is the authority; this only keeps the picker from offering an
 // owner it would refuse.
+// mayUpdateOwner is whether the caller may write onto one owner: the kind's
+// update permission, and the owner row's own actions (scope-aware) when the
+// row carries them.
+export const mayUpdateOwner = (me: Me | null | undefined, kind: OwnerKind, actions?: string[]) =>
+  can(me, kind, "update") && (Array.isArray(actions) ? actions.includes("update") : true);
+
 export function ownerChoices(systems: System[], components: Component[], conduitId: string, me: Me | null | undefined) {
-  const may = (kind: OwnerKind, actions?: string[]) =>
-    can(me, kind, "update") && (Array.isArray(actions) ? actions.includes("update") : true);
+  const may = (kind: OwnerKind, actions?: string[]) => mayUpdateOwner(me, kind, actions);
   const byLabel = (a: { name: string; label?: string }, b: { name: string; label?: string }) => entityLabel(a).localeCompare(entityLabel(b));
   return {
     systems: systems.filter((s) => may("system", s.actions)).sort(byLabel),

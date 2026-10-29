@@ -65,11 +65,13 @@ function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 
-function mount(opts: { bindings?: IdentityBindings; unbound?: UnboundIdentities; canUpdate?: boolean } = {}) {
+function mount(opts: { bindings?: IdentityBindings; unbound?: UnboundIdentities; canUpdate?: boolean; unseeded?: boolean; systems?: System[] } = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-  qc.setQueryData([...identityBindingsKey(CONDUIT)], opts.bindings ?? bound);
-  qc.setQueryData([...unboundIdentitiesKey(CONDUIT)], opts.unbound ?? inbox);
-  qc.setQueryData([...SYSTEMS_KEY], systems);
+  if (!opts.unseeded) {
+    qc.setQueryData([...identityBindingsKey(CONDUIT)], opts.bindings ?? bound);
+    qc.setQueryData([...unboundIdentitiesKey(CONDUIT)], opts.unbound ?? inbox);
+  }
+  qc.setQueryData([...SYSTEMS_KEY], opts.systems ?? systems);
   qc.setQueryData([...COMPONENTS_KEY], components);
   qc.setQueryData([...ME_KEY], admin);
   const result = render(() => (
@@ -86,7 +88,10 @@ const boundList = (q: ReturnType<typeof mount>) => q.getByTestId("identity-bindi
 const unboundList = (q: ReturnType<typeof mount>) => q.getByTestId("identity-unbound");
 
 describe("IdentitiesPanel", () => {
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
 
   it("renders nothing on a component that fans nothing out and heard nothing", () => {
     const { queryByTestId } = mount({ bindings: { conduit: CONDUIT, bindings: [], hidden: 0 }, unbound: { component: CONDUIT, identities: [] } });
@@ -233,5 +238,69 @@ describe("IdentitiesPanel", () => {
     expect(q.queryByRole("button", { name: "Bind zr-annex-1" })).toBeNull();
     expect(q.queryByRole("button", { name: "Unbind zr-boardroom-a" })).toBeNull();
     expect(within(unboundList(q)).getByText("zr-annex-1")).toBeTruthy();
+  });
+  // Both reads keep polling whichever answers first (review finding 1): the
+  // poll decision is one reactive fact over both reads, so the read that
+  // landed while the other was still out learns when the other lands.
+  const pollsBoth = async (first: "bindings" | "unbound", b: IdentityBindings, u: UnboundIdentities) => {
+    vi.useFakeTimers();
+    const hits = { bindings: 0, unbound: 0 };
+    let releaseSecond: (() => void) | undefined;
+    const second = new Promise<void>((r) => (releaseSecond = r));
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = (input as Request).url;
+      const which = url.includes("/unbound-identities") ? "unbound" : url.includes("/identity-bindings") ? "bindings" : null;
+      if (!which) return json({});
+      hits[which]++;
+      if (which !== first && hits[which] === 1) await second;
+      return json(which === "bindings" ? b : u);
+    });
+    mount({ unseeded: true });
+    await vi.advanceTimersByTimeAsync(50);
+    releaseSecond!();
+    await vi.advanceTimersByTimeAsync(50);
+    expect(hits).toEqual({ bindings: 1, unbound: 1 });
+    await vi.advanceTimersByTimeAsync(5_100);
+    expect(hits.bindings).toBeGreaterThanOrEqual(2);
+    expect(hits.unbound).toBeGreaterThanOrEqual(2);
+  };
+
+  it("keeps polling the inbox when it answered empty before the bindings did", () =>
+    pollsBoth("unbound", bound, { component: CONDUIT, identities: [] }));
+
+  it("keeps polling the bindings when they answered empty before the inbox did", () =>
+    pollsBoth("bindings", { conduit: CONDUIT, bindings: [], hidden: 0 }, inbox));
+
+  it("offers no unbind on a binding whose owner the caller cannot update, or cannot see listed", () => {
+    const q = mount({
+      bindings: { conduit: CONDUIT, bindings: [binding("zr-boardroom-a", "boardroom-a"), binding("zr-x", "elsewhere")], hidden: 0 },
+      systems: [{ ...systems[0], actions: ["read"] }, systems[1], systems[2]],
+    });
+    expect(q.queryByRole("button", { name: "Unbind zr-boardroom-a" })).toBeNull();
+    expect(q.queryByRole("button", { name: "Unbind zr-x" })).toBeNull();
+  });
+
+  it("says an unbind of a binding already gone in its own words, and reads the lists again", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "DELETE") return json({ status: 404, title: "Not Found", detail: "no binding of this identity on this conduit" }, 404);
+      if (req.url.includes("/unbound-identities")) return json(inbox);
+      return json(bound);
+    });
+    const q = mount();
+    const spy = vi.spyOn(q.qc, "invalidateQueries");
+    fireEvent.click(q.getByRole("button", { name: "Unbind zr-boardroom-a" }));
+    expect((await q.findByRole("alert")).textContent).toContain("This binding is already gone, or its owner is outside what you can see.");
+    await waitFor(() => expect(spy.mock.calls.map((c) => JSON.stringify((c[0] as { queryKey: unknown }).queryKey))).toContain(JSON.stringify(identityBindingsKey(CONDUIT))));
+  });
+
+  it("ties the Bind button to its picker by an id that survives a value with spaces", () => {
+    const q = mount({ unbound: { component: CONDUIT, identities: [{ ...annex, value: "zr room 1" }] } });
+    const trigger = q.getByRole("button", { name: "Bind zr room 1" });
+    fireEvent.click(trigger);
+    const controls = trigger.getAttribute("aria-controls")!;
+    expect(controls).not.toMatch(/\s/);
+    expect(document.getElementById(controls)).toBe(q.getByTestId("bind-row-zr room 1"));
   });
 });
