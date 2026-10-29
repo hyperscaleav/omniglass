@@ -96,12 +96,12 @@ func newNodeRunCmd() *cobra.Command {
 	cmd.Flags().StringVar(&serverURL, "server", "", "Omniglass server base URL (env OMNIGLASS_SERVER)")
 	cmd.Flags().StringVar(&name, "name", "", "this node's registered name (env OMNIGLASS_NODE_NAME)")
 	cmd.Flags().StringVar(&token, "token", "", "enrollment token from POST /nodes/{name}:enroll (env OMNIGLASS_NODE_TOKEN)")
-	cmd.Flags().DurationVar(&heartbeat, "heartbeat", 30*time.Second, "heartbeat interval")
+	cmd.Flags().DurationVar(&heartbeat, "heartbeat", node.DefaultHeartbeat, "heartbeat interval")
 	cmd.Flags().DurationVar(&probeEvery, "probe-every", 0, "how often each reachability probe runs; 0 probes on every heartbeat. Keep it under the console's 150s staleness window, past which a probe-only endpoint reads stale between probes")
 	cmd.Flags().BoolVar(&once, "once", false, "run a single claim + pull + heartbeat cycle and exit")
 	cmd.Flags().BoolVar(&simulate, "simulate", false, "also run the simulator in this process, serving the simulated components placed on this node on its own loopback")
 	cmd.Flags().BoolVar(&impairments, "impairments", false, "with --simulate: apply impairments (unplug, latency, loss) and truthful ping by rewriting the firewall and traffic shaping of this network namespace; needs NET_ADMIN, and is meant for a namespace of the node's own (a container)")
 	cmd.Flags().IntVar(&portOffset, "port-offset", 0, "with --simulate: lift the simulated ports below 1024 by this much, to serve without the privilege to bind them")
-	cmd.Flags().DurationVar(&poll, "poll", 10*time.Second, "with --simulate: how often the simulator re-pulls its component list")
+	cmd.Flags().DurationVar(&poll, "poll", simnode.DefaultPoll, "with --simulate: how often the simulator re-pulls its component list")
 	return cmd
 }

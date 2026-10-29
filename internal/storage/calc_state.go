@@ -512,14 +512,15 @@ func orderPreviewOwners(ctx context.Context, tx pgx.Tx, r CalcRule, owners []pre
 	for i, o := range owners {
 		ids[i] = o.owner.id
 	}
-	table, typeCol := "property", "property_type_id"
-	if r.OutputLane == rules.LaneMetric {
-		table, typeCol = "metric", "metric_type_id"
-	}
 	col := calcOwner{kind: r.OwnerKind}.col()
+	held := `exists (select 1 from property x where x.` + col + ` = o.id and x.property_type_id = $2::uuid and x.instance = ''
+			and x.provenance in ('observed', 'calculated'))`
+	if r.OutputLane == rules.LaneMetric {
+		held = `exists (select 1 from metric_series x where x.owner_id = o.id and x.metric_type_id = $2::uuid and x.instance = ''
+			and x.provenance in ('observed', 'calculated') and exists (select 1 from metric m where m.series_id = x.id))`
+	}
 	rows, err := tx.Query(ctx, `select o.id::text from unnest($1::uuid[]) as o(id)
-		where exists (select 1 from `+table+` x where x.`+col+` = o.id and x.`+typeCol+` = $2::uuid and x.instance = ''
-			and x.provenance in ('observed', 'calculated'))`, ids, r.outputID)
+		where `+held, ids, r.outputID)
 	if err != nil {
 		return fmt.Errorf("storage: calc preview holders of the output: %w", err)
 	}
@@ -570,7 +571,7 @@ func previewCalcOwners(ctx context.Context, tx pgx.Tx, r CalcRule, components, s
 		}
 		metricIDs, propertyIDs := inputTypeIDs(r.Inputs)
 		rows, err := tx.Query(ctx, `select c.id::text from unnest($1::uuid[]) as c(id)
-			where exists (select 1 from metric m where m.component_id = c.id and m.metric_type_id = any($2::uuid[]))
+			where `+metricHeldSQL("c.id", "any($2::uuid[])")+`
 				or exists (select 1 from property x where x.component_id = c.id and x.property_type_id = any($3::uuid[]))`, ids, metricIDs, propertyIDs)
 		if err != nil {
 			return nil, fmt.Errorf("storage: calc preview holders: %w", err)

@@ -31,6 +31,75 @@ drivers:
             # sysUpTime is timeticks (hundredths); the declared scale lands it
             # in the canon's seconds.
             - { name: uptime, extract: { oid: "1.3.6.1.2.1.1.3.0" }, transform: { scale: 0.01 } }
+  - id: boreal-beam-snmp
+    label: Boreal Beam SNMP
+    version: "1.0.0"
+    spec:
+      version: 1
+      # The Boreal projector's state over v2c (#899), from the projector's
+      # branch of the Boreal enterprise arc (1.3.6.1.4.1.55520.6): the
+      # light-source hours a projector is serviced by, the shutter and the
+      # input, beside the device power every Boreal agent keeps at .1.1.1.0.
+      # Its identity sits at .5, sysDescr and sysUpTime are MIB-II's. Power,
+      # the shutter and the input are set over the projector's web admin, a
+      # control face this driver does not speak.
+      transport: snmp
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "161" }
+        - { name: community, kind: secret, secret_type: snmp-community, required: true }
+      polls:
+        - name: identity
+          schedule: { every: 5m }
+          request: { get: ["1.3.6.1.2.1.1.1.0", "1.3.6.1.4.1.55520.5.2.0", "1.3.6.1.4.1.55520.5.1.0"] }
+          emits:
+            - { name: model-number, extract: { oid: "1.3.6.1.2.1.1.1.0" } }
+            - { name: serial-number, extract: { oid: "1.3.6.1.4.1.55520.5.2.0" } }
+            - { name: firmware-version, extract: { oid: "1.3.6.1.4.1.55520.5.1.0" } }
+        - name: status
+          schedule: { every: 30s }
+          request:
+            get: ["1.3.6.1.2.1.1.3.0", "1.3.6.1.4.1.55520.1.1.1.0", "1.3.6.1.4.1.55520.6.1.0", "1.3.6.1.4.1.55520.6.2.0", "1.3.6.1.4.1.55520.6.3.0"]
+          emits:
+            - { name: uptime, extract: { oid: "1.3.6.1.2.1.1.3.0" }, transform: { scale: 0.01 } }
+            - { name: power-state, extract: { oid: "1.3.6.1.4.1.55520.1.1.1.0" } }
+            - { name: light-source-hours, extract: { oid: "1.3.6.1.4.1.55520.6.1.0" } }
+            - { name: shutter-state, extract: { oid: "1.3.6.1.4.1.55520.6.2.0" } }
+            - { name: video-input, extract: { oid: "1.3.6.1.4.1.55520.6.3.0" } }
+  - id: polaris-amp-snmp
+    label: Polaris Amp SNMP
+    version: "1.0.0"
+    spec:
+      version: 1
+      # The Polaris amplifier's operating state over v2c (#898), from the
+      # amplifier's branch of the Polaris enterprise arc (1.3.6.1.4.1.55540.3):
+      # chassis power and protect, the heatsink temperature and the fan. Its
+      # identity sits where every Polaris agent keeps it (.5), sysDescr and
+      # sysUpTime are MIB-II's. Standby and the protect reset are the
+      # amplifier's HTTP API, a control face this driver does not speak.
+      transport: snmp
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "161" }
+        - { name: community, kind: secret, secret_type: snmp-community, required: true }
+      polls:
+        - name: identity
+          schedule: { every: 5m }
+          request: { get: ["1.3.6.1.2.1.1.1.0", "1.3.6.1.4.1.55540.5.2.0", "1.3.6.1.4.1.55540.5.1.0"] }
+          emits:
+            - { name: model-number, extract: { oid: "1.3.6.1.2.1.1.1.0" } }
+            - { name: serial-number, extract: { oid: "1.3.6.1.4.1.55540.5.2.0" } }
+            - { name: firmware-version, extract: { oid: "1.3.6.1.4.1.55540.5.1.0" } }
+        - name: status
+          schedule: { every: 30s }
+          request:
+            get: ["1.3.6.1.2.1.1.3.0", "1.3.6.1.4.1.55540.3.1.0", "1.3.6.1.4.1.55540.3.2.0", "1.3.6.1.4.1.55540.3.3.0", "1.3.6.1.4.1.55540.3.4.0"]
+          emits:
+            - { name: uptime, extract: { oid: "1.3.6.1.2.1.1.3.0" }, transform: { scale: 0.01 } }
+            - { name: power-state, extract: { oid: "1.3.6.1.4.1.55540.3.1.0" } }
+            - { name: protect-state, extract: { oid: "1.3.6.1.4.1.55540.3.2.0" } }
+            - { name: temperature, extract: { oid: "1.3.6.1.4.1.55540.3.3.0" } }
+            - { name: fan-speed, extract: { oid: "1.3.6.1.4.1.55540.3.4.0" } }
   - id: kestrel-api
     label: Kestrel Device API
     version: "1.0.0"

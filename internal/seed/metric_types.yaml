@@ -88,6 +88,26 @@ metric_types:
     data_type: int
     label: Participant Count
     description: The participants a component reports in its current call; 0 when no call is active.
+  # A projector's light source wears by the hour (#899): the number its
+  # service interval and replacement are planned from.
+  - name: light-source-hours
+    data_type: float
+    unit: h
+    label: Light Source Hours
+    description: The hours a component reports its light source (a projector's lamp or laser) has been lit.
+  # A component's own thermal state, read off its API (#898): one name per
+  # measurement whatever the component, the heatsink of an amplifier or the
+  # chassis of a DSP alike.
+  - name: temperature
+    data_type: float
+    unit: "C"
+    label: Temperature
+    description: The temperature a component reports of itself (its chassis, heatsink or processor), in degrees Celsius.
+  - name: fan-speed
+    data_type: float
+    unit: rpm
+    label: Fan Speed
+    description: The speed a component reports of its cooling fan, in revolutions per minute.
   # A media player's local storage filling as content syncs down (#893).
   # Dimensionless, so stored as a ratio (0..1) and shown as a percentage.
   - name: storage-utilization

@@ -26,6 +26,7 @@ type writerFixture struct {
 	gw    *storage.PG
 	conn  *pgx.Conn
 	actor string
+	dsn   string
 }
 
 func newWriterFixture(t *testing.T) writerFixture {
@@ -64,7 +65,7 @@ func newWriterFixture(t *testing.T) writerFixture {
 	if err := conn.QueryRow(ctx, `select principal_id from human where username = 'root'`).Scan(&actor); err != nil {
 		t.Fatalf("resolve actor: %v", err)
 	}
-	return writerFixture{ctx: ctx, gw: gw, conn: conn, actor: actor}
+	return writerFixture{ctx: ctx, gw: gw, conn: conn, actor: actor, dsn: dsn}
 }
 
 func (f writerFixture) count(t *testing.T, sql string, args ...any) int {
@@ -192,10 +193,9 @@ func TestNodeProbeReadsServeOnlyObserved(t *testing.T) {
 		where c.name = 'disp-1' and pt.name = v.key`, observedAt); err != nil {
 		t.Fatalf("observed rows: %v", err)
 	}
-	if _, err := f.conn.Exec(f.ctx, `
-		insert into metric (ts, owner_kind, component_id, metric_type_id, instance, value, provenance, source)
+	if _, err := f.conn.Exec(f.ctx, storagetest.WideMetricInsert(`ts, owner_kind, component_id, metric_type_id, instance, value, provenance, source`, `
 		select $1, 'component', c.id, mt.id, 'ssh', 0, 'observed', 'tcp'
-		from component c, metric_type mt where c.name = 'disp-1' and mt.name = 'tcp-open'`, observedAt); err != nil {
+		from component c, metric_type mt where c.name = 'disp-1' and mt.name = 'tcp-open'`), observedAt); err != nil {
 		t.Fatalf("observed metric: %v", err)
 	}
 	// The planted rows, an hour newer than the node's.
@@ -206,10 +206,9 @@ func TestNodeProbeReadsServeOnlyObserved(t *testing.T) {
 		where c.name = 'disp-1' and pt.name = v.key`); err != nil {
 		t.Fatalf("declared rows: %v", err)
 	}
-	if _, err := f.conn.Exec(f.ctx, `
-		insert into metric (ts, owner_kind, component_id, metric_type_id, instance, value, provenance, source, source_rule)
+	if _, err := f.conn.Exec(f.ctx, storagetest.WideMetricInsert(`ts, owner_kind, component_id, metric_type_id, instance, value, provenance, source, source_rule`, `
 		select now(), 'component', c.id, mt.id, 'ssh', 1, 'calculated', 'calc', 'forged'
-		from component c, metric_type mt where c.name = 'disp-1' and mt.name = 'tcp-open'`); err != nil {
+		from component c, metric_type mt where c.name = 'disp-1' and mt.name = 'tcp-open'`)); err != nil {
 		t.Fatalf("calculated metric: %v", err)
 	}
 
@@ -408,7 +407,7 @@ func TestWriterMismatchRefused(t *testing.T) {
 		}
 	}
 	// Nothing a refusal touched landed.
-	if n := f.count(t, `select (select count(*) from metric) + (select count(*) from property) + (select count(*) from event)`); n != 0 {
+	if n := f.count(t, `select (select count(*) from `+storagetest.MetricRows+` metric) + (select count(*) from property) + (select count(*) from event)`); n != 0 {
 		t.Errorf("%d sample or event rows landed from refused writes", n)
 	}
 
@@ -654,7 +653,7 @@ func TestNodeProbeSampleCannotOutliveItsTime(t *testing.T) {
 		t.Fatal(err)
 	}
 	if n := f.count(t, `select (select count(*) from property where ts > now() + interval '1 hour')
-		+ (select count(*) from metric where ts > now() + interval '1 hour')
+		+ (select count(*) from `+storagetest.MetricRows+` metric where ts > now() + interval '1 hour')
 		+ (select count(*) from event where ts > now() + interval '1 hour')`); n != 0 {
 		t.Fatalf("%d node-probe rows kept a time seventy years ahead", n)
 	}
@@ -680,7 +679,7 @@ func TestNodeProbeSampleCannotOutliveItsTime(t *testing.T) {
 		{OwnerKind: "component", OwnerID: comp.ID, Key: "uptime", Value: 3, TS: far}}); err != nil {
 		t.Fatal(err)
 	}
-	if n := f.count(t, `select count(*) from metric where ts > now() + interval '1 hour'
+	if n := f.count(t, `select count(*) from `+storagetest.MetricRows+` metric where ts > now() + interval '1 hour'
 		and metric_type_id = (select id from metric_type where name = 'uptime')`); n != 1 {
 		t.Fatalf("a pushed uptime's own time: %d far rows, want 1", n)
 	}

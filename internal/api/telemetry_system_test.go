@@ -110,7 +110,11 @@ func TestASystemOwnsItsPushedTelemetry(t *testing.T) {
 	defer conn.Close(ctx)
 	for _, tbl := range []string{"metric", "property", "event"} {
 		var n int
-		if err := conn.QueryRow(ctx, `select count(*) from `+tbl+` where owner_kind = 'system' and system_id = (select id from system where name = 'huddle-1') and provenance = 'observed' and instance = ''`).Scan(&n); err != nil {
+		from := tbl
+		if tbl == "metric" {
+			from = storagetest.MetricRows + " metric"
+		}
+		if err := conn.QueryRow(ctx, `select count(*) from `+from+` where owner_kind = 'system' and system_id = (select id from system where name = 'huddle-1') and provenance = 'observed' and instance = ''`).Scan(&n); err != nil {
 			t.Fatalf("count %s: %v", tbl, err)
 		}
 		if n != 1 {
@@ -148,11 +152,11 @@ func TestASystemOwnsItsPushedTelemetry(t *testing.T) {
 	}, http.StatusAccepted)
 	waitFor(t, "the flushing push", func() bool {
 		var n int
-		_ = conn.QueryRow(ctx, `select count(*) from metric where owner_kind = 'system' and value = 22.5`).Scan(&n)
+		_ = conn.QueryRow(ctx, `select count(*) from `+storagetest.MetricRows+` metric where owner_kind = 'system' and value = 22.5`).Scan(&n)
 		return n == 1
 	})
 	var n int
-	if err := conn.QueryRow(ctx, `select count(*) from metric where metric_type_id = (select id from metric_type where name = 'occupancy-count')`).Scan(&n); err != nil {
+	if err := conn.QueryRow(ctx, `select count(*) from `+storagetest.MetricRows+` metric where metric_type_id = (select id from metric_type where name = 'occupancy-count')`).Scan(&n); err != nil {
 		t.Fatal(err)
 	}
 	if n != 0 {

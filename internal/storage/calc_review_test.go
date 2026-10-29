@@ -2,6 +2,7 @@ package storage_test
 
 import (
 	"errors"
+	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 	"strings"
 	"testing"
 	"time"
@@ -20,7 +21,7 @@ func (r *evalRig) avgRule(name, input, output string) {
 
 func (r *evalRig) latest(key string) string {
 	r.t.Helper()
-	return scalar(r.t, r.conn, `select coalesce((select value::text from metric where component_id = '`+r.comp+`'
+	return scalar(r.t, r.conn, `select coalesce((select value::text from `+storagetest.MetricRows+` metric where component_id = '`+r.comp+`'
 		and metric_type_id = (select id from metric_type where name = '`+key+`') and provenance = 'calculated'
 		order by id desc limit 1), '')`)
 }
@@ -152,7 +153,7 @@ func TestCalcRuleWriteMarks(t *testing.T) {
 	if got := r.latest("avg-temp"); got != "40" {
 		t.Fatalf("avg-temp %q after the reduce edit, want 40", got)
 	}
-	if got := scalar(t, r.conn, `select source_rule_version::text from metric where provenance = 'calculated' order by id desc limit 1`); got != "2" {
+	if got := scalar(t, r.conn, `select source_rule_version::text from `+storagetest.MetricRows+` metric where provenance = 'calculated' order by id desc limit 1`); got != "2" {
 		t.Fatalf("the new output names version %s, want 2", got)
 	}
 	// A component without the input is not marked.

@@ -2,6 +2,7 @@ package storage_test
 
 import (
 	"errors"
+	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 	"strings"
 	"testing"
 
@@ -96,7 +97,7 @@ func TestCalcRuleState(t *testing.T) {
 // tableCounts is the row counts a preview must leave unchanged.
 func (r *evalRig) tableCounts() string {
 	r.t.Helper()
-	return scalar(r.t, r.conn, `select (select count(*) from metric)::text || ',' || (select count(*) from property)::text || ',' ||
+	return scalar(r.t, r.conn, `select (select count(*) from `+storagetest.MetricRows+` metric)::text || ',' || (select count(*) from property)::text || ',' ||
 		(select count(*) from calc_pending)::text || ',' || (select count(*) from calc_rule_state)::text || ',' ||
 		(select count(*) from audit_log)::text || ',' || (select count(*) from calc_rule)::text`)
 }

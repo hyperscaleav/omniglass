@@ -41,15 +41,15 @@ func TestMetricTypeSplitMigration(t *testing.T) {
 		}
 	}
 
-	// The metric sample table points at its own catalog, by the lane's name.
+	// The metric series dimension (#1275) points at its own catalog.
 	var target string
 	if err := conn.QueryRow(ctx, `
 		select ccu.table_name
 		from information_schema.table_constraints tc
 		join information_schema.constraint_column_usage ccu on ccu.constraint_name = tc.constraint_name
-		where tc.table_name = 'metric' and tc.constraint_type = 'FOREIGN KEY'
-		  and tc.constraint_name = 'metric_metric_type_id_fkey'`).Scan(&target); err != nil {
-		t.Fatalf("metric has no metric_type_id FK: %v", err)
+		where tc.table_name = 'metric_series' and tc.constraint_type = 'FOREIGN KEY'
+		  and tc.constraint_name = 'metric_series_metric_type_id_fkey'`).Scan(&target); err != nil {
+		t.Fatalf("metric_series has no metric_type_id FK: %v", err)
 	}
 	if target != "metric_type" {
 		t.Errorf("metric's catalog FK points at %q, want metric_type", target)
