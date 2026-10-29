@@ -18,7 +18,7 @@ type identityBindingBody struct {
 	Conduit   string    `json:"conduit" doc:"Name of the conduit component: the component whose endpoint reports the identity, the path rather than the owner"`
 	ConduitID string    `json:"conduit_id" doc:"The conduit component's uuid"`
 	Key       string    `json:"key" doc:"The match key: a registered property type naming what kind of identity the value is (e.g. ucc-room-id)"`
-	Value     string    `json:"value" doc:"The identity value the conduit reports (e.g. a room's id in the service that reports on it)"`
+	Value     string    `json:"value" doc:"The identity value the conduit reports (e.g. the id a UCC service gives one of the rooms it reports on)"`
 	OwnerKind string    `json:"owner_kind" enum:"component,system" doc:"What kind of owner the identity names: a component or a system"`
 	Owner     string    `json:"owner" doc:"Name of the owner the identity's values land on"`
 	OwnerID   string    `json:"owner_id" doc:"The owner's uuid, the address to navigate by"`
@@ -48,7 +48,7 @@ type putIdentityBindingInput struct {
 	Value string `path:"value" minLength:"1" maxLength:"256" doc:"The identity value the conduit reports, 1 to 256 characters" example:"room-17c-415a"`
 	Body  struct {
 		OwnerKind string `json:"owner_kind" enum:"component,system" doc:"What kind of owner the identity names. A component or a system; a place or a node owns no observed sample, so neither is an owner here"`
-		Owner     string `json:"owner" minLength:"1" doc:"Name or uuid of the owner the identity's values land on, or a dotted address" example:"boardroom-a"`
+		Owner     string `json:"owner" minLength:"1" doc:"Name or uuid of the owner the identity's values land on, or a dotted address" example:"hq.west.level-2.boardroom-a.$sys.av"`
 	}
 }
 
@@ -96,7 +96,7 @@ func registerIdentityBindingRoutes(api huma.API, a *authenticator, gw storage.Ga
 		Method:      http.MethodGet,
 		Path:        "/components/{name}/identity-bindings",
 		Summary:     "List the identities a conduit component fans out",
-		Description: "The identity bindings of this conduit component: each value it reports under a match key (a registered property type, such as ucc-room-id) and the one system or component that value's samples land on. A component that speaks for many owners (a cloud service, a controller fronting many devices) is the conduit, the path rather than the owner. Each binding is named only when its owner is inside the caller's read on its tier (system:read for a system owner, component:read for a component owner); the rest are counted in hidden, never named. Gated by component:read; a conduit outside it is a non-disclosing 404.",
+		Description: "The identity bindings of this conduit component: each value it reports under a match key (a registered property type, such as ucc-room-id) and the one system or component that value's samples land on. A component that speaks for many owners (a cloud service, a controller fronting many components) is the conduit, the path rather than the owner. Each binding is named only when its owner is inside the caller's read on its tier (system:read for a system owner, component:read for a component owner); the rest are counted in hidden, never named. Gated by component:read; a conduit outside it is a non-disclosing 404.",
 	}, "component", "read"), func(ctx context.Context, in *identityBindingsInput) (*listIdentityBindingsOutput, error) {
 		l, err := gw.ListIdentityBindings(ctx, in.Name, a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "system", "read"))
 		if err != nil {

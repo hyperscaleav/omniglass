@@ -375,6 +375,21 @@ webhook endpoint's read carries its masked path, its scheme, whether it is signe
 token is revealed through and its refusals. `GET /unclaimed-sources` (gated `node:read`) is the inbox
 of senders posting to a token no endpoint holds.
 
+**An identity binding costs a write on both of its ends** (#1385,
+[ADR-1282](/architecture/decisions/#adr-1282-a-conduit-fans-each-identified-value-out-to-the-owner-its-binding-names-and-a-binding-costs-a-write-on-both-of-its-ends)).
+`GET /components/{name}/identity-bindings` (gated `component:read`) lists the conduit component's
+bindings, each a value it reports under a match key (a registered property type) tied to one system
+or component; an owner is named only inside the caller's read on its tier, and the rest are counted
+in `hidden`. `PUT /components/{name}/identity-bindings/{key}/{value}` (body: `owner_kind` and
+`owner`) binds one, and `DELETE` on the same address unbinds it. Both are gated `component:update`
+on the conduit and publish the owner's `system:update` as their conditional permission: a put naming
+a system refuses a caller holding none with a 403 naming it before anything resolves. Each end then
+resolves in its own tier's read scope and must be inside its update scope (out of read the
+non-disclosing 404, readable but not writable a 403); a put naming a different owner moves the
+binding and needs update on the owner it leaves as well, a re-put to the same owner changes nothing,
+an unregistered key or an owner that is a place or a node is a 422, and every change is audited in
+its transaction, naming both ends.
+
 **A simulated device can be broken on purpose.** `GET` and `PUT /components/{name}/impairment`
 (gated `simulation:read` and `simulation:update`, component-scoped, the write audited) read and set
 what is broken on a simulated component: unplugged, or latency, jitter and loss toward it and a rate
