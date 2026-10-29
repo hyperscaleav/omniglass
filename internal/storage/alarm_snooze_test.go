@@ -289,8 +289,8 @@ func TestUnsnoozingAnExpiredSnoozeEndsItAsTheSweepWould(t *testing.T) {
 	if _, err := gw.SnoozeAlarm(ctx, actor, comp, raised.ID, time.Hour); err != nil {
 		t.Fatal(err)
 	}
-	if _, before, _ := snoozeAudit(t, dsn, "snooze", raised.ID); before["snoozed_until"] != nil {
-		t.Errorf("a snooze after an expired one audited before %v, want none", before)
+	if _, before, _ := snoozeAudit(t, dsn, "snooze", raised.ID); before == nil || before["snoozed_until"] != nil {
+		t.Errorf("a snooze after an expired one audited before %v, want a null deadline", before)
 	}
 }
 

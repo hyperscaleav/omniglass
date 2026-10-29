@@ -39,8 +39,9 @@ drawer. See [implementation status](/architecture/status/).
   deleting or aging out the thing a row is about never deletes or rewrites the row. What makes the row
   still worth reading is its images: an update carries the fields it moved in both `old` and `new`
   (null on the side where a field was unset), and enough of the subject to name it. An alarm's rows
-  are the first held to it, since alarm retention (#1339) removes cleared alarms while their audit rows
-  stay ([ADR-1442](/architecture/decisions/#adr-1442-an-audit-row-outlives-its-subject-both-images-and-a-string-reference)).
+  are held to it today: deleting a component already removes its alarms (the foreign key cascades) and
+  keeps their rows, and alarm retention (#1339) will remove cleared ones. Several other writers still
+  write an update with no before image or a delete with no image (#1444) ([ADR-1442](/architecture/decisions/#adr-1442-an-audit-row-outlives-its-subject-both-images-and-a-string-reference)).
 - **The actor** is resolved by IAM ([identity and access](/architecture/identity-access/)): the
   human, service, or node. The read resolves it to the actor's **identifier**, a human's username, a
   service account's name, or a node's name, through the gateway's one resolution

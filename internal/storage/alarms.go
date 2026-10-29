@@ -307,7 +307,7 @@ func (p *PG) ClearAlarm(ctx context.Context, actorID, componentName, alarmID str
 	}
 	// Both images, and the condition: an alarm's audit rows outlive it (#1339).
 	if err := writeAuditRes(ctx, tx, actorID, "update", "alarm", alarmID, map[string]any{"cleared_at": nil},
-		map[string]any{"component": componentName, "dedup_key": dedupKey, "cleared_at": cleared}); err != nil {
+		map[string]any{"component": component.Name, "dedup_key": dedupKey, "cleared_at": cleared}); err != nil {
 		return err
 	}
 	if err := p.RecomputeHealth(ctx, tx, component.ID); err != nil {
@@ -389,7 +389,7 @@ func (p *PG) AcknowledgeAlarm(ctx context.Context, actorID, componentName, alarm
 	}
 
 	if err := writeAuditRes(ctx, tx, actorID, "acknowledge", "alarm", alarmID, map[string]any{"acknowledged_at": nil},
-		map[string]any{"component": componentName, "dedup_key": acked.DedupKey, "acknowledged_at": acked.AcknowledgedAt}); err != nil {
+		map[string]any{"component": component.Name, "dedup_key": acked.DedupKey, "acknowledged_at": acked.AcknowledgedAt}); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {

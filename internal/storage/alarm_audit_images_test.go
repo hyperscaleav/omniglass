@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
 // An alarm's audit rows outlive the alarm (#1339, ruled 2026-10-29): retention
@@ -18,17 +20,21 @@ func TestEveryAlarmAuditRowCarriesItsBeforeAndAfter(t *testing.T) {
 	gw, dsn, comp, raised := ackFixture(t)
 	ctx := context.Background()
 	actor := ackActor(t, dsn, "jordan-ops")
+	// The API addresses the component by its uuid (requireComponentInScope),
+	// and the row must still name it: a uuid outlives nothing once the
+	// component is deleted.
+	byID := raised.ComponentID
 
-	if _, err := gw.SnoozeAlarm(ctx, actor, comp, raised.ID, time.Hour); err != nil {
+	if _, err := gw.SnoozeAlarm(ctx, actor, byID, raised.ID, time.Hour); err != nil {
 		t.Fatalf("snooze: %v", err)
 	}
-	if _, err := gw.UnsnoozeAlarm(ctx, actor, comp, raised.ID); err != nil {
+	if _, err := gw.UnsnoozeAlarm(ctx, actor, byID, raised.ID); err != nil {
 		t.Fatalf("unsnooze: %v", err)
 	}
-	if _, err := gw.AcknowledgeAlarm(ctx, actor, comp, raised.ID); err != nil {
+	if _, err := gw.AcknowledgeAlarm(ctx, actor, byID, raised.ID); err != nil {
 		t.Fatalf("acknowledge: %v", err)
 	}
-	if err := gw.ClearAlarm(ctx, actor, comp, raised.ID); err != nil {
+	if err := gw.ClearAlarm(ctx, actor, byID, raised.ID); err != nil {
 		t.Fatalf("clear: %v", err)
 	}
 
@@ -81,5 +87,29 @@ func TestEveryAlarmAuditRowCarriesItsBeforeAndAfter(t *testing.T) {
 			t.Errorf("%s row: new image names %v / %v, want the condition %s / %s",
 				verb, new["component"], new["dedup_key"], comp, raised.DedupKey)
 		}
+	}
+}
+
+// A rule's clear (clearAlarmByDedupTx) carries the same before and after as a
+// hand clear, and names its condition.
+func TestARulesClearAuditsItsBeforeAndAfter(t *testing.T) {
+	r := newEdgeRig(t)
+	r.rule(storage.EventRuleSpec{Name: "audited", Severity: "high", ClearEventType: "condition-ended"})
+	r.observe("tcp", "down")
+	alarm := r.openAlarm("tcp")
+	if alarm == "" {
+		t.Fatal("the rule opened no alarm")
+	}
+	r.observe("tcp", "up")
+	var old, new map[string]any
+	if err := r.f.conn.QueryRow(r.ctx, `select old, new from audit_log
+		where resource = 'alarm' and resource_id = $1 and verb = 'update'`, alarm).Scan(&old, &new); err != nil {
+		t.Fatalf("read the rule's clear row: %v", err)
+	}
+	if v, ok := old["cleared_at"]; !ok || v != nil || new["cleared_at"] == nil {
+		t.Errorf("rule clear: old %v, new %v; want cleared_at null before and set after", old, new)
+	}
+	if new["component"] != "bar-1" || new["dedup_key"] == nil || new["dedup_key"] == "" {
+		t.Errorf("rule clear: new %v, want the condition named (bar-1 and its dedup key)", new)
 	}
 }

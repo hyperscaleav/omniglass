@@ -79,8 +79,8 @@ and its acts are audit rows on the alarm they were called on.
 **An alarm's audit rows outlive it.** Each row other than the raise (whose `new` image is the whole
 alarm) carries the field it moved in both images (`cleared_at`, `acknowledged_at` or `snoozed_until`,
 null on the side where it was unset) and names its condition, the component and the dedup key, so the
-row says on its own what was done, what changed and what it became. Removing an alarm never touches
-`audit_log` ([audit](/architecture/audit/#the-model),
+row says on its own what was done, what changed and what it became. Removing an alarm (deleting its
+component does today, and retention will, #1339) never touches `audit_log` ([audit](/architecture/audit/#the-model),
 [ADR-1442](/architecture/decisions/#adr-1442-an-audit-row-outlives-its-subject-both-images-and-a-string-reference)).
 
 An alarm write is **not sample-silent**: raising or clearing one recomputes

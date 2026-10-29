@@ -81,8 +81,8 @@ func readAlarmTx(ctx context.Context, q querier, componentID, alarmID string) (*
 
 // SnoozeAlarm snoozes the condition of the alarm it is called on for d from
 // now, setting the deadline or replacing it (shorter or longer), and audits
-// the call on that alarm with the deadline before (when one was in force)
-// and after. It queues nothing: a snooze is an operator act, not a condition
+// the call on that alarm with the deadline before (null when none was in
+// force) and after. It queues nothing: a snooze is an operator act, not a condition
 // edge. A d outside [SnoozeMin, SnoozeMax] is ErrSnoozeDuration.
 func (p *PG) SnoozeAlarm(ctx context.Context, actorID, componentName, alarmID string, d time.Duration) (*Alarm, error) {
 	if d < SnoozeMin || d > SnoozeMax {
