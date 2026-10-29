@@ -113,6 +113,13 @@ interfaces:
     protocol: icmp
     doc: { summary: "ICMP ping reachability", tags: [monitoring] }
 
+# How the simulator subscribes this service to its webhook endpoint (#1370,
+# ADR-1370): the subscribe route above, called with the endpoint's URL and
+# signing key when the service's component holds a webhook endpoint, as the
+# service's own admin would. A lab's posts flow from the start.
+webhook:
+  subscribe: /api/webhooks
+
 computed:
   - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
 
@@ -120,13 +127,12 @@ computed:
 # meeting flag on AND POSTs a "meeting.started" webhook to the configured
 # collector, the device's only egress-HTTP capability (see emit.go).
 #
-# OPERATOR CONFIG: point every room at a webhook receiver by
-# setting configuration.webhook.target_url. It is a single profile-level
-# value, so one edit covers all ucc-service instances across every room
-# (the lab models one ucc-service per room; they share this profile, so
-# the target is service-level by construction). Leave it empty to disable
-# emission, render of an empty URL is the safe configured-off default,
-# so the behavior still ticks (flips the meeting flag) but sends nothing.
+# Subscription: POST /api/webhooks sets configuration.webhook.target_url,
+# as the service's admin would; in a lab the simulator calls it for the
+# webhook endpoint the service's component holds (ADR-1370), so the posts
+# flow from the start. Empty disables emission: render of an empty URL is
+# the safe configured-off default, so the behavior still ticks (flips the
+# meeting flag) but sends nothing.
 #
 # One event per room: each device instance runs its own copy of this
 # behavior with its own hostname, so the catcher sees one
@@ -164,9 +170,8 @@ defaults:
       version: "cloud-2026.06"
     network:
       hostname: ""
-    # Outbound webhook target for the meeting_started behavior. Set
-    # target_url to a webhook receiver URL to enable emission
-    # for every ucc-service room at once; empty disables it (configured-off).
+    # Outbound webhook target for the meeting_started behavior, set by
+    # the subscribe route; empty disables it (configured-off).
     # target_host is the hostname the event maps to in the monitoring
     # platform: the room's VIDEO BAR (the meeting-room endpoint the UCC data
     # belongs to), set per room via a fleet override. The cloud fires the

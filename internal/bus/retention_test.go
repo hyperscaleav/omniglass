@@ -18,6 +18,28 @@ type backlogStore struct {
 	backlog   map[string]int64
 	fail      map[string]error
 	calls     []pruneCall
+	// The metric partition roll: how often it ran, the cutoff each drop was
+	// asked for, and an error each half answers with.
+	ensured   int
+	drops     []time.Time
+	ensureErr error
+	dropErr   error
+}
+
+func (b *backlogStore) EnsureMetricPartitions(context.Context) ([]string, error) {
+	b.ensured++
+	if b.ensureErr != nil {
+		return nil, b.ensureErr
+	}
+	return []string{"metric_p209901"}, nil
+}
+
+func (b *backlogStore) DropMetricPartitions(_ context.Context, before time.Time) ([]string, error) {
+	b.drops = append(b.drops, before)
+	if b.dropErr != nil {
+		return nil, b.dropErr
+	}
+	return []string{"metric_p200001"}, nil
 }
 
 type pruneCall struct {
@@ -247,5 +269,74 @@ func TestARetentionPassPrunesATypeByItsOwnWindow(t *testing.T) {
 	}
 	if rep.Deleted["metric/tcp-connect-time"] != 4 {
 		t.Errorf("report %+v, want 4 tcp-connect-time rows under metric/tcp-connect-time", rep.Deleted)
+	}
+}
+
+// Each pass rolls the metric table's months (#420) before it prunes: the
+// partitions ahead made, and the months wholly past the metric window
+// dropped, the cutoff the metric lane's own. A roll that fails is reported,
+// and every lane is still pruned.
+func TestRetentionPassRollsTheMetricMonths(t *testing.T) {
+	now := time.Date(2026, 10, 29, 12, 0, 0, 0, time.UTC)
+	store := &backlogStore{windows: defaultWindows(), backlog: map[string]int64{}}
+	rep, err := retentionPass(context.Background(), store, now, 10, 5, 0)
+	if err != nil {
+		t.Fatalf("pass: %v", err)
+	}
+	if store.ensured != 1 || len(store.drops) != 1 || !store.drops[0].Equal(now.AddDate(0, 0, -14)) {
+		t.Errorf("roll: ensured %d, drops %v; want one of each, dropping before %v", store.ensured, store.drops, now.AddDate(0, 0, -14))
+	}
+	if len(rep.Created) != 1 || len(rep.Dropped) != 1 {
+		t.Errorf("report: created %v, dropped %v; want what the roll said", rep.Created, rep.Dropped)
+	}
+
+	failing := &backlogStore{windows: defaultWindows(), backlog: map[string]int64{"metric": 3},
+		ensureErr: errors.New("lock timeout"), dropErr: errors.New("lock timeout")}
+	rep, err = retentionPass(context.Background(), failing, now, 10, 5, 0)
+	if err == nil {
+		t.Fatal("a failed roll: no error, want it reported")
+	}
+	if rep.Deleted["metric"] != 3 {
+		t.Errorf("a failed roll: metric lane deleted %d, want its 3 still pruned", rep.Deleted["metric"])
+	}
+}
+
+// A node override (#1350) moves node_log's band and only node_log's: with the
+// node debug window at 1 day, node_log/debug is cut 1 day back while
+// log_line/debug keeps the shared 3, and an unset band follows the shared
+// window on both tables.
+func TestARetentionPassPrunesNodeLogsByTheirOverride(t *testing.T) {
+	now := time.Date(2026, 10, 28, 12, 0, 0, 0, time.UTC)
+	w := defaultWindows()
+	w.NodeDebugLogDays = 1
+	store := &backlogStore{windows: w, backlog: map[string]int64{}}
+	if _, err := retentionPass(context.Background(), store, now, 100, 10, 0); err != nil {
+		t.Fatal(err)
+	}
+	cutoff := map[string]time.Time{}
+	for _, c := range store.calls {
+		cutoff[c.lane] = c.before
+	}
+	for lane, days := range map[string]int{"node_log/debug": 1, "log_line/debug": 3, "node_log/info": 14, "log_line/info": 14, "node_log/error": 90} {
+		if want := now.AddDate(0, 0, -days); !cutoff[lane].Equal(want) {
+			t.Errorf("%s cutoff %v, want %d days back", lane, cutoff[lane], days)
+		}
+	}
+}
+
+// A node override stored out of range (past the settings validator) is
+// refused like any window, not read as "follow the shared band".
+func TestARetentionPassRefusesANodeOverrideOutOfRange(t *testing.T) {
+	w := defaultWindows()
+	w.NodeErrorLogDays = settings.RetentionMaxDays + 1
+	store := &backlogStore{windows: w, backlog: map[string]int64{}}
+	_, err := retentionPass(context.Background(), store, time.Now(), 100, 10, 0)
+	if err == nil {
+		t.Fatal("pass took a node override past the ceiling, want it refused")
+	}
+	for _, c := range store.calls {
+		if c.lane == "node_log/error" {
+			t.Errorf("node_log/error pruned with an out-of-range override")
+		}
 	}
 }

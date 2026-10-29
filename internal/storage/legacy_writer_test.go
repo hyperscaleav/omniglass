@@ -3,6 +3,7 @@ package storage_test
 import (
 	"encoding/json"
 	"errors"
+	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 	"slices"
 	"strings"
 	"testing"
@@ -87,7 +88,7 @@ func TestNodeWriterBindsItsComponentAndEndpoint(t *testing.T) {
 		}
 	}
 	if n := f.count(t, `select (select count(*) from property where component_id = $1::uuid)
-		+ (select count(*) from metric where component_id = $1::uuid)
+		+ (select count(*) from `+storagetest.MetricRows+` metric where component_id = $1::uuid)
 		+ (select count(*) from event where component_id = $1::uuid)`, d2); n != 0 {
 		t.Errorf("%d rows landed on the component the node does not collect for", n)
 	}

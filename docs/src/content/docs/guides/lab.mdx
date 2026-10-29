@@ -85,6 +85,24 @@ The fleet is the dev fleet, the same one every walkthrough is recorded on: place
 them, components of several products from several vendors, and the edge node `edge-hq` collecting
 from all of them.
 
+Every way omniglass collects runs here, healthy on at least one component, so you can watch each
+one work (and a regression in any of them shows in a lab, not only in a unit test). The HQ boardroom
+holds the ones the rest of the fleet does not use: the video bar's control socket over a secure
+websocket, the display's web admin behind an http digest login, the touch panel's https API behind
+its sign-in form, the same panel's console over ssh and over telnet (the healthy twins of two of the
+faults below), and a plain ping. Beside them:
+
+- **Webhooks arrive from the start.** The simulated meeting service is subscribed to its webhook
+  endpoint when the lab comes up, as its admin would subscribe it, and posts a meeting every minute,
+  so the endpoint's page reads last heard within the first two minutes.
+- **An integration pushes.** A simulated booking service pushes the HQ boardroom system's bookings
+  (`booking-count`, `booking-state`) through `POST /telemetry:push`, with a token the lab mints on
+  every run for a service account that may push to that one system and do nothing else. Open the
+  boardroom's system page to see them; a push carries no endpoint, so there is no reachability to
+  read, only the values.
+
+[Simulation](/architecture/simulation/#the-dev-fleet) lists every method and where it runs.
+
 ## Walk through it
 
 Each guided walkthrough is a recording of a real console flow on this same lab, banner and all, so
@@ -152,11 +170,17 @@ server's bus and the node publish nothing; the node reaches the server across th
 impairments and truthful ping, and they reach only that container's own network namespace, never
 your machine's. The `server` and `db` containers carry no added capability.
 
-The node checks in every 2s, so a change you make in the console reaches it within seconds, and
-probes reachability every 10s (`--probe-every`): a lab may run for days, and a probe on every
-check-in wrote most of its rows. The throwaway lab each walkthrough is recorded on probes every 2s,
-since a recording is held to a time budget, so in your lab a walkthrough that waits on a probe's
-verdict (watching a rule raise an alarm, say) waits up to 8 seconds longer than its recording.
+How often the node checks in and probes is its **cadence profile**. Your lab runs at `lab`: it
+checks in often, so a change you make in the console reaches it within seconds, and probes
+reachability less often (`--probe-every`), because a lab may run for days and a probe on every
+check-in wrote most of its rows. The throwaway lab each walkthrough is recorded on runs at
+`walkthrough` and probes on every check-in, since a recording is held to a time budget, so in your
+lab a walkthrough that waits on a probe's verdict (watching a rule raise an alarm, say) waits a few
+seconds longer than its recording. `default` is the product's own cadence, what a deployment's
+node runs at; the [lab footprint](/contributing/test-driven/#measuring-a-running-lab) measures a lab
+at each to say what that cadence costs.
+
+<LabTopology part="cadences" />
 
 Publishing nothing is not the same as unreachable. On Linux, a Docker bridge network's addresses are
 routable from the machine itself, so a local process that finds the lab network's address can reach

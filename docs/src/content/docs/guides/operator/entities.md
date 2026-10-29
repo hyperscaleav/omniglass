@@ -396,8 +396,8 @@ There is no un-acknowledge yet.
 for the alarm that flaps or that you are already working on: **Snooze** beside the alarm (in the
 **Why** strip and the alarms panel, active or recently cleared) offers 15 minutes, 1 hour, 4 hours
 or 24 hours. While it holds, every notification about that condition, a raise or a clear, on a
-webhook, by email or in an inbox, is **held back** instead of sent, and each one stays on the alarm's
-timeline with the reason. The alarm wears a **snoozed until** chip naming the time, and its tooltip
+webhook, by email or in an inbox, is recorded instead of sent, and each one stays on the alarm's
+timeline reading **snoozed**, with the reason. The alarm wears a **snoozed until** chip naming the time, and its tooltip
 names who snoozed it.
 
 A snooze belongs to the alarm's **condition**, not to one alarm row: when the condition clears and
@@ -423,7 +423,10 @@ page, and in the alarms panel, active or recently cleared) opens the alarm's **t
 `condition-started` when the condition came into force and opened the alarm, its `condition-ended`
 when it passed and resolved it), named by the rule and the endpoint; an **audit** line is what was
 done to the alarm (raised, acknowledged, cleared, snoozed, unsnoozed, snooze ended) and by whom, a person by name or the rule the
-platform acted for. A hand-raised alarm's timeline is its audit lines alone. The same button sits on
+platform acted for. A **notify** line is a notification the alarm's raise or clear queued, read as a
+status row: its target, how its delivery stands (**on its way**, **sent**, **failed** with the
+receiver's answer and a **Retry**, or **snoozed** with the snooze's reason), and the **action rule**
+that queued it. A hand-raised alarm's timeline is its audit lines alone. The same button sits on
 each open alarm in a rule's blade on the Rules page. Click it again to fold the timeline away; any
 number can be open at once.
 

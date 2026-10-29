@@ -2,6 +2,7 @@ package storage_test
 
 import (
 	"errors"
+	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 	"strings"
 	"testing"
 	"time"
@@ -76,7 +77,7 @@ func (r *systemRig) temp(comp, instance string, v float64) {
 func (r *systemRig) systemOutput(system string) string {
 	r.t.Helper()
 	return scalar(r.t, r.conn, `select coalesce((select value::text || ' ' || source_rule || ' ' || source_rule_version::text || ' ' || owner_kind
-		from metric where system_id = '`+r.ids[system]+`' and provenance = 'calculated' and instance = ''
+		from `+storagetest.MetricRows+` metric where system_id = '`+r.ids[system]+`' and provenance = 'calculated' and instance = ''
 		and metric_type_id = (select id from metric_type where name = 'avg-temp') order by id desc limit 1), '')`)
 }
 
@@ -109,7 +110,7 @@ func TestCalcSystemRule(t *testing.T) {
 	if got := r.systemOutput("sys-3"); got != "" {
 		t.Fatalf("sys-3 (not a kind-a) got %q", got)
 	}
-	if n := count(t, r.conn, `select count(*) from metric where provenance = 'calculated' and component_id is not null`); n != 0 {
+	if n := count(t, r.conn, `select count(*) from `+storagetest.MetricRows+` metric where provenance = 'calculated' and component_id is not null`); n != 0 {
 		t.Fatalf("%d calculated rows on components, want none", n)
 	}
 	// A member leaving the role drops out on the next tick.

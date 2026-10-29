@@ -1,6 +1,9 @@
 package lab
 
 import (
+	"github.com/hyperscaleav/omniglass/internal/node"
+	"github.com/hyperscaleav/omniglass/internal/simnode"
+
 	"slices"
 	"strings"
 	"testing"
@@ -158,6 +161,35 @@ func TestPlanNodeTokenFlow(t *testing.T) {
 	}
 }
 
+// The simulated pusher's token (#1370) flows as the node's does: minted per
+// run, the node's simulator holds the plaintext, and the seed gets only its
+// hash and its non-secret prefix. A lab with no node runs no simulator, so
+// it carries none.
+func TestPlanPushTokenFlow(t *testing.T) {
+	o := testOptions()
+	o.PushToken, o.PushTokenHash, o.PushTokenPrefix = "ptok", "pushhash", "0a0b0c0d"
+	s, err := Plan(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(s.Node.Env, "OMNIGLASS_SIM_PUSH_TOKEN=ptok") {
+		t.Fatalf("node env %v, want the run's push token", s.Node.Env)
+	}
+	for _, e := range s.Seed.Env {
+		if strings.Contains(e, "=ptok") {
+			t.Fatalf("the seed sees the plaintext push token: %s", e)
+		}
+	}
+	for _, want := range []string{"OMNIGLASS_LAB_PUSH_TOKEN_HASH=pushhash", "OMNIGLASS_LAB_PUSH_TOKEN_PREFIX=0a0b0c0d"} {
+		if !slices.Contains(s.Seed.Env, want) {
+			t.Fatalf("seed env %v, want %s", s.Seed.Env, want)
+		}
+	}
+	if h := configHash(s.Node); strings.Contains(h, "ptok") {
+		t.Fatal("the node's config hash carries the token")
+	}
+}
+
 // The database and the data directory are named volumes kept across runs;
 // the server and the seed share the data directory, so the key the seed's
 // secrets are sealed with is the one the server opens them with.
@@ -232,5 +264,60 @@ func TestPlanNoNode(t *testing.T) {
 	}
 	if !slices.Contains(s.Seed.Cmd, "--no-node") {
 		t.Fatalf("a throwaway lab with no node: the seed runs %v, want --no-node", s.Seed.Cmd)
+	}
+}
+
+// A cadence profile (#1277) names how often the lab's node checks in and
+// probes, so the lab footprint can measure a lab at the product's default
+// cadence beside the lab's own. A lab given none keeps the cadence it has
+// always run at, an unknown one is refused, and each profile lands on the
+// node's command line as its heartbeat and probe interval.
+func TestPlanCadenceProfiles(t *testing.T) {
+	flag := func(cmd []string, name string) string {
+		i := slices.Index(cmd, name)
+		if i < 0 || i+1 >= len(cmd) {
+			return ""
+		}
+		return cmd[i+1]
+	}
+	cases := []struct {
+		cadence   string
+		ephemeral bool
+		heartbeat string
+		probe     string // "" probes on every check-in
+		simPoll   string
+	}{
+		{"", false, "2s", "10s", "2s"},
+		{"", true, "2s", "", "2s"},
+		{"lab", true, "2s", "10s", "2s"},
+		{"walkthrough", false, "2s", "", "2s"},
+		// The product's own: the node's and the simulator's defaults, so
+		// the profile cannot drift from what a deployment runs.
+		{"default", true, node.DefaultHeartbeat.String(), "", simnode.DefaultPoll.String()},
+	}
+	for _, c := range cases {
+		o := testOptions()
+		o.Cadence = c.cadence
+		if c.ephemeral {
+			o.Project, o.Ephemeral = "foot-1", true
+		}
+		s, err := Plan(o)
+		if err != nil {
+			t.Fatalf("cadence %q: %v", c.cadence, err)
+		}
+		if got := flag(s.Node.Cmd, "--heartbeat"); got != c.heartbeat {
+			t.Errorf("cadence %q: --heartbeat %q in %v, want %s", c.cadence, got, s.Node.Cmd, c.heartbeat)
+		}
+		if got := flag(s.Node.Cmd, "--poll"); got != c.simPoll {
+			t.Errorf("cadence %q: --poll %q in %v, want %s", c.cadence, got, s.Node.Cmd, c.simPoll)
+		}
+		if got := flag(s.Node.Cmd, "--probe-every"); got != c.probe {
+			t.Errorf("cadence %q: --probe-every %q in %v, want %q", c.cadence, got, s.Node.Cmd, c.probe)
+		}
+	}
+	o := testOptions()
+	o.Cadence = "fast"
+	if _, err := Plan(o); err == nil || !strings.Contains(err.Error(), "walkthrough") {
+		t.Fatalf("an unknown cadence: %v, want a refusal listing the profiles", err)
 	}
 }

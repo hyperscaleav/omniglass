@@ -183,7 +183,7 @@ func TestNodePublishMissingItsAckIsRetriedOnce(t *testing.T) {
 	count := func() (logs, metrics int) {
 		if err := conn.QueryRow(ctx, `select
 			(select count(*) from node_log where message = 'ack lost twice'),
-			(select count(*) from metric where metric_type_id = (select id from metric_type where name = 'tcp-open'))`).Scan(&logs, &metrics); err != nil {
+			(select count(*) from `+storagetest.MetricRows+` metric where metric_type_id = (select id from metric_type where name = 'tcp-open'))`).Scan(&logs, &metrics); err != nil {
 			t.Fatalf("count rows: %v", err)
 		}
 		return

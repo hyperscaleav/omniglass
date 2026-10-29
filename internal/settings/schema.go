@@ -106,6 +106,13 @@ type NotificationSettings struct {
 // A log line (a component's log_line, a node's node_log) is kept by its
 // severity's band (logline.RetentionBands): four windows rather than eight, and
 // a line with no severity is kept as long as info.
+//
+// A node's own logs may keep a band for a window of their own (#1350): the
+// node_log_* settings declare no default, so until an admin sets one it is
+// absent from the effective document, reads as zero here, and node_log follows
+// the shared band (NodeLogDays). Restoring one (a null in the merge patch)
+// returns node_log to the shared window. A set value is held to the same range
+// as every other window.
 type RetentionSettings struct {
 	MetricDays     int `json:"metric_days" minimum:"1" maximum:"36500" default:"14" doc:"Days a metric sample is kept, unless its type keeps its own (a metric type's retention_days)"`
 	PropertyDays   int `json:"property_days" minimum:"1" maximum:"36500" default:"90" doc:"Days a property transition is kept, unless its type keeps its own (a property type's retention_days)"`
@@ -114,6 +121,11 @@ type RetentionSettings struct {
 	InfoLogDays    int `json:"log_info_days" minimum:"1" maximum:"36500" default:"14" doc:"Days an info or notice log line, or one with no severity, is kept"`
 	WarningLogDays int `json:"log_warning_days" minimum:"1" maximum:"36500" default:"30" doc:"Days a warning log line is kept"`
 	ErrorLogDays   int `json:"log_error_days" minimum:"1" maximum:"36500" default:"90" doc:"Days an error, critical, alert or emergency log line is kept"`
+
+	NodeDebugLogDays   int `json:"node_log_debug_days,omitempty" minimum:"1" maximum:"36500" doc:"Days a node's own debug log line is kept; unset follows log_debug_days"`
+	NodeInfoLogDays    int `json:"node_log_info_days,omitempty" minimum:"1" maximum:"36500" doc:"Days a node's own info or notice log line, or one with no severity, is kept; unset follows log_info_days"`
+	NodeWarningLogDays int `json:"node_log_warning_days,omitempty" minimum:"1" maximum:"36500" doc:"Days a node's own warning log line is kept; unset follows log_warning_days"`
+	NodeErrorLogDays   int `json:"node_log_error_days,omitempty" minimum:"1" maximum:"36500" doc:"Days a node's own error, critical, alert or emergency log line is kept; unset follows log_error_days"`
 }
 
 // CollectionSettings is the collection namespace (#1369): the platform
@@ -142,6 +154,21 @@ func (r RetentionSettings) LogDays(band string) int {
 		return r.ErrorLogDays
 	}
 	return 0
+}
+
+// NodeLogDays is the window for one band of a node's own logs (node_log): the
+// node override when an admin set one, else the shared band (LogDays).
+func (r RetentionSettings) NodeLogDays(band string) int {
+	override := map[string]int{
+		"debug":   r.NodeDebugLogDays,
+		"info":    r.NodeInfoLogDays,
+		"warning": r.NodeWarningLogDays,
+		"error":   r.NodeErrorLogDays,
+	}[band]
+	if override != 0 {
+		return override
+	}
+	return r.LogDays(band)
 }
 
 // RetentionMaxDays is the longest retention window, the schema's maximum above.

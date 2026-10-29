@@ -7,9 +7,10 @@ import (
 )
 
 // Typed marshals a resolved settings map through JSON into the typed Settings
-// struct. The effective document is always complete (defaults fill every leaf), so
-// this is total; a mismatch is a programming error surfaced as an error, not a
-// silent zero.
+// struct. Defaults fill every leaf that declares one, so a mismatch is a
+// programming error surfaced as an error. An optional setting (no default tag,
+// json omitempty) that no level set is absent and reads as its zero value, which
+// its reader takes as unset (RetentionSettings.NodeLogDays, #1350).
 func Typed(d Doc) (Settings, error) {
 	var s Settings
 	b, err := json.Marshal(d)

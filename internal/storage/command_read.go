@@ -185,7 +185,7 @@ var commandReadCols = `c.id, c.ts, c.component_id::text, comp.name, ct.name, c.i
 	coalesce(c.actor::text, ''), ` + principalIdentCols("c.actor") + `,
 	ct.settle_window_seconds, coalesce(pt.name, ''), coalesce(mt.name, ''),
 	(select pr.value from property pr where pr.command_id = c.id and pr.provenance = 'intended' order by pr.ts desc, pr.id desc limit 1),
-	(select m.value from metric m where m.command_id = c.id and m.provenance = 'intended' order by m.ts desc, m.id desc limit 1),
+	(select m.value from metric_declared m where m.command_id = c.id order by m.ts desc, m.id desc limit 1),
 	coalesce(ride.id::text, ''), coalesce(ride.name, ''),
 	coalesce((select n.name from node n where n.principal_id = ride.node_name), ''),
 	coalesce(drv.name, ''), drv.spec`

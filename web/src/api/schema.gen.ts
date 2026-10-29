@@ -2683,7 +2683,7 @@ export interface paths {
         put?: never;
         /**
          * Set a metric type's retention window
-         * @description Sets how many days this type's samples are kept, overriding the metric lane's window (retention.metric_days), or with null returns it to the lane's. Works on an official type: a shipped type's definition is read-only, but how long an install keeps its samples is the install's, and the boot seed never resets it. The retention floor still holds: a type's latest value per series is never removed. 1 to 36,500 days. Audited as set_retention. Gated by metric_type:update and platform:update.
+         * @description Sets how many days this type's samples are kept, overriding the metric lane's window (retention.metric_days), or with null returns it to the lane's. Works on an official type: a shipped type's definition is read-only, but how long an install keeps its samples is the install's, and the boot seed never resets it. A command's intended values are never removed; a series with no sample inside the window reads as no reading within retention (ADR-1275). 1 to 36,500 days. Audited as set_retention. Gated by metric_type:update and platform:update.
          */
         post: operations["set-metric-type-retention"];
         delete?: never;
@@ -2795,7 +2795,7 @@ export interface paths {
         put?: never;
         /**
          * Add a simulated component
-         * @description Creates a component of a simulated product, at the lowest free address in the simulated block (127.60.0.0/16), with the endpoint the collector reaches it through placed on the node: a driver attach where the driver's inputs are known (an SNMP attach needs the sim-community secret, else it falls back), otherwise a reachability probe on a port the profile serves, lifted as the node's simulator lifts its ports. The simulator serves it from its next pull, with no restart. Gated by simulation:update, and also needs component:create and endpoint:create, each in the caller's own scope. A node with no simulator connected is a 409, and a product no profile simulates a 422.
+         * @description Creates a component of a simulated product, at the lowest free address in the simulated block (127.60.0.0/16), with the endpoint the collector reaches it through placed on the node: a driver attach where the driver's inputs are known (only when the platform secret the attach references exists, the community or the credential the face demands, else it falls back), otherwise a reachability probe on a port the profile serves, lifted as the node's simulator lifts its ports. The simulator serves it from its next pull, with no restart. Gated by simulation:update, and also needs component:create and endpoint:create, each in the caller's own scope. A node with no simulator connected is a 409, and a product no profile simulates a 422.
          */
         post: operations["add-node-simulation-component"];
         delete?: never;
@@ -10415,6 +10415,26 @@ export interface components {
              * @default 14
              */
             metric_days: number;
+            /**
+             * Format: int64
+             * @description Days a node's own debug log line is kept; unset follows log_debug_days
+             */
+            node_log_debug_days?: number;
+            /**
+             * Format: int64
+             * @description Days a node's own error, critical, alert or emergency log line is kept; unset follows log_error_days
+             */
+            node_log_error_days?: number;
+            /**
+             * Format: int64
+             * @description Days a node's own info or notice log line, or one with no severity, is kept; unset follows log_info_days
+             */
+            node_log_info_days?: number;
+            /**
+             * Format: int64
+             * @description Days a node's own warning log line is kept; unset follows log_warning_days
+             */
+            node_log_warning_days?: number;
             /**
              * Format: int64
              * @description Days a property transition is kept, unless its type keeps its own (a property type's retention_days)

@@ -10,7 +10,7 @@ import {
   useRestoreNamespace,
   useRestoreAllDefaults,
 } from "../lib/settings";
-import { constraintFor, isList, listText, validateField, wireValue } from "../lib/settingsValidation";
+import { constraintFor, isList, listText, settingKeys, validateField, wireValue } from "../lib/settingsValidation";
 
 // Settings is the Admin platform-settings surface (issue #271). It resolves the
 // effective settings document from the cascade (the declared defaults, the operator
@@ -51,6 +51,10 @@ function levelLabel(level: string): string {
       return "Declared default";
   }
 }
+
+// UNSET is the source of an optional key (no declared default, #1350) no level
+// has set: nothing resolves it, so the layer stack marks no level effective.
+const UNSET = "unset";
 
 // The cascade order, broad to specific, for the layer-stack display. "default" is
 // off the axis: it is what the setting is when nobody set it, never a stored row.
@@ -156,14 +160,14 @@ export default function Settings() {
                     </Show>
                   </div>
                   <div class="overflow-hidden rounded-box border border-base-300 bg-base-100">
-                    <For each={Object.keys(data().values[namespace]).sort()}>
+                    <For each={settingKeys(namespace, data().values[namespace])}>
                       {(key, i) => (
                         <SettingRow
                           first={i() === 0}
                           namespace={namespace}
                           settingKey={key}
                           value={data().values[namespace][key]}
-                          source={data().sources[`${namespace}.${key}`] ?? "default"}
+                          source={data().sources[`${namespace}.${key}`] ?? (data().values[namespace][key] == null ? UNSET : "default")}
                           lockLevel={data().locks[`${namespace}.${key}`]}
                           editing={editing() && canEdit()}
                           onPatch={patchNamespace}
@@ -231,7 +235,9 @@ function SettingRow(props: {
   // The generated per-field constraint drives both the control (an enum renders as a
   // select) and inline validation. A field is only validated while it is being
   // edited, so read mode never shows an error.
-  const fieldErr = () => (rowEditing() ? validateField(constraint(), draft()) : null);
+  // A blank draft on a key no level set is "not set", not an invalid value.
+  const fieldErr = () =>
+    rowEditing() && !(props.source === UNSET && draft() === "") ? validateField(constraint(), draft()) : null;
 
   async function save() {
     setBusy(true);
@@ -325,6 +331,11 @@ function SettingRow(props: {
               )}
             </For>
           </ul>
+          <Show when={props.source === UNSET}>
+            <p class="mt-2 text-base-content/60">
+              Not set at any level, and it declares no default. {constraint()?.description}
+            </p>
+          </Show>
           <Show when={locked()}>
             <p class="mt-2 text-base-content/60">
               Locked at the {levelLabel(props.lockLevel!)} level; more specific levels cannot override it.

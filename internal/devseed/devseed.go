@@ -50,6 +50,9 @@ type Doc struct {
 	// SimIdentityBindings tie the simulated conduit's room ids to the
 	// systems they are the rooms of (#1282).
 	SimIdentityBindings []IdentityBinding `yaml:"sim_identity_bindings"`
+	// SimPusher is the simulated first-party pusher (#1370), granted with
+	// the simulated fleet only.
+	SimPusher *SimPusher `yaml:"sim_pusher"`
 }
 
 // SimSecret is a platform secret the simulated fleet's endpoints reference
@@ -69,8 +72,12 @@ type SimSecret struct {
 // is a fixture key. Seeded once: a component already holding an endpoint of
 // the driver's transport is left alone.
 type SimEndpoint struct {
-	Component string            `yaml:"component"`
+	Component string `yaml:"component"`
+	// Driver attaches a driver; Transport, with no driver, is a bare probe
+	// of that transport at the component's simulated address (#1370: icmp,
+	// which no driver speaks, since a ping has no device API to read).
 	Driver    string            `yaml:"driver"`
+	Transport string            `yaml:"transport"`
 	Label     string            `yaml:"label"`
 	Inputs    map[string]string `yaml:"inputs"`
 	// HostKey pins an ssh endpoint's host key when it is created (#1078),
@@ -758,6 +765,15 @@ func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, op
 	}
 	if err := seedIdentityBindings(ctx, gw, actorID, base, compIDs, sysIDs); err != nil {
 		return err
+	}
+	if p := base.SimPusher; p != nil {
+		sysID, ok := sysIDs[p.System]
+		if !ok {
+			return fmt.Errorf("devseed: the simulated pusher names unknown system key %q", p.System)
+		}
+		if err := GrantPusher(ctx, gw, actorID, p.Service, sysID); err != nil {
+			return err
+		}
 	}
 	// The breadth RTT series, after the endpoints they are the node's account
 	// of.
