@@ -629,6 +629,28 @@ promise:
   only on components the system already holds (a primary moved to another system that holds the
   member, an occupant carried onto the new standard's role) and binds none it did not.
 
+- **An identity binding** is the same rule on a relationship whose owner end may be either tier
+  ([ADR-1282](/architecture/decisions/#adr-1282-a-conduit-fans-each-identified-value-out-to-the-owner-its-binding-names-and-a-binding-costs-a-write-on-both-of-its-ends),
+  [#1385](https://github.com/hyperscaleav/omniglass/issues/1385)). It ties a value a conduit
+  component reports to one system or component, so that owner receives the conduit's values for it,
+  and it costs `component:update` on the conduit and the owner's update. The routes live under the
+  conduit (`/components/{name}/identity-bindings/{key}/{value}`) and are gated on `component:update`;
+  a put naming a system owner publishes `system:update` as its conditional permission and refuses a
+  caller holding none with a 403 naming it before anything resolves. In the gateway each end gets the
+  read-then-action split in its own tier: the conduit in `component:read` then `component:update`, the
+  owner in `system:read` then `system:update` or the component pair (out of read the non-disclosing
+  404, readable but not writable a 403 naming the end). A put naming a different owner moves the
+  binding and also needs update on the owner it leaves, refused with a 403 that names neither that
+  owner nor its kind, since the caller may not read it. The list is a read of the conduit, so it names
+  an owner only inside the caller's read on its tier and counts the rest, and a delete of a binding
+  whose owner the caller cannot read is the same 404 as one that does not exist. One fact does pass,
+  and it is accepted: a put naming an identity already bound to an owner the caller cannot read is
+  refused with the move 403, so the caller learns that the identity is bound, never to whom (the
+  list's hidden count already says the conduit has bindings it cannot see). Neither end alone is
+  enough: a principal scoped to one system could otherwise claim an identity that belongs to another owner and pull a conduit
+  it cannot read onto its system, and one scoped to the conduit could write onto systems it cannot
+  update.
+
 A guard inside the same primitive panics if the caller's scope was resolved for a resource that does
 not cover the config being checked against, catching a tier mismatch (a component-tier scope compared
 against a system's own table, say) as a caller bug rather than a silently wrong answer. It is **forward

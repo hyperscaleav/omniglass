@@ -158,6 +158,12 @@
       "labelled": true
     },
     {
+      "table": "identity_binding",
+      "shape": "id only",
+      "reason": "a conduit's identity tied to its owner, addressed by its conduit, match key and value; nothing names it",
+      "labelled": false
+    },
+    {
       "table": "impersonation_session",
       "shape": "id only",
       "labelled": false

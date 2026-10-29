@@ -385,6 +385,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 	registerEffectiveMetricRoutes(api, a, gw)
 	registerRoleRoutes(api, a, gw)
 	registerMemberRoutes(api, a, gw)
+	registerIdentityBindingRoutes(api, a, gw)
 	registerAlarmRoutes(api, a, gw)
 	registerAlarmTimelineRoute(api, a, gw)
 	registerHealthRoutes(api, a, gw)
