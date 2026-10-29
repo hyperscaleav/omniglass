@@ -82,6 +82,19 @@ metric_types:
     data_type: int
     label: Participant Count
     description: The participants a component reports in its current call; 0 when no call is active.
+  # A component's own thermal state, read off its API (#898): one name per
+  # measurement whatever the component, the heatsink of an amplifier or the
+  # chassis of a DSP alike.
+  - name: temperature
+    data_type: float
+    unit: "C"
+    label: Temperature
+    description: The temperature a component reports of itself (its chassis, heatsink or processor), in degrees Celsius.
+  - name: fan-speed
+    data_type: float
+    unit: rpm
+    label: Fan Speed
+    description: The speed a component reports of its cooling fan, in revolutions per minute.
   - name: http-response-time
     data_type: float
     unit: ms

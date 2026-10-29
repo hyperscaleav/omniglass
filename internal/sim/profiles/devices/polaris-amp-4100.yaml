@@ -1,0 +1,182 @@
+# yaml-language-server: $schema=schema.json
+# Polaris Amp 4-100, 4-Channel Power Amplifier
+#
+# Polaris is the lab's fictional audio vendor. The Amp 4-100 is a
+# rack-mounted four-channel power amplifier, 100 W a channel, the
+# stage after the DSP 16 in a room's audio rack: each channel drives
+# a passive loudspeaker zone (the Polaris Sky C6 ceiling speakers).
+#
+# Its monitoring face is SNMP, under the same Polaris enterprise arc
+# as the DSP (1.3.6.1.4.1.55540), the amplifier's branch at .3: the
+# chassis power state, the protect state (an amplifier mutes its
+# outputs and latches protect on a fault: overheating, a shorted load,
+# DC on an output), the heatsink temperature and fan, and a channel
+# table of output level, clip and load. Each channel's load is what a
+# speaker on it reports through the amplifier, since the speaker
+# itself has no network interface.
+#
+# Its control face is the same HTTP JSON API the DSP has, behind the
+# same header token: standby and wake, and the protect reset an
+# operator reaches for once the fault is cleared.
+
+name: polaris-amp-4100
+manufacturer: Polaris
+model: "Amp 4-100"
+device_type: amplifier
+slug_prefix: amp
+
+doc:
+  summary: "Polaris Amp 4-100, 4-channel power amplifier"
+  description: |
+    Rack-mounted four-channel power amplifier for meeting rooms and
+    halls. Monitored over SNMP (power, protect, temperature, fan, and
+    per-channel output level, clip and load); controlled over an HTTP
+    JSON API (standby, protect reset).
+
+interfaces:
+  - name: http-api
+    protocol: http
+    port: 80
+    doc: { summary: "Polaris JSON control API", tags: [management, api] }
+    auth:
+      type: header
+      header: "X-Polaris-Token"
+      api_key: "polaris-lab-token"
+      enforce: true
+    api_surface: polaris-amp
+    routes:
+      - match: "GET /api/status"
+        template: api/polaris-amp/status.json.gotempl
+        doc: { summary: "Amplifier status snapshot (power, protect, thermal, channels)", tags: [api, status] }
+
+      - match: "POST /api/power"
+        template: api/polaris-amp/power-ack.json.gotempl
+        doc: { summary: "Enter standby or wake (on, standby)", tags: [api, control] }
+        example: |
+          {"power": "standby"}
+        mutations:
+          - path: status.amp.power
+            value: "{{ .Request.Body.power }}"
+            enum: ["on", "standby"]
+
+      # Protect latches: an amplifier stays muted after the fault clears
+      # until an operator resets it. A scenario trips it (status.amp.protect
+      # to "protect"); this is the way back.
+      - match: "POST /api/protect/reset"
+        template: api/polaris-amp/protect-ack.json.gotempl
+        doc: { summary: "Clear a latched protect state", tags: [api, control] }
+        example: "{}"
+        mutations:
+          - { path: status.amp.protect, value: "normal" }
+
+      - match: "POST /api/admin/reboot"
+        template: api/polaris-amp/reboot-ack.json.gotempl
+        doc: { summary: "Reboot amplifier (clears uptime and a latched protect)", tags: [api, admin] }
+        example: "{}"
+        mutations:
+          - { path: status.device.boot_epoch, value: "{{ now }}" }
+          - { path: status.amp.protect, value: "{{ .Defaults.status.amp.protect }}" }
+          - { path: status.amp.temperature, value: "{{ .Defaults.status.amp.temperature }}" }
+
+  - name: snmp
+    protocol: snmp
+    port: 161
+    doc: { summary: "SNMP monitoring", tags: [monitoring] }
+    api_surface: polaris-amp
+    auth:
+      community: "public"
+      refused_community: "revoked"
+    # The amplifier's branch of the Polaris arc is .3: scalars at .3.1 to
+    # .3.4, and a channel table at .3.10.1.<column>.<channel> (channels
+    # 1 to 4): column 2 the output level in dBFS, 3 the clip flag, 4 the
+    # load in ohms. Identity sits where the DSP's does (.5).
+    oid_map:
+      configuration.device.model:     "1.3.6.1.2.1.1.1.0"   # sysDescr
+      status.device.uptime:           "1.3.6.1.2.1.1.3.0"
+      status.amp.power:               "1.3.6.1.4.1.55540.3.1.0"
+      status.amp.protect:             "1.3.6.1.4.1.55540.3.2.0"
+      status.amp.temperature:         "1.3.6.1.4.1.55540.3.3.0"
+      status.amp.fan_rpm:             "1.3.6.1.4.1.55540.3.4.0"
+      status.channels.0.output_db:    "1.3.6.1.4.1.55540.3.10.1.2.1"
+      status.channels.1.output_db:    "1.3.6.1.4.1.55540.3.10.1.2.2"
+      status.channels.2.output_db:    "1.3.6.1.4.1.55540.3.10.1.2.3"
+      status.channels.3.output_db:    "1.3.6.1.4.1.55540.3.10.1.2.4"
+      status.channels.0.clip:         "1.3.6.1.4.1.55540.3.10.1.3.1"
+      status.channels.1.clip:         "1.3.6.1.4.1.55540.3.10.1.3.2"
+      status.channels.2.clip:         "1.3.6.1.4.1.55540.3.10.1.3.3"
+      status.channels.3.clip:         "1.3.6.1.4.1.55540.3.10.1.3.4"
+      status.channels.0.load_ohms:    "1.3.6.1.4.1.55540.3.10.1.4.1"
+      status.channels.1.load_ohms:    "1.3.6.1.4.1.55540.3.10.1.4.2"
+      status.channels.2.load_ohms:    "1.3.6.1.4.1.55540.3.10.1.4.3"
+      status.channels.3.load_ohms:    "1.3.6.1.4.1.55540.3.10.1.4.4"
+      configuration.firmware.version: "1.3.6.1.4.1.55540.5.1.0"
+      configuration.device.serial:    "1.3.6.1.4.1.55540.5.2.0"
+
+  - name: icmp
+    protocol: icmp
+    doc: { summary: "ICMP ping reachability", tags: [monitoring] }
+
+computed:
+  - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
+
+# A running amplifier's readings move: the heatsink warms and cools with
+# the program, the fan follows, and the outputs ride the program level.
+# Each is a behavior a scenario timeline can drive or override later.
+behaviors:
+  - name: temperature_drift
+    schedule:
+      interval: 60s
+    mutations:
+      - path: status.amp.temperature
+        value: "{{ sigfig 3 (clamp 34.0 52.0 (randStep 1.0 .State.status.amp.temperature)) }}"
+
+  - name: fan_drift
+    schedule:
+      interval: 60s
+    mutations:
+      - path: status.amp.fan_rpm
+        value: "{{ round 0 (clamp 2200.0 3600.0 (randStep 80.0 .State.status.amp.fan_rpm)) }}"
+
+  - name: output_drift
+    schedule:
+      interval: 30s
+    mutations:
+      - path: status.channels.0.output_db
+        value: '{{ round 1 (clamp -40.0 -6.0 (randStep 2.0 (index .State.status.channels 0 | get "output_db"))) }}'
+      - path: status.channels.1.output_db
+        value: '{{ round 1 (clamp -40.0 -6.0 (randStep 2.0 (index .State.status.channels 1 | get "output_db"))) }}'
+      - path: status.channels.2.output_db
+        value: '{{ round 1 (clamp -40.0 -6.0 (randStep 2.0 (index .State.status.channels 2 | get "output_db"))) }}'
+      - path: status.channels.3.output_db
+        value: '{{ round 1 (clamp -40.0 -6.0 (randStep 2.0 (index .State.status.channels 3 | get "output_db"))) }}'
+
+defaults:
+  status:
+    device:
+      boot_epoch: 0
+    amp:
+      power: "on"
+      protect: normal
+      temperature: 41
+      fan_rpm: 2800
+    # Four channels, indexed 0..3 in state and 1..4 in the SNMP channel
+    # table, as an amplifier's front panel numbers them. Each drives a
+    # ceiling-speaker zone; 8 ohms is a healthy zone's load.
+    channels:
+      - { index: 0, name: "Zone 1", output_db: -18, clip: false, load_ohms: 8 }
+      - { index: 1, name: "Zone 2", output_db: -18, clip: false, load_ohms: 8 }
+      - { index: 2, name: "Zone 3", output_db: -21, clip: false, load_ohms: 8 }
+      - { index: 3, name: "Zone 4", output_db: -21, clip: false, load_ohms: 8 }
+    network:
+      ipv4:
+        address: ""
+        mac: ""
+  configuration:
+    device:
+      serial: ""
+      model: "Amp 4-100"
+      manufacturer: "Polaris"
+    firmware:
+      version: "2.3.1"
+    network:
+      hostname: ""

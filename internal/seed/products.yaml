@@ -173,7 +173,7 @@ products:
   - id: polaris-amp-4100
     label: Polaris Amp 4-100
     vendor_id: polaris
-    driver_id: snmp-generic
+    driver_id: polaris-amp-snmp
     kind: device
     component_type: amplifier
   - id: polaris-sky-c6

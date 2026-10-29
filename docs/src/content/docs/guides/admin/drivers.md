@@ -472,11 +472,9 @@ driver this way. It is a leaf catalog beside the vendor registry. See
   the pair never disappears.
 - An **official** row is always read-only: the blade keeps the Edit and Delete pair in place,
   greyed, with the reason on hover: "Official: ships with Omniglass and updates with it."
-  Omniglass ships a starter set of official drivers (Generic SNMP, Newtron NVP, and Newtron NVP
-  over Telnet, its login a session block, over SSH, and over TLS, pinning the panel's key, the Kestrel
-  Device API over https with basic auth, HTTP JSON over http with a header key, Newtron Panel Web
-  over https behind its form login, Boreal Edge Web Admin over http with digest, and UCC Webhooks,
-  the server's listener for signed meeting posts, all with real specs), upserted idempotently at boot so the
+  Omniglass ships a starter set of official drivers, each with a real spec (the set the binary
+  seeds is rendered under [the declarative menu](/architecture/collection/#drivers-the-declarative-menu)),
+  upserted idempotently at boot so the
   shared set cannot drift install to install; add a custom driver for anything else.
 - **Delete** refuses while an **endpoint is attached** through the driver (422): an attach
   derives real collection work from the spec, so the driver cannot vanish out from under it.
