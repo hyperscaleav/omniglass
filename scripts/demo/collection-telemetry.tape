@@ -18,18 +18,24 @@ Wait
 Type `bar='hq.west.level-2.huddle.$comp.videobar-1'`
 Enter
 Wait
+Type "# Turn its volume up: the bar pushes the change down its event stream"
+Enter
+Wait
+Type `omniglass component simulation fire "$bar" --surface http-api --method POST --path /api/audio/volume --body '{"volume": 41}' | jq -c .status`
+Enter
+Wait
 Hide
-Type `demo_until 90 'omniglass component metric list "$bar" | jq -e "[.metrics[] | select(.metric_type_name == \"poll-duration\" or .metric_type_name == \"push-message-count\")] | length == 2"'`
+Type `demo_until 90 'omniglass component metric list "$bar" | jq -e "([.metrics[] | select(.metric_type_name == \"push-message-count\" and .value >= 1)] | length == 1) and ([.metrics[] | select(.metric_type_name == \"poll-duration\")] | length == 1)"'`
 Enter
 Wait@100s
 Type "clear"
 Enter
 Wait
 Show
-Type "# Its endpoint's account of itself: mean poll time (ms) and the pushes its listeners claimed"
+Type "# Its endpoint's account of itself this window: mean poll time (ms), and the push its listener claimed"
 Enter
 Wait
-Type `omniglass component metric list "$bar" | jq -c '.metrics[] | select(.metric_type_name | test("^(poll|push)-")) | {metric: .metric_type_name, endpoint: .instance, value: (.value | floor)}'`
+Type `omniglass component metric list "$bar" | jq -c '.metrics[] | select(.metric_type_name | test("^(poll|push)-")) | {metric: .metric_type_name, endpoint: .instance, value: ((.value * 10 | round) / 10)}'`
 Enter
 Wait
 
