@@ -1213,10 +1213,10 @@
       "nullable": false
      },
      {
-      "name": "keys_carried",
+      "name": "carried_type_ids",
       "type": "ARRAY",
       "nullable": false,
-      "default": "'{}'::text[]"
+      "default": "'{}'::uuid[]"
      }
     ]
    },
@@ -4400,6 +4400,11 @@
       "nullable": true,
       "fk": true,
       "fk_target": "alarm.id"
+     },
+     {
+      "name": "source_conduit_id",
+      "type": "uuid",
+      "nullable": true
      }
     ],
     "checks": [
@@ -4879,6 +4884,11 @@
      },
      {
       "name": "source_rule_id",
+      "type": "uuid",
+      "nullable": true
+     },
+     {
+      "name": "source_conduit_id",
       "type": "uuid",
       "nullable": true
      }
@@ -5408,6 +5418,11 @@
      },
      {
       "name": "source_rule_id",
+      "type": "uuid",
+      "nullable": true
+     },
+     {
+      "name": "source_conduit_id",
       "type": "uuid",
       "nullable": true
      }
