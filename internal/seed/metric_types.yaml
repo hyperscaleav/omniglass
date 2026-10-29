@@ -108,6 +108,14 @@ metric_types:
     unit: rpm
     label: Fan Speed
     description: The speed a component reports of its cooling fan, in revolutions per minute.
+  # A media player's local storage filling as content syncs down (#893).
+  # Dimensionless, so stored as a ratio (0..1) and shown as a percentage.
+  - name: storage-utilization
+    data_type: float
+    unit: ratio
+    precision: 3
+    label: Storage Utilization
+    description: How full a component reports its local storage, as a fraction of its capacity (0 to 1).
   - name: http-response-time
     data_type: float
     unit: ms
