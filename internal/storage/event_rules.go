@@ -306,18 +306,20 @@ func resolveRuleEventTypes(ctx context.Context, q querier, r *EventRule) error {
 }
 
 func resolveRuleLane(ctx context.Context, q querier, r *EventRule) error {
-	var isProperty, isMetric bool
-	if err := q.QueryRow(ctx, `select exists (select 1 from property_type where name = $1),
-		exists (select 1 from metric_type where name = $1)`, r.SampleKey).Scan(&isProperty, &isMetric); err != nil {
+	// The lane is the one the ingest registry resolves the name to (#1307): an
+	// operator's row shadows an official one of the same name.
+	holders, err := nameHolders(ctx, q, r.SampleKey)
+	if err != nil {
 		return fmt.Errorf("storage: check rule sample key: %w", err)
 	}
-	switch {
-	case isProperty:
+	lane, _, _ := ResolveNameLane(r.SampleKey, holders)
+	switch lane {
+	case "property":
 		r.SampleLane = rules.LaneProperty
 		if err := q.QueryRow(ctx, `select data_type from property_type where name = $1`, r.SampleKey).Scan(&r.dataType); err != nil {
 			return fmt.Errorf("storage: check rule sample key: %w", err)
 		}
-	case isMetric:
+	case "metric":
 		r.SampleLane, r.dataType = rules.LaneMetric, ""
 	default:
 		return invalidRule("sample key %q is not a registered property or metric", r.SampleKey)
