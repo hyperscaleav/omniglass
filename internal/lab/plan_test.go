@@ -158,6 +158,35 @@ func TestPlanNodeTokenFlow(t *testing.T) {
 	}
 }
 
+// The simulated pusher's token (#1370) flows as the node's does: minted per
+// run, the node's simulator holds the plaintext, and the seed gets only its
+// hash and its non-secret prefix. A lab with no node runs no simulator, so
+// it carries none.
+func TestPlanPushTokenFlow(t *testing.T) {
+	o := testOptions()
+	o.PushToken, o.PushTokenHash, o.PushTokenPrefix = "ptok", "pushhash", "0a0b0c0d"
+	s, err := Plan(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(s.Node.Env, "OMNIGLASS_SIM_PUSH_TOKEN=ptok") {
+		t.Fatalf("node env %v, want the run's push token", s.Node.Env)
+	}
+	for _, e := range s.Seed.Env {
+		if strings.Contains(e, "=ptok") {
+			t.Fatalf("the seed sees the plaintext push token: %s", e)
+		}
+	}
+	for _, want := range []string{"OMNIGLASS_LAB_PUSH_TOKEN_HASH=pushhash", "OMNIGLASS_LAB_PUSH_TOKEN_PREFIX=0a0b0c0d"} {
+		if !slices.Contains(s.Seed.Env, want) {
+			t.Fatalf("seed env %v, want %s", s.Seed.Env, want)
+		}
+	}
+	if h := configHash(s.Node); strings.Contains(h, "ptok") {
+		t.Fatal("the node's config hash carries the token")
+	}
+}
+
 // The database and the data directory are named volumes kept across runs;
 // the server and the seed share the data directory, so the key the seed's
 // secrets are sealed with is the one the server opens them with.

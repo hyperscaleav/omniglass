@@ -44,6 +44,12 @@ type Config struct {
 	Impairments bool
 	// Applier realizes impairments; nil is the kernel's (impair.Netlink).
 	Applier applier
+	// PushToken is the simulated booking service's token (#1370): set, the
+	// simulator pushes the bookings of the one system its principal is
+	// granted through POST /telemetry:push every PushEvery (zero takes the
+	// default). Empty, it pushes nothing.
+	PushToken string
+	PushEvery time.Duration
 }
 
 const (
@@ -141,6 +147,10 @@ func Run(ctx context.Context, cfg Config) error {
 	defer impairs.clear()
 
 	profileFor := func(p string) (string, bool) { name, _, ok := store.ForProduct(p); return name, ok }
+	subs := newSubscriber(cfg.ServerURL, store)
+	if cfg.PushToken != "" {
+		go newPusher(cfg.ServerURL, cfg.PushToken).run(ctx, cfg.PushEvery, log.With("pusher", pusherSource))
+	}
 	pull := func() {
 		devices, err := pullList(nc, cfg.Name, caps)
 		if err != nil {
@@ -169,6 +179,9 @@ func Run(ctx context.Context, cfg Config) error {
 		impairs.reconcile(served, wants)
 		if st := impairs.status(); st.Error != "" {
 			log.Warn("impairments did not apply", "error", st.Error)
+		}
+		for _, err := range subs.reconcile(devices, engine.Devices()) {
+			log.Warn("a webhook subscription did not apply", "error", err)
 		}
 	}
 	pull()

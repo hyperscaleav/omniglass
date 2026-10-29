@@ -238,6 +238,12 @@ func seedSimEndpoints(ctx context.Context, gw storage.Gateway, actorID string, d
 		if !ok {
 			return fmt.Errorf("devseed: simulated endpoint references unknown component key %q", se.Component)
 		}
+		if se.Driver == "" {
+			if err := seedSimProbe(ctx, gw, actorID, se, compID, endpoints); err != nil {
+				return err
+			}
+			continue
+		}
 		spec, ok := specs[se.Driver]
 		if !ok {
 			return fmt.Errorf("devseed: simulated endpoint on %s names driver %q, which has no spec", se.Component, se.Driver)
@@ -329,6 +335,41 @@ func seedIdentityBindings(ctx context.Context, gw storage.Gateway, actorID strin
 		if _, err := gw.PutIdentityBinding(ctx, actorID, conduit, b.Key, b.Value, storage.IdentityBindingOwner{Kind: "system", Name: sys}, sc); err != nil {
 			return fmt.Errorf("devseed: bind %s %s=%s to %s: %w", b.Conduit, b.Key, b.Value, b.System, err)
 		}
+	}
+	return nil
+}
+
+// seedSimProbe lands a fixture's bare probe (#1370): an endpoint of the
+// transport alone, no driver, targeting the component's simulated address on
+// the dev node. Its target is the host, which is what an icmp probe pings.
+// Idempotent: a component already holding an endpoint of the transport is
+// left alone.
+func seedSimProbe(ctx context.Context, gw storage.Gateway, actorID string, se SimEndpoint, compID string, endpoints []storage.Endpoint) error {
+	if se.Transport == "" {
+		return fmt.Errorf("devseed: simulated endpoint on %s names neither a driver nor a transport", se.Component)
+	}
+	host := ""
+	for _, e := range endpoints {
+		if e.ComponentID == nil || *e.ComponentID != compID {
+			continue
+		}
+		if e.Transport == se.Transport {
+			return nil
+		}
+		if h := storage.TargetHost(endpointTarget(e.Params)); strings.HasPrefix(h, "127.60.") {
+			host = h
+		}
+	}
+	if host == "" {
+		return fmt.Errorf("devseed: simulated %s probe on %s: the component has no simulated address", se.Transport, se.Component)
+	}
+	all := scope.Set{All: true}
+	comp, node := compID, reachNode
+	if _, err := gw.CreateEndpoint(ctx, actorID, storage.EndpointSpec{
+		Transport: se.Transport, Label: se.Label, Component: &comp, Node: &node,
+		Params: []byte(fmt.Sprintf(`{"target":%q}`, host)), SecretRead: all, CanAdmin: true,
+	}, all); err != nil {
+		return fmt.Errorf("devseed: create simulated %s probe on %s: %w", se.Transport, se.Component, err)
 	}
 	return nil
 }

@@ -157,6 +157,11 @@ property_types:
     data_type: string
     label: Content Name
     description: The name of the item a media player is playing, as it reports it.
+  - name: booking-state
+    data_type: string
+    validation: { enum: [booked, free] }
+    label: Booking State
+    description: Whether a space is booked now (a meeting in progress) or free, as its scheduling service reports it.
   # Declared attribute properties: the starter set a field draws from.
   - name: serial-number
     data_type: string

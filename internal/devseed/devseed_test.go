@@ -452,11 +452,12 @@ func TestRunIdempotent(t *testing.T) {
 	if humans != 4 {
 		t.Errorf("human principals = %d, want 4", humans)
 	}
+	// The four people's grants, and the simulated pusher's one (#1370).
 	if err := conn.QueryRow(ctx, `select count(*) from principal_grant`).Scan(&grants); err != nil {
 		t.Fatalf("count grants: %v", err)
 	}
-	if grants != 4 {
-		t.Errorf("grants = %d, want 4", grants)
+	if grants != 5 {
+		t.Errorf("grants = %d, want 5", grants)
 	}
 
 	// The property primitive seeds one extra contract line on the QM55, one component
@@ -1822,12 +1823,12 @@ func TestSimulatedFleetAtRealPorts(t *testing.T) {
 		t.Errorf("demo DSP http endpoint = %q, want a simulated address at port 80", http)
 	}
 	// Probe targets below 1024 are served as declared; a lift would have
-	// moved them into 10001..11023.
+	// moved them into 10001..11023. A ping's target is a host alone.
 	var lifted, low int
 	if err := conn.QueryRow(ctx, `
 		select count(*) filter (where port between 10001 and 11023), count(*) filter (where port < 1024)
 		from (select split_part(params->>'target', ':', 2)::int as port
-		      from endpoint where params->>'target' like '127.60.%') t`).Scan(&lifted, &low); err != nil {
+		      from endpoint where params->>'target' like '127.60.%:%') t`).Scan(&lifted, &low); err != nil {
 		t.Fatal(err)
 	}
 	if lifted != 0 || low == 0 {

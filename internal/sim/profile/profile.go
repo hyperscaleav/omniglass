@@ -30,6 +30,17 @@ type DeviceProfile struct {
 	// a display line in its sizes. Each may overlay the profile's defaults
 	// with its own identity. The catalog alignment test holds both rules.
 	Products []ProductVariant `yaml:"products"`
+	// Webhook declares how the simulated service is subscribed to a
+	// webhook receiver (#1370): absent for a device that posts none.
+	Webhook *WebhookSubscribe `yaml:"webhook"`
+}
+
+// WebhookSubscribe names the route a simulated service's admin would call to
+// point its webhooks at a receiver: a POST taking a JSON body of url, scheme
+// and secret. The simulator calls it for a device whose component holds a
+// webhook endpoint (ADR-1370), so its posts flow from the start.
+type WebhookSubscribe struct {
+	Subscribe string `yaml:"subscribe"`
 }
 
 // ProductVariant is one more product a profile simulates.
