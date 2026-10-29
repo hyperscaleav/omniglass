@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/rules"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
@@ -221,6 +222,21 @@ func TestBothArrivalsFanOutTheSameRows(t *testing.T) {
 		if n := f.count(t, `select count(*) from property where component_id = $1`, f.conduit); n != 0 {
 			t.Errorf("%s: an identified value landed on the conduit (%d rows)", lane, n)
 		}
+		// The owner-level read shows it: an empty instance is the owner's
+		// own series, never a retired observer.
+		effs, err := f.gw.EffectiveProperties(f.ctx, "system", "room-a", scope.Set{All: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		shown := false
+		for _, e := range effs {
+			if e.PropertyTypeName == "call-state" && e.Reconciliation != nil && string(e.Reconciliation.Is) == `"active"` {
+				shown = true
+			}
+		}
+		if !shown {
+			t.Errorf("%s: room-a's properties read %+v, want call-state is active", lane, effs)
+		}
 		inbox, err := f.gw.ListUnboundIdentities(f.ctx, "meetings-cloud", scope.Set{All: true})
 		if err != nil || len(inbox) != 1 || inbox[0].Value != "zr-x" || inbox[0].Count != 2 {
 			t.Errorf("%s: inbox = %+v (%v), want zr-x heard twice", lane, inbox, err)
@@ -347,5 +363,39 @@ func TestFanOutResolvesOwnersInOneRead(t *testing.T) {
 	}
 	if n := f.count(t, `select count(*) from metric m join system s on s.id = m.system_id`); n != 2*3+2*200 {
 		t.Errorf("landed %d fanned metric rows, want %d", n, 2*3+2*200)
+	}
+}
+
+// TestAnOwnersRuleJudgesAFannedValue: a fanned value is the owner's sample
+// like any other, so an event rule over its key raises the alarm on the
+// owner it fanned out to, never on the conduit. Owned here by a component:
+// event rules do not yet judge a system's samples (#1002), so a system
+// owner's rule waits on that issue.
+func TestAnOwnersRuleJudgesAFannedValue(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	f := newFanIngest(t)
+	all := scope.Set{All: true}
+	if _, err := f.gw.CreateComponent(f.ctx, "", storage.ComponentSpec{Name: "bar-p"}, all, all, all, all); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.gw.PutIdentityBinding(f.ctx, f.actor, "meetings-cloud", "ucc-room-id", "zr-p",
+		storage.IdentityBindingOwner{Kind: "component", Name: "bar-p"}, f.scopes()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.gw.CreateEventRule(f.ctx, "", storage.EventRuleSpec{Name: "in-a-call", SampleKey: "call-state",
+		Fire: rules.Criteria{Expr: `value == "active"`}, Severity: "high", FireEventType: "condition-started"}, all); err != nil {
+		t.Fatal(err)
+	}
+	subject, ev := f.webhookLane(&ogv1.TelemetryBatch{Properties: []*ogv1.PropertySample{
+		{Name: "call-state", ValueJson: `"active"`, Identity: room("zr-p")}}})
+	f.deliver(t, subject, ev, "")
+	got, err := f.gw.ListAlarms(f.ctx, "bar-p", storage.AlarmFilter{})
+	if err != nil || len(got) != 1 {
+		t.Fatalf("alarms on the owner = %+v (%v), want the rule's one alarm", got, err)
+	}
+	if conduit, _ := f.gw.ListAlarms(f.ctx, "meetings-cloud", storage.AlarmFilter{}); len(conduit) != 0 {
+		t.Errorf("the conduit raised %d alarms for a value it fanned out", len(conduit))
 	}
 }
