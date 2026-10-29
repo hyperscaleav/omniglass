@@ -79,6 +79,10 @@ func (f fakeStore) PruneLogs(context.Context, string, string, time.Time, int) (i
 func (f fakeStore) PruneSamples(context.Context, string, time.Time, int) (int64, error) {
 	return 0, nil
 }
+func (f fakeStore) EnsureMetricPartitions(context.Context) ([]string, error) { return nil, nil }
+func (f fakeStore) DropMetricPartitions(context.Context, time.Time) ([]string, error) {
+	return nil, nil
+}
 func (f fakeStore) PruneTelemetryReceipts(context.Context, time.Time, int) (int64, error) {
 	return 0, nil
 }

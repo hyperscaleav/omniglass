@@ -64,25 +64,29 @@ const (
 	// so the property lane no longer reads them in the batch's transaction (18).
 	wantStatementsPerBatch = 18
 	// wantMetricRowsPerPage is how many of the window's metric rows fill one
-	// 8 KiB heap page (about 126 bytes a row). Exact on every full page. Density
+	// 8 KiB heap page (about 60 bytes a row). Exact on every full page. Density
 	// rather than a page count, so a fleet that grows by a few endpoints moves
-	// nothing here unless a row does.
-	wantMetricRowsPerPage = 65
+	// nothing here unless a row does. 65 (about 126 bytes) until #1275 moved
+	// the series out of the row: (id, series_id, ts, value) is 32 bytes of
+	// data beside the 24-byte tuple header and the 4-byte line pointer.
+	wantMetricRowsPerPage = 136
 	// maxMetricIndexBytesPerRow bounds the metric indexes per window row,
 	// measured after REINDEX so the figure is the same on every run (a live
 	// index's page splits follow the fleet's random uuids and vary by a fifth).
 	// The bound is a little over the measured figure; the index definitions
 	// below are pinned exactly, so an added index fails by name, not by size.
-	maxMetricIndexBytesPerRow = 96
+	// 96 until #1275, which left one btree, (series_id, ts desc, id desc),
+	// beside two block range indexes (measured 39.4).
+	maxMetricIndexBytesPerRow = 44
 )
 
-// wantMetricIndexes is every index on the metric table, by definition. An
-// added, dropped or re-keyed index changes this list.
+// wantMetricIndexes is every index on the metric table, by definition, as
+// the partitioned parent declares it for every month (#1275). An added,
+// dropped or re-keyed index changes this list.
 var wantMetricIndexes = []string{
-	"CREATE INDEX metric_arc_owner_idx ON public.metric USING btree (metric_type_id, COALESCE(system_id, location_id, node_id), instance, ts DESC) WHERE (component_id IS NULL)",
-	"CREATE INDEX metric_owner_idx ON public.metric USING btree (component_id, metric_type_id, instance, ts DESC) WHERE (component_id IS NOT NULL)",
-	"CREATE UNIQUE INDEX metric_pkey ON public.metric USING btree (id)",
-	"CREATE INDEX metric_ts_brin ON public.metric USING brin (ts)",
+	"CREATE INDEX metric_id_brin ON ONLY public.metric USING brin (id)",
+	"CREATE INDEX metric_series_ts_idx ON ONLY public.metric USING btree (series_id, ts DESC, id DESC)",
+	"CREATE INDEX metric_ts_brin ON ONLY public.metric USING brin (ts)",
 }
 
 type footprintFixture struct {
@@ -200,7 +204,11 @@ func (f *footprintFixture) relationBytes(tb testing.TB, table string, rebuilt bo
 			tb.Fatalf("reindex %s: %v", table, err)
 		}
 	}
-	if err := f.conn.QueryRow(ctx, `select pg_relation_size($1::regclass), pg_indexes_size($1::regclass)`, table).Scan(&heap, &index); err != nil {
+	// A partitioned table (metric, #1275) holds nothing itself: its size is
+	// its partitions', heap and indexes, summed over the partition tree.
+	if err := f.conn.QueryRow(ctx, `select coalesce(sum(pg_relation_size(r)), 0)::bigint, coalesce(sum(pg_indexes_size(r)), 0)::bigint
+		from (select relid as r from pg_partition_tree($1::regclass) where isleaf
+			union select $1::regclass where not exists (select 1 from pg_partition_tree($1::regclass))) leaves`, table).Scan(&heap, &index); err != nil {
 		tb.Fatalf("size %s: %v", table, err)
 	}
 	return heap, index
@@ -212,7 +220,7 @@ func (f *footprintFixture) relationBytes(tb testing.TB, table string, rebuilt bo
 func (f *footprintFixture) rowsPerFullPage(tb testing.TB, afterID int64) []int64 {
 	tb.Helper()
 	rows, err := f.conn.Query(context.Background(), `select count(*) from metric where id > $1
-		group by (ctid::text::point)[0] order by (ctid::text::point)[0]`, afterID)
+		group by tableoid, (ctid::text::point)[0] order by tableoid, (ctid::text::point)[0]`, afterID)
 	if err != nil {
 		tb.Fatalf("rows per page: %v", err)
 	}
@@ -316,6 +324,9 @@ func TestIngestFootprint(t *testing.T) {
 	t.Logf("  metric index per row     %8.1f  (after REINDEX; held)", float64(metricIndex)/float64(metricRows))
 	t.Logf("  metric index per row     %8.1f  (live, as this run's splits left it; varies with the fleet's random uuids)", float64(liveIndex)/float64(metricRows))
 	t.Logf("  receipt bytes per batch  %8.1f", float64(receiptBytes)/float64(batches))
+	seriesHeap, seriesIndex := f.relationBytes(t, "metric_series", false)
+	t.Logf("  metric series            %8d  (%d bytes, heap and index: one row per series, not per sample)",
+		f.count(t, `select count(*) from metric_series`), seriesHeap+seriesIndex)
 	t.Logf("  WAL bytes per obs        %8.1f  (diagnostic, not held)", float64(walBytes)/float64(observations))
 
 	if statements != wantStatementsPerBatch*batches {

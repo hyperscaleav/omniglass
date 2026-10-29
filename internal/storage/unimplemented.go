@@ -729,6 +729,15 @@ func (UnimplementedGateway) LatestValue(context.Context, string, string, string,
 func (UnimplementedGateway) PruneSamples(context.Context, string, time.Time, int) (int64, error) {
 	return 0, nil
 }
+func (UnimplementedGateway) EnsureMetricPartitions(context.Context) ([]string, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DropMetricPartitions(context.Context, time.Time) ([]string, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) MetricPartitions(context.Context) ([]MetricPartition, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) PruneSamplesOfType(context.Context, string, string, int, time.Time, int) (int64, error) {
 	return 0, nil
 }

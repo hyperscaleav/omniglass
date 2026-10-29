@@ -52,8 +52,11 @@ func (f *pruneFixture) row(lane, owner string, ts time.Time, provenance string, 
 		col, name = "system_id", "prune-s1"
 	}
 	if lane == "metric" {
-		mustExec(f.t, f.conn, `insert into metric (ts, owner_kind, `+col+`, metric_type_id, instance, provenance, value)
-			values ($1, $2, (select id from `+owner+` where name = $3), (select id from metric_type where name = 'prune-rtt'), '', $4, $5)`,
+		if err := f.gw.MakeMetricMonths(f.ctx, ts); err != nil {
+			f.t.Fatal(err)
+		}
+		mustExec(f.t, f.conn, storagetest.WideMetricInsert(`ts, owner_kind, `+col+`, metric_type_id, instance, provenance, value`,
+			`values ($1, $2, (select id from `+owner+` where name = $3), (select id from metric_type where name = 'prune-rtt'), '', $4, $5)`),
 			ts, owner, name, provenance, value)
 		return
 	}
@@ -74,7 +77,11 @@ func (f *pruneFixture) values(lane, owner string) []string {
 	if lane == "metric" {
 		value = `value::text`
 	}
-	rows, err := f.conn.Query(f.ctx, `select provenance || ':' || `+value+` from `+lane+`
+	table := lane
+	if lane == "metric" {
+		table = storagetest.MetricRows + " metric"
+	}
+	rows, err := f.conn.Query(f.ctx, `select provenance || ':' || `+value+` from `+table+`
 		where owner_kind = $1 and `+col+` is not null order by ts, id`, owner)
 	if err != nil {
 		f.t.Fatalf("read %s %s: %v", lane, owner, err)
@@ -101,11 +108,14 @@ func (f *pruneFixture) prune(lane string, before time.Time, limit int) int64 {
 }
 
 // TestPruneSamplesKeepsDeclaredAndLatestRows pins the retention floor (#591,
-// ADR-0080) on both lanes and on a component and a system owner: a prune
+// ADR-0080) on a component and a system owner. On the property lane a prune
 // deletes samples older than the cutoff EXCEPT a declared row (an operator's
 // assertion is the truth, not a sample) and EXCEPT the latest row of every
 // series (type, owner arc, instance, provenance), so a prune never erases a
-// current value. A re-run deletes nothing.
+// value a transition-only series still holds. On the metric lane the floor is
+// the latest row within retention (ADR-1275): every observation of a quantity
+// is stored, so a series still measured has a recent row, and one past its
+// window reads as no reading within retention. A re-run deletes nothing.
 func TestPruneSamplesKeepsDeclaredAndLatestRows(t *testing.T) {
 	f := newPruneFixture(t)
 	now := time.Now().UTC()
@@ -122,7 +132,8 @@ func TestPruneSamplesKeepsDeclaredAndLatestRows(t *testing.T) {
 		f.row("property", owner, twoYears, "declared", 2)
 		f.row("property", owner, tenDays, "observed", 3)
 		f.row("property", owner, fiveDays, "observed", 4)
-		// Metric lane: the same shape, a superseded old row and an old latest.
+		// Metric lane: the same shape, a superseded old row and an old latest,
+		// both past the window.
 		f.row("metric", owner, tenDays, "observed", 12)
 		f.row("metric", owner, fiveDays, "observed", 34)
 	}
@@ -130,15 +141,15 @@ func TestPruneSamplesKeepsDeclaredAndLatestRows(t *testing.T) {
 	if n := f.prune("property", cutoff, 100); n != 2 {
 		t.Fatalf("property prune deleted %d rows, want 2 (the superseded observed row of each owner)", n)
 	}
-	if n := f.prune("metric", cutoff, 100); n != 2 {
-		t.Fatalf("metric prune deleted %d rows, want 2 (the superseded observed row of each owner)", n)
+	if n := f.prune("metric", cutoff, 100); n != 4 {
+		t.Fatalf("metric prune deleted %d rows, want 4 (every row past the window, latest included)", n)
 	}
 	for _, owner := range []string{"component", "system"} {
 		if got := strings.Join(f.values("property", owner), ","); got != "declared:1,declared:2,observed:4" {
 			t.Errorf("%s property rows after prune = %s, want both declared edits and the latest observed", owner, got)
 		}
-		if got := strings.Join(f.values("metric", owner), ","); got != "observed:34" {
-			t.Errorf("%s metric rows after prune = %s, want the latest observed", owner, got)
+		if got := strings.Join(f.values("metric", owner), ","); got != "" {
+			t.Errorf("%s metric rows after prune = %s, want none within retention", owner, got)
 		}
 	}
 	if n := f.prune("property", cutoff, 100) + f.prune("metric", cutoff, 100); n != 0 {
@@ -187,12 +198,11 @@ func TestPruneSamplesCompletesABacklogInChunks(t *testing.T) {
 func TestPruneSamplesReachesAnIndexOnEveryArc(t *testing.T) {
 	f := newPruneFixture(t)
 	want := map[string]map[string]string{
-		"metric":   {"component": "metric_owner_idx", "system": "metric_arc_owner_idx", "location": "metric_arc_owner_idx"},
 		"property": {"component": "property_series_idx", "system": "property_system_owner_idx", "location": "property_location_owner_idx"},
 	}
 	// The series indexes that end in ts DESC; the property owner indexes for a
 	// system or a location are ordered by id instead.
-	tsOrdered := map[string]bool{"metric_owner_idx": true, "metric_arc_owner_idx": true, "property_series_idx": true}
+	tsOrdered := map[string]bool{"property_series_idx": true}
 	for lane, arcs := range want {
 		// The lane's own prune, and a typed prune of one type with a window of
 		// its own (#417), which differ only in the type predicate.
@@ -267,19 +277,13 @@ func TestRetentionWindowsReadTheSettingsStore(t *testing.T) {
 	}
 }
 
-// TestPruneSamplesSparesWhatAReaderCallsLatest: the floor holds under both
-// orders the readers use. After the node's clock stepped back (#801), a series'
-// newest row by id carries an older ts than the row before it: the latest-value
-// reads take the higher ts, the health reads the higher id, and neither row may
-// go. A command's intended row is kept with the command, which the command
+// TestPruneSamplesSparesWhatAReaderCallsLatest: on the property lane a
+// command's intended row is kept with the command, which the command
 // table (never pruned) reads back by its command_id, however many rows came
 // after it.
 func TestPruneSamplesSparesWhatAReaderCallsLatest(t *testing.T) {
 	f := newPruneFixture(t)
 	now := time.Now().UTC()
-	f.row("metric", "component", now.Add(-10*24*time.Hour), "observed", 1) // lower id, newer ts
-	f.row("metric", "component", now.Add(-20*24*time.Hour), "observed", 2) // higher id, older ts
-
 	mustExec(t, f.conn, `insert into command_type (name, label, target_property_type_id)
 		values ('prune-set-power', 'Set power', (select id from property_type where name = 'prune-power'))`)
 	// Two commands, each opening its intended row; the second supersedes the
@@ -298,11 +302,52 @@ func TestPruneSamplesSparesWhatAReaderCallsLatest(t *testing.T) {
 	}
 
 	cutoff := now.Add(-24 * time.Hour)
-	if n := f.prune("metric", cutoff, 100); n != 0 {
-		t.Errorf("the metric prune deleted %d rows of a series whose ts and id orders disagree, want 0", n)
-	}
 	if got := strings.Join(f.values("property", "component"), ","); f.prune("property", cutoff, 100) != 0 ||
 		got != "intended:10,intended:11" {
 		t.Errorf("after the prune, property rows %s, want the command's intended row kept though superseded", strings.Join(f.values("property", "component"), ","))
+	}
+}
+
+// TestPruneMetricSamplesReadOneMonthAtATime holds the metric prune's access
+// path (#1275): the lane's prune reads the one partition it is given and
+// deletes the rows it chose by TID, never a probe into another month; a typed
+// prune walks its type's series through metric_series_type_idx and searches
+// each series' old rows through the partition's series index.
+func TestPruneMetricSamplesReadOneMonthAtATime(t *testing.T) {
+	f := newPruneFixture(t)
+	parts, err := f.gw.MetricPartitions(f.ctx)
+	if err != nil || len(parts) == 0 {
+		t.Fatalf("partitions %v (%v)", parts, err)
+	}
+	part := parts[0].Name
+	sanitized := `"public"."` + part + `"`
+	plan, err := accesspath.Explain(f.ctx, f.conn, storage.ExportPruneMetricSampleSQL(sanitized, false), time.Now(), 10)
+	if err != nil {
+		t.Fatalf("explain the lane prune: %v", err)
+	}
+	for _, s := range plan {
+		if strings.HasPrefix(s.Relation, "metric_p") && s.Relation != part {
+			t.Errorf("the lane prune of %s reads another month, %s:\n\t%s", part, s.Relation, plan)
+		}
+	}
+	tid := false
+	for _, s := range plan {
+		tid = tid || strings.Contains(s.Node, "Tid")
+	}
+	if !tid {
+		t.Errorf("the lane prune does not delete its chosen rows by TID:\n\t%s", plan)
+	}
+	plan, err = accesspath.Explain(f.ctx, f.conn, storage.ExportPruneMetricSampleSQL(sanitized, true), time.Now(), 10,
+		"00000000-0000-0000-0000-000000000000", 3)
+	if err != nil {
+		t.Fatalf("explain the typed prune: %v", err)
+	}
+	var byType, bySeries bool
+	for _, s := range plan {
+		byType = byType || s.Index == "metric_series_type_idx"
+		bySeries = bySeries || (s.Relation == part && strings.Contains(s.Cond, "series_id"))
+	}
+	if !byType || !bySeries {
+		t.Errorf("the typed prune does not walk its type's series and search each one's rows:\n\t%s", plan)
 	}
 }

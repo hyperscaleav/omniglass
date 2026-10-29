@@ -71,6 +71,11 @@ type KeyWriter struct {
 	// Endpoint is the endpoint of Component's a node's task ran against, the
 	// only instance a node-probe key lands under. Node writers only.
 	Endpoint string
+	// Node is the id of the node whose task collected the samples, recorded on
+	// each metric series the writer starts (#1275): a task that moves to
+	// another node starts a new series of the same logical key. Node writers
+	// only; empty records none.
+	Node string
 	// bound is Component's id once admitWrites has resolved it; "" refuses
 	// every row a node writer carries.
 	bound string
@@ -102,6 +107,15 @@ func (w KeyWriter) provenanceArgs() (string, any, any, any) {
 		return "observed", nil, nil, nil
 	}
 	return w.calc.provenanceArgs()
+}
+
+// collector is the node a metric series records as its collector: the
+// node's id for a node writer that names one, nil otherwise.
+func (w KeyWriter) collector() any {
+	if w.Kind != writerclass.Node || w.Node == "" {
+		return nil
+	}
+	return w.Node
 }
 
 // rule is the calc rule writing, "" for any other writer.

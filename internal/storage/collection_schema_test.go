@@ -40,7 +40,7 @@ func TestCollectionSchema(t *testing.T) {
 		t.Fatalf("seed metric type: %v", err)
 	}
 	// owner_kind = component but all id columns null violates the owner-arc CHECK.
-	_, err = conn.Exec(ctx, `insert into metric (owner_kind, metric_type_id, value, provenance) values ('component', (select id from metric_type where name = 'tcp-open'), 1, 'observed')`)
+	_, err = conn.Exec(ctx, `insert into metric_series (owner_kind, metric_type_id, provenance) values ('component', (select id from metric_type where name = 'tcp-open'), 'observed')`)
 	var pgErr *pgconn.PgError
 	if !errors.As(err, &pgErr) || pgErr.Code != "23514" {
 		t.Fatalf("owner-arc CHECK: want check_violation (23514), got %v", err)

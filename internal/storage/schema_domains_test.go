@@ -41,13 +41,13 @@ func TestSampleProvenanceDomains(t *testing.T) {
 		t.Fatalf("property_type: %v", err)
 	}
 
-	// The metric lane has no declared writer, so its schema still refuses the
-	// row (either narrowed constraint may report first).
+	// The metric lane has no declared writer, so its schema still refuses a
+	// declared series (#1275: provenance is the series').
 	_, err = conn.Exec(ctx, `
-		insert into metric (ts, owner_kind, component_id, metric_type_id, value, provenance, source)
-		values (now(), 'component', $1, $2, 1, 'declared', 'test')`, compID, mtID)
-	if err == nil || (!strings.Contains(err.Error(), "metric_provenance_check") && !strings.Contains(err.Error(), "metric_lineage_check")) {
-		t.Errorf("metric declared insert error = %v, want a provenance or lineage CHECK violation", err)
+		insert into metric_series (owner_kind, component_id, metric_type_id, provenance, source)
+		values ('component', $1, $2, 'declared', 'test')`, compID, mtID)
+	if err == nil || !strings.Contains(err.Error(), "metric_series_provenance_check") {
+		t.Errorf("metric declared series insert error = %v, want the provenance CHECK violation", err)
 	}
 
 	// The property lane holds declared values as series rows (#591), with the

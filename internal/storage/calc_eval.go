@@ -665,11 +665,20 @@ func calcSeries(lane rules.Lane) (table, typeCol, value string) {
 // the server's now.
 func readCalcWindow(ctx context.Context, tx pgx.Tx, owner calcOwner, in rules.TypedInput) (samples []any, due *time.Time, err error) {
 	table, typeCol, value := calcSeries(in.Lane)
-	rows, err := tx.Query(ctx, fmt.Sprintf(`select instance, %[3]s, ts from %[1]s
+	sql := fmt.Sprintf(`select instance, %[3]s, ts from %[1]s
 		where %[4]s = $1::uuid and %[2]s = $2::uuid and provenance in ('observed', 'calculated')
 			and ts > now() - make_interval(secs => $3)
-		order by ts desc, id desc limit $4`, table, typeCol, value, owner.col()),
-		owner.id, in.KeyID, in.Window, rules.MaxCalcWindowSamples)
+		order by ts desc, id desc limit $4`, table, typeCol, value, owner.col())
+	if in.Lane == rules.LaneMetric {
+		// The owner's series of the key, observed and calculated, and their
+		// samples inside the window, through each series' (series_id, ts) index.
+		sql = `select s.instance, m.value::text, m.ts from metric_series s
+			join metric m on m.series_id = s.id
+			where s.owner_id = $1::uuid and s.metric_type_id = $2::uuid and s.provenance in ('observed', 'calculated')
+				and m.ts > now() - make_interval(secs => $3)
+			order by m.ts desc, m.id desc limit $4`
+	}
+	rows, err := tx.Query(ctx, sql, owner.id, in.KeyID, in.Window, rules.MaxCalcWindowSamples)
 	if err != nil {
 		return nil, nil, fmt.Errorf("storage: read calc window %s: %w", in.Key, err)
 	}
@@ -739,6 +748,20 @@ func readCalcInput(ctx context.Context, tx pgx.Tx, owner calcOwner, in rules.Typ
 		sql = fmt.Sprintf(`select ''::text, n.v, n.ts from
 				lateral (select %[3]s as v, ts from %[1]s where %[4]s = $1::uuid and %[2]s = $2::uuid and instance = ''
 					and provenance in ('observed', 'calculated') order by ts desc, id desc limit 1) n`, table, typeCol, value, col)
+	}
+	if in.Lane == rules.LaneMetric {
+		// Each instance's newest observed or calculated sample, across the
+		// instance's series (one per provenance, source and collecting node).
+		only := ""
+		if aggregateOnly {
+			only = `and s.instance = ''`
+		}
+		sql = `select x.instance, x.v, x.ts from (
+				select distinct on (s.instance) s.instance, n.value::text as v, n.ts
+				from metric_series s cross join lateral (` + metricNewestSQL("s.id") + `) n
+				where s.owner_id = $1::uuid and s.metric_type_id = $2::uuid and s.provenance in ('observed', 'calculated') ` + only + `
+				order by s.instance, n.ts desc, n.id desc) x
+			order by x.instance`
 	}
 	rows, err := tx.Query(ctx, sql, owner.id, in.KeyID)
 	if err != nil {
@@ -917,7 +940,7 @@ func resetCalcRuleWork(ctx context.Context, tx pgx.Tx, r CalcRule) error {
 		select $1::uuid, 'component', c.id from component c left join product p on p.id = c.product_id
 		where ((cardinality($2::uuid[]) = 0 and cardinality($3::text[]) = 0)
 				or c.id = any($2::uuid[]) or p.component_type_id in (select id from accepted))
-			and (exists (select 1 from metric m where m.component_id = c.id and m.metric_type_id = any($4::uuid[]))
+			and (`+metricHeldSQL("c.id", "any($4::uuid[])")+`
 				or exists (select 1 from property x where x.component_id = c.id and x.property_type_id = any($5::uuid[])))
 		order by c.id
 		on conflict on constraint calc_pending_key do update set marked_at = calc_pending.marked_at`,
@@ -1044,7 +1067,7 @@ func markSystemCalcRules(ctx context.Context, tx pgx.Tx, systemIDs ...string) er
 // event rules' component matcher, the one the serve rechecks by.
 func (p *PG) markComponentCalcRules(ctx context.Context, tx pgx.Tx, componentID string) error {
 	rows, err := tx.Query(ctx, `select r.id::text, r.selector, exists (select 1 from calc_rule_input i where i.rule_id = r.id and (
-			exists (select 1 from metric m where m.component_id = $1::uuid and m.metric_type_id = i.metric_type_id)
+			`+metricHeldSQL("$1::uuid", "i.metric_type_id")+`
 			or exists (select 1 from property x where x.component_id = $1::uuid and x.property_type_id = i.property_type_id)))
 		from calc_rule r where r.enabled and r.owner_kind = 'component' order by r.id`, componentID)
 	if err != nil {

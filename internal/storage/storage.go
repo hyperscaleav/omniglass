@@ -841,8 +841,18 @@ type Gateway interface {
 	LatestValue(ctx context.Context, ownerKind, ownerID, key, instance, provenance string, read scope.Set) (*CurrentValue, error)
 	// PruneSamples is the provenance-aware retention primitive over one sample
 	// lane (metric or property): delete up to limit samples older than before,
-	// never a declared row and never the latest row of a series (#591, #417).
+	// never a declared or intended row; on the property lane never the latest
+	// row of a series (#591, #417), on the metric lane the latest row within
+	// retention (ADR-1275).
 	PruneSamples(ctx context.Context, lane string, before time.Time, limit int) (int64, error)
+	// EnsureMetricPartitions keeps the metric table partitioned through the
+	// month two ahead of the current one, returning what it created (#420).
+	EnsureMetricPartitions(ctx context.Context) ([]string, error)
+	// DropMetricPartitions drops each month of metric wholly past before and
+	// past every type's own window, returning what it dropped (#420).
+	DropMetricPartitions(ctx context.Context, before time.Time) ([]string, error)
+	// MetricPartitions lists the metric table's monthly partitions.
+	MetricPartitions(ctx context.Context) ([]MetricPartition, error)
 	// PruneSamplesOfType is PruneSamples for one type with a window of its
 	// own, which the lane's prune skips (#417).
 	PruneSamplesOfType(ctx context.Context, lane, typeID string, days int, before time.Time, limit int) (int64, error)

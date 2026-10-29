@@ -18,6 +18,28 @@ type backlogStore struct {
 	backlog   map[string]int64
 	fail      map[string]error
 	calls     []pruneCall
+	// The metric partition roll: how often it ran, the cutoff each drop was
+	// asked for, and an error each half answers with.
+	ensured   int
+	drops     []time.Time
+	ensureErr error
+	dropErr   error
+}
+
+func (b *backlogStore) EnsureMetricPartitions(context.Context) ([]string, error) {
+	b.ensured++
+	if b.ensureErr != nil {
+		return nil, b.ensureErr
+	}
+	return []string{"metric_p209901"}, nil
+}
+
+func (b *backlogStore) DropMetricPartitions(_ context.Context, before time.Time) ([]string, error) {
+	b.drops = append(b.drops, before)
+	if b.dropErr != nil {
+		return nil, b.dropErr
+	}
+	return []string{"metric_p200001"}, nil
 }
 
 type pruneCall struct {
@@ -247,5 +269,34 @@ func TestARetentionPassPrunesATypeByItsOwnWindow(t *testing.T) {
 	}
 	if rep.Deleted["metric/tcp-connect-time"] != 4 {
 		t.Errorf("report %+v, want 4 tcp-connect-time rows under metric/tcp-connect-time", rep.Deleted)
+	}
+}
+
+// Each pass rolls the metric table's months (#420) before it prunes: the
+// partitions ahead made, and the months wholly past the metric window
+// dropped, the cutoff the metric lane's own. A roll that fails is reported,
+// and every lane is still pruned.
+func TestRetentionPassRollsTheMetricMonths(t *testing.T) {
+	now := time.Date(2026, 10, 29, 12, 0, 0, 0, time.UTC)
+	store := &backlogStore{windows: defaultWindows(), backlog: map[string]int64{}}
+	rep, err := retentionPass(context.Background(), store, now, 10, 5, 0)
+	if err != nil {
+		t.Fatalf("pass: %v", err)
+	}
+	if store.ensured != 1 || len(store.drops) != 1 || !store.drops[0].Equal(now.AddDate(0, 0, -14)) {
+		t.Errorf("roll: ensured %d, drops %v; want one of each, dropping before %v", store.ensured, store.drops, now.AddDate(0, 0, -14))
+	}
+	if len(rep.Created) != 1 || len(rep.Dropped) != 1 {
+		t.Errorf("report: created %v, dropped %v; want what the roll said", rep.Created, rep.Dropped)
+	}
+
+	failing := &backlogStore{windows: defaultWindows(), backlog: map[string]int64{"metric": 3},
+		ensureErr: errors.New("lock timeout"), dropErr: errors.New("lock timeout")}
+	rep, err = retentionPass(context.Background(), failing, now, 10, 5, 0)
+	if err == nil {
+		t.Fatal("a failed roll: no error, want it reported")
+	}
+	if rep.Deleted["metric"] != 3 {
+		t.Errorf("a failed roll: metric lane deleted %d, want its 3 still pruned", rep.Deleted["metric"])
 	}
 }

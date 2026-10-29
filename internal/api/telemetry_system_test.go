@@ -148,11 +148,11 @@ func TestASystemOwnsItsPushedTelemetry(t *testing.T) {
 	}, http.StatusAccepted)
 	waitFor(t, "the flushing push", func() bool {
 		var n int
-		_ = conn.QueryRow(ctx, `select count(*) from metric where owner_kind = 'system' and value = 22.5`).Scan(&n)
+		_ = conn.QueryRow(ctx, `select count(*) from `+storagetest.MetricRows+` metric where owner_kind = 'system' and value = 22.5`).Scan(&n)
 		return n == 1
 	})
 	var n int
-	if err := conn.QueryRow(ctx, `select count(*) from metric where metric_type_id = (select id from metric_type where name = 'occupancy-count')`).Scan(&n); err != nil {
+	if err := conn.QueryRow(ctx, `select count(*) from `+storagetest.MetricRows+` metric where metric_type_id = (select id from metric_type where name = 'occupancy-count')`).Scan(&n); err != nil {
 		t.Fatal(err)
 	}
 	if n != 0 {

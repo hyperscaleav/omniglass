@@ -222,6 +222,7 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 			bind.SampleOwner = &owner
 			bind.Arc = componentArc(owner)
 			bind.Writer = storage.NodeWriter(owner.ComponentID, owner.EndpointName)
+			bind.Writer.Node = owner.NodeID
 		} else {
 			// The fence drops these by design, but never silently (#1200): a
 			// warning per node per window and a count on the node, so a node

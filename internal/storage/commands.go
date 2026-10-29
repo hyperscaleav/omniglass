@@ -187,8 +187,17 @@ func (p *PG) IssueCommand(ctx context.Context, actorID, ownerKind, ownerID, comm
 	// this command (its lineage) and keeps the caused event stamped.
 	if opensIntended {
 		if ct.TargetMetricType != "" {
-			metricSQL := fmt.Sprintf(`insert into metric (owner_kind, %s, metric_type_id, instance, provenance, value, source, event_id, command_id)
-				values ($1, $2, (select id from metric_type where name = $3), $4, 'intended', $5, 'command', $6, $7)`, col)
+			// The metric lane's intended rows are its declared tier (#1275),
+			// on the owner's intended series of the target, started here when
+			// this is its first command.
+			metricSQL := fmt.Sprintf(`with series as (
+					insert into metric_series (metric_type_id, owner_kind, %s, instance, provenance, source)
+					values ((select id from metric_type where name = $3), $1, $2, $4, 'intended', 'command')
+					on conflict (owner_id, metric_type_id, instance, provenance, source, collector_node_id)
+						do update set source = excluded.source
+					returning id)
+				insert into metric_declared (series_id, value, event_id, command_id)
+				select id, $5, $6, $7 from series`, col)
 			if _, err := tx.Exec(ctx, metricSQL, ownerKind, arc, ct.TargetMetricType, instance, metricValue, causedID, cmd.ID); err != nil {
 				return nil, fmt.Errorf("storage: open intended metric for %q: %w", commandType, err)
 			}
