@@ -1,5 +1,13 @@
 // Generated from api/openapi.json by web/scripts/gen-settings-schema.mjs (make gen). Do not edit by hand.
 export const settingsSchema = {
+  "collection": {
+    "report_seconds": {
+      "type": "integer",
+      "minimum": 10,
+      "maximum": 3600,
+      "format": "int64"
+    }
+  },
   "keybindings": {
     "close_blade": {
       "type": "string"

@@ -123,6 +123,10 @@ type WorklistTask struct {
 type Worklist struct {
 	Tasks            []WorklistTask
 	ConfigGeneration int64
+	// ReportSeconds is the platform's collection report window (#1369,
+	// collection.report_seconds), read on every pull so an admin's change
+	// reaches each node on its next one.
+	ReportSeconds int
 }
 
 // The placement arc stores location.id, so the name is read back beside it via a
@@ -642,6 +646,11 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 		from endpoint where node_name = (select principal_id from node where name = $1)`, name).Scan(&wl.ConfigGeneration); err != nil {
 		return Worklist{}, fmt.Errorf("storage: node config generation %q: %w", name, err)
 	}
+	s, err := p.platformSettings(ctx, p.pool)
+	if err != nil {
+		return Worklist{}, fmt.Errorf("storage: node worklist %q: %w", name, err)
+	}
+	wl.ReportSeconds = s.Collection.ReportSeconds
 	return wl, nil
 }
 

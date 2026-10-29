@@ -13,6 +13,7 @@ import (
 	"context"
 	"github.com/hyperscaleav/omniglass/internal/egress"
 	"net/http"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
@@ -70,6 +71,9 @@ type options struct {
 	// lab marks a server `omniglass lab` started (#1195); /auth/status
 	// reports it so the console shows the lab banner.
 	lab bool
+	// reportEvery is the server's own collection report window (#1369),
+	// overriding the platform's: a test's. Zero reads the platform's.
+	reportEvery time.Duration
 	// trustedProxies are the peers a forwarded header is believed from, for
 	// the client address a credential is stamped with and a webhook sender is
 	// limited by (#1185). Unset takes clientaddr.Default.
@@ -89,6 +93,13 @@ func WithEgressOptions(e egress.Options) Option { return func(o *options) { o.eg
 
 // WithSecureCookies marks the session cookie Secure (set behind TLS).
 func WithSecureCookies(b bool) Option { return func(o *options) { o.secureCookies = b } }
+
+// WithCollectionReportEvery overrides the collection report window the
+// webhook receiver counts its posts over (#1369), which otherwise follows the
+// platform's collection.report_seconds: a test cannot wait the minute.
+func WithCollectionReportEvery(d time.Duration) Option {
+	return func(o *options) { o.reportEvery = d }
+}
 
 // WithTrustedProxies sets the peers whose X-Forwarded-For is believed
 // (OMNIGLASS_TRUSTED_PROXIES); an empty, non-nil Trust believes none.
@@ -348,7 +359,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 	registerSystemLogRoutes(api, a, gw)
 	registerSeriesRoutes(api, a, gw)
 	registerTelemetryRoutes(api, a, gw, o.telemetryPub)
-	registerWebhookRoutes(api, gw, o.telemetryPub, o.trustedProxies)
+	registerWebhookRoutes(api, gw, o.telemetryPub, o.trustedProxies, o.reportEvery)
 	registerUnclaimedRoutes(api, a, gw)
 	registerSimulationRoutes(api, a, gw, o.simStatus)
 	registerSimFleetRoutes(api, a, gw, o.simHub)

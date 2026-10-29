@@ -124,6 +124,16 @@ type TaskSpec struct {
 type WorklistReply struct {
 	Tasks            []TaskSpec `json:"tasks"`
 	ConfigGeneration int64      `json:"config_generation"`
+	// ReportSeconds is the platform's collection report window (#1369,
+	// collection.report_seconds): how long each endpoint's collection
+	// telemetry covers. Zero (an older server) leaves the node's own.
+	ReportSeconds int `json:"report_seconds,omitempty"`
+}
+
+// ReportEvery is the worklist's collection report window; zero when it
+// carries none.
+func (w WorklistReply) ReportEvery() time.Duration {
+	return time.Duration(w.ReportSeconds) * time.Second
 }
 
 // Heartbeat is a node's liveness publish payload.

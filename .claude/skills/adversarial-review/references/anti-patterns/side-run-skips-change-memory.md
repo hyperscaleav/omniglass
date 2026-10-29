@@ -10,3 +10,9 @@ could land an event twice and fire its rules twice. Detection cue: a function th
 collector the loop calls, then publishes, without touching the loop's per-task memory. Fix: route
 the side path's landing through the loop's own filter and commit (here `landableRun`), and pin it
 with a test that runs the side path twice over an unchanged event and the loop after it.
+
+The same class skips an accumulator the loop feeds, not only a memory it filters by. In #1369 the
+run now published its samples and faults but never reached the collection report, so an hourly poll
+run three times in one window landed three `collection-failed` events and no `poll-failure-count`.
+Fixed by passing the report into `runNowTask`, and pinned by
+`TestAGatedPollAndARunNowCountInTheReport`, which fails with the call removed.

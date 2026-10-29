@@ -78,6 +78,25 @@ const (
 	// emit that did not extract. Its message is the node's account of its
 	// own task, so it is node-only like every key above.
 	CollectionFailed = "collection-failed"
+	// PollDuration is the mean time of an endpoint's driver poll runs over
+	// a report window (#1369), in milliseconds: every run of the endpoint's
+	// polls, scheduled or run now, answered or failed, from its request to
+	// its last emit. A window with no run lands none.
+	PollDuration = "poll-duration"
+	// PollFailureCount is how many of an endpoint's polls failed in a report
+	// window (#1369): a run that faulted and landed nothing, or a due poll
+	// the endpoint's gate refused, as the scheduler books a failure. Landed
+	// only when nonzero.
+	PollFailureCount = "poll-failure-count"
+	// PushMessageCount is how many messages an endpoint's held session or
+	// udp socket delivered that a listener claimed, over a report window
+	// (#1369). Landed every window while the endpoint is held, zero
+	// included, so a quiet device shows as quiet rather than as missing.
+	PushMessageCount = "push-message-count"
+	// PushUnclaimedCount is how many delivered messages no listener claimed
+	// in a report window (#1369), the count the node's self-log already
+	// tells per tick. Landed only when nonzero.
+	PushUnclaimedCount = "push-unclaimed-count"
 )
 
 // Every constant above is ruled exactly once, in nodeOnly or in pushable
@@ -86,7 +105,9 @@ const (
 
 // nodeOnly are the native keys whose value only a node's own probe can know
 // (#1080): the reachability verdicts and their rungs, the probe metrics and
-// their timings, and the node's account of its own connection (a held
+// their timings, the node's account of its own collection (its polls' times
+// and failures and its listeners' message counts, #1369), and the node's
+// account of its own connection (a held
 // session's state and reason, the host key it trusted, the gate it
 // publishes and why, a tls endpoint's pin and certificate facts). The console reads
 // each as the node's observation, and the gate and the pins (the ssh host key,
@@ -97,7 +118,7 @@ var nodeOnly = []string{
 	TCPOpen, TCPConnectTime, ICMPReachable, ICMPRTTAvg, HTTPResponseTime, SSHHandshakeTime, TelnetResponseTime,
 	EndpointReachable, EndpointResponsive, EndpointAuthenticated, SessionState, SessionReason, SSHHostKey, EndpointRejection, EndpointRejectionReason,
 	TLSHandshakeTime, TLSCertificate, TLSCertificateExpiry, TLSCertificateDaysLeft, UDPResponseTime, SNMPResponseTime,
-	CollectionFailed,
+	CollectionFailed, PollDuration, PollFailureCount, PushMessageCount, PushUnclaimedCount,
 }
 
 // pushable are the native keys a push may write too, each mapped to the

@@ -373,7 +373,7 @@ class**, and the Storage Gateway holds every write to it
 [the ruling](/architecture/properties/#who-writes-a-key-the-writer-class)). The probekeys set is the
 `node-probe` class, so a declared value, a command, a calc rule or an event rule is refused on it the
 same way (the ssh host key and the tls certificate admit one declared row, the pin set through an
-endpoint's `:retry`), and a push is refused a `platform` key (`health`) and a calc rule's output,
+endpoint's `:retry`), and a push is refused a `platform` key (`health`, the webhook counts) and a calc rule's output,
 naming the rule. On the node's own lane a node-probe key lands only under the endpoint whose task the
 node ran: an empty instance is that endpoint's name, and any other (another node's endpoint on the same
 component, a name no endpoint holds) is refused, while a driver's own keys keep the instance they name,
@@ -383,6 +383,48 @@ may emit only a collected key: a reserved one is refused at the spec's write (#1
 case: a driver emitting one would have the worklist hand it back as the pin), and again where the
 node interprets a task derived before that refusal existed, so a driver cannot speak for the node
 either.
+
+### Collection telemetry: every endpoint's account of itself
+
+What an endpoint reports comes in two tiers. **Collected** data is what its driver reads from the
+device's own API (a volume, a call state, an input): the driver's polls and listeners declare it.
+**Built-in** data is what Omniglass knows about the endpoint itself, and every endpoint gets it,
+whatever its driver, because the endpoint cannot work without it: the probe samples
+([below](#poll-protocols-and-their-config)), a held session's state, the gate and the pins, and the
+endpoint's **collection telemetry** (#1369). A driver never declares or emits a built-in key; it only
+tunes how some are gathered (its ladder). Collection telemetry is the endpoint's account of its own
+collection, so even a device that reports nothing of its own, or one that only pushes, has telemetry
+of its own:
+
+| Key | Written by | What it counts, per report window | Lands |
+|---|---|---|---|
+| `poll-duration` | the node | the mean time of the endpoint's driver poll runs, scheduled or run now, answered or failed, in ms | when a poll ran |
+| `poll-failure-count` | the node | the polls that failed: a run that faulted and landed nothing, or a due poll the endpoint's gate refused | when nonzero |
+| `push-message-count` | the node | the messages its held session or udp socket delivered that a listener claimed | every window while held, zero included |
+| `push-unclaimed-count` | the node | the messages no listener claimed | when nonzero |
+| `webhook-post-count` | the server | the webhook posts it accepted for the endpoint | when nonzero, then one zero after a stream stops |
+| `webhook-refusal-count` | the server | the posts it refused (a bad signature, a stale timestamp, a missing credential) | when nonzero |
+
+Each is counted where it happens and reported once a **report window**, the platform's
+`collection.report_seconds` (a minute by default, 10 seconds to an hour), so it costs a few rows per
+endpoint per window however fast a driver polls or a device pushes. The node reads the window off its
+worklist at heartbeat granularity, and the server's webhook receiver reads it from the settings. A row's
+instance is its endpoint, so an endpoint's several polls share one series, published under a task the
+node holds when the window closes, and a rate is read from the counts rather than stored. A session or
+socket recycled mid-window hands its counts to the next report. The server lands each component's
+webhook counts in a transaction of their own, so a component deleted since its last post costs only
+its own. A duration and a message count land every window so a quiet endpoint shows
+as quiet, not missing; the failure, unclaimed and refusal counts land only when there is something to
+count. A webhook endpoint reports one zero after a window with posts, then nothing while quiet: its
+**last heard** says how long. The node's four keys are `node-probe`, refused on the push lane like
+every probe key above; the two webhook keys are `platform`, the server's own count, written by the
+process through the Storage Gateway, so neither a node nor a push may write them, and an event rule
+reads them as it reads any metric
+([ADR-1369](/architecture/decisions/#adr-1369-every-endpoint-reports-its-own-collection-once-a-report-window)).
+
+One window for every endpoint type is the first step of the cadence model (#1373): each endpoint type's
+catalog entry holds its built-in data's defaults, a driver overrides them per endpoint type it uses, and
+an operator overrides them down the cascade.
 
 ## Endpoint types and their config
 
@@ -1078,7 +1120,9 @@ driver declares as its challenge (`webhook.challenge`), echoed as text, or `204`
 component as owner, whose writer admits only `collected` keys, so a leaked token can write only
 collected keys on one component. A refused post is counted, never gated: it never reads rejected.
 Refusals are tallied per endpoint, source and reason, and land on the endpoint's read once per tick
-(the count, the latest time, source and reason, never the credential). A post to a token no
+(the count, the latest time, source and reason, never the credential), and as the component's
+`webhook-refusal-count` once a report window, beside the posts it accepted as `webhook-post-count`
+([collection telemetry](#collection-telemetry-every-endpoints-account-of-itself)). A post to a token no
 endpoint holds lands its sender in the **unclaimed-source inbox** (`GET /unclaimed-sources`, under
 `node:read`): one row per source address, with a count, first and last heard, and the last message
 cut to 512 bytes, bounded at 256 sources per listener and aged out after seven days. The token a
