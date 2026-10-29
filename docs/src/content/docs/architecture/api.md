@@ -387,7 +387,8 @@ a system refuses a caller holding none with a 403 naming it before anything reso
 resolves in its own tier's read scope and must be inside its update scope (out of read the
 non-disclosing 404, readable but not writable a 403); a put naming a different owner moves the
 binding and needs update on the owner it leaves as well, a re-put to the same owner changes nothing,
-an unregistered key or an owner that is a place or a node is a 422, and every change is audited in
+an unregistered key, an owner that is a place or a node, or the conduit itself as owner is a 422,
+the value rides the path as one percent-encoded segment (`room%2F1` round-trips), and every change is audited in
 its transaction, naming both ends.
 
 **A simulated device can be broken on purpose.** `GET` and `PUT /components/{name}/impairment`

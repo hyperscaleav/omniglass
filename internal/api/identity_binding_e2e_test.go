@@ -3,6 +3,7 @@ package api_test
 import (
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -241,5 +242,39 @@ func TestIdentityBindingListCountsUnreadableOwners(t *testing.T) {
 	// refusal does not disclose it.
 	if st, raw := f.c.send(narrow, http.MethodDelete, bindPath("ucc-cloud", "ucc-room-id", "R-B"), nil); st != http.StatusNotFound {
 		t.Errorf("delete of a hidden binding = %d %s, want 404", st, raw)
+	}
+}
+
+// A binding whose owner is its own conduit is a 422.
+func TestIdentityBindingRefusesTheConduitAsOwnerOverHTTP(t *testing.T) {
+	f := newBindingE2E(t)
+	st, raw := f.c.send(f.owner, http.MethodPut, bindPath("ucc-cloud", "ucc-room-id", "R-1"), ownerBody("component", "ucc-cloud"))
+	if st != http.StatusUnprocessableEntity || !strings.Contains(string(raw), "conduit") {
+		t.Errorf("binding the conduit to itself = %d %s, want 422 naming the conduit", st, raw)
+	}
+}
+
+// An identity value carrying reserved characters rides the path
+// percent-encoded, one segment, and round-trips: the list reads back the
+// decoded value, and the delete on the same encoded address removes it.
+func TestIdentityBindingValueWithReservedCharactersRoundTrips(t *testing.T) {
+	f := newBindingE2E(t)
+	for _, v := range []string{"room/1", "a b", "x?y#z%", "R:1"} {
+		p := bindPath("ucc-cloud", "ucc-room-id", strings.ReplaceAll(url.PathEscape(v), ":", "%3A"))
+		var b bindingWire
+		if err := json.Unmarshal(f.c.do(f.owner, http.MethodPut, p, ownerBody("system", "room-a"), http.StatusOK), &b); err != nil {
+			t.Fatalf("decode %q: %v", v, err)
+		}
+		if b.Value != v {
+			t.Errorf("put %q came back as %q", v, b.Value)
+		}
+		l := f.list(f.owner, "ucc-cloud")
+		if len(l.Bindings) != 1 || l.Bindings[0].Value != v {
+			t.Errorf("list after put %q = %+v, want exactly that value", v, l.Bindings)
+		}
+		f.c.do(f.owner, http.MethodDelete, p, nil, http.StatusNoContent)
+	}
+	if n := f.count(`select count(*) from identity_binding`); n != 0 {
+		t.Fatalf("bindings = %d, want none after the deletes", n)
 	}
 }

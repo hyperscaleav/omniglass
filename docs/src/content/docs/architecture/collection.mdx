@@ -1224,6 +1224,8 @@ identity shares one name, and the value is what the conduit reports (`R-415A`). 
 conduit has one owner; the same value on another conduit is another binding. A place or a node is no
 owner: neither owns an observed sample
 ([ADR-0422](/architecture/decisions/#adr-0422-a-system-owns-its-own-telemetry-and-a-location-owns-no-observed-sample)).
+The conduit is never its own identity's owner: a value it reports with no identity already lands on
+it, so a binding naming the conduit is refused (422).
 
 A binding is a relationship with two ends, so it costs a write on both, the
 [ADR-0510](/architecture/decisions/#adr-0510-a-membership-or-a-role-assignment-costs-a-write-on-both-of-its-ends)
@@ -1238,7 +1240,8 @@ author later loses scope, as a membership does, and deleting the conduit or the 
 Bindings are made under the conduit, beside the identities it reports:
 `GET /components/{name}/identity-bindings` lists them (an owner named only when the caller can read
 it, the rest counted), and `PUT` and `DELETE` on `/components/{name}/identity-bindings/{key}/{value}`
-bind and unbind one ([api](/architecture/api/)), through the generated CLI
+bind and unbind one ([api](/architecture/api/)); the value is one percent-encoded path segment, so a
+value carrying a slash or a space (`room%2F1`) round-trips, through the generated CLI
 (`omniglass component identity-binding`) and the MCP tools as well. Every change is audited in its
 transaction, naming both ends.
 

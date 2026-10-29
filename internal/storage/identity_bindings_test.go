@@ -341,3 +341,19 @@ func TestIdentityBindingListNamesOnlyReadableOwners(t *testing.T) {
 		t.Fatalf("list on an unreadable conduit = %v, want ErrComponentNotFound", err)
 	}
 }
+
+// A fanned value never lands on its own conduit (an unidentified sample
+// already does), so a binding whose owner is the conduit is refused.
+func TestIdentityBindingRefusesTheConduitAsOwner(t *testing.T) {
+	ctx := context.Background()
+	f := newBindingFixture(t, ctx)
+	for _, ref := range []string{"ucc-cloud", f.ids["ucc-cloud"]} {
+		_, err := f.gw.PutIdentityBinding(ctx, "", "ucc-cloud", "ucc-room-id", "R-1", storage.IdentityBindingOwner{Kind: "component", Name: ref}, f.allScopes())
+		if !errors.Is(err, storage.ErrIdentityBindingOwnerIsConduit) {
+			t.Errorf("owner %s (the conduit) = %v, want ErrIdentityBindingOwnerIsConduit", ref, err)
+		}
+	}
+	if n := f.count(t, ctx, `select count(*) from identity_binding`); n != 0 {
+		t.Fatalf("bindings = %d, want none", n)
+	}
+}
