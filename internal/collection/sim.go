@@ -2,6 +2,7 @@ package collection
 
 import (
 	"errors"
+	"slices"
 	"time"
 )
 
@@ -107,6 +108,24 @@ type SimImpairmentStatus struct {
 type SimlistReply struct {
 	Devices []SimDevice `json:"devices"`
 }
+
+// simProtocols are the protocols a simulated device reports a hit by: the
+// profile schema's interface protocols, less icmp (the kernel answers it, so
+// the simulator sees no request) and https (the schema allows it, but no face
+// serves it: https is http with tls, and reports as http). Two tests hold the
+// list, one to the schema's list and one to the simulator's own sources (every
+// protocol its hit emitters name and its binder serves), so a protocol the
+// simulator gains cannot be dropped by a hub that was never told (#1366).
+var simProtocols = []string{"http", "snmp", "ssh", "telnet", "tcp", "udp", "websocket"}
+
+// SimProtocols is the protocols a simulated device reports a hit by, a fresh
+// slice.
+func SimProtocols() []string { return slices.Clone(simProtocols) }
+
+// IsSimProtocol reports a protocol a simulated device reports a hit by. The
+// hub counts only these, so a hit naming anything else is rejected rather
+// than becoming a new key in its tally.
+func IsSimProtocol(p string) bool { return slices.Contains(simProtocols, p) }
 
 // SimHit is one request a simulated device answered.
 type SimHit struct {

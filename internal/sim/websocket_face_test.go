@@ -23,12 +23,18 @@ import (
 // the face's own auth; the console drops every socket as a restart would;
 // and the face serves over the device's https identity when it serves tls.
 
+// wsTestConfig is the websocket block the face tests serve: two watchable
+// paths, one settable, and a console drop route.
+func wsTestConfig() profile.WebSocket {
+	return profile.WebSocket{Path: "/api/ws", Paths: []string{"power", "audio"}, Settable: []string{"audio.volume"},
+		DropPath: "/api/admin/sockets/drop"}
+}
+
 func newWSDevice(t *testing.T, auth HTTPAuth, withTLS bool) (*Device, string) {
 	t.Helper()
 	dev := NewDevice("d", "ws-host", net.ParseIP("127.0.0.1"), "p", 1,
 		map[string]any{"power": "on", "audio": map[string]any{"volume": 30}, "secret": "x"})
-	dev.SetWebSocket(profile.WebSocket{Path: "/api/ws", Paths: []string{"power", "audio"}, Settable: []string{"audio.volume"},
-		DropPath: "/api/admin/sockets/drop"}, auth)
+	dev.SetWebSocket(wsTestConfig(), auth)
 	addr, err := dev.StartWebSocket(0, withTLS)
 	if err != nil {
 		t.Fatal(err)
