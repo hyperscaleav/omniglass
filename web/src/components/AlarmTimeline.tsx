@@ -27,9 +27,13 @@ const KIND_CHIP: Record<string, { word: string; tip: string; cls: string }> = {
 // is read against one clock, taken when its entries land, so the order the
 // ages say is the order the lines are in. The notifications a transition
 // queued (#618) sit after the edge that caused them, reading their delivery as
-// it stands, and a failed one offers Retry to a caller who may retry it. A row
-// a snooze held back reads "held back" with its reason, beside the snooze's
-// own audit lines (#1318).
+// it stands, and a failed one offers Retry to a caller who may retry it. A
+// notification line is a status row, not a sentence (#1413): an event or
+// audit line reads "<what> by <who>", and "by" on a notification would credit
+// its action rule with whatever happened to it (a snoozed row beside the real
+// "snoozed by alice"), so it reads its addressee, the shared status pill and
+// the action rule, labelled. A row a snooze suppressed reads "snoozed" with
+// its reason (#1318).
 export default function AlarmTimeline(props: { component: string; alarmId: string; id?: string; label: string }): JSX.Element {
   const q = useQuery(() => ({
     queryKey: alarmTimelineKey(props.component, props.alarmId),
@@ -101,15 +105,23 @@ function Sentence(props: { e: AlarmTimelineEntry }): JSX.Element {
 // NotifyRow is a notification line as a status row (#1413): its target, how
 // its delivery stands, the action rule that queued it, then the reason (a
 // snooze's, muted, as what the snooze was for; a failure's with its attempts,
-// and Retry). A person's row may carry no target (it went to their inbox or
-// mail) and, withheld, no action rule; each slot is left out when empty. The
-// rendered subject rides as the target's hint.
+// and Retry). A row a person's own subscription wrote has no target: it is
+// addressed by the person and the channel instead ("alice (email)"), or "a
+// person" to a caller who may not see who (#1341), and then its rule is
+// withheld too, so the action rule slot is left out when empty. The rendered
+// subject rides as the addressee's hint.
 function NotifyRow(props: { e: AlarmTimelineEntry; component: string; alarmId: string; onRetryError: (msg: string | null) => void }): JSX.Element {
   const e = () => props.e;
+  const to = () => e().target || e().recipient || (e().recipient_withheld ? "a person" : "");
   return (
     <span class="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
-      <Show when={e().target}>
-        <span class="font-data text-base-content/85" title={e().message}>{e().target}</span>
+      <Show when={to()}>
+        <span class="font-data text-base-content/85" title={e().message}>
+          {to()}
+          <Show when={!e().target && e().channel}>
+            <span class="font-sans text-base-content/55"> ({e().channel})</span>
+          </Show>
+        </span>
       </Show>
       <NotificationStatusPill status={e().what} size="xs" />
       <Show when={e().action_rule}>

@@ -15,5 +15,7 @@ The pill is a new primitive, `NotificationStatusPill`, worn by both the timeline
 **Recent notifications**, which drops its own status table: queued reads **on its way**, sent
 **sent**, failed **failed**, and suppressed **snoozed** in the neutral pill, each with a hint that
 teaches the status. The blade also stops prefixing a snoozed row's reason with "Retrying:", which only
-a queued row is. A personal row keeps leaving out what it withholds (a target it has none of, an
-action rule withheld with the person). The rendered subject rides as the target's hint. No API change.
+a queued row is. A row a person's own subscription wrote has no target, so it is addressed by the
+person and channel ("alice (email)", or "a person" to a caller who may not see who, whose row also
+withholds its rule). The SnoozeButton's tooltips say "recorded, not sent" for what they called held
+back. The rendered subject rides as the addressee's hint. No API change.

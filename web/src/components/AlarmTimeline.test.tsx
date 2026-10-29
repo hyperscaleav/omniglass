@@ -111,13 +111,22 @@ describe("AlarmTimeline notifications", () => {
     expect(pillOf(lis[3])).toBeNull();
   });
 
-  it("leaves out what a person's row withholds: no target, no action rule", async () => {
+  it("names a person's row by its recipient and channel, and leaves out what it withholds", async () => {
     const lis = await rows(viewer, [
-      { at: ago(10_000), kind: "notification", what: "sent", target: "", channel: "inbox", transition: "raised", notification: notified, attempts: 1, message: "[High] Lobby display: no video" },
+      { at: ago(20_000), kind: "notification", what: "sent", target: "", channel: "email", recipient: "alice", action_rule: "my-pages", transition: "raised", notification: notified, attempts: 1, message: "[High] Lobby display: no video" },
+      { at: ago(10_000), kind: "notification", what: "sent", target: "", channel: "inbox", recipient_withheld: true, transition: "raised", notification: queued, attempts: 1, message: "[High] Lobby display: no video" },
     ]);
-    expect(pillOf(lis[0])?.textContent).toBe("sent");
-    expect(lis[0].textContent).not.toContain("action rule");
-    expect(bySpan(lis[0])).toBeUndefined();
+    const [seen, withheld] = lis;
+    expect(seen.textContent).toContain("alice (email)");
+    expect(seen.textContent).toContain("action rule my-pages");
+    expect(withheld.textContent).toContain("a person (inbox)");
+    expect(withheld.textContent).not.toContain("action rule");
+    for (const li of lis) {
+      expect(pillOf(li)?.textContent).toBe("sent");
+      expect(bySpan(li)).toBeUndefined();
+      // The rendered subject rides as the addressee's hint.
+      expect(li.querySelector('[title="[High] Lobby display: no video"]')).toBeTruthy();
+    }
   });
 
   it("retries a failed notification for a caller who may, and refreshes", async () => {
