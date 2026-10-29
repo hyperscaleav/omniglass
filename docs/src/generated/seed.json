@@ -371,6 +371,12 @@
    "description": "Whether a space reads occupied or vacant by its occupancy source."
   },
   {
+   "name": "shutter-state",
+   "data_type": "string",
+   "label": "Shutter State",
+   "description": "Whether a projector's shutter is open (the image shows) or closed (the image is blanked with the light source still lit)."
+  },
+  {
    "name": "protect-state",
    "data_type": "string",
    "label": "Protect State",
@@ -515,6 +521,13 @@
    "data_type": "int",
    "label": "Participant Count",
    "description": "The participants a component reports in its current call; 0 when no call is active."
+  },
+  {
+   "name": "light-source-hours",
+   "data_type": "float",
+   "unit": "h",
+   "label": "Light Source Hours",
+   "description": "The hours a component reports its light source (a projector's lamp or laser) has been lit."
   },
   {
    "name": "temperature",
@@ -2633,6 +2646,13 @@
    "polls": 1
   },
   {
+   "id": "boreal-beam-snmp",
+   "label": "Boreal Beam SNMP",
+   "version": "1.0.0",
+   "transport": "snmp",
+   "polls": 2
+  },
+  {
    "id": "polaris-amp-snmp",
    "label": "Polaris Amp SNMP",
    "version": "1.0.0",
@@ -2844,7 +2864,7 @@
    "id": "boreal-beam-340",
    "label": "Boreal Beam 340",
    "vendor_id": "boreal",
-   "driver_id": "snmp-generic",
+   "driver_id": "boreal-beam-snmp",
    "component_type": "projector",
    "kind": "device"
   },

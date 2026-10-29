@@ -80,7 +80,7 @@ products:
   - id: boreal-beam-340
     label: Boreal Beam 340
     vendor_id: boreal
-    driver_id: snmp-generic
+    driver_id: boreal-beam-snmp
     kind: device
     component_type: projector
   - id: boreal-cast-m1

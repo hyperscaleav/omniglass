@@ -148,6 +148,13 @@ property_types:
     validation: { enum: [occupied, vacant] }
     label: Occupancy State
     description: Whether a space reads occupied or vacant by its occupancy source.
+  - name: shutter-state
+    data_type: string
+    validation: { enum: [open, closed] }
+    label: Shutter State
+    description: >-
+      Whether a projector's shutter is open (the image shows) or closed (the
+      image is blanked with the light source still lit).
   - name: protect-state
     data_type: string
     validation: { enum: [normal, protect] }

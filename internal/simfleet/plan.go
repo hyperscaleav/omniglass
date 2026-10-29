@@ -35,6 +35,7 @@ const (
 // read it.
 var AttachSecret = map[string]string{
 	"snmp-generic":     CommunitySecret,
+	"boreal-beam-snmp": CommunitySecret,
 	"polaris-amp-snmp": CommunitySecret,
 	"kestrel-api":      KestrelLoginSecret,
 	"http-json":        CensusKeySecret,
@@ -143,6 +144,7 @@ func Plan(comps []Component, used map[string]bool, cat Catalog) ([]Device, error
 // driver with simulated products that is missing).
 var Attach = map[string]func(addr string, shift func(int) int) map[string]string{
 	"snmp-generic":     snmpAttach,
+	"boreal-beam-snmp": snmpAttach,
 	"polaris-amp-snmp": snmpAttach,
 	"newtron-nvp": func(addr string, _ func(int) int) map[string]string {
 		return map[string]string{"host": addr} // 51325, the spec's default, needs no privilege
