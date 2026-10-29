@@ -210,6 +210,18 @@
       "labelled": false
     },
     {
+      "table": "metric_declared",
+      "shape": "id only",
+      "reason": "a command's intended metric row, the metric lane's declared tier (#1275); read through its command, never named",
+      "labelled": false
+    },
+    {
+      "table": "metric_series",
+      "shape": "id only",
+      "reason": "what a metric sample is a sample of (#1275), keyed by its type, owner, instance, provenance, source and collecting node; nothing addresses it by name",
+      "labelled": false
+    },
+    {
       "table": "metric_type",
       "shape": "keyspace",
       "reason": "icmp-rtt-avg, a numeric-series name referenced from drivers and templates",
