@@ -194,6 +194,18 @@ describe("NotificationTargets", () => {
     expect(screen.queryByText("A webhook needs the URL it posts to.")).toBeNull();
   });
 
+  it("keeps the group picked across a kind switch, shown as picked (bindSelectValue)", async () => {
+    stubFetch(refuse);
+    mount();
+    fireEvent.click(screen.getByText("New target"));
+    const kind = (await screen.findByTestId("target-kind-select")) as HTMLSelectElement;
+    fireEvent.change(kind, { target: { value: "principal_group" } });
+    fireEvent.change(await screen.findByTestId("target-group-select"), { target: { value: "on-call" } });
+    fireEvent.change(kind, { target: { value: "webhook" } });
+    fireEvent.change(kind, { target: { value: "principal_group" } });
+    await waitFor(() => expect((screen.getByTestId("target-group-select") as HTMLSelectElement).value).toBe("on-call"));
+  });
+
   it("refuses to create a webhook without a URL, saying why", async () => {
     stubFetch(refuse);
     mount();

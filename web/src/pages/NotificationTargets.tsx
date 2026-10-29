@@ -582,7 +582,7 @@ export function TargetForm(p: { mode: "create" | "edit"; target?: NotificationTa
           >
             <div class="flex flex-col gap-1">
               <FieldRow label="Group" info={TARGET_HINTS.group}>
-                <select class="select select-bordered w-full" onChange={(e) => setGroup(e.currentTarget.value)} aria-required="true">
+                <select ref={bindSelectValue(group, () => groups.data)} class="select select-bordered w-full" onChange={(e) => setGroup(e.currentTarget.value)} aria-required="true" data-testid="target-group-select">
                   <option value="">Choose a group</option>
                   <For each={groups.data ?? []}>{(g) => <option value={g.name}>{entityLabel(g) === g.name ? g.name : `${entityLabel(g)} (${g.name})`}</option>}</For>
                 </select>
@@ -599,7 +599,7 @@ export function TargetForm(p: { mode: "create" | "edit"; target?: NotificationTa
           >
             <div class="flex flex-col gap-1">
               <FieldRow label="Person" info={TARGET_HINTS.person}>
-                <select class="select select-bordered w-full" onChange={(e) => setPerson(e.currentTarget.value)} aria-required="true">
+                <select ref={bindSelectValue(person, humans)} class="select select-bordered w-full" onChange={(e) => setPerson(e.currentTarget.value)} aria-required="true">
                   <option value="">Choose a person</option>
                   <For each={humans()}>{(h) => <option value={h.human!.username}>{principalName(h) === h.human!.username ? h.human!.username : `${principalName(h)} (${h.human!.username})`}</option>}</For>
                 </select>

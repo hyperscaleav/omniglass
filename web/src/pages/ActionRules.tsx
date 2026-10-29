@@ -51,7 +51,7 @@ export const ACTION_RULE_HINTS = {
   when: "A predicate over the alarm's facts (component, place, severity, severity_rank, message, rule and more). Empty always holds: every alarm transition sends. severity_rank >= 40 is high and above.",
   targets: "Where it sends: one notification per target, per transition. A disabled target is skipped.",
   type: "What the message says. The official one for the transition (alarm-raised, alarm-cleared) unless you pick your own from Notifications.",
-  optOut: "Whether a member of a group this rule targets may opt themselves out of it. Off by default, so an on-call page cannot be opted out of.",
+  optOut: "Whether a member of a group this rule targets may opt themselves out of it. Off by default, so an on-call page cannot be opted out of. Turning it off withdraws every opt-out, and turning it back on does not restore them.",
   enabled: "A disabled rule queues nothing on a transition; what it queued before still delivers. Enabled again, it acts from the next transition.",
   recent: "What this rule sent lately, newest first, about components you can read, picked from the newest 500 notifications.",
   official: "Official rules ship with Omniglass and update with it, so they are read-only.",
@@ -325,10 +325,11 @@ export function ActionRuleForm(p: { mode: "create" | "edit"; rule?: ActionRule; 
   const [busy, setBusy] = createSignal(false);
   const [formErr, setFormErr] = createSignal<string | null>(null);
 
-  // The targets are admin-only to read; a rule writer who cannot read them
-  // types the names instead.
-  const canReadTargets = () => can(me.data, "notification_target", "read");
-  const targetList = useQuery(() => ({ queryKey: NOTIFICATION_TARGETS_KEY, queryFn: listNotificationTargets, enabled: canReadTargets() }));
+  // The targets are admin-only to read, with an all-scope grant; a rule
+  // writer who cannot read them (or whose read was refused) types the names.
+  const canReadTargetsAtAll = () => canFleet(me.data, "notification_target", "read");
+  const targetList = useQuery(() => ({ queryKey: NOTIFICATION_TARGETS_KEY, queryFn: listNotificationTargets, enabled: canReadTargetsAtAll() }));
+  const canReadTargets = () => canReadTargetsAtAll() && !targetList.error;
   const targetOptions = createMemo(() => {
     const known = (targetList.data ?? []).map((t) => t.name);
     // A name the rule holds that the list does not (yet) is kept, so a save

@@ -2,6 +2,7 @@ import { uuidFor } from "./testids";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { api } from "../api/client";
 import {
+  RECENT_SHOWN,
   RECENT_WINDOW,
   actionRuleDraftErrors,
   actionRuleDraftFrom,
@@ -78,10 +79,10 @@ describe("usedBy", () => {
 
 describe("listRecentNotifications", () => {
   afterEach(() => vi.restoreAllMocks());
-  it("reads the route's whole window, narrowed to a target when given", async () => {
+  it("reads only what a panel shows for a target, and the whole window for a rule", async () => {
     const spy = vi.spyOn(api, "GET").mockResolvedValue({ data: { notifications: [note({})] }, error: undefined } as never);
     expect(await listRecentNotifications({ target: "ops-chat" })).toHaveLength(1);
-    expect(spy).toHaveBeenCalledWith("/notifications", { params: { query: { limit: RECENT_WINDOW, target: "ops-chat" } } });
+    expect(spy).toHaveBeenCalledWith("/notifications", { params: { query: { limit: RECENT_SHOWN, target: "ops-chat" } } });
     await listRecentNotifications();
     expect(spy).toHaveBeenLastCalledWith("/notifications", { params: { query: { limit: RECENT_WINDOW, target: undefined } } });
   });

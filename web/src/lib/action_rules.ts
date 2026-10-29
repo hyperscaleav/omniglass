@@ -135,7 +135,10 @@ export const recentNotificationsKey = (filter: { target?: string }) =>
   [...NOTIFICATIONS_KEY, "recent", filter.target ?? ""] as const;
 
 export async function listRecentNotifications(filter: { target?: string } = {}): Promise<Notification[]> {
-  const { data, error } = await api.GET("/notifications", { params: { query: { limit: RECENT_WINDOW, target: filter.target || undefined } } });
+  // A target is narrowed by the server, so only what a panel shows is read;
+  // a rule is picked out of the whole window.
+  const limit = filter.target ? RECENT_SHOWN : RECENT_WINDOW;
+  const { data, error } = await api.GET("/notifications", { params: { query: { limit, target: filter.target || undefined } } });
   if (error) throw error;
   return (data?.notifications ?? []) as Notification[];
 }
