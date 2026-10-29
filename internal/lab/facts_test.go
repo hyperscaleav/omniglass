@@ -24,6 +24,11 @@ func TestLabFactsMatchCommitted(t *testing.T) {
 	if !strings.Contains(string(fresh), `"node"`) || !strings.Contains(string(fresh), "NET_ADMIN") {
 		t.Fatal("the facts lack the node and its NET_ADMIN")
 	}
+	for _, want := range []string{`"cadences"`, `"walkthrough"`, `"every check-in"`, `"30s"`} {
+		if !strings.Contains(string(fresh), want) {
+			t.Fatalf("the facts lack the cadence profiles (%s)", want)
+		}
+	}
 }
 
 // A walkthrough's setup is listed for a learner as the CLI command that makes

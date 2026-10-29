@@ -26,6 +26,23 @@ import (
 // container binds; seed-dev --sim-port-offset lifts them for one run
 // unprivileged on a host.
 
+// simSecrets are the platform secrets the simulated fleet's attaches
+// reference (simfleet.AttachSecret), each holding what the simulated face
+// demands: the SNMP community, and the http attaches' credentials (#902). A
+// test holds each to the profiles it is attached to.
+var simSecrets = []storage.SecretSpec{
+	{Name: simfleet.CommunitySecret, Label: "Simulated fleet SNMP community", SecretType: "snmp-community",
+		OwnerKind: "platform", Fields: map[string]string{"community": "public"}},
+	{Name: simfleet.KestrelLoginSecret, Label: "Simulated Kestrel bar login", SecretType: "basic-auth",
+		OwnerKind: "platform", Fields: map[string]string{"username": "admin", "password": "kestrel"}},
+	{Name: simfleet.CensusKeySecret, Label: "Simulated Tessellate sensor api key", SecretType: "api-key",
+		OwnerKind: "platform", Fields: map[string]string{"key": "census-lab-key"}},
+	{Name: simfleet.UCCTokenSecret, Label: "Simulated UCC platform api token", SecretType: "api-key",
+		OwnerKind: "platform", Fields: map[string]string{"key": "ucc-lab-token"}},
+	{Name: simfleet.CastKeySecret, Label: "Simulated Boreal Cast player api key", SecretType: "api-key",
+		OwnerKind: "platform", Fields: map[string]string{"key": "boreal-cast-key"}},
+}
+
 // seedSimFleet lands the plan through the gateway: the community secret,
 // then each planned component's endpoints on the dev node. A component that
 // already has an endpoint is left alone, so a re-run changes nothing. Only the
@@ -36,21 +53,7 @@ func seedSimFleet(ctx context.Context, gw storage.Gateway, actorID string, portO
 	if err != nil {
 		return fmt.Errorf("devseed: load simulator catalog: %w", err)
 	}
-	if _, err := gw.CreateSecret(ctx, actorID, storage.SecretSpec{
-		Name: simfleet.CommunitySecret, Label: "Simulated fleet SNMP community", SecretType: "snmp-community",
-		OwnerKind: "platform", Fields: map[string]string{"community": "public"},
-	}, all, true); err != nil && !errors.Is(err, storage.ErrSecretExists) {
-		return fmt.Errorf("devseed: create simulator community secret: %w", err)
-	}
-	// The http attaches' credentials (#902): what the simulated faces demand.
-	for _, sec := range []storage.SecretSpec{
-		{Name: simfleet.KestrelLoginSecret, Label: "Simulated Kestrel bar login", SecretType: "basic-auth",
-			OwnerKind: "platform", Fields: map[string]string{"username": "admin", "password": "kestrel"}},
-		{Name: simfleet.CensusKeySecret, Label: "Simulated Tessellate sensor api key", SecretType: "api-key",
-			OwnerKind: "platform", Fields: map[string]string{"key": "census-lab-key"}},
-		{Name: simfleet.UCCTokenSecret, Label: "Simulated UCC platform api token", SecretType: "api-key",
-			OwnerKind: "platform", Fields: map[string]string{"key": "ucc-lab-token"}},
-	} {
+	for _, sec := range simSecrets {
 		if _, err := gw.CreateSecret(ctx, actorID, sec, all, true); err != nil && !errors.Is(err, storage.ErrSecretExists) {
 			return fmt.Errorf("devseed: create simulator secret %s: %w", sec.Name, err)
 		}

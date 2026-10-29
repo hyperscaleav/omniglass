@@ -70,6 +70,16 @@ simulated, listed with its issue, passive, or one of the fleet's few productless
 The lab then reaches "every seeded component is collected" one profile at a time, and the list of what
 is left is always current.
 
+A new profile lands at the class floor (#1266): the product's driver reads at least one signal of its
+class off the component's own API, beyond identity and `uptime`, beside the connection-level data every
+endpoint gets. The Polaris amplifier (#898) is the pattern. Its SNMP agent answers, under the Polaris
+enterprise arc, the chassis power, the protect state an amplifier latches on a fault, the heatsink
+temperature and fan, and a channel table of output level, clip and load; the `polaris-amp-snmp`
+driver reads the first four. The channel table waits on a driver naming an instance (#1252) and on
+the fan-out carrying a channel's load to the speaker it drives (#1367). Standby and the protect reset
+are the amplifier's HTTP API, its control face, and its temperature, fan and output levels drift as
+behaviors a scenario can drive.
+
 The catalog names only fictional vendors (Kestrel, Polaris, Newtron, Boreal, Tessellate, Shinra Cloud), the same
 rule the boot seed follows, and a test holds it to that.
 
@@ -456,8 +466,8 @@ Adding a simulated component is adding a component the simulator can serve:
 --product newtron-panel-7`) creates a component of a simulated product and the endpoint the
 collector reaches it through, placed on the node. The plan is the dev seed's, made a primitive
 (`internal/simfleet`): the lowest address in `127.60.0.0/16` no endpoint already targets, a driver
-attach where the driver's inputs are known (an SNMP attach only when the `sim-community` secret
-exists for it to reference), otherwise a reachability probe on a port the profile serves, lifted
+attach where the driver's inputs are known (only when the platform secret it references, the
+community or the credential its face demands, exists), otherwise a reachability probe on a port the profile serves, lifted
 as that node's simulator lifts its ports. The simulator serves it from its next pull, with no
 restart. Changing its product among the products its profile simulates keeps its endpoints valid
 (they share a driver), and deleting the component removes it from the simulation.

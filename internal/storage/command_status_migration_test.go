@@ -151,20 +151,21 @@ func TestIntendedLineageNamesCommand(t *testing.T) {
 		t.Error("dangling property.command_id accepted, want FK violation")
 	}
 
-	// metric: the same repoint on the numeric lane.
-	mustExec(t, conn, `insert into metric (owner_kind, component_id, metric_type_id, provenance, value, command_id)
-		values ('component', $1, $2, 'intended', 50, $3)`, f.compID, f.mtID, cmdID)
-	if _, err := conn.Exec(ctx,
-		`insert into metric (owner_kind, component_id, metric_type_id, provenance, value, event_id)
-		 values ('component', $1, $2, 'intended', 50, $3)`, f.compID, f.mtID, f.evID); err == nil ||
-		!strings.Contains(err.Error(), "metric_lineage_check") {
-		t.Errorf("event-only intended metric error = %v, want metric_lineage_check violation", err)
+	// metric: the same lineage on the numeric lane, whose intended rows are
+	// its declared tier (#1275): one names its command, one naming only an
+	// event is refused, and the hot tier, where observed samples live, has no
+	// command lineage to carry at all.
+	mustExec(t, conn, storagetest.WideMetricInsert(`owner_kind, component_id, metric_type_id, provenance, value, command_id`,
+		`values ('component', $1::uuid, $2::uuid, 'intended', 50, $3::bigint)`), f.compID, f.mtID, cmdID)
+	if _, err := conn.Exec(ctx, storagetest.WideMetricInsert(`owner_kind, component_id, metric_type_id, provenance, value, event_id`,
+		`values ('component', $1::uuid, $2::uuid, 'intended', 50, $3::bigint)`), f.compID, f.mtID, f.evID); err == nil ||
+		!strings.Contains(err.Error(), "command_id") {
+		t.Errorf("event-only intended metric error = %v, want metric_declared's command_id NOT NULL violation", err)
 	}
-	if _, err := conn.Exec(ctx,
-		`insert into metric (owner_kind, component_id, metric_type_id, provenance, value, command_id)
-		 values ('component', $1, $2, 'observed', 50, $3)`, f.compID, f.mtID, cmdID); err == nil ||
-		!strings.Contains(err.Error(), "metric_lineage_check") {
-		t.Errorf("observed metric with command lineage error = %v, want metric_lineage_check violation", err)
+	var hotLineage bool
+	if err := conn.QueryRow(ctx, `select exists (select 1 from information_schema.columns
+		where table_name = 'metric' and column_name in ('command_id', 'event_id'))`).Scan(&hotLineage); err != nil || hotLineage {
+		t.Errorf("the metric hot tier carries command or event lineage (%v), want none", err)
 	}
 }
 

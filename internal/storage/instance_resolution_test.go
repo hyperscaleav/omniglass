@@ -293,7 +293,7 @@ func TestLatestPerInstanceIsAnIndexWalk(t *testing.T) {
 	mustExec(t, conn, "set enable_seqscan = off")
 	for _, tc := range []struct{ lane, index string }{
 		{"property", "property_series_idx"},
-		{"metric", "metric_owner_idx"},
+		{"metric", "metric_series_ts_idx"},
 	} {
 		rows, err := conn.Query(ctx, "explain "+storage.ExportLatestPerInstanceSQL(tc.lane), "component", uuid.NewString(), "video-input", []string{"tcp", "ssh"})
 		if err != nil {
@@ -308,7 +308,12 @@ func TestLatestPerInstanceIsAnIndexWalk(t *testing.T) {
 			plan += line + "\n"
 		}
 		rows.Close()
-		if strings.Count(plan, tc.index) < 2 {
+		// On the metric lane (#1275) the walk is the owner's series of the key,
+		// through the series key, and the newest probe each month's series index.
+		if tc.lane == "metric" && !strings.Contains(plan, "metric_series_key") {
+			t.Errorf("the metric lane's per-instance read does not find its series through metric_series_key:\n%s", plan)
+		}
+		if strings.Count(plan, tc.index) < 2 && tc.lane == "property" || tc.lane == "metric" && !strings.Contains(plan, "series_id_ts_id_idx") {
 			t.Errorf("the %s lane's per-instance read does not walk %s (the instance walk and the newest probe):\n%s", tc.lane, tc.index, plan)
 		}
 	}

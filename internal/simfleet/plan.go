@@ -28,18 +28,24 @@ const (
 	// UCCTokenSecret is the simulated UCC platform's api token (#1282), the
 	// one its http api's X-UCC-Token header demands.
 	UCCTokenSecret = "sim-ucc-token"
+	// CastKeySecret is the simulated Boreal Cast media player's api key
+	// (#893), sent in the header its API demands.
+	CastKeySecret = "sim-cast-key"
 )
 
 // AttachSecret is the platform secret each driver's simulated attach
 // references, keyed by driver: an attach is offered only to a caller who can
 // read it.
 var AttachSecret = map[string]string{
-	"snmp-generic":  CommunitySecret,
-	"lyra-arc-snmp": CommunitySecret,
-	"lyra-hx-snmp":  CommunitySecret,
-	"kestrel-api":   KestrelLoginSecret,
-	"http-json":     CensusKeySecret,
-	"ucc-rooms":     UCCTokenSecret,
+	"snmp-generic":     CommunitySecret,
+	"boreal-beam-snmp": CommunitySecret,
+	"polaris-amp-snmp": CommunitySecret,
+	"kestrel-api":      KestrelLoginSecret,
+	"http-json":        CensusKeySecret,
+	"ucc-rooms":        UCCTokenSecret,
+	"boreal-cast-api":  CastKeySecret,
+	"lyra-arc-snmp":    CommunitySecret,
+	"lyra-hx-snmp":     CommunitySecret,
 }
 
 // AddressCap is how many addresses the simulated block holds: 256 third
@@ -143,9 +149,11 @@ func Plan(comps []Component, used map[string]bool, cat Catalog) ([]Device, error
 // then its products get a probe (the dev seed's test fails for a spec'd
 // driver with simulated products that is missing).
 var Attach = map[string]func(addr string, shift func(int) int) map[string]string{
-	"snmp-generic":  snmpAttach,
-	"lyra-arc-snmp": snmpAttach,
-	"lyra-hx-snmp":  snmpAttach,
+	"snmp-generic":     snmpAttach,
+	"boreal-beam-snmp": snmpAttach,
+	"polaris-amp-snmp": snmpAttach,
+	"lyra-arc-snmp":    snmpAttach,
+	"lyra-hx-snmp":     snmpAttach,
 	"newtron-nvp": func(addr string, _ func(int) int) map[string]string {
 		return map[string]string{"host": addr} // 51325, the spec's default, needs no privilege
 	},
@@ -156,6 +164,10 @@ var Attach = map[string]func(addr string, shift func(int) int) map[string]string
 	},
 	"http-json": func(addr string, shift func(int) int) map[string]string {
 		return map[string]string{"host": addr, "port": strconv.Itoa(shift(80)), "key": CensusKeySecret}
+	},
+	// The Boreal Cast media player's http API on 80, its key in a header.
+	"boreal-cast-api": func(addr string, shift func(int) int) map[string]string {
+		return map[string]string{"host": addr, "port": strconv.Itoa(shift(80)), "key": CastKeySecret}
 	},
 	// The UCC platform's https API on 443 (#1282), its key pinned on first
 	// use, its token in the header the platform demands.

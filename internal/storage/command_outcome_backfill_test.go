@@ -28,6 +28,10 @@ func outcomeBackfillSQL(t *testing.T) (up, down string) {
 	if !ok {
 		t.Fatal("the backfill has no -- migrate:down")
 	}
+	// A metric row's event lineage is the declared tier's since the narrow
+	// lane (#1275, which keeps every such row there): the frozen statement
+	// reads it where it now lives.
+	up = strings.Replace(up, "FROM public.metric WHERE event_id", "FROM public.metric_declared WHERE event_id", 1)
 	return strings.TrimPrefix(up, "-- migrate:up"), down
 }
 

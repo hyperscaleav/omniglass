@@ -80,13 +80,13 @@ products:
   - id: boreal-beam-340
     label: Boreal Beam 340
     vendor_id: boreal
-    driver_id: snmp-generic
+    driver_id: boreal-beam-snmp
     kind: device
     component_type: projector
   - id: boreal-cast-m1
     label: Boreal Cast M1
     vendor_id: boreal
-    driver_id: http-json
+    driver_id: boreal-cast-api
     kind: device
     component_type: media-player
   # Kestrel: video conferencing and cameras.
@@ -173,7 +173,7 @@ products:
   - id: polaris-amp-4100
     label: Polaris Amp 4-100
     vendor_id: polaris
-    driver_id: snmp-generic
+    driver_id: polaris-amp-snmp
     kind: device
     component_type: amplifier
   - id: polaris-sky-c6

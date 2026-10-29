@@ -111,9 +111,9 @@ func TestEffectiveMetrics(t *testing.T) {
 	// becomes the resolved value. (Inserted raw: the gateway's sample sink writes
 	// only the observed lane.)
 	conn := connectDSN(t, dsn)
-	mustExec(t, conn, `insert into metric (ts, owner_kind, component_id, metric_type_id, instance, value, provenance, source, source_rule, source_rule_version)
-		values ($1, 'component', (select id from component where name = 'dsp-1'),
-		        (select id from metric_type where name = 'room-temperature'), '', 9.75, 'calculated', 'rule', 'rule-x', 1)`,
+	mustExec(t, conn, storagetest.WideMetricInsert(`ts, owner_kind, component_id, metric_type_id, instance, value, provenance, source, source_rule, source_rule_version`,
+		`values ($1, 'component', (select id from component where name = 'dsp-1'),
+		        (select id from metric_type where name = 'room-temperature'), '', 9.75, 'calculated', 'rule', 'rule-x', 1)`),
 		base.Add(2*time.Minute))
 	idx = metricsByName(mustEffectiveMetrics(t, gw, "component", "dsp-1", all))
 	if temp = idx["room-temperature"]; string(temp.Value) != `9.75` || !temp.IsSampled {

@@ -49,6 +49,8 @@ type retentionStore interface {
 	PruneLogs(ctx context.Context, table, band string, before time.Time, limit int) (int64, error)
 	RetentionOverrides(ctx context.Context) ([]storage.TypeRetention, error)
 	PruneSamplesOfType(ctx context.Context, lane, typeID string, days int, before time.Time, limit int) (int64, error)
+	EnsureMetricPartitions(ctx context.Context) ([]string, error)
+	DropMetricPartitions(ctx context.Context, before time.Time) ([]string, error)
 }
 
 // retentionLane is one thing a pass prunes to one window: a sample lane, or a
@@ -98,6 +100,9 @@ func retentionLanes(store retentionStore, w settings.RetentionSettings, override
 type retentionReport struct {
 	Deleted map[string]int64
 	Behind  []string
+	// Created and Dropped are the metric partitions the pass's roll made
+	// and the months it dropped whole (#420).
+	Created, Dropped []string
 }
 
 // retentionPass prunes each lane to its window once (retentionLanes): the metric
@@ -127,6 +132,23 @@ func retentionPass(ctx context.Context, store retentionStore, now time.Time, chu
 		return rep, err
 	}
 	var errs []error
+	// The metric table's roll (#420): the next months' partitions made, then
+	// each month wholly past the metric window (and every type's own) dropped,
+	// before the lanes' chunked prune keeps the window exact inside the rest.
+	pctx, pdone := bounded()
+	created, err := store.EnsureMetricPartitions(pctx)
+	rep.Created = created
+	if err != nil {
+		errs = append(errs, fmt.Errorf("roll metric partitions: %w", err))
+	}
+	if w.MetricDays > 0 && w.MetricDays <= settings.RetentionMaxDays {
+		dropped, err := store.DropMetricPartitions(pctx, now.AddDate(0, 0, -w.MetricDays))
+		rep.Dropped = dropped
+		if err != nil {
+			errs = append(errs, fmt.Errorf("drop metric partitions: %w", err))
+		}
+	}
+	pdone()
 	// The types with windows of their own. A failed read loses only their own
 	// lanes this pass: the lane prunes skip them regardless (storage holds that).
 	octx, odone := bounded()
@@ -185,6 +207,10 @@ func (s *Server) startSampleRetention() {
 			if total > 0 || len(rep.Behind) > 0 {
 				slog.Info("rows pruned past their retention window", "facility", "retention",
 					"deleted", rep.Deleted, "behind", rep.Behind)
+			}
+			if len(rep.Created) > 0 || len(rep.Dropped) > 0 {
+				slog.Info("metric partitions rolled", "facility", "retention",
+					"created", rep.Created, "dropped", rep.Dropped)
 			}
 			t := time.NewTimer(nextRetentionWait(rep))
 			select {

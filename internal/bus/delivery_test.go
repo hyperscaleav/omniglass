@@ -83,7 +83,7 @@ func pushBatch(tag string) *ogv1.TelemetryBatch {
 func (f deliveryFixture) tagged(t *testing.T, tag string) (metric, property, event, logLine int) {
 	t.Helper()
 	err := f.conn.QueryRow(f.ctx, `select
-		(select count(*) from metric where source = 'delivery-test'),
+		(select count(*) from `+storagetest.MetricRows+` metric where source = 'delivery-test'),
 		(select count(*) from property where value = to_jsonb($1::text) and provenance = 'observed'),
 		(select count(*) from event where message = $1 and origin = 'caught'),
 		(select count(*) from log_line where message = $1)`, tag).Scan(&metric, &property, &event, &logLine)

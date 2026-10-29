@@ -103,7 +103,9 @@ func newLabRunCmd(version string) *cobra.Command {
 	// The docs screenshots (#1267) photograph pages that must hold still: a
 	// fleet with no node collecting from it.
 	cmd.Flags().BoolVar(&script.noNode, "no-node", false, "run no node: seed the fleet without the simulated wiring, so nothing collects (needs --ephemeral)")
-	for _, name := range []string{"ephemeral", "ready-file", "while-pid", "no-node"} {
+	// The lab footprint (#1277) measures a lab at a chosen cadence profile.
+	cmd.Flags().StringVar(&script.cadence, "cadence", "", "the node's cadence profile ("+lab.CadenceNames()+"); empty is lab, or walkthrough for a throwaway lab")
+	for _, name := range []string{"ephemeral", "ready-file", "while-pid", "no-node", "cadence"} {
 		_ = cmd.Flags().MarkHidden(name)
 	}
 	return cmd
@@ -115,6 +117,7 @@ type labScript struct {
 	noNode    bool
 	readyFile string
 	whilePID  int
+	cadence   string
 }
 
 type labFlags struct {
@@ -187,7 +190,7 @@ func runLab(ctx context.Context, out io.Writer, version string, f labFlags) erro
 			NodeToken: token, NodeTokenHash: hex.EncodeToString(hash),
 			PushToken: pushToken, PushTokenHash: hex.EncodeToString(pushHash), PushTokenPrefix: pushPrefix,
 			Owner: lab.Owner{Host: host, PID: os.Getpid(), PIDNS: lab.CurrentPIDNS()}, WorkDir: wd,
-			Ephemeral: f.script.ephemeral, NoNode: f.script.noNode,
+			Ephemeral: f.script.ephemeral, NoNode: f.script.noNode, Cadence: f.script.cadence,
 		},
 		Image: choice, Fresh: f.fresh, PlantedFaults: plantedLabels(faults), Hold: true,
 		ReadyFile: f.script.readyFile, WhilePID: f.script.whilePID,

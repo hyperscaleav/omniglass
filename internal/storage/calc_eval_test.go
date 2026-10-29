@@ -60,7 +60,7 @@ func (r *evalRig) pending() int {
 // value, source_rule and source_rule_version, oldest first.
 func (r *evalRig) calculated(key string) []string {
 	r.t.Helper()
-	rows, err := r.conn.Query(r.ctx, `select value::text || ' ' || source_rule || ' ' || source_rule_version::text from metric
+	rows, err := r.conn.Query(r.ctx, `select value::text || ' ' || source_rule || ' ' || source_rule_version::text from `+storagetest.MetricRows+` metric
 		where component_id = $1 and metric_type_id = (select id from metric_type where name = $2) and provenance = 'calculated'
 		and instance = '' order by id`, r.comp, key)
 	if err != nil {
@@ -163,7 +163,7 @@ func TestCalcDerivesComponentSamples(t *testing.T) {
 	if got := r.calculated("temp-sum"); len(got) != 1 || got[0] != "66 per-person 1" {
 		t.Fatalf("temp-sum rows %v after the rule's delete, want its one calculated 66 kept", got)
 	}
-	if n := count(t, r.conn, `select count(*) from metric where component_id = '`+r.comp+`' and source_rule = 'per-person'
+	if n := count(t, r.conn, `select count(*) from `+storagetest.MetricRows+` metric where component_id = '`+r.comp+`' and source_rule = 'per-person'
 		and source_rule_id is not null`); n != 1 {
 		t.Fatalf("%d temp-sum rows keep the deleted rule's id, want 1", n)
 	}
@@ -255,8 +255,8 @@ func TestCalcChainAndNoSelfMark(t *testing.T) {
 		select c.id, 0, 's', 'metric', (select id from metric_type where name = 'temp-sum') from c`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := r.conn.Exec(r.ctx, `insert into metric (ts, owner_kind, component_id, metric_type_id, instance, value, provenance, source)
-		values (now(), 'component', $1::uuid, (select id from metric_type where name = 'temp-sum'), '', 1, 'observed', 'test')`, r.comp); err != nil {
+	if _, err := r.conn.Exec(r.ctx, storagetest.WideMetricInsert(`ts, owner_kind, component_id, metric_type_id, instance, value, provenance, source`,
+		`values (now(), 'component', $1::uuid, (select id from metric_type where name = 'temp-sum'), '', 1, 'observed', 'test')`), r.comp); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := r.conn.Exec(r.ctx, `insert into calc_pending (rule_id, owner_kind, component_id)
@@ -349,10 +349,10 @@ func TestCalcDrainReplicasAndRestart(t *testing.T) {
 	if served[0]+served[1] != owners-3 || r.pending() != 0 {
 		t.Fatalf("replicas served %v, %d left; want %d in all, none left", served, r.pending(), owners-3)
 	}
-	if n := count(t, r.conn, `select count(*) from metric where provenance = 'calculated' and source_rule = 'temp-mean'`); n != owners {
+	if n := count(t, r.conn, `select count(*) from `+storagetest.MetricRows+` metric where provenance = 'calculated' and source_rule = 'temp-mean'`); n != owners {
 		t.Fatalf("%d calculated rows, want exactly %d (one per owner)", n, owners)
 	}
-	if n := count(t, r.conn, `select count(*) from (select component_id from metric where provenance = 'calculated'
+	if n := count(t, r.conn, `select count(*) from (select component_id from `+storagetest.MetricRows+` metric where provenance = 'calculated'
 		group by component_id having count(*) > 1) d`); n != 0 {
 		t.Fatalf("%d owners computed twice", n)
 	}
