@@ -1,0 +1,176 @@
+# yaml-language-server: $schema=schema.json
+# Kestrel Relay C1, Room Codec
+#
+# Kestrel is the lab's fictional conferencing vendor. The Relay C1 is a
+# rack codec: the conferencing engine of a larger place, with separate
+# cameras, microphones through the DSP and displays of its own, where the
+# VRoom bar is the all-in-one for a small one. It speaks the same Kestrel
+# API as the bar (the same call, audio and system routes behind the same
+# basic auth over https, the same live feed), so the bar's driver
+# (kestrel-api) reads it, and it adds what a rack codec has: content
+# sharing as its own source, and the peripherals wired to it.
+
+name: kestrel-relay-c1
+manufacturer: Kestrel
+model: "Relay C1"
+device_type: video-codec
+slug_prefix: codec
+
+doc:
+  summary: "Kestrel Relay C1 rack conferencing codec"
+  description: |
+    Rack conferencing codec. Call, audio and system state over the
+    Kestrel JSON API (https, basic auth) with a live feed; content
+    sharing and its connected peripherals besides.
+
+interfaces:
+  - name: http-api
+    protocol: http
+    port: 443
+    tls: true
+    doc:
+      summary: "Kestrel HTTP JSON API"
+      tags: [management, api]
+    auth:
+      type: basic
+      default_user: admin
+      default_password: kestrel
+      realm: "Kestrel Relay"
+      enforce: true
+    events:
+      path: /api/events
+      retry_ms: 2000
+      paths: [status.audio.volume, status.audio.mic_mute, status.call, status.device.power, status.content.sharing]
+      drop_path: /api/admin/streams/drop
+    api_surface: kestrel-relay
+    routes:
+      # The bar's routes, the same templates: what kestrel-api reads.
+      - match: "GET /api/system"
+        template: api/kestrel-vroom/system.json.gotempl
+        doc: { summary: "System unit info (serial, firmware, uptime, power)", tags: [api, info] }
+      - match: "GET /api/call"
+        template: api/kestrel-vroom/call.json.gotempl
+        doc: { summary: "Current call state", tags: [api, call] }
+      - match: "GET /api/audio"
+        template: api/kestrel-vroom/audio.json.gotempl
+        doc: { summary: "Audio state (volume, mute)", tags: [api, audio] }
+
+      # The codec's own: content sharing and peripherals.
+      - match: "GET /api/content"
+        template: api/kestrel-relay/content.json.gotempl
+        doc: { summary: "Content sharing state and source", tags: [api, content] }
+      - match: "GET /api/peripherals"
+        template: api/kestrel-relay/peripherals.json.gotempl
+        doc: { summary: "Connected cameras, microphones and touch controller", tags: [api, peripherals] }
+
+      - match: "POST /api/audio/volume"
+        template: api/kestrel-vroom/audio-ack.json.gotempl
+        doc: { summary: "Set speaker volume", tags: [api, control] }
+        example: |
+          {"volume": 50}
+        mutate:
+          status.audio.volume: "{{ .Request.Body.volume }}"
+          status.audio.speaker_level: "{{ .Request.Body.volume }}"
+      - match: "POST /api/audio/mute"
+        template: api/kestrel-vroom/audio-ack.json.gotempl
+        doc: { summary: "Set microphone mute", tags: [api, control] }
+        example: |
+          {"mute": true}
+        mutate:
+          status.audio.mic_mute: "{{ .Request.Body.mute }}"
+      - match: "POST /api/system/standby"
+        template: api/kestrel-vroom/system-ack.json.gotempl
+        doc: { summary: "Set codec standby state", tags: [api, control] }
+        example: |
+          {"power": "standby"}
+        mutations:
+          - path: status.device.power
+            value: "{{ .Request.Body.power }}"
+            enum: ["on", "off", "standby"]
+      - match: "POST /api/call/dial"
+        template: api/kestrel-vroom/system-ack.json.gotempl
+        doc: { summary: "Place a call", tags: [api, control] }
+        example: |
+          {"id": "c9001", "participants": 3}
+        mutations:
+          - { path: status.call.id, value: "{{ .Request.Body.id }}", pattern: "^[A-Za-z0-9-]{1,32}$" }
+          - { path: status.call.active, value: true }
+          - { path: status.call.participants, value: "{{ or .Request.Body.participants 2 }}" }
+        events:
+          - name: call-started
+            data: '{"id":"{{ .Request.Body.id }}","participants":{{ or .Request.Body.participants 2 }}}'
+      - match: "POST /api/call/disconnect"
+        template: api/kestrel-vroom/system-ack.json.gotempl
+        doc: { summary: "Disconnect active call", tags: [api, control] }
+        example: "{}"
+        mutate:
+          status.call.active: false
+          status.call.participants: 0
+          status.content.sharing: false
+        events:
+          - name: call-ended
+            data: '{"id":"{{ .State | get "status" | get "call" | get "id" }}"}'
+      # Share content (a laptop on the content input) or stop sharing.
+      - match: "POST /api/content"
+        template: api/kestrel-relay/content.json.gotempl
+        doc: { summary: "Start or stop sharing content", tags: [api, control] }
+        example: |
+          {"sharing": true}
+        mutations:
+          - path: status.content.sharing
+            value: "{{ .Request.Body.sharing }}"
+            enum: ["true", "false"]
+
+      - match: "POST /api/admin/reboot"
+        template: api/kestrel-vroom/reboot-ack.json.gotempl
+        doc: { summary: "Reboot codec (clears call, content and uptime)", tags: [api, admin] }
+        example: "{}"
+        mutations:
+          - { path: status.device.boot_epoch, value: "{{ now }}" }
+          - { path: status.call.active, value: false }
+          - { path: status.call.participants, value: 0 }
+          - { path: status.content.sharing, value: false }
+
+  - name: icmp
+    protocol: icmp
+    doc: { summary: "ICMP ping reachability", tags: [monitoring] }
+
+computed:
+  - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
+
+defaults:
+  status:
+    device:
+      power: "on"
+      boot_epoch: 0
+    call:
+      active: false
+      participants: 0
+      id: ""
+    audio:
+      volume: 50
+      mic_mute: false
+      speaker_level: 50
+    content:
+      sharing: false
+      source: "hdmi-content"
+    # What is wired to the codec: two cameras, the DSP's microphone feed,
+    # the touch controller. Each connected or not.
+    peripherals:
+      - { name: "Camera 1", kind: camera, connected: true }
+      - { name: "Camera 2", kind: camera, connected: true }
+      - { name: "DSP audio", kind: microphone, connected: true }
+      - { name: "Touch controller", kind: touch-panel, connected: true }
+    network:
+      ipv4:
+        address: ""
+        mac: ""
+  configuration:
+    device:
+      serial: ""
+      model: "Relay C1"
+      manufacturer: "Kestrel"
+    firmware:
+      version: "3.0.1"
+    network:
+      hostname: ""

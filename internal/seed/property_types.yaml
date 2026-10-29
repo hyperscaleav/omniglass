@@ -153,6 +153,17 @@ property_types:
     validation: { enum: [booked, free] }
     label: Booking State
     description: Whether a space is booked now (a meeting in progress) or free, as its scheduling service reports it.
+  # A PTZ camera's position (#897): the preset it sits at, and whether it
+  # is tracking a presenter on its own.
+  - name: camera-preset
+    data_type: string
+    label: Camera Preset
+    description: The named position a camera reports it is at (a preset the integrator stored).
+  - name: tracking-state
+    data_type: string
+    validation: { enum: ["on", "off"] }
+    label: Tracking State
+    description: Whether a camera reports it is tracking a presenter on its own.
   # Declared attribute properties: the starter set a field draws from.
   - name: serial-number
     data_type: string

@@ -43,7 +43,7 @@ func TestNodeWebSocketArmsPushesAnswersByIDAndRecovers(t *testing.T) {
 	}
 	var barProfile string
 	s := newHTTPStack(t, "edge-ws", nil, func(store *profile.Store) []string {
-		barProfile = driverProfile(t, store, "kestrel-api")
+		barProfile = driverProfile(t, store, "kestrel-api", "websocket") // the bar: its control socket too
 		return []string{barProfile}
 	})
 	bar := s.devices[barProfile]

@@ -1,0 +1,4 @@
+{
+  "sharing": {{ .State | get "status" | get "content" | get "sharing" }},
+  "source": "{{ .State | get "status" | get "content" | get "source" }}"
+}

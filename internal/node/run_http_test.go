@@ -145,8 +145,8 @@ func (s *httpStack) attachHTTP(comp, drv, nodeName string, inputs map[string]str
 }
 
 // driverProfile is the simulator profile serving a product the shipped
-// driver reads, derived from both catalogs.
-func driverProfile(t *testing.T, store *profile.Store, driver string) string {
+// driver reads and every face protocol named, derived from both catalogs.
+func driverProfile(t *testing.T, store *profile.Store, driver string, faces ...string) string {
 	t.Helper()
 	raw, err := seed.FactsJSON()
 	if err != nil {
@@ -166,15 +166,31 @@ func driverProfile(t *testing.T, store *profile.Store, driver string) string {
 		if p.DriverID != driver {
 			continue
 		}
-		if name, _, ok := store.ForProduct(p.ID); ok {
+		if name, _, ok := store.ForProduct(p.ID); ok && servesFaces(store.Devices[name], faces) {
 			names = append(names, name)
 		}
 	}
 	if len(names) == 0 {
-		t.Fatalf("no simulator profile serves a %s product", driver)
+		t.Fatalf("no simulator profile serves a %s product with faces %v", driver, faces)
 	}
 	sort.Strings(names)
 	return names[0]
+}
+
+// servesFaces reports whether a profile serves every protocol named: a test
+// that drives a face beyond the driver's own names it, so a product on the
+// same driver that sorts first and lacks the face cannot be picked.
+func servesFaces(p *profile.DeviceProfile, faces []string) bool {
+	have := map[string]bool{}
+	for _, i := range p.Interfaces {
+		have[i.Protocol] = true
+	}
+	for _, f := range faces {
+		if !have[f] {
+			return false
+		}
+	}
+	return true
 }
 
 // xmlProfile is the simulator profile whose http face serves its status as

@@ -1,0 +1,133 @@
+# yaml-language-server: $schema=schema.json
+# Kestrel Gaze P2, PTZ Camera
+#
+# Kestrel is the lab's fictional conferencing vendor. The Gaze P2 is a
+# PTZ (pan, tilt and lens) camera on the network beside a Relay codec: it holds
+# presets (the lectern, the audience, the whole place) and can track a
+# presenter on its own. What an operator watches it for is which preset
+# it sits at and whether tracking is on, and its position.
+#
+# Its face is the Kestrel JSON API over https behind basic auth, the
+# family's convention: its system info, its camera state, and the moves
+# (recall a preset, nudge pan and tilt, turn tracking on or off).
+
+name: kestrel-gaze-p2
+manufacturer: Kestrel
+model: "Gaze P2"
+device_type: ptz-camera
+slug_prefix: camera
+
+doc:
+  summary: "Kestrel Gaze P2 PTZ camera"
+  description: |
+    Network PTZ (pan, tilt and lens) camera with presets and presenter tracking,
+    over the Kestrel JSON API (https, basic auth).
+
+interfaces:
+  - name: http-api
+    protocol: http
+    port: 443
+    tls: true
+    doc:
+      summary: "Kestrel camera API"
+      tags: [management, api]
+    auth:
+      type: basic
+      default_user: admin
+      default_password: kestrel
+      realm: "Kestrel Gaze"
+      enforce: true
+    api_surface: kestrel-gaze
+    routes:
+      - match: "GET /api/system"
+        template: api/kestrel-vroom/system.json.gotempl
+        doc: { summary: "System unit info (serial, firmware, uptime, power)", tags: [api, info] }
+      - match: "GET /api/camera"
+        template: api/kestrel-gaze/camera.json.gotempl
+        doc: { summary: "Camera position, preset and tracking", tags: [api, camera] }
+
+      # Recalling a preset moves the camera to it and stops tracking, as a
+      # PTZ camera does.
+      - match: "POST /api/camera/preset"
+        template: api/kestrel-gaze/camera.json.gotempl
+        doc: { summary: "Recall a preset (lectern, audience, wide)", tags: [api, control] }
+        example: |
+          {"preset": "audience"}
+        mutations:
+          - path: status.camera.preset
+            value: "{{ .Request.Body.preset }}"
+            enum: [lectern, audience, wide]
+          - path: status.camera.tracking
+            value: 'false{{ guard "^(lectern|audience|wide)$" .Request.Body.preset }}'
+
+      - match: "POST /api/camera/tracking"
+        template: api/kestrel-gaze/camera.json.gotempl
+        doc: { summary: "Turn presenter tracking on or off", tags: [api, control] }
+        example: |
+          {"tracking": true}
+        mutations:
+          - path: status.camera.tracking
+            value: "{{ .Request.Body.tracking }}"
+            enum: ["true", "false"]
+
+      - match: "POST /api/system/standby"
+        template: api/kestrel-vroom/system-ack.json.gotempl
+        doc: { summary: "Set camera standby state", tags: [api, control] }
+        example: |
+          {"power": "standby"}
+        mutations:
+          - path: status.device.power
+            value: "{{ .Request.Body.power }}"
+            enum: ["on", "standby"]
+
+      - match: "POST /api/admin/reboot"
+        template: api/kestrel-vroom/reboot-ack.json.gotempl
+        doc: { summary: "Reboot camera (clears uptime, returns to the wide preset)", tags: [api, admin] }
+        example: "{}"
+        mutations:
+          - { path: status.device.boot_epoch, value: "{{ now }}" }
+          - { path: status.camera.preset, value: "{{ .Defaults.status.camera.preset }}" }
+          - { path: status.camera.tracking, value: false }
+
+  - name: icmp
+    protocol: icmp
+    doc: { summary: "ICMP ping reachability", tags: [monitoring] }
+
+computed:
+  - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
+
+# Tracking follows a presenter: while it is on, pan drifts a few degrees a
+# tick within the lectern's sweep; off, the camera holds its preset.
+behaviors:
+  - name: presenter_tracking
+    schedule:
+      interval: 10s
+    mutations:
+      - path: status.camera.pan
+        value: '{{ if eq (printf "%v" .State.status.camera.tracking) "true" }}{{ round 1 (clamp -30.0 30.0 (randStep 4.0 .State.status.camera.pan)) }}{{ else }}{{ .State.status.camera.pan }}{{ end }}'
+
+defaults:
+  status:
+    device:
+      power: "on"
+      boot_epoch: 0
+    camera:
+      preset: wide
+      tracking: false
+      # Degrees from centre, and the lens magnification (1 is widest).
+      pan: 0
+      tilt: -5
+      magnification: 1
+    network:
+      ipv4:
+        address: ""
+        mac: ""
+  configuration:
+    device:
+      serial: ""
+      model: "Gaze P2"
+      manufacturer: "Kestrel"
+    firmware:
+      version: "1.6.0"
+    network:
+      hostname: ""

@@ -377,6 +377,18 @@
    "description": "Whether a space is booked now (a meeting in progress) or free, as its scheduling service reports it."
   },
   {
+   "name": "camera-preset",
+   "data_type": "string",
+   "label": "Camera Preset",
+   "description": "The named position a camera reports it is at (a preset the integrator stored)."
+  },
+  {
+   "name": "tracking-state",
+   "data_type": "string",
+   "label": "Tracking State",
+   "description": "Whether a camera reports it is tracking a presenter on its own."
+  },
+  {
    "name": "serial-number",
    "data_type": "string",
    "label": "Serial number",
@@ -2622,6 +2634,13 @@
    "commands": 3
   },
   {
+   "id": "kestrel-camera-api",
+   "label": "Kestrel Camera API",
+   "version": "1.0.0",
+   "transport": "https",
+   "polls": 2
+  },
+  {
    "id": "kestrel-ws",
    "label": "Kestrel Control Socket",
    "version": "1.0.0",
@@ -2861,7 +2880,7 @@
    "id": "kestrel-gaze-p2",
    "label": "Kestrel Gaze P2",
    "vendor_id": "kestrel",
-   "driver_id": "kestrel-api",
+   "driver_id": "kestrel-camera-api",
    "component_type": "ptz-camera",
    "kind": "device"
   },

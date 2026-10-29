@@ -34,10 +34,11 @@ const (
 // references, keyed by driver: an attach is offered only to a caller who can
 // read it.
 var AttachSecret = map[string]string{
-	"snmp-generic": CommunitySecret,
-	"kestrel-api":  KestrelLoginSecret,
-	"http-json":    CensusKeySecret,
-	"ucc-rooms":    UCCTokenSecret,
+	"snmp-generic":       CommunitySecret,
+	"kestrel-api":        KestrelLoginSecret,
+	"kestrel-camera-api": KestrelLoginSecret,
+	"http-json":          CensusKeySecret,
+	"ucc-rooms":          UCCTokenSecret,
 }
 
 // AddressCap is how many addresses the simulated block holds: 256 third
@@ -150,6 +151,9 @@ var Attach = map[string]func(addr string, shift func(int) int) map[string]string
 	// The Kestrel bar's https API on 443, its key pinned on first use (the
 	// spec's default mode), and the Tessellate sensor's http API on 80.
 	"kestrel-api": func(addr string, shift func(int) int) map[string]string {
+		return map[string]string{"host": addr, "port": strconv.Itoa(shift(443)), "login": KestrelLoginSecret}
+	},
+	"kestrel-camera-api": func(addr string, shift func(int) int) map[string]string {
 		return map[string]string{"host": addr, "port": strconv.Itoa(shift(443)), "login": KestrelLoginSecret}
 	},
 	"http-json": func(addr string, shift func(int) int) map[string]string {

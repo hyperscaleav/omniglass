@@ -131,6 +131,39 @@ drivers:
         - command_type: set-power
           request: { method: POST, path: /api/system/standby, body: { power: "${value}" } }
           settle: { from: response, extract: { jsonpath: power } }
+  - id: kestrel-camera-api
+    label: Kestrel Camera API
+    version: "1.0.0"
+    spec:
+      version: 1
+      # The Kestrel Gaze PTZ camera's JSON API (#897), the family's https on
+      # 443 with basic auth and the key pinned on first use: its system info,
+      # and the preset it sits at and whether it is tracking a presenter.
+      transport: https
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "443" }
+        - { name: tls-mode, kind: string, default: pin }
+        - { name: login, kind: secret, secret_type: basic-auth, required: true }
+      session:
+        credential: login
+        scheme: basic
+      polls:
+        - name: system
+          schedule: { every: 5m }
+          request: { path: /api/system }
+          emits:
+            - { name: model-number, extract: { jsonpath: model } }
+            - { name: serial-number, extract: { jsonpath: serial } }
+            - { name: firmware-version, extract: { jsonpath: firmware } }
+            - { name: uptime, extract: { jsonpath: uptime } }
+            - { name: power-state, extract: { jsonpath: power } }
+        - name: camera
+          schedule: { every: 30s }
+          request: { path: /api/camera }
+          emits:
+            - { name: camera-preset, extract: { jsonpath: preset } }
+            - { name: tracking-state, extract: { jsonpath: tracking }, transform: { map: { "true": "on", "false": "off" } } }
   - id: kestrel-ws
     label: Kestrel Control Socket
     version: "1.0.0"

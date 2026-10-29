@@ -110,7 +110,7 @@ products:
   - id: kestrel-gaze-p2
     label: Kestrel Gaze P2
     vendor_id: kestrel
-    driver_id: kestrel-api
+    driver_id: kestrel-camera-api
     kind: device
     component_type: ptz-camera
   # Lyra: microphones, by form factor.
