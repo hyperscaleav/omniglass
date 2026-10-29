@@ -16,6 +16,8 @@ import { PROPERTIES_KEY } from "../lib/properties";
 import { EVENT_TYPES_KEY } from "../lib/event_types";
 import { COMMAND_TYPES_KEY } from "../lib/command_types";
 import { NOTIFICATION_TYPES_KEY } from "../lib/notification_types";
+import { NOTIFICATION_TARGETS_KEY } from "../lib/notification_targets";
+import { ACTION_RULES_KEY } from "../lib/action_rules";
 import { EVENT_RULES_KEY } from "../lib/event_rules";
 import { severityLevelsKey } from "../lib/severity";
 import { TAGS_KEY } from "../lib/tags";
@@ -52,6 +54,8 @@ const PRIMED: [readonly string[], number][] = [
   [EVENT_TYPES_KEY, 15],
   [COMMAND_TYPES_KEY, 6],
   [NOTIFICATION_TYPES_KEY, 2],
+  [ACTION_RULES_KEY, 4],
+  [NOTIFICATION_TARGETS_KEY, 3],
   [EVENT_RULES_KEY, 3],
   [severityLevelsKey, 5],
   [TAGS_KEY, 9],
@@ -140,6 +144,11 @@ describe("CatalogOverview page", () => {
     expect(notifications.textContent).toContain("2");
     expect(notifications.textContent).not.toContain("soon");
     expect(notifications.getAttribute("href")).toBe("/notifications");
+    // When a message is sent and where it goes, beside what it says (#1346).
+    expect(entry(act, "Action rules").getAttribute("href")).toBe("/action-rules");
+    expect(entry(act, "Action rules").textContent).toContain("4");
+    expect(entry(act, "Targets").getAttribute("href")).toBe("/notification-targets");
+    expect(entry(act, "Targets").textContent).toContain("3");
     // The Templates slots went live (#1329): filtered links, their own counts.
     const templates = entry(card("Components")!, "Templates");
     expect(templates.tagName).toBe("A");

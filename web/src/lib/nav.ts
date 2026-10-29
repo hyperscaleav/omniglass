@@ -179,6 +179,8 @@ export const OFF_RAIL: { path: string; label: string; hint: string; resource?: s
   { path: "/severity-levels", label: "Severity", resource: "severity_level", hint: "The severity levels: how bad an alarm is, ranked, each with its color and whether it takes its component out." },
   { path: "/log-types", label: "Logs", hint: "The log shape catalog. The log lane arrives untyped today; typing what a line can be is still to come." },
   { path: "/notifications", label: "Notifications", resource: "notification_type", hint: "The notification types: what a message about an alarm says, as a subject and a text, previewed against a real alarm." },
+  { path: "/action-rules", label: "Action rules", resource: "rule", hint: "The action rules: when a message about an alarm is sent, on which transitions, under which predicate, and to which targets." },
+  { path: "/notification-targets", label: "Targets", resource: "notification_target", hint: "The notification targets: where a message about an alarm goes, a webhook, a mailbox, a group or a person. Admin-only." },
   // The template catalog (#1329), live inside the catalog shell: the
   // Components, Systems and Locations groups' Templates slots open it filtered.
   { path: "/templates", label: "Templates", resource: "template", hint: "Examples you clone: start a standard, a component, a whole system, or a subtree of places from one, then own what you get." },

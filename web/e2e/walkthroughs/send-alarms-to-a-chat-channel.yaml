@@ -1,0 +1,40 @@
+# Send alarms to a chat channel (#1346): an admin makes a webhook target, tests
+# it and reads the receiver's answer, then writes the action rule that sends to
+# it, its when checked in the expression editor. The lab has no route to the
+# made-up chat host, so the test's answer is the honest reason it was not
+# delivered, which is what the panel is for.
+title: Send alarms to a chat channel
+description: Make a webhook target, test it and read the receiver's answer, then write the action rule that sends high alarms to it.
+steps:
+  - goto: /notification-targets
+    caption: A target says where a message about an alarm goes. Targets are admin-only, since a webhook's URL is often a credential.
+  - click: { role: button, name: New target }
+    caption: Make a new one. A webhook posts a signed message to a chat or paging tool.
+  - type: { target: { role: textbox, name: Label, exact: true }, text: Ops chat }
+    caption: Give it a label; its name follows from it.
+  - type: { target: { role: textbox, name: URL, exact: true }, text: 'https://chat.example.invalid/hooks/ops?token=lab' }
+    caption: The chat channel's incoming webhook URL.
+  - click: { role: button, name: Create target }
+    caption: Create it.
+  - wait: { selector: '[data-testid="target-url"]' }
+    caption: From now on the URL reads masked to its host. Reveal shows it whole, and every reveal is audited.
+  - click: { role: button, name: Send a test }
+    caption: Send a test message, exactly as a delivery would be sent.
+  - wait: { selector: '[data-testid="target-test-result"]' }
+    caption: The receiver's answer. This lab cannot reach that host, so it says why the message was not delivered.
+    hold: 1500
+  - goto: /action-rules
+    caption: An action rule says when to send, and to which targets.
+  - click: { role: button, name: New action rule }
+    caption: Write a new one.
+  - type: { target: { role: textbox, name: Label, exact: true }, text: Page ops }
+    caption: Label it.
+  - type: { target: { role: textbox, name: When, exact: true }, text: 'severity_rank >= 40' }
+    caption: When reads the alarm's facts, checked as you type. severity_rank 40 is high, so this sends on high alarms and worse.
+  - click: { role: checkbox, name: ops-chat }
+    caption: Send to the target just made.
+  - click: { role: button, name: Create action rule }
+    caption: Create the rule. From the next high alarm, a message goes to the channel.
+  - wait: { selector: '[data-testid="action-rule-when"]' }
+    caption: The rule, enabled. Its panel says what it sends and to whom, and lists what it has sent.
+    poster: true
