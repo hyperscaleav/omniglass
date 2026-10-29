@@ -1644,27 +1644,27 @@ func (p *PG) EnsureServicePrincipal(ctx context.Context, actorID, name string) (
 		return "", fmt.Errorf("storage: begin ensure service: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	var id string
-	err = tx.QueryRow(ctx, `select principal_id from service where name = $1`, name).Scan(&id)
+	var pid string
+	err = tx.QueryRow(ctx, `select principal_id from service where name = $1`, name).Scan(&pid)
 	if err == nil {
-		return id, nil
+		return pid, nil
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return "", fmt.Errorf("storage: find service %q: %w", name, err)
 	}
-	if err := tx.QueryRow(ctx, `insert into principal (kind) values ('service') returning id`).Scan(&id); err != nil {
+	if err := tx.QueryRow(ctx, `insert into principal (kind) values ('service') returning id`).Scan(&pid); err != nil {
 		return "", fmt.Errorf("storage: create service principal: %w", err)
 	}
-	if _, err := tx.Exec(ctx, `insert into service (principal_id, name) values ($1, $2)`, id, name); err != nil {
+	if _, err := tx.Exec(ctx, `insert into service (principal_id, name) values ($1, $2)`, pid, name); err != nil {
 		return "", fmt.Errorf("storage: create service %q: %w", name, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "create", "principal", id, nil, map[string]string{"kind": "service", "name": name}); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "create", "principal", pid, nil, map[string]string{"kind": "service", "name": name}); err != nil {
 		return "", err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return "", fmt.Errorf("storage: commit ensure service: %w", err)
 	}
-	return id, nil
+	return pid, nil
 }
 
 // SetServiceToken makes one token the service's only one, by its hash and

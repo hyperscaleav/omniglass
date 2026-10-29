@@ -3,6 +3,7 @@
 package simnode
 
 import (
+	"sort"
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
@@ -30,12 +31,23 @@ func TestTheSimulatorSubscribesAServiceToItsWebhookEndpoint(t *testing.T) {
 	engine := sim.NewEngine(store, profiles.Templates())
 	engine.SetPortMap(sim.EphemeralPorts)
 	t.Cleanup(engine.StopAll)
+	// A profile that posts webhooks, found by its subscribe route.
+	var sender []string
+	for name, p := range store.Devices {
+		if p.Webhook != nil {
+			sender = append(sender, name)
+		}
+	}
+	if len(sender) == 0 {
+		t.Fatal("no profile declares a webhook subscribe route")
+	}
+	sort.Strings(sender)
 	ip := simtest.ClaimLoopback(t)
-	snap := sim.DeviceSnapshot{DeviceID: "ucc", Hostname: "ucc", LoopbackIP: ip, ProfileName: "ucc-service", Version: 1}
+	snap := sim.DeviceSnapshot{DeviceID: "ucc", Hostname: "ucc", LoopbackIP: ip, ProfileName: sender[0], Version: 1}
 	if err := engine.Sync([]sim.DeviceSnapshot{snap}); err != nil {
 		t.Fatal(err)
 	}
-	listed := []collection.SimDevice{{ComponentID: "ucc", Name: "ucc", Product: "ucc-service", Address: ip,
+	listed := []collection.SimDevice{{ComponentID: "ucc", Name: "ucc", Address: ip,
 		Webhook: &collection.SimWebhook{Path: "/api/v1/webhooks/TOKEN", Scheme: "hmac", Secret: "lab-key"}}}
 
 	calls := 0
