@@ -35,7 +35,9 @@ export default function SimulationSection(props: { componentId: string }): JSX.E
             hint="A simulator beside the node answers for this component: a loopback address speaking its product's protocols, so collection reads it as real hardware. Impair it to watch monitoring notice."
             right={<Button size="xs" icon={FlaskConical} onClick={() => setOpen(true)}>Open simulation</Button>}
           />
-          <dl class="mt-2 grid grid-cols-[6rem_1fr] gap-x-3 gap-y-1">
+          {/* Rows align on their first baseline (#1379): a monospace
+              node, address or hit count beside the card's text label. */}
+          <dl class="mt-2 grid grid-cols-[6rem_1fr] items-baseline gap-x-3 gap-y-1">
             <dt class="text-base-content/50">Node</dt>
             <dd class="font-data text-xs">{s().node}</dd>
             <dt class="text-base-content/50">Address</dt>
