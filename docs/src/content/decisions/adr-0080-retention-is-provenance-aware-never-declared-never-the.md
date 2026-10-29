@@ -19,6 +19,11 @@ summary: "retention is provenance-aware: a prune never deletes a declared row an
   the latest row. Both invariants are unchanged; "latest" now holds under both reader orders (ts then
   id, and id), and a command's lineage rows are kept too
   ([ADR-0417](/architecture/decisions/#adr-0417-the-server-prunes-each-sample-lane-to-a-window-in-bounded-chunks)).
+  **Amended (#1275):** on the metric lane the floor is the latest row within retention: a month past
+  every window is dropped whole, latest rows with it, and a series with no row inside its window reads
+  as no reading within retention. A command's intended rows live in their own never-pruned table. The
+  property lane keeps both invariants unchanged
+  ([ADR-1275](/architecture/decisions/#adr-1275-the-metric-lane-is-narrow-rows-on-a-series-dimension-partitioned-by-month)).
 - **Context:** a blanket "delete older than N days" is the obvious first retention feature, and it
   would silently erase a declared value set two years ago, because for declared provenance the
   single row is the record itself, not one sample among many. With current values now derived from

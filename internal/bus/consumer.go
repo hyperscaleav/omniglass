@@ -222,6 +222,7 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 			bind.SampleOwner = &owner
 			bind.Arc = componentArc(owner)
 			bind.Writer = storage.NodeWriter(owner.ComponentID, owner.EndpointName)
+			bind.Writer.Node = owner.NodeID
 			// The task's component is the conduit a fanned sample's identity
 			// resolves against, and only it (#1282): the node is already
 			// confined to it.

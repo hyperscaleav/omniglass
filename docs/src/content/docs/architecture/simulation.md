@@ -70,6 +70,16 @@ simulated, listed with its issue, passive, or one of the fleet's few productless
 The lab then reaches "every seeded component is collected" one profile at a time, and the list of what
 is left is always current.
 
+A new profile lands at the class floor (#1266): the product's driver reads at least one signal of its
+class off the component's own API, beyond identity and `uptime`, beside the connection-level data every
+endpoint gets. The Polaris amplifier (#898) is the pattern. Its SNMP agent answers, under the Polaris
+enterprise arc, the chassis power, the protect state an amplifier latches on a fault, the heatsink
+temperature and fan, and a channel table of output level, clip and load; the `polaris-amp-snmp`
+driver reads the first four. The channel table waits on a driver naming an instance (#1252) and on
+the fan-out carrying a channel's load to the speaker it drives (#1367). Standby and the protect reset
+are the amplifier's HTTP API, its control face, and its temperature, fan and output levels drift as
+behaviors a scenario can drive.
+
 The catalog names only fictional vendors (Kestrel, Polaris, Newtron, Boreal, Tessellate, Shinra Cloud), the same
 rule the boot seed follows, and a test holds it to that.
 

@@ -53,7 +53,9 @@ type Config struct {
 }
 
 const (
-	defaultPoll       = 10 * time.Second
+	// DefaultPoll is how often the simulator re-pulls its component list
+	// when it is not told otherwise.
+	DefaultPoll       = 10 * time.Second
 	defaultFlushEvery = time.Second
 )
 
@@ -63,7 +65,7 @@ const (
 // fatal.
 func Run(ctx context.Context, cfg Config) error {
 	if cfg.Poll <= 0 {
-		cfg.Poll = defaultPoll
+		cfg.Poll = DefaultPoll
 	}
 	if cfg.FlushEvery <= 0 {
 		cfg.FlushEvery = defaultFlushEvery
