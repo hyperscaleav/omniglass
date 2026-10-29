@@ -98,7 +98,8 @@ the targets to send to, and optionally a notification type.
 ::screenshot{#action-rule-new}
 
 The rule's panel shows what it sends and to whom, and its **recent notifications**: each message's
-component, edge, target and how its delivery stands (on its way, sent, or failed with the reason),
+component, edge, target and how its delivery stands (on its way, sent, failed with the reason, or
+snoozed with the reason),
 picked from the newest 500 notifications you can see. **Disable** pauses the rule and **Enable**
 resumes it. From the CLI:
 
@@ -177,11 +178,25 @@ only when `egress_allow` names it, as for a webhook.
 
 ## Reading a delivery
 
-Every notification joins its alarm's timeline after the edge that queued it: **notifying**
-ops-chat while it is on its way, **notified** when the receiver answered 2xx, **failed to notify**
-with the reason when it gave up, **held back from** ops-chat with the reason when the alarm's
+Every notification joins its alarm's timeline after the edge that queued it, as a status row rather
+than a sentence: its target, a status pill, and the **action rule** that queued it.
+
+```
+notify  ops-chat  [sent]         action rule page-ops
+notify  ops-chat  [failed]       action rule page-ops   the receiver answered 503 (3 attempts)   [Retry]
+notify  ops-chat  [snoozed]      action rule page-ops   the condition is snoozed until 2026-10-29 14:30 UTC by root
+notify  ops-chat  [on its way]   action rule page-ops
+```
+
+**On its way** while it is queued, **sent** when the receiver answered 2xx, **failed** with the reason
+when it gave up, **snoozed** with the reason when the alarm's
 condition was [snoozed](/guides/operator/entities/#snoozing-silencing-a-noisy-condition-for-a-while)
-(a held-back row is final: it is never sent or retried). A receiver that is down is retried: 10 seconds, then doubling,
+(a snoozed row is final: it is never sent or retried). The same pill, in the same words, marks each row
+of an action rule's or a target's recent notifications. The action rule is labelled, not a "by": the
+rule queued the message, and who snoozed the alarm is on the timeline's own **snoozed by** audit line.
+A row a person's own subscription wrote has no target: it names the person and the channel
+(**alice (email)**), or **a person** to whoever may not see who, and then shows neither its rule nor
+its reason. A receiver that is down is retried: 10 seconds, then doubling,
 until the 8th failed attempt (about 21 minutes in all). A failed one carries **Retry** on the
 timeline for whoever holds `notification:retry` (operators do), or:
 
