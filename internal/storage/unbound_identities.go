@@ -71,6 +71,8 @@ func writeUnboundIdentities(ctx context.Context, tx pgx.Tx, us []UnboundIdentity
 		from unnest($1::text[], $2::text[], $3::text[], $4::bigint[], $5::timestamptz[], $6::timestamptz[], $7::text[])
 			as u(conduit, key, value, n, first_at, last_at, keys)
 		join property_type t on t.name = u.key
+		where not exists (select 1 from identity_binding b
+			where b.conduit_id = u.conduit::uuid and b.property_type_id = t.id and b.value = u.value)
 		on conflict (conduit_id, property_type_id, value) do update set
 			heard_count = unbound_identity.heard_count + excluded.heard_count,
 			first_heard_at = least(unbound_identity.first_heard_at, excluded.first_heard_at),

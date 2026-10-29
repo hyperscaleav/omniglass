@@ -111,6 +111,9 @@ func identityKey(id *ogv1.Identity) (storage.IdentityKey, bool) {
 	return k, true
 }
 
+// maxKeysCarried bounds the keys one inbox row remembers.
+const maxKeysCarried = 32
+
 // fanPlan is what the fan-out derives from one batch's identified samples:
 // the rows that land on their bound owners, what the conduit heard that no
 // binding places, and how many samples named no valid identity.
@@ -140,19 +143,20 @@ func planFanOut(fanned *ogv1.TelemetryBatch, conduitID, conduitName, endpoint st
 	}
 	unbound := map[storage.IdentityKey]*heard{}
 	var order []storage.IdentityKey
-	hear := func(k storage.IdentityKey, key string, ts time.Time) {
-		if ts.IsZero() {
-			ts = now
-		}
+	// hear records one unbound sample, dated by the server's clock (a
+	// device's or payload's time would let an old record age out the moment
+	// it lands, or a future one outlive the inbox's window), and remembers
+	// its key only when the lane's catalog holds it, at most
+	// maxKeysCarried, so the row names only keys a binding would land.
+	hear := func(k storage.IdentityKey, key string, known bool) {
 		h, ok := unbound[k]
 		if !ok {
-			h = &heard{first: ts, last: ts}
+			h = &heard{first: now, last: now}
 			unbound[k] = h
 			order = append(order, k)
 		}
 		h.count++
-		h.first, h.last = minTime(h.first, ts), maxTime(h.last, ts)
-		if !slices.Contains(h.keys, key) {
+		if known && len(h.keys) < maxKeysCarried && !slices.Contains(h.keys, key) {
 			h.keys = append(h.keys, key)
 		}
 	}
@@ -169,7 +173,7 @@ func planFanOut(fanned *ogv1.TelemetryBatch, conduitID, conduitName, endpoint st
 		}
 		return b
 	}
-	route := func(id *ogv1.Identity, name string, ts time.Time) (storage.IdentityOwner, bool) {
+	route := func(id *ogv1.Identity, name string, known bool) (storage.IdentityOwner, bool) {
 		k, ok := identityKey(id)
 		if !ok {
 			p.invalid++
@@ -177,25 +181,28 @@ func planFanOut(fanned *ogv1.TelemetryBatch, conduitID, conduitName, endpoint st
 		}
 		o, ok := owners[k]
 		if !ok {
-			hear(k, name, ts)
+			hear(k, name, known)
 			return storage.IdentityOwner{}, false
 		}
 		return o, true
 	}
 	for _, m := range fanned.GetMetrics() {
-		if o, ok := route(m.GetIdentity(), m.GetName(), sampleTime(fanned, m.GetTs())); ok {
+		_, known := reg.Metric(m.GetName())
+		if o, ok := route(m.GetIdentity(), m.GetName(), known); ok {
 			b := sub(o)
 			b.Metrics = append(b.Metrics, &ogv1.MetricSample{Name: m.GetName(), Value: m.GetValue(), Ts: m.GetTs()})
 		}
 	}
 	for _, s := range fanned.GetProperties() {
-		if o, ok := route(s.GetIdentity(), s.GetName(), sampleTime(fanned, s.GetTs())); ok {
+		_, known := reg.Property(s.GetName())
+		if o, ok := route(s.GetIdentity(), s.GetName(), known); ok {
 			b := sub(o)
 			b.Properties = append(b.Properties, &ogv1.PropertySample{Name: s.GetName(), ValueJson: s.GetValueJson(), Ts: s.GetTs()})
 		}
 	}
 	for _, e := range fanned.GetEvents() {
-		if o, ok := route(e.GetIdentity(), e.GetName(), sampleTime(fanned, e.GetTs())); ok {
+		_, known := reg.Event(e.GetName())
+		if o, ok := route(e.GetIdentity(), e.GetName(), known); ok {
 			b := sub(o)
 			b.Events = append(b.Events, &ogv1.EventSample{Name: e.GetName(), Message: e.GetMessage(), Payload: e.GetPayload(), Ts: e.GetTs()})
 		}
@@ -217,20 +224,6 @@ func planFanOut(fanned *ogv1.TelemetryBatch, conduitID, conduitName, endpoint st
 			Count: h.count, FirstAt: h.first, LastAt: h.last, Keys: keys})
 	}
 	return p
-}
-
-func minTime(a, b time.Time) time.Time {
-	if b.Before(a) {
-		return b
-	}
-	return a
-}
-
-func maxTime(a, b time.Time) time.Time {
-	if b.After(a) {
-		return b
-	}
-	return a
 }
 
 // unboundWarnWindow is how often the ingest warns about one conduit's

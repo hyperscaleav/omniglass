@@ -46,7 +46,8 @@ func TestSplitIdentified(t *testing.T) {
 // binding names, observed at the empty instance whatever the wire said,
 // naming its conduit and endpoint in source, admitted only for a collected
 // key; an identity no binding places lands on no owner and is aggregated for
-// the conduit's inbox; an identity that is no valid identity is dropped
+// the conduit's inbox, dated by the server's clock and naming only catalog
+// keys; an identity that is no valid identity is dropped
 // whole, never recorded.
 func TestPlanFanOut(t *testing.T) {
 	t0 := time.Date(2026, 10, 29, 9, 0, 0, 0, time.UTC)
@@ -55,6 +56,7 @@ func TestPlanFanOut(t *testing.T) {
 			{Name: "participant-count", Value: 3, Instance: "forged", Identity: room("zr-a")},
 			{Name: "tcp-open", Value: 1, Identity: room("zr-a")}, // a node-probe key: refused
 			{Name: "participant-count", Value: 2, Identity: room("zr-x"), Ts: timestamppb.New(t0)},
+			{Name: "bad\x00name", Value: 2, Identity: room("zr-x")}, // no catalog key: counted, never named
 		},
 		Properties: []*ogv1.PropertySample{
 			{Name: "call-state", ValueJson: `"active"`, Identity: room("zr-x"), Ts: timestamppb.New(t0.Add(time.Minute))},
@@ -82,8 +84,8 @@ func TestPlanFanOut(t *testing.T) {
 		t.Fatalf("unbound = %+v, want zr-x alone (the invalid identity is not recorded)", p.unbound)
 	}
 	u := p.unbound[0]
-	if u.ConduitID != "conduit-1" || u.Key != "ucc-room-id" || u.Value != "zr-x" || u.Count != 2 ||
-		!u.FirstAt.Equal(t0) || !u.LastAt.Equal(t0.Add(time.Minute)) || strings.Join(u.Keys, ",") != "call-state,participant-count" {
+	if u.ConduitID != "conduit-1" || u.Key != "ucc-room-id" || u.Value != "zr-x" || u.Count != 3 ||
+		!u.FirstAt.Equal(t0.Add(time.Hour)) || !u.LastAt.Equal(t0.Add(time.Hour)) || strings.Join(u.Keys, ",") != "call-state,participant-count" {
 		t.Errorf("unbound = %+v", u)
 	}
 	if p.invalid != 1 {
