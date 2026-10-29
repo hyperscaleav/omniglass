@@ -10,6 +10,12 @@ import { describeError, fmtTime } from "../lib/format";
 
 type Snoozable = { id: string; snoozed_until?: string; snoozed_by?: string };
 
+// Which alarm's duration menu is open, by alarm id, held outside the row: an
+// alarm list that polls hands its rows new objects, so a row (and any state
+// it owned) is rebuilt every few seconds, and a menu held in the row would
+// close under the operator's pointer. One menu is open at a time anyway.
+const [openMenu, setOpenMenu] = createSignal<string | null>(null);
+
 // What a snooze is, against the three acts it is mistaken for: the tooltip on
 // the control, so the difference is taught where the choice is made.
 export const SNOOZE_TIP =
@@ -53,12 +59,11 @@ export default function SnoozeButton(props: { component: string; alarm: Snoozabl
 export function SnoozeControl(props: { component: string; alarm: Snoozable; allowed: boolean }): JSX.Element {
   const qc = useQueryClient();
   const [busy, setBusy] = createSignal(false);
-  const [open, setOpen] = createSignal(false);
   const [err, setErr] = createSignal<string | null>(null);
   const run = async (write: () => Promise<unknown>) => {
     setBusy(true);
     setErr(null);
-    setOpen(false);
+    setOpenMenu(null);
     try {
       await write();
       await Promise.all([
@@ -84,7 +89,7 @@ export function SnoozeControl(props: { component: string; alarm: Snoozable; allo
           </Button>
         }
       >
-        <Popover placement="bottom-end" gutter={4} open={open()} onOpenChange={setOpen}>
+        <Popover placement="bottom-end" gutter={4} open={openMenu() === props.alarm.id} onOpenChange={(o) => setOpenMenu(o ? props.alarm.id : null)}>
           <Popover.Trigger class="btn btn-quiet btn-xs gap-1.5 self-center" title={err() ?? SNOOZE_TIP} disabled={busy()}>
             <Moon size={14} />
             Snooze
