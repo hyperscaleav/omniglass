@@ -471,7 +471,11 @@ namespace, admin-only), since the server cannot know the name a receiver reaches
 a real alarm on a component the caller can read, exactly as a delivery of that transition would
 carry it, and returns the facts beside the result; it writes nothing. The console's
 **Catalog > Actions > Notifications** page edits the templates and previews them through that
-route, so an author sees what a receiver gets and what a template can read.
+route, so an author sees what a receiver gets and what a template can read. Its neighbours,
+**Action rules** and **Targets** (#1346), author the other two registries: a target's panel tests it
+and shows the receiver's answer, reveals its URL under the audit row, and names the rules sending to
+it; a rule's panel switches it on and off and lists what it recently sent, its `when` written in the
+expression editor at the action site.
 
 ### Notification targets: where a message goes
 

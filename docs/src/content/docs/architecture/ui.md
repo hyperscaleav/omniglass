@@ -210,7 +210,9 @@ group completing the sentence (Catalog, under Locations: Types). The organizing 
 teach: **Telemetry is what you receive, Actions is what you send or run**; an event is a record of
 a happening (caught from the fleet or caused by the platform), never an outbound message, which
 is why Events sits in Telemetry while Rules, Commands, and Notifications (#618) sit in
-Actions.
+Actions, with the action rules that say when a message is sent and the targets it goes to beside
+them (#1346). Targets is the one Actions entry off the read floor: `notification_target` is a
+sensitive resource, so only an admin sees it.
 
 **Values is its own top-level group**: values set on fleet entities and resolved
 down the cascade, a distinct genus from the entities themselves. **Config is the CI store** (desired

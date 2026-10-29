@@ -133,6 +133,12 @@
       "setup": []
     },
     {
+      "id": "send-alarms-to-a-chat-channel",
+      "title": "Send alarms to a chat channel",
+      "description": "Make a webhook target, test it and read the receiver's answer, then write the action rule that sends high alarms to it.",
+      "setup": []
+    },
+    {
       "id": "set-up-monitoring",
       "title": "Set up monitoring on a component",
       "description": "Attach the SNMP driver and add a reachability probe to a component, both collected by an edge node, and watch reachability and samples arrive.",

@@ -321,4 +321,56 @@ test.describe("operator console", () => {
     await page.goto("/web/explore");
     await expect(rowOf(campusLabel)).toHaveCount(0);
   });
+  // #1346: an admin makes a target, tests it and reads the receiver's answer,
+  // reveals its masked URL, then writes the action rule that sends to it in the
+  // expression editor, switches it off and on, and removes both. The e2e
+  // server names no egress allow list and has no route to the world, so the
+  // target's host never resolves: the test's answer is the honest reason.
+  test("notifications: a target is made, tested and revealed; an action rule sends to it", async ({ page }) => {
+    const stamp = Date.now();
+    const target = `e2e-hook-${stamp}`;
+    const rule = `e2e-page-${stamp}`;
+    page.on("dialog", (d) => d.accept());
+    const blade = page.locator("aside[data-blade]");
+
+    await page.goto("/web/notification-targets");
+    await page.getByRole("button", { name: "New target" }).click();
+    await page.getByPlaceholder("ops-chat").fill(target);
+    await page.getByPlaceholder("https://chat.example.com/hooks/ops").fill(`https://hooks.example.invalid/ops?token=${stamp}`);
+    await page.getByRole("button", { name: /create target/i }).click();
+
+    // Create opens the new target's blade; its URL reads masked to scheme and host.
+    await expect(blade.getByTestId("target-url")).toHaveText("https://hooks.example.invalid/…");
+    await blade.getByRole("button", { name: "Reveal" }).click();
+    await expect(blade.getByTestId("target-url")).toHaveText(`https://hooks.example.invalid/ops?token=${stamp}`);
+    await blade.getByRole("button", { name: "Send a test" }).click();
+    const result = blade.getByTestId("target-test-result");
+    await expect(result).toHaveAttribute("data-ok", "false");
+    await expect(result).toContainText("Not delivered");
+
+    // The rule: the when is checked as it is typed, then saved.
+    await page.goto("/web/action-rules");
+    await page.getByRole("button", { name: "New action rule" }).click();
+    await page.getByPlaceholder("page-ops").fill(rule);
+    await page.locator(".cm-content").click();
+    await page.keyboard.type("severity_rank >= 40");
+    await expect(page.getByText("Compiles; yields bool.")).toBeVisible();
+    await page.getByRole("group", { name: "Send to" }).getByLabel(target).check();
+    await page.getByRole("button", { name: /create action rule/i }).click();
+    await expect(blade.getByTestId("action-rule-when")).toHaveText("severity_rank >= 40");
+
+    // The enabled switch, from the blade footer.
+    await blade.getByRole("button", { name: "Disable" }).click();
+    await expect(blade.getByTestId("action-rule-status")).toHaveText("disabled");
+    await blade.getByRole("button", { name: "Enable" }).click();
+    await expect(blade.getByTestId("action-rule-status")).toHaveText("enabled");
+
+    // A target a rule sends to cannot be deleted; the rule goes first.
+    expect((await page.request.delete(`/api/v1/notification-targets/${target}`)).status()).toBe(409);
+    await blade.getByRole("button", { name: "More actions" }).click();
+    await blade.locator(".dropdown-content").getByRole("button", { name: "Delete" }).click();
+    await expect(blade).toHaveCount(0);
+    await expect.poll(async () => (await page.request.get(`/api/v1/action-rules/${rule}`)).status()).toBe(404);
+    expect((await page.request.delete(`/api/v1/notification-targets/${target}`)).ok()).toBeTruthy();
+  });
 });
