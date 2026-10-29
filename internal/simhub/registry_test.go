@@ -1,6 +1,10 @@
 package simhub
 
 import (
+	"bytes"
+	"fmt"
+	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
@@ -45,6 +49,70 @@ func TestRegistryCountsHitsOnListedDevices(t *testing.T) {
 	}
 	if !st.Serving["c1"] || !st.Serving["c2"] || st.Serving["c9"] {
 		t.Fatalf("serving = %v, want only the listed devices", st.Serving)
+	}
+}
+
+// A simulated device's websocket face reports its hits by "websocket" (#1366),
+// and the hub counts them as it does every other protocol's: it used to
+// reject each one, so a websocket-driven component showed no hits at all.
+func TestRegistryCountsAWebsocketHit(t *testing.T) {
+	r := New()
+	r.now = func() time.Time { return at(0) }
+	r.Pulled("edge-a", collection.SimCapabilities{}, []string{"c1"})
+
+	acc, rej := r.Report("edge-a", collection.SimHitBatch{Hits: []collection.SimHit{
+		{ComponentID: "c1", Protocol: "websocket", Method: "GET", Path: "/ws", At: at(1)},
+	}})
+	if acc != 1 || rej != 0 {
+		t.Fatalf("accepted %d rejected %d, want the websocket hit counted", acc, rej)
+	}
+	st, _ := r.Status("edge-a")
+	c1 := st.Devices["c1"]
+	if c1.Count != 1 || c1.ByProtocol["websocket"] != 1 || c1.LastProtocol != "websocket" {
+		t.Fatalf("c1 = %+v, want one websocket hit", c1)
+	}
+}
+
+// A hit the hub drops for its protocol used to vanish: the websocket drop
+// (#1366) read as a component with no hits. The hub now says so, once for each
+// protocol it will not count, naming the node, and bounded so a credential
+// reporting made-up protocols cannot grow its memory or its log.
+func TestRegistryTellsOnceForEachProtocolItWillNotCount(t *testing.T) {
+	var buf bytes.Buffer
+	prior := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+	t.Cleanup(func() { slog.SetDefault(prior) })
+
+	r := New()
+	r.now = func() time.Time { return at(0) }
+	r.Pulled("edge-a", collection.SimCapabilities{}, []string{"c1"})
+	r.Report("edge-a", collection.SimHitBatch{Hits: []collection.SimHit{
+		{ComponentID: "c1", Protocol: "made-up-1"}, {ComponentID: "c1", Protocol: "made-up-1"},
+		{ComponentID: "c1", Protocol: "made-up-2"}, {ComponentID: "c1", Protocol: "http"},
+		{ComponentID: "c9", Protocol: "made-up-3"}, // not handed to this node: the ordinary rejection, said nothing of
+	}})
+	r.Report("edge-a", collection.SimHitBatch{Hits: []collection.SimHit{{ComponentID: "c1", Protocol: "made-up-1"}}})
+	logs := buf.String()
+	for _, p := range []string{"made-up-1", "made-up-2"} {
+		if n := strings.Count(logs, "protocol="+p); n != 1 {
+			t.Errorf("told %d times of %s, want once:\n%s", n, p, logs)
+		}
+	}
+	if !strings.Contains(logs, "node=edge-a") {
+		t.Errorf("the notice does not name the node:\n%s", logs)
+	}
+	if strings.Contains(logs, "made-up-3") || strings.Contains(logs, "protocol=http") {
+		t.Errorf("told of a hit that was not dropped for its protocol:\n%s", logs)
+	}
+
+	buf.Reset()
+	many := collection.SimHitBatch{}
+	for i := 0; i < 5*maxToldProtocols; i++ {
+		many.Hits = append(many.Hits, collection.SimHit{ComponentID: "c1", Protocol: fmt.Sprintf("flood-%d", i)})
+	}
+	r.Report("edge-a", many)
+	if n := strings.Count(buf.String(), "protocol=flood-"); n > maxToldProtocols {
+		t.Errorf("told of %d distinct protocols, want at most %d", n, maxToldProtocols)
 	}
 }
 
