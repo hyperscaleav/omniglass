@@ -421,6 +421,12 @@
       "no_label": "no operator surface of its own: only the ingest's conflict check reads a receipt, and nothing renders a receipt row for a label to appear on"
     },
     {
+      "table": "unbound_identity",
+      "shape": "id only",
+      "reason": "an identity a conduit reported that no binding places, one row per conduit, match key and value; read as the conduit's list, never addressed by name",
+      "labelled": false
+    },
+    {
       "table": "unclaimed_source",
       "shape": "id only",
       "reason": "a sender no endpoint claims, one row per listener host, transport and source address; read as a list, never addressed by name",

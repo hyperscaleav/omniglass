@@ -1040,8 +1040,9 @@ posted ([ADR-1185](/architecture/decisions/#adr-1185-the-client-address-believes
 `webhook-token` secret on the endpoint's component: sealed, revealed and copied only under
 `secret:reveal`, audited, deleted with the endpoint, and rotated by
 `POST /endpoints/{endpoint}:rotateToken`, after which the old token resolves to nothing. A sender
-posts to `/api/v1/webhooks/<token>`. The token names one endpoint, and so one component: nothing in
-the payload selects further.
+posts to `/api/v1/webhooks/<token>`. The token names one endpoint, and so one component: a payload
+naming an identity selects only among the owners bound to that component, and an identity bound to
+none lands in its unbound inbox ([the fan-out](#shared-api-collection-one-component-many-owners)).
 
 **The scheme.** A webhook driver declares how a post is authenticated in its session block, and
 never by default:
@@ -1188,28 +1189,60 @@ audited: a preview on the node (and on each secret it used), a run now on the en
 
 ## Shared-API collection: one component, many owners
 
-What is built today: a system owns the telemetry a push names it for and what a system calc rule
-derives from its members ([ADR-0422](/architecture/decisions/#adr-0422-a-system-owns-its-own-telemetry-and-a-location-owns-no-observed-sample)), a webhook endpoint lands every post on its own
-component, and the [identity binding](#identity-binding-a-conduits-identity-tied-to-its-owner) a
-fan-out resolves through is stored, scoped and audited. A driver function [reads records and names
-each one's identity](#a-function-reads-records-and-names-each-ones-identity), and every sample a
-record yields carries that identity on the wire (#1386). A component that fans its values out to other
-owners through those bindings is the design below. An endpoint stays a component's: system telemetry
-a node collects arrives through this fan-out, never through a system-owned endpoint.
+Some sources describe **many entities at once**: a SaaS or UCC platform, a controller fronting many
+components, a building gateway, an amplifier feeding many loudspeakers. The API is **one component**
+(one endpoint, one credential) whose data **fans out** to the entities it describes, not one
+component per described entity
+([ADR-1282](/architecture/decisions/#adr-1282-a-conduit-fans-each-identified-value-out-to-the-owner-its-binding-names-and-a-binding-costs-a-write-on-both-of-its-ends)).
 
-:::design[The shared-API fan-out, tracked in #1282; the discovery_rule is its own design]
-Some sources describe **many entities at once**: a SaaS / UCC platform (Zoom, Teams), a controller fronting many devices, a building gateway. The API is **one component** (one endpoint, one credential) whose data **fans out** to the entities it describes, not one component per described entity.
+- **The conduit.** The component whose endpoint reports a value is the **conduit**: the path, not
+  the owner. Its driver function [names each record's identity](#a-function-reads-records-and-names-each-ones-identity)
+  (`ucc-room-id`, `zr-huddle-north`), and every sample the record yields carries it on the wire.
+- **One fan-out step for both arrivals.** The ingest resolves every identified sample in a batch
+  against the conduit's [identity bindings](#identity-binding-a-conduits-identity-tied-to-its-owner)
+  in one read and lands the batch in its one transaction under its receipt
+  ([ADR-0311](/architecture/decisions/#adr-0311-a-telemetry-batch-lands-once-in-one-transaction-under-its-receipt)).
+  On the node lane the conduit is the component confinement already holds the node to (the task's
+  endpoint's component), so a batch confinement orphans is dropped before any identity is read; on
+  the [webhook lane](#push-ingress-webhooks-on-the-server) it is the component the token's one
+  endpoint names. A node polling the API and the service posting to its webhook land the same rows.
+- **Nothing in a payload names an owner.** A payload names an identity, and only the bindings of
+  the conduit the batch is already confined to can turn it into an owner, so a compromised node or a
+  leaked webhook token reaches the owners bound to its own conduit, and nothing beyond.
+- **What a fanned sample is.** It is observed, admitted by the Storage Gateway only for a
+  `collected` key (the `fan-out` writer, held to an owner one of the conduit's bindings names,
+  re-read in the write's own transaction), lands once on its owner (never also on the conduit), at
+  the **empty instance**, and names its observer in `source` as `<conduit>/<endpoint>`
+  ([metrics and properties](/architecture/properties/#the-instance-dimension-many-values-of-one-name-on-one-owner)).
+  A sample with no identity lands on the conduit exactly as before. A log line never fans out: a
+  system owns none.
+- **The owner can be a system.** SaaS state that is telemetry *of* a room maps to **system-owned
+  samples**; a virtual component is for the genuine *member* case (its own topology node, a
+  `health_role`, a lifecycle). **Member -> component, telemetry -> system.**
+- **Unmatched identities are kept**, never dropped and never misfiled on the conduit: an identity no
+  binding places lands on no owner and is upserted into the conduit's **unbound inbox**
+  (`unbound_identity`: one row per match key and value, a count, first and last heard, the keys it
+  carried; 1024 rows per conduit, the least recently heard evicted, aged out after seven days), read
+  at `GET /components/{name}/unbound-identities` under `component:read` on the conduit. A webhook
+  post's raw line still lands on the conduit. The ingest warns once per conduit per window, never per
+  sample. Binding an inbox row makes the next value naming it land on its owner, with no restart, and
+  lets the row go.
+- **Bounds.** A batch about two hundred owners resolves them in one read and one fence, however many
+  there are; an identity is held to the engine's bounds again on the server (non-empty, at most 256
+  bytes, no control character) before it reaches a read or the inbox.
 
-- Its function pulls the batch in one call, **labeling each emitted sample with the external identity** it belongs to (a Zoom Room ID).
-- The component whose endpoint ran the function is the **conduit**, not the owner: ownership resolves **server-side** against the conduit's [identity bindings](#identity-binding-a-conduits-identity-tied-to-its-owner) (`ucc-room-id` `R-415A` to the system it names). **One primitive for pull and push**: a node polling the API and a [webhook endpoint](#push-ingress-webhooks-on-the-server) on the same component receiving posts about many owners bind through the same index, so the fan-out extends the webhook ingress rather than duplicating it.
-- **The owner can be a system.** SaaS state that is telemetry *of* a room maps to **system-owned samples**; a virtual component is for the genuine *member* case (its own topology node, a `health_role`, a lifecycle). **Member -> component, telemetry -> system.**
-- **Unmatched identities are kept**, never dropped and never misfiled on the conduit: an identity no binding names lands on no owner and is recorded in the conduit's inbox of unbound identities, the input an operator binds from and a discovery candidate (below) ([ADR-1282](/architecture/decisions/#adr-1282-a-conduit-fans-each-identified-value-out-to-the-owner-its-binding-names-and-a-binding-costs-a-write-on-both-of-its-ends)).
+The design's cascade-scoped index (an identity declared at a place or a system binding every member
+below it) and its fallback to an observed identity sample are not built: each would widen who can
+place a value on an owner without the conduit end's consent (ADR-1282, point 8). An event rule over a
+fanned key judges it on its owner like any of the owner's samples; a system owner's rule waits on
+event rules judging system samples (#1002).
 
 **Best practice**: map SaaS / cloud telemetry to system-owned samples wired into system health via a system-scoped `event_rule`; the vendor's own status is an input to that judgment, not the verdict, so corroborate a reported "offline" before downing the room ([health](/architecture/health/)).
 
 ### discovery_rule: orphans become candidates
 
-A `discovery_rule` turns the orphan stream, every emitted identity the index does not resolve (an unmatched shared-API `(property_type, value)`, plus a node's out-of-placement labels), into proposed entities: the onboarding win, no hand-mapping.
+:::design[The discovery_rule, tracked in #1395]
+A `discovery_rule` turns the orphan stream, every identity a conduit's unbound inbox holds plus a node's out-of-placement labels, into proposed bindings or entities: the onboarding win, no hand-mapping.
 
 - **Creates** candidate components or owners, each seeded with the identity that surfaced it (it becomes an identity binding to the new entity), so the next batch resolves through it.
 - **Idempotent on re-discovery**: keyed on the `(property_type, value)` already bound, so a steady stream of the same orphan resolves to one candidate.
@@ -1256,6 +1289,21 @@ transaction, naming both ends.
     owner_kind: 'component or system: the arc arm that is set',
     component_id: 'The owning component, when owner_kind is component',
     system_id: 'The owning system, when owner_kind is system',
+  }}
+/>
+
+The conduit's unbound inbox, one row per identity it reported that no binding places:
+
+<SchemaTable
+  table="unbound_identity"
+  notes={{
+    conduit_id: 'The conduit component that reported the identity',
+    property_type_id: 'The match key the identity was reported under',
+    value: 'The identity as the conduit reported it',
+    heard_count: 'How many samples named it while it was unbound',
+    first_heard_at: 'When the conduit first reported it',
+    last_heard_at: 'When the conduit last reported it; the inbox evicts the least recently heard past 1024 rows and lets go of a row unheard for seven days',
+    keys_carried: 'The metric, property and event keys its samples carried',
   }}
 />
 

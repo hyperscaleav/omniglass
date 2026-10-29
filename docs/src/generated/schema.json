@@ -1173,6 +1173,53 @@
      }
     ]
    },
+   "unbound_identity": {
+    "columns": [
+     {
+      "name": "conduit_id",
+      "type": "uuid",
+      "nullable": false,
+      "pk": true,
+      "fk": true,
+      "fk_target": "component.id"
+     },
+     {
+      "name": "property_type_id",
+      "type": "uuid",
+      "nullable": false,
+      "pk": true,
+      "fk": true,
+      "fk_target": "property_type.id"
+     },
+     {
+      "name": "value",
+      "type": "text",
+      "nullable": false,
+      "pk": true
+     },
+     {
+      "name": "heard_count",
+      "type": "bigint",
+      "nullable": false
+     },
+     {
+      "name": "first_heard_at",
+      "type": "timestamp with time zone",
+      "nullable": false
+     },
+     {
+      "name": "last_heard_at",
+      "type": "timestamp with time zone",
+      "nullable": false
+     },
+     {
+      "name": "keys_carried",
+      "type": "ARRAY",
+      "nullable": false,
+      "default": "'{}'::text[]"
+     }
+    ]
+   },
    "unclaimed_source": {
     "columns": [
      {

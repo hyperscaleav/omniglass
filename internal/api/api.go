@@ -345,6 +345,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 	registerEventRoutes(api, a, gw)
 	registerSystemEventRoutes(api, a, gw)
 	registerLogRoutes(api, a, gw)
+	registerUnboundIdentityRoutes(api, a, gw)
 	registerSystemLogRoutes(api, a, gw)
 	registerSeriesRoutes(api, a, gw)
 	registerTelemetryRoutes(api, a, gw, o.telemetryPub)

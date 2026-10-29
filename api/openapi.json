@@ -15047,6 +15047,86 @@
         ],
         "type": "object"
       },
+      "UnboundIdentitiesOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/UnboundIdentitiesOutputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "component": {
+            "description": "The conduit component",
+            "type": "string"
+          },
+          "identities": {
+            "description": "The identities it reported that no binding places, most recently heard first",
+            "items": {
+              "$ref": "#/components/schemas/UnboundIdentityBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "component",
+          "identities"
+        ],
+        "type": "object"
+      },
+      "UnboundIdentityBody": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "description": "How many samples named it, across the window it has been heard in",
+            "format": "int64",
+            "type": "integer"
+          },
+          "first_heard_at": {
+            "description": "When the conduit first reported it unbound",
+            "format": "date-time",
+            "type": "string"
+          },
+          "key": {
+            "description": "The match key: the property type the driver's identity names (e.g. ucc-room-id)",
+            "type": "string"
+          },
+          "keys_carried": {
+            "description": "The metric, property and event keys its samples carried, which a binding would land on its owner",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "last_heard_at": {
+            "description": "When the conduit last reported it",
+            "format": "date-time",
+            "type": "string"
+          },
+          "value": {
+            "description": "The identity's value as the conduit reported it",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "value",
+          "count",
+          "first_heard_at",
+          "last_heard_at",
+          "keys_carried"
+        ],
+        "type": "object"
+      },
       "UnclaimedSourceBody": {
         "additionalProperties": false,
         "properties": {
@@ -20228,6 +20308,52 @@
         },
         "summary": "Fire an operation at a simulated component",
         "x-omniglass-permission": "simulation:update"
+      }
+    },
+    "/components/{name}/unbound-identities": {
+      "get": {
+        "description": "A component that speaks for many owners (a conduit) lands each value its driver identifies on the owner an identity binding names; a value naming an identity it has no binding for lands on no owner and is kept here, one row per match key and value (a count, first and last heard, the keys it carried), bounded at 1024 per conduit with the least recently heard evicted, and aged out after seven days. Binding one (PUT .../identity-bindings/{key}/{value}) makes the next value naming it land on its owner. Gated by component:read; an out-of-scope conduit is a non-disclosing 404.",
+        "operationId": "list-unbound-identities",
+        "parameters": [
+          {
+            "description": "The conduit component's name, or a dotted address (e.g. hq.$comp.meetings-cloud)",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "description": "The conduit component's name, or a dotted address (e.g. hq.$comp.meetings-cloud)",
+              "examples": [
+                "hq.$comp.meetings-cloud"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnboundIdentitiesOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List the identities a conduit reported that no binding places",
+        "x-omniglass-mcp": {},
+        "x-omniglass-permission": "component:read"
       }
     },
     "/components/{name}:listTags": {

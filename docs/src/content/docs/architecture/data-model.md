@@ -444,6 +444,12 @@ collection: {
     id: text {constraint: primary_key}
     endpoint_id: uuid {constraint: foreign_key}
   }
+  unbound_identity: {
+    shape: sql_table
+    conduit_id: uuid {constraint: primary_key}
+    property_type_id: uuid {constraint: primary_key}
+    value: text {constraint: primary_key}
+  }
   unclaimed_source: {
     shape: sql_table
     id: uuid {constraint: primary_key}
@@ -558,6 +564,8 @@ collection.node.principal_id -> identity.principal.id
 collection.node_log.node_id -> collection.node.principal_id
 collection.sim_impairment.component_id -> fleet.component.id
 collection.task.endpoint_id -> fleet.endpoint.id
+collection.unbound_identity.conduit_id -> fleet.component.id
+collection.unbound_identity.property_type_id -> telemetry.property_type.id
 collection.webhook_token.endpoint_id -> fleet.endpoint.id
 collection.webhook_token.secret_id -> config.secret.id
 config.credential.principal_id -> identity.principal.id

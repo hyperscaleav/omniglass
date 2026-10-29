@@ -1040,6 +1040,12 @@ func (UnimplementedGateway) RecordUnclaimedSources(context.Context, []UnclaimedS
 func (UnimplementedGateway) ListUnclaimedSources(context.Context) ([]UnclaimedSource, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) ResolveIdentityBindings(context.Context, string, []IdentityKey) (*IdentityResolution, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ListUnboundIdentities(context.Context, string, scope.Set) ([]UnboundIdentity, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) ClaimUnclaimedSource(context.Context, string, string, string) (bool, error) {
 	return false, nil
 }

@@ -106,6 +106,10 @@
         "doc": "the telemetry push lane"
       },
       {
+        "writer": "fan-out",
+        "doc": "a conduit's value fanned out to the owner its identity binding names (ADR-1282)"
+      },
+      {
         "writer": "command",
         "doc": "a command's intended value and caused event"
       },

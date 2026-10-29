@@ -61,6 +61,11 @@ const (
 	Node Writer = "node"
 	// Push is the telemetry push lane, observed.
 	Push Writer = "push"
+	// Fanout is a conduit's value fanned out to the owner an identity
+	// binding names (#1282, ADR-1282), on the node lane or the webhook lane,
+	// observed. It speaks only for a collected key, held to an owner the
+	// conduit's bindings name.
+	Fanout Writer = "fan-out"
 	// CalcRule is a calc rule's tick writing its own output, calculated.
 	CalcRule Writer = "calc-rule"
 	// Process is the Omniglass process itself (the server, later a node of
@@ -82,7 +87,7 @@ const (
 
 // Writers is every writer.
 func Writers() []Writer {
-	return []Writer{Node, Push, CalcRule, Process, Command, CommandReply, Operator, KeyPin, EventRule}
+	return []Writer{Node, Push, Fanout, CalcRule, Process, Command, CommandReply, Operator, KeyPin, EventRule}
 }
 
 // Health is the platform key the health rollup writes: the rolled-up verdict
@@ -157,7 +162,8 @@ func Pinnable(key string) bool { return pinnable[key] != "" }
 //   - calc: the rule that outputs it, and an operator's declared value, which
 //     resolves ahead of the calculated one by design (properties page).
 //   - collected: every observer (the node lane carrying a driver's emits, a
-//     push, a command's reply), a command's intended value, an operator's
+//     push, a conduit's value fanned out to its bound owner, a command's
+//     reply), a command's intended value, an operator's
 //     declared value, an event rule's event. A calc rule never: its output is a
 //     key it owns, so a collected key is never one.
 var admits = map[Class][]Writer{
@@ -165,7 +171,7 @@ var admits = map[Class][]Writer{
 	Platform:         {Process},
 	CommandLifecycle: {Command},
 	Calc:             {CalcRule, Operator},
-	Collected:        {Node, Push, Command, CommandReply, Operator, EventRule},
+	Collected:        {Node, Push, Fanout, Command, CommandReply, Operator, EventRule},
 }
 
 // Admits reports whether w may write key, whose class is c.
@@ -283,6 +289,7 @@ var classDoc = map[Class]string{
 var writerDoc = map[Writer]string{
 	Node:         "the node lane, under the endpoint whose task the node ran",
 	Push:         "the telemetry push lane",
+	Fanout:       "a conduit's value fanned out to the owner its identity binding names (ADR-1282)",
 	CalcRule:     "the calc rule's tick",
 	Process:      "the Omniglass process (the health rollup)",
 	Command:      "a command's intended value and caused event",
