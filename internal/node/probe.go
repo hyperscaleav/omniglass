@@ -683,10 +683,11 @@ func buildBatch(taskID, node string, dps []collection.Sample) *ogv1.TelemetryBat
 			// A driver's event (#1145): its message and payload, validated
 			// against the event type at ingest.
 			ev.Events = append(ev.Events, &ogv1.EventSample{
-				Name:    d.Name,
-				Message: strings.ToValidUTF8(d.Text, "\uFFFD"),
-				Payload: d.Attributes,
-				Ts:      ts,
+				Name:     d.Name,
+				Message:  strings.ToValidUTF8(d.Text, "\uFFFD"),
+				Payload:  d.Attributes,
+				Ts:       ts,
+				Identity: collection.WireIdentity(d.Identity),
 			})
 			continue
 		case driver.LaneLog:
@@ -711,14 +712,16 @@ func buildBatch(taskID, node string, dps []collection.Sample) *ogv1.TelemetryBat
 				ValueJson: string(vj),
 				Ts:        ts,
 				Labels:    validLabels(d.Labels),
+				Identity:  collection.WireIdentity(d.Identity),
 			})
 			continue
 		}
 		ev.Metrics = append(ev.Metrics, &ogv1.MetricSample{
-			Name:   d.Name,
-			Value:  d.Value,
-			Ts:     ts,
-			Labels: validLabels(d.Labels),
+			Name:     d.Name,
+			Value:    d.Value,
+			Ts:       ts,
+			Labels:   validLabels(d.Labels),
+			Identity: collection.WireIdentity(d.Identity),
 		})
 	}
 	return ev
