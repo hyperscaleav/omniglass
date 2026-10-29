@@ -229,6 +229,12 @@ func (p *PG) PutIdentityBinding(ctx context.Context, actorID, conduit, key, valu
 			c.ID, keyID, value, owner.Kind, componentID, systemID).Scan(&id); err != nil {
 			return nil, fmt.Errorf("storage: insert identity binding: %w", err)
 		}
+		// The identity is placed now: its row in the conduit's inbox of
+		// unbound identities (#1282) is let go in the same transaction.
+		if _, err := tx.Exec(ctx, `delete from unbound_identity where conduit_id = $1 and property_type_id = $2 and value = $3`,
+			c.ID, keyID, value); err != nil {
+			return nil, fmt.Errorf("storage: let go of the unbound identity: %w", err)
+		}
 	case before.OwnerKind == owner.Kind && before.OwnerID == ownerID:
 		return before, nil // already bound here: nothing changes, nothing to audit
 	default:

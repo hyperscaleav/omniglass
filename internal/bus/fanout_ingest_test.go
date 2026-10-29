@@ -273,6 +273,9 @@ func TestFanOutFollowsTheBindings(t *testing.T) {
 	}
 
 	f.bind(t, "zr-x", "room-c")
+	if inbox, _ := f.gw.ListUnboundIdentities(f.ctx, "meetings-cloud", scope.Set{All: true}); len(inbox) != 0 {
+		t.Errorf("after binding, the inbox still holds %+v", inbox)
+	}
 	subject, ev = f.nodeLane(rooms("zr-x"))
 	ev.Metrics = append(ev.Metrics, &ogv1.MetricSample{Name: "tcp-open", Value: 1, Identity: room("zr-x")})
 	f.deliver(t, subject, ev, "")
