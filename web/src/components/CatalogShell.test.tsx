@@ -16,6 +16,8 @@ import { PROPERTIES_KEY } from "../lib/properties";
 import { EVENT_TYPES_KEY } from "../lib/event_types";
 import { COMMAND_TYPES_KEY } from "../lib/command_types";
 import { NOTIFICATION_TYPES_KEY } from "../lib/notification_types";
+import { NOTIFICATION_TARGETS_KEY } from "../lib/notification_targets";
+import { ACTION_RULES_KEY } from "../lib/action_rules";
 import { EVENT_RULES_KEY } from "../lib/event_rules";
 import { CALC_RULES_KEY } from "../lib/calc_rules";
 import { severityLevelsKey } from "../lib/severity";
@@ -54,6 +56,8 @@ const PRIMED: [readonly string[], number][] = [
   [EVENT_TYPES_KEY, 15],
   [COMMAND_TYPES_KEY, 6],
   [NOTIFICATION_TYPES_KEY, 2],
+  [ACTION_RULES_KEY, 4],
+  [NOTIFICATION_TARGETS_KEY, 3],
   [EVENT_RULES_KEY, 3],
   [CALC_RULES_KEY, 2],
   [severityLevelsKey, 5],
@@ -114,7 +118,7 @@ describe("CatalogShell", () => {
     expect(hrefs()).toEqual([
       "/catalog",
       "/metrics", "/properties", "/event-types",
-      "/command-types", "/rules", "/calc-rules", "/severity-levels", "/notifications",
+      "/command-types", "/rules", "/calc-rules", "/severity-levels", "/notifications", "/action-rules", "/notification-targets",
       "/vendors", "/products", "/drivers", "/component-types", "/templates?kind=component_template",
       "/standards", "/system-types", "/templates?kind=standard_template,system_template",
       "/location-types", "/templates?kind=place_template",
@@ -189,9 +193,12 @@ describe("CatalogShell", () => {
     expect(within(nav()).queryByText("Secret types")).toBeNull();
   });
 
-  it("keeps every entry for a *:read floor viewer: nothing on the subrail is off the read floor", () => {
+  it("keeps every entry for a *:read floor viewer but Targets, the one slot off the read floor (#1346)", () => {
     mount(viewer);
-    expect(hrefs()).toHaveLength(20);
+    expect(hrefs()).toHaveLength(21);
+    expect(hrefs()).toContain("/action-rules");
+    // notification_target is a sensitive resource: *:read does not reach it.
+    expect(hrefs()).not.toContain("/notification-targets");
     expect([...nav().querySelectorAll("button[disabled]")]).toHaveLength(0);
   });
 

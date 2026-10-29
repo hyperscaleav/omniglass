@@ -300,7 +300,11 @@ func (r *Runner) up(ctx context.Context, spec Spec, cfg Config) (*Lab, error) {
 	r.step("sign in", fmt.Sprintf("the login %s / %s works", LoginUser, LoginPassword))
 
 	if !res.Node {
-		r.step("node", "this scenario places no node, so none runs")
+		if cfg.NoNode {
+			r.step("node", "none runs (--no-node): the fleet holds still, with nothing collecting from it")
+		} else {
+			r.step("node", "this scenario places no node, so none runs")
+		}
 		return lab, nil
 	}
 	id, err = r.Engine.RunContainer(ctx, spec.Node, spec.Network)

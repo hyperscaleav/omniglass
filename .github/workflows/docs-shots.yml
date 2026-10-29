@@ -5,8 +5,9 @@ name: docs-shots
 #
 # - verify (fast, deterministic): every declared shot has a committed PNG, every
 #   PNG is declared, ids are unique. Catches a forgotten capture or an orphan.
-# - freshness (heavier): recapture against the real console (Postgres + the built
-#   binary + Playwright, all in Docker) and fail on ANY unmasked pixel change.
+# - freshness (heavier): recapture against the real console (a throwaway lab
+#   with no node, built by make, and Playwright, all in Docker, #1267) and fail
+#   on ANY unmasked pixel change.
 #   Nondeterministic regions (v7-uuid text, seed-time stamps) are masked in each
 #   page's frontmatter, so the pinned browser's rasters are byte-stable and the
 #   tolerance is zero (#398, #623); DOCS_SHOTS_MAX_RATIO remains an escape hatch
@@ -48,10 +49,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
-        with:
-          go-version-file: go.mod
-          cache: true
+      # make docs-shots-check builds the lab (make: the image and the binary,
+      # with only Docker), so the job needs no Go toolchain.
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"

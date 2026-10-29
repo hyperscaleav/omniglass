@@ -54,6 +54,10 @@ type alarmBody struct {
 	AcknowledgedAt *time.Time `json:"acknowledged_at,omitempty" doc:"When a human first recorded seeing this alarm; null while nobody has. Independent of cleared_at"`
 	AcknowledgedBy string     `json:"acknowledged_by,omitempty" doc:"Who acknowledged it, by name; empty while unacknowledged, or once that principal has been purged (the audit log keeps the name)"`
 	Acknowledged   bool       `json:"acknowledged" doc:"Whether anybody has recorded seeing this alarm; says nothing about whether it is still raised"`
+	// The snooze belongs to the alarm's condition (#1318), so every alarm of
+	// the same (component, dedup_key) reads the same pair.
+	SnoozedUntil *time.Time `json:"snoozed_until,omitempty" doc:"Until when the alarm's condition (component and dedup_key) is snoozed: its notifications are written suppressed until then. Null while it is not snoozed. Independent of acknowledged and cleared_at"`
+	SnoozedBy    string     `json:"snoozed_by,omitempty" doc:"Who snoozed the condition, by name; empty while it is not snoozed, or once that principal has been purged (the audit log keeps the name)"`
 }
 
 func toAlarmBody(a *storage.Alarm) alarmBody {
@@ -72,7 +76,38 @@ func toAlarmBody(a *storage.Alarm) alarmBody {
 		AcknowledgedAt: a.AcknowledgedAt,
 		AcknowledgedBy: a.AcknowledgedBy,
 		Acknowledged:   a.Acknowledged(),
+		SnoozedUntil:   a.SnoozedUntil,
+		SnoozedBy:      a.SnoozedBy,
 	}
+}
+
+type snoozeAlarmInput struct {
+	Name string `path:"name" doc:"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)"`
+	ID   string `path:"id" doc:"The alarm id: any alarm of the condition to snooze"`
+	Body struct {
+		Duration string `json:"duration" doc:"How long from now the condition stays snoozed, from 1m to 7d: a duration such as 15m, 1h, 4h or 24h, or whole days such as 7d. Snoozing a snoozed condition replaces its deadline, shorter or longer"`
+	}
+}
+
+// parseSnoozeDuration reads a snooze's duration: a Go duration (15m, 1h,
+// 24h) or whole days (7d), the unit an operator thinks in at the top of the
+// bound. Anything else, or anything outside the bound, is the 422 naming it.
+func parseSnoozeDuration(s string) (time.Duration, error) {
+	var d time.Duration
+	var err error
+	if n, ok := strings.CutSuffix(s, "d"); ok && n != "" && strings.Trim(n, "0123456789") == "" && len(n) <= 3 {
+		days := 0
+		for _, c := range n {
+			days = days*10 + int(c-'0')
+		}
+		d = time.Duration(days) * 24 * time.Hour
+	} else {
+		d, err = time.ParseDuration(s)
+	}
+	if err != nil || d < storage.SnoozeMin || d > storage.SnoozeMax {
+		return 0, storage.ErrSnoozeDuration
+	}
+	return d, nil
 }
 
 type listAlarmsInput struct {
@@ -250,12 +285,58 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		}
 		return &alarmOutput{Body: toAlarmBody(alarm)}, nil
 	})
+
+	// Snooze (#1318, ADR-1318) is acknowledgement's shape exactly: its own
+	// permission, alarm:snooze, whose scope resolves on the component tier
+	// from that permission, with the caller's component:read deciding only
+	// between the non-disclosing 404 and the truthful 403.
+	huma.Register(api, a.gated(huma.Operation{
+		OperationID: "snooze-component-alarm",
+		Method:      http.MethodPost,
+		Path:        "/components/{name}/alarms/{id}:snooze",
+		Summary:     "Snooze an alarm's condition",
+		Description: "Snoozes the alarm's condition, its component and dedup_key, for a duration from now (1m to 7d), so every notification any alarm of that condition would send, a raise or a clear, on any channel, is written suppressed with the reason instead, and a message already waiting to be retried is suppressed when its turn comes. Snoozing a snoozed condition replaces the deadline. It changes nothing else: it does not acknowledge, does not recompute health, a snoozed alarm stays in the unacknowledged queue, and a clear does not end it. It notifies nothing itself. When the snooze ends, at its deadline or by :unsnooze, with an alarm of the condition still raised, that alarm is announced again as raised to whoever the action rules reach then. Audited on this alarm. Gated by alarm:snooze, whose scope is resolved on the component tier from that permission; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not snooze on is a 403.",
+	}, "alarm", "snooze"), func(ctx context.Context, in *snoozeAlarmInput) (*alarmOutput, error) {
+		d, err := parseSnoozeDuration(in.Body.Duration)
+		if err != nil {
+			return nil, mapAlarmErr(err)
+		}
+		compID, err := gw.ResolveActionTarget(ctx, "component", in.Name,
+			a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "alarm", "snooze"))
+		if err != nil {
+			return nil, mapComponentErr(err)
+		}
+		alarm, err := gw.SnoozeAlarm(ctx, actorID(ctx), compID, in.ID, d)
+		if err != nil {
+			return nil, mapAlarmErr(err)
+		}
+		return &alarmOutput{Body: toAlarmBody(alarm)}, nil
+	})
+
+	huma.Register(api, a.gated(huma.Operation{
+		OperationID: "unsnooze-component-alarm",
+		Method:      http.MethodPost,
+		Path:        "/components/{name}/alarms/{id}:unsnooze",
+		Summary:     "End an alarm's condition's snooze",
+		Description: "Ends the snooze on the alarm's condition early, exactly as its deadline passing would: if an alarm of the condition is still raised, it is announced again as raised to whoever the action rules reach now. Audited on this alarm, naming the caller. Unsnoozing a condition that is not snoozed is a 200 that writes nothing. Gated by alarm:snooze, resolved as :snooze is.",
+	}, "alarm", "snooze"), func(ctx context.Context, in *clearAlarmInput) (*alarmOutput, error) {
+		compID, err := gw.ResolveActionTarget(ctx, "component", in.Name,
+			a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "alarm", "snooze"))
+		if err != nil {
+			return nil, mapComponentErr(err)
+		}
+		alarm, err := gw.UnsnoozeAlarm(ctx, actorID(ctx), compID, in.ID)
+		if err != nil {
+			return nil, mapAlarmErr(err)
+		}
+		return &alarmOutput{Body: toAlarmBody(alarm)}, nil
+	})
 }
 
 type alarmTimelineEntryBody struct {
 	At       time.Time `json:"at" doc:"When it happened (a notification: when it was queued, the transition's own moment)"`
 	Kind     string    `json:"kind" enum:"event,audit,notification" doc:"An event carrying the alarm (a rule's fire or clear event), an audit row about it, or a notification about it (#618)"`
-	What     string    `json:"what" doc:"The event's type (e.g. condition-started), the audit action (raise, acknowledge or clear), or a notification's status as it stands (queued, sent or failed)"`
+	What     string    `json:"what" doc:"The event's type (e.g. condition-started), the audit action (raise, acknowledge, clear, snooze, unsnooze, or snooze-end when a snooze reached its deadline), or a notification's status as it stands (queued, sent, failed, or suppressed when its condition was snoozed)"`
 	Actor    string    `json:"actor,omitempty" doc:"Who acted, by name; absent when the platform acted for a rule"`
 	Rule     string    `json:"rule,omitempty" doc:"The event rule the entry belongs to, by name: the rule that wrote the event, or the rule the platform acted for"`
 	Instance string    `json:"instance,omitempty" doc:"The series instance (an endpoint) an event is about"`
@@ -266,7 +347,7 @@ type alarmTimelineEntryBody struct {
 	Transition   string `json:"transition,omitempty" doc:"The alarm edge a notification is about: raised or cleared"`
 	Target       string `json:"target,omitempty" doc:"The target a notification goes to, by name"`
 	Attempts     int    `json:"attempts,omitempty" doc:"A notification's attempts so far"`
-	Error        string `json:"error,omitempty" doc:"Why a notification's last attempt failed"`
+	Error        string `json:"error,omitempty" doc:"Why a notification's last attempt failed, or why a suppressed one was held back"`
 	Channel      string `json:"channel,omitempty" enum:"webhook,inbox,email," doc:"How a notification travels: webhook, a person's inbox, or email"`
 	Recipient    string `json:"recipient,omitempty" doc:"The person a notification is addressed to, by username: shown to that person and to holders of principal:read:admin"`
 	Withheld     bool   `json:"recipient_withheld,omitempty" doc:"True when a notification is addressed to a person whose name the caller may not see"`
@@ -290,7 +371,7 @@ func registerAlarmTimelineRoute(api huma.API, a *authenticator, gw storage.Gatew
 		Method:      http.MethodGet,
 		Path:        "/components/{name}/alarms/{id}:timeline",
 		Summary:     "Read an alarm's timeline",
-		Description: "The alarm's history in one list, oldest first: the events that carry it (an event rule's fire event, which opened it, and its clear event, which resolved it) merged by time with its audit rows (the raise, each acknowledgement, the clear, and a rule edit that opened or resolved it, naming the editor) and the notifications its transitions queued, each at the moment it was queued with its status as it stands (#618). At one instant an event comes before the audit row it caused, and that before a notification. Gated by alarm:read; a component outside the caller's component read scope, and an alarm not on the component, are a non-disclosing 404.",
+		Description: "The alarm's history in one list, oldest first: the events that carry it (an event rule's fire event, which opened it, and its clear event, which resolved it) merged by time with its audit rows (the raise, each acknowledgement, the clear, each snooze, unsnooze and snooze-end, and a rule edit that opened or resolved it, naming the editor) and the notifications its transitions queued, each at the moment it was queued with its status as it stands (#618). At one instant an event comes before the audit row it caused, and that before a notification. Gated by alarm:read; a component outside the caller's component read scope, and an alarm not on the component, are a non-disclosing 404.",
 	}, "alarm", "read"), func(ctx context.Context, in *clearAlarmInput) (*alarmTimelineOutput, error) {
 		compID, err := requireComponentInScope(ctx, a, gw, in.Name, "read")
 		if err != nil {
@@ -329,6 +410,8 @@ func mapAlarmErr(err error) error {
 		return huma.Error404NotFound("alarm not found")
 	case errors.Is(err, storage.ErrAlarmInvalid):
 		return huma.Error422UnprocessableEntity(strings.TrimPrefix(err.Error(), "storage: alarm is invalid: "))
+	case errors.Is(err, storage.ErrSnoozeDuration):
+		return huma.Error422UnprocessableEntity("duration must be from 1m to 7d (168h), for example 15m, 1h, 4h, 24h or 7d")
 	case errors.Is(err, storage.ErrAlarmSeverity):
 		return huma.Error422UnprocessableEntity("severity must name a severity level (see /severity-levels)")
 	case errors.Is(err, storage.ErrComponentNotFound):

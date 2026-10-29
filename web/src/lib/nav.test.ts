@@ -291,6 +291,8 @@ describe("Catalog single entry", () => {
       "/calc-rules": ["rule", "read"],
       "/severity-levels": ["severity_level", "read"],
       "/notifications": ["notification_type", "read"],
+      "/action-rules": ["rule", "read"],
+      "/notification-targets": ["notification_target", "read"],
       "/templates": ["template", "read"],
       "/log-types": null,
       // The re-homed index routes (#798): off the rail, gates unchanged.

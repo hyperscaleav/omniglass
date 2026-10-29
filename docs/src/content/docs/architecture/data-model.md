@@ -267,6 +267,12 @@ telemetry: {
     raised_by_rule_id: uuid {constraint: foreign_key}
     severity: text {constraint: foreign_key}
   }
+  alarm_snooze: {
+    shape: sql_table
+    component_id: uuid {constraint: primary_key}
+    dedup_key: text {constraint: primary_key}
+    snoozed_by: uuid {constraint: foreign_key}
+  }
   calc_pending: {
     shape: sql_table
     component_id: uuid {constraint: foreign_key}
@@ -618,6 +624,8 @@ telemetry.alarm.acknowledged_by -> identity.principal.id
 telemetry.alarm.component_id -> fleet.component.id
 telemetry.alarm.raised_by_rule_id -> telemetry.event_rule.id
 telemetry.alarm.severity -> telemetry.severity_level.name
+telemetry.alarm_snooze.component_id -> fleet.component.id
+telemetry.alarm_snooze.snoozed_by -> identity.principal.id
 telemetry.calc_pending.component_id -> fleet.component.id
 telemetry.calc_pending.rule_id -> telemetry.calc_rule.id
 telemetry.calc_pending.system_id -> fleet.system.id

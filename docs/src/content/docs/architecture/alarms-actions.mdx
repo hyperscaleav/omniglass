@@ -35,8 +35,9 @@ live state, and the console's **Rules** and **Severity** pages. The **event-to-a
 a rule's alarm is optional (an informational rule raises none), it writes typed events at each edge of
 its condition, carrying the alarm they opened or resolved, and an **alarm's timeline** merges those
 events with its audit rows. **Acknowledgement** ([below](#acknowledgement-a-fact-about-a-person)), the record that a
-human has seen an incident, orthogonal to whether it is still raised. **Snooze** and **resolve** are
-not built, and the reasons are in that section. The [notification](#notifications) lane (#618):
+human has seen an incident, orthogonal to whether it is still raised. **Snooze**
+([below](#snooze-a-fact-about-a-condition)), a bounded silence on an alarm's condition (#1318).
+**Resolve** is not built, and the reason is in the acknowledgement section. The [notification](#notifications) lane (#618):
 **notification types** previewed against a real alarm, **webhook targets** sent through the egress
 primitive, the **action rule** with its one `notify` step, and the **notification** delivery row a
 server tick sends, on the alarm's timeline with a retry. **People as recipients** (#1341): a
@@ -70,7 +71,9 @@ a [CDC publisher](/architecture/messaging/) fans the committed transition onto J
 with the `alarm_id`; the operator-driven transitions are recorded in `audit_log` (also carrying the
 `alarm_id`) and applied to the row. The timeline assembles by `alarm_id` across events + audit. The
 acknowledgement half of that is built and works exactly this way ([below](#acknowledgement-a-fact-about-a-person)),
-as are the rule-driven events and the timeline itself ([below](#the-alarms-timeline)); snooze is not.
+as are the rule-driven events and the timeline itself ([below](#the-alarms-timeline)). A snooze is a
+row of its own on the condition rather than on the alarm ([below](#snooze-a-fact-about-a-condition)),
+and its acts are audit rows on the alarm they were called on.
 :::
 
 An alarm write is **not sample-silent**: raising or clearing one recomputes
@@ -137,15 +140,13 @@ person:
 decision, not a nullable field somebody flips
 ([#728](https://github.com/hyperscaleav/omniglass/issues/728)).
 
-:::caution[Snooze and resolve are deliberately absent]
-Both are commonly bundled with acknowledge, and neither is built, for reasons rather than sequencing:
-
-- **Snooze** exists to suppress **notification**. Until the [notification](#notifications) lane
-  was built (#618) a snooze would have suppressed nothing: a column that lies. There is something to
-  suppress now, and snooze is its own feature, #1318.
-- **Resolve** is either the existing `DELETE /components/{name}/alarms/{id}` (clear) under a second
-  name, or a different concept nobody has specified. A human "resolving" an alarm whose raised state
-  belongs to its condition is a contradiction until somebody says what it means.
+:::caution[Resolve is deliberately absent]
+Resolve is commonly bundled with acknowledge, and it is not built, for a reason rather than
+sequencing: it is either the existing `DELETE /components/{name}/alarms/{id}` (clear) under a second
+name, or a different concept nobody has specified. A human "resolving" an alarm whose raised state
+belongs to its condition is a contradiction until somebody says what it means. Snooze was refused
+beside it until there was a notification to suppress; it is built now, as a fact about the condition
+([below](#snooze-a-fact-about-a-condition)).
 
 A three-verb permission string bundling acknowledge with both of them appeared for most of a year in
 this repo's test fixtures and in an earlier draft of the
@@ -153,8 +154,76 @@ this repo's test fixtures and in an earlier draft of the
 and no route ever enforced it
 ([ADR-0109](/architecture/decisions/#adr-0109-an-alarm-carries-an-acknowledgement-and-not-a-snooze-or-a-resolve)).
 The permission lint now catches any attempt to write it back, because `alarm` is a resource the
-route surface knows and neither of the other two verbs gates anything.
+route surface knows and the bundled string gates nothing.
 :::
+
+## Snooze: a fact about a condition
+
+An acknowledgement is a fact about a person; a **snooze** is a fact about a **condition** (#1318): stop
+telling people about this for a while. It is keyed by the condition identity, `(component,
+dedup_key)` ([ADR-0075](/architecture/decisions/#adr-0075-an-alarms-condition-identity-is-a-raiser-supplied-dedup-key)),
+not by an alarm row, because a row has only two edges: by the time an operator sees a raised alarm its
+raise has already been sent, so a snooze on that one row could only ever hold back its clear. A
+condition that flaps opens a new row on every re-raise ([above](#the-alarm-a-stateful-entity)), and one
+snooze on the condition covers each of them until its deadline
+([ADR-1318](/architecture/decisions/#adr-1318-a-snooze-is-a-fact-about-an-alarms-condition-its-notifications-are-written-suppressed-and-its-end-tells-people-again)).
+
+`POST /components/{name}/alarms/{id}:snooze` with a `duration` snoozes the condition of the alarm it
+names, set from any alarm of that condition, cleared ones included: silencing a condition that has just
+cleared is the usual case for one that flaps. The duration runs from now, from `1m` to `7d` (`15m`,
+`1h`, `4h`, `24h`, `7d`); outside that bound it is a 422 naming the bound, since anything longer is a
+maintenance window or a paused rule. `alarm_snooze` holds one row per snoozed condition, and snoozing
+again replaces its deadline, shorter or longer. `POST /components/{name}/alarms/{id}:unsnooze` ends it
+early; unsnoozing a condition that is not snoozed is a 200 that writes nothing.
+
+```bash
+omniglass component alarm snooze display-1 <alarm-id> --duration 1h
+omniglass component alarm unsnooze display-1 <alarm-id>
+```
+
+Both verbs are gated by **`alarm:snooze`**, held by `operator` and not by `deploy` or `viewer`, its
+scope resolved on the component tier from that permission exactly as `alarm:acknowledge`'s is: a
+component outside the caller's component read is a non-disclosing 404, and one it can read but not
+snooze on is a 403. Both are audited on the alarm they were called on, the deadline before and after,
+so they show on its [timeline](#the-alarms-timeline) as `snooze` and `unsnooze` with no change to the
+timeline's read. Every alarm read carries `snoozed_until` and `snoozed_by` while its condition is
+snoozed, `snoozed_by` resolved when read as the acknowledger is.
+
+**What it holds back: every notification of the condition, written `suppressed`.** At the one seam
+every raise and clear passes, one indexed lookup of the alarm's condition runs once some
+[action rule](#the-action_rule-when-a-message-is-sent) fires, and while the condition is snoozed each
+row the firing rules would write (webhook, email, inbox, a group's people, a personal rule's owner) is
+written with the terminal status **`suppressed`** instead of `queued` or `sent`, the reason in
+`last_error` (`the condition is snoozed until 2026-10-29 14:30 UTC by alice`). A raise and a clear
+are both suppressed, so nobody gets a closing message about a raise they were never told of. A rule
+whose `when` fails still writes `failed`, so a broken rule stays visible. Nothing is sent and nothing
+reaches an inbox, and the alarm's timeline keeps every row it held back. Where a row waits, the tick
+judges it again: a row queued before the snooze and still waiting out a retry is marked `suppressed`
+when its turn comes, so "stop paging me" also stops the retry already on its way. A suppressed row is
+final: it is never released or retried, and `:retry` refuses it. It is the primitive storm
+suppression and dedupe (#1345) consume.
+
+**When it ends, a condition still raised is announced again.** When the deadline passes, or
+`:unsnooze` ends it early, the snooze's row is deleted and, if an alarm of the condition is still
+open, that alarm is announced again as a plain `raised` transition, judged against the action rules
+and memberships as they stand at that moment: a rule disabled during the snooze stays quiet, and the
+people a group reaches are filtered by the same queue-time scope check as at any raise. A condition
+that cleared during the snooze gets nothing. The end is audited just before the rows it causes,
+`unsnooze` naming the operator on the alarm it was called on, or `snooze-end` from the platform on
+the condition's latest alarm, so the timeline reads the end, then the new rows. The held rows are
+never replayed: the rules are judged again from scratch, so nobody gets a backlog of stale messages.
+The deadline sweep runs on the notification tick (every 2s) until the time primitive (#419) lands:
+it takes each expired snooze `FOR UPDATE SKIP LOCKED` and deletes it in the transaction that queues
+its announcement, so two replicas never announce one condition twice and a restart loses nothing.
+
+**It governs notifications and nothing else.**
+
+- Acknowledging does not snooze, snoozing does not acknowledge, and a snoozed, unacknowledged alarm
+  stays in the queue.
+- It does not recompute health, and a snoozed alarm still degrades its component.
+- A clear does not end it.
+- It notifies nothing itself: it is an operator act, not a condition edge
+  ([cycle safety](#cycle-safety-in-the-action-layer) rule 2). Its end is the one exception, above.
 
 ## The `event_rule`
 
@@ -471,7 +540,11 @@ namespace, admin-only), since the server cannot know the name a receiver reaches
 a real alarm on a component the caller can read, exactly as a delivery of that transition would
 carry it, and returns the facts beside the result; it writes nothing. The console's
 **Catalog > Actions > Notifications** page edits the templates and previews them through that
-route, so an author sees what a receiver gets and what a template can read.
+route, so an author sees what a receiver gets and what a template can read. Its neighbours,
+**Action rules** and **Targets** (#1346), author the other two registries: a target's panel tests it
+and shows the receiver's answer, reveals its URL under the audit row, and names the rules sending to
+it; a rule's panel switches it on and off and lists what it recently sent, its `when` written in the
+expression editor at the action site.
 
 ### Notification targets: where a message goes
 
@@ -600,7 +673,8 @@ then opt out of it for themselves with `POST /action-rules/{name}:optOut`, and b
 expand, and a pending email of theirs from that rule fails at send; a target that names them directly
 still tells them (a person a rule reaches both directly and through a group is attributed to the
 direct target), and taking `opt_out_allowed` back off withdraws every opt-out, recorded on the rule's
-audit row, so allowing it again starts from none. Snooze (#1318), not opt-out, is the answer for one noisy alarm.
+audit row, so allowing it again starts from none. [Snooze](#snooze-a-fact-about-a-condition), not
+opt-out, is the answer for one noisy alarm.
 
 ### Personal action rules: subscribing yourself
 
@@ -652,9 +726,9 @@ omniglass action-rule create --name page-ops --on '["raised","cleared"]' \
 `when` is the **action** site of the [expression engine](/architecture/expressions/): its bindings
 are the alarm facts above in snake_case (`component`, `place`, `severity`, `message`, `rule`, ...)
 plus `severity_rank`, so a floor reads as a comparison (`severity_rank >= 40` is high and above).
-**Acknowledgement never notifies**, and no operator transition does: an acknowledgement is not a
-condition edge ([ADR-0069](/architecture/decisions/#adr-0069-cycle-safety-is-provenance-based-not-topology-based)
-rule 2, the reason [ADR-0109](/architecture/decisions/) gives for snooze firing nothing). A clear is
+**Acknowledgement never notifies**, and neither does a snooze: an operator act is not a condition
+edge ([cycle safety](#cycle-safety-in-the-action-layer) rule 2), with the one exception of a snooze's
+end announcing a still-raised condition again ([above](#snooze-a-fact-about-a-condition)). A clear is
 the condition's edge whoever records it, so clearing a hand-raised alarm notifies as a rule's clear
 does. One message per transition per rule per target: no grouping, no digest (the storm design
 below is later).
@@ -662,9 +736,11 @@ below is later).
 ### Delivery: the `notification` row
 
 A **notification** is one message on its way, a stateful row holding its own delivery state
-(`queued`, `sent`, `failed`). It is written **in the same transaction as the alarm transition**, at
+(`queued`, `sent`, `failed`, or `suppressed`, written but never sent because its condition was
+[snoozed](#snooze-a-fact-about-a-condition)). It is written **in the same transaction as the alarm transition**, at
 the one seam every hand and rule raise and clear passes, so no transition is lost and none is
-written twice; it is rendered then, so a retry sends the same bytes and a preview is what a
+written twice (the one second set of rows is the announcement a
+[snooze's end](#snooze-a-fact-about-a-condition) makes, in that end's own transaction); it is rendered then, so a retry sends the same bytes and a preview is what a
 delivery carries. A server tick drains the due rows, one per transaction under `FOR UPDATE SKIP
 LOCKED`, the send made while the row is locked, so two replicas never send one twice outside the
 crash window between a send and its commit, and a restart loses nothing
@@ -677,7 +753,7 @@ The delivery is visible where an operator already looks: each row joins its
 [alarm's timeline](#the-alarms-timeline) after the edge that queued it, reading its status as it
 stands, and a failed one that was attempted is re-queued with `POST /notifications/{id}:retry` (`notification:retry`,
 an operator's, beside `alarm:acknowledge`), from the timeline or the CLI. `GET /notifications` lists
-them by alarm, target or status, and every read is scoped by the alarm's component exactly as the
+them by alarm, target or status (`?status=suppressed` lists what snoozes held back), and every read is scoped by the alarm's component exactly as the
 alarm reads are: a principal never sees a message about a component outside its scope.
 
 :::design[The rest of the action (ADR-0050)]
@@ -752,8 +828,12 @@ opens an alarm, fires the action again), closed with three rules:
    trigger a rule off its own output
    ([ADR-0069](/architecture/decisions/#adr-0069-cycle-safety-is-provenance-based-not-topology-based)).
 2. **Operator transitions do not match `action_rule`s** (only open / resolve do). Built (#618): an
-   `action_rule` fires on `raised` and `cleared` alone, and acknowledgement queues nothing.
-   Snooze remains unbuilt (ADR-0109); #1318 takes it up now there is a notification to suppress.
+   `action_rule` fires on `raised` and `cleared` alone, and neither acknowledging nor snoozing
+   queues anything. The one exception is the end of a snooze, which announces a still-raised
+   condition again as `raised` (#1318,
+   [ADR-1318](/architecture/decisions/#adr-1318-a-snooze-is-a-fact-about-an-alarms-condition-its-notifications-are-written-suppressed-and-its-end-tells-people-again)):
+   it re-sends a transition the platform already announced, judged by the same rules, and a snooze
+   ends only once, so it cannot loop.
 3. **The control loop is lineage-guarded at dispatch**: before running an action, the engine walks
    the triggering event's **causation lineage** (carried on **NATS message headers**); if the same
    `(action, owner)` appears upstream it is suppressed, with a depth bound as backstop. Flows are
@@ -831,6 +911,19 @@ not. The **target design shape** adds the owner arc, `status`, `opened_at`, and 
   }}
 />
 
+A snooze is a row of its own, one per snoozed condition, keyed by the condition rather than the alarm
+([above](#snooze-a-fact-about-a-condition)):
+
+<SchemaTable
+  table="alarm_snooze"
+  notes={{
+    component_id: 'With dedup_key, the condition identity (ADR-0075) the snooze is on; it goes with its component',
+    dedup_key: 'The condition snoozed; every alarm of it, past and future, reads the snooze while it holds',
+    snoozed_until: 'When it ends; the index on it is what the end-of-snooze sweep reads. Snoozing again replaces it',
+    snoozed_by: 'Who set it; ON DELETE SET NULL, its name resolved when read, and audit_log keeps the name',
+  }}
+/>
+
 The notification lane is four tables: the `notification_type` and `notification_target`
 registries, the `action_rule` and the targets it sends to (`action_rule_target`), and the
 `notification` delivery row.
@@ -872,7 +965,7 @@ registries, the `action_rule` and the targets it sends to (`action_rule_target`)
     component_id: 'The alarm\'s component, denormalized for the scope filter every read injects',
     rule_name: 'The action rule that queued it, kept by name after the rule is deleted (as type_name and target_name are)',
     facts: 'The alarm facts the templates rendered over, sent as the envelope\'s facts',
-    status: 'queued, sent or failed; the partial index on due queued rows is what the tick drains',
+    status: 'queued, sent, failed or suppressed (a snoozed condition\'s row, written but never sent); the partial index on due queued rows is what the tick drains',
     next_attempt_at: 'When the tick next tries a queued row: now, then 10s doubling after each failure',
     channel: 'How it travels: webhook, inbox (delivered by its commit) or email',
     recipient_principal_id: 'The person it is addressed to; ON DELETE SET NULL, recipient_name keeping who it was',

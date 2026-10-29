@@ -1,47 +1,25 @@
 #!/usr/bin/env bash
-# Browser-driven e2e of the operator console against the real binary, fully in
-# Docker so it runs the same on a laptop, in a worktree, and in CI: Postgres, the
-# server (the built binary, console embedded), and Playwright all run as
-# containers on one private network.
+# Browser-driven e2e of the operator console against the real binary, on a
+# throwaway lab (omniglass lab run, #1193; web/e2e/lib/lab.sh, #1267): Postgres
+# and the server in lab mode, with Playwright in a container on the lab's own
+# network, so it runs the same on a laptop, in a worktree, and in CI.
 #
-# Nothing is published to a host port. That is not tidiness: this repo is worked
-# in several git worktrees at once and each has its own compose project, so the
-# old `docker compose up -d db` here refused to start whenever any other
-# worktree's dev stack held 5432, and `make test-e2e` could not be run at all.
-# The docs-screenshot capture (docs/screenshots/capture.sh) already worked this
-# way; this is the same recipe.
+# The lab is seeded with the empty scenario: nothing beyond the boot seed and
+# the login, so the CRUD round-trips create everything they read, as on a
+# fresh install, and the empty scenario places no node. Each run is a lab of a
+# project of its own, on a loopback port Docker picks, torn down with its data
+# on every exit path, so concurrent runs in different worktrees never meet.
 #
-# Prereqs: docker. Run via `make test-e2e`. Extra args pass through to Playwright.
+# Prereqs: docker, and `make` run first (make test-e2e does): the lab is the
+# binary and the image it builds. Extra args pass through to Playwright.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
-# The stack (network, Postgres, server) is per run: names carry a run id and
-# teardown stops only this run's resources, so concurrent runs in different
-# worktrees cannot collide (#855). See web/e2e/lib/stack.sh.
-. web/e2e/lib/stack.sh
+. web/e2e/lib/lab.sh
 
-PWIMG=$STACK_PWIMG
-APPIMG=debian:stable-slim
-E2E_USER="e2e"
-E2E_PASSWORD="e2e-password-Xy7"
+lab_init oge2e
+STACK_SCENARIO=empty lab_up
 
-stack_init oge2e
-
-make build-web
-
-stack_up
-
-app() { stack_run -v "$ROOT/bin/omniglass:/omniglass:ro" -e OMNIGLASS_DSN="$STACK_DSN" "$APPIMG" /omniglass "$@"; }
-
-app migrate
-# Idempotent per username: a fresh database creates the owner with this password.
-app bootstrap "$E2E_USER" --password "$E2E_PASSWORD" >/dev/null 2>&1 || true
-app set-password "$E2E_USER" "$E2E_PASSWORD" >/dev/null 2>&1 || true
-
-stack_server -v "$ROOT/bin/omniglass:/omniglass:ro" -e OMNIGLASS_DSN="$STACK_DSN" "$APPIMG" /omniglass server
-
-stack_run -v "$ROOT:/w" -w /w/web \
-  --user "$(id -u):$(id -g)" -e HOME=/tmp -e PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
-  -e OG_E2E_USER="$E2E_USER" -e OG_E2E_PASSWORD="$E2E_PASSWORD" -e OG_E2E_BASE="$STACK_SRV_URL" \
-  "$PWIMG" npx playwright test "$@"
+lab_pw npx playwright test "$@"
+lab_assert_intact

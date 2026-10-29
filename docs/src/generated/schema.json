@@ -3521,6 +3521,48 @@
      }
     ]
    },
+   "alarm_snooze": {
+    "columns": [
+     {
+      "name": "component_id",
+      "type": "uuid",
+      "nullable": false,
+      "pk": true,
+      "fk": true,
+      "fk_target": "component.id"
+     },
+     {
+      "name": "dedup_key",
+      "type": "text",
+      "nullable": false,
+      "pk": true
+     },
+     {
+      "name": "snoozed_until",
+      "type": "timestamp with time zone",
+      "nullable": false
+     },
+     {
+      "name": "snoozed_by",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "principal.id"
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     }
+    ]
+   },
    "calc_pending": {
     "columns": [
      {
@@ -4976,7 +5018,7 @@
      },
      {
       "name": "notification_status_check",
-      "expr": "CHECK ((status = ANY (ARRAY['queued'::text, 'sent'::text, 'failed'::text])))"
+      "expr": "CHECK ((status = ANY (ARRAY['queued'::text, 'sent'::text, 'failed'::text, 'suppressed'::text])))"
      },
      {
       "name": "notification_transition_check",

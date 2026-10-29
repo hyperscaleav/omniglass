@@ -461,7 +461,7 @@ var catalog = []tooldef.Def{
 		Permission:  "notification:read",
 		QueryParams: []string{"alarm", "target", "status", "limit"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
-		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"alarm\":{\"description\":\"Only the notifications about this alarm (its uuid)\",\"type\":\"string\"},\"limit\":{\"description\":\"At most this many, newest first (default 100)\",\"format\":\"int64\",\"maximum\":500,\"minimum\":0,\"type\":\"integer\"},\"status\":{\"description\":\"Only those in this status\",\"enum\":[\"queued\",\"sent\",\"failed\",\"\"],\"type\":\"string\"},\"target\":{\"description\":\"Only those to this target, by name\",\"type\":\"string\"}},\"type\":\"object\"}",
+		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"alarm\":{\"description\":\"Only the notifications about this alarm (its uuid)\",\"type\":\"string\"},\"limit\":{\"description\":\"At most this many, newest first (default 100)\",\"format\":\"int64\",\"maximum\":500,\"minimum\":0,\"type\":\"integer\"},\"status\":{\"description\":\"Only those in this status\",\"enum\":[\"queued\",\"sent\",\"failed\",\"suppressed\",\"\"],\"type\":\"string\"},\"target\":{\"description\":\"Only those to this target, by name\",\"type\":\"string\"}},\"type\":\"object\"}",
 	},
 	{
 		Name:        "list-products",

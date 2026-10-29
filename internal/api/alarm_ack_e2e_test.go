@@ -28,6 +28,7 @@ import (
 
 type ackFixture struct {
 	c     *apiClient
+	dsn   string
 	owner string
 	// responder holds operator (which carries alarm:acknowledge) scoped to ONE
 	// component, beside the all-scoped viewer floor a real principal carries. The
@@ -61,7 +62,7 @@ func newAckFixture(t *testing.T) *ackFixture {
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
 	owner := principalWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
-	f := &ackFixture{c: c, owner: owner, mine: "codec-mine", theirs: "codec-theirs"}
+	f := &ackFixture{c: c, dsn: dsn, owner: owner, mine: "codec-mine", theirs: "codec-theirs"}
 
 	for _, name := range []string{f.mine, f.theirs} {
 		c.do(owner, http.MethodPost, "/components", map[string]any{

@@ -58,7 +58,7 @@ function json(body: unknown, status = 200, type = "application/json") {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": type } });
 }
 
-function mount(opts: { rows?: Alarm[]; canUpdate?: boolean; canAcknowledge?: boolean; levels?: SeverityLevel[] } = {}) {
+function mount(opts: { rows?: Alarm[]; canUpdate?: boolean; canAcknowledge?: boolean; canSnooze?: boolean; levels?: SeverityLevel[] } = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...componentAlarmsKey("disp-1")], opts.rows ?? alarms);
   seedSeverityLevels(qc, opts.levels ?? SEEDED_LEVELS);
@@ -68,6 +68,7 @@ function mount(opts: { rows?: Alarm[]; canUpdate?: boolean; canAcknowledge?: boo
         component="disp-1"
         canUpdate={opts.canUpdate ?? true}
         canAcknowledge={opts.canAcknowledge ?? true}
+        canSnooze={opts.canSnooze}
       />
     </QueryClientProvider>
   ));
@@ -352,5 +353,18 @@ describe("AlarmsPanel", () => {
     fireEvent.click(getByText("Raise alarm"));
     await waitFor(() => expect(post).toBeTruthy());
     expect(JSON.parse(await post!.text()).severity).toBe("major");
+  });
+
+  it("shows a snoozed condition on every row of it, active or cleared, and offers Snooze only with alarm:snooze (#1318)", () => {
+    const until = new Date(Date.now() + 3_600_000).toISOString();
+    const rows = alarms.map((a) => (a.id === "a-1" || a.id === "a-0" ? { ...a, snoozed_until: until, snoozed_by: "jordan" } : a));
+    const viewer = mount({ rows, canSnooze: false });
+    expect(viewer.getAllByText(/^snoozed until/)).toHaveLength(2);
+    expect(viewer.queryByRole("button", { name: /snooze/i })).toBeNull();
+    viewer.unmount();
+    const op = mount({ rows, canSnooze: true });
+    // The snoozed rows end the snooze; the unsnoozed active one offers it.
+    expect(op.getAllByRole("button", { name: "Unsnooze" })).toHaveLength(2);
+    expect(op.getAllByRole("button", { name: /^Snooze/ })).toHaveLength(1);
   });
 });

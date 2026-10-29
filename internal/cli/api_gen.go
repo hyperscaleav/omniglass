@@ -1404,15 +1404,56 @@ func generatedCommands() []*cobra.Command {
 			}())
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
+					var fDuration string
+					cmd := &cobra.Command{
+						Use:     "snooze <name> <id>",
+						Short:   "Snooze an alarm's condition",
+						Long:    "Snoozes the alarm's condition, its component and dedup_key, for a duration from now (1m to 7d), so every notification any alarm of that condition would send, a raise or a clear, on any channel, is written suppressed with the reason instead, and a message already waiting to be retried is suppressed when its turn comes. Snoozing a snoozed condition replaces the deadline. It changes nothing else: it does not acknowledge, does not recompute health, a snoozed alarm stays in the unacknowledged queue, and a clear does not end it. It notifies nothing itself. When the snooze ends, at its deadline or by :unsnooze, with an alarm of the condition still raised, that alarm is announced again as raised to whoever the action rules reach then. Audited on this alarm. Gated by alarm:snooze, whose scope is resolved on the component tier from that permission; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not snooze on is a 403.",
+						Example: "  omniglass component alarm snooze <name> <id> --duration duration",
+						Args:    pathArgs(2),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/components/%s/alarms/%s:snooze", pathSegment(args[0]), pathSegment(args[1]))
+							body := map[string]any{}
+							if cmd.Flags().Changed("duration") {
+								body["duration"] = fDuration
+							}
+							return runAPICommand(cmd, "POST", path, body)
+						},
+					}
+					cmd.Flags().StringVar(&fDuration, "duration", "", "How long from now the condition stays snoozed, from 1m to 7d: a duration such as 15m, 1h, 4h or 24h, or whole days such as 7d. Snoozing a snoozed condition replaces its deadline, shorter or longer")
+					_ = cmd.MarkFlagRequired("duration")
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "timeline <name> <id>",
 						Short:   "Read an alarm's timeline",
-						Long:    "The alarm's history in one list, oldest first: the events that carry it (an event rule's fire event, which opened it, and its clear event, which resolved it) merged by time with its audit rows (the raise, each acknowledgement, the clear, and a rule edit that opened or resolved it, naming the editor) and the notifications its transitions queued, each at the moment it was queued with its status as it stands (#618). At one instant an event comes before the audit row it caused, and that before a notification. Gated by alarm:read; a component outside the caller's component read scope, and an alarm not on the component, are a non-disclosing 404.",
+						Long:    "The alarm's history in one list, oldest first: the events that carry it (an event rule's fire event, which opened it, and its clear event, which resolved it) merged by time with its audit rows (the raise, each acknowledgement, the clear, each snooze, unsnooze and snooze-end, and a rule edit that opened or resolved it, naming the editor) and the notifications its transitions queued, each at the moment it was queued with its status as it stands (#618). At one instant an event comes before the audit row it caused, and that before a notification. Gated by alarm:read; a component outside the caller's component read scope, and an alarm not on the component, are a non-disclosing 404.",
 						Example: "  omniglass component alarm timeline <name> <id>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
 							path := fmt.Sprintf("/api/v1/components/%s/alarms/%s:timeline", pathSegment(args[0]), pathSegment(args[1]))
 							return runAPICommand(cmd, "GET", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "unsnooze <name> <id>",
+						Short:   "End an alarm's condition's snooze",
+						Long:    "Ends the snooze on the alarm's condition early, exactly as its deadline passing would: if an alarm of the condition is still raised, it is announced again as raised to whoever the action rules reach now. Audited on this alarm, naming the caller. Unsnoozing a condition that is not snoozed is a 200 that writes nothing. Gated by alarm:snooze, resolved as :snooze is.",
+						Example: "  omniglass component alarm unsnooze <name> <id>",
+						Args:    pathArgs(2),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/components/%s/alarms/%s:unsnooze", pathSegment(args[0]), pathSegment(args[1]))
+							return runAPICommand(cmd, "POST", path, nil)
 						},
 					}
 					return cmd
@@ -5111,7 +5152,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "retry <id>",
 					Short:   "Retry a failed notification",
-					Long:    "Re-queues a failed notification for a fresh run of attempts, sending the same rendered message with the same Idempotency-Key. One that is queued or sent, or one that failed before any attempt (its rule's when did not run, or its type did not render, so it holds no message), is a 409. Audited as retry. Gated by notification:retry, whose scope resolves on the component tier; a component outside the caller's component read scope is a non-disclosing 404, one it reads but may not retry on a 403.",
+					Long:    "Re-queues a failed notification for a fresh run of attempts, sending the same rendered message with the same Idempotency-Key. One that is queued, sent or suppressed (its alarm's condition was snoozed), or one that failed before any attempt (its rule's when did not run, or its type did not render, so it holds no message), is a 409. Audited as retry. Gated by notification:retry, whose scope resolves on the component tier; a component outside the caller's component read scope is a non-disclosing 404, one it reads but may not retry on a 403.",
 					Example: "  omniglass notification retry <id>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {

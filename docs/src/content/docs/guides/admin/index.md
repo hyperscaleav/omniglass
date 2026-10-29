@@ -66,7 +66,7 @@ Every task on these pages has two front doors, and they call the same API with t
   tree that says what kind of space a system is.
 - **[Notifications](/guides/admin/notifications/)** is sending an alarm to a chat channel: a
   webhook target, the action rule that sends to it, the message it carries, and how a delivery
-  reads on the alarm's timeline.
+  reads on the alarm's timeline, all on the console's **Catalog, under Actions**.
 
 ## How long data is kept
 

@@ -560,9 +560,9 @@ and `OMNIGLASS_LAB_URL` moves it for a lab on another `--port`.
 
 Component-level tests (Vitest + `@solidjs/testing-library`) cover the interactive widgets and the
 pure list/filter logic (`lib/predicate`, `lib/listmodel`, `FilterBar`, the data layers). The
-**browser-driven e2e tier** is `make test-e2e` (`web/e2e/run.sh`): it brings up the dev
-Postgres, builds the binary with the console embedded, serves it, and runs Playwright against
-the real login form and console, driving the surfaces as a user would per the
+**browser-driven e2e tier** is `make test-e2e` (`web/e2e/run.sh`): it builds the lab (`make`),
+brings up a throwaway lab of the `empty` scenario, and runs Playwright against its real login
+form and console, driving the surfaces as a user would per the
 [test-first doctrine](/contributing/test-driven/).
 
 ## How this relates to the UI architecture

@@ -10,6 +10,8 @@ import { PROPERTIES_KEY, listProperties } from "./properties";
 import { EVENT_TYPES_KEY, listEventTypes } from "./event_types";
 import { COMMAND_TYPES_KEY, listCommandTypes } from "./command_types";
 import { NOTIFICATION_TYPES_KEY, listNotificationTypes } from "./notification_types";
+import { NOTIFICATION_TARGETS_KEY, listNotificationTargets } from "./notification_targets";
+import { ACTION_RULES_KEY, listActionRules } from "./action_rules";
 import { CALC_RULES_KEY, listCalcRules } from "./calc_rules";
 import { EVENT_RULES_KEY, listEventRules } from "./event_rules";
 import { severityLevelsKey, listSeverityLevels } from "./severity";
@@ -123,7 +125,7 @@ export const CATALOG_GROUPS: CatalogGroup[] = [
   },
   {
     header: "Actions",
-    copy: "What you send or run: commands (the instructions you issue, with a target and a settle window), rules (what opens an alarm, and when), calc rules (a value derived from others), severity (how bad that alarm is), notifications (what a message about an alarm says).",
+    copy: "What you send or run: commands (the instructions you issue, with a target and a settle window), rules (what opens an alarm, and when), calc rules (a value derived from others), severity (how bad that alarm is), notifications (what a message about an alarm says), action rules (when it is sent) and targets (where it goes).",
     entries: [
       { label: "Commands", path: "/command-types", gate: ["command_type", "read"], key: COMMAND_TYPES_KEY, list: listCommandTypes },
       { label: "Rules", path: "/rules", gate: ["rule", "read"], key: EVENT_RULES_KEY, list: listEventRules },
@@ -133,6 +135,10 @@ export const CATALOG_GROUPS: CatalogGroup[] = [
       { label: "Severity", path: "/severity-levels", gate: ["severity_level", "read"], key: severityLevelsKey, list: listSeverityLevels },
       // The outbound message registry (#618), the commands' peer.
       { label: "Notifications", path: "/notifications", gate: ["notification_type", "read"], key: NOTIFICATION_TYPES_KEY, list: listNotificationTypes },
+      // When a message is sent and where it goes (#1346), beside what it says.
+      // Targets are admin-only, so the gate hides the slot from everyone else.
+      { label: "Action rules", path: "/action-rules", gate: ["rule", "read"], key: ACTION_RULES_KEY, list: listActionRules },
+      { label: "Targets", path: "/notification-targets", gate: ["notification_target", "read"], key: NOTIFICATION_TARGETS_KEY, list: listNotificationTargets },
     ],
   },
   {

@@ -390,13 +390,39 @@ Acknowledging twice is harmless. The first person and the first time are what th
 second click (or a colleague reaching it a moment after you) changes nothing and is not an error.
 There is no un-acknowledge yet.
 
+### Snoozing: silencing a noisy condition for a while
+
+**Snoozing stops the people an alarm notifies from being told about it, for a bounded time.** It is
+for the alarm that flaps or that you are already working on: **Snooze** beside the alarm (in the
+**Why** strip and the alarms panel, active or recently cleared) offers 15 minutes, 1 hour, 4 hours
+or 24 hours. While it holds, every notification about that condition, a raise or a clear, on a
+webhook, by email or in an inbox, is **held back** instead of sent, and each one stays on the alarm's
+timeline with the reason. The alarm wears a **snoozed until** chip naming the time, and its tooltip
+names who snoozed it.
+
+A snooze belongs to the alarm's **condition**, not to one alarm row: when the condition clears and
+comes back, the new alarm is snoozed too, until the deadline. Another alarm on the same component is
+not affected. When the snooze ends, by its deadline or by **Unsnooze**, and the condition is still
+raised, the people its rules reach are told again; a condition that cleared meanwhile gets nothing.
+
+It is not acknowledging (nobody is recorded as having looked), not [opting out](/guides/admin/notifications/)
+(that silences only you), and not pausing an action rule (that silences a rule for every alarm). It
+changes nothing about the alarm itself: the component stays exactly as broken, and an unacknowledged
+alarm stays in the queue. It needs the `alarm:snooze` permission, which the **Operator** role carries;
+a viewer sees the chip and gets no button.
+
+```bash
+omniglass component alarm snooze display-1 <alarm-id> --duration 1h
+omniglass component alarm unsnooze display-1 <alarm-id>
+```
+
 ### Reading an alarm's timeline
 
 The **clock** button on an alarm row (in the **Why** strip at the top of a component's or a system's
 page, and in the alarms panel, active or recently cleared) opens the alarm's **timeline** under the row: everything recorded about it, oldest first. An **event** line is what a rule saw (its
 `condition-started` when the condition came into force and opened the alarm, its `condition-ended`
 when it passed and resolved it), named by the rule and the endpoint; an **audit** line is what was
-done to the alarm (raised, acknowledged, cleared) and by whom, a person by name or the rule the
+done to the alarm (raised, acknowledged, cleared, snoozed, unsnoozed, snooze ended) and by whom, a person by name or the rule the
 platform acted for. A hand-raised alarm's timeline is its audit lines alone. The same button sits on
 each open alarm in a rule's blade on the Rules page. Click it again to fold the timeline away; any
 number can be open at once.

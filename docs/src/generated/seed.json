@@ -35,6 +35,7 @@
     "command:issue",
     "simulation:update",
     "alarm:acknowledge",
+    "alarm:snooze",
     "notification:retry",
     "telemetry:push",
     "file:create,delete"
@@ -68,6 +69,7 @@
     "command:issue",
     "simulation:update",
     "alarm:acknowledge",
+    "alarm:snooze",
     "notification:retry",
     "telemetry:push",
     "file:create",
@@ -250,6 +252,7 @@
     "command:issue",
     "simulation:update",
     "alarm:acknowledge",
+    "alarm:snooze",
     "notification:retry",
     "telemetry:push",
     "file:create",

@@ -929,6 +929,16 @@ type Gateway interface {
 	// alarm write that does NOT recompute health: acknowledging is not fixing,
 	// and the raised state belongs to the condition, not to the person looking.
 	AcknowledgeAlarm(ctx context.Context, actorID, componentName, alarmID string) (*Alarm, error)
+	// SnoozeAlarm snoozes the alarm's condition (component, dedup_key) for a
+	// duration from now, setting or replacing the deadline (#1318); it
+	// suppresses the condition's notifications and moves nothing else.
+	// UnsnoozeAlarm ends it early; a condition that is not snoozed is a no-op.
+	SnoozeAlarm(ctx context.Context, actorID, componentName, alarmID string, d time.Duration) (*Alarm, error)
+	UnsnoozeAlarm(ctx context.Context, actorID, componentName, alarmID string) (*Alarm, error)
+	// EndExpiredSnoozes is the end-of-snooze sweep the notifier's tick runs:
+	// it ends up to max snoozes past their deadline, announcing a condition
+	// still raised again, and reports how many it ended.
+	EndExpiredSnoozes(ctx context.Context, max int) (int, error)
 	// AlarmTimeline reads one alarm's events and audit rows merged by time
 	// (#950), on a component by the uuid the caller resolved in scope; an
 	// alarm not on the component is ErrAlarmNotFound.

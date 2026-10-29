@@ -198,6 +198,26 @@ func componentActions() []actionRoute {
 			ok: http.StatusOK,
 		},
 		{
+			// Snooze (#1318) is the acknowledgement's shape: gated on
+			// alarm:snooze, its action scope resolved from that permission.
+			name:    "snooze-alarm",
+			needs:   []string{"alarm:snooze"},
+			prepare: raiseAs("matrix-snooze"),
+			request: func(target, made string) (string, string, map[string]any) {
+				return http.MethodPost, alarms(target) + "/" + made + ":snooze", map[string]any{"duration": "1h"}
+			},
+			ok: http.StatusOK,
+		},
+		{
+			name:    "unsnooze-alarm",
+			needs:   []string{"alarm:snooze"},
+			prepare: raiseAs("matrix-unsnooze"),
+			request: func(target, made string) (string, string, map[string]any) {
+				return http.MethodPost, alarms(target) + "/" + made + ":unsnooze", nil
+			},
+			ok: http.StatusOK,
+		},
+		{
 			// The actuation route (#749), and the only one on this list whose
 			// refusal keeps a physical device from being told to do something.
 			// It is gated on command:issue and, like the acknowledgement,

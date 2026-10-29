@@ -9,7 +9,7 @@
 // regenerates and fails on any diff. For that gate to be stable, capture runs in a
 // pinned browser container so raster output matches byte-for-byte across machines.
 //
-// Run via `make docs-shots` (brings up the stack and exports OG_TOKEN + OG_E2E_BASE).
+// Run via `make docs-shots` (brings up a lab and exports OG_TOKEN + OG_E2E_BASE).
 import { chromium } from '@playwright/test';
 import matter from 'gray-matter';
 import { mkdir, readdir, readFile } from 'node:fs/promises';
@@ -101,6 +101,11 @@ for (const spec of specs) {
     await page.addInitScript((t) => localStorage.setItem('og-token', t), TOKEN);
   }
   await page.goto(BASE + spec.path, { waitUntil: 'networkidle' });
+  // The capture runs on a throwaway lab (#1267), whose console says so on
+  // every screen. That banner is a fact about the lab, not the product the docs
+  // teach, so the shots show the console an operator runs: the rule hides the
+  // lab's banner alone, whenever it renders.
+  await page.addStyleTag({ content: '[data-testid="lab-banner"] { display: none !important; }' });
   for (const step of spec.steps ?? []) {
     if (step.action === 'click') await page.click(step.selector);
     else if (step.action === 'hover') await page.hover(step.selector);

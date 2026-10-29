@@ -133,11 +133,25 @@
       "setup": []
     },
     {
+      "id": "send-alarms-to-a-chat-channel",
+      "title": "Send alarms to a chat channel",
+      "description": "Make a webhook target, test it and read the receiver's answer, then write the action rule that sends high alarms to it.",
+      "setup": []
+    },
+    {
       "id": "set-up-monitoring",
       "title": "Set up monitoring on a component",
       "description": "Attach the SNMP driver and add a reachability probe to a component, both collected by an edge node, and watch reachability and samples arrive.",
       "setup": [
         "omniglass component create --label \"Bay 2 Display\" --location bay-2 --name bay-2-display --product boreal-edge-55"
+      ]
+    },
+    {
+      "id": "snooze-an-alarm",
+      "title": "Snooze an alarm",
+      "description": "Silence a noisy alarm's notifications for an hour from its component's page, read the snooze on its timeline, and end it early.",
+      "setup": [
+        "omniglass component alarm create panel-2 --dedup-key walkthrough-snooze --message \"Touch input lost\" --severity high"
       ]
     },
     {

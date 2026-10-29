@@ -107,4 +107,8 @@ export const ROUTE_MANIFEST: RouteEntry[] = [
   // The notification types (#618), the commands' outbound peer; it was the
   // catalog's last routed soon slot.
   { path: "/notifications", shell: "catalog", page: "Notifications", smoke: "/notifications" },
+  // Beside them (#1346): the action rules that say when a message is sent, and
+  // the targets it goes to (admin-only, notification_target:*).
+  { path: "/action-rules", shell: "catalog", page: "ActionRules", smoke: "/action-rules" },
+  { path: "/notification-targets", shell: "catalog", page: "NotificationTargets", smoke: "/notification-targets" },
 ];

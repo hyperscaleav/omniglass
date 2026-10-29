@@ -209,3 +209,28 @@ func TestPlanProbesALearnersLabEvery10s(t *testing.T) {
 		t.Fatalf("a throwaway lab: --heartbeat %q, want 2s", got)
 	}
 }
+
+// A lab with no node (#1267) is a throwaway lab whose seed is told so: it
+// lays the fleet down unwired and enrolls nothing, so no node runs. A
+// learner's lab is refused one, and a lab without the option seeds as ever.
+func TestPlanNoNode(t *testing.T) {
+	s, err := Plan(testOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(s.Seed.Cmd, "--no-node") {
+		t.Fatalf("a lab with its node: the seed runs %v, want no --no-node", s.Seed.Cmd)
+	}
+	o := testOptions()
+	o.NoNode = true
+	if _, err := Plan(o); err == nil || !strings.Contains(err.Error(), "--ephemeral") {
+		t.Fatalf("a learner's lab with no node: %v, want a refusal naming --ephemeral", err)
+	}
+	o.Project, o.Ephemeral = "shots-1", true
+	if s, err = Plan(o); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(s.Seed.Cmd, "--no-node") {
+		t.Fatalf("a throwaway lab with no node: the seed runs %v, want --no-node", s.Seed.Cmd)
+	}
+}
