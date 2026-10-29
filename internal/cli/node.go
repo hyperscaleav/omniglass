@@ -82,6 +82,7 @@ func newNodeRunCmd() *cobra.Command {
 				return simnode.RunWithNode(ctx, nodeCfg, simnode.Config{
 					ServerURL: serverURL, Name: name, Token: token,
 					PortOffset: portOffset, Poll: poll, Impairments: impairments,
+					PushToken: config.Get("OMNIGLASS_SIM_PUSH_TOKEN"),
 				})
 			}
 			wl, err := node.Run(cmd.Context(), nodeCfg)

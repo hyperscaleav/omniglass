@@ -90,6 +90,12 @@ var Registry = []Var{
 		Doc: "the omniglass image omniglass lab run runs when --image is omitted; one that is not the binary's own build is warned about"},
 	{Key: "OMNIGLASS_LAB_NODE_TOKEN_HASH", Scope: "cli",
 		Doc: "set by omniglass lab run for its seed one-off: the hash of the node token it minted for this run, never set by hand"},
+	{Key: "OMNIGLASS_LAB_PUSH_TOKEN_HASH", Scope: "cli",
+		Doc: "set by omniglass lab run for its seed one-off: the hash of the simulated pusher's token it minted for this run, never set by hand"},
+	{Key: "OMNIGLASS_LAB_PUSH_TOKEN_PREFIX", Scope: "cli",
+		Doc: "set by omniglass lab run for its seed one-off: the non-secret prefix of the simulated pusher's token, never set by hand"},
+	{Key: "OMNIGLASS_SIM_PUSH_TOKEN", Scope: "cli",
+		Doc: "the simulated booking service's token, with which omniglass node run --simulate pushes a system's bookings to the server; set by omniglass lab run, read when the command runs and never printed by help"},
 	{Key: "OMNIGLASS_TEST_ADMIN_DSN", Scope: "test",
 		Doc: "points the storage test harness at an existing admin database instead of a testcontainer"},
 }

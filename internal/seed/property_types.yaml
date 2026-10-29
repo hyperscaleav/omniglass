@@ -155,6 +155,11 @@ property_types:
     description: >-
       Whether a projector's shutter is open (the image shows) or closed (the
       image is blanked with the light source still lit).
+  - name: booking-state
+    data_type: string
+    validation: { enum: [booked, free] }
+    label: Booking State
+    description: Whether a space is booked now (a meeting in progress) or free, as its scheduling service reports it.
   # Declared attribute properties: the starter set a field draws from.
   - name: serial-number
     data_type: string

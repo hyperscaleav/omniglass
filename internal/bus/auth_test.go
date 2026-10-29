@@ -42,6 +42,9 @@ func (f fakeStore) ReconcileEventRules(context.Context, *storage.RuleReconcileSt
 func (f fakeStore) NodeSimDevices(context.Context, string, scope.Set) ([]storage.SimDevice, error) {
 	return nil, nil
 }
+func (f fakeStore) NodeSimWebhooks(context.Context, string) (map[string]storage.SimWebhook, error) {
+	return nil, nil
+}
 func (f fakeStore) NodeWorklist(context.Context, string) (storage.Worklist, error) {
 	return storage.Worklist{}, nil
 }
