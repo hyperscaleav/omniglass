@@ -28,7 +28,8 @@ An effective value resolves from ordered contributions, plus one thing that is n
 **`default` is off the axis.** It is the value reflected from the canonical `Settings` struct's
 `default:` tags (see [the single-source struct](#the-single-source-struct)): the setting's own
 **declaration**, never a row, shadowing nothing; every settable key has one, so the effective
-document is always complete. It is the **fall-through**, not the bottom rung
+document is complete, except for an [optional setting](#the-single-source-struct), which declares
+none and is absent until a level sets it. It is the **fall-through**, not the bottom rung
 ([cascade](/architecture/cascade/#bindings-cascade-declarations-do-not)).
 
 **The base layer** is recomputed into memory on every boot and never stored in the override table:
@@ -194,6 +195,15 @@ a boot panic like any other. Three consequences worth knowing before declaring o
   inline error, since a blank entry would be stored and match nothing.
 - **Declare it `nullable:"false"`.** Huma makes arrays nullable by default, and `null` is the merge
   patch's delete sentinel, so a nullable list invites a write that means something else entirely.
+
+**An optional setting** declares no `default` tag and a `json:"<key>,omitempty"`: the effective
+document leaves it out until a level sets it, the published schema does not list it as required, and
+its Go reader treats the zero value as "unset" and falls back to whatever the setting overrides. The
+node log windows are the first (`retention.node_log_debug_days` and its three siblings, #1350): unset,
+a node's own logs follow the shared band. A merge-patch `null` restores one to unset. The Admin page
+lists every key the generated schema declares, not only the keys the effective document resolved, so
+an optional setting shows as `not set` and is still settable from the console
+([ADR-1350](/architecture/decisions/#adr-1350-a-node-log-window-is-an-optional-setting-unset-follows-the-shared-band)).
 
 **Add a namespace.** Define the sub-struct, then add it as a field on `Settings`:
 

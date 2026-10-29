@@ -1,6 +1,7 @@
 import { settingsSchema } from "../api/settings.schema.gen";
 
 export type Constraint = {
+  description?: string;
   type?: string;
   enum?: readonly string[];
   pattern?: string;
@@ -13,6 +14,16 @@ export type Constraint = {
 // constraintFor looks up a generated field constraint by namespace and key.
 export function constraintFor(ns: string, key: string): Constraint | undefined {
   return (settingsSchema as Record<string, Record<string, Constraint>>)[ns]?.[key];
+}
+
+// settingKeys is every key a namespace's card lists: the keys the effective
+// document resolved, and every key the generated schema declares. A setting with
+// no declared default (a node log window, #1350) is absent from the effective
+// document until someone sets it, and a card listing only resolved keys would
+// leave it unsettable from the console.
+export function settingKeys(ns: string, resolved: Record<string, unknown>): string[] {
+  const declared = Object.keys((settingsSchema as Record<string, Record<string, Constraint>>)[ns] ?? {});
+  return [...new Set([...Object.keys(resolved), ...declared])].sort();
 }
 
 // isList reports whether a setting is list-valued, from the generated schema

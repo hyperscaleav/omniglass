@@ -62,7 +62,8 @@ type retentionLane struct {
 // retentionLanes is every lane a pass prunes, in order: the metric and property
 // samples, each type with a window of its own (#417, named <lane>/<type>; the
 // lane's own prune skips it), then each log table's bands
-// (logline.RetentionBands), least severe first.
+// (logline.RetentionBands), least severe first: log_line by the shared band
+// window, node_log by the node override where an admin set one (#1350).
 func retentionLanes(store retentionStore, w settings.RetentionSettings, overrides []storage.TypeRetention) []retentionLane {
 	lanes := []retentionLane{}
 	for _, l := range []struct {
@@ -80,7 +81,11 @@ func retentionLanes(store retentionStore, w settings.RetentionSettings, override
 	}
 	for _, table := range []string{"log_line", "node_log"} {
 		for _, band := range logline.RetentionBands() {
-			lanes = append(lanes, retentionLane{table + "/" + band, w.LogDays(band), func(ctx context.Context, before time.Time, limit int) (int64, error) {
+			days := w.LogDays(band)
+			if table == "node_log" {
+				days = w.NodeLogDays(band) // a node override when set (#1350)
+			}
+			lanes = append(lanes, retentionLane{table + "/" + band, days, func(ctx context.Context, before time.Time, limit int) (int64, error) {
 				return store.PruneLogs(ctx, table, band, before, limit)
 			}})
 		}
