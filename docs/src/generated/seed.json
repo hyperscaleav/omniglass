@@ -535,6 +535,21 @@
    "description": "The participants a component reports in its current call; 0 when no call is active."
   },
   {
+   "name": "audio-level",
+   "data_type": "float",
+   "unit": "dBFS",
+   "label": "Audio Level",
+   "description": "The audio level a component reports, in decibels relative to digital full scale (0 is the loudest it can carry)."
+  },
+  {
+   "name": "battery-charge",
+   "data_type": "float",
+   "unit": "ratio",
+   "precision": 3,
+   "label": "Battery Charge",
+   "description": "How charged a component reports its battery, as a fraction of full (0 to 1)."
+  },
+  {
    "name": "light-source-hours",
    "data_type": "float",
    "unit": "h",
@@ -2666,6 +2681,20 @@
    "polls": 1
   },
   {
+   "id": "lyra-arc-snmp",
+   "label": "Lyra Arc SNMP",
+   "version": "1.0.0",
+   "transport": "snmp",
+   "polls": 2
+  },
+  {
+   "id": "lyra-hx-snmp",
+   "label": "Lyra HX SNMP",
+   "version": "1.0.0",
+   "transport": "snmp",
+   "polls": 2
+  },
+  {
    "id": "boreal-beam-snmp",
    "label": "Boreal Beam SNMP",
    "version": "1.0.0",
@@ -2943,7 +2972,7 @@
    "id": "lyra-arc-a2",
    "label": "Lyra Arc A2",
    "vendor_id": "lyra",
-   "driver_id": "snmp-generic",
+   "driver_id": "lyra-arc-snmp",
    "component_type": "ceiling-mic",
    "kind": "device"
   },
@@ -2951,7 +2980,7 @@
    "id": "lyra-hx-1",
    "label": "Lyra HX-1",
    "vendor_id": "lyra",
-   "driver_id": "snmp-generic",
+   "driver_id": "lyra-hx-snmp",
    "component_type": "wireless-mic",
    "kind": "device"
   },

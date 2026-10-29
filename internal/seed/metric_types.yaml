@@ -88,6 +88,19 @@ metric_types:
     data_type: int
     label: Participant Count
     description: The participants a component reports in its current call; 0 when no call is active.
+  # A microphone's input level and a wireless transmitter's battery (#894).
+  - name: audio-level
+    data_type: float
+    unit: dBFS
+    label: Audio Level
+    description: The audio level a component reports, in decibels relative to digital full scale (0 is the loudest it can carry).
+  # Dimensionless, so stored as a ratio (0..1) and shown as a percentage.
+  - name: battery-charge
+    data_type: float
+    unit: ratio
+    precision: 3
+    label: Battery Charge
+    description: How charged a component reports its battery, as a fraction of full (0 to 1).
   # A projector's light source wears by the hour (#899): the number its
   # service interval and replacement are planned from.
   - name: light-source-hours

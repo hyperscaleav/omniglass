@@ -117,13 +117,13 @@ products:
   - id: lyra-arc-a2
     label: Lyra Arc A2
     vendor_id: lyra
-    driver_id: snmp-generic
+    driver_id: lyra-arc-snmp
     kind: device
     component_type: ceiling-mic
   - id: lyra-hx-1
     label: Lyra HX-1
     vendor_id: lyra
-    driver_id: snmp-generic
+    driver_id: lyra-hx-snmp
     kind: device
     component_type: wireless-mic
   - id: lyra-gn-12
