@@ -43,6 +43,9 @@ type Store interface {
 	// metric rows through cp1's insert path. The catalog is two lanes (#587):
 	// metric_type names route to the metric sink, property_type names to property.
 	ResolveTaskOwner(ctx context.Context, taskID, nodeName string) (storage.TaskOwner, bool, error)
+	// ResolveIdentityBindings resolves the identities one batch names against
+	// its conduit's bindings in one read (#1282), in system mode.
+	ResolveIdentityBindings(ctx context.Context, conduitID string, ids []storage.IdentityKey) (*storage.IdentityResolution, error)
 	ListMetricTypes(ctx context.Context) ([]storage.MetricType, error)
 	ListPropertyTypes(ctx context.Context) ([]storage.PropertyType, error)
 	// The event-type registry snapshot: with the log kind gone from property_type,

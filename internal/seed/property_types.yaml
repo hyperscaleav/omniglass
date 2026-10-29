@@ -174,3 +174,14 @@ property_types:
     data_type: string
     label: Model number
     description: The manufacturer model number.
+  # Identity match keys (#1282): the key an identity binding ties a conduit's
+  # reported value to an owner by. A key is a registered property type, so
+  # every driver reporting it shares one name.
+  - name: ucc-room-id
+    data_type: string
+    label: UCC room id
+    description: >-
+      The id a unified-communications service gives one of the rooms it
+      reports on. A driver on the service's component reads it off each
+      record, and an identity binding on that component ties each id to the
+      system or component it names.

@@ -399,6 +399,12 @@
    "data_type": "string",
    "label": "Model number",
    "description": "The manufacturer model number."
+  },
+  {
+   "name": "ucc-room-id",
+   "data_type": "string",
+   "label": "UCC room id",
+   "description": "The id a unified-communications service gives one of the rooms it reports on. A driver on the service's component reads it off each record, and an identity binding on that component ties each id to the system or component it names."
   }
  ],
  "metric_types": [
@@ -2711,7 +2717,14 @@
    "label": "UCC Webhooks",
    "version": "1.0.0",
    "transport": "webhook",
-   "listeners": 2
+   "listeners": 5
+  },
+  {
+   "id": "ucc-rooms",
+   "label": "UCC Rooms",
+   "version": "1.0.0",
+   "transport": "https",
+   "polls": 1
   }
  ],
  "products": [
@@ -2965,6 +2978,14 @@
    "id": "ucc-service",
    "label": "Shinra UCC Platform",
    "vendor_id": "shinra-cloud",
+   "component_type": "generic-service",
+   "kind": "service"
+  },
+  {
+   "id": "ucc-platform",
+   "label": "Shinra UCC Platform (account)",
+   "vendor_id": "shinra-cloud",
+   "driver_id": "ucc-rooms",
    "component_type": "generic-service",
    "kind": "service"
   },

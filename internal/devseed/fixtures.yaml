@@ -2102,6 +2102,15 @@ sim_endpoints:
     driver: ucc-webhook
     label: Meeting webhooks
     inputs: { signing-key: sim-ucc-signing }
+  # The account-wide meeting platform's webhooks (#1282): the same driver,
+  # whose room-naming listeners declare the ucc-room-id identity, so each
+  # post lands on the system bound to its room (the bindings below). Point
+  # the simulated ucc-platform at this endpoint's URL (its POST /api/webhooks)
+  # and each meeting it starts or ends, and its batched report, fans out.
+  - component: ucc-platform
+    driver: ucc-webhook
+    label: Room webhooks
+    inputs: { signing-key: sim-ucc-signing }
   - component: huddle-touch
     driver: newtron-nvp-telnet
     label: Panel console
@@ -2159,3 +2168,20 @@ sim_components:
   - key: ucc-service
     product: ucc-service
     location: hq
+  # The meeting platform's account-wide plane (#1282): one component that
+  # speaks for every room, polled by ucc-rooms and posting room-naming
+  # webhooks, the conduit the bindings below fan out from.
+  - key: ucc-platform
+    product: ucc-platform
+    location: hq
+
+# The fan-out's identity bindings (#1282, ADR-1282): each room id the
+# simulated ucc-platform reports, tied on that conduit to the system it is
+# the room of, so each room's call state lands on its own system. The
+# platform's fifth room (zr-boardroom-b) is bound to nothing on purpose: its
+# values land in the conduit's unbound inbox until an operator binds it.
+sim_identity_bindings:
+  - { conduit: ucc-platform, key: ucc-room-id, value: zr-boardroom-a, system: boardroom-a }
+  - { conduit: ucc-platform, key: ucc-room-id, value: zr-huddle-north, system: huddle-north }
+  - { conduit: ucc-platform, key: ucc-room-id, value: zr-briefing-av, system: briefing-av }
+  - { conduit: ucc-platform, key: ucc-room-id, value: zr-auditorium-av, system: auditorium-av }

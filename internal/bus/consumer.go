@@ -222,6 +222,10 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 			bind.SampleOwner = &owner
 			bind.Arc = componentArc(owner)
 			bind.Writer = storage.NodeWriter(owner.ComponentID, owner.EndpointName)
+			// The task's component is the conduit a fanned sample's identity
+			// resolves against, and only it (#1282): the node is already
+			// confined to it.
+			bind.Conduit, bind.ConduitEndpoint = owner.ComponentID, owner.EndpointName
 		} else {
 			// The fence drops these by design, but never silently (#1200): a
 			// warning per node per window and a count on the node, so a node
@@ -267,11 +271,17 @@ func apiBinding(ev *ogv1.TelemetryBatch) (ingestBinding, bool) {
 	switch o.GetKind() {
 	case "component":
 		owner := storage.TaskOwner{ComponentID: o.GetRef()}
+		// The component the route authorized is the conduit an identified
+		// sample resolves against (#1282): the webhook token's one endpoint's
+		// component, its endpoint the batch's source. The push route never
+		// sets an identity.
 		return ingestBinding{
-			LogComponent: o.GetRef(),
-			SampleOwner:  &owner,
-			Arc:          componentArc(owner),
-			Writer:       storage.PushWriter(),
+			LogComponent:    o.GetRef(),
+			SampleOwner:     &owner,
+			Arc:             componentArc(owner),
+			Writer:          storage.PushWriter(),
+			Conduit:         o.GetRef(),
+			ConduitEndpoint: ev.GetSource(),
 		}, true
 	case "system":
 		if len(ev.GetLogs()) > 0 {
@@ -324,6 +334,11 @@ type ingestBinding struct {
 	SampleOwner  *storage.TaskOwner
 	Arc          sampleArc
 	Writer       storage.KeyWriter
+	// Conduit is the component an identified sample's identity resolves
+	// against (its id) and ConduitEndpoint the endpoint it arrived through
+	// (#1282); empty where no identity may fan out (a system push).
+	Conduit         string
+	ConduitEndpoint string
 }
 
 // sampleCount is how many registry-resolved observations a batch carries across
@@ -389,9 +404,19 @@ func (s *Server) land(ctx context.Context, id string, ev *ogv1.TelemetryBatch, b
 		// is transition-only: a value equal to its series' latest is not written, the
 		// guard held in the insert itself (LandBatch), so a restart that re-emits an
 		// unchanged verdict adds no row, under any dispatch (#455).
-		batch.Metrics = deriveMetrics(ev, bind.Arc, *bind.SampleOwner, reg, bind.Writer)
-		batch.Properties = deriveProperties(ev, bind.Arc, *bind.SampleOwner, reg, bind.Writer)
-		batch.Events = deriveEvents(ev, bind.Arc, *bind.SampleOwner, reg, bind.Writer)
+		//
+		// An identified sample is the conduit's report about another owner
+		// (#1282): it is split off here and lands only through the fan-out,
+		// never on the conduit.
+		own, fanned := splitIdentified(ev)
+		batch.Metrics = deriveMetrics(own, bind.Arc, *bind.SampleOwner, reg, bind.Writer)
+		batch.Properties = deriveProperties(own, bind.Arc, *bind.SampleOwner, reg, bind.Writer)
+		batch.Events = deriveEvents(own, bind.Arc, *bind.SampleOwner, reg, bind.Writer)
+		if fanned != nil {
+			if err := s.fanOut(ctx, &batch, fanned, bind, reg); err != nil {
+				return err
+			}
+		}
 	}
 	if _, err := s.store.LandBatch(ctx, batch); err != nil {
 		return err
@@ -406,6 +431,51 @@ func (s *Server) land(ctx context.Context, id string, ev *ogv1.TelemetryBatch, b
 		if id := bind.SampleOwner.EndpointID; id != "" {
 			return s.store.StampEndpointsSeen(ctx, []string{id})
 		}
+	}
+	return nil
+}
+
+// fanOut resolves a batch's identified samples against its conduit's
+// bindings in one read and adds what they derive to the batch: the rows that
+// land on their bound owners, and what the conduit heard that no binding
+// places, for its inbox. A batch with no conduit to resolve against (a
+// system push, which never carries an identity) lands none of them. A
+// returned error is the read's, transient.
+func (s *Server) fanOut(ctx context.Context, batch *storage.IngestBatch, fanned *ogv1.TelemetryBatch, bind ingestBinding, reg collection.Registry) error {
+	n := sampleCount(fanned)
+	if bind.Conduit == "" {
+		slog.Warn("identified samples on a batch with no conduit, dropped", "facility", "ingest", "samples", n)
+		return nil
+	}
+	ids := identityKeys(fanned)
+	var res *storage.IdentityResolution
+	if len(ids) > 0 {
+		var err error
+		if res, err = s.store.ResolveIdentityBindings(ctx, bind.Conduit, ids); err != nil {
+			return err
+		}
+	}
+	if res == nil {
+		// The conduit is no component any longer, or nothing the batch named
+		// is a valid identity: nothing to land and nothing to keep.
+		slog.Warn("identified samples dropped: no conduit to resolve them on, or no valid identity",
+			"facility", "ingest", "conduit", bind.Conduit, "samples", n)
+		return nil
+	}
+	plan := planFanOut(fanned, bind.Conduit, res.ConduitName, bind.ConduitEndpoint, res.Owners, reg, time.Now().UTC())
+	if len(plan.rows.Metrics)+len(plan.rows.Properties)+len(plan.rows.Events) > 0 {
+		batch.Fanned = &plan.rows
+	}
+	batch.Unbound = plan.unbound
+	if len(plan.unbound) > 0 {
+		heard := 0
+		for _, u := range plan.unbound {
+			heard += int(u.Count)
+		}
+		s.unboundWarn.note(bind.Conduit, res.ConduitName, heard, len(plan.unbound), time.Now())
+	}
+	if plan.invalid > 0 {
+		slog.Warn("samples naming no valid identity dropped", "facility", "ingest", "conduit", res.ConduitName, "samples", plan.invalid)
 	}
 	return nil
 }

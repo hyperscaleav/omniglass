@@ -21,7 +21,7 @@ Each tool says what a client may assume of it, from one rule over the route's me
 
 A tool that is not read-only and not destructive adds something (a create).
 
-59 tools.
+63 tools.
 
 | Tool | What it does | Gate | Assume |
 |---|---|---|---|
@@ -36,12 +36,16 @@ A tool that is not read-only and not destructive adds something (a create).
 | [`get-component-command`](#get-component-command) | Read a command | `command:read` | read-only, idempotent |
 | [`issue-component-command`](#issue-component-command) | Issue a command to a component | `command:issue` | destructive, open-world |
 | [`list-component-events`](#list-component-events) | List a component's recent events | `component:read` | read-only, idempotent |
+| [`list-identity-bindings`](#list-identity-bindings) | List the identities a conduit component fans out | `component:read` | read-only, idempotent |
+| [`put-identity-binding`](#put-identity-binding) | Bind an identity a conduit reports to its owner | `component:update` | destructive, idempotent |
+| [`delete-identity-binding`](#delete-identity-binding) | Unbind an identity a conduit reports | `component:update` | destructive, idempotent |
 | [`list-component-logs`](#list-component-logs) | List a component's recent log lines | `component:read` | read-only, idempotent |
 | [`list-component-metrics`](#list-component-metrics) | List a component's effective metrics | `component:read` | read-only, idempotent |
 | [`list-component-metric-series`](#list-component-metric-series) | Read one metric series' raw samples | `component:read` | read-only, idempotent |
 | [`list-component-properties`](#list-component-properties) | List a component's properties and where each stands | `component:read` | read-only, idempotent |
 | [`list-component-property-series`](#list-component-property-series) | Read one property series' change history | `component:read` | read-only, idempotent |
 | [`get-component-reachability`](#get-component-reachability) | Read a component's per-endpoint reachability | `component:read` | read-only, idempotent |
+| [`list-unbound-identities`](#list-unbound-identities) | List the identities a conduit reported that no binding places | `component:read` | read-only, idempotent |
 | [`create-component-from-template`](#create-component-from-template) | Start a component from a template | `component:create` | adds |
 | [`list-drivers`](#list-drivers) | List drivers | `driver:read` | read-only, idempotent |
 | [`create-driver`](#create-driver) | Create a driver | `driver:create` | adds |
@@ -250,6 +254,54 @@ Returns the component's recent log occurrences (the log-kind sink), newest first
 |---|---|---|---|
 | `name` | string | yes | The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
 
+## `list-identity-bindings`
+
+List the identities a conduit component fans out
+
+The identity bindings of this conduit component: each value it reports under a match key (a registered property type, such as ucc-room-id) and the one system or component that value's samples land on. A component that speaks for many owners (a cloud service, a controller fronting many components) is the conduit, the path rather than the owner. Each binding is named only when its owner is inside the caller's read on its tier (system:read for a system owner, component:read for a component owner); the rest are counted in hidden, never named. Gated by component:read; a conduit outside it is a non-disclosing 404.
+
+- Route: `GET /api/v1/components/{name}/identity-bindings`
+- Gate: `component:read`
+- Assume: read-only, idempotent
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes | Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
+
+## `put-identity-binding`
+
+Bind an identity a conduit reports to its owner
+
+Ties this value, reported by the conduit component under this match key, to one owner, a system or a component, so the conduit's samples naming it land on that owner. One identity on one conduit has exactly one owner: a put naming the owner it is already bound to changes nothing, and one naming a different owner moves it. The match key must be a registered property type (422 otherwise), and the owner a component or a system other than the conduit itself (a place or a node owns no observed sample, and a value with no identity already lands on the conduit: each a 422). The value rides the path as one percent-encoded segment, so a value carrying a slash, a space or another reserved character is escaped (room%2F1) and round-trips. A binding writes onto both of its ends, so it costs a write on both: gated by component:update on the conduit, and it also needs the owner's update (component:update, or system:update for a system, refused with a 403 naming it before anything resolves). Each end resolves in its own tier's read scope and must be inside its update scope: an end outside the read scope is a non-disclosing 404, one readable but not writable a 403. A move also needs update on the owner it leaves; refused, it says the identity is bound to another owner but never which one.
+
+- Route: `PUT /api/v1/components/{name}/identity-bindings/{key}/{value}`
+- Gate: `component:update`
+- Assume: destructive, idempotent
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `key` | string | yes | The match key, a registered property type |
+| `name` | string | yes | Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
+| `owner` | string | yes | Name or uuid of the owner the identity's values land on, or a dotted address |
+| `owner_kind` | string | yes | What kind of owner the identity names. A component or a system; a place or a node owns no observed sample, so neither is an owner here |
+| `value` | string | yes | The identity value the conduit reports, 1 to 256 characters |
+
+## `delete-identity-binding`
+
+Unbind an identity a conduit reports
+
+Removes the binding of this value, reported by the conduit component under this match key, so its samples no longer land on the owner it named. Unbinding writes onto both ends, so it costs a write on both: gated by component:update on the conduit, and it also needs update on the binding's owner (component:update, or system:update for a system), a 403 naming it when the caller reads the owner but cannot write it. A binding whose owner the caller cannot read is a 404, as one that does not exist is: the list does not name it either.
+
+- Route: `DELETE /api/v1/components/{name}/identity-bindings/{key}/{value}`
+- Gate: `component:update`
+- Assume: destructive, idempotent
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `key` | string | yes | The match key, a registered property type |
+| `name` | string | yes | Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
+| `value` | string | yes | The identity value the conduit reports, 1 to 256 characters |
+
 ## `list-component-logs`
 
 List a component's recent log lines
@@ -341,6 +393,20 @@ Composes, per endpoint, the latest reachability verdict, the probe-layer signals
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `name` | string | yes | The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
+
+## `list-unbound-identities`
+
+List the identities a conduit reported that no binding places
+
+A component that speaks for many owners (a conduit) lands each value its driver identifies on the owner an identity binding names; a value naming an identity it has no binding for lands on no owner and is kept here, one row per match key and value (a count, first and last heard, the keys it carried), bounded at 1024 per conduit with the least recently heard evicted, and aged out after seven days. Binding one (PUT .../identity-bindings/{key}/{value}) makes the next value naming it land on its owner. Gated by component:read; an out-of-scope conduit is a non-disclosing 404.
+
+- Route: `GET /api/v1/components/{name}/unbound-identities`
+- Gate: `component:read`
+- Assume: read-only, idempotent
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes | The conduit component's name, or a dotted address (e.g. hq.$comp.meetings-cloud) |
 
 ## `create-component-from-template`
 

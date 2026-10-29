@@ -25,6 +25,9 @@ const CommunitySecret = "sim-community"
 const (
 	KestrelLoginSecret = "sim-kestrel-login"
 	CensusKeySecret    = "sim-census-key"
+	// UCCTokenSecret is the simulated UCC platform's api token (#1282), the
+	// one its http api's X-UCC-Token header demands.
+	UCCTokenSecret = "sim-ucc-token"
 )
 
 // AttachSecret is the platform secret each driver's simulated attach
@@ -35,6 +38,7 @@ var AttachSecret = map[string]string{
 	"polaris-amp-snmp": CommunitySecret,
 	"kestrel-api":      KestrelLoginSecret,
 	"http-json":        CensusKeySecret,
+	"ucc-rooms":        UCCTokenSecret,
 }
 
 // AddressCap is how many addresses the simulated block holds: 256 third
@@ -150,6 +154,11 @@ var Attach = map[string]func(addr string, shift func(int) int) map[string]string
 	},
 	"http-json": func(addr string, shift func(int) int) map[string]string {
 		return map[string]string{"host": addr, "port": strconv.Itoa(shift(80)), "key": CensusKeySecret}
+	},
+	// The UCC platform's https API on 443 (#1282), its key pinned on first
+	// use, its token in the header the platform demands.
+	"ucc-rooms": func(addr string, shift func(int) int) map[string]string {
+		return map[string]string{"host": addr, "port": strconv.Itoa(shift(443)), "token": UCCTokenSecret}
 	},
 }
 
