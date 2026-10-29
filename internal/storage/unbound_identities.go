@@ -37,7 +37,9 @@ type UnboundIdentityWrite struct {
 	Keys      []string
 }
 
-// UnboundIdentity is one row of a conduit's inbox.
+// UnboundIdentity is one row of a conduit's inbox. Keys are the metric,
+// property and event type names its samples carried, each held by its type's
+// id and rendered by its current name.
 type UnboundIdentity struct {
 	Key          string
 	Value        string
@@ -66,8 +68,13 @@ func writeUnboundIdentities(ctx context.Context, tx pgx.Tx, us []UnboundIdentity
 		carried = append(carried, pgTextArray(slices.Compact(ks)))
 	}
 	if _, err := tx.Exec(ctx, `
-		insert into unbound_identity (conduit_id, property_type_id, value, heard_count, first_heard_at, last_heard_at, keys_carried)
-		select u.conduit::uuid, t.id, u.value, u.n, u.first_at, u.last_at, u.keys::text[]
+		insert into unbound_identity (conduit_id, property_type_id, value, heard_count, first_heard_at, last_heard_at, carried_type_ids)
+		select u.conduit::uuid, t.id, u.value, u.n, u.first_at, u.last_at, array(
+			select coalesce(mt.id, pt.id, et.id) from unnest(u.keys::text[]) as k(name)
+			left join metric_type mt on mt.name = k.name
+			left join property_type pt on pt.name = k.name
+			left join event_type et on et.name = k.name
+			where coalesce(mt.id, pt.id, et.id) is not null)
 		from unnest($1::text[], $2::text[], $3::text[], $4::bigint[], $5::timestamptz[], $6::timestamptz[], $7::text[])
 			as u(conduit, key, value, n, first_at, last_at, keys)
 		join property_type t on t.name = u.key
@@ -77,7 +84,7 @@ func writeUnboundIdentities(ctx context.Context, tx pgx.Tx, us []UnboundIdentity
 			heard_count = unbound_identity.heard_count + excluded.heard_count,
 			first_heard_at = least(unbound_identity.first_heard_at, excluded.first_heard_at),
 			last_heard_at = greatest(unbound_identity.last_heard_at, excluded.last_heard_at),
-			keys_carried = (select coalesce(array_agg(distinct k order by k), '{}') from unnest(unbound_identity.keys_carried || excluded.keys_carried) k)`,
+			carried_type_ids = (select coalesce(array_agg(distinct k), '{}') from unnest(unbound_identity.carried_type_ids || excluded.carried_type_ids) k)`,
 		ids, keys, values, counts, firsts, lasts, carried); err != nil {
 		return fmt.Errorf("storage: record unbound identities: %w", err)
 	}
@@ -123,7 +130,13 @@ func (p *PG) ListUnboundIdentities(ctx context.Context, conduitRef string, read 
 		return nil, err
 	}
 	rows, err := p.pool.Query(ctx, `
-		select t.name, u.value, u.heard_count, u.first_heard_at, u.last_heard_at, u.keys_carried
+		select t.name, u.value, u.heard_count, u.first_heard_at, u.last_heard_at,
+			array(select coalesce(mt.name, pt.name, et.name) from unnest(u.carried_type_ids) as k(id)
+				left join metric_type mt on mt.id = k.id
+				left join property_type pt on pt.id = k.id
+				left join event_type et on et.id = k.id
+				where coalesce(mt.name, pt.name, et.name) is not null
+				order by 1)
 		from unbound_identity u join property_type t on t.id = u.property_type_id
 		where u.conduit_id = $1 and u.last_heard_at >= now() - $2::interval
 		order by u.last_heard_at desc, t.name, u.value`, c.ID, UnboundMaxAge.String())

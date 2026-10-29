@@ -402,3 +402,34 @@ func TestAnOwnersRuleJudgesAFannedValue(t *testing.T) {
 		t.Errorf("the conduit raised %d alarms for a value it fanned out", len(conduit))
 	}
 }
+
+// TestAFannedSampleNamesItsConduitAcrossARename: a fanned sample records its
+// conduit by uuid, so renaming the conduit never orphans the history that
+// says where a value came from: the sample still resolves to it and reads
+// with its new name.
+func TestAFannedSampleNamesItsConduitAcrossARename(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	f := newFanIngest(t)
+	all := scope.Set{All: true}
+	subject, ev := f.nodeLane(rooms("zr-a"))
+	f.deliver(t, subject, ev, "")
+	if n := f.count(t, `select count(*) from property where source_conduit_id = $1::uuid`, f.conduit); n != 1 {
+		t.Fatalf("%d fanned property rows record the conduit by uuid, want one", n)
+	}
+	if _, err := f.gw.RenameComponent(f.ctx, f.actor, "meetings-cloud", "rooms-cloud", all, all); err != nil {
+		t.Fatalf("rename the conduit: %v", err)
+	}
+	props, err := f.gw.ListPropertySeries(f.ctx, "system", "room-a", "call-state", 0, 10)
+	if err != nil || len(props) != 1 {
+		t.Fatalf("room-a's call-state = %+v (%v), want one row", props, err)
+	}
+	if props[0].Source != "rooms-cloud/http" {
+		t.Errorf("after the rename the fanned sample reads source %q, want rooms-cloud/http", props[0].Source)
+	}
+	metrics, err := f.gw.ListMetricSeries(f.ctx, "system", "room-a", "participant-count", 0, 10)
+	if err != nil || len(metrics) != 1 || metrics[0].Source != "rooms-cloud/http" {
+		t.Errorf("room-a's participant-count = %+v (%v), want one row naming rooms-cloud/http", metrics, err)
+	}
+}

@@ -121,6 +121,26 @@ func (w KeyWriter) provenanceArgs() (string, any, any, any) {
 	return w.calc.provenanceArgs()
 }
 
+// sourceConduit is the conduit a fan-out writer's rows record by id
+// (source_conduit_id, #1282), nil for any other writer.
+func (w KeyWriter) sourceConduit() any {
+	if w.Kind != writerclass.Fanout || !isUUID(w.Component) {
+		return nil
+	}
+	return w.Component
+}
+
+// sourceRendered is a sample row's source as a read shows it: a fanned row
+// names its conduit by its current name (the component its
+// source_conduit_id holds) and its endpoint, so a renamed conduit still reads
+// as itself; a deleted one keeps the name it was written under; any other
+// row reads its source as stored. alias is the sample table's alias.
+func sourceRendered(alias string) string {
+	return `case when ` + alias + `.source_conduit_id is null then ` + alias + `.source
+		else coalesce((select c.name from component c where c.id = ` + alias + `.source_conduit_id)
+			|| substr(` + alias + `.source, strpos(` + alias + `.source, '/')), ` + alias + `.source) end`
+}
+
 // rule is the calc rule writing, "" for any other writer.
 func (w KeyWriter) rule() string {
 	if w.Kind != writerclass.CalcRule {

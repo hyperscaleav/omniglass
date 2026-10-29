@@ -102,3 +102,41 @@ func TestUnboundIdentityInbox(t *testing.T) {
 		t.Errorf("a conduit outside read scope: err = %v, want ErrComponentNotFound", err)
 	}
 }
+
+// TestTheInboxNamesKeysAcrossARename: an inbox row records the keys its
+// samples carried by type id, so renaming a key's type lists it under its
+// new name (#1188 makes telemetry types renameable).
+func TestTheInboxNamesKeysAcrossARename(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	f := newWriterFixture(t)
+	all := scope.Set{All: true}
+	for _, name := range []string{"test-room-id", "room-mood"} {
+		if _, err := f.gw.CreatePropertyType(f.ctx, "", storage.PropertyTypeSpec{Name: name, DataType: "string"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	comp, err := f.gw.GetComponent(f.ctx, "disp-1", all)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	if _, err := f.gw.LandBatch(f.ctx, storage.IngestBatch{BatchID: "k1", Writer: storage.PushWriter(), Unbound: []storage.UnboundIdentityWrite{
+		{ConduitID: comp.ID, Key: "test-room-id", Value: "r-1", Count: 1, FirstAt: now, LastAt: now, Keys: []string{"room-mood", "uptime"}},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	// Telemetry types are not renameable through the API yet (#1188); the
+	// row's name moves here as that rename will move it, by its uuid.
+	if _, err := f.conn.Exec(f.ctx, `update property_type set name = 'room-feeling' where name = 'room-mood'`); err != nil {
+		t.Fatalf("rename the key's type: %v", err)
+	}
+	got, err := f.gw.ListUnboundIdentities(f.ctx, "disp-1", all)
+	if err != nil || len(got) != 1 {
+		t.Fatalf("inbox = %+v (%v)", got, err)
+	}
+	if fmt.Sprint(got[0].Keys) != "[room-feeling uptime]" {
+		t.Errorf("keys carried = %v, want the renamed type under its new name beside uptime", got[0].Keys)
+	}
+}
