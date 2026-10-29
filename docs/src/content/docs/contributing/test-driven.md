@@ -169,18 +169,18 @@ brand; and a test whose assertions read the **type tree** (stems, labels,
 inherited facts) mints a product under the type it needs, because the walk
 under test never looked at the product anyway.
 
-## Four performance instruments, three of which gate
+## Five performance instruments, three of which gate
 
-Performance has four instruments in this repo, and they are deliberately not the same
+Performance has five instruments in this repo, and they are deliberately not the same
 thing. Knowing which answers a given question is most of the value:
 
-| | **Round-trip counting** | **Access-path assertions** | **Ingest footprint** | **Wall-clock benchmarks** |
-|---|---|---|---|---|
-| Catches | N+1s: cost that grows with row count | A read that cannot reach the index it was built for | What one node batch costs the database: statements, rows per observation, bytes per row | Cost inside one statement: a recursive CTE that stops being bounded, a plan that degrades on real volume |
-| Blind to | Anything a single statement does | Everything except one relation's access path | Reads, and time | Anything smaller than the host's own noise |
-| Determinism | Exact. Same number every run | Exact. Independent of the fixture's size | Exact, except index bytes, which are bounded | Noisy. Interpreted by comparison, never by threshold |
-| Gates a merge | **Yes.** Ordinary tests in `make test` | **Yes.** Ordinary tests in `make test` | **Yes.** An ordinary test in `make test` | **No.** Inert without `-bench` |
-| How you run it | `make test` | `make test` | `make test`; `make footprint` prints it | `make bench`, deliberately, before and after |
+| | **Round-trip counting** | **Access-path assertions** | **Ingest footprint** | **Lab footprint** | **Wall-clock benchmarks** |
+|---|---|---|---|---|---|
+| Catches | N+1s: cost that grows with row count | A read that cannot reach the index it was built for | What one node batch costs the database: statements, rows per observation, bytes per row | What a running lab costs per container and per day: CPU, memory, rows a minute, growth, read latency | Cost inside one statement: a recursive CTE that stops being bounded, a plan that degrades on real volume |
+| Blind to | Anything a single statement does | Everything except one relation's access path | Reads, and time | Anything smaller than the host's neighbours move it by | Anything smaller than the host's own noise |
+| Determinism | Exact. Same number every run | Exact. Independent of the fixture's size | Exact, except index bytes, which are bounded | Noisy. A median of N windows, with the range beside it | Noisy. Interpreted by comparison, never by threshold |
+| Gates a merge | **Yes.** Ordinary tests in `make test` | **Yes.** Ordinary tests in `make test` | **Yes.** An ordinary test in `make test` | **No.** A diagnostic | **No.** Inert without `-bench` |
+| How you run it | `make test` | `make test` | `make test`; `make footprint` prints it | `make lab-footprint` | `make bench`, deliberately, before and after |
 
 They are complements, not alternatives. A dropped index issues exactly as many statements
 as the index scan it replaced, so counting never moves; an N+1 that doubles from twenty to
@@ -254,6 +254,42 @@ lane, cadence and how often a value changes, not the protocol that produced it.
 simulated fleet changes. A change that moves a held number **on purpose** (batched writes,
 narrower rows) updates the constant in the same PR and says why; `make footprint` prints the
 current figures, and `BenchmarkIngestFootprint` in `make bench` times the same path.
+
+### Measuring a running lab
+
+The ingest footprint counts one batch through the handler; it cannot say what a lab costs to
+run. `make lab-footprint` does
+([ADR-1277](/architecture/decisions/#adr-1277-the-lab-footprint-measures-a-running-lab-per-container-and-gates-nothing)).
+It builds the image, brings up a throwaway lab of its own project at a
+[cadence profile](/guides/lab/#what-runs-with-which-privilege), warms it up, and measures N
+back-to-back windows:
+
+- **CPU per container** (server, node, Postgres), in millicores, from each cgroup's CPU time
+  as the Engine reports it.
+- **Memory per container**, the working set: anonymous plus shared memory, never RSS, which
+  counts the binary's file pages and the page cache the kernel would reclaim.
+- **Rows a minute** on the metric and property lanes, from Postgres's cumulative statistics, so
+  measuring scans nothing. A lane is summed over its partitions.
+- **Growth a day** of the metric and property tables (with their indexes), the receipts, the
+  whole database, and the WAL a replica or archive would carry.
+- **Series read latency** over 24 h and 30 d, through the API the console reads, with the
+  server and Postgres held to one vCPU while the reads are timed (and only then, so ingest is
+  measured unthrottled).
+
+Each figure is the median of the windows, printed with the lowest and the highest. Read the
+range before the median: on a shared host the neighbours move every figure here, which is why
+it gates nothing. Measure on a quiet machine, with nothing else of yours running, and compare
+two runs you took minutes apart. When it is done it stops the lab and fails if any container,
+network or volume of its project is left.
+
+```bash
+make lab-footprint                                            # the lab profile, 5 one-minute windows
+make lab-footprint LAB_FOOTPRINT_ARGS="-cadence default -windows 7 -json out.json"
+```
+
+`-cadence` takes `lab` (a learner's lab), `walkthrough` (probes on every check-in, as a
+recording's lab does) or `default` (the product's own cadence); `-json` writes the report for a
+generator to render.
 
 ### Benchmarks are diagnostic, never a gate
 
