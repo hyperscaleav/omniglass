@@ -4961,7 +4961,7 @@
     "uniques": [
      {
       "name": "metric_series_key",
-      "definition": "CREATE UNIQUE INDEX metric_series_key ON public.metric_series USING btree (owner_id, metric_type_id, instance, provenance, source, collector_node_id) NULLS NOT DISTINCT"
+      "definition": "CREATE UNIQUE INDEX metric_series_key ON public.metric_series USING btree (owner_id, metric_type_id, instance, provenance, source, collector_node_id, source_conduit_id) NULLS NOT DISTINCT"
      }
     ]
    },

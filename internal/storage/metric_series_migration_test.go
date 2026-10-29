@@ -27,17 +27,17 @@ const metricBackfillFile = "migrations/20261029132028_metric_series_backfill.sql
 // wideMetricCols is the wide table's every column, in the order the snapshot
 // reads them.
 const wideMetricCols = `id, ts, owner_kind, component_id, system_id, location_id, node_id, metric_type_id,
-	instance, value, provenance, source, source_rule, source_rule_version, source_rule_id, event_id, command_id`
+	instance, value, provenance, source, source_rule, source_rule_version, source_rule_id, event_id, command_id, source_conduit_id`
 
 // narrowAsWideSQL reads the narrow lane back in the wide table's shape: each
 // sample and declared row beside its series' columns.
 const narrowAsWideSQL = `select m.id, m.ts, s.owner_kind, s.component_id, s.system_id, s.location_id, s.node_id, s.metric_type_id,
 		s.instance, m.value, s.provenance, s.source, m.source_rule, m.source_rule_version, m.source_rule_id,
-		null::bigint as event_id, null::bigint as command_id
+		null::bigint as event_id, null::bigint as command_id, s.source_conduit_id
 	from metric m join metric_series s on s.id = m.series_id
 	union all
 	select d.id, d.ts, s.owner_kind, s.component_id, s.system_id, s.location_id, s.node_id, s.metric_type_id,
-		s.instance, d.value, s.provenance, s.source, null, null, null, d.event_id, d.command_id
+		s.instance, d.value, s.provenance, s.source, null, null, null, d.event_id, d.command_id, s.source_conduit_id
 	from metric_declared d join metric_series s on s.id = d.series_id`
 
 // snapshotRows reads a query's rows as text, one line a row, in id order
@@ -111,6 +111,10 @@ func plantWideMetrics(t *testing.T, conn *pgx.Conn) {
 			[]any{f.compID, f.mtID}},
 		{`insert into metric (ts, owner_kind, system_id, metric_type_id, value) values ('2026-10-03T00:00:00Z', 'system', $1, $2, 1)`,
 			[]any{sysID, f.mtID}},
+		// A fanned sample (#1282): its conduit by id beside its source text.
+		{`insert into metric (ts, owner_kind, system_id, metric_type_id, value, source, source_conduit_id)
+			values ('2026-10-03T01:00:00Z', 'system', $1, $2, 3, 'conduit-1/http', $3)`,
+			[]any{sysID, f.mtID, f.compID}},
 		{`insert into metric (ts, owner_kind, node_id, metric_type_id, value) values ('2026-10-04T00:00:00Z', 'node', $1, $2, 2)`,
 			[]any{nodeID, f.mtID}},
 		{`insert into metric (ts, owner_kind, component_id, metric_type_id, value, provenance, source, event_id, command_id)
@@ -161,11 +165,11 @@ func TestNarrowMetricKeepsEveryRow(t *testing.T) {
 	if kind != "p" || declared != 1 || samples != len(want)-1 {
 		t.Errorf("metric relkind %q with %d samples and %d declared rows, want a partitioned table with %d and 1", kind, samples, declared, len(want)-1)
 	}
-	// One series per (owner, type, instance, provenance, source): the
+	// One series per (owner, type, instance, provenance, source, conduit): the
 	// component's 2 instances x 2 sources observed, its calculated and intended
-	// series, the system's and the node's.
-	if series != 8 {
-		t.Errorf("%d series, want 8", series)
+	// series, the system's own and fanned ones, and the node's.
+	if series != 9 {
+		t.Errorf("%d series, want 9", series)
 	}
 	parts := partitionsOf(t, conn, "metric")
 	for _, m := range []string{"metric_p202608", "metric_p202609", "metric_p202610", "metric_p202611"} {
