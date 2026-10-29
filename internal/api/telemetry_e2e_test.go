@@ -84,7 +84,7 @@ func TestTelemetryPushAPI(t *testing.T) {
 		"source": "webex-cloud",
 		"metrics": []map[string]any{
 			{"name": "room-temperature", "value": 21.5, "ts": suppliedTS.Format(time.RFC3339)},
-			{"name": "audio-level", "value": -42.5},
+			{"name": "not-a-registered-metric", "value": -42.5},
 		},
 		"properties": []map[string]any{
 			{"name": "video-input", "value": "hdmi2"},
@@ -106,8 +106,8 @@ func TestTelemetryPushAPI(t *testing.T) {
 	}
 	// Rejection is SYNCHRONOUS even though acceptance is not: that is the whole
 	// reason the route validates before publishing.
-	if len(r.Rejected) != 1 || r.Rejected[0].Name != "audio-level" {
-		t.Fatalf("rejected = %+v, want exactly audio-level", r.Rejected)
+	if len(r.Rejected) != 1 || r.Rejected[0].Name != "not-a-registered-metric" {
+		t.Fatalf("rejected = %+v, want exactly not-a-registered-metric", r.Rejected)
 	}
 
 	// The lane the caller chose is the table the row landed in, and the supplied
@@ -146,10 +146,10 @@ func TestTelemetryPushAPI(t *testing.T) {
 		return false
 	})
 	// An unregistered name reached no table at all.
-	if m, err := gw.LatestMetric(ctx, "bar-1", "audio-level"); err != nil {
-		t.Fatalf("latest audio-level: %v", err)
+	if m, err := gw.LatestMetric(ctx, "bar-1", "not-a-registered-metric"); err != nil {
+		t.Fatalf("latest not-a-registered-metric: %v", err)
 	} else if m != nil {
-		t.Fatalf("reject-not-project failed: audio-level landed as %+v", m)
+		t.Fatalf("reject-not-project failed: not-a-registered-metric landed as %+v", m)
 	}
 
 	// A native probe key (a node's own observation, its gate, its session) is
