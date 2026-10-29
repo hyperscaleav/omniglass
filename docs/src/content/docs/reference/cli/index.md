@@ -975,6 +975,26 @@ Example:
 omniglass component alarm list <name>
 ```
 
+#### `omniglass component alarm snooze`
+
+Snooze an alarm's condition
+
+```
+omniglass component alarm snooze <name> <id> [flags]
+```
+
+Snoozes the alarm's condition, its component and dedup_key, for a duration from now (1m to 7d). Snoozing a snoozed condition replaces the deadline. It changes nothing else: it does not acknowledge, does not recompute health, a snoozed alarm stays in the unacknowledged queue, and a clear does not end it. It notifies nothing itself. Audited on this alarm. Gated by alarm:snooze, whose scope is resolved on the component tier from that permission; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not snooze on is a 403.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--duration` | string | (none) | How long from now the condition stays snoozed, from 1m to 7d: a duration such as 15m, 1h, 4h or 24h, or whole days such as 7d. Snoozing a snoozed condition replaces its deadline, shorter or longer |
+
+Example:
+
+```sh
+omniglass component alarm snooze <name> <id> --duration duration
+```
+
 #### `omniglass component alarm timeline`
 
 Read an alarm's timeline
@@ -989,6 +1009,22 @@ Example:
 
 ```sh
 omniglass component alarm timeline <name> <id>
+```
+
+#### `omniglass component alarm unsnooze`
+
+End an alarm's condition's snooze
+
+```
+omniglass component alarm unsnooze <name> <id>
+```
+
+Ends the snooze on the alarm's condition early. Audited on this alarm, naming the caller. Unsnoozing a condition that is not snoozed is a 200 that writes nothing. Gated by alarm:snooze, resolved as :snooze is.
+
+Example:
+
+```sh
+omniglass component alarm unsnooze <name> <id>
 ```
 
 ### `omniglass component checkName`

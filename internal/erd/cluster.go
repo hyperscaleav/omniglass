@@ -30,7 +30,7 @@ var Subsystems = []Cluster{
 	}},
 	{Name: "telemetry", Tables: []string{
 		"property_type", "metric_type", "metric", "property",
-		"event_type", "event", "log_line", "alarm", "severity_level", "event_rule", "event_rule_state", "event_rule_live",
+		"event_type", "event", "log_line", "alarm", "alarm_snooze", "severity_level", "event_rule", "event_rule_state", "event_rule_live",
 		"event_rule_condition", "calc_rule", "calc_rule_input", "calc_pending", "calc_rule_state",
 		"command_type", "command",
 		// The outbound notification lane (#618): what a message says.

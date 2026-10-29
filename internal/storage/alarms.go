@@ -54,6 +54,13 @@ type Alarm struct {
 	RaisedByRuleID *string
 	// RaisedByRule is that rule's name, carried beside its id.
 	RaisedByRule *string
+	// SnoozedUntil and SnoozedBy are the snooze on the alarm's CONDITION
+	// (#1318, ADR-1318), not on this row: every alarm of the same
+	// (component, dedup_key) reads the same pair while the snooze is in
+	// force, and none once its deadline passes. SnoozedBy is the identifier
+	// of who set it, resolved as AcknowledgedBy is.
+	SnoozedUntil *time.Time
+	SnoozedBy    string
 }
 
 // Active reports whether the alarm is still raised.
@@ -62,6 +69,9 @@ func (a Alarm) Active() bool { return a.ClearedAt == nil }
 // Acknowledged reports whether somebody has recorded that they have seen this
 // alarm. It says nothing about whether the alarm is still raised.
 func (a Alarm) Acknowledged() bool { return a.AcknowledgedAt != nil }
+
+// Snoozed reports whether the alarm's condition is snoozed.
+func (a Alarm) Snoozed() bool { return a.SnoozedUntil != nil }
 
 // AlarmFilter narrows a component's alarm list. The zero value is what is wrong
 // now: active alarms, acknowledged or not.
@@ -113,16 +123,29 @@ var (
 var alarmCols = `a.id, a.component_id, (select c.name from component c where c.id = a.component_id),
 	a.severity, a.message, a.dedup_key, a.raised_at, a.cleared_at, a.raised_by_rule_id::text,
 	(select r.name from event_rule r where r.id = a.raised_by_rule_id),
-	a.acknowledged_at, ` + principalIdentCols("a.acknowledged_by")
+	a.acknowledged_at, ` + principalIdentCols("a.acknowledged_by") + `,
+	` + snoozeOf("snoozed_until") + `, ` + principalIdentCols(snoozeOf("snoozed_by"))
+
+// snoozeOf reads one column of the snooze in force on the alarm's condition
+// (#1318): a scalar subquery on the primary key, so it rides the UPDATE ...
+// RETURNING reads as the acknowledger's projection does. A snooze past its
+// deadline that the sweep has not yet ended reads as no snooze: the row is
+// only waiting to be swept.
+func snoozeOf(col string) string {
+	return "(select s." + col + " from alarm_snooze s where s.component_id = a.component_id and s.dedup_key = a.dedup_key and s.snoozed_until > now())"
+}
 
 func scanAlarm(row pgx.Row) (*Alarm, error) {
 	var a Alarm
 	var ackUsername, ackServiceName, ackNodeName *string
+	var snzUsername, snzServiceName, snzNodeName *string
 	if err := row.Scan(&a.ID, &a.ComponentID, &a.ComponentName, &a.Severity, &a.Message,
-		&a.DedupKey, &a.RaisedAt, &a.ClearedAt, &a.RaisedByRuleID, &a.RaisedByRule, &a.AcknowledgedAt, &ackUsername, &ackServiceName, &ackNodeName); err != nil {
+		&a.DedupKey, &a.RaisedAt, &a.ClearedAt, &a.RaisedByRuleID, &a.RaisedByRule, &a.AcknowledgedAt, &ackUsername, &ackServiceName, &ackNodeName,
+		&a.SnoozedUntil, &snzUsername, &snzServiceName, &snzNodeName); err != nil {
 		return nil, err
 	}
 	a.AcknowledgedBy = principalIdent(ackUsername, ackServiceName, ackNodeName)
+	a.SnoozedBy = principalIdent(snzUsername, snzServiceName, snzNodeName)
 	return &a, nil
 }
 

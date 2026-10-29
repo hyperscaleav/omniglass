@@ -1404,6 +1404,30 @@ func generatedCommands() []*cobra.Command {
 			}())
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
+					var fDuration string
+					cmd := &cobra.Command{
+						Use:     "snooze <name> <id>",
+						Short:   "Snooze an alarm's condition",
+						Long:    "Snoozes the alarm's condition, its component and dedup_key, for a duration from now (1m to 7d). Snoozing a snoozed condition replaces the deadline. It changes nothing else: it does not acknowledge, does not recompute health, a snoozed alarm stays in the unacknowledged queue, and a clear does not end it. It notifies nothing itself. Audited on this alarm. Gated by alarm:snooze, whose scope is resolved on the component tier from that permission; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not snooze on is a 403.",
+						Example: "  omniglass component alarm snooze <name> <id> --duration duration",
+						Args:    pathArgs(2),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/components/%s/alarms/%s:snooze", pathSegment(args[0]), pathSegment(args[1]))
+							body := map[string]any{}
+							if cmd.Flags().Changed("duration") {
+								body["duration"] = fDuration
+							}
+							return runAPICommand(cmd, "POST", path, body)
+						},
+					}
+					cmd.Flags().StringVar(&fDuration, "duration", "", "How long from now the condition stays snoozed, from 1m to 7d: a duration such as 15m, 1h, 4h or 24h, or whole days such as 7d. Snoozing a snoozed condition replaces its deadline, shorter or longer")
+					_ = cmd.MarkFlagRequired("duration")
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "timeline <name> <id>",
 						Short:   "Read an alarm's timeline",
@@ -1413,6 +1437,23 @@ func generatedCommands() []*cobra.Command {
 						RunE: func(cmd *cobra.Command, args []string) error {
 							path := fmt.Sprintf("/api/v1/components/%s/alarms/%s:timeline", pathSegment(args[0]), pathSegment(args[1]))
 							return runAPICommand(cmd, "GET", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "unsnooze <name> <id>",
+						Short:   "End an alarm's condition's snooze",
+						Long:    "Ends the snooze on the alarm's condition early. Audited on this alarm, naming the caller. Unsnoozing a condition that is not snoozed is a 200 that writes nothing. Gated by alarm:snooze, resolved as :snooze is.",
+						Example: "  omniglass component alarm unsnooze <name> <id>",
+						Args:    pathArgs(2),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/components/%s/alarms/%s:unsnooze", pathSegment(args[0]), pathSegment(args[1]))
+							return runAPICommand(cmd, "POST", path, nil)
 						},
 					}
 					return cmd

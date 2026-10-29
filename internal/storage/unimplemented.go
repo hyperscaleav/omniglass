@@ -891,6 +891,12 @@ func (UnimplementedGateway) AlarmTimeline(context.Context, string, string, Recip
 func (UnimplementedGateway) AcknowledgeAlarm(context.Context, string, string, string) (*Alarm, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) SnoozeAlarm(context.Context, string, string, string, time.Duration) (*Alarm, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) UnsnoozeAlarm(context.Context, string, string, string) (*Alarm, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) ListAlarms(context.Context, string, AlarmFilter) ([]Alarm, error) {
 	return nil, nil
 }

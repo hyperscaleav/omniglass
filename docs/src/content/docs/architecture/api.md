@@ -1057,8 +1057,16 @@ still raised, raised and unacknowledged, or cleared having never been acknowledg
 alarm can still be acknowledged by whoever reviews the history. Acknowledging twice is **idempotent**:
 the first person and the first time are what the row keeps, and the no-op writes no second audit row.
 Un-acknowledging is deliberately not a verb yet
-([#728](https://github.com/hyperscaleav/omniglass/issues/728)); snooze and resolve are
-[out of scope with reasons](/architecture/alarms-actions/).
+([#728](https://github.com/hyperscaleav/omniglass/issues/728)); resolve is
+[out of scope with a reason](/architecture/alarms-actions/).
+
+**Snooze rides the same shape** (#1318): `POST /components/{name}/alarms/{id}:snooze` (a `duration`,
+`1m` to `7d`, else a 422 naming the bound) and `:unsnooze`, both gated by **`alarm:snooze`**, its scope
+resolved on the component tier from that permission. A snooze belongs to the alarm's condition
+(`component`, `dedup_key`), not to the row, so every alarm read carries `snoozed_until` and
+`snoozed_by` on each alarm of a snoozed condition; it does not acknowledge or recompute health, and
+both verbs are audited on the alarm they name
+([alarms and actions](/architecture/alarms-actions/#snooze-a-fact-about-a-condition)).
 
 An alarm's transitions also queue its **notifications** (#618): `/notification-types` (the message
 catalog, `notification_type:*`, read on the viewer floor, `:rename` and a `:preview` that renders against

@@ -880,6 +880,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/components/{name}/alarms/{id}:snooze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Snooze an alarm's condition
+         * @description Snoozes the alarm's condition, its component and dedup_key, for a duration from now (1m to 7d). Snoozing a snoozed condition replaces the deadline. It changes nothing else: it does not acknowledge, does not recompute health, a snoozed alarm stays in the unacknowledged queue, and a clear does not end it. It notifies nothing itself. Audited on this alarm. Gated by alarm:snooze, whose scope is resolved on the component tier from that permission; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not snooze on is a 403.
+         */
+        post: operations["snooze-component-alarm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/components/{name}/alarms/{id}:timeline": {
         parameters: {
             query?: never;
@@ -894,6 +914,26 @@ export interface paths {
         get: operations["get-component-alarm-timeline"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/components/{name}/alarms/{id}:unsnooze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * End an alarm's condition's snooze
+         * @description Ends the snooze on the alarm's condition early. Audited on this alarm, naming the caller. Unsnoozing a condition that is not snoozed is a 200 that writes nothing. Gated by alarm:snooze, resolved as :snooze is.
+         */
+        post: operations["unsnooze-component-alarm"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5606,6 +5646,13 @@ export interface components {
             raised_by_rule_id?: string;
             /** @description The severity level the alarm was raised at, by name (see /severity-levels) */
             severity: string;
+            /** @description Who snoozed the condition, by name; empty while it is not snoozed, or once that principal has been purged (the audit log keeps the name) */
+            snoozed_by?: string;
+            /**
+             * Format: date-time
+             * @description Until when the alarm's condition (component and dedup_key) is snoozed: its notifications are written suppressed until then. Null while it is not snoozed. Independent of acknowledged and cleared_at
+             */
+            snoozed_until?: string;
         };
         AlarmFactBody: {
             /** @description The key a template reads it by ({{.Name}}) */
@@ -10966,6 +11013,16 @@ export interface components {
             /** Format: date-time */
             last_seen?: string;
         };
+        SnoozeAlarmInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SnoozeAlarmInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description How long from now the condition stays snoozed, from 1m to 7d: a duration such as 15m, 1h, 4h or 24h, or whole days such as 7d. Snoozing a snoozed condition replaces its deadline, shorter or longer */
+            duration: string;
+        };
         StandardBody: {
             /**
              * Format: uri
@@ -14261,6 +14318,44 @@ export interface operations {
             };
         };
     };
+    "snooze-component-alarm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
+                name: string;
+                /** @description The alarm id: any alarm of the condition to snooze */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SnoozeAlarmInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlarmBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "get-component-alarm-timeline": {
         parameters: {
             query?: never;
@@ -14282,6 +14377,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AlarmTimelineOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "unsnooze-component-alarm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
+                name: string;
+                /** @description The alarm id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlarmBody"];
                 };
             };
             /** @description Error */
