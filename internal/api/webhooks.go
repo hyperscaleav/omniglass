@@ -87,12 +87,21 @@ type webhookReceiver struct {
 	sources, endpoints, listener *ingress.Buckets
 	dedup                        *ingress.Deduper
 	tally                        *ingress.Tally
+	// window counts each endpoint's accepted and refused posts over a
+	// collection report window (#1369), reported as the component's own
+	// series; reportEvery overrides the platform's window (a test's).
+	window      *ingress.PostWindow
+	reportEvery time.Duration
 
 	mu         sync.Mutex
 	inFlight   int
 	reading    int64
 	perSource  map[string]int
 	flushArmed bool
+	// reportArmed is a report timer pending: armed by a counted post and
+	// re-armed while the window owes a report, so a quiet receiver holds
+	// none.
+	reportArmed bool
 	// unclaimed is the sources the inbox holds a row for, so a post landing
 	// on an endpoint lets go of its source's row (it is claimed) without a
 	// write per post; loaded from the store on first use.
@@ -108,6 +117,7 @@ func newWebhookReceiver(gw storage.Gateway, pub TelemetryPublisher) *webhookRece
 		listener:  ingress.NewBuckets(webhookListenerRate, webhookListenerBurst, 1),
 		dedup:     ingress.NewDeduper(ingress.ReplayWindow, webhookDeliveries),
 		tally:     ingress.NewTally(storage.UnclaimedBound),
+		window:    ingress.NewPostWindow(),
 		perSource: map[string]int{},
 		unclaimed: map[string]bool{},
 	}
@@ -171,11 +181,12 @@ type webhookVerifyOutput struct {
 
 // registerWebhookRoutes wires the webhook receiver and its verification
 // challenge, both ungated by necessity.
-func registerWebhookRoutes(api huma.API, gw storage.Gateway, pub TelemetryPublisher, trust clientaddr.Trust) *webhookReceiver {
+func registerWebhookRoutes(api huma.API, gw storage.Gateway, pub TelemetryPublisher, trust clientaddr.Trust, reportEvery time.Duration) *webhookReceiver {
 	rc := newWebhookReceiver(gw, pub)
 	if trust != nil {
 		rc.trust = trust
 	}
+	rc.reportEvery = reportEvery
 	bound := huma.Middlewares{rc.bound(api)}
 	huma.Register(api, huma.Operation{
 		OperationID:   "receive-webhook",
@@ -393,6 +404,8 @@ func (rc *webhookReceiver) receive(ctx context.Context, in *webhookInput) (*webh
 		}
 		rc.tally.Refused(t.EndpointID, in.source, reason, now)
 		rc.armFlush()
+		rc.window.Refused(postTarget(t))
+		rc.armReport()
 		return nil, huma.Error401Unauthorized("unauthorized")
 	}
 	// The endpoint's budget is spent only by posts its scheme admitted, so a
@@ -424,6 +437,8 @@ func (rc *webhookReceiver) receive(ctx context.Context, in *webhookInput) (*webh
 	if id != "" {
 		rc.dedup.Commit(t.EndpointID, id)
 	}
+	rc.window.Accepted(postTarget(t))
+	rc.armReport()
 	// Last heard: every attributed post stamps its endpoint, the push
 	// endpoint's read in place of a verdict.
 	if err := rc.gw.StampEndpointsSeen(ctx, []string{t.EndpointID}); err != nil {
@@ -529,6 +544,64 @@ func (rc *webhookReceiver) flush() {
 	rc.mu.Unlock()
 	if rc.tally.Pending() {
 		rc.armFlush()
+	}
+}
+
+// postTarget is the endpoint a post was addressed to, as the window counts
+// it: the component and endpoint name its counts land on.
+func postTarget(t *storage.WebhookTarget) ingress.PostTarget {
+	return ingress.PostTarget{EndpointID: t.EndpointID, ComponentID: t.ComponentID, Endpoint: t.EndpointName}
+}
+
+// armReport schedules the window's report one window out, once: a quiet
+// receiver holds no timer.
+func (rc *webhookReceiver) armReport() {
+	rc.mu.Lock()
+	if rc.reportArmed {
+		rc.mu.Unlock()
+		return
+	}
+	rc.reportArmed = true
+	rc.mu.Unlock()
+	time.AfterFunc(rc.reportWindow(), rc.report)
+}
+
+// reportWindow is the collection report window: the override, else the
+// platform's collection.report_seconds, else a minute when it cannot be
+// read.
+func (rc *webhookReceiver) reportWindow() time.Duration {
+	if rc.reportEvery > 0 {
+		return rc.reportEvery
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	s, err := rc.gw.CollectionSettings(ctx)
+	if err != nil || s.ReportSeconds <= 0 {
+		return time.Minute
+	}
+	return time.Duration(s.ReportSeconds) * time.Second
+}
+
+// report lands the window's counts on their components (one transaction per
+// window) and re-arms while the window owes a report: a zero after a window
+// with posts.
+func (rc *webhookReceiver) report() {
+	at := rc.now().UTC()
+	rows := rc.window.Take()
+	counts := make([]storage.WebhookCount, 0, len(rows))
+	for _, r := range rows {
+		counts = append(counts, storage.WebhookCount{ComponentID: r.ComponentID, Endpoint: r.Endpoint, Posts: r.Posts, Refusals: r.Refusals, At: at})
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := rc.gw.RecordWebhookCounts(ctx, counts); err != nil {
+		slog.Warn("webhook: record collection counts", "error", err)
+	}
+	rc.mu.Lock()
+	rc.reportArmed = false
+	rc.mu.Unlock()
+	if rc.window.Pending() {
+		rc.armReport()
 	}
 }
 

@@ -49,7 +49,7 @@ func TestProbeIntervalGatesReachabilityProbes(t *testing.T) {
 			verdicts, faultseen := map[string]string{}, map[string]string{}
 			for i := 0; i < ticks; i++ {
 				now := start.Add(time.Duration(i) * time.Second)
-				if err := runTasks(t.Context(), spool, "edge", wl, runner, sessions, sched, verdicts, faultseen, now); err != nil {
+				if err := runTasks(t.Context(), spool, "edge", wl, runner, sessions, sched, verdicts, faultseen, nil, now); err != nil {
 					t.Fatalf("tick %d: %v", i, err)
 				}
 			}
@@ -83,7 +83,7 @@ func TestProbeRunsAtOnceWhenItsFingerprintMoves(t *testing.T) {
 		t.Helper()
 		task.Fingerprint = fp
 		wl := collection.WorklistReply{Tasks: []collection.TaskSpec{task}}
-		if err := runTasks(t.Context(), spool, "edge", wl, runner, sessions, sched, verdicts, faultseen, now); err != nil {
+		if err := runTasks(t.Context(), spool, "edge", wl, runner, sessions, sched, verdicts, faultseen, nil, now); err != nil {
 			t.Fatal(err)
 		}
 		now = now.Add(time.Second)
@@ -126,7 +126,7 @@ func TestAProbeAtTheHeartbeatRunsEveryJitteredTick(t *testing.T) {
 	offsets := []time.Duration{12, 9, 14, 8, 15, 11} // ms of work before the probe, per tick
 	for i, off := range offsets {
 		now := start.Add(time.Duration(i)*2*time.Second + off*time.Millisecond)
-		if err := runTasks(t.Context(), spool, "edge", wl, runner, sessions, sched, verdicts, faultseen, now); err != nil {
+		if err := runTasks(t.Context(), spool, "edge", wl, runner, sessions, sched, verdicts, faultseen, nil, now); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -7,7 +7,8 @@
 // Three classes form the reserved system family, fixed and internal: node-probe
 // (the keys a node's own probes and session machine write, declared in
 // probekeys), platform (keys only the Omniglass process itself writes: the
-// health rollup's verdict today, its self-monitoring later) and
+// health rollup's verdict and the webhook receiver's counts today, its
+// self-monitoring later) and
 // command-lifecycle (the events a command's own lifecycle writes:
 // command-issued, and its terminal command-settled, command-failed or
 // command-timed-out). Their names are declared in code and reserved against
@@ -89,11 +90,22 @@ func Writers() []Writer {
 // of a component, system or location.
 const Health = "health"
 
+// The webhook receiver's counts (#1369): an endpoint's webhook posts the
+// server accepted, and those it refused, over a report window. The server
+// counts them, so they are the process's to write, never a node's or a
+// push's.
+const (
+	WebhookPostCount    = "webhook-post-count"
+	WebhookRefusalCount = "webhook-refusal-count"
+)
+
 // platform maps each platform key to the part of the process that writes it.
 // A key only the Omniglass process writes about itself joins here with its
 // writer (the self-monitoring follow-on, #1094, is its planned consumer).
 var platform = map[string]string{
-	Health: "the health rollup",
+	Health:              "the health rollup",
+	WebhookPostCount:    "the webhook receiver",
+	WebhookRefusalCount: "the webhook receiver",
 }
 
 // CommandIssued is the event a command's issue lands on its owner's timeline,

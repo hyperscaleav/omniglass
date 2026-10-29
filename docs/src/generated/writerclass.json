@@ -13,6 +13,10 @@
       "http-response-time",
       "icmp-reachable",
       "icmp-rtt-avg",
+      "poll-duration",
+      "poll-failure-count",
+      "push-message-count",
+      "push-unclaimed-count",
       "session-reason",
       "session-state",
       "snmp-response-time",
@@ -51,7 +55,9 @@
     "reserved": true,
     "doc": "what only the Omniglass process writes about itself or its rollups",
     "keys": [
-      "health"
+      "health",
+      "webhook-post-count",
+      "webhook-refusal-count"
     ],
     "admits": [
       {

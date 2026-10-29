@@ -14,6 +14,34 @@ operator-facing name, for example `snmp-generic`), the **label**, an optional
 an `id`, a uuid minted by the database, the internal address the handle resolves to
 ([ADR-0062](/architecture/decisions/)); the handle is what you type and read.
 
+## Built-in and collected data
+
+An endpoint carries two kinds of data, and a driver configures only one of them:
+
+- **Built-in data** is what Omniglass knows about the endpoint itself, and every endpoint gets it,
+  whatever its driver, because the endpoint cannot work without it:
+  - its reachability ladder's verdicts and timings;
+  - a held session's state and reason;
+  - the gate and the pins it holds;
+  - `collection-failed`;
+  - its own collection telemetry, once a report window: how long its polls took and how many failed,
+    the pushes its listeners claimed and did not, and for a webhook endpoint the posts the server
+    accepted and refused.
+
+  Omniglass produces it from the endpoint's transport. A driver never declares or emits it, and a
+  spec that emits one is refused. A driver only tunes how some of it is gathered: its `ladder` (below)
+  picks the reachability rung and whether to ping. The cadences become per-endpoint-type defaults a
+  driver and an operator can override with #1373. The keys are the `node-probe` and `platform` writer
+  classes, listed from the code on [who writes a key](/architecture/properties/#who-writes-a-key-the-writer-class).
+- **Collected data** is what the device's own API says: a volume, a call state, an input. It is
+  exactly what the driver's polls and listeners emit, each a **collected** key, and the driver
+  decides what is read and how often (a poll's `schedule.every`).
+
+A device that only pushes, or reports little of its own, still carries its built-in data; what makes
+it worth watching is what its driver collects.
+
+## The spec
+
 A driver's body is its **spec** ([ADR-0135](/architecture/decisions/#adr-0135-a-drivers-spec-is-data-one-engine-interprets-it)):
 a versioned declarative document (data, not code) naming the transport it rides, the **inputs**
 an attach must supply (host, port, credentials as secret references), and its three function
@@ -30,10 +58,8 @@ answer the request as a failure carrying the device's text instead of timing out
 a spec is Go RE2 with **substring** semantics: `INPUT \S+` also matches `EVT INPUT hdmi2`, so anchor
 a pattern meant to match a whole line (`^INPUT \S+$`). `unmatched: collection-failed` makes a line
 nobody claims a collection fault, and `unmatched: log` a log line on the component, rather than a counted discard ([routing](/architecture/collection/#listeners-over-a-held-session)).
-An emit names a **collected** key. A key only the node writes (every native probe key: the
-reachability verdicts and probe timings, `tls-certificate`, `ssh-host-key`, `endpoint-rejection` and
-its `endpoint-rejection-reason`, a held session's `session-state` and `session-reason`, and
-`collection-failed`), `health`,
+An emit names a **collected** key. A built-in key (every `node-probe` or `platform` key, [listed from
+the code](/architecture/properties/#who-writes-a-key-the-writer-class)),
 `command-issued`, or a key a calc rule outputs is refused at the spec's write, naming the key, since
 each has its own writer ([who writes a key](/architecture/properties/#who-writes-a-key-the-writer-class)):
 the node would otherwise take a driver's value as its own observation, the pin or the gate. A spec

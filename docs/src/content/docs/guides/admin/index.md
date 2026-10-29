@@ -106,6 +106,24 @@ The type's window shows as `retention_days` on `omniglass metric-type get`. The 
 latest value per series is never removed. See
 [storage](/architecture/storage/#retention-what-is-kept-and-for-how-long) for how it works.
 
+## How often an endpoint reports on itself
+
+Every endpoint reports on its own collection once a **report window**. This is built-in data: every
+endpoint gets it, whatever its driver, with nothing to set up
+([built-in and collected data](/guides/admin/drivers/#built-in-and-collected-data)):
+- how long its polls took, and how many failed;
+- how many pushed messages its listeners claimed, and how many they did not;
+- for a webhook endpoint, how many posts the server accepted and refused.
+
+These show beside the device's own values on the component's page (`poll-duration`,
+`push-message-count`, `webhook-post-count` and the rest), so a device that pushes and is never polled
+still has telemetry. The window is the **collection** setting `report_seconds` on
+**Admin > Settings**: 60 by default, from 10 to 3,600. A shorter window shows a stall sooner and costs
+more rows; each endpoint lands a few rows per window, however fast its driver polls. A change reaches
+every node on its next worklist pull. See
+[collection telemetry](/architecture/collection/#collection-telemetry-every-endpoints-account-of-itself)
+for what each count means.
+
 The model behind all of this is [identity and access](/architecture/identity-access/) and
 [config and credentials](/architecture/variables/); those pages say how it is built, these say
 how to run it.

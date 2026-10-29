@@ -253,3 +253,22 @@ func TestCommandOutcomeEvents(t *testing.T) {
 		t.Errorf("issued writes %q, want no outcome event", got)
 	}
 }
+
+// The webhook receiver's counts (#1369) are platform keys: the server counts
+// the posts it accepts and refuses, so neither a node nor a push may write
+// them, and the process writes them through the gateway.
+func TestTheWebhookCountsArePlatformKeys(t *testing.T) {
+	for _, key := range []string{WebhookPostCount, WebhookRefusalCount} {
+		if c, ok := Reserved(key); !ok || c != Platform {
+			t.Errorf("%s resolves to %q (%v), want platform", key, c, ok)
+		}
+		if !Admits(Platform, Process, key) {
+			t.Errorf("the process may not write %s", key)
+		}
+		for _, w := range []Writer{Node, Push, Operator} {
+			if Admits(Platform, w, key) {
+				t.Errorf("%s may write %s, which only the webhook receiver counts", w, key)
+			}
+		}
+	}
+}
