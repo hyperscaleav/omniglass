@@ -2172,8 +2172,6 @@ sim_components:
   # speaks for every room, polled by ucc-rooms and posting room-naming
   # webhooks, the conduit the bindings below fan out from.
   - key: ucc-platform
-    name: ucc-platform
-    label: Meeting platform (account)
     product: ucc-platform
     location: hq
 

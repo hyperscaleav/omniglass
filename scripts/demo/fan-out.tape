@@ -10,7 +10,12 @@
 Type "# The meeting platform's account-wide service at headquarters: the conduit"
 Enter
 Wait
-Type `c='hq.$comp.ucc-platform'`
+Hide
+Type `demo_hush 'c="hq.\$comp.$(omniglass component list | jq -r ".components[] | select(.product == \"ucc-platform\") | .name")"'`
+Enter
+Wait
+Show
+Type `echo "$c"`
 Enter
 Wait
 Type `huddle='hq.west.level-2.huddle.$sys.huddle'; board_a='hq.west.level-2.boardroom-a.$sys.boardroom'; board_b='hq.west.level-2.boardroom-b.$sys.boardroom'`
