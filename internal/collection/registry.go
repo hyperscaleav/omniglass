@@ -123,12 +123,12 @@ func NewRegistry(metricTypes []storage.MetricType, propertyTypes []storage.Prope
 // Collisions returns the names registered in more than one catalog that resolve
 // to nothing. Empty in a healthy install; non-empty means two operator rows (or
 // two official ones) hold a name, and every sample carrying it is being refused
-// until one of them is renamed.
+// until one of them is deleted.
 func (r Registry) Collisions() []string { return r.collisions }
 
 // Shadowed returns the names an official row holds in one catalog and an
 // operator's row holds in another: each resolves to the operator's row, and the
-// official one waits until the operator renames theirs (#1307).
+// official one waits until the operator deletes theirs (#1307).
 func (r Registry) Shadowed() []string { return r.shadowed }
 
 // IsShadowed reports a name an operator's row shadows an official row of (#1307).

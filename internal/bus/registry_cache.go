@@ -107,7 +107,7 @@ func (c *registryCache) warnCollisions() {
 			"names", clashes)
 	}
 	if len(shadowed) > 0 {
-		log.Warn("a ship-with registry name is shadowed by an operator's row in another catalog: samples using it land on the operator's, and the official row waits until the operator renames theirs",
+		log.Warn("a ship-with registry name is shadowed by an operator's row in another catalog: samples using it land on the operator's, and the official row waits until the operator deletes theirs",
 			"names", shadowed)
 	}
 }
