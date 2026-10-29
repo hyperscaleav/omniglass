@@ -8,6 +8,12 @@
       "labelled": true
     },
     {
+      "table": "action_rule_opt_out",
+      "shape": "id only",
+      "reason": "a person opted out of a rule, keyed by rule and principal; nothing addresses it by name",
+      "labelled": false
+    },
+    {
       "table": "action_rule_target",
       "shape": "id only",
       "reason": "a target an action rule sends to, keyed by rule and target; nothing addresses it by name",

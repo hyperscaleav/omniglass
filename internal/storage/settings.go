@@ -88,6 +88,32 @@ func (p *PG) UpsertSettingOverride(ctx context.Context, actorID, scope, namespac
 // lock, and racing inserts would clobber each other through ON CONFLICT. The advisory
 // lock covers the not-yet-existent row too. It releases at commit or rollback.
 func (p *PG) MergePatchSettingOverride(ctx context.Context, actorID, scope, namespace string, patch map[string]any) (*SettingOverride, error) {
+	return p.mergePatchSettingOverride(ctx, actorID, scope, namespace, patch, nil)
+}
+
+// MergePatchNotificationSettings is MergePatchSettingOverride on the platform
+// notification namespace with the mail relay's binding judged (#1317): when
+// the settings that RESULT from the patch (every layer resolved, the operator
+// file included) bind a mail_secret and either it or the mail_relay changed,
+// the caller must be able to reveal that secret (use), as binding a secret to
+// a target requires, since every send hands it to the relay. Judged inside the
+// patch's own serialized transaction, so no concurrent patch slips between the
+// check and the write.
+func (p *PG) MergePatchNotificationSettings(ctx context.Context, actorID string, patch map[string]any, use SecretUse) (*SettingOverride, error) {
+	return p.mergePatchSettingOverride(ctx, actorID, "platform", "notification", patch, func(tx pgx.Tx, before settings.Settings) error {
+		after, err := p.platformSettings(ctx, tx)
+		if err != nil {
+			return err
+		}
+		b, a := before.Notification, after.Notification
+		if a.MailSecret == "" || (a.MailSecret == b.MailSecret && a.MailRelay == b.MailRelay) {
+			return nil
+		}
+		return p.checkMailSecret(ctx, tx, a.MailSecret, use)
+	})
+}
+
+func (p *PG) mergePatchSettingOverride(ctx context.Context, actorID, scope, namespace string, patch map[string]any, check func(pgx.Tx, settings.Settings) error) (*SettingOverride, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin merge-patch setting override: %w", err)
@@ -115,10 +141,21 @@ func (p *PG) MergePatchSettingOverride(ctx context.Context, actorID, scope, name
 		return nil, fmt.Errorf("storage: read setting override: %w", err)
 	}
 
+	var before settings.Settings
+	if check != nil {
+		if before, err = p.platformSettings(ctx, tx); err != nil {
+			return nil, err
+		}
+	}
 	merged := settings.ApplyMergePatch(current, patch)
 	o, err := upsertOverrideTx(ctx, tx, actorID, scope, namespace, merged, nil)
 	if err != nil {
 		return nil, err
+	}
+	if check != nil {
+		if err := check(tx, before); err != nil {
+			return nil, err
+		}
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("storage: commit merge-patch setting override: %w", err)

@@ -891,7 +891,7 @@ func (UnimplementedGateway) RaiseAlarm(context.Context, string, string, AlarmSpe
 	return nil, nil
 }
 func (UnimplementedGateway) ClearAlarm(context.Context, string, string, string) error { return nil }
-func (UnimplementedGateway) AlarmTimeline(context.Context, string, string) ([]AlarmTimelineEntry, error) {
+func (UnimplementedGateway) AlarmTimeline(context.Context, string, string, RecipientView) ([]AlarmTimelineEntry, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) AcknowledgeAlarm(context.Context, string, string, string) (*Alarm, error) {
@@ -1079,7 +1079,7 @@ func (UnimplementedGateway) ListNotificationTargets(context.Context, scope.Set) 
 func (UnimplementedGateway) GetNotificationTarget(context.Context, string, scope.Set) (*NotificationTarget, error) {
 	return nil, ErrNotificationTargetNotFound
 }
-func (UnimplementedGateway) CreateNotificationTarget(context.Context, string, NotificationTargetSpec, scope.Set, SecretUse) (*NotificationTarget, error) {
+func (UnimplementedGateway) CreateNotificationTarget(context.Context, string, NotificationTargetSpec, scope.Set, SecretUse, PeopleUse) (*NotificationTarget, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) UpdateNotificationTarget(context.Context, string, string, NotificationTargetPatch, scope.Set, SecretUse) (*NotificationTarget, error) {
@@ -1114,14 +1114,52 @@ func (UnimplementedGateway) UpdateActionRule(context.Context, string, string, Ac
 func (UnimplementedGateway) DeleteActionRule(context.Context, string, string, scope.Set) error {
 	return nil
 }
-func (UnimplementedGateway) ListNotifications(context.Context, NotificationFilter, scope.Set) ([]Notification, error) {
+func (UnimplementedGateway) ListNotifications(context.Context, NotificationFilter, scope.Set, RecipientView) ([]Notification, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) GetNotification(context.Context, string, scope.Set) (*Notification, error) {
+func (UnimplementedGateway) GetNotification(context.Context, string, scope.Set, RecipientView) (*Notification, error) {
 	return nil, ErrNotificationNotFound
 }
-func (UnimplementedGateway) RetryNotification(context.Context, string, string, scope.Set, scope.Set) (*Notification, error) {
+func (UnimplementedGateway) RetryNotification(context.Context, string, string, scope.Set, scope.Set, RecipientView) (*Notification, error) {
 	return nil, ErrNotificationNotFound
+}
+func (UnimplementedGateway) ListInbox(context.Context, string, InboxFilter, scope.Set) (*Inbox, error) {
+	return &Inbox{Notifications: []Notification{}}, nil
+}
+func (UnimplementedGateway) MarkInboxRead(context.Context, string, string, string, scope.Set) (*Notification, error) {
+	return nil, ErrNotificationNotFound
+}
+func (UnimplementedGateway) MarkInboxAllRead(context.Context, string, string, scope.Set) (int, error) {
+	return 0, nil
 }
 func (UnimplementedGateway) DeliverNext(context.Context, SendFunc) (bool, error) { return false, nil }
 func (UnimplementedGateway) NotificationBacklog(context.Context) (int, error)    { return 0, nil }
+
+func (UnimplementedGateway) MailRelay(context.Context) (*MailRelay, string, error) {
+	return nil, "no mail relay is configured", nil
+}
+func (UnimplementedGateway) MergePatchNotificationSettings(context.Context, string, map[string]any, SecretUse) (*SettingOverride, error) {
+	return nil, nil
+}
+
+func (UnimplementedGateway) ListPersonalRules(context.Context, string) ([]ActionRule, error) {
+	return []ActionRule{}, nil
+}
+func (UnimplementedGateway) GetPersonalRule(context.Context, string, string) (*ActionRule, error) {
+	return nil, ErrActionRuleNotFound
+}
+func (UnimplementedGateway) CreatePersonalRule(context.Context, string, string, PersonalRuleSpec) (*ActionRule, error) {
+	return nil, ErrActionRuleNotFound
+}
+func (UnimplementedGateway) UpdatePersonalRule(context.Context, string, string, string, PersonalRulePatch) (*ActionRule, error) {
+	return nil, ErrActionRuleNotFound
+}
+func (UnimplementedGateway) DeletePersonalRule(context.Context, string, string, string) error {
+	return ErrActionRuleNotFound
+}
+func (UnimplementedGateway) TestPersonalRule(context.Context, string, string, RuleDraft, scope.Set, int) ([]RuleMatch, error) {
+	return nil, ErrActionRuleNotFound
+}
+func (UnimplementedGateway) SetRuleOptOut(context.Context, string, string, string, bool) (*ActionRule, error) {
+	return nil, ErrActionRuleNotFound
+}

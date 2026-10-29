@@ -56,6 +56,46 @@ export interface paths {
         patch: operations["update-action-rule"];
         trace?: never;
     };
+    "/action-rules/{name}:optIn": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Opt yourself back in to a group notification
+         * @description Undoes your opt-out of a platform action rule; always allowed. Idempotent and audited. Gated by notification:subscribe.
+         */
+        post: operations["opt-in-action-rule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/action-rules/{name}:optOut": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Opt yourself out of a group notification
+         * @description Stops a platform action rule telling you through a group it targets, for you alone. Only a rule an admin marked opt_out_allowed (a 409 otherwise); a rule that names you directly still tells you. Idempotent and audited. Gated by notification:subscribe.
+         */
+        post: operations["opt-out-action-rule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/audit-log": {
         parameters: {
             query?: never;
@@ -140,6 +180,98 @@ export interface paths {
         patch: operations["update-auth-me"];
         trace?: never;
     };
+    "/auth/me/action-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List your alarm subscriptions
+         * @description Your own personal action rules, by name. Self-scoped. Gated by notification:subscribe.
+         */
+        get: operations["list-auth-me-action-rules"];
+        put?: never;
+        /**
+         * Subscribe yourself to alarms
+         * @description Creates a personal action rule: on which alarm transitions, when, what to send, and on which of your channels (inbox, email). It tells you alone and names no target (targets is a 422), and it only ever matches an alarm on a component you can read at that moment, judged before its when runs. A taken name among your rules, or a 51st rule, is a 409. Audited. Gated by notification:subscribe.
+         */
+        post: operations["create-auth-me-action-rule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/me/action-rules/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get one of your alarm subscriptions
+         * @description One of your own personal action rules, by name or uuid; another user's is a 404. Gated by notification:subscribe.
+         */
+        get: operations["get-auth-me-action-rule"];
+        put?: never;
+        post?: never;
+        /**
+         * Unsubscribe: delete one of your alarm subscriptions
+         * @description Deletes one of your own personal action rules; what it already sent keeps its name. Another user's is a 404. Audited. Gated by notification:subscribe.
+         */
+        delete: operations["delete-auth-me-action-rule"];
+        options?: never;
+        head?: never;
+        /**
+         * Change or pause one of your alarm subscriptions
+         * @description Patches one of your own personal action rules (an absent field is unchanged); enabled false pauses it. Another user's is a 404. Audited. Gated by notification:subscribe.
+         */
+        patch: operations["update-auth-me-action-rule"];
+        trace?: never;
+    };
+    "/auth/me/action-rules/{name}:test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test one of your alarm subscriptions against your recent alarms
+         * @description Judges one of your own personal action rules, or a draft of its on and when, against your most recent alarms on components you can read: for each transition it fires on, whether it would have told you. Writes and sends nothing. Another user's rule is a 404. Gated by notification:subscribe.
+         */
+        post: operations["test-auth-me-action-rule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/me/action-rules:testDraft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test a draft alarm subscription against your recent alarms
+         * @description Judges a draft's on (default raised) and when (default always) against your most recent alarms on components you can read, before it is saved: for each transition, whether it would have told you. Writes and sends nothing. Gated by notification:subscribe.
+         */
+        post: operations["test-auth-me-action-rules-draft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/me/avatar": {
         parameters: {
             query?: never;
@@ -154,6 +286,66 @@ export interface paths {
         get: operations["get-auth-me-avatar"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/me/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List your inbox
+         * @description The caller's own console inbox: the notifications addressed to them on the inbox channel, newest first, with the unread count. Self-scoped (never another principal's), and scoped again by the caller's component read scope as it stands now, so an entry about a component they can no longer read is gone. Gated by notification:read.
+         */
+        get: operations["list-auth-me-notifications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/me/notifications/{id}:markRead": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark an inbox entry read
+         * @description Marks one of the caller's own inbox entries read (one already read keeps its first read time). An entry that is not the caller's, or about a component outside their component read scope, is a non-disclosing 404. Audited. Gated by notification:read.
+         */
+        post: operations["mark-read-auth-me-notification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/me/notifications:markAllRead": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark every inbox entry read
+         * @description Marks every unread entry in the caller's own inbox read, over the same scope the inbox reads, and says how many. Audited as one row. Gated by notification:read.
+         */
+        post: operations["mark-all-read-auth-me-notifications"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2643,7 +2835,7 @@ export interface paths {
         put?: never;
         /**
          * Create a notification target
-         * @description Adds a destination a notification can be sent to: a channel kind (webhook), its URL and, optionally, the platform secret it signs or authenticates with. Binding a secret takes the right to reveal it (secret:reveal, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not reveal a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.
+         * @description Adds a destination a notification can be sent to: a webhook, its URL and, optionally, the platform secret it signs or authenticates with; or people, a principal_group (every human member, read at each alarm transition) or one principal, on the channels named. A person is told only about an alarm on a component their own component read scope admits. Binding a group takes principal_group:read:admin and binding a person principal:read:admin (a 403 without it), since the target reaches whoever they name. Binding a secret takes the right to reveal it (secret:reveal, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not reveal a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.
          */
         post: operations["create-notification-target"];
         delete?: never;
@@ -2711,7 +2903,7 @@ export interface paths {
         put?: never;
         /**
          * Send a test notification to a target
-         * @description Sends one synthetic message (transition test, about no alarm) to the target through the egress contract, signed or authenticated as a delivery would be, and answers what the receiver said. Records nothing but its audit row (the result, never the URL). A disabled target is still tested. Gated by notification_target:test with an all-scope grant.
+         * @description Sends one synthetic message (transition test, about no alarm) to a webhook or email target through the egress contract, signed or authenticated as a delivery would be (an email through the install's mail relay), and answers what the receiver said; a group or person target is a 422, since people are told only about alarms. Records nothing but its audit row (the result, never the URL). A disabled target is still tested. Gated by notification_target:test with an all-scope grant.
          */
         post: operations["test-notification-target"];
         delete?: never;
@@ -2821,7 +3013,7 @@ export interface paths {
         };
         /**
          * List notifications
-         * @description The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. Gated by notification:read.
+         * @description The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. A row addressed to a person names them only to that person and to holders of principal:read:admin. Gated by notification:read.
          */
         get: operations["list-notification"];
         put?: never;
@@ -2912,7 +3104,7 @@ export interface paths {
         post?: never;
         /**
          * Delete a principal group
-         * @description Removes a group and, by cascade, its memberships and grants. Gated by principal_group:delete (all-scope).
+         * @description Removes a group and, by cascade, its memberships and grants. A group a notification target notifies cannot be deleted (a 409): the refusal names the target to a caller who reads targets. Gated by principal_group:delete (all-scope).
          */
         delete: operations["delete-group"];
         options?: never;
@@ -3291,7 +3483,7 @@ export interface paths {
         put?: never;
         /**
          * Purge a principal
-         * @description Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. Gated by principal:purge:admin (admin-sensitive, all-scope), and the principal must be archived first.
+         * @description Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. A person a notification target notifies cannot be purged (a 409; the refusal names the target to a caller who reads targets). Gated by principal:purge:admin (admin-sensitive, all-scope), and the principal must be archived first.
          */
         post: operations["purge-principal"];
         delete?: never;
@@ -5288,6 +5480,8 @@ export interface components {
             official: boolean;
             /** @description The alarm transitions it fires on: raised, cleared, or both */
             on: string[] | null;
+            /** @description Whether a member of a group it targets may opt out of it for themselves (:optOut); false by default, so an on-call page cannot be opted out of unless an admin allows it */
+            opt_out_allowed: boolean;
             /** @description The notification targets it sends to, by name */
             targets: string[] | null;
             /** Format: date-time */
@@ -5433,6 +5627,11 @@ export interface components {
              * @description A notification's attempts so far
              */
             attempts?: number;
+            /**
+             * @description How a notification travels: webhook, a person's inbox, or email
+             * @enum {string}
+             */
+            channel?: "webhook" | "inbox" | "email" | "";
             /** @description Why a notification's last attempt failed */
             error?: string;
             /** @description The series instance (an endpoint) an event is about */
@@ -5446,6 +5645,10 @@ export interface components {
             message?: string;
             /** @description A notification's uuid, what :retry names */
             notification?: string;
+            /** @description The person a notification is addressed to, by username: shown to that person and to holders of principal:read:admin */
+            recipient?: string;
+            /** @description True when a notification is addressed to a person whose name the caller may not see */
+            recipient_withheld?: boolean;
             /** @description The event rule the entry belongs to, by name: the rule that wrote the event, or the rule the platform acted for */
             rule?: string;
             /** @description The target a notification goes to, by name */
@@ -6235,6 +6438,8 @@ export interface components {
             notification_type?: string;
             /** @description The alarm transitions it fires on: raised, cleared, or both. Acknowledging an alarm is never one */
             on: string[] | null;
+            /** @description Let a member of a group it targets opt out of it for themselves (default false) */
+            opt_out_allowed?: boolean;
             /** @description The notification targets to send to, by name or uuid */
             targets: string[] | null;
             /** @description A predicate over the alarm facts at the action expression site (component, place, severity, severity_rank, message, transition, rule, ...; see /expressions:validate with site action); absent always holds. A refusal is a 422 with its line and column */
@@ -6704,21 +6909,29 @@ export interface components {
              * @example /api/v1/schemas/CreateNotificationTargetInputBody.json
              */
             readonly $schema?: string;
+            /** @description An email target's recipient addresses */
+            addresses?: string[] | null;
+            /** @description A group or person target's channels: inbox, email */
+            channels?: string[] | null;
             /** @description Whether deliveries go to it (default true) */
             enabled?: boolean;
             /**
-             * @description The channel kind
+             * @description The target kind
              * @enum {string}
              */
-            kind: "webhook";
+            kind: "webhook" | "email" | "principal_group" | "principal";
             /** @description A human label */
             label?: string;
             /** @description The target's name (lowercase kebab) */
             name: string;
+            /** @description A principal target's person, by username or uuid; binding one takes principal:read:admin */
+            principal?: string;
+            /** @description A principal_group target's group, by name or uuid; binding one takes principal_group:read:admin */
+            principal_group?: string;
             /** @description A platform secret, by name or uuid, of type hmac-key (signs each body) or bearer-token (sent as Authorization: Bearer) */
             secret?: string;
-            /** @description The destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is */
-            url: string;
+            /** @description A webhook's destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is */
+            url?: string;
         };
         CreateNotificationTypeInputBody: {
             /**
@@ -6737,6 +6950,32 @@ export interface components {
             subject: string;
             /** @description The body text template */
             text: string;
+        };
+        CreatePersonalRuleInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreatePersonalRuleInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description How it tells you: inbox, email (your directory email) */
+            channels: string[] | null;
+            /** @description What it is for */
+            description?: string;
+            /** @description Whether it fires (default true) */
+            enabled?: boolean;
+            /** @description A human label */
+            label?: string;
+            /** @description The rule's name (lowercase kebab), unique among your own rules */
+            name: string;
+            /** @description The notification type to send, by name or uuid; absent sends the official one for the transition */
+            notification_type?: string;
+            /** @description The alarm transitions it fires on: raised, cleared, or both */
+            on: string[] | null;
+            /** @description Refused when set (a 422): a personal rule tells you alone and names no target */
+            targets?: string[] | null;
+            /** @description A predicate over the alarm facts (component, place, severity, severity_rank, message, rule, ...); absent always holds. Judged only for alarms on components you can read */
+            when?: string;
         };
         CreatePrincipalInputBody: {
             /**
@@ -8211,6 +8450,20 @@ export interface components {
             readonly $schema?: string;
             groups: components["schemas"]["GroupBody"][] | null;
         };
+        ListInboxOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListInboxOutputBody.json
+             */
+            readonly $schema?: string;
+            notifications: components["schemas"]["NotificationBody"][] | null;
+            /**
+             * Format: int64
+             * @description How many entries the caller has not read, over the same scope
+             */
+            unread: number;
+        };
         ListLocationTypeMetricsOutputBody: {
             /**
              * Format: uri
@@ -8309,6 +8562,15 @@ export interface components {
              */
             readonly $schema?: string;
             notifications: components["schemas"]["NotificationBody"][] | null;
+        };
+        ListPersonalRulesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListPersonalRulesOutputBody.json
+             */
+            readonly $schema?: string;
+            action_rules: components["schemas"]["PersonalRuleBody"][] | null;
         };
         ListPrincipalSessionsOutputBody: {
             /**
@@ -8707,6 +8969,19 @@ export interface components {
             /** @description The channels the window's lines arrived on, whatever the filter: the source filter's choices */
             sources: string[] | null;
         };
+        MarkAllReadOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/MarkAllReadOutputBody.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: int64
+             * @description How many entries were marked read
+             */
+            marked: number;
+        };
         MeOutputBody: {
             /**
              * Format: uri
@@ -8913,6 +9188,11 @@ export interface components {
              * @description Attempts made; the 8th failure is final
              */
             attempts: number;
+            /**
+             * @description How it travels: a webhook post, a person's console inbox (delivered by its own commit), or email
+             * @enum {string}
+             */
+            channel: "webhook" | "inbox" | "email";
             /** @description The alarm's component, by name */
             component: string;
             /** @description The component's uuid */
@@ -8938,6 +9218,15 @@ export interface components {
             next_attempt_at?: string;
             /** @description The notification type that rendered it, by name */
             notification_type: string;
+            /**
+             * Format: date-time
+             * @description When its recipient read it, for an inbox entry
+             */
+            read_at?: string;
+            /** @description The person it is addressed to, by username: shown to that person and to holders of principal:read:admin, withheld from everyone else (see recipient_withheld) */
+            recipient?: string;
+            /** @description True when the row is addressed to a person whose name the caller may not see */
+            recipient_withheld?: boolean;
             /** Format: date-time */
             sent_at?: string;
             /**
@@ -8947,7 +9236,7 @@ export interface components {
             status: "queued" | "sent" | "failed";
             /** @description The rendered subject */
             subject: string;
-            /** @description The target it goes to, by name */
+            /** @description The target it goes to, by name: a webhook, or the group or person target it reached its recipient through */
             target: string;
             /** @description The rendered text */
             text: string;
@@ -8962,6 +9251,18 @@ export interface components {
             console_url: string;
             /** @description The internal destinations a notification may reach, each a CIDR (10.20.0.0/16), an address, or a host name (chat.corp.example). Everything private, loopback or link-local is refused unless named here; a cloud metadata address is refused even when it is; plain http is admitted only to a destination named here */
             egress_allow: string[];
+            /** @description The From address of an email notification (Omniglass <alerts@example.com>) */
+            mail_from: string;
+            /** @description The SMTP relay email notifications go through, host:port (smtp.example.com:587). Empty turns email off. An internal relay is reached only when egress_allow names it */
+            mail_relay: string;
+            /** @description A platform basic-auth secret, by name, the relay session authenticates with; empty sends without authenticating. Setting it, or moving mail_relay while one is set, takes the right to reveal that secret */
+            mail_secret: string;
+            /**
+             * @description How the session to the relay is protected: starttls (the relay must offer it), tls (implicit TLS, port 465), or none, admitted only for a relay egress_allow names (a lab's mail sim)
+             * @default starttls
+             * @enum {string}
+             */
+            mail_security: "starttls" | "tls" | "none";
         };
         NotificationTargetBody: {
             /**
@@ -8970,11 +9271,15 @@ export interface components {
              * @example /api/v1/schemas/NotificationTargetBody.json
              */
             readonly $schema?: string;
+            /** @description An email target's recipients: a shared mailbox, sent through the install's mail relay */
+            addresses?: string[] | null;
             /**
              * @description How a send proves itself: hmac signs each body with the bound hmac-key (X-Omniglass-Signature), bearer presents the bound bearer-token, none sends unsigned
              * @enum {string}
              */
             auth: "none" | "hmac" | "bearer";
+            /** @description The channels a group or person target delivers on: inbox (the console inbox) and email (each person's directory email) */
+            channels?: string[] | null;
             /** Format: date-time */
             created_at: string;
             /** @description Whether deliveries go to it; a disabled target is skipped */
@@ -8982,20 +9287,28 @@ export interface components {
             /** @description The target's uuid, the stable form of name */
             id: string;
             /**
-             * @description The channel kind: webhook posts a signed JSON envelope to the URL
+             * @description The target kind: webhook posts a signed JSON envelope to the URL; email sends to fixed addresses through the install's mail relay; principal_group reaches every human member of a group, read at each alarm transition; principal reaches one person. A person is told only about alarms on components they can read
              * @enum {string}
              */
-            kind: "webhook";
+            kind: "webhook" | "email" | "principal_group" | "principal";
             label?: string;
             name: string;
+            /** @description The person a principal target reaches, by username; shown to a caller who reads the principal directory (principal:read:admin, all-scope) */
+            principal?: string;
+            /** @description The group a principal_group target reaches, by name; shown to a caller who reads the group directory (principal_group:read:admin, all-scope) */
+            principal_group?: string;
+            /** @description The group's uuid */
+            principal_group_id?: string;
+            /** @description The person's uuid */
+            principal_id?: string;
             /** @description The platform secret the send signs (an hmac-key) or authenticates (a bearer-token) with, by name; absent sends unsigned */
             secret?: string;
             /** @description The bound secret's uuid, the stable form of secret */
             secret_id?: string;
             /** Format: date-time */
             updated_at: string;
-            /** @description The destination, masked to its scheme and host (the path and query often carry a credential); :reveal returns it whole */
-            url: string;
+            /** @description A webhook's destination, masked to its scheme and host (the path and query often carry a credential); :reveal returns it whole */
+            url?: string;
         };
         NotificationTypeBody: {
             /**
@@ -9020,6 +9333,18 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
         };
+        OptOutOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/OptOutOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The rule, by name */
+            action_rule: string;
+            /** @description Whether you are now opted out of it */
+            opted_out: boolean;
+        };
         OwnerStruct: {
             /**
              * @description The owner arc: a component, or a system (telemetry about the system as a whole, such as a cloud service's account of the room it serves). A system batch carries no log lines, since a log line is component-owned
@@ -9028,6 +9353,36 @@ export interface components {
             kind: "component" | "system";
             /** @description The owning entity, by name or id */
             ref: string;
+        };
+        PersonalRuleBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/PersonalRuleBody.json
+             */
+            readonly $schema?: string;
+            /** @description How it tells you: inbox (your console inbox), email (your directory email) */
+            channels: string[] | null;
+            /** Format: date-time */
+            created_at: string;
+            description?: string;
+            /** @description Whether it fires; a paused rule queues nothing */
+            enabled: boolean;
+            /** @description The rule's uuid, the stable form of name */
+            id: string;
+            label?: string;
+            /** @description The rule's name, unique among your own rules */
+            name: string;
+            /** @description The notification type it sends, by name; absent sends the official one for the transition */
+            notification_type?: string;
+            /** @description That type's uuid */
+            notification_type_id?: string;
+            /** @description The alarm transitions it fires on: raised, cleared, or both */
+            on: string[] | null;
+            /** Format: date-time */
+            updated_at: string;
+            /** @description The predicate over the alarm facts (the action expression site); absent always holds */
+            when?: string;
         };
         PlatformBindingInputBody: {
             /**
@@ -10052,6 +10407,28 @@ export interface components {
              * @description When the condition came into force
              */
             since: string;
+        };
+        RuleMatchBody: {
+            /** @description The alarm's uuid */
+            alarm: string;
+            /**
+             * Format: date-time
+             * @description When that edge happened
+             */
+            at: string;
+            /** @description The alarm's component, by name */
+            component: string;
+            /** @description Why the when did not run, when it did not */
+            error?: string;
+            /** @description Whether the rule would have told you */
+            matched: boolean;
+            message: string;
+            severity: string;
+            /**
+             * @description The edge judged
+             * @enum {string}
+             */
+            transition: "raised" | "cleared";
         };
         RuleOpenAlarmBody: {
             alarm_id: string;
@@ -11190,6 +11567,23 @@ export interface components {
             /** @description The system type the system is classified as */
             system_type?: string;
         };
+        TestDraftInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/TestDraftInputBody.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: int64
+             * @description How many of your most recent alarms to judge (default 20)
+             */
+            limit?: number;
+            /** @description The transitions to judge (default raised) */
+            on?: string[];
+            /** @description The predicate to judge (default always) */
+            when?: string;
+        };
         TestNotificationTargetOutputBody: {
             /**
              * Format: uri
@@ -11206,6 +11600,33 @@ export interface components {
              * @description The receiver's HTTP status; 0 when no answer came (refused, unreachable, TLS, timeout)
              */
             status: number;
+        };
+        TestPersonalRuleInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/TestPersonalRuleInputBody.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: int64
+             * @description How many of your most recent alarms to judge (default 20)
+             */
+            limit?: number;
+            /** @description A draft of the transitions to judge with, in place of the rule's own */
+            on?: string[];
+            /** @description A draft of the predicate to judge with, in place of the rule's own */
+            when?: string;
+        };
+        TestPersonalRuleOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/TestPersonalRuleOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Your most recent alarms on components you can read, newest first, each transition the rule fires on that the alarm has had */
+            matches: components["schemas"]["RuleMatchBody"][] | null;
         };
         Transport: {
             built: boolean;
@@ -11272,6 +11693,8 @@ export interface components {
             notification_type?: string;
             /** @description The transitions it fires on (replaces the set) */
             on?: string[];
+            /** @description Let a member of a group it targets opt out of it; false withdraws every opt-out from the next transition */
+            opt_out_allowed?: boolean;
             /** @description The targets (replaces the set) */
             targets?: string[];
             /** @description The predicate (empty always holds) */
@@ -11532,6 +11955,10 @@ export interface components {
              * @example /api/v1/schemas/UpdateNotificationTargetInputBody.json
              */
             readonly $schema?: string;
+            /** @description An email target's recipient addresses */
+            addresses?: string[];
+            /** @description A group or person target's channels: inbox, email */
+            channels?: string[];
             /** @description Whether deliveries go to it */
             enabled?: boolean;
             /** @description A human label (empty clears it) */
@@ -11556,6 +11983,28 @@ export interface components {
             subject?: string;
             /** @description The body text template */
             text?: string;
+        };
+        UpdatePersonalRuleInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdatePersonalRuleInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description How it tells you (replaces the set) */
+            channels?: string[];
+            /** @description What it is for */
+            description?: string;
+            /** @description Whether it fires: false pauses it, true resumes it from the next transition */
+            enabled?: boolean;
+            /** @description A human label (empty clears it) */
+            label?: string;
+            /** @description The type to send (empty returns to the official one per transition) */
+            notification_type?: string;
+            /** @description The transitions it fires on (replaces the set) */
+            on?: string[];
+            /** @description The predicate (empty always holds) */
+            when?: string;
         };
         UpdatePrincipalInputBody: {
             /**
@@ -12035,6 +12484,70 @@ export interface operations {
             };
         };
     };
+    "opt-in-action-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The rule's name or uuid */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OptOutOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "opt-out-action-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The rule's name or uuid */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OptOutOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "list-audit-log": {
         parameters: {
             query?: {
@@ -12224,6 +12737,235 @@ export interface operations {
             };
         };
     };
+    "list-auth-me-action-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListPersonalRulesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-auth-me-action-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePersonalRuleInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonalRuleBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-auth-me-action-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Your rule's name or uuid */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonalRuleBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-auth-me-action-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Your rule's name or uuid */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-auth-me-action-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Your rule's name or uuid */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePersonalRuleInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonalRuleBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "test-auth-me-action-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Your rule's name or uuid */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["TestPersonalRuleInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestPersonalRuleOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "test-auth-me-action-rules-draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["TestDraftInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestPersonalRuleOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "get-auth-me-avatar": {
         parameters: {
             query?: never;
@@ -12240,6 +12982,101 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AvatarOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-auth-me-notifications": {
+        parameters: {
+            query?: {
+                /** @description Only the entries not yet read */
+                unread?: boolean;
+                /** @description At most this many, newest first (default 100) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListInboxOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "mark-read-auth-me-notification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The notification's uuid */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "mark-all-read-auth-me-notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarkAllReadOutputBody"];
                 };
             };
             /** @description Error */

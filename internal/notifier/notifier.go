@@ -2,7 +2,9 @@
 // ADR-0618): every TickEvery it drains the due rows the alarm transitions
 // queued, one row per transaction, each sent through the egress primitive
 // while its row lock is held, so replicas drain one queue (FOR UPDATE SKIP
-// LOCKED) and a restart resumes where the last pass stopped. It is the shape
+// LOCKED) and a restart resumes where the last pass stopped. A webhook row
+// goes through the egress HTTP client; an email row (#1317) through the mail
+// relay, over the egress primitive's same dial. It is the shape
 // ADR-0148 chose for calc rules, not the CDC-to-JetStream sender the
 // alarms-and-actions page designs: the notification must commit with the
 // alarm, and the CDC publisher (#430) is unbuilt; when it lands the drain can
@@ -17,6 +19,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/egress"
+	"github.com/hyperscaleav/omniglass/internal/mail"
 	"github.com/hyperscaleav/omniglass/internal/notify"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
@@ -55,9 +58,13 @@ func New(store Store, opts egress.Options) *Notifier {
 func (n *Notifier) Pass(ctx context.Context, max int) (int, error) {
 	pol, perr := n.store.EgressPolicy(ctx)
 	client := egress.New(pol, n.opts)
+	mailer := mail.New(pol, n.opts)
 	send := func(ctx context.Context, s storage.NotificationSend) storage.SendResult {
 		if perr != nil {
 			return storage.SendResult{Reason: strings.TrimPrefix(perr.Error(), "egress: ")}
+		}
+		if s.Channel == storage.DeliveryEmail {
+			return SendEmail(ctx, mailer, s.ID, s.Subject, s.Text, s.Email)
 		}
 		req, err := notify.Build(s.Target.URL, notify.Envelope{
 			ID: s.ID, Type: s.Type, Transition: s.Transition, Subject: s.Subject, Text: s.Text,
@@ -88,6 +95,27 @@ func (n *Notifier) Pass(ctx context.Context, max int) (int, error) {
 		taken++
 	}
 	return taken, nil
+}
+
+// SendEmail builds one email row's message and hands it to the relay: the
+// same row builds the same bytes, so a retry resends what the first attempt
+// sent. A message that cannot be built (an address that does not parse) is
+// the send's reason.
+func SendEmail(ctx context.Context, mailer *mail.Client, id, subject, text string, e *storage.EmailSend) storage.SendResult {
+	if e == nil {
+		return storage.SendResult{Reason: "the email has no send"}
+	}
+	from, err := mail.CheckAddress(e.Relay.From)
+	if err != nil {
+		return storage.SendResult{Reason: "mail_from is not an email address"}
+	}
+	raw, err := mail.Build(mail.Message{ID: id, From: e.Relay.From, To: e.To, Subject: subject, Text: text, Date: e.Date})
+	if err != nil {
+		return storage.SendResult{Reason: err.Error()}
+	}
+	res := mailer.Send(ctx, mail.Relay{Addr: e.Relay.Addr, Security: e.Relay.Security, Username: e.Relay.Username, Password: e.Relay.Password},
+		from, e.To, raw)
+	return storage.SendResult{OK: res.OK, Status: res.Status, Reason: res.Reason}
 }
 
 // RowBound bounds one row's take, send and record: the egress client's own

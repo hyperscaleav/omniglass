@@ -198,6 +198,7 @@ var IdentityShapes = map[string]TableIdentity{
 	"calc_rule_input":      {Shape: ShapeIDOnly, Reason: "one input of a calc rule, keyed by rule and position; its alias is an expression's binding, not an address"},
 	"endpoint_live":        {Shape: ShapeIDOnly, Reason: "when an endpoint last delivered a batch, keyed by the endpoint's uuid; nothing addresses it by name"},
 	"action_rule_target":   {Shape: ShapeIDOnly, Reason: "a target an action rule sends to, keyed by rule and target; nothing addresses it by name"},
+	"action_rule_opt_out":  {Shape: ShapeIDOnly, Reason: "a person opted out of a rule, keyed by rule and principal; nothing addresses it by name"},
 	"notification":         {Shape: ShapeIDOnly, Reason: "one message on its way, keyed by its uuid (the Idempotency-Key a receiver sees); nothing addresses it by name"},
 	"webhook_token":        {Shape: ShapeIDOnly, Reason: "a webhook endpoint's token binding, keyed by the endpoint's uuid and found by the token's digest; nothing addresses it by name"},
 	"unclaimed_source":     {Shape: ShapeIDOnly, Reason: "a sender no endpoint claims, one row per listener host, transport and source address; read as a list, never addressed by name"},

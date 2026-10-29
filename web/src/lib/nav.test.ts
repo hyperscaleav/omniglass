@@ -162,6 +162,15 @@ describe("routeTokens", () => {
     expect(routeTokens("/web/profile")).toBeNull();
     expect(routeTokens("/web/dashboards")).toBeNull(); // a not-yet-built stub
   });
+  // The inbox and a person's own subscriptions (#1355) are self-scoped pages
+  // off the rail: ungated at the route (each page gates its own reads and
+  // writes on the notification permissions), labelled in the top bar.
+  it("labels the inbox and the subscriptions page, and leaves both ungated at the route", () => {
+    expect(sectionLabel("/web/inbox")).toBe("Inbox");
+    expect(sectionLabel("/web/profile/subscriptions")).toBe("Profile · Alarm subscriptions");
+    expect(routeTokens("/web/inbox")).toBeNull();
+    expect(routeTokens("/web/profile/subscriptions")).toBeNull();
+  });
   it("gates exactly what the sidebar hides: routeTokens is set iff the nav entry has a resource/perm", () => {
     // Every gated nav child's route resolves to a permission; a resource-less stub does not.
     const admin = navItems.find((i) => i.label === "Admin")!;

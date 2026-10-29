@@ -28,6 +28,7 @@ type actionRuleBody struct {
 	NotificationType   string    `json:"notification_type,omitempty" doc:"The notification type it sends, by name; absent sends the official one for the transition (alarm-raised, alarm-cleared)"`
 	NotificationTypeID string    `json:"notification_type_id,omitempty" doc:"That type's uuid"`
 	Targets            []string  `json:"targets" doc:"The notification targets it sends to, by name"`
+	OptOutAllowed      bool      `json:"opt_out_allowed" doc:"Whether a member of a group it targets may opt out of it for themselves (:optOut); false by default, so an on-call page cannot be opted out of unless an admin allows it"`
 	Enabled            bool      `json:"enabled"`
 	Official           bool      `json:"official"`
 	CreatedAt          time.Time `json:"created_at"`
@@ -41,7 +42,7 @@ func toActionRuleBody(r *storage.ActionRule) actionRuleBody {
 	}
 	return actionRuleBody{ID: r.ID, Name: r.Name, Label: r.Label, Description: r.Description, On: r.On, When: r.When,
 		NotificationType: r.NotificationType, NotificationTypeID: r.NotificationTypeID, Targets: targets,
-		Enabled: r.Enabled, Official: r.Official, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
+		OptOutAllowed: r.OptOutAllowed, Enabled: r.Enabled, Official: r.Official, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
 }
 
 type listActionRulesOutput struct {
@@ -65,6 +66,7 @@ type createActionRuleInput struct {
 		When             string   `json:"when,omitempty" required:"false" doc:"A predicate over the alarm facts at the action expression site (component, place, severity, severity_rank, message, transition, rule, ...; see /expressions:validate with site action); absent always holds. A refusal is a 422 with its line and column"`
 		NotificationType string   `json:"notification_type,omitempty" required:"false" doc:"The notification type to send, by name or uuid; absent sends the official one for the transition"`
 		Targets          []string `json:"targets" minItems:"1" doc:"The notification targets to send to, by name or uuid"`
+		OptOutAllowed    bool     `json:"opt_out_allowed,omitempty" required:"false" doc:"Let a member of a group it targets opt out of it for themselves (default false)"`
 		Enabled          *bool    `json:"enabled,omitempty" required:"false" doc:"Whether it fires (default true): a disabled rule queues nothing on a transition, and what it queued before still delivers"`
 	}
 }
@@ -78,6 +80,7 @@ type updateActionRuleInput struct {
 		When             *string   `json:"when,omitempty" required:"false" doc:"The predicate (empty always holds)"`
 		NotificationType *string   `json:"notification_type,omitempty" required:"false" doc:"The type to send (empty returns to the official one per transition)"`
 		Targets          *[]string `json:"targets,omitempty" required:"false" doc:"The targets (replaces the set)"`
+		OptOutAllowed    *bool     `json:"opt_out_allowed,omitempty" required:"false" doc:"Let a member of a group it targets opt out of it; false withdraws every opt-out from the next transition"`
 		Enabled          *bool     `json:"enabled,omitempty" required:"false" doc:"Whether it fires: a disabled rule queues nothing on a transition, and what it queued before still delivers; re-enabled, it acts on the next transition"`
 	}
 }
@@ -126,7 +129,7 @@ func registerActionRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway
 	}, "rule", "create"), func(ctx context.Context, in *createActionRuleInput) (*actionRuleOutput, error) {
 		r, err := gw.CreateActionRule(ctx, actorID(ctx), storage.ActionRuleSpec{
 			Name: in.Body.Name, Label: in.Body.Label, Description: in.Body.Description, On: in.Body.On, When: in.Body.When,
-			NotificationType: in.Body.NotificationType, Targets: in.Body.Targets, Enabled: in.Body.Enabled,
+			NotificationType: in.Body.NotificationType, Targets: in.Body.Targets, OptOutAllowed: in.Body.OptOutAllowed, Enabled: in.Body.Enabled,
 		}, a.scopeFor(ctx, "rule", "create"))
 		if err != nil {
 			return nil, mapActionRuleErr(err)
@@ -143,7 +146,7 @@ func registerActionRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway
 	}, "rule", "update"), func(ctx context.Context, in *updateActionRuleInput) (*actionRuleOutput, error) {
 		r, err := gw.UpdateActionRule(ctx, actorID(ctx), in.Name, storage.ActionRulePatch{
 			Label: in.Body.Label, Description: in.Body.Description, On: in.Body.On, When: in.Body.When,
-			NotificationType: in.Body.NotificationType, Targets: in.Body.Targets, Enabled: in.Body.Enabled,
+			NotificationType: in.Body.NotificationType, Targets: in.Body.Targets, OptOutAllowed: in.Body.OptOutAllowed, Enabled: in.Body.Enabled,
 		}, a.scopeFor(ctx, "rule", "update"))
 		if err != nil {
 			return nil, mapActionRuleErr(err)

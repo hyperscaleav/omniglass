@@ -41,6 +41,7 @@ Adds a rule that, on an alarm's raise or clear, when its predicate holds over th
 | `--name` | string | (none) | The rule's name (lowercase kebab) |
 | `--notification-type` | string | (none) | The notification type to send, by name or uuid; absent sends the official one for the transition |
 | `--on` | string | (none) | The alarm transitions it fires on: raised, cleared, or both. Acknowledging an alarm is never one |
+| `--opt-out-allowed` | bool | `false` | Let a member of a group it targets opt out of it for themselves (default false) |
 | `--targets` | string | (none) | The notification targets to send to, by name or uuid |
 | `--when` | string | (none) | A predicate over the alarm facts at the action expression site (component, place, severity, severity_rank, message, transition, rule, ...; see /expressions:validate with site action); absent always holds. A refusal is a 422 with its line and column |
 
@@ -98,6 +99,38 @@ Example:
 omniglass action-rule list
 ```
 
+### `omniglass action-rule optIn`
+
+Opt yourself back in to a group notification
+
+```
+omniglass action-rule optIn <name>
+```
+
+Undoes your opt-out of a platform action rule; always allowed. Idempotent and audited. Gated by notification:subscribe.
+
+Example:
+
+```sh
+omniglass action-rule optIn <name>
+```
+
+### `omniglass action-rule optOut`
+
+Opt yourself out of a group notification
+
+```
+omniglass action-rule optOut <name>
+```
+
+Stops a platform action rule telling you through a group it targets, for you alone. Only a rule an admin marked opt_out_allowed (a 409 otherwise); a rule that names you directly still tells you. Idempotent and audited. Gated by notification:subscribe.
+
+Example:
+
+```sh
+omniglass action-rule optOut <name>
+```
+
 ### `omniglass action-rule update`
 
 Update an action rule
@@ -115,6 +148,7 @@ Patches a rule (an absent field is unchanged; on and targets replace their sets)
 | `--label` | string | (none) | A human label (empty clears it) |
 | `--notification-type` | string | (none) | The type to send (empty returns to the official one per transition) |
 | `--on` | string | (none) | The transitions it fires on (replaces the set) |
+| `--opt-out-allowed` | bool | `false` | Let a member of a group it targets opt out of it; false withdraws every opt-out from the next transition |
 | `--targets` | string | (none) | The targets (replaces the set) |
 | `--when` | string | (none) | The predicate (empty always holds) |
 
@@ -255,7 +289,7 @@ omniglass auth logout
 The authenticated principal, its permissions, and grants
 
 ```
-omniglass auth me
+omniglass auth me [flags]
 ```
 
 Returns the caller's principal, flattened permissions (a UI hint and the fast-reject set), the permissions held on an all-scope grant (fleet_permissions), and grants. Requires authentication.
@@ -264,6 +298,213 @@ Example:
 
 ```sh
 omniglass auth me
+```
+
+#### `omniglass auth me action-rule`
+
+Commands for the action-rule resource
+
+##### `omniglass auth me action-rule create`
+
+Subscribe yourself to alarms
+
+```
+omniglass auth me action-rule create [flags]
+```
+
+Creates a personal action rule: on which alarm transitions, when, what to send, and on which of your channels (inbox, email). It tells you alone and names no target (targets is a 422), and it only ever matches an alarm on a component you can read at that moment, judged before its when runs. A taken name among your rules, or a 51st rule, is a 409. Audited. Gated by notification:subscribe.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--channels` | string | (none) | How it tells you: inbox, email (your directory email) |
+| `--description` | string | (none) | What it is for |
+| `--enabled` | bool | `false` | Whether it fires (default true) |
+| `--label` | string | (none) | A human label |
+| `--name` | string | (none) | The rule's name (lowercase kebab), unique among your own rules |
+| `--notification-type` | string | (none) | The notification type to send, by name or uuid; absent sends the official one for the transition |
+| `--on` | string | (none) | The alarm transitions it fires on: raised, cleared, or both |
+| `--targets` | string | (none) | Refused when set (a 422): a personal rule tells you alone and names no target |
+| `--when` | string | (none) | A predicate over the alarm facts (component, place, severity, severity_rank, message, rule, ...); absent always holds. Judged only for alarms on components you can read |
+
+Example:
+
+```sh
+omniglass auth me action-rule create --channels <json> --name name --on <json>
+```
+
+##### `omniglass auth me action-rule delete`
+
+Unsubscribe: delete one of your alarm subscriptions
+
+```
+omniglass auth me action-rule delete <name>
+```
+
+Deletes one of your own personal action rules; what it already sent keeps its name. Another user's is a 404. Audited. Gated by notification:subscribe.
+
+Example:
+
+```sh
+omniglass auth me action-rule delete <name>
+```
+
+##### `omniglass auth me action-rule get`
+
+Get one of your alarm subscriptions
+
+```
+omniglass auth me action-rule get <name>
+```
+
+One of your own personal action rules, by name or uuid; another user's is a 404. Gated by notification:subscribe.
+
+Example:
+
+```sh
+omniglass auth me action-rule get <name>
+```
+
+##### `omniglass auth me action-rule list`
+
+List your alarm subscriptions
+
+```
+omniglass auth me action-rule list
+```
+
+Your own personal action rules, by name. Self-scoped. Gated by notification:subscribe.
+
+Example:
+
+```sh
+omniglass auth me action-rule list
+```
+
+##### `omniglass auth me action-rule test`
+
+Test one of your alarm subscriptions against your recent alarms
+
+```
+omniglass auth me action-rule test <name> [flags]
+```
+
+Judges one of your own personal action rules, or a draft of its on and when, against your most recent alarms on components you can read: for each transition it fires on, whether it would have told you. Writes and sends nothing. Another user's rule is a 404. Gated by notification:subscribe.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--limit` | int | `0` | How many of your most recent alarms to judge (default 20) |
+| `--on` | string | (none) | A draft of the transitions to judge with, in place of the rule's own |
+| `--when` | string | (none) | A draft of the predicate to judge with, in place of the rule's own |
+
+Example:
+
+```sh
+omniglass auth me action-rule test <name>
+```
+
+##### `omniglass auth me action-rule testDraft`
+
+Test a draft alarm subscription against your recent alarms
+
+```
+omniglass auth me action-rule testDraft [flags]
+```
+
+Judges a draft's on (default raised) and when (default always) against your most recent alarms on components you can read, before it is saved: for each transition, whether it would have told you. Writes and sends nothing. Gated by notification:subscribe.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--limit` | int | `0` | How many of your most recent alarms to judge (default 20) |
+| `--on` | string | (none) | The transitions to judge (default raised) |
+| `--when` | string | (none) | The predicate to judge (default always) |
+
+Example:
+
+```sh
+omniglass auth me action-rule testDraft
+```
+
+##### `omniglass auth me action-rule update`
+
+Change or pause one of your alarm subscriptions
+
+```
+omniglass auth me action-rule update <name> [flags]
+```
+
+Patches one of your own personal action rules (an absent field is unchanged); enabled false pauses it. Another user's is a 404. Audited. Gated by notification:subscribe.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--channels` | string | (none) | How it tells you (replaces the set) |
+| `--description` | string | (none) | What it is for |
+| `--enabled` | bool | `false` | Whether it fires: false pauses it, true resumes it from the next transition |
+| `--label` | string | (none) | A human label (empty clears it) |
+| `--notification-type` | string | (none) | The type to send (empty returns to the official one per transition) |
+| `--on` | string | (none) | The transitions it fires on (replaces the set) |
+| `--when` | string | (none) | The predicate (empty always holds) |
+
+Example:
+
+```sh
+omniglass auth me action-rule update <name>
+```
+
+#### `omniglass auth me notification`
+
+Commands for the notification resource
+
+##### `omniglass auth me notification list`
+
+List your inbox
+
+```
+omniglass auth me notification list [flags]
+```
+
+The caller's own console inbox: the notifications addressed to them on the inbox channel, newest first, with the unread count. Self-scoped (never another principal's), and scoped again by the caller's component read scope as it stands now, so an entry about a component they can no longer read is gone. Gated by notification:read.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--limit` | int | `0` | At most this many, newest first (default 100) |
+| `--unread` | bool | `false` | Only the entries not yet read |
+
+Example:
+
+```sh
+omniglass auth me notification list
+```
+
+##### `omniglass auth me notification markAllRead`
+
+Mark every inbox entry read
+
+```
+omniglass auth me notification markAllRead
+```
+
+Marks every unread entry in the caller's own inbox read, over the same scope the inbox reads, and says how many. Audited as one row. Gated by notification:read.
+
+Example:
+
+```sh
+omniglass auth me notification markAllRead
+```
+
+##### `omniglass auth me notification markRead`
+
+Mark an inbox entry read
+
+```
+omniglass auth me notification markRead <id>
+```
+
+Marks one of the caller's own inbox entries read (one already read keeps its first read time). An entry that is not the caller's, or about a component outside their component read scope, is a non-disclosing 404. Audited. Gated by notification:read.
+
+Example:
+
+```sh
+omniglass auth me notification markRead <id>
 ```
 
 ### `omniglass auth remove-avatar`
@@ -3453,7 +3694,7 @@ List notifications
 omniglass notification list [flags]
 ```
 
-The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. Gated by notification:read.
+The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. A row addressed to a person names them only to that person and to holders of principal:read:admin. Gated by notification:read.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -3496,21 +3737,25 @@ Create a notification target
 omniglass notification-target create [flags]
 ```
 
-Adds a destination a notification can be sent to: a channel kind (webhook), its URL and, optionally, the platform secret it signs or authenticates with. Binding a secret takes the right to reveal it (secret:reveal, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not reveal a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.
+Adds a destination a notification can be sent to: a webhook, its URL and, optionally, the platform secret it signs or authenticates with; or people, a principal_group (every human member, read at each alarm transition) or one principal, on the channels named. A person is told only about an alarm on a component their own component read scope admits. Binding a group takes principal_group:read:admin and binding a person principal:read:admin (a 403 without it), since the target reaches whoever they name. Binding a secret takes the right to reveal it (secret:reveal, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not reveal a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--addresses` | string | (none) | An email target's recipient addresses |
+| `--channels` | string | (none) | A group or person target's channels: inbox, email |
 | `--enabled` | bool | `false` | Whether deliveries go to it (default true) |
-| `--kind` | string | (none) | The channel kind |
+| `--kind` | string | (none) | The target kind |
 | `--label` | string | (none) | A human label |
 | `--name` | string | (none) | The target's name (lowercase kebab) |
+| `--principal` | string | (none) | A principal target's person, by username or uuid; binding one takes principal:read:admin |
+| `--principal-group` | string | (none) | A principal_group target's group, by name or uuid; binding one takes principal_group:read:admin |
 | `--secret` | string | (none) | A platform secret, by name or uuid, of type hmac-key (signs each body) or bearer-token (sent as Authorization: Bearer) |
-| `--url` | string | (none) | The destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is |
+| `--url` | string | (none) | A webhook's destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is |
 
 Example:
 
 ```sh
-omniglass notification-target create --kind kind --name name --url url
+omniglass notification-target create --kind kind --name name
 ```
 
 ### `omniglass notification-target delete`
@@ -3585,7 +3830,7 @@ Send a test notification to a target
 omniglass notification-target test <name>
 ```
 
-Sends one synthetic message (transition test, about no alarm) to the target through the egress contract, signed or authenticated as a delivery would be, and answers what the receiver said. Records nothing but its audit row (the result, never the URL). A disabled target is still tested. Gated by notification_target:test with an all-scope grant.
+Sends one synthetic message (transition test, about no alarm) to a webhook or email target through the egress contract, signed or authenticated as a delivery would be (an email through the install's mail relay), and answers what the receiver said; a group or person target is a 422, since people are told only about alarms. Records nothing but its audit row (the result, never the URL). A disabled target is still tested. Gated by notification_target:test with an all-scope grant.
 
 Example:
 
@@ -3605,6 +3850,8 @@ Patches a target's label, URL, secret or enabled flag (an absent field is unchan
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--addresses` | string | (none) | An email target's recipient addresses |
+| `--channels` | string | (none) | A group or person target's channels: inbox, email |
 | `--enabled` | bool | `false` | Whether deliveries go to it |
 | `--label` | string | (none) | A human label (empty clears it) |
 | `--secret` | string | (none) | A platform secret by name or uuid; empty unbinds it |
@@ -3963,7 +4210,7 @@ Purge a principal
 omniglass principal purge <id>
 ```
 
-Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. Gated by principal:purge:admin (admin-sensitive, all-scope), and the principal must be archived first.
+Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. A person a notification target notifies cannot be purged (a 409; the refusal names the target to a caller who reads targets). Gated by principal:purge:admin (admin-sensitive, all-scope), and the principal must be archived first.
 
 Example:
 
@@ -4155,7 +4402,7 @@ Delete a principal group
 omniglass principal-group delete <group>
 ```
 
-Removes a group and, by cascade, its memberships and grants. Gated by principal_group:delete (all-scope).
+Removes a group and, by cascade, its memberships and grants. A group a notification target notifies cannot be deleted (a 409): the refusal names the target to a caller who reads targets. Gated by principal_group:delete (all-scope).
 
 Example:
 
@@ -5159,6 +5406,22 @@ omniglass severity-level update <name>
 ## `omniglass sim`
 
 Simulate the devices placed on a node
+
+### `omniglass sim mail`
+
+Run a mail relay simulator that keeps what it is sent
+
+```
+omniglass sim mail [flags]
+```
+
+Serves SMTP on --listen and keeps every message it accepts, writing each as one JSON line (from, to, subject, text, message_id) to --out (standard output by default). It sends nothing on. Point the notification settings' mail_relay at it with mail_security none and name its address in egress_allow. While --down-file holds the word down, it refuses every message with a temporary error.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--down-file` | string | (none) | while this file holds the word down, refuse every message with a temporary error |
+| `--listen` | string | `127.0.0.1:2525` | the address to serve SMTP on |
+| `--out` | string | (none) | append each accepted message as a JSON line to this file (default standard output) |
 
 ### `omniglass sim run`
 

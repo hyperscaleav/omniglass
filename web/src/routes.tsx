@@ -7,6 +7,8 @@ import Locations from "./pages/Locations";
 import Systems from "./pages/Systems";
 import Components from "./pages/Components";
 import Profile from "./pages/Profile";
+import Subscriptions from "./pages/Subscriptions";
+import Inbox from "./pages/Inbox";
 import Nodes from "./pages/Nodes";
 import Simulation from "./pages/Simulation";
 import Users from "./pages/Users";
@@ -53,6 +55,8 @@ export const PAGES: Record<string, Component> = {
   Systems,
   Components,
   Profile,
+  Subscriptions,
+  Inbox,
   Nodes,
   Simulation,
   Users,

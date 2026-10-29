@@ -8,9 +8,15 @@
 roles:
   - id: viewer
     label: Viewer
-    description: Read-only access to everything. The floor every other role inherits.
+    description: Read-only access to everything, and subscribing yourself to the alarms you can see. The floor every other role inherits.
     permissions:
       - "*:read"
+      # notification:subscribe is a person's own alarm subscriptions and
+      # group opt-outs (#1341): every human who can see alarms may subscribe
+      # to them, told only about what they can read; granted explicitly so a
+      # permission is still checked on every route and an install can
+      # withhold it with a custom role.
+      - "notification:subscribe"
   - id: operator
     label: Operator
     description: >-

@@ -33,6 +33,23 @@ export const settingsSchema = {
     },
     "egress_allow": {
       "type": "array"
+    },
+    "mail_from": {
+      "type": "string"
+    },
+    "mail_relay": {
+      "type": "string"
+    },
+    "mail_secret": {
+      "type": "string"
+    },
+    "mail_security": {
+      "type": "string",
+      "enum": [
+        "starttls",
+        "tls",
+        "none"
+      ]
     }
   },
   "retention": {

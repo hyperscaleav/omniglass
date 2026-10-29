@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/hyperscaleav/omniglass/internal/settings"
@@ -95,7 +96,13 @@ func registerSettingsRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		}
 		// The merge is a single atomic read-modify-write in the Gateway, serialized
 		// against concurrent patches to the same namespace so no update is lost.
-		if _, err := gw.MergePatchSettingOverride(ctx, actorID(ctx), "platform", in.Namespace, in.Body); err != nil {
+		// The notification namespace's mail relay binds a secret, so its patch
+		// is judged on the settings it results in (#1317).
+		if in.Namespace == "notification" {
+			if _, err := gw.MergePatchNotificationSettings(ctx, actorID(ctx), in.Body, secretUse(ctx, a)); err != nil {
+				return nil, mapMailSecretErr(err)
+			}
+		} else if _, err := gw.MergePatchSettingOverride(ctx, actorID(ctx), "platform", in.Namespace, in.Body); err != nil {
 			return nil, err
 		}
 		return resolveOutput(ctx, svc)
@@ -152,4 +159,20 @@ func resolveOutput(ctx context.Context, svc *settings.Service) (*settingsReadOut
 	out.Body.Sources = r.Sources
 	out.Body.Locks = r.Locks
 	return out, nil
+}
+
+// mapMailSecretErr maps a notification settings patch refused for the mail
+// relay's secret (#1317): binding one, or moving the relay while one stays
+// bound, by any layer, takes the right to reveal it, exactly as binding a
+// secret to a notification target does.
+func mapMailSecretErr(err error) error {
+	switch {
+	case errors.Is(err, storage.ErrSecretNotFound):
+		return huma.Error404NotFound("secret not found")
+	case errors.Is(err, storage.ErrSecretForbidden):
+		return huma.Error403Forbidden("binding the mail relay's secret, or moving the relay while one is bound, takes the right to reveal that secret (secret:reveal)")
+	case errors.Is(err, storage.ErrMailSecretInvalid):
+		return huma.Error422UnprocessableEntity(strings.TrimPrefix(err.Error(), "storage: the mail relay's secret is invalid: "))
+	}
+	return err
 }
