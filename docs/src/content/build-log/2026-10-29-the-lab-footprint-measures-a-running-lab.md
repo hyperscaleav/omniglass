@@ -17,23 +17,26 @@ The lab's node cadence is now a named profile: `lab` (a learner's), `walkthrough
 probing on every check-in) and `default` (the product's 30 s). The lab guide renders the profiles
 from the planner.
 
-The first reading, on build `5cf55044`, the dev fleet (41 systems, 215 components, 609 tasks): a
-2-minute warm-up, then 5 one-minute windows per profile, run back to back. The host was shared,
-with a load average of 12 to 22 on 12 cores, so CPU reads high and the ranges are wide.
+The first reading, on build `ccbb5d56`, the dev fleet (41 systems, 215 components, 609 tasks): a
+2-minute warm-up, then 5 windows per profile (one minute each, two at `default`, so a window
+holds four of its check-ins), run back to back. The host was shared, with a load average of 6 to
+17 on 12 cores, so CPU reads high and the ranges are wide. At `default` the simulator re-pulls its
+list at its own 10 s rather than the lab's 2 s, so the figure carries as little simulator traffic
+as a lab can.
 
 | Per lab | `walkthrough` (2 s, probe every check-in) | `lab` (2 s, probe every 10 s) | `default` (30 s) |
 |---|---|---|---|
-| Metric rows a minute | 13,138 (13,021 to 13,300) | 2,929 (2,928 to 2,960) | 1,225 (1,140 to 1,340) |
-| Metric table a day, with indexes | 3.99 GiB | 965 MiB | 415 MiB |
-| Database a day | 5.20 GiB | 1.27 GiB | 606 MiB |
-| WAL a day | 11.49 GiB | 2.71 GiB | 1.28 GiB |
-| CPU, server / node / db (millicores) | 211 / 82 / 284 | 116 / 30 / 144 | 33 / 13 / 105 |
-| CPU in all | 576 (522 to 585) | 292 (268 to 310) | 150 (137 to 159) |
-| Memory, server / node / db (MiB) | 47 / 135 / 92 | 41 / 128 / 84 | 37 / 129 / 70 |
-| Series read, 24 h / 30 d, one vCPU | 8.9 / 6.4 ms | 5.2 / 3.2 ms | 2.8 / 2.1 ms |
+| Metric rows a minute | 13,257 (13,000 to 13,342) | 2,930 (2,929 to 2,961) | 1,205 (1,044 to 1,366) |
+| Metric table a day, with indexes | 4.21 GiB | 966 MiB | 376 MiB |
+| Database a day | 5.42 GiB | 1.25 GiB | 556 MiB |
+| WAL a day | 11.77 GiB | 2.71 GiB | 1.50 GiB |
+| CPU, server / node / db (millicores) | 222 / 88 / 289 | 114 / 28 / 145 | 28 / 13 / 90 |
+| CPU in all | 596 (580 to 643) | 289 (285 to 313) | 131 (129 to 133) |
+| Memory, server / node / db (MiB) | 44 / 128 / 100 | 42 / 130 / 79 | 41 / 134 / 76 |
+| Series read, 24 h / 30 d, one vCPU | 3.9 / 4.2 ms | 3.5 / 2.9 ms | 2.9 / 2.8 ms |
 
-This reproduces the 2026-10-27 hand measurement: about 13,000 rows a minute at 2 s, and the
-2026-10-28 learner's lab figure of 2,733. At 30 s it reads 1,225 against about 1,000; the fleet
-has grown since, and a one-minute window holds only two 30 s check-ins. CPU at 2 s reads 576
-against about 470, on a host this busy. The reads are fast because a lab minutes old holds minutes
-of history; the 1,000-system lab (#1357) measures them on volume.
+This reproduces the 2026-10-27 hand measurement at 2 s, about 13,000 rows a minute. It also
+reproduces the 2026-10-28 learner's lab figure of 2,733. At 30 s it reads 1,205 against about
+1,000, because the fleet has grown since. CPU at 2 s reads 596 against about 470, on a host this
+busy. The reads are fast because a lab minutes old holds minutes of history; the 1,000-system lab
+(#1357) measures them on volume.
