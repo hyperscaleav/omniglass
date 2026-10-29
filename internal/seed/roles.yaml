@@ -59,6 +59,12 @@ roles:
       # grant reaches no component at all (#714), so granting it there would ship
       # a capability that acknowledges nothing in the shape the role is granted in.
       - "alarm:acknowledge"
+      # alarm:snooze silences an alarm's condition's notifications for a
+      # bounded time (#1318, ADR-1318). The role that acknowledges is the role
+      # that snoozes, and for the same reason it is NOT on deploy: it resolves
+      # on the component tier, which a location-scoped deploy grant never
+      # reaches (#714).
+      - "alarm:snooze"
       # notification:retry re-queues a notification that failed (#618): the
       # role that acknowledges an alarm is the role that re-sends its page. It
       # resolves on the component tier, beside alarm:acknowledge.

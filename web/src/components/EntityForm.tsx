@@ -321,7 +321,7 @@ export default function EntityForm(props: {
           onAdd={can(me.data, "endpoint", "create") ? () => blades.push({ kind: "endpoint-create", id }) : undefined}
           onOpenEndpoint={can(me.data, "endpoint", "read") ? (ifid) => blades.push({ kind: "endpoint", id: ifid }) : undefined}
         />
-        <AlarmsPanel component={id} canUpdate={slot.editing() && canUpdate()} canAcknowledge={can(me.data, "alarm", "acknowledge")} />
+        <AlarmsPanel component={id} canUpdate={slot.editing() && canUpdate()} canAcknowledge={can(me.data, "alarm", "acknowledge")} canSnooze={can(me.data, "alarm", "snooze")} />
       </>
     );
   };

@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
+import { For, Show, createMemo, createSignal, createUniqueId, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import Button from "./Button";
 import { Check, Eye, Siren } from "./icons";
@@ -17,6 +17,7 @@ import {
 import { useSeverity } from "../lib/severity";
 import { entityLabel } from "../lib/entities";
 import SeverityBadge from "./SeverityBadge";
+import { SnoozeControl, SnoozedBadge } from "./SnoozeButton";
 
 // AlarmsPanel: what is wrong with this component, and what was.
 //
@@ -50,7 +51,7 @@ import SeverityBadge from "./SeverityBadge";
 // most severe, each saying what it does to this component, and the badges render
 // each level's label and color through SeverityBadge.
 
-export default function AlarmsPanel(props: { component: string; canUpdate: boolean; canAcknowledge?: boolean }): JSX.Element {
+export default function AlarmsPanel(props: { component: string; canUpdate: boolean; canAcknowledge?: boolean; canSnooze?: boolean }): JSX.Element {
   const qc = useQueryClient();
   const key = () => componentAlarmsKey(props.component);
   const q = useQuery(() => ({
@@ -75,6 +76,8 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
   const [message, setMessage] = createSignal("");
   // Each row opens its timeline in place (#950).
   const timelines = createTimelineToggles();
+  // The snooze controls' surface: one per panel, outliving its polled rows.
+  const surface = createUniqueId();
 
   async function run(write: () => Promise<void>, after?: () => void) {
     setBusy(true);
@@ -179,6 +182,7 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
                       seen by {a.acknowledged_by || "someone since removed"} {rel(a.acknowledged_at!)}
                     </span>
                   </Show>
+                  <SnoozedBadge alarm={a} />
                   <Show when={props.canAcknowledge && !a.acknowledged}>
                     <Button
                       square
@@ -201,6 +205,7 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
                       onClick={() => void clear(a.id)}
                     />
                   </Show>
+                  <SnoozeControl component={props.component} alarm={a} surface={surface} allowed={!!props.canSnooze} />
                   {timelines.button(a.id, a.message)}
                 </div>
                 <Show when={timelines.isOpen(a.id)}>
@@ -271,6 +276,11 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
                         <Show when={!a.acknowledged}> · never acknowledged</Show>
                       </span>
                     </span>
+                    {/* A snooze belongs to the condition, so a cleared alarm can
+                        carry one: silencing a condition that just cleared is how
+                        a flapping one is quieted. */}
+                    <SnoozedBadge alarm={a} />
+                    <SnoozeControl component={props.component} alarm={a} surface={surface} allowed={!!props.canSnooze} />
                     {timelines.button(a.id, a.message)}
                   </div>
                   <Show when={timelines.isOpen(a.id)}>

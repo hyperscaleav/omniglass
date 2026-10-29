@@ -52,7 +52,7 @@ func TestALocationGrantOfDeployReachesOneTier(t *testing.T) {
 	// grant on a fleet tier could plausibly contain. An action a role does not
 	// carry resolves empty for the same reason an unreachable tier does (the
 	// per-action union), and both are reach, so both are listed.
-	actions := []string{"read", "create", "update", "rename", "move", "delete", "reveal", "issue", "push", "acknowledge"}
+	actions := []string{"read", "create", "update", "rename", "move", "delete", "reveal", "issue", "push", "acknowledge", "snooze"}
 	want := map[string]string{
 		// The tier the grant is at: the whole of what it builds out.
 		"location": "read create update rename move",

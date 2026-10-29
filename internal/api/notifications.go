@@ -33,11 +33,11 @@ type notificationBody struct {
 	ReadAt        *time.Time `json:"read_at,omitempty" doc:"When its recipient read it, for an inbox entry"`
 	Subject       string     `json:"subject" doc:"The rendered subject"`
 	Text          string     `json:"text" doc:"The rendered text"`
-	Status        string     `json:"status" enum:"queued,sent,failed" doc:"queued: on its way (its next attempt at next_attempt_at); sent: the receiver answered 2xx; failed: its last attempt failed, or it was refused before one"`
+	Status        string     `json:"status" enum:"queued,sent,failed,suppressed" doc:"queued: on its way (its next attempt at next_attempt_at); sent: the receiver answered 2xx; failed: its last attempt failed, or it was refused before one; suppressed: written but never sent, because its alarm's condition was snoozed (the reason in last_error)"`
 	Attempts      int        `json:"attempts" doc:"Attempts made; the 8th failure is final"`
 	NextAttemptAt *time.Time `json:"next_attempt_at,omitempty" doc:"When the tick next tries it, while queued"`
 	LastStatus    *int       `json:"last_status,omitempty" doc:"The receiver's HTTP status on the last attempt"`
-	LastError     string     `json:"last_error,omitempty" doc:"Why the last attempt failed, never the URL or a credential"`
+	LastError     string     `json:"last_error,omitempty" doc:"Why the last attempt failed, or why a suppressed one was held back; never the URL or a credential"`
 	SentAt        *time.Time `json:"sent_at,omitempty"`
 	CreatedAt     time.Time  `json:"created_at" doc:"When it was queued: the transition's own moment"`
 }
@@ -53,7 +53,7 @@ func toNotificationBody(n *storage.Notification) notificationBody {
 type listNotificationsInput struct {
 	Alarm  string `query:"alarm" doc:"Only the notifications about this alarm (its uuid)"`
 	Target string `query:"target" doc:"Only those to this target, by name"`
-	Status string `query:"status" enum:"queued,sent,failed," doc:"Only those in this status"`
+	Status string `query:"status" enum:"queued,sent,failed,suppressed," doc:"Only those in this status"`
 	Limit  int    `query:"limit" minimum:"0" maximum:"500" doc:"At most this many, newest first (default 100)"`
 }
 
@@ -110,7 +110,7 @@ func registerNotificationRoutes(api huma.API, a *authenticator, gw storage.Gatew
 		Method:      http.MethodPost,
 		Path:        "/notifications/{id}:retry",
 		Summary:     "Retry a failed notification",
-		Description: "Re-queues a failed notification for a fresh run of attempts, sending the same rendered message with the same Idempotency-Key. One that is queued or sent, or one that failed before any attempt (its rule's when did not run, or its type did not render, so it holds no message), is a 409. Audited as retry. Gated by notification:retry, whose scope resolves on the component tier; a component outside the caller's component read scope is a non-disclosing 404, one it reads but may not retry on a 403.",
+		Description: "Re-queues a failed notification for a fresh run of attempts, sending the same rendered message with the same Idempotency-Key. One that is queued, sent or suppressed (its alarm's condition was snoozed), or one that failed before any attempt (its rule's when did not run, or its type did not render, so it holds no message), is a 409. Audited as retry. Gated by notification:retry, whose scope resolves on the component tier; a component outside the caller's component read scope is a non-disclosing 404, one it reads but may not retry on a 403.",
 	}, "notification", "retry"), func(ctx context.Context, in *notificationIDInput) (*notificationOutput, error) {
 		n, err := gw.RetryNotification(ctx, actorID(ctx), in.ID, a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "notification", "retry"), recipientView(ctx, a))
 		if err != nil {
@@ -221,7 +221,7 @@ func mapNotificationErr(err error) error {
 	case errors.Is(err, storage.ErrNotificationForbidden):
 		return huma.Error403Forbidden("retrying a notification about this component is outside your notification:retry scope")
 	case errors.Is(err, storage.ErrNotificationNotRetryable):
-		return huma.Error409Conflict("only a failed notification that was attempted is retried: a queued one is on its way, a sent one arrived, and one that failed before any attempt holds no message to send")
+		return huma.Error409Conflict("only a failed notification that was attempted is retried: a queued one is on its way, a sent one arrived, a suppressed one was held back by a snooze, and one that failed before any attempt holds no message to send")
 	}
 	return huma.Error500InternalServerError("notification operation failed")
 }

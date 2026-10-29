@@ -82,3 +82,8 @@ summary: "An alarm's raised state belongs to its **condition** (ADR-0075) and an
   [#733](https://github.com/hyperscaleav/omniglass/issues/733),
   [#734](https://github.com/hyperscaleav/omniglass/issues/734) and
   [#735](https://github.com/hyperscaleav/omniglass/issues/735).
+- **Amended (#1318):** the refusal of snooze is lifted now that #618 built something to suppress.
+  Snooze is a fact about the alarm's condition, gated by `alarm:snooze` on the component tier and
+  seeded on `operator` only, for this entry's reason
+  ([ADR-1318](#adr-1318-a-snooze-is-a-fact-about-an-alarms-condition-its-notifications-are-written-suppressed-and-its-end-tells-people-again)).
+  Resolve, un-acknowledge and bulk acknowledge stay refused.

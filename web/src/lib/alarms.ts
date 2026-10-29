@@ -92,6 +92,42 @@ export async function acknowledgeAlarm(name: string, id: string): Promise<Alarm>
 // unacknowledgedCount is the queue an operator actually works: raised, and nobody
 // has looked at it yet. Cleared alarms are excluded because the queue is about
 // what still needs somebody, not about the history.
+// The snooze (#1318): a bounded silence on the alarm's condition (component
+// and dedup key), not on one row. The console offers four presets inside the
+// server's bound of 1m to 7d.
+export const SNOOZE_PRESETS: { duration: string; label: string }[] = [
+  { duration: "15m", label: "15 minutes" },
+  { duration: "1h", label: "1 hour" },
+  { duration: "4h", label: "4 hours" },
+  { duration: "24h", label: "24 hours" },
+];
+
+export async function snoozeAlarm(name: string, id: string, duration: string): Promise<Alarm> {
+  const { data, error } = await api.POST("/components/{name}/alarms/{id}:snooze", {
+    params: { path: { name, id } },
+    body: { duration },
+  });
+  if (error) throw error;
+  return data as Alarm;
+}
+
+export async function unsnoozeAlarm(name: string, id: string): Promise<Alarm> {
+  const { data, error } = await api.POST("/components/{name}/alarms/{id}:unsnooze", {
+    params: { path: { name, id } },
+  });
+  if (error) throw error;
+  return data as Alarm;
+}
+
+// snoozedUntilWords words a snooze's deadline as the badge reads it: the
+// time alone when it ends today, the day and time when it ends later.
+export function snoozedUntilWords(until: string, now: number = Date.now()): string {
+  const d = new Date(until);
+  const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  if (d.toDateString() === new Date(now).toDateString()) return `snoozed until ${time}`;
+  return `snoozed until ${d.toLocaleDateString([], { month: "short", day: "numeric" })} ${time}`;
+}
+
 export function unacknowledgedCount(list: Alarm[]): number {
   return list.filter((a) => a.active && !a.acknowledged).length;
 }
@@ -149,17 +185,28 @@ export async function alarmTimeline(component: string, id: string): Promise<Alar
   return (data?.entries ?? []) as AlarmTimelineEntry[];
 }
 
-const AUDIT_WORDS: Record<string, string> = { raise: "raised", clear: "cleared", acknowledge: "acknowledged" };
+const AUDIT_WORDS: Record<string, string> = {
+  raise: "raised",
+  clear: "cleared",
+  acknowledge: "acknowledged",
+  snooze: "snoozed",
+  unsnooze: "unsnoozed",
+  "snooze-end": "snooze ended",
+};
 
 // NOTIFY_WORDS word a notification's status as what happened to its target
-// (#618): queued is on its way, sent arrived, failed gave up.
-const NOTIFY_WORDS: Record<string, string> = { queued: "notifying", sent: "notified", failed: "failed to notify" };
+// (#618): queued is on its way, sent arrived, failed gave up, and suppressed
+// was held back because the alarm's condition was snoozed (#1318).
+const NOTIFY_WORDS: Record<string, string> = { queued: "notifying", sent: "notified", failed: "failed to notify", suppressed: "held back from" };
 
 // timelineWhat is the entry's verb as an operator reads it: an event by its
 // type (condition-started), an audit row by what was done to the alarm, a
 // notification by what happened to its target.
 export function timelineWhat(e: Pick<AlarmTimelineEntry, "kind" | "what" | "target">): string {
-  if (e.kind === "notification") return `${NOTIFY_WORDS[e.what] ?? e.what} ${e.target ?? ""}`.trim();
+  if (e.kind === "notification") {
+    if (e.what === "suppressed" && !e.target) return "held back";
+    return `${NOTIFY_WORDS[e.what] ?? e.what} ${e.target ?? ""}`.trim();
+  }
   return e.kind === "audit" ? (AUDIT_WORDS[e.what] ?? e.what) : e.what;
 }
 
