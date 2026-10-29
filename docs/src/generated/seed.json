@@ -2650,7 +2650,14 @@
    "label": "UCC Webhooks",
    "version": "1.0.0",
    "transport": "webhook",
-   "listeners": 2
+   "listeners": 5
+  },
+  {
+   "id": "ucc-rooms",
+   "label": "UCC Rooms",
+   "version": "1.0.0",
+   "transport": "https",
+   "polls": 1
   }
  ],
  "products": [
@@ -2904,6 +2911,14 @@
    "id": "ucc-service",
    "label": "Shinra UCC Platform",
    "vendor_id": "shinra-cloud",
+   "component_type": "generic-service",
+   "kind": "service"
+  },
+  {
+   "id": "ucc-platform",
+   "label": "Shinra UCC Platform (account)",
+   "vendor_id": "shinra-cloud",
+   "driver_id": "ucc-rooms",
    "component_type": "generic-service",
    "kind": "service"
   },
