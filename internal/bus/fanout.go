@@ -3,13 +3,11 @@ package bus
 import (
 	"log/slog"
 	"slices"
-	"strings"
 	"sync"
 	"time"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/driver"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
 )
@@ -99,21 +97,16 @@ func identityKeys(fanned *ogv1.TelemetryBatch) []storage.IdentityKey {
 	return out
 }
 
-// maxIdentityLen bounds an identity's key and value as received, the
-// engine's own bound (driver.MaxIdentityValue): an identity is a claim from
-// a node or a sender, so the server holds it again before it reaches a read
-// or the inbox.
-const maxIdentityLen = 256
-
-// identityKey reads a received identity, or refuses it: a key and a value
-// each non-empty, at most maxIdentityLen bytes, valid UTF-8 and free of
-// control characters (a NUL would fail the batch's one transaction).
+// identityKey reads a received identity, or refuses it: an identity is a
+// claim from a node or a sender, so the server holds it again to the
+// engine's own bounds (driver.ValidIdentity: a key and a value each
+// non-empty, at most 256 bytes, valid UTF-8, free of control characters, a
+// NUL among them, which would fail the batch's one transaction) before it
+// reaches a read or the inbox.
 func identityKey(id *ogv1.Identity) (storage.IdentityKey, bool) {
 	k := storage.IdentityKey{Key: id.GetKey(), Value: id.GetValue()}
-	for _, s := range []string{k.Key, k.Value} {
-		if s == "" || len(s) > maxIdentityLen || !utf8.ValidString(s) || strings.IndexFunc(s, unicode.IsControl) >= 0 {
-			return storage.IdentityKey{}, false
-		}
+	if driver.ValidIdentity(driver.Identity{Key: k.Key, Value: k.Value}) != nil {
+		return storage.IdentityKey{}, false
 	}
 	return k, true
 }
