@@ -98,10 +98,18 @@ func TestFanOutEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The account-wide platform's profile, found by its model so the test
+	// borrows no catalog name.
+	platProfile := ""
+	for name, p := range store.Devices {
+		if p.Model == "UCC Platform (account)" {
+			platProfile = name
+		}
+	}
 	engine := sim.NewEngine(store, profiles.Templates())
 	engine.SetPortMap(sim.EphemeralPorts)
 	t.Cleanup(engine.StopAll)
-	if err := engine.Sync([]sim.DeviceSnapshot{{DeviceID: "ucc-plat", Hostname: "ucc-plat", LoopbackIP: simtest.ClaimLoopback(t), ProfileName: "ucc-platform", Version: 1}}); err != nil {
+	if err := engine.Sync([]sim.DeviceSnapshot{{DeviceID: "ucc-plat", Hostname: "ucc-plat", LoopbackIP: simtest.ClaimLoopback(t), ProfileName: platProfile, Version: 1}}); err != nil {
 		t.Fatalf("serve the ucc platform: %v", err)
 	}
 	plat := engine.Devices()[0]
