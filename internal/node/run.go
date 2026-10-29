@@ -35,6 +35,10 @@ type Config struct {
 	// ProbeEvery is how often each reachability probe runs (#1273). Zero
 	// probes every heartbeat tick, the behavior before it existed.
 	ProbeEvery time.Duration
+	// ReportEvery is the node's own collection report window (#1369),
+	// overriding the platform's the worklist carries: a test's, or a lab's.
+	// Zero takes the worklist's.
+	ReportEvery time.Duration
 	// Once runs a single claim + pull + heartbeat cycle and returns, for tests
 	// and one-shot invocations.
 	Once bool
@@ -318,7 +322,13 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	// lives here (the report repeats, the device is not touched twice). It is
 	// pruned past the redelivery window so it does not grow for the life of the run.
 	executedCommands := map[int64]commandOutcome{}
-	if err := runTasks(ctx, spool, cfg.Name, wl, runner, sessions, sched, verdicts, faultseen, time.Now()); err != nil {
+	// report accumulates each endpoint's collection telemetry over a report
+	// window (#1369), published when the window is due.
+	report := newCollectionReport(cfg.ReportEvery, time.Now())
+	if cfg.ReportEvery <= 0 {
+		report.setEvery(wl.ReportEvery())
+	}
+	if err := runTasks(ctx, spool, cfg.Name, wl, runner, sessions, sched, verdicts, faultseen, report, time.Now()); err != nil {
 		return wl, err
 	}
 	runCommands(ctx, nc, cfg.Name, runner, sessions, executedCommands)
@@ -369,7 +379,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 			return wl, nil
 		case job := <-runJobs:
 			if time.Now().Before(job.deadline) {
-				job.respond(runNowTask(ctx, spool, cfg.Name, runner, sessions, sched, job.task, job.deadline))
+				job.respond(runNowTask(ctx, spool, cfg.Name, runner, sessions, sched, report, job.task, job.deadline))
 			}
 			publishSelfLogs(spool, cfg.Name, sink)
 		case <-ticker.C:
@@ -396,11 +406,23 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 			sessions.reconcile(wl.Tasks)
 			// Run the worklist's tcp tasks and publish their telemetry. A publish
 			// failure is non-fatal (retry next tick).
-			_ = runTasks(ctx, spool, cfg.Name, wl, runner, sessions, sched, verdicts, faultseen, time.Now())
+			if cfg.ReportEvery <= 0 {
+				report.setEvery(wl.ReportEvery())
+			}
+			_ = runTasks(ctx, spool, cfg.Name, wl, runner, sessions, sched, verdicts, faultseen, report, time.Now())
 			// Pull and actuate the pending command queue (#815).
 			runCommands(ctx, nc, cfg.Name, runner, sessions, executedCommands)
 			// Report the inbound lines no listener claimed this tick.
 			sessions.flushUnclaimed()
+			// Count this tick's pushes into the collection report, and
+			// publish the report when its window is due (#1369). A publish
+			// failure is non-fatal: the spool holds the batch and retries it.
+			sessions.reportPushes(report)
+			if now := time.Now(); report.due(now) {
+				for _, row := range report.take(now.UTC(), publishTasks(wl.Tasks)) {
+					_ = publishBatch(spool, cfg.Name, row.task, row.samples)
+				}
+			}
 			// Ship whatever the node logged this tick as self-logs.
 			publishSelfLogs(spool, cfg.Name, sink)
 		}

@@ -21,6 +21,35 @@ metric_types:
     unit: ms
     label: TCP Connect Time
     description: Time to establish the TCP connection; absent when the port is closed.
+  # Collection telemetry (#1369): each endpoint's account of its own
+  # collection over a report window (collection.report_seconds), the
+  # built-in data every endpoint carries whatever its driver. The node writes
+  # the poll and push keys; the server writes the webhook keys.
+  - name: poll-duration
+    data_type: float
+    unit: ms
+    label: Poll Duration
+    description: Mean time of the endpoint's driver poll runs over the report window, scheduled or run now, answered or failed; absent when no poll ran.
+  - name: poll-failure-count
+    data_type: int
+    label: Poll Failures
+    description: The endpoint's driver polls that failed in the report window (faulted and landed nothing, or refused by the endpoint's gate); reported only when nonzero.
+  - name: push-message-count
+    data_type: int
+    label: Pushed Messages
+    description: Messages the endpoint's held session or udp socket delivered that a listener claimed in the report window; zero when quiet.
+  - name: push-unclaimed-count
+    data_type: int
+    label: Unclaimed Messages
+    description: Messages the endpoint delivered that no listener claimed in the report window; reported only when nonzero.
+  - name: webhook-post-count
+    data_type: int
+    label: Webhook Posts
+    description: Webhook posts to the endpoint the server accepted in the report window; one zero follows a window with posts, then none while quiet.
+  - name: webhook-refusal-count
+    data_type: int
+    label: Webhook Refusals
+    description: Webhook posts to the endpoint the server refused (a bad signature, a missing credential) in the report window; reported only when nonzero.
   # Room-level series: the first standard-contract metrics (#790). A meeting
   # room's standard declares them, so every conforming system's zoom shows the
   # same KPI tiles; the sensor feeding them is whatever the room's build wires

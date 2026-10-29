@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
 	"github.com/hyperscaleav/omniglass/internal/driver"
 )
 
@@ -401,6 +402,47 @@ func TestSessionManagerFlushesUnclaimedByPolicy(t *testing.T) {
 	m.flushUnclaimed()
 	if f := c.faultsOf("l1"); len(f) != 1 {
 		t.Fatalf("an empty tick landed a fault: %v", f)
+	}
+}
+
+// The collection report counts a held session's pushes (#1369): the lines a
+// listener claimed and the ones none did, every window, a quiet one as zero.
+// A session recycled before the window is taken (a credential edit, a moved
+// pin) keeps the counts its router held: they are the endpoint's, not the
+// connection's.
+func TestSessionManagerReportsItsListenersPushes(t *testing.T) {
+	c := newCapture()
+	task := listenTask("l1", "ep-1", "10.0.0.5:51325")
+	m := newSessionManager(map[string]collection.SessionDialer{"tcp": &heldFakeDialer{}}, c.hooks(&transitionLog{}))
+	defer m.closeAll()
+	m.reconcile([]collection.TaskSpec{task})
+	tasks := publishTasks([]collection.TaskSpec{task})
+	report := newCollectionReport(time.Minute, t0)
+	take := func(at time.Time) map[string]float64 {
+		t.Helper()
+		m.reportPushes(report)
+		return reportValues(t, report.take(at, tasks))["l1"]
+	}
+
+	h := m.held["ep-1"]
+	if !h.router.Claim(driver.LineMessage("EVT INPUT hdmi2")) {
+		t.Fatal("the listener did not claim its line")
+	}
+	h.router.Unclaimed(driver.LineMessage("NOISE 1"))
+	h.router.Unclaimed(driver.LineMessage("NOISE 2"))
+	m.flushUnclaimed() // the per-tick self-log drains its own count, not the report's
+	if got := take(t0.Add(time.Minute)); got[probekeys.PushMessageCount] != 1 || got[probekeys.PushUnclaimedCount] != 2 {
+		t.Fatalf("window = %v, want 1 claimed and 2 unclaimed", got)
+	}
+	if got := take(t0.Add(2 * time.Minute)); len(got) != 1 || got[probekeys.PushMessageCount] != 0 {
+		t.Fatalf("a quiet window = %v, want push-message-count 0 and nothing else", got)
+	}
+
+	m.held["ep-1"].router.Claim(driver.LineMessage("EVT INPUT hdmi3"))
+	m.teardown("ep-1", m.held["ep-1"], "recycled")
+	m.reconcile([]collection.TaskSpec{task})
+	if got := take(t0.Add(3 * time.Minute)); got[probekeys.PushMessageCount] != 1 {
+		t.Fatalf("after a recycle = %v, want the claim made before it still counted", got)
 	}
 }
 

@@ -178,7 +178,7 @@ func landableRun(sched *pollSchedule, taskID string, dps []collection.Sample) []
 // poll is refused with the gate's refusal and nothing is sent), a terminal
 // refusal it meets gating the endpoint, and what it reads published (its
 // faults as collection-failed, its samples as a batch), so it lands.
-func runNowTask(ctx context.Context, out *telemetrySpool, node string, runner *collection.Runner, sessions *sessionManager, sched *pollSchedule, task collection.TaskSpec, deadline time.Time) collection.RunReply {
+func runNowTask(ctx context.Context, out *telemetrySpool, node string, runner *collection.Runner, sessions *sessionManager, sched *pollSchedule, report *collectionReport, task collection.TaskSpec, deadline time.Time) collection.RunReply {
 	if task.Mode != "poll" || !driver.IsBaked(task.Spec) {
 		return collection.RunReply{Error: "a run now runs a driver poll, and this task is not one"}
 	}
@@ -202,6 +202,9 @@ func runNowTask(ctx context.Context, out *telemetrySpool, node string, runner *c
 		res.Function = fn.Function
 	}
 	dps, faults := collectDriverTask(ctx, runner, task, sessions)
+	// A run now is a poll run like a scheduled one, so it counts in the
+	// endpoint's collection report (#1369).
+	report.poll(task.EndpointID, time.Since(start), !landedData(dps) && len(faults) > 0)
 	if ownRequest {
 		for _, f := range faults {
 			if terr, ok := collection.AsTerminal(f); ok {

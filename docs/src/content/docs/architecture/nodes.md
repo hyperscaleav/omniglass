@@ -355,8 +355,9 @@ this, above). Where the protocol itself frames responses vs events (xAPI `*r` vs
 id; built for a correlated websocket exchange's id), framing drives routing and the regex only
 extracts within the matched frame, and a driver's declared prompt delimits a held answer (#1057).
 An **unmatched** frame lands as `raw` (orphan, logged): a missing matcher surfaces, never fails
-silently. Today it is counted and logged once per tick, and lands as a log line only where the
-spec asks (`unmatched: log`).
+silently. Today it is counted and logged once per tick, counted once a report window as the
+endpoint's `push-unclaimed-count` ([collection telemetry](/architecture/collection/#collection-telemetry-every-endpoints-account-of-itself)),
+and lands as a log line only where the spec asks (`unmatched: log`).
 :::
 
 ## The component task queue
