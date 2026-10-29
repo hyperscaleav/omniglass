@@ -69,7 +69,7 @@ func TestEveryEndpointReportsItsOwnCollection(t *testing.T) {
 	}
 	var barProfile string
 	s := newHTTPStack(t, "edge-report", nil, func(store *profile.Store) []string {
-		barProfile = driverProfile(t, store, "kestrel-api")
+		barProfile = driverProfile(t, store, "kestrel-api", "websocket") // the bar (only it has the control socket)
 		return []string{barProfile}
 	})
 	bar := s.devices[barProfile]
@@ -144,7 +144,7 @@ func TestAGatedPollAndARunNowCountInTheReport(t *testing.T) {
 	}
 	var barProfile string
 	s := newHTTPStack(t, "edge-gate-report", nil, func(store *profile.Store) []string {
-		barProfile = driverProfile(t, store, "kestrel-api")
+		barProfile = driverProfile(t, store, "kestrel-api", "websocket") // the bar (only it has the control socket)
 		return []string{barProfile}
 	})
 	owner := s.ownerToken()

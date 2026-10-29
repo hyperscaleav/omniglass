@@ -108,7 +108,7 @@ func TestNodeHTTPStreamLandsChangesAndResumes(t *testing.T) {
 	}
 	var barProfile string
 	s := newHTTPStack(t, "edge-stream", nil, func(store *profile.Store) []string {
-		barProfile = driverProfile(t, store, "kestrel-api")
+		barProfile = driverProfile(t, store, "kestrel-api", "websocket") // the bar (only it has the control socket)
 		return []string{barProfile}
 	})
 	bar := s.devices[barProfile]
@@ -187,7 +187,7 @@ func TestNodeHTTPStreamBehindAFormLogin(t *testing.T) {
 	}
 	formBar := "bar-form"
 	s := newHTTPStack(t, "edge-stream-login", func(store *profile.Store) {
-		base := driverProfile(t, store, "kestrel-api")
+		base := driverProfile(t, store, "kestrel-api", "websocket") // the bar (only it has the control socket)
 		loginVariant(store, base, formBar, profile.Auth{Type: "form", DefaultUser: "admin", DefaultPassword: "kestrel", Enforce: true})
 	}, func(*profile.Store) []string { return []string{formBar} })
 	bar := s.devices[formBar]

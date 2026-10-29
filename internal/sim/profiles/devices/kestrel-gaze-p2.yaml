@@ -9,7 +9,7 @@
 #
 # Its face is the Kestrel JSON API over https behind basic auth, the
 # family's convention: its system info, its camera state, and the moves
-# (recall a preset, nudge pan and tilt, turn tracking on or off).
+# (recall a preset, which moves it there, and turn tracking on or off).
 
 name: kestrel-gaze-p2
 manufacturer: Kestrel
@@ -46,11 +46,12 @@ interfaces:
         template: api/kestrel-gaze/camera.json.gotempl
         doc: { summary: "Camera position, preset and tracking", tags: [api, camera] }
 
-      # Recalling a preset moves the camera to it and stops tracking, as a
-      # PTZ camera does.
+      # Recalling a preset moves the camera to the preset's position and
+      # stops tracking, as a PTZ camera does. Every write is guarded on the
+      # preset, so a refused recall moves nothing.
       - match: "POST /api/camera/preset"
         template: api/kestrel-gaze/camera.json.gotempl
-        doc: { summary: "Recall a preset (lectern, audience, wide)", tags: [api, control] }
+        doc: { summary: "Recall a preset (lectern, audience, wide): move there", tags: [api, control] }
         example: |
           {"preset": "audience"}
         mutations:
@@ -59,6 +60,10 @@ interfaces:
             enum: [lectern, audience, wide]
           - path: status.camera.tracking
             value: 'false{{ guard "^(lectern|audience|wide)$" .Request.Body.preset }}'
+          - path: status.camera.pan
+            value: '{{ index .Defaults.presets (printf "%v" .Request.Body.preset) | get "pan" }}{{ guard "^(lectern|audience|wide)$" .Request.Body.preset }}'
+          - path: status.camera.tilt
+            value: '{{ index .Defaults.presets (printf "%v" .Request.Body.preset) | get "tilt" }}{{ guard "^(lectern|audience|wide)$" .Request.Body.preset }}'
 
       - match: "POST /api/camera/tracking"
         template: api/kestrel-gaze/camera.json.gotempl
@@ -88,6 +93,8 @@ interfaces:
           - { path: status.device.boot_epoch, value: "{{ now }}" }
           - { path: status.camera.preset, value: "{{ .Defaults.status.camera.preset }}" }
           - { path: status.camera.tracking, value: false }
+          - { path: status.camera.pan, value: "{{ .Defaults.status.camera.pan }}" }
+          - { path: status.camera.tilt, value: "{{ .Defaults.status.camera.tilt }}" }
 
   - name: icmp
     protocol: icmp
@@ -107,6 +114,11 @@ behaviors:
         value: '{{ if eq (printf "%v" .State.status.camera.tracking) "true" }}{{ round 1 (clamp -30.0 30.0 (randStep 4.0 .State.status.camera.pan)) }}{{ else }}{{ .State.status.camera.pan }}{{ end }}'
 
 defaults:
+  # Each preset's stored position: pan and tilt in degrees from centre.
+  presets:
+    lectern: { pan: 12, tilt: -8 }
+    audience: { pan: 0, tilt: 2 }
+    wide: { pan: 0, tilt: -5 }
   status:
     device:
       power: "on"

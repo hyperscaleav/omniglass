@@ -223,7 +223,7 @@ func TestNodeLandsKestrelCallEvents(t *testing.T) {
 	}
 	var barProfile string
 	s := newHTTPStack(t, "edge-calls", nil, func(store *profile.Store) []string {
-		barProfile = driverProfile(t, store, "kestrel-api")
+		barProfile = driverProfile(t, store, "kestrel-api", "websocket") // the bar (only it has the control socket)
 		return []string{barProfile}
 	})
 	bar := s.devices[barProfile]

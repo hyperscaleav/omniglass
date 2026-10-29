@@ -93,9 +93,11 @@ interfaces:
         example: |
           {"id": "c9001", "participants": 3}
         mutations:
+          # Every write guarded on the id, so a refused dial writes nothing;
+          # participants a count from 1 to 999 (absent or 0, two).
           - { path: status.call.id, value: "{{ .Request.Body.id }}", pattern: "^[A-Za-z0-9-]{1,32}$" }
-          - { path: status.call.active, value: true }
-          - { path: status.call.participants, value: "{{ or .Request.Body.participants 2 }}" }
+          - { path: status.call.active, value: 'true{{ guard "^[A-Za-z0-9-]{1,32}$" .Request.Body.id }}{{ guard "^[1-9][0-9]{0,2}$" (or .Request.Body.participants 2) }}' }
+          - { path: status.call.participants, value: '{{ or .Request.Body.participants 2 }}{{ guard "^[A-Za-z0-9-]{1,32}$" .Request.Body.id }}{{ guard "^[1-9][0-9]{0,2}$" (or .Request.Body.participants 2) }}' }
         events:
           - name: call-started
             data: '{"id":"{{ .Request.Body.id }}","participants":{{ or .Request.Body.participants 2 }}}'

@@ -79,6 +79,16 @@ func TestRelayCodecAnswersTheBarsRoutesAndItsOwn(t *testing.T) {
 		t.Errorf("peripherals = %v, want four", p)
 	}
 
+	// A refused dial (a bad id, or a participant count out of range) places
+	// no call.
+	for _, body := range []string{`{"id": "bad id!", "participants": 7}`, `{"id": "c0", "participants": 1000}`} {
+		if code, _ := kestrelJSON(t, d, "POST", "/api/call/dial", body); code != 400 {
+			t.Errorf("dial %s: %d, want 400", body, code)
+		}
+		if _, call := kestrelJSON(t, d, "GET", "/api/call", ""); call["active"] != false || call["participants"] != float64(0) {
+			t.Errorf("after a refused dial %s, call = %v, want none", body, call)
+		}
+	}
 	kestrelJSON(t, d, "POST", "/api/call/dial", `{"id": "c1", "participants": 4}`)
 	if code, c := kestrelJSON(t, d, "POST", "/api/content", `{"sharing": true}`); code != 200 || c["sharing"] != true {
 		t.Fatalf("share = %d %v", code, c)
@@ -133,8 +143,9 @@ func TestGazeCameraPresetsAndTracking(t *testing.T) {
 		t.Error("tracking never moved the camera")
 	}
 
-	if code, c := kestrelJSON(t, d, "POST", "/api/camera/preset", `{"preset": "lectern"}`); code != 200 || c["preset"] != "lectern" || c["tracking"] != false {
-		t.Fatalf("recall lectern = %d %v, want lectern with tracking off", code, c)
+	if code, c := kestrelJSON(t, d, "POST", "/api/camera/preset", `{"preset": "lectern"}`); code != 200 || c["preset"] != "lectern" || c["tracking"] != false ||
+		c["pan"] != float64(12) || c["tilt"] != float64(-8) {
+		t.Fatalf("recall lectern = %d %v, want the lectern's position with tracking off", code, c)
 	}
 	held, _, _ := toFloat(d.ReadPath("status.camera.pan"))
 	d.tickBehavior(follow)
@@ -145,7 +156,7 @@ func TestGazeCameraPresetsAndTracking(t *testing.T) {
 	if code, _ := kestrelJSON(t, d, "POST", "/api/camera/preset", `{"preset": "balcony"}`); code != 400 {
 		t.Errorf("preset %q: %d, want 400", "balcony", code)
 	}
-	if _, c := kestrelJSON(t, d, "GET", "/api/camera", ""); c["preset"] != "lectern" || c["tracking"] != true {
-		t.Errorf("after a refused preset = %v, want lectern, still tracking", c)
+	if _, c := kestrelJSON(t, d, "GET", "/api/camera", ""); c["preset"] != "lectern" || c["tracking"] != true || c["pan"] != float64(12) || c["tilt"] != float64(-8) {
+		t.Errorf("after a refused preset = %v, want lectern where it was, still tracking", c)
 	}
 }
