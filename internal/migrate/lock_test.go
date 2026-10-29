@@ -76,10 +76,30 @@ func TestRunGuardsTheSchemaUnderTheLock(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- migrate.Run(dsn) }()
 
-	select {
-	case err := <-done:
-		t.Fatalf("run returned %v while another session held the lock; want it to wait", err)
-	case <-time.After(500 * time.Millisecond):
+	// Wait until the run is queued on the lock (an ungranted advisory lock on
+	// LockKey: pg_locks splits the bigint key into classid and objid), so the
+	// stamp below lands while it waits rather than before it reached the guard.
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		select {
+		case err := <-done:
+			t.Fatalf("run returned %v while another session held the lock; want it to wait", err)
+		default:
+		}
+		var waiting bool
+		if err := holder.QueryRow(ctx, `select exists (select 1 from pg_locks where locktype = 'advisory'
+			and not granted and classid::bigint = $1 and objid::bigint = $2)`,
+			int64(uint32(migrate.LockKey>>32)), int64(uint32(migrate.LockKey)),
+		).Scan(&waiting); err != nil {
+			t.Fatalf("read pg_locks: %v", err)
+		}
+		if waiting {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("run never queued on the migration lock")
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 
 	if _, err := holder.Exec(ctx, `insert into schema_migrations (version) values ('29991231235959')`); err != nil {

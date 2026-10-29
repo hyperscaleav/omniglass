@@ -21,8 +21,8 @@ spec:
       # instead of Helm pre-install hooks: a bundled Postgres in the same release
       # is not up during pre-install, so a hook-Job migrate would race the DB.
       # Both migrate and bootstrap are idempotent, so re-running on every rollout
-      # is safe. At replicas > 1 in production, run migrate as a one-shot Job
-      # instead, to avoid concurrent migrators.
+      # is safe. At replicas > 1 each replica's migrate runs, but they take turns
+      # on a Postgres advisory lock: one applies, the rest find nothing to do.
       initContainers:
         {{- if .Values.postgres.enabled }}
         - name: wait-for-db
