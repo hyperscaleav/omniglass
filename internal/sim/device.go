@@ -358,9 +358,10 @@ type Device struct {
 	// (#902): an ECDSA key derived from its id, so it is the same on every
 	// run and a pinned https endpoint survives a simulator restart.
 	httpsID tlsIdentity
-	// sshHostKey is the device's SSH host key, minted on the first StartSSH
-	// and kept across listener restarts, as a real device keeps its key; a
-	// test rotates it to model a replaced or reimaged device (#1032).
+	// sshHostKey is the device's SSH host key, derived from its id on the
+	// first StartSSH (#1370), so it is the same on every run, as a real
+	// device keeps its key; a test rotates it to model a replaced or
+	// reimaged device (#1032).
 	sshHostKey ssh.Signer
 	// telnetSilentReject makes the telnet login hang up on a wrong password
 	// with no text (#1056).

@@ -63,6 +63,12 @@ metric_types:
     data_type: int
     label: Occupancy Count
     description: People detected in the space by the room's occupancy source.
+  # A space's bookings, as its scheduling service pushes them (#1370): the
+  # lab's simulated booking service pushes them to a system.
+  - name: booking-count
+    data_type: int
+    label: Booking Count
+    description: Meetings booked in the space for the rest of the day, the one in progress included, as its scheduling service reports them.
   - name: uptime
     data_type: float
     unit: s

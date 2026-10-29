@@ -53,7 +53,8 @@ func (s *Store) resolveExtends() error {
 // framing) and gains p's routes, commands and subjects after the base's, and
 // p's OID map entries over the base's; p's other interfaces follow. Behaviors,
 // computed fields and overrides are the base's then p's; defaults are deep
-// merged, p's winning. Identity, docs and products are p's alone.
+// merged, p's winning; a webhook subscription is p's, else the base's.
+// Identity, docs and products are p's alone.
 func extend(base, p *DeviceProfile) (*DeviceProfile, error) {
 	out := *p
 	own := map[string]Interface{}
@@ -92,6 +93,9 @@ func extend(base, p *DeviceProfile) (*DeviceProfile, error) {
 	out.Computed = append(append([]Computed(nil), base.Computed...), p.Computed...)
 	out.Overrides = append(append([]Override(nil), base.Overrides...), p.Overrides...)
 	out.Defaults = mergeDefaults(base.Defaults, p.Defaults)
+	if out.Webhook == nil {
+		out.Webhook = base.Webhook
+	}
 	return &out, nil
 }
 

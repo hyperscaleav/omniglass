@@ -114,6 +114,21 @@
           }
         }
       }
+    },
+    "webhook": {
+      "type": "object",
+      "description": "How the simulated service is subscribed to a webhook receiver (#1370): subscribe is the path of a POST route on its http interface taking a JSON body of url, scheme and secret, which the simulator calls for a device whose component holds a webhook endpoint (ADR-1370).",
+      "required": [
+        "subscribe"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "subscribe": {
+          "type": "string",
+          "pattern": "^/",
+          "description": "The path of the POST route that subscribes the service."
+        }
+      }
     }
   },
   "additionalProperties": false,

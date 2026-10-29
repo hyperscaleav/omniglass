@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"errors"
 	"strings"
 	"testing"
 
@@ -26,7 +27,7 @@ func TestLabSeedWithNoNodeWiresNothingAndEnrollsNoNode(t *testing.T) {
 		t.Setenv("OMNIGLASS_DSN", dsn)
 		t.Setenv("OMNIGLASS_DATA_DIR", t.TempDir())
 		var out bytes.Buffer
-		if err := runLabSeed(ctx, &out, "dev", lab.NodeName, lab.LoginUser, lab.LoginPassword, tokenHash, noNode); err != nil {
+		if err := runLabSeed(ctx, &out, "dev", lab.NodeName, lab.LoginUser, lab.LoginPassword, tokenHash, noNode, pushCredential{}); err != nil {
 			t.Fatalf("lab seed (no node %v): %v", noNode, err)
 		}
 		gw, err := storage.NewPG(ctx, dsn)
@@ -59,5 +60,46 @@ func TestLabSeedWithNoNodeWiresNothingAndEnrollsNoNode(t *testing.T) {
 	}
 	if stillEndpoints >= liveEndpoints {
 		t.Fatalf("no node: %d endpoints, with its node %d; want the simulated wiring left out", stillEndpoints, liveEndpoints)
+	}
+}
+
+// Each lab run mints the simulated pusher a token (#1370), and the seed makes
+// it the pusher's only one, as it re-enrolls the node: the run's token
+// authenticates the booking service, and the last run's no longer does.
+func TestLabSeedGivesThePusherThisRunsToken(t *testing.T) {
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	t.Setenv("OMNIGLASS_DSN", dsn)
+	t.Setenv("OMNIGLASS_DATA_DIR", t.TempDir())
+	_, nodeHash, _, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := func() []byte {
+		t.Helper()
+		_, hash, prefix, err := auth.NewBearerToken()
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out bytes.Buffer
+		if err := runLabSeed(ctx, &out, "dev", lab.NodeName, lab.LoginUser, lab.LoginPassword, hex.EncodeToString(nodeHash), false,
+			pushCredential{Hash: hex.EncodeToString(hash), Prefix: prefix}); err != nil {
+			t.Fatalf("lab seed: %v", err)
+		}
+		return hash
+	}
+	first := run()
+	second := run()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gw.Close()
+	pr, err := gw.AuthenticateBearer(ctx, second)
+	if err != nil || pr.Service == nil || pr.Service.Name != "sim-booking-service" {
+		t.Fatalf("this run's token = %+v, %v; want the booking service", pr, err)
+	}
+	if _, err := gw.AuthenticateBearer(ctx, first); !errors.Is(err, storage.ErrCredentialNotFound) {
+		t.Fatalf("the last run's token still authenticates: %v", err)
 	}
 }

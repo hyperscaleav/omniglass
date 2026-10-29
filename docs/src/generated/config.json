@@ -133,6 +133,21 @@
    "doc": "set by omniglass lab run for its seed one-off: the hash of the node token it minted for this run, never set by hand"
   },
   {
+   "key": "OMNIGLASS_LAB_PUSH_TOKEN_HASH",
+   "scope": "cli",
+   "doc": "set by omniglass lab run for its seed one-off: the hash of the simulated pusher's token it minted for this run, never set by hand"
+  },
+  {
+   "key": "OMNIGLASS_LAB_PUSH_TOKEN_PREFIX",
+   "scope": "cli",
+   "doc": "set by omniglass lab run for its seed one-off: the non-secret prefix of the simulated pusher's token, never set by hand"
+  },
+  {
+   "key": "OMNIGLASS_SIM_PUSH_TOKEN",
+   "scope": "cli",
+   "doc": "the simulated booking service's token, with which omniglass node run --simulate pushes a system's bookings to the server; set by omniglass lab run, read when the command runs and never printed by help"
+  },
+  {
    "key": "OMNIGLASS_TEST_ADMIN_DSN",
    "scope": "test",
    "doc": "points the storage test harness at an existing admin database instead of a testcontainer"

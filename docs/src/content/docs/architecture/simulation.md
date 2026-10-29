@@ -32,8 +32,11 @@ simulated device through the API and CLI, applied by a simulator run with `--imp
 device's API surface and firing any operation at it, adding a device, and the Simulation page,
 drawer and component section over them. Also built: the simulator in the node's own process,
 `omniglass node run --simulate` (#1198), and the [lab](/guides/lab/) (#1194), which runs that node
-in a container of its own with every privilege the simulator can use. Still `Design`: the Helm
-sidecar (#892).
+in a container of its own with every privilege the simulator can use. Also built: every
+collection method healthy in the lab (#1370): each seeded driver and each registry transport runs on
+a dev-fleet component that is no planted fault, the simulator subscribes a simulated service to its
+webhook endpoint, and a simulated booking service pushes through `POST /telemetry:push`. Still
+`Design`: the Helm sidecar (#892).
 :::
 
 ## The catalog
@@ -282,13 +285,46 @@ lowest address no endpoint already targets) and endpoints on the dev node, `edge
 has a spec gets that driver attached: SNMP products through `snmp-generic` (with a seeded platform
 community secret), the Newtron panels through `newtron-nvp`'s line protocol, the Kestrel bars
 through `kestrel-api` over https (a seeded basic-auth login, the bar's key pinned on first use), and
-the Tessellate sensors through `http-json` (a seeded api key in its header). The huddle's panel
-also carries its line protocol over telnet behind a login (`newtron-nvp-telnet`, the
-rejected-session demonstration) and over TLS (`newtron-nvp-tls` on 51326, pinning the panel's key
-on first use). A product whose driver
+the Tessellate sensors through `http-json` (a seeded api key in its header). A product whose driver
 is still a stub gets a reachability probe on the port its profile serves. The endpoints target the
 profiles' real ports, which a simulator in a container binds; for a simulator on a host that may not
 bind below 1024, `omniglass seed-dev --sim-port-offset 10000` aims them at the lifted ports instead.
+
+Beside those, the fixture's simulated endpoints wire the rest:
+
+- **Planted faults** (#1193), each a lesson to find and fix: the huddle's panel console over telnet
+  logs in with the password from before a rotation (`newtron-nvp-telnet`, the rejected session); the
+  briefing panel's ssh endpoint pins the host key it had before it was reimaged (`newtron-nvp-ssh`,
+  the changed host key); the auditorium panel's SNMP endpoint names the community its agent refuses
+  (`snmp-generic`, the probe gate).
+- **The huddle panel's other carriers**: its line protocol over TLS (`newtron-nvp-tls` on 51326,
+  pinning the panel's key on first use) and as datagrams (`newtron-nvp-udp` on 51327, dropping a
+  seeded 5% of them each way).
+- **The webhooks**: the UCC service's and the UCC platform's webhook endpoints (`ucc-webhook`),
+  which the simulator subscribes each service to ([below](#a-simulated-service-posts-from-the-start)).
+- **Every collection method healthy on one place** (#1370): the HQ boardroom runs the three drivers
+  the rest of the fleet never attaches, the bar's control socket (`kestrel-ws`, JSON over wss on
+  9443), the display's web admin over http digest (`boreal-edge-web`) and the panel's https API
+  behind its sign-in form (`newtron-panel-web`); the healthy twins of the ssh and telnet faults (the
+  right login and no stale pin); and a bare `icmp` probe. A simulated device's ssh host key, like its
+  https key, is derived from its id, so a key the node pinned on first use survives a simulator
+  restart.
+- **A first-party pusher**: the simulated booking service, beside the node, pushes the HQ
+  boardroom system's `booking-count` (meetings left in its day) and `booking-state` (`booked` or
+  `free`) through `POST /telemetry:push` on one meeting day that repeats every day. It holds a
+  service principal whose only grant is `telemetry:push` on that one system, and reads that system
+  off its own grant (`GET /auth/me`), so it pushes nowhere else and reads nothing. The lab mints its
+  token on every run, as it does the node's, and hands it to the simulator.
+
+`TestEveryCollectionMethodRunsOnAHealthyLabComponent` holds the fleet to it: every seeded driver and
+every registry transport is attached, by an endpoint that is no planted fault, on a component a
+profile serves, or is listed as a gap with its issue (a plain `websocket`, #1414; the unbuilt shared
+push listener, syslog and SNMP traps, #1148, #1149 and #1150), and a listed method the fleet gains
+fails as stale. A method counts on both tiers: a driver only when it reads collected values (a poll
+or a listener that emits), a driverless transport (`icmp`) on its connection tier, since a ping has
+no device API to read, and the push lane on its collected tier alone, since a push has no endpoint.
+The lab proves it live: `make test-lab` waits out the warm-up and requires each method up with a
+value its driver emits landed from it, and a system holding the booking service's push.
 
 The [lab](/guides/lab/) runs the dev fleet with the node `edge-hq` serving it in process, so the
 whole loop is one command: the node polls the simulated components, the samples land on the seeded
@@ -380,8 +416,24 @@ webhook transport is proven against: its admin API takes a **webhook subscriptio
 timestamp, a dot and the body. A fault posts as a sender gone wrong: `bad-signature` signs with the
 wrong key, `stale` signs a timestamp ten minutes old, and `redeliver` sends one delivery twice. The
 shipped `ucc-webhook` driver maps them; the dev fleet carries the service at headquarters with its
-webhook endpoint, which a subscription to the endpoint's URL and the fleet's signing key
-(`sim-ucc-signing`) brings to life ([ADR-1024](/architecture/decisions/#adr-1024-omniglass-receives-webhooks-on-the-server-and-a-webhook-token-is-a-sealed-secret)).
+webhook endpoint, signed with the fleet's key (`sim-ucc-signing`) ([ADR-1024](/architecture/decisions/#adr-1024-omniglass-receives-webhooks-on-the-server-and-a-webhook-token-is-a-sealed-secret)).
+
+### A simulated service posts from the start
+
+A webhook's URL carries a token the server mints when the endpoint is created, so no profile default
+can name it. The simulator plays the external service that posts to it, and so holds what that
+service would hold (#1370, [ADR-1370](/architecture/decisions/#adr-1370-the-simulator-plays-the-saas-so-it-holds-a-webhook-endpoints-token-and-key)):
+the server's simulation device list carries, for a simulated component holding a webhook endpoint,
+the endpoint's path and the secret its scheme signs with, and the simulator calls the device's own
+subscribe route (a profile's `webhook.subscribe`, a POST taking `url`, `scheme` and `secret`) with
+the server URL it already reaches plus that path, as the service's admin would. It does so once per
+device and subscription, and again for a restarted device, whose state began again from its
+defaults. The fence is two facts the server holds and a node cannot assert: the database carries
+the lab mark, and the component sits in the simulated block (`127.60.0.0/16`), which only the seed
+allocates. A database with no lab mark hands out nothing (outside a lab, `make dev` included, a
+service is subscribed by hand through its subscribe route), a real device's webhook is never handed
+out, and a node's worklist never carries one. The UCC service's meeting behavior then posts `meeting.started` every minute, so a lab's
+webhook endpoint is heard within its first two minutes.
 
 The **UCC platform** (`ucc-platform`) is the same vendor's account-wide plane, the face the
 [fan-out](/architecture/collection/#shared-api-collection-one-component-many-owners) is proven
