@@ -28,7 +28,8 @@ An effective value resolves from ordered contributions, plus one thing that is n
 **`default` is off the axis.** It is the value reflected from the canonical `Settings` struct's
 `default:` tags (see [the single-source struct](#the-single-source-struct)): the setting's own
 **declaration**, never a row, shadowing nothing; every settable key has one, so the effective
-document is always complete. It is the **fall-through**, not the bottom rung
+document is complete, except for an [optional setting](#the-single-source-struct), which declares
+none and is absent until a level sets it. It is the **fall-through**, not the bottom rung
 ([cascade](/architecture/cascade/#bindings-cascade-declarations-do-not)).
 
 **The base layer** is recomputed into memory on every boot and never stored in the override table:

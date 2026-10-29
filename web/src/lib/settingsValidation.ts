@@ -1,6 +1,7 @@
 import { settingsSchema } from "../api/settings.schema.gen";
 
 export type Constraint = {
+  description?: string;
   type?: string;
   enum?: readonly string[];
   pattern?: string;

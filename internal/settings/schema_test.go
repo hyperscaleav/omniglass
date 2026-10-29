@@ -98,6 +98,11 @@ func TestANodeLogBandFollowsTheSharedWindowUntilOverridden(t *testing.T) {
 	if got := w.LogDays("debug"); got != 3 {
 		t.Errorf("shared debug window %d after a node override, want it untouched at 3", got)
 	}
+	// A zero (only the unvalidated operator file can hold one) reads as unset.
+	w.NodeInfoLogDays = 0
+	if got := w.NodeLogDays("info"); got != w.InfoLogDays {
+		t.Errorf("node_log info window %d with the override at 0, want the shared %d", got, w.InfoLogDays)
+	}
 	if got := w.NodeLogDays("error"); got != w.ErrorLogDays {
 		t.Errorf("node_log error window %d with only debug overridden, want the shared %d", got, w.ErrorLogDays)
 	}
