@@ -1,0 +1,141 @@
+# yaml-language-server: $schema=schema.json
+# Newtron Slate 5, Scheduling Panel
+#
+# Newtron is the lab's fictional control-systems vendor. The Slate 5 is
+# the small panel outside a meeting space's door that shows whether the
+# space is booked and what is next, and lets someone book it on the spot
+# or end a meeting early. It is not a touch panel: it controls nothing in
+# the space, so it shares none of the Panel 7's surface (#896).
+#
+# Its faces: the Newtron NVP line protocol (GET BOOKING, GET NEXT, a push
+# on SUBSCRIBE BOOKING), an HTTPS API behind the Newtron sign-in for its
+# status and the book-now and end-now buttons, and MIB-2 SNMP.
+
+name: newtron-slate-5
+manufacturer: Newtron
+model: "Slate 5"
+device_type: scheduling-panel
+slug_prefix: scheduling-panel
+
+doc:
+  summary: "Newtron Slate 5 scheduling panel"
+  description: |
+    Door-side scheduling panel. Shows and reports whether its space is
+    booked and the next meeting, over the Newtron NVP line protocol and
+    an HTTPS API; books on the spot or ends a meeting from the panel.
+
+interfaces:
+  - name: http-api
+    protocol: http
+    port: 443
+    tls: true
+    doc: { summary: "Newtron HTTP API", tags: [management, api] }
+    auth:
+      type: form
+      default_user: admin
+      default_password: newtron
+      enforce: true
+      login_path: /login
+      expire_path: /api/admin/sessions/expire
+    api_surface: newtron-slate
+    routes:
+      - match: "GET /api/status"
+        template: api/newtron-slate/status.json.gotempl
+        doc: { summary: "Booking state, the next meeting and identity", tags: [api, status] }
+
+      # The panel's two buttons: book the space now, or end the meeting.
+      - match: "POST /api/booking"
+        template: api/newtron-slate/booking-ack.json.gotempl
+        doc: { summary: "Book now (booked) or end now (free)", tags: [api, control] }
+        example: |
+          {"state": "booked"}
+        mutations:
+          - path: status.booking.state
+            value: "{{ .Request.Body.state }}"
+            enum: [booked, free]
+
+      - match: "POST /api/admin/reboot"
+        template: api/newtron-slate/reboot-ack.json.gotempl
+        doc: { summary: "Reboot panel (clears uptime)", tags: [api, admin] }
+        example: "{}"
+        mutations:
+          - { path: status.device.boot_epoch, value: "{{ now }}" }
+
+  - name: nvp
+    protocol: tcp
+    port: 51325
+    doc:
+      summary: "NVP line protocol: booking state, the next meeting, booking events"
+      tags: [control, persistent-session, raw-tcp]
+    api_surface: newtron-slate
+    persistent: true
+    line_ending: "\r\n"
+    subjects:
+      - match: "status.booking.state"
+        path: "status.booking.state"
+        publish_token: "BOOKING"
+        push_format: "EVT BOOKING {{ .Raw }}"
+    commands:
+      - match: "GET BOOKING"
+        response: 'BOOKING {{ .State | get "status" | get "booking" | get "state" }}'
+      - match: "GET NEXT"
+        response: 'NEXT {{ .State | get "status" | get "booking" | get "next" }}'
+      - match: "SUBSCRIBE BOOKING"
+        action: subscribe
+        subject: "status.booking.state"
+        token: "BOOKING"
+        response: "OK"
+      - match: "UNSUBSCRIBE BOOKING"
+        action: unsubscribe
+        subject: "status.booking.state"
+        response: "OK"
+
+  - name: snmp
+    protocol: snmp
+    port: 161
+    doc: { summary: "SNMP monitoring (MIB-2 only)", tags: [monitoring] }
+    api_surface: newtron-slate
+    auth:
+      community: "public"
+      refused_community: "revoked"
+    oid_map:
+      configuration.device.model: "1.3.6.1.2.1.1.1.0"
+      status.device.uptime:       "1.3.6.1.2.1.1.3.0"
+
+  - name: icmp
+    protocol: icmp
+    doc: { summary: "ICMP ping reachability", tags: [monitoring] }
+
+computed:
+  - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
+
+# A meeting day: the space turns over every half hour, booked then free,
+# a behavior a scenario timeline can replace with the place's real day.
+behaviors:
+  - name: booking_cycle
+    schedule:
+      interval: 1800s
+    mutations:
+      - path: status.booking.state
+        value: '{{ if eq (printf "%v" .State.status.booking.state) "booked" }}free{{ else }}booked{{ end }}'
+
+defaults:
+  status:
+    device:
+      boot_epoch: 0
+    booking:
+      state: free
+      next: "14:00 Weekly sync"
+    network:
+      ipv4:
+        address: ""
+        mac: ""
+  configuration:
+    device:
+      serial: ""
+      model: "Slate 5"
+      manufacturer: "Newtron"
+    firmware:
+      version: "2.0.3"
+    network:
+      hostname: ""

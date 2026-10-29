@@ -58,7 +58,11 @@ A device profile is named for the product it simulates, and may list other produ
 same kind of device (the same component type), each with its own identity (a model name) over the
 profile's defaults: the Boreal Edge displays in every size share one profile. A different kind of
 device never stands in, even on the same driver: a touch panel's surface is a subset of a control
-processor's, so each has its own. Every
+processor's, so each has its own. Where one device's surface is a subset of another's, the larger
+profile `extends` the smaller and adds to it ([ADR-0896](/architecture/decisions/#adr-0896-a-device-profile-extends-another-whose-surface-it-carries)):
+the Newtron Core control processor carries every face, route and NVP verb of the Panel 7 and adds its
+program, its connected panels and its control ports, so a signal the panel gains, the processor
+answers too. Every
 seeded product on the network is served by a profile or listed, with its issue, in the catalog's
 `coverage.yaml`, and a test holds the two catalogs to that. Products with no network interface (a
 passive speaker, an analog microphone) have nothing to collect from and are not simulated:
@@ -282,10 +286,9 @@ its own beside a node, and for the Helm sidecar (#892).
 The dev seed simulates its own fleet. Every component whose product a profile serves gets an
 address in `127.60.0.0/16` (a component keeps the address it was given, and a new one takes the
 lowest address no endpoint already targets) and endpoints on the dev node, `edge-hq`. A product whose driver
-has a spec gets that driver attached: SNMP products through `snmp-generic` (with a seeded platform
-community secret), the Newtron panels through `newtron-nvp`'s line protocol, the Kestrel bars
-through `kestrel-api` over https (a seeded basic-auth login, the bar's key pinned on first use), and
-the Tessellate sensors through `http-json` (a seeded api key in its header). A product whose driver
+has a spec gets that driver attached, with the credential its simulated face demands (an SNMP
+community, a login, an api key) seeded as a platform secret; the attach table in `internal/simfleet`
+says which driver takes which. A product whose driver
 is still a stub gets a reachability probe on the port its profile serves. The endpoints target the
 profiles' real ports, which a simulator in a container binds; for a simulator on a host that may not
 bind below 1024, `omniglass seed-dev --sim-port-offset 10000` aims them at the lifted ports instead.

@@ -263,6 +263,104 @@ drivers:
         - command_type: set-input
           request: { line: "SET INPUT ${value}", reply: { prefix: "INPUT ", error: { prefix: "-ERR" } } }
           settle: { from: response, extract: { regex: "^INPUT (\\S+)$" } }
+  - id: newtron-core-nvp
+    label: Newtron Core NVP
+    version: "1.0.0"
+    spec:
+      version: 1
+      # The Newtron Core control processor over NVP (#896): everything the
+      # panel driver (newtron-nvp) reads, since the processor answers the
+      # panel's verbs, and the processor's own, its control program's state
+      # and the panels connected to it, polled and, for the program, pushed.
+      transport: tcp
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "51325" }
+      polls:
+        - name: program
+          schedule: { every: 30s }
+          request: { line: "GET PROGRAM", reply: { prefix: "PROGRAM ", error: { prefix: "-ERR" } } }
+          emits:
+            - { name: program-state, extract: { regex: "^PROGRAM (\\S+)$" } }
+        - name: panels
+          schedule: { every: 60s }
+          request: { line: "GET PANELS", reply: { prefix: "PANELS ", error: { prefix: "-ERR" } } }
+          emits:
+            - { name: panel-count, extract: { regex: "^PANELS (\\d+)$" } }
+        - name: status
+          schedule: { every: 30s }
+          # The reply shape picks GET INPUT's answer out of the EVT pushes
+          # sharing the held session (#817); the panel refuses with a -ERR
+          # line, which answers the ask as a failure rather than a timeout.
+          request: { line: "GET INPUT", reply: { prefix: "INPUT ", error: { prefix: "-ERR" } } }
+          emits:
+            - { name: video-input, extract: { regex: "^INPUT (\\S+)$" } }
+      # The NVP conversation is line-oriented over a held TCP session: the
+      # subscribes arm on establish (and re-arm on every recover), and the
+      # device pushes lines the listeners claim by prefix. The standing
+      # listen tasks are what make the node hold the endpoint's session
+      # (#816): the subscribes are sent on every connection before it reads
+      # up, the pushes land with no poll involved, and the status poll and
+      # set-input command borrow the same connection (#817).
+      #
+      # One push lands on several lanes (#1145): an input change is the
+      # video-input property and an input-changed event carrying the new
+      # input; a diagnostics line is a log line, its severity read off the
+      # line; and anything no listener claims (the scene changes SUBSCRIBE
+      # SCENE pushes) lands whole as a log line, raw arrival.
+      unmatched: log
+      listeners:
+        - name: events
+          arm: ["SUBSCRIBE INPUT", "SUBSCRIBE SCENE", "SUBSCRIBE PROGRAM"]
+          match: { prefix: "EVT INPUT " }
+          emits:
+            - { name: video-input, extract: { regex: "^EVT INPUT (\\S+)$" } }
+            - name: input-changed
+              message: { value: "Video input changed" }
+              attributes:
+                input: { extract: { regex: "^EVT INPUT (\\S+)$" } }
+        - name: program-change
+          match: { prefix: "EVT PROGRAM " }
+          emits:
+            - { name: program-state, extract: { regex: "^EVT PROGRAM (\\S+)$" } }
+        - name: logs
+          arm: ["SUBSCRIBE LOG"]
+          match: { prefix: "LOG " }
+          emits:
+            - log:
+                severity: { extract: { regex: "^LOG (\\S+)" } }
+                facility: { value: panel }
+              message: { extract: { regex: "^LOG (?:\\S+\\s+)?(.+)$" } }
+      commands:
+        # The panel answers SET INPUT with the input it now shows, so the
+        # reply settles the command (ADR-0141).
+        - command_type: set-input
+          request: { line: "SET INPUT ${value}", reply: { prefix: "INPUT ", error: { prefix: "-ERR" } } }
+          settle: { from: response, extract: { regex: "^INPUT (\\S+)$" } }
+  - id: newtron-slate-nvp
+    label: Newtron Slate NVP
+    version: "1.0.0"
+    spec:
+      version: 1
+      # The Newtron Slate scheduling panel over NVP (#896): whether its space
+      # is booked, polled, and pushed the moment it changes (a meeting booked
+      # at the door, ended early, or the day's schedule turning it over).
+      transport: tcp
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "51325" }
+      polls:
+        - name: booking
+          schedule: { every: 30s }
+          request: { line: "GET BOOKING", reply: { prefix: "BOOKING ", error: { prefix: "-ERR" } } }
+          emits:
+            - { name: booking-state, extract: { regex: "^BOOKING (\\S+)$" } }
+      listeners:
+        - name: booking-change
+          arm: ["SUBSCRIBE BOOKING"]
+          match: { prefix: "EVT BOOKING " }
+          emits:
+            - { name: booking-state, extract: { regex: "^EVT BOOKING (\\S+)$" } }
   - id: newtron-nvp-telnet
     label: Newtron NVP over Telnet
     version: "1.0.0"

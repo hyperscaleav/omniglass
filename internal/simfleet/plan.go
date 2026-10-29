@@ -147,6 +147,12 @@ var Attach = map[string]func(addr string, shift func(int) int) map[string]string
 	"newtron-nvp": func(addr string, _ func(int) int) map[string]string {
 		return map[string]string{"host": addr} // 51325, the spec's default, needs no privilege
 	},
+	"newtron-core-nvp": func(addr string, _ func(int) int) map[string]string {
+		return map[string]string{"host": addr}
+	},
+	"newtron-slate-nvp": func(addr string, _ func(int) int) map[string]string {
+		return map[string]string{"host": addr}
+	},
 	// The Kestrel bar's https API on 443, its key pinned on first use (the
 	// spec's default mode), and the Tessellate sensor's http API on 80.
 	"kestrel-api": func(addr string, shift func(int) int) map[string]string {

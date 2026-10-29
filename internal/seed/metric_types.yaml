@@ -88,6 +88,12 @@ metric_types:
     data_type: int
     label: Participant Count
     description: The participants a component reports in its current call; 0 when no call is active.
+  # A control processor's connected touch panels (#896).
+  - name: panel-count
+    data_type: int
+    unit: count
+    label: Panel Count
+    description: The touch panels a control processor reports connected to it.
   - name: http-response-time
     data_type: float
     unit: ms

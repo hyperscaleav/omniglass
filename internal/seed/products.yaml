@@ -154,13 +154,13 @@ products:
   - id: newtron-slate-5
     label: Newtron Slate 5
     vendor_id: newtron
-    driver_id: newtron-nvp
+    driver_id: newtron-slate-nvp
     kind: device
     component_type: scheduling-panel
   - id: newtron-core-3
     label: Newtron Core CP-3
     vendor_id: newtron
-    driver_id: newtron-nvp
+    driver_id: newtron-core-nvp
     kind: device
     component_type: control-processor
   # Polaris: the audio rack.
