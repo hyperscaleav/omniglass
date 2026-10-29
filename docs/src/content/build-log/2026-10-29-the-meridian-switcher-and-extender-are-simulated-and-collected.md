@@ -16,7 +16,7 @@ input to an output and plugs a source in or out. A behavior keeps every output's
 input, so a laptop going to sleep darkens each output showing it within a tick. The XL-1 receiver
 reports the link between its pair and whether a signal arrives over it, at `.3`.
 
-`meridian-mx-snmp` reads output 1, the room's main display feed: its `video-input` and its
+`meridian-mx-snmp` reads output 1, the main display feed: its `video-input` and its
 `signal-state`; the other outputs and the input table wait on a driver naming an instance (#1252).
 `meridian-xl-snmp` reads `link-state` and `signal-state`. Both properties are new to the boot seed,
 and `video-input` gains `hdmi4` to `hdmi6` for the switcher's eight inputs.

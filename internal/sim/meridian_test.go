@@ -113,7 +113,7 @@ func TestMeridianSwitcherRoutesAndReportsSignal(t *testing.T) {
 		t.Errorf("after routing hdmi3 to output 1: %v, want hdmi3, no signal", got)
 	}
 
-	// The room PC (hdmi1, on outputs 2 and 4) goes to sleep: its outputs go
+	// The resident PC (hdmi1, on outputs 2 and 4) goes to sleep: its outputs go
 	// dark on the next tick; output 3 (hdmi2) holds.
 	if code, _ := meridianDo(t, d, http.MethodPost, "/api/inputs/signal", `{"input": "hdmi1", "signal": false}`); code != http.StatusOK {
 		t.Fatalf("input signal: %d", code)
@@ -140,8 +140,17 @@ func TestMeridianSwitcherRoutesAndReportsSignal(t *testing.T) {
 			t.Errorf("route %s: %d, want 400", body, code)
 		}
 	}
-	if v := meridianSNMP(t, d, switcherOutput(1, 1))[switcherOutput(1, 1)]; v != "hdmi3" {
-		t.Errorf("output 1 after refused routes = %q, want hdmi3", v)
+	// A refused route writes nothing: not the input, and not the signal it
+	// would have carried.
+	if got := meridianSNMP(t, d, switcherOutput(1, 1), switcherOutput(1, 2)); got[switcherOutput(1, 1)] != "hdmi3" || got[switcherOutput(1, 2)] != "false" {
+		t.Errorf("output 1 after refused routes = %v, want hdmi3, no signal", got)
+	}
+	// An input the switcher does not have is refused, and no input appears.
+	if code, _ := meridianDo(t, d, http.MethodPost, "/api/inputs/signal", `{"input": "hdmi7", "signal": true}`); code != http.StatusBadRequest {
+		t.Errorf("signal on hdmi7: %d, want 400", code)
+	}
+	if _, s := meridianDo(t, d, http.MethodGet, "/api/status", ""); s["inputs"].(map[string]any)["hdmi7"] != nil {
+		t.Errorf("a refused input appeared: %v", s["inputs"])
 	}
 }
 

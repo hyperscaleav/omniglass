@@ -2,8 +2,8 @@
 # Meridian MX 84, Presentation Switcher
 #
 # Meridian is the lab's fictional signal-distribution vendor. The MX 84
-# is an eight-input, four-output presentation switcher in a room's rack:
-# laptops and the room PC come in, the displays and the capture feed go
+# is an eight-input, four-output presentation switcher in a rack:
+# laptops and the resident PC come in, the displays and the capture feed go
 # out. What an operator watches it for is which input each output shows,
 # and whether that input carries a signal at all (a dark display is
 # usually a laptop asleep, not a broken display).
@@ -53,7 +53,8 @@ interfaces:
           - path: 'status.outputs.{{ .Request.Body.output }}{{ guard "^[1-4]$" .Request.Body.output }}.input'
             value: "{{ .Request.Body.input }}"
             enum: [hdmi1, hdmi2, hdmi3, hdmi4, hdmi5, hdmi6, dp1, usbc]
-          - path: 'status.outputs.{{ .Request.Body.output }}{{ guard "^[1-4]$" .Request.Body.output }}.signal'
+          # Guarded on both fields it reads, so a refused route writes nothing.
+          - path: 'status.outputs.{{ .Request.Body.output }}{{ guard "^[1-4]$" .Request.Body.output }}{{ guard "^(hdmi[1-6]|dp1|usbc)$" .Request.Body.input }}.signal'
             value: '{{ index .State.status.inputs (printf "%v" .Request.Body.input) }}'
 
       # A source plugged in or unplugged (a laptop arriving, going to sleep).
@@ -63,7 +64,7 @@ interfaces:
         example: |
           {"input": "hdmi1", "signal": false}
         mutations:
-          - path: 'status.inputs.{{ segment .Request.Body.input }}'
+          - path: 'status.inputs.{{ segment .Request.Body.input }}{{ guard "^(hdmi[1-6]|dp1|usbc)$" .Request.Body.input }}'
             value: "{{ .Request.Body.signal }}"
             enum: ["true", "false"]
 
@@ -116,7 +117,7 @@ computed:
 
 # Each output follows its routed input's signal: a source going dark goes
 # dark on every output showing it, within a tick. A scenario timeline
-# unplugs a laptop or puts the room PC to sleep through the inputs.
+# unplugs a laptop or puts the resident PC to sleep through the inputs.
 behaviors:
   - name: output_signal_follow
     schedule:
@@ -135,7 +136,7 @@ defaults:
   status:
     device:
       boot_epoch: 0
-    # Each input's signal: the room PC (hdmi1) and the wall plate (hdmi2)
+    # Each input's signal: the resident PC (hdmi1) and the wall plate (hdmi2)
     # are live, the table inputs wait for a laptop.
     inputs:
       hdmi1: true

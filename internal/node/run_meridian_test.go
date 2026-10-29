@@ -41,7 +41,7 @@ func TestNodeMeridianReadsRouteSignalAndLink(t *testing.T) {
 
 	s.waitFor("switcher-1", mxEP, "model-number", is("MX 84"), "the switcher's model")
 	s.waitFor("switcher-1", mxEP, "serial-number", is(fmt.Sprint(s.devices[mx].ReadPath("configuration.device.serial"))), "its serial")
-	s.waitFor("switcher-1", mxEP, "video-input", is("hdmi1"), "output 1 shows the room PC")
+	s.waitFor("switcher-1", mxEP, "video-input", is("hdmi1"), "output 1 shows the resident PC")
 	s.waitFor("switcher-1", mxEP, "signal-state", is("present"), "with a signal")
 	s.waitFor("extender-1", xlEP, "model-number", is("XL-1"), "the extender's model")
 	s.waitFor("extender-1", xlEP, "link-state", is("up"), "its link up")
