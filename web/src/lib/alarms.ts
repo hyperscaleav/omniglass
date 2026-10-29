@@ -194,28 +194,19 @@ const AUDIT_WORDS: Record<string, string> = {
   "snooze-end": "snooze ended",
 };
 
-// NOTIFY_WORDS word a notification's status as what happened to its target
-// (#618): queued is on its way, sent arrived, failed gave up, and suppressed
-// was held back because the alarm's condition was snoozed (#1318).
-const NOTIFY_WORDS: Record<string, string> = { queued: "notifying", sent: "notified", failed: "failed to notify", suppressed: "held back from" };
-
-// timelineWhat is the entry's verb as an operator reads it: an event by its
-// type (condition-started), an audit row by what was done to the alarm, a
-// notification by what happened to its target.
-export function timelineWhat(e: Pick<AlarmTimelineEntry, "kind" | "what" | "target">): string {
-  if (e.kind === "notification") {
-    if (e.what === "suppressed" && !e.target) return "held back";
-    return `${NOTIFY_WORDS[e.what] ?? e.what} ${e.target ?? ""}`.trim();
-  }
+// timelineWhat is an event or audit entry's verb as an operator reads it: an
+// event by its type (condition-started), an audit row by what was done to the
+// alarm. A notification is not a sentence (#1413): it reads as a status row,
+// its status in the shared NotificationStatusPill.
+export function timelineWhat(e: Pick<AlarmTimelineEntry, "kind" | "what">): string {
   return e.kind === "audit" ? (AUDIT_WORDS[e.what] ?? e.what) : e.what;
 }
 
-// timelineWho says who: the person who acted, else the rule the entry belongs
-// to (the rule wrote the event, or the platform acted for it; a notification's
-// action rule queued it), else the platform itself.
-export function timelineWho(e: Pick<AlarmTimelineEntry, "actor" | "rule" | "action_rule">): string {
+// timelineWho says who, on an event or audit entry: the person who acted,
+// else the rule the entry belongs to (the rule wrote the event, or the
+// platform acted for it), else the platform itself.
+export function timelineWho(e: Pick<AlarmTimelineEntry, "actor" | "rule">): string {
   if (e.actor) return e.actor;
-  if (e.action_rule) return `action rule ${e.action_rule}`;
   if (e.rule) return `rule ${e.rule}`;
   return "the platform";
 }
