@@ -58,6 +58,11 @@ func newNodeRunCmd() *cobra.Command {
 			} else if once {
 				return fmt.Errorf("node: --once is one collection cycle and cannot hold a simulator up; drop --once or --simulate")
 			}
+			// The heartbeat is the granularity a node runs at (ADR-0152), so a
+			// probe interval below it is a promise the node cannot keep (#1373).
+			if probeEvery > 0 && probeEvery < heartbeat {
+				return fmt.Errorf("node: --probe-every %s is below --heartbeat %s, the granularity this node runs at; raise it, or lower the heartbeat", probeEvery, heartbeat)
+			}
 			if serverURL == "" {
 				serverURL = config.Get("OMNIGLASS_SERVER")
 			}
@@ -97,7 +102,7 @@ func newNodeRunCmd() *cobra.Command {
 	cmd.Flags().StringVar(&name, "name", "", "this node's registered name (env OMNIGLASS_NODE_NAME)")
 	cmd.Flags().StringVar(&token, "token", "", "enrollment token from POST /nodes/{name}:enroll (env OMNIGLASS_NODE_TOKEN)")
 	cmd.Flags().DurationVar(&heartbeat, "heartbeat", 30*time.Second, "heartbeat interval")
-	cmd.Flags().DurationVar(&probeEvery, "probe-every", 0, "how often each reachability probe runs; 0 probes on every heartbeat. Keep it under the console's 150s staleness window, past which a probe-only endpoint reads stale between probes")
+	cmd.Flags().DurationVar(&probeEvery, "probe-every", 0, "how often each reachability probe runs, overriding the platform's collection.probe_seconds; 0 takes the platform's. Never below --heartbeat. Keep it under the console's 150s staleness window, past which a probe-only endpoint reads stale between probes")
 	cmd.Flags().BoolVar(&once, "once", false, "run a single claim + pull + heartbeat cycle and exit")
 	cmd.Flags().BoolVar(&simulate, "simulate", false, "also run the simulator in this process, serving the simulated components placed on this node on its own loopback")
 	cmd.Flags().BoolVar(&impairments, "impairments", false, "with --simulate: apply impairments (unplug, latency, loss) and truthful ping by rewriting the firewall and traffic shaping of this network namespace; needs NET_ADMIN, and is meant for a namespace of the node's own (a container)")

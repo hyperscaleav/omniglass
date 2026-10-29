@@ -101,7 +101,7 @@ func TestNodeTelnetSessionRejectsThenRecoversOnTheFix(t *testing.T) {
 	runCtx, stop := context.WithCancel(ctx)
 	ran := make(chan error, 1)
 	go func() {
-		_, err := node.Run(runCtx, node.Config{ServerURL: apiSrv.URL, Name: "edge-t", Token: token, HeartbeatEvery: 100 * time.Millisecond})
+		_, err := node.Run(runCtx, node.Config{ServerURL: apiSrv.URL, Name: "edge-t", Token: token, HeartbeatEvery: 100 * time.Millisecond, ProbeEvery: 100 * time.Millisecond})
 		ran <- err
 	}()
 	defer func() {

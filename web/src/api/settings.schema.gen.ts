@@ -1,6 +1,20 @@
 // Generated from api/openapi.json by web/scripts/gen-settings-schema.mjs (make gen). Do not edit by hand.
 export const settingsSchema = {
   "collection": {
+    "poll_seconds": {
+      "description": "Seconds between runs of a driver poll that declares no schedule of its own; a declared schedule wins; never below the 30-second heartbeat",
+      "type": "integer",
+      "minimum": 30,
+      "maximum": 86400,
+      "format": "int64"
+    },
+    "probe_seconds": {
+      "description": "Seconds between reachability probes of each endpoint, unless a node's own --probe-every says otherwise; never below the 30-second heartbeat a node runs at",
+      "type": "integer",
+      "minimum": 30,
+      "maximum": 86400,
+      "format": "int64"
+    },
     "report_seconds": {
       "description": "Seconds each endpoint's collection telemetry covers: its polls' mean duration and failures, and the pushes its listeners claimed or did not, reported once a window",
       "type": "integer",

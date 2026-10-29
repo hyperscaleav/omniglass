@@ -335,9 +335,14 @@ func Plan(o Options) (Spec, error) {
 			"its bus listens on the lab network for the node.",
 	}
 	nodeCmd := []string{"node", "run", "--simulate", "--impairments", "--heartbeat", labCadence}
+	// A throwaway lab probes on every check-in, said outright: a node with
+	// no interval of its own takes the platform's (#1373), the product's
+	// 30s heartbeat.
+	probe := labCadence
 	if !o.Ephemeral {
-		nodeCmd = append(nodeCmd, "--probe-every", labProbeEvery)
+		probe = labProbeEvery
 	}
+	nodeCmd = append(nodeCmd, "--probe-every", probe)
 	spec.Node = Service{
 		Name: "node", Container: o.Project + "-node-1", Image: o.Image,
 		Cmd: append(nodeCmd, "--poll", labCadence),

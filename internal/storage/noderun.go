@@ -192,8 +192,8 @@ func (p *PG) PlanDriverPreview(ctx context.Context, actorID string, in PreviewIn
 		if err := bakeIdentity(poll.Identity, cat); err != nil {
 			return nil, err
 		}
-		sched, req := poll.Schedule, poll.Request
-		baked, err := json.Marshal(driver.BakedFunction{Driver: d.Name, Version: d.Version, Function: poll.Name, Schedule: &sched, Request: &req, Emits: emits,
+		req := poll.Request
+		baked, err := json.Marshal(driver.BakedFunction{Driver: d.Name, Version: d.Version, Function: poll.Name, Schedule: driver.BakedSchedule(poll.Schedule), Request: &req, Emits: emits,
 			Records: poll.Records, Identity: poll.Identity})
 		if err != nil {
 			return nil, fmt.Errorf("storage: marshal preview task: %w", err)

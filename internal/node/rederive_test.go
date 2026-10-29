@@ -227,7 +227,7 @@ func TestNodeHonorsThePollSchedule(t *testing.T) {
 	ran := make(chan error, 1)
 	go func() {
 		_, err := node.Run(runCtx, node.Config{ServerURL: apiSrv.URL, Name: "edge-s2", Token: token,
-			HeartbeatEvery: 50 * time.Millisecond, Line: line})
+			HeartbeatEvery: 50 * time.Millisecond, ProbeEvery: 50 * time.Millisecond, Line: line})
 		ran <- err
 	}()
 	deadline := time.Now().Add(10 * time.Second)

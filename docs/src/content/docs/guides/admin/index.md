@@ -136,6 +136,16 @@ every node on its next worklist pull. See
 [collection telemetry](/architecture/collection/#collection-telemetry-every-endpoints-account-of-itself)
 for what each count means.
 
+Two more **collection** settings set how often the install collects, the platform defaults of the
+[cadence model](/architecture/collection/#how-often-the-cadence-model):
+- `probe_seconds`, how often each endpoint's reachability is probed;
+- `poll_seconds`, how often a driver poll that declares no schedule of its own runs (a declared one
+  keeps its own).
+
+Both default to the 30-second heartbeat a node runs at and cannot go below it. Raising them is the
+lever on how many rows the install writes a day: a probe every 60 seconds writes half the rows of one
+every 30. A change reaches every node on its next worklist pull.
+
 The model behind all of this is [identity and access](/architecture/identity-access/) and
 [config and credentials](/architecture/variables/); those pages say how it is built, these say
 how to run it.

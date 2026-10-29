@@ -30,7 +30,7 @@ func (s *gateStack) runNodeReporting(name string, every time.Duration) {
 	ran := make(chan error, 1)
 	go func() {
 		_, err := node.Run(runCtx, node.Config{ServerURL: s.apiURL, Name: name, Token: s.token,
-			HeartbeatEvery: 100 * time.Millisecond, ReportEvery: every})
+			HeartbeatEvery: 100 * time.Millisecond, ProbeEvery: 100 * time.Millisecond, ReportEvery: every})
 		ran <- err
 	}()
 	s.stop = func() {

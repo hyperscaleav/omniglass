@@ -127,6 +127,10 @@ type Worklist struct {
 	// collection.report_seconds), read on every pull so an admin's change
 	// reaches each node on its next one.
 	ReportSeconds int
+	// ProbeSeconds and PollSeconds are the platform's cadences (#1373,
+	// collection.probe_seconds and poll_seconds): a reachability probe's,
+	// and a driver poll's that declares no schedule.
+	ProbeSeconds, PollSeconds int
 }
 
 // The placement arc stores location.id, so the name is read back beside it via a
@@ -651,6 +655,7 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 		return Worklist{}, fmt.Errorf("storage: node worklist %q: %w", name, err)
 	}
 	wl.ReportSeconds = s.Collection.ReportSeconds
+	wl.ProbeSeconds, wl.PollSeconds = s.Collection.ProbeSeconds, s.Collection.PollSeconds
 	return wl, nil
 }
 

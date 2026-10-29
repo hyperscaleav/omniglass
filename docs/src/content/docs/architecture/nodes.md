@@ -504,7 +504,9 @@ new to the worklist runs at once, a restart polls at its first tick, and a run w
 retries on a backoff from the heartbeat, doubling, capped at the interval). The half heartbeat is
 there because a tick is judged after its own work, which varies by milliseconds: without it, an
 interval equal to the heartbeat would skip a tick now and then. A reachability probe runs on the
-node's probe interval (`--probe-every`) the same way, and on every tick when the interval is unset. A
+node's probe interval the same way: its own `--probe-every` when set, else the platform's
+`collection.probe_seconds` (#1373), carried on the worklist; a driver poll that declares no schedule
+runs at the platform's `collection.poll_seconds`. A
 probe new to the worklist runs at once, and so does one whose endpoint was edited in place or retried
 (its connection fingerprint moved), so an operator's fix reads its verdict on the next tick. The
 interval lets a node check in often, so a change reaches it within seconds, while probing less often,

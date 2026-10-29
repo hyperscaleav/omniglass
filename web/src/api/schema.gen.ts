@@ -6221,6 +6221,18 @@ export interface components {
         CollectionSettings: {
             /**
              * Format: int64
+             * @description Seconds between runs of a driver poll that declares no schedule of its own; a declared schedule wins; never below the 30-second heartbeat
+             * @default 30
+             */
+            poll_seconds: number;
+            /**
+             * Format: int64
+             * @description Seconds between reachability probes of each endpoint, unless a node's own --probe-every says otherwise; never below the 30-second heartbeat a node runs at
+             * @default 30
+             */
+            probe_seconds: number;
+            /**
+             * Format: int64
              * @description Seconds each endpoint's collection telemetry covers: its polls' mean duration and failures, and the pushes its listeners claimed or did not, reported once a window
              * @default 60
              */

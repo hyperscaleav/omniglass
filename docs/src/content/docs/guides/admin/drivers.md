@@ -30,8 +30,9 @@ An endpoint carries two kinds of data, and a driver configures only one of them:
 
   Omniglass produces it from the endpoint's transport. A driver never declares or emits it, and a
   spec that emits one is refused. A driver only tunes how some of it is gathered: its `ladder` (below)
-  picks the reachability rung and whether to ping. The cadences become per-endpoint-type defaults a
-  driver and an operator can override with #1373. The keys are the `node-probe` and `platform` writer
+  picks the reachability rung and whether to ping. How often it is probed is the platform's
+  `collection.probe_seconds` (or a node's own `--probe-every`); per-endpoint-type defaults and an
+  operator's overrides follow with #1443. The keys are the `node-probe` and `platform` writer
   classes, listed from the code on [who writes a key](/architecture/properties/#who-writes-a-key-the-writer-class).
 - **Collected data** is what the device's own API says: a volume, a call state, an input. It is
   exactly what the driver's polls and listeners emit, each a **collected** key, and the driver
@@ -394,7 +395,9 @@ session:
 ```
 
 A poll's `schedule.every` is how often the node asks the device, at the node's heartbeat
-granularity (a `60s` poll on a 30s heartbeat runs every other tick). A poll whose fetch fails
+granularity (a `60s` poll on a 30s heartbeat runs every other tick). A poll may leave `schedule`
+out: it then runs at the install's `collection.poll_seconds` (**Admin > Settings**), so a value the
+driver author has no opinion on follows the install's cost choice rather than every heartbeat. A poll whose fetch fails
 (the device rebooting, say) retries sooner, on a backoff that starts at the heartbeat and doubles
 up to the interval, so a daily poll is not lost for a day. A listener's pushes land as they arrive
 whatever the schedule. Changing a spec (or its version) reaches the endpoints already attached through it: their tasks

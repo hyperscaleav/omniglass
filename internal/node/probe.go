@@ -64,7 +64,7 @@ func runTasks(ctx context.Context, out *telemetrySpool, node string, wl collecti
 		if driver.IsBaked(task.Spec) {
 			// A driver poll runs on its declared schedule (#822), not on
 			// every heartbeat.
-			interval := pollInterval(task)
+			interval := pollCadence(task, wl)
 			if driver.IsHTTP(task.Transport) && sessions.streamPending(task.EndpointID) {
 				// The endpoint's stream is making its first attempt under
 				// this fingerprint (#1038): the poll waits a tick for its
@@ -223,15 +223,31 @@ func landedData(dps []collection.Sample) bool {
 	return false
 }
 
-// pollInterval reads a driver poll's declared cadence off its baked spec;
-// zero (run every tick) when it declares none or does not parse, where the
-// poll itself then faults by name.
-func pollInterval(task collection.TaskSpec) time.Duration {
+// pollCadence is a driver poll's cadence (#1373): its declared
+// schedule.every, else the platform's default for a poll that declares none
+// (the worklist's), else every tick. A spec that does not parse runs every
+// tick, where the poll itself then faults by name.
+func pollCadence(task collection.TaskSpec, wl collection.WorklistReply) time.Duration {
 	fn, err := driver.ParseBaked(task.Spec)
-	if err != nil || fn.Schedule == nil {
+	if err != nil {
 		return 0
 	}
-	return fn.Schedule.Interval()
+	if fn.Schedule != nil {
+		if d := fn.Schedule.Interval(); d > 0 {
+			return d
+		}
+	}
+	return wl.PollEvery()
+}
+
+// probeCadence is a reachability probe's cadence (#1373): the node's own
+// --probe-every when set, else the platform default the worklist carries,
+// else every tick (an older server's worklist carries none).
+func probeCadence(local time.Duration, wl collection.WorklistReply) time.Duration {
+	if local > 0 {
+		return local
+	}
+	return wl.ProbeEvery()
 }
 
 // clampedCount is how many of a run's samples claimed a time past the clamp

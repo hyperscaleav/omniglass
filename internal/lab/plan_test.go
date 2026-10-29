@@ -231,8 +231,8 @@ func TestPlanProbesALearnersLabEvery10s(t *testing.T) {
 	if s, err = Plan(o); err != nil {
 		t.Fatal(err)
 	}
-	if slices.Contains(s.Node.Cmd, "--probe-every") {
-		t.Fatalf("a throwaway lab: %v sets a probe interval, want none (every check-in)", s.Node.Cmd)
+	if got := flag(s.Node.Cmd, "--probe-every"); got != "2s" {
+		t.Fatalf("a throwaway lab: --probe-every %q in %v, want 2s (every check-in, said outright, #1373)", got, s.Node.Cmd)
 	}
 	if got := flag(s.Node.Cmd, "--heartbeat"); got != "2s" {
 		t.Fatalf("a throwaway lab: --heartbeat %q, want 2s", got)

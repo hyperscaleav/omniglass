@@ -1552,6 +1552,22 @@
       "CollectionSettings": {
         "additionalProperties": false,
         "properties": {
+          "poll_seconds": {
+            "default": 30,
+            "description": "Seconds between runs of a driver poll that declares no schedule of its own; a declared schedule wins; never below the 30-second heartbeat",
+            "format": "int64",
+            "maximum": 86400,
+            "minimum": 30,
+            "type": "integer"
+          },
+          "probe_seconds": {
+            "default": 30,
+            "description": "Seconds between reachability probes of each endpoint, unless a node's own --probe-every says otherwise; never below the 30-second heartbeat a node runs at",
+            "format": "int64",
+            "maximum": 86400,
+            "minimum": 30,
+            "type": "integer"
+          },
           "report_seconds": {
             "default": 60,
             "description": "Seconds each endpoint's collection telemetry covers: its polls' mean duration and failures, and the pushes its listeners claimed or did not, reported once a window",
@@ -1562,6 +1578,8 @@
           }
         },
         "required": [
+          "probe_seconds",
+          "poll_seconds",
           "report_seconds"
         ],
         "type": "object"

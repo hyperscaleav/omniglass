@@ -430,9 +430,33 @@ from it. A driver that only connects does not count. Two methods carry one tier 
 `POST /telemetry:push` has no endpoint, so it counts on its collected tier alone. The coverage test
 and the live lab check are in [simulation](/architecture/simulation/#the-dev-fleet).
 
-One window for every endpoint type is the first step of the cadence model (#1373): each endpoint type's
-catalog entry holds its built-in data's defaults, a driver overrides them per endpoint type it uses, and
-an operator overrides them down the cascade.
+### How often: the cadence model
+
+Every collection cadence resolves through one model (#1373,
+[ADR-1373](/architecture/decisions/#adr-1373-a-cadence-resolves-from-the-platform-default-and-the-drivers-declaration-and-never-runs-below-the-heartbeat)),
+most specific first:
+
+| Cadence | The driver declares | Else the platform default | A node's own |
+|---|---|---|---|
+| A driver poll (collected data) | its `schedule.every` | `collection.poll_seconds` | |
+| A reachability probe (built-in data) | | `collection.probe_seconds` | `--probe-every` wins |
+| Collection telemetry's report window | | `collection.report_seconds` | |
+
+The platform defaults are settings in the `collection` namespace, platform domain, written by an admin
+with `settings:update` on **Admin > Settings** and carried to every node on its next worklist pull.
+The two cadences default to the product's 30-second heartbeat, so an install that sets nothing
+collects exactly as before, and a write below the heartbeat is refused: the heartbeat is the
+granularity a node runs at ([ADR-0152](/architecture/decisions/#adr-0152-a-driver-poll-runs-on-its-declared-schedule-at-heartbeat-granularity)),
+so a faster cadence would be a promise no node keeps. A node's own `--probe-every` is refused below
+its own `--heartbeat` for the same reason; it stays for labs and tests, which check in faster than a
+deployment does.
+
+:::note[Still design: overrides down the cascade]
+An operator's override of a poll's cadence per component, system, location or product, and of the
+probe cadence per node, lands with the cascade's node leaf (#1351) as a dedicated typed binding
+rather than a variable, since a cadence has bounds and units a free-form variable cannot enforce
+(#1443). Per-endpoint-type defaults on each transport's catalog entry wait for it too.
+:::
 
 ## Endpoint types and their config
 
@@ -1431,8 +1455,10 @@ Drivers page renders each spec as the menu it is.
 **The interpreter runs the poll functions** (#814) **on their declared schedule** (#822): a poll's
 `schedule.every` is honored at heartbeat granularity, the node running it on the first tick within
 half a heartbeat of its due time (a new task at once, and a run whose fetch failed retried on a backoff from the
-heartbeat, doubling, capped at the interval), while reachability probes run on the node's probe interval
-(`--probe-every`, every tick when unset, [ADR-1273](/architecture/decisions/#adr-1273-a-reachability-probe-runs-on-the-nodes-probe-interval-not-every-heartbeat))
+heartbeat, doubling, capped at the interval; a poll that declares no schedule runs at the platform's
+`collection.poll_seconds`, [above](#how-often-the-cadence-model)), while reachability probes run on the
+node's probe interval (`--probe-every`, else the platform's `collection.probe_seconds`,
+[ADR-1273](/architecture/decisions/#adr-1273-a-reachability-probe-runs-on-the-nodes-probe-interval-not-every-heartbeat))
 and a listener's pushes ride the held session as they arrive, never gated ([ADR-0152](/architecture/decisions/#adr-0152-a-driver-poll-runs-on-its-declared-schedule-at-heartbeat-granularity)).
 The node tells a baked driver task from a probe task by its spec, fetches over the transport (an http request rides the node's http fetcher with the endpoint's credential, [above](#http-and-https); the v2c scalar GET rides `gosnmp`, proven
 against a from-the-spec BER agent; a line poll runs one stateless ask over a throwaway

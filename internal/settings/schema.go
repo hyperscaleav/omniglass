@@ -137,7 +137,17 @@ type RetentionSettings struct {
 // claimed and unclaimed pushes over it, and the server its webhook posts, so
 // the telemetry costs a few rows per endpoint per window however fast a
 // driver polls. The node reads it off its worklist, at heartbeat granularity.
+//
+// ProbeSeconds and PollSeconds are the cadence model's platform defaults: how
+// often a reachability probe runs, and how often a driver poll that declares
+// no schedule runs. A driver's declared schedule wins over PollSeconds, and a
+// node's own --probe-every over ProbeSeconds. Both default to the product's
+// heartbeat (node.DefaultHeartbeat, held by a test) and are refused below it:
+// the heartbeat is the granularity a node runs at (ADR-0152), so a faster
+// cadence is a promise no node keeps.
 type CollectionSettings struct {
+	ProbeSeconds  int `json:"probe_seconds" minimum:"30" maximum:"86400" default:"30" doc:"Seconds between reachability probes of each endpoint, unless a node's own --probe-every says otherwise; never below the 30-second heartbeat a node runs at"`
+	PollSeconds   int `json:"poll_seconds" minimum:"30" maximum:"86400" default:"30" doc:"Seconds between runs of a driver poll that declares no schedule of its own; a declared schedule wins; never below the 30-second heartbeat"`
 	ReportSeconds int `json:"report_seconds" minimum:"10" maximum:"3600" default:"60" doc:"Seconds each endpoint's collection telemetry covers: its polls' mean duration and failures, and the pushes its listeners claimed or did not, reported once a window"`
 }
 

@@ -32,8 +32,9 @@ type Config struct {
 	Name           string
 	Token          string
 	HeartbeatEvery time.Duration
-	// ProbeEvery is how often each reachability probe runs (#1273). Zero
-	// probes every heartbeat tick, the behavior before it existed.
+	// ProbeEvery is the node's own reachability probe interval (#1273), a
+	// local override of the platform's (#1373). Zero takes the worklist's,
+	// and a worklist that carries none probes every heartbeat tick.
 	ProbeEvery time.Duration
 	// ReportEvery is the node's own collection report window (#1369),
 	// overriding the platform's the worklist carries: a test's, or a lab's.
@@ -309,12 +310,12 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 		heartbeat = 30 * time.Second
 	}
 	sched := newPollSchedule(heartbeat)
-	sched.probeEvery = cfg.ProbeEvery
 
 	wl, err := pullWorklist(nc, cfg.Name)
 	if err != nil {
 		return collection.WorklistReply{}, err
 	}
+	sched.probeEvery = probeCadence(cfg.ProbeEvery, wl)
 	logger.Info("worklist pulled", "facility", "collection", "tasks", len(wl.Tasks))
 	sessions.reconcile(wl.Tasks)
 	// executedCommands remembers each pulled command's outcome across ticks:
@@ -401,6 +402,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 			// is non-fatal: the last worklist runs and the pull retries next tick.
 			if next, err := pullWorklist(nc, cfg.Name); err == nil {
 				wl = next
+				sched.probeEvery = probeCadence(cfg.ProbeEvery, wl)
 			}
 			// Hold, recycle, or tear down sessions to match the worklist.
 			sessions.reconcile(wl.Tasks)

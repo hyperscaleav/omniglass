@@ -205,3 +205,21 @@ func TestValidateStructureOnly(t *testing.T) {
 		t.Fatal("structure-only validation must still refuse two extractors")
 	}
 }
+
+// A poll may declare no schedule (#1373): it then runs at the platform's
+// default cadence for collected data, and bakes with no schedule, so the node
+// knows the cadence is not the driver's. A declared one bakes as it always
+// did.
+func TestAPollMayDeclareNoSchedule(t *testing.T) {
+	s := validSpec()
+	s.Polls[0].Schedule = driver.Schedule{}
+	if err := s.Validate(catalog()); err != nil {
+		t.Fatalf("a poll with no schedule was refused: %v", err)
+	}
+	if got := driver.BakedSchedule(s.Polls[0].Schedule); got != nil {
+		t.Fatalf("an undeclared schedule baked as %+v, want none", got)
+	}
+	if got := driver.BakedSchedule(driver.Schedule{Every: "45s"}); got == nil || got.Every != "45s" {
+		t.Fatalf("a declared schedule baked as %+v, want 45s", got)
+	}
+}

@@ -428,10 +428,10 @@ func derivedDriverTasks(endpointID string, d *Driver, sp *driver.Spec, cat catal
 		if err := bakeIdentity(p.Identity, cat); err != nil {
 			return nil, err
 		}
-		sched, req := p.Schedule, p.Request
+		req := p.Request
 		if err := add("poll", driver.BakedFunction{
 			Driver: d.Name, Version: d.Version, Function: p.Name,
-			Schedule: &sched, Request: &req, Emits: emits,
+			Schedule: driver.BakedSchedule(p.Schedule), Request: &req, Emits: emits,
 			Records: p.Records, Identity: p.Identity,
 		}); err != nil {
 			return nil, err

@@ -128,6 +128,24 @@ type WorklistReply struct {
 	// collection.report_seconds): how long each endpoint's collection
 	// telemetry covers. Zero (an older server) leaves the node's own.
 	ReportSeconds int `json:"report_seconds,omitempty"`
+	// ProbeSeconds is the platform's reachability probe cadence (#1373,
+	// collection.probe_seconds); a node's own --probe-every wins. Zero (an
+	// older server) probes every heartbeat.
+	ProbeSeconds int `json:"probe_seconds,omitempty"`
+	// PollSeconds is the platform's cadence for a driver poll that declares
+	// no schedule (collection.poll_seconds). Zero runs it every heartbeat.
+	PollSeconds int `json:"poll_seconds,omitempty"`
+}
+
+// ProbeEvery is the worklist's probe cadence; zero when it carries none.
+func (w WorklistReply) ProbeEvery() time.Duration {
+	return time.Duration(w.ProbeSeconds) * time.Second
+}
+
+// PollEvery is the worklist's cadence for an undeclared poll; zero when it
+// carries none.
+func (w WorklistReply) PollEvery() time.Duration {
+	return time.Duration(w.PollSeconds) * time.Second
 }
 
 // ReportEvery is the worklist's collection report window; zero when it

@@ -106,7 +106,7 @@ func TestNodeHoldsASessionThroughADeviceOutage(t *testing.T) {
 	runCtx, stop := context.WithCancel(ctx)
 	ran := make(chan error, 1)
 	go func() {
-		_, err := node.Run(runCtx, node.Config{ServerURL: apiSrv.URL, Name: "edge-s", Token: token, HeartbeatEvery: 200 * time.Millisecond})
+		_, err := node.Run(runCtx, node.Config{ServerURL: apiSrv.URL, Name: "edge-s", Token: token, HeartbeatEvery: 200 * time.Millisecond, ProbeEvery: 200 * time.Millisecond})
 		ran <- err
 	}()
 	stopped := false

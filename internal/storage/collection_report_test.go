@@ -41,6 +41,35 @@ func TestAWorklistCarriesTheCollectionReportWindow(t *testing.T) {
 	}
 }
 
+// TestAWorklistCarriesThePlatformCadences: a node's worklist carries the
+// platform's probe cadence and its cadence for a poll that declares none
+// (#1373), the product's heartbeat by default, so an admin's change reaches
+// every node on its next pull.
+func TestAWorklistCarriesThePlatformCadences(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	t.Cleanup(gw.Close)
+	wl, err := gw.NodeWorklist(ctx, "edge-unknown")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if wl.ProbeSeconds != 30 || wl.PollSeconds != 30 {
+		t.Fatalf("the worklist's cadences: probe %d s, poll %d s, want the default 30 and 30", wl.ProbeSeconds, wl.PollSeconds)
+	}
+	if _, err := gw.UpsertSettingOverride(ctx, "", "platform", "collection", map[string]any{"probe_seconds": 90, "poll_seconds": 300}, nil); err != nil {
+		t.Fatalf("override: %v", err)
+	}
+	if wl, err = gw.NodeWorklist(ctx, "edge-unknown"); err != nil || wl.ProbeSeconds != 90 || wl.PollSeconds != 300 {
+		t.Fatalf("after an override: probe %d s, poll %d s (err %v), want 90 and 300", wl.ProbeSeconds, wl.PollSeconds, err)
+	}
+}
+
 // TestTheWebhookReceiversCountsLandOnTheEndpointsComponent: a window's webhook
 // counts (#1369) land as the component's metric series under the endpoint's
 // name, observed, written by the process; a refusal count only when the

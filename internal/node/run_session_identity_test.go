@@ -120,7 +120,7 @@ func (s *gateStack) runNode(name string) {
 	runCtx, cancel := context.WithCancel(s.ctx)
 	ran := make(chan error, 1)
 	go func() {
-		_, err := node.Run(runCtx, node.Config{ServerURL: s.apiURL, Name: name, Token: s.token, HeartbeatEvery: 100 * time.Millisecond})
+		_, err := node.Run(runCtx, node.Config{ServerURL: s.apiURL, Name: name, Token: s.token, HeartbeatEvery: 100 * time.Millisecond, ProbeEvery: 100 * time.Millisecond})
 		ran <- err
 	}()
 	s.stop = func() {

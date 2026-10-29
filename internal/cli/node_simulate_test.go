@@ -41,3 +41,16 @@ func TestNodeRunRefusesSimulateWithOnce(t *testing.T) {
 		t.Fatalf("node run --simulate --once: %v, want a refusal naming --once", err)
 	}
 }
+
+// A probe interval below the heartbeat is refused when it is set (#1373): the
+// heartbeat is the granularity the node runs at, so the node could not keep
+// it. One at the heartbeat, or above, is the node's to keep.
+func TestNodeRunRefusesAProbeIntervalBelowTheHeartbeat(t *testing.T) {
+	root := Root("test")
+	root.SetArgs([]string{"node", "run", "--server", "http://127.0.0.1:1", "--name", "edge", "--token", "t",
+		"--heartbeat", "10s", "--probe-every", "5s"})
+	err := root.Execute()
+	if err == nil || !strings.Contains(err.Error(), "--probe-every") || !strings.Contains(err.Error(), "--heartbeat") {
+		t.Fatalf("node run --heartbeat 10s --probe-every 5s: %v, want a refusal naming both", err)
+	}
+}

@@ -94,8 +94,22 @@ type Schedule struct {
 	Every string `json:"every"`
 }
 
-// Interval parses the cadence; zero on a malformed value (Validate refuses
-// those, so a validated spec never returns zero).
+// Declared reports whether the poll names its own cadence. A poll that
+// declares none runs at the platform's default for collected data (#1373).
+func (s Schedule) Declared() bool { return s.Every != "" }
+
+// BakedSchedule is the schedule a derived task carries: none when the poll
+// declares none, so the node falls back to the platform default rather than
+// reading an empty cadence as every heartbeat.
+func BakedSchedule(s Schedule) *Schedule {
+	if !s.Declared() {
+		return nil
+	}
+	return &s
+}
+
+// Interval parses the cadence; zero when none is declared or the value is
+// malformed (Validate refuses those).
 func (s Schedule) Interval() time.Duration {
 	d, err := time.ParseDuration(s.Every)
 	if err != nil || d < 0 {
@@ -358,8 +372,10 @@ func sortedKeys[V any](m map[string]V) []string {
 // Poll is a scheduled ask: send Request every Schedule, extract Emits from
 // the response.
 type Poll struct {
-	Name     string   `json:"name"`
-	Schedule Schedule `json:"schedule"`
+	Name string `json:"name"`
+	// Schedule is the poll's own cadence; omitted, the poll runs at the
+	// platform's default for collected data (#1373).
+	Schedule Schedule `json:"schedule,omitempty"`
 	Request  Request  `json:"request"`
 	// Records and Identity read a response about many owners (#1386): see
 	// Listener.
@@ -693,7 +709,7 @@ func (s *Spec) Validate(cat Catalog) error {
 			return fmt.Errorf("driver: duplicate function name %q", p.Name)
 		}
 		functions[p.Name] = true
-		if d, err := time.ParseDuration(p.Schedule.Every); err != nil || d <= 0 {
+		if d, err := time.ParseDuration(p.Schedule.Every); p.Schedule.Declared() && (err != nil || d <= 0) {
 			return fmt.Errorf("driver: poll %q has an uninterpretable schedule %q", p.Name, p.Schedule.Every)
 		}
 		if p.Request.Empty() {
