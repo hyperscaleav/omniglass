@@ -1256,7 +1256,8 @@ component per described entity
 - **What a fanned sample is.** It is observed, admitted by the Storage Gateway only for a
   `collected` key (the `fan-out` writer, held to an owner one of the conduit's bindings names,
   re-read in the write's own transaction), lands once on its owner (never also on the conduit), at
-  the **empty instance**, and names its observer in `source` as `<conduit>/<endpoint>`
+  the **empty instance**, and names its observer in `source` as `<conduit>/<endpoint>`, the conduit
+  held by its uuid and read by its current name, so a renamed conduit's history still names it
   ([metrics and properties](/architecture/properties/#the-instance-dimension-many-values-of-one-name-on-one-owner)).
   A sample with no identity lands on the conduit exactly as before. A log line never fans out: a
   system owns none.

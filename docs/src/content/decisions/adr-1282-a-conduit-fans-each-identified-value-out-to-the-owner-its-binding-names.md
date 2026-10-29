@@ -42,7 +42,10 @@ refs: [1282, 456, 1024, 510, 422, 161]
      ([ADR-0161](#adr-0161-every-key-has-one-writer-class-held-at-the-storage-gateway)), held to an
      owner the conduit's bindings name, and it lands once, on its owner and not also on the conduit.
      It lands at the **empty instance** and names its observer in `source` as
-     `<conduit component>/<endpoint>`. This amends
+     `<conduit component>/<endpoint>`. Components and systems are renamed, so the
+     conduit is recorded by its uuid (`source_conduit_id`, beside the name it was written
+     under, the `source_rule_id` precedent) and a read renders its current name: a renamed
+     conduit's history still names it. This amends
      [ADR-0456](#adr-0456-an-instance-names-which-value-of-one-key-on-one-owner-a-row-is-and-an-owner-level-read-reduces-across-every-instance)'s
      observer stamp: the conduit's endpoint is no endpoint of the owner (a system has none), so as
      an instance it would read as a retired observer and hide the value from the owner's own reads.
@@ -52,7 +55,8 @@ refs: [1282, 456, 1024, 510, 422, 161]
      values writes a row each time, revisited if a consumer needs a series per conduit.
   7. **Unmatched values are kept** (decision 5). An identity the conduit has no binding for lands on
      no owner and is upserted into `unbound_identity` (one row per conduit, key and value: a count,
-     first and last heard, the keys it carried; 1024 rows per conduit, the least recently heard
+     first and last heard, the keys it carried, held by their types' uuids and read by
+     their current names; 1024 rows per conduit, the least recently heard
      evicted; aged out after seven days), read under `component:read` on the conduit. A webhook
      post's raw log line still lands on the conduit. The ingest warns once per conduit per window,
      never per sample. This amends
