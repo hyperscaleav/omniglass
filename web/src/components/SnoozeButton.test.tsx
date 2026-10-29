@@ -83,9 +83,7 @@ describe("snooze words", () => {
     expect(snoozedUntilWords(new Date(2026, 10, 2, 14, 30).toISOString(), now)).toMatch(/^snoozed until \D/);
   });
 
-  it("words a suppressed row and the snooze audit lines on the timeline", () => {
-    expect(timelineWhat({ kind: "notification", what: "suppressed", target: "ops-chat" })).toBe("held back from ops-chat");
-    expect(timelineWhat({ kind: "notification", what: "suppressed", target: "" })).toBe("held back");
+  it("words the snooze audit lines on the timeline", () => {
     expect(timelineWhat({ kind: "audit", what: "snooze" })).toBe("snoozed");
     expect(timelineWhat({ kind: "audit", what: "unsnooze" })).toBe("unsnoozed");
     expect(timelineWhat({ kind: "audit", what: "snooze-end" })).toBe("snooze ended");

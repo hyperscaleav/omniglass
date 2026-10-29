@@ -112,6 +112,12 @@
       "setup": []
     },
     {
+      "id": "keep-node-logs-for-a-day",
+      "title": "Keep a node's own logs for a day",
+      "description": "Give a node's own debug log lines a window of their own, one day, on the Settings page, while a component's debug lines keep the shared three days.",
+      "setup": []
+    },
+    {
       "id": "preview-a-notification",
       "title": "Preview a notification",
       "description": "Open an operator's notification type, preview it against Touch Panel 2's open alarm, and try a draft subject before saving it.",
