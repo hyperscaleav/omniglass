@@ -9904,6 +9904,8 @@ export interface components {
             message?: string;
             /** @description A registered event_type name */
             name: string;
+            /** @description The catalog namespace the name is read in: og for the platform's type, local for the operator's, or another the operator named. Omit to walk the search path, the operator's type first, then the platform's. Set, the name is read in that namespace only, reaching an og type the operator's type of the same name shadows; a namespace holding no such type rejects the item */
+            namespace?: string;
             /** @description The occurrence's structured payload, validated against the event_type's payload schema */
             payload?: unknown;
             /**
@@ -9959,6 +9961,8 @@ export interface components {
             instance?: string;
             /** @description A registered metric_type name */
             name: string;
+            /** @description The catalog namespace the name is read in: og for the platform's type, local for the operator's, or another the operator named. Omit to walk the search path, the operator's type first, then the platform's. Set, the name is read in that namespace only, reaching an og type the operator's type of the same name shadows; a namespace holding no such type rejects the item */
+            namespace?: string;
             /**
              * Format: date-time
              * @description When this was observed; defaults to the batch timestamp, then to ingest time
@@ -9986,6 +9990,8 @@ export interface components {
             instance?: string;
             /** @description A registered property_type name */
             name: string;
+            /** @description The catalog namespace the name is read in: og for the platform's type, local for the operator's, or another the operator named. Omit to walk the search path, the operator's type first, then the platform's. Set, the name is read in that namespace only, reaching an og type the operator's type of the same name shadows; a namespace holding no such type rejects the item */
+            namespace?: string;
             /**
              * Format: date-time
              * @description When this was observed; defaults to the batch timestamp, then to ingest time
@@ -9996,6 +10002,7 @@ export interface components {
         };
         PushRejection: {
             name: string;
+            namespace?: string;
             reason: string;
         };
         PutIdentityBindingInputBody: {

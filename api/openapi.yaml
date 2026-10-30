@@ -7727,6 +7727,10 @@ components:
           description: A registered event_type name
           minLength: 1
           type: string
+        namespace:
+          description: "The catalog namespace the name is read in: og for the platform's type, local for the operator's, or another the operator named. Omit to walk the search path, the operator's type first, then the platform's. Set, the name is read in that namespace only, reaching an og type the operator's type of the same name shadows; a namespace holding no such type rejects the item"
+          pattern: ^[a-z0-9][a-z0-9-]*$
+          type: string
         payload:
           description: The occurrence's structured payload, validated against the event_type's payload schema
         ts:
@@ -7823,6 +7827,10 @@ components:
           description: A registered metric_type name
           minLength: 1
           type: string
+        namespace:
+          description: "The catalog namespace the name is read in: og for the platform's type, local for the operator's, or another the operator named. Omit to walk the search path, the operator's type first, then the platform's. Set, the name is read in that namespace only, reaching an og type the operator's type of the same name shadows; a namespace holding no such type rejects the item"
+          pattern: ^[a-z0-9][a-z0-9-]*$
+          type: string
         ts:
           description: When this was observed; defaults to the batch timestamp, then to ingest time
           format: date-time
@@ -7867,6 +7875,10 @@ components:
           description: A registered property_type name
           minLength: 1
           type: string
+        namespace:
+          description: "The catalog namespace the name is read in: og for the platform's type, local for the operator's, or another the operator named. Omit to walk the search path, the operator's type first, then the platform's. Set, the name is read in that namespace only, reaching an og type the operator's type of the same name shadows; a namespace holding no such type rejects the item"
+          pattern: ^[a-z0-9][a-z0-9-]*$
+          type: string
         ts:
           description: When this was observed; defaults to the batch timestamp, then to ingest time
           format: date-time
@@ -7881,6 +7893,8 @@ components:
       additionalProperties: false
       properties:
         name:
+          type: string
+        namespace:
           type: string
         reason:
           type: string

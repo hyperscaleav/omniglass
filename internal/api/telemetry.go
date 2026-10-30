@@ -51,25 +51,28 @@ type TelemetryPublisher interface {
 }
 
 type pushMetric struct {
-	Name     string    `json:"name" minLength:"1" doc:"A registered metric_type name"`
-	Instance string    `json:"instance,omitempty" doc:"The endpoint of the owner this came through, by name (an endpoint is named by its transport); omit for the owner as a whole. An instance naming no endpoint on the owner refuses the batch with a 422"`
-	Value    float64   `json:"value" doc:"The numeric observation"`
-	TS       time.Time `json:"ts,omitempty" doc:"When this was observed; defaults to the batch timestamp, then to ingest time"`
+	Namespace string    `json:"namespace,omitempty" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The catalog namespace the name is read in: og for the platform's type, local for the operator's, or another the operator named. Omit to walk the search path, the operator's type first, then the platform's. Set, the name is read in that namespace only, reaching an og type the operator's type of the same name shadows; a namespace holding no such type rejects the item"`
+	Name      string    `json:"name" minLength:"1" doc:"A registered metric_type name"`
+	Instance  string    `json:"instance,omitempty" doc:"The endpoint of the owner this came through, by name (an endpoint is named by its transport); omit for the owner as a whole. An instance naming no endpoint on the owner refuses the batch with a 422"`
+	Value     float64   `json:"value" doc:"The numeric observation"`
+	TS        time.Time `json:"ts,omitempty" doc:"When this was observed; defaults to the batch timestamp, then to ingest time"`
 }
 
 type pushProperty struct {
-	Name     string    `json:"name" minLength:"1" doc:"A registered property_type name"`
-	Instance string    `json:"instance,omitempty" doc:"The endpoint of the owner this came through, by name (an endpoint is named by its transport); omit for the owner as a whole. An instance naming no endpoint on the owner refuses the batch with a 422"`
-	Value    any       `json:"value" doc:"The observed value, shaped by the type's data_type and validated against its validation schema"`
-	TS       time.Time `json:"ts,omitempty" doc:"When this was observed; defaults to the batch timestamp, then to ingest time"`
+	Namespace string    `json:"namespace,omitempty" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The catalog namespace the name is read in: og for the platform's type, local for the operator's, or another the operator named. Omit to walk the search path, the operator's type first, then the platform's. Set, the name is read in that namespace only, reaching an og type the operator's type of the same name shadows; a namespace holding no such type rejects the item"`
+	Name      string    `json:"name" minLength:"1" doc:"A registered property_type name"`
+	Instance  string    `json:"instance,omitempty" doc:"The endpoint of the owner this came through, by name (an endpoint is named by its transport); omit for the owner as a whole. An instance naming no endpoint on the owner refuses the batch with a 422"`
+	Value     any       `json:"value" doc:"The observed value, shaped by the type's data_type and validated against its validation schema"`
+	TS        time.Time `json:"ts,omitempty" doc:"When this was observed; defaults to the batch timestamp, then to ingest time"`
 }
 
 type pushEvent struct {
-	Name     string    `json:"name" minLength:"1" doc:"A registered event_type name"`
-	Instance string    `json:"instance,omitempty" doc:"The endpoint of the owner this came through, by name (an endpoint is named by its transport); omit for the owner as a whole. An instance naming no endpoint on the owner refuses the batch with a 422"`
-	Message  string    `json:"message,omitempty" doc:"The occurrence's human-readable line"`
-	Payload  any       `json:"payload,omitempty" doc:"The occurrence's structured payload, validated against the event_type's payload schema"`
-	TS       time.Time `json:"ts,omitempty" doc:"When this occurred; defaults to the batch timestamp, then to ingest time"`
+	Namespace string    `json:"namespace,omitempty" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The catalog namespace the name is read in: og for the platform's type, local for the operator's, or another the operator named. Omit to walk the search path, the operator's type first, then the platform's. Set, the name is read in that namespace only, reaching an og type the operator's type of the same name shadows; a namespace holding no such type rejects the item"`
+	Name      string    `json:"name" minLength:"1" doc:"A registered event_type name"`
+	Instance  string    `json:"instance,omitempty" doc:"The endpoint of the owner this came through, by name (an endpoint is named by its transport); omit for the owner as a whole. An instance naming no endpoint on the owner refuses the batch with a 422"`
+	Message   string    `json:"message,omitempty" doc:"The occurrence's human-readable line"`
+	Payload   any       `json:"payload,omitempty" doc:"The occurrence's structured payload, validated against the event_type's payload schema"`
+	TS        time.Time `json:"ts,omitempty" doc:"When this occurred; defaults to the batch timestamp, then to ingest time"`
 }
 
 type pushLog struct {
@@ -97,8 +100,15 @@ type pushInput struct {
 }
 
 type pushRejection struct {
-	Name   string `json:"name"`
-	Reason string `json:"reason"`
+	Namespace string `json:"namespace,omitempty"`
+	Name      string `json:"name"`
+	Reason    string `json:"reason"`
+}
+
+// inNamespace is rej naming the namespace the item was read in.
+func inNamespace(rej pushRejection, namespace string) pushRejection {
+	rej.Namespace = namespace
+	return rej
 }
 
 type pushOutput struct {
@@ -239,44 +249,44 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 		// is where the caller hears it.
 		for _, m := range in.Body.Metrics {
 			if rej, ok := reservedRejection(m.Name); ok {
-				out.Body.Rejected = append(out.Body.Rejected, rej)
+				out.Body.Rejected = append(out.Body.Rejected, inNamespace(rej, m.Namespace))
 				continue
 			}
-			mt, ok := reg.Metric(m.Name)
+			mt, ok := reg.MetricIn(m.Namespace, m.Name)
 			if !ok {
 				out.Body.Rejected = append(out.Body.Rejected, pushRejection{
-					Name: m.Name, Reason: unregisteredReason(reg, m.Name, "metric"),
+					Namespace: m.Namespace, Name: m.Name, Reason: unregisteredReason(reg, m.Namespace, m.Name, "metric"),
 				})
 				continue
 			}
 			if rej, ok := classRejection(m.Name, mt.WriterClass, mt.WrittenBy); ok {
-				out.Body.Rejected = append(out.Body.Rejected, rej)
+				out.Body.Rejected = append(out.Body.Rejected, inNamespace(rej, m.Namespace))
 				continue
 			}
 			batch.Metrics = append(batch.Metrics, &ogv1.MetricSample{
-				Name: m.Name, Instance: m.Instance, Value: m.Value, Ts: itemTS(m.TS),
+				Namespace: m.Namespace, Name: m.Name, Instance: m.Instance, Value: m.Value, Ts: itemTS(m.TS),
 			})
 		}
 
 		for _, p := range in.Body.Properties {
 			if rej, ok := reservedRejection(p.Name); ok {
-				out.Body.Rejected = append(out.Body.Rejected, rej)
+				out.Body.Rejected = append(out.Body.Rejected, inNamespace(rej, p.Namespace))
 				continue
 			}
-			pt, ok := reg.Property(p.Name)
+			pt, ok := reg.PropertyIn(p.Namespace, p.Name)
 			if !ok {
 				out.Body.Rejected = append(out.Body.Rejected, pushRejection{
-					Name: p.Name, Reason: unregisteredReason(reg, p.Name, "property"),
+					Namespace: p.Namespace, Name: p.Name, Reason: unregisteredReason(reg, p.Namespace, p.Name, "property"),
 				})
 				continue
 			}
 			if rej, ok := classRejection(p.Name, pt.WriterClass, pt.WrittenBy); ok {
-				out.Body.Rejected = append(out.Body.Rejected, rej)
+				out.Body.Rejected = append(out.Body.Rejected, inNamespace(rej, p.Namespace))
 				continue
 			}
 			if p.Value == nil {
 				out.Body.Rejected = append(out.Body.Rejected, pushRejection{
-					Name: p.Name, Reason: "no value",
+					Namespace: p.Namespace, Name: p.Name, Reason: "no value",
 				})
 				continue
 			}
@@ -290,29 +300,29 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 				return nil, huma.Error422UnprocessableEntity("property \"" + p.Name + "\": " + err.Error())
 			}
 			batch.Properties = append(batch.Properties, &ogv1.PropertySample{
-				Name: p.Name, Instance: p.Instance, ValueJson: string(raw), Ts: itemTS(p.TS),
+				Namespace: p.Namespace, Name: p.Name, Instance: p.Instance, ValueJson: string(raw), Ts: itemTS(p.TS),
 			})
 		}
 
 		for _, e := range in.Body.Events {
 			if rej, ok := reservedRejection(e.Name); ok {
-				out.Body.Rejected = append(out.Body.Rejected, rej)
+				out.Body.Rejected = append(out.Body.Rejected, inNamespace(rej, e.Namespace))
 				continue
 			}
-			et, ok := reg.Event(e.Name)
+			et, ok := reg.EventIn(e.Namespace, e.Name)
 			if !ok {
 				out.Body.Rejected = append(out.Body.Rejected, pushRejection{
-					Name: e.Name, Reason: unregisteredReason(reg, e.Name, "event"),
+					Namespace: e.Namespace, Name: e.Name, Reason: unregisteredReason(reg, e.Namespace, e.Name, "event"),
 				})
 				continue
 			}
 			if rej, ok := classRejection(e.Name, et.WriterClass, nil); ok {
-				out.Body.Rejected = append(out.Body.Rejected, rej)
+				out.Body.Rejected = append(out.Body.Rejected, inNamespace(rej, e.Namespace))
 				continue
 			}
 			if e.Message == "" && e.Payload == nil {
 				out.Body.Rejected = append(out.Body.Rejected, pushRejection{
-					Name: e.Name, Reason: "no content: set message or payload",
+					Namespace: e.Namespace, Name: e.Name, Reason: "no content: set message or payload",
 				})
 				continue
 			}
@@ -328,7 +338,7 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 				payload = raw
 			}
 			batch.Events = append(batch.Events, &ogv1.EventSample{
-				Name: e.Name, Instance: e.Instance, Message: e.Message, Payload: payload, Ts: itemTS(e.TS),
+				Namespace: e.Namespace, Name: e.Name, Instance: e.Instance, Message: e.Message, Payload: payload, Ts: itemTS(e.TS),
 			})
 		}
 
@@ -502,9 +512,12 @@ func endpointListing(names []string) string {
 // registered nowhere, or the name is held on another lane by an operator's row
 // that shadows an official one of the same name on this install (#1307), which
 // is not "unregistered": the official catalog does hold it.
-func unregisteredReason(reg collection.Registry, name, kind string) string {
+func unregisteredReason(reg collection.Registry, namespace, name, kind string) string {
+	if namespace != "" {
+		return fmt.Sprintf("no %s type %q in namespace %q", kind, name, namespace)
+	}
 	if reg.IsShadowed(name) {
-		return "name is shadowed on this install: an operator's row of the same name in another catalog takes it over the official " + kind + " type"
+		return "name is shadowed on this install: an operator's row of the same name in another catalog takes it over the official " + kind + " type; name namespace \"og\" to reach the official one"
 	}
 	return "unregistered " + kind + " type name"
 }
