@@ -15,13 +15,18 @@ import (
 
 // Run applies all pending migrations against dsn. It first refuses a database
 // a newer build migrated (ErrSchemaAhead), so an older image never boots, or
-// applies its own migrations, on a schema it does not know (#1289).
+// applies its own migrations, on a schema it does not know (#1289). Guard and
+// migrations run under one advisory lock (withLock), so concurrent runs
+// against one database take turns: the first migrates, the rest wait, then
+// judge the schema the first left and find nothing to do (#1288).
 func Run(dsn string) error {
 	return withDBMate(dsn, func(mate *dbmate.DB) error {
-		if err := guardHead(mate); err != nil {
-			return err
-		}
-		return mate.Migrate()
+		return withLock(mate, func() error {
+			if err := guardHead(mate); err != nil {
+				return err
+			}
+			return mate.Migrate()
+		})
 	})
 }
 
