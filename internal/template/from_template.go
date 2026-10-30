@@ -292,13 +292,14 @@ func planFills(ctx context.Context, gw storage.Gateway, roles []systemplan.Role,
 	if err != nil {
 		return systemplan.SystemPlan{}, fmt.Errorf("template: list component types: %w", err)
 	}
+	// By name, as a bare name reaches them (#1432): one row per name.
 	byName := map[string]storage.ComponentType{}
-	for _, ct := range types {
+	for _, ct := range storage.InEffect(types, func(t storage.ComponentType) (string, string) { return t.Namespace, t.Name }) {
 		byName[ct.Name] = ct
 	}
 	ps := make([]systemplan.Product, 0, len(products))
 	known := map[string]bool{}
-	for _, p := range products {
+	for _, p := range storage.InEffect(products, func(p storage.Product) (string, string) { return p.Namespace, p.Name }) {
 		ps = append(ps, systemplan.Product{Name: p.Name, ComponentType: p.ComponentType})
 		known[p.Name] = true
 	}

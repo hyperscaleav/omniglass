@@ -245,7 +245,7 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 			mt, ok := reg.Metric(m.Name)
 			if !ok {
 				out.Body.Rejected = append(out.Body.Rejected, pushRejection{
-					Name: m.Name, Reason: "unregistered metric type name",
+					Name: m.Name, Reason: unregisteredReason(reg, m.Name, "metric"),
 				})
 				continue
 			}
@@ -266,7 +266,7 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 			pt, ok := reg.Property(p.Name)
 			if !ok {
 				out.Body.Rejected = append(out.Body.Rejected, pushRejection{
-					Name: p.Name, Reason: "unregistered property type name",
+					Name: p.Name, Reason: unregisteredReason(reg, p.Name, "property"),
 				})
 				continue
 			}
@@ -302,7 +302,7 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 			et, ok := reg.Event(e.Name)
 			if !ok {
 				out.Body.Rejected = append(out.Body.Rejected, pushRejection{
-					Name: e.Name, Reason: "unregistered event type name",
+					Name: e.Name, Reason: unregisteredReason(reg, e.Name, "event"),
 				})
 				continue
 			}
@@ -496,4 +496,15 @@ func endpointListing(names []string) string {
 		out += fmt.Sprintf(", and %d more", rest)
 	}
 	return out
+}
+
+// unregisteredReason is why a push's name did not resolve on its lane: it is
+// registered nowhere, or the name is held on another lane by an operator's row
+// that shadows an official one of the same name on this install (#1307), which
+// is not "unregistered": the official catalog does hold it.
+func unregisteredReason(reg collection.Registry, name, kind string) string {
+	if reg.IsShadowed(name) {
+		return "name is shadowed on this install: an operator's row of the same name in another catalog takes it over the official " + kind + " type"
+	}
+	return "unregistered " + kind + " type name"
 }

@@ -384,7 +384,7 @@ func TestSeriesNewestIsAnIndexProbe(t *testing.T) {
 	}
 	for _, tc := range []struct{ lane, index string }{
 		{"property", "property_series_idx"},
-		{"metric", "metric_owner_idx"},
+		{"metric", "series_id_ts_id_idx"},
 	} {
 		rows, err := f.conn.Query(ctx, "explain "+storage.ExportSeriesNewestSQL(tc.lane), uuid.NewString(), uuid.NewString(), "tcp")
 		if err != nil {

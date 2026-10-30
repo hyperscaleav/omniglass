@@ -519,7 +519,7 @@ func TestEmptyStemRefusesGeneration(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	if err := gw.UpsertComponentType(ctx, storage.ComponentType{
+	if _, err := gw.UpsertComponentType(ctx, storage.ComponentType{
 		Name: "stemless-root", Label: "Stemless Root", Official: true,
 	}); err != nil {
 		t.Fatalf("upsert a stemless root type: %v", err)

@@ -76,6 +76,13 @@ row of its own on the condition rather than on the alarm ([below](#snooze-a-fact
 and its acts are audit rows on the alarm they were called on.
 :::
 
+**An alarm's audit rows outlive it.** Each row other than the raise (whose `new` image is the whole
+alarm) carries the field it moved in both images (`cleared_at`, `acknowledged_at` or `snoozed_until`,
+null on the side where it was unset) and names its condition, the component and the dedup key, so the
+row says on its own what was done, what changed and what it became. Removing an alarm (deleting its
+component does today, and retention will, #1339) never touches `audit_log` ([audit](/architecture/audit/#the-model),
+[ADR-1442](/architecture/decisions/#adr-1442-an-audit-row-outlives-its-subject-both-images-and-a-string-reference)).
+
 An alarm write is **not sample-silent**: raising or clearing one recomputes
 [health](/architecture/health/) in the same transaction, and the rollup records the verdict
 transition as a **calculated-provenance `property` sample** (`provenance='calculated'`,
@@ -197,7 +204,7 @@ written with the terminal status **`suppressed`** instead of `queued` or `sent`,
 `last_error` (`the condition is snoozed until 2026-10-29 14:30 UTC by alice`). A raise and a clear
 are both suppressed, so nobody gets a closing message about a raise they were never told of. A rule
 whose `when` fails still writes `failed`, so a broken rule stays visible. Nothing is sent and nothing
-reaches an inbox, and the alarm's timeline keeps every row it held back. Where a row waits, the tick
+reaches an inbox, and the alarm's timeline keeps every row it suppressed, reading **snoozed**. Where a row waits, the tick
 judges it again: a row queued before the snooze and still waiting out a retry is marked `suppressed`
 when its turn comes, so "stop paging me" also stops the retry already on its way. A suppressed row is
 final: it is never released or retried, and `:retry` refuses it. It is the primitive storm
@@ -751,9 +758,10 @@ attempt carries the same `Idempotency-Key`, the row's uuid, so a receiver drops 
 
 The delivery is visible where an operator already looks: each row joins its
 [alarm's timeline](#the-alarms-timeline) after the edge that queued it, reading its status as it
-stands, and a failed one that was attempted is re-queued with `POST /notifications/{id}:retry` (`notification:retry`,
+stands (a status row in the console: the target, a status pill shared with the recent-notifications
+list, and the action rule, labelled rather than a "by", #1413), and a failed one that was attempted is re-queued with `POST /notifications/{id}:retry` (`notification:retry`,
 an operator's, beside `alarm:acknowledge`), from the timeline or the CLI. `GET /notifications` lists
-them by alarm, target or status (`?status=suppressed` lists what snoozes held back), and every read is scoped by the alarm's component exactly as the
+them by alarm, target or status (`?status=suppressed` lists what snoozes suppressed), and every read is scoped by the alarm's component exactly as the
 alarm reads are: a principal never sees a message about a component outside its scope.
 
 :::design[The rest of the action (ADR-0050)]

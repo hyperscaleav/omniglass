@@ -55,6 +55,13 @@ func (c catalogMaps) WriterClass(name string) writerclass.Class {
 // property and event catalogs as emit lanes (an event type's payload schema
 // beside it, #1145), the command types, the secret types.
 func loadDriverCatalog(ctx context.Context, q querier) (catalogMaps, error) {
+	return loadDriverCatalogIn(ctx, q, "")
+}
+
+// loadDriverCatalogIn reads the catalogs a spec validates against in one
+// namespace (a shipped driver against og, the catalog it shipped with), or
+// along the search path when namespace is empty (#1432).
+func loadDriverCatalogIn(ctx context.Context, q querier, namespace string) (catalogMaps, error) {
 	cat := catalogMaps{
 		lanes:     map[string]string{},
 		schemas:   map[string][]byte{},
@@ -63,38 +70,55 @@ func loadDriverCatalog(ctx context.Context, q querier) (catalogMaps, error) {
 		calcOwned: map[string]bool{},
 	}
 	rows, err := q.Query(ctx, `
-		select name, 'metric', null::jsonb from metric_type
+		select name, 'metric', namespace, null::jsonb from metric_type
 		union all
-		select name, 'property', null::jsonb from property_type
+		select name, 'property', namespace, null::jsonb from property_type
 		union all
-		select name, 'event', payload_schema from event_type`)
+		select name, 'event', namespace, payload_schema from event_type`)
 	if err != nil {
 		return cat, fmt.Errorf("storage: load emit catalogs: %w", err)
 	}
 	defer rows.Close()
+	held := map[string][]NameHolder{}
+	eventSchemas := map[string][]byte{}
 	for rows.Next() {
-		var name, lane string
+		var name string
+		var h NameHolder
 		var schema []byte
-		if err := rows.Scan(&name, &lane, &schema); err != nil {
+		if err := rows.Scan(&name, &h.Lane, &h.Namespace, &schema); err != nil {
 			return cat, fmt.Errorf("storage: scan emit catalog: %w", err)
 		}
-		// The three ingest catalogs share one namespace (a create is refused
-		// when a sibling holds the name); first write wins if a stranger ever
-		// collides, and validation still resolves.
-		if _, dup := cat.lanes[name]; !dup {
-			cat.lanes[name] = lane
-			if len(schema) > 0 {
-				cat.schemas[name] = schema
-			}
+		held[name] = append(held[name], h)
+		if h.Lane == "event" && len(schema) > 0 {
+			eventSchemas[h.Namespace+"/"+name] = schema
 		}
 	}
 	if err := rows.Err(); err != nil {
 		return cat, fmt.Errorf("storage: read emit catalogs: %w", err)
 	}
+	// A name resolves to the catalog the ingest registry resolves it to (an
+	// operator's row shadows an official one, #1307). A name that resolves to
+	// nothing (a collision) is left out, so a spec naming it is refused rather
+	// than validated against a lane ingest would not write.
+	for name, hs := range held {
+		h, _, ok := ResolveNameLane(name, hs)
+		if namespace != "" {
+			h, ok = ResolveNameIn(namespace, hs)
+		}
+		if !ok {
+			continue
+		}
+		cat.lanes[name] = h.Lane
+		if h.Lane == "event" {
+			if s, has := eventSchemas[h.Namespace+"/"+name]; has {
+				cat.schemas[name] = s
+			}
+		}
+	}
 	for sql, into := range map[string]map[string]bool{
-		`select name from command_type`: cat.commands,
-		`select name from secret_type`:  cat.secrets,
-		calcOwnedNamesSQL:               cat.calcOwned,
+		`select name from ` + catalogRows("command_type", namespace) + ` t`: cat.commands,
+		`select name from ` + catalogRows("secret_type", namespace) + ` t`:  cat.secrets,
+		calcOwnedNamesSQL: cat.calcOwned,
 	} {
 		rows, err := q.Query(ctx, sql)
 		if err != nil {
@@ -121,6 +145,12 @@ func loadDriverCatalog(ctx context.Context, q querier) (catalogMaps, error) {
 // catalogs. A nil/empty spec passes: a stub row is legal, it just cannot be
 // attached.
 func (p *PG) validateDriverSpec(ctx context.Context, raw []byte) error {
+	return p.validateDriverSpecIn(ctx, raw, "")
+}
+
+// validateDriverSpecIn validates against one namespace's catalogs, or the
+// search path when namespace is empty.
+func (p *PG) validateDriverSpecIn(ctx context.Context, raw []byte, namespace string) error {
 	if len(raw) == 0 {
 		return nil
 	}
@@ -128,7 +158,7 @@ func (p *PG) validateDriverSpec(ctx context.Context, raw []byte) error {
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrSpecInvalid, err)
 	}
-	cat, err := loadDriverCatalog(ctx, p.pool)
+	cat, err := loadDriverCatalogIn(ctx, p.pool, namespace)
 	if err != nil {
 		return err
 	}
@@ -345,7 +375,7 @@ func attachParams(effective map[string]string) map[string]string {
 // starts after waits for the attach, whose endpoint its re-derive then sees
 // (#823). Without it an attach racing an update kept the old spec for good.
 func loadDriverRef(ctx context.Context, q querier, ref string) (*Driver, error) {
-	d, err := scanDriver(q.QueryRow(ctx, `select `+driverCols+` from driver where `+registryRefCol(ref)+` = $1 for share`, ref))
+	d, err := scanDriver(q.QueryRow(ctx, `select `+driverCols+` from driver where id = (select r.id from `+refRows("driver", ref)+` r where r.`+registryRefCol(ref)+` = $1) for share`, ref))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrTypeNotFound
 	}
@@ -384,6 +414,20 @@ func bakeEmits(emits []driver.Emit, cat catalogMaps) ([]driver.BakedEmit, error)
 	return out, nil
 }
 
+// bakeIdentity re-checks a function's identity key at attach (#1386): it was
+// a registered property type at spec write, and a catalog row deleted since
+// is the one path here, so attaching refuses naming it rather than baking a
+// key no binding can be made for.
+func bakeIdentity(id *driver.IdentitySpec, cat catalogMaps) error {
+	if id == nil {
+		return nil
+	}
+	if lane, ok := cat.LaneOf(id.Key); !ok || lane != driver.LaneProperty {
+		return fmt.Errorf("%w: identity key %q is no longer a registered property type", ErrAttachInvalid, id.Key)
+	}
+	return nil
+}
+
 // derivedTask is one task a driver spec derives on an endpoint: its content
 // hash id, its mode, and its baked spec.
 type derivedTask struct {
@@ -411,10 +455,14 @@ func derivedDriverTasks(endpointID string, d *Driver, sp *driver.Spec, cat catal
 		if err != nil {
 			return nil, err
 		}
+		if err := bakeIdentity(p.Identity, cat); err != nil {
+			return nil, err
+		}
 		sched, req := p.Schedule, p.Request
 		if err := add("poll", driver.BakedFunction{
 			Driver: d.Name, Version: d.Version, Function: p.Name,
 			Schedule: &sched, Request: &req, Emits: emits,
+			Records: p.Records, Identity: p.Identity,
 		}); err != nil {
 			return nil, err
 		}
@@ -424,10 +472,14 @@ func derivedDriverTasks(endpointID string, d *Driver, sp *driver.Spec, cat catal
 		if err != nil {
 			return nil, err
 		}
+		if err := bakeIdentity(l.Identity, cat); err != nil {
+			return nil, err
+		}
 		match := l.Match
 		if err := add("listen", driver.BakedFunction{
 			Driver: d.Name, Version: d.Version, Function: l.Name,
 			Arm: l.Arm, Match: &match, Emits: emits, Unmatched: sp.Unmatched, Log: l.Log,
+			Records: l.Records, Identity: l.Identity,
 		}); err != nil {
 			return nil, err
 		}

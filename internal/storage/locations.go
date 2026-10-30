@@ -101,7 +101,7 @@ func (p *PG) validatePlacement(ctx context.Context, q querier, childType string,
 	// operator who forked a shipped type to widen where it may sit is placing
 	// locations by THEIR rule, and reading the shipped column here would
 	// enforce a constraint they had already replaced.
-	lt, err := scanLocationTypeResolved(q.QueryRow(ctx, locationTypeResolved+` where lt.`+registryRefCol(childType)+` = $1`, childType))
+	lt, err := scanLocationTypeResolved(q.QueryRow(ctx, locationTypeResolved+` where lt.id = (select r.id from `+refRows("location_type", childType)+` r where r.`+registryRefCol(childType)+` = $1)`, childType))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}
@@ -292,9 +292,9 @@ func (p *PG) UpsertLocationType(ctx context.Context, lt LocationType) error {
 		return fmt.Errorf("storage: upsert location_type %q: %w", lt.Name, err)
 	}
 	if _, err := p.pool.Exec(ctx, `
-		insert into location_type (name, official, label, icon, allowed_parent_types, label_rule, name_rule)
-		values ($1, $2, $3, $4, $5, $6, $7)
-		on conflict (name) do update
+		insert into location_type (namespace, name, official, label, icon, allowed_parent_types, label_rule, name_rule)
+		values (case when $2 then 'og' else 'local' end, $1, $2, $3, $4, $5, $6, $7)
+		on conflict (namespace, name) do update
 			set official             = excluded.official,
 			    label         = excluded.label,
 			    icon                 = excluded.icon,
@@ -378,7 +378,7 @@ func (p *PG) ListLocationTypes(ctx context.Context) ([]LocationType, error) {
 // namespace is not part of the address and never reaches a caller (ADR-0095
 // decision 1).
 func (p *PG) GetLocationType(ctx context.Context, ref string) (*LocationType, error) {
-	lt, err := scanLocationTypeResolved(p.pool.QueryRow(ctx, locationTypeResolved+` where lt.`+registryRefCol(ref)+` = $1`, ref))
+	lt, err := scanLocationTypeResolved(p.pool.QueryRow(ctx, locationTypeResolved+` where lt.id = (select r.id from `+refRows("location_type", ref)+` r where r.`+registryRefCol(ref)+` = $1)`, ref))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrTypeNotFound
 	}
@@ -734,7 +734,7 @@ func (p *PG) UpdateLocationType(ctx context.Context, actorID, ref string, patch 
 	if err := lockRegistryRow(ctx, tx, "location_type", ref); err != nil {
 		return nil, err
 	}
-	current, err := scanLocationTypeResolved(tx.QueryRow(ctx, locationTypeResolved+` where lt.`+registryRefCol(ref)+` = $1`, ref))
+	current, err := scanLocationTypeResolved(tx.QueryRow(ctx, locationTypeResolved+` where lt.id = (select r.id from `+refRows("location_type", ref)+` r where r.`+registryRefCol(ref)+` = $1)`, ref))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTypeNotFound
@@ -850,7 +850,7 @@ func (p *PG) RestoreLocationType(ctx context.Context, actorID, ref string) (*Loc
 	if err := lockRegistryRow(ctx, tx, "location_type", ref); err != nil {
 		return nil, err
 	}
-	current, err := scanLocationTypeResolved(tx.QueryRow(ctx, locationTypeResolved+` where lt.`+registryRefCol(ref)+` = $1`, ref))
+	current, err := scanLocationTypeResolved(tx.QueryRow(ctx, locationTypeResolved+` where lt.id = (select r.id from `+refRows("location_type", ref)+` r where r.`+registryRefCol(ref)+` = $1)`, ref))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTypeNotFound
@@ -1053,7 +1053,7 @@ func (p *PG) createLocationTx(ctx context.Context, tx pgx.Tx, actorID string, sp
 	// row is inserted with no label and stamped below.
 	l, err := scanLocation(tx.QueryRow(ctx, `
 		insert into location (name, label, location_type, parent_id, name_generated, ordinal, label_generated)
-		values ($1, $2, (select id from location_type where `+registryRefCol(spec.LocationType)+` = $3), $4, $5, $6, $7)
+		values ($1, $2, (select id from `+refRows("location_type", spec.LocationType)+` location_type where `+registryRefCol(spec.LocationType)+` = $3), $4, $5, $6, $7)
 		returning `+locationCols,
 		name, labelOrNull(spec.Label), spec.LocationType, parentID, generated, ordinal, strings.TrimSpace(spec.Label) == ""))
 	if err != nil {
@@ -1209,7 +1209,7 @@ func resolveLocationTypeID(ctx context.Context, q querier, ref *string) (*string
 		return nil, nil
 	}
 	var id string
-	err := q.QueryRow(ctx, `select id from location_type where `+registryRefCol(*ref)+` = $1`, *ref).Scan(&id)
+	err := q.QueryRow(ctx, `select id from `+refRows("location_type", *ref)+` location_type where `+registryRefCol(*ref)+` = $1`, *ref).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}

@@ -19,7 +19,7 @@ summary: "Alarms are raised by event rules (one table per rule kind, `rule:*` au
      floor of the ranked levels, so no verdict moved; a component's own verdict now reads the rank
      (`high` and above is an outage). The reference is added `NOT VALID` because the levels are
      boot-seeded after migrations run; it is enforced on every write. An official level never takes
-     over an operator's (a clash stops the boot naming it), and re-ranking a level recomputes the
+     over an operator's (a clash stops the boot naming it; **amended by [ADR-0318](/architecture/decisions/#adr-0318-every-catalog-key-is-a-namespace-and-a-key) (#1431):** a name clash now leaves the operator's level alone and the boot goes on, and only a rank a differently named operator level holds still stops it), and re-ranking a level recomputes the
      health of every component with an open alarm at it.
   5. **One alarm per endpoint** for a per-endpoint input: the dedup key is the rule name plus the
      sample's instance, so a component with several endpoints holds an alarm per endpoint.

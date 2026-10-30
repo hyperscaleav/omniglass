@@ -9,7 +9,7 @@ import "time"
 type Hit struct {
 	DeviceID string
 	Hostname string
-	Protocol string // http, snmp, ssh, telnet, tcp, udp
+	Protocol string // one of collection.SimProtocols: http, snmp, ssh, telnet, tcp, udp, websocket
 	Method   string
 	Path     string
 	Port     int

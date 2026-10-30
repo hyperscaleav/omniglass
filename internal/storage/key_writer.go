@@ -41,12 +41,17 @@ type KeyWriterError struct {
 	Owner     string
 	Component string
 	binding   bool
+	fanned    bool
 }
 
 func (e *KeyWriterError) Error() string {
 	if e.binding {
 		return fmt.Sprintf("%s: a node writes only for the component and the endpoint its task ran against "+
 			"(the row's component %q; the task's component %q, endpoint %q)", e.Key, e.Owner, e.Component, e.Endpoint)
+	}
+	if e.fanned {
+		return fmt.Sprintf("%s: a conduit's fanned value lands only on an owner one of its identity bindings names "+
+			"(the row's owner %q; the conduit %q)", e.Key, e.Owner, e.Component)
 	}
 	msg := writerclass.Refusal(e.Class, e.Key, e.Writer, e.Rule)
 	if e.Class == writerclass.NodeProbe && e.Writer == writerclass.Node {
@@ -71,11 +76,28 @@ type KeyWriter struct {
 	// Endpoint is the endpoint of Component's a node's task ran against, the
 	// only instance a node-probe key lands under. Node writers only.
 	Endpoint string
+	// Node is the id of the node whose task collected the samples, recorded on
+	// each metric series the writer starts (#1275): a task that moves to
+	// another node starts a new series of the same logical key. Node writers
+	// only; empty records none.
+	Node string
 	// bound is Component's id once admitWrites has resolved it; "" refuses
 	// every row a node writer carries.
 	bound string
 	// calc is a calc rule's lineage; set only by the calc tick.
 	calc *sampleLineage
+	// fanOwners is the owners a fan-out writer's conduit has bound, each as
+	// kind and id, once admitWrites has read them; a row on any other owner
+	// is refused. Fan-out writers only.
+	fanOwners map[string]bool
+}
+
+// FanoutWriter is a conduit's value fanned out to the owner its identity
+// binding names (#1282, ADR-1282): observed, admitted only for a collected
+// key, and held to an owner one of conduit's bindings names. conduit is the
+// conduit component's id.
+func FanoutWriter(conduit string) KeyWriter {
+	return KeyWriter{Kind: writerclass.Fanout, Component: conduit}
 }
 
 // NodeWriter is the node lane's writer: a node's own collection, for the
@@ -102,6 +124,35 @@ func (w KeyWriter) provenanceArgs() (string, any, any, any) {
 		return "observed", nil, nil, nil
 	}
 	return w.calc.provenanceArgs()
+}
+
+// collector is the node a metric series records as its collector: the
+// node's id for a node writer that names one, nil otherwise.
+func (w KeyWriter) collector() any {
+	if w.Kind != writerclass.Node || w.Node == "" {
+		return nil
+	}
+	return w.Node
+}
+
+// sourceConduit is the conduit a fan-out writer's rows record by id
+// (source_conduit_id, #1282), nil for any other writer.
+func (w KeyWriter) sourceConduit() any {
+	if w.Kind != writerclass.Fanout || !isUUID(w.Component) {
+		return nil
+	}
+	return w.Component
+}
+
+// sourceRendered is a sample row's source as a read shows it: a fanned row
+// names its conduit by its current name (the component its
+// source_conduit_id holds) and its endpoint, so a renamed conduit still reads
+// as itself; a deleted one keeps the name it was written under; any other
+// row reads its source as stored. alias is the sample table's alias.
+func sourceRendered(alias string) string {
+	return `case when ` + alias + `.source_conduit_id is null then ` + alias + `.source
+		else coalesce((select c.name from component c where c.id = ` + alias + `.source_conduit_id)
+			|| substr(` + alias + `.source, strpos(` + alias + `.source, '/')), ` + alias + `.source) end`
 }
 
 // rule is the calc rule writing, "" for any other writer.
@@ -166,7 +217,7 @@ func keyWriters(ctx context.Context, q querier, lane writeLane, keys []string) (
 	if lane == writeProperty {
 		col, table = "output_property_type_id", "property_type"
 	}
-	rows, err := q.Query(ctx, `select t.name, c.id::text, c.name from calc_rule c join `+table+` t on t.id = c.`+col+`
+	rows, err := q.Query(ctx, `select t.name, c.id::text, c.name from calc_rule c join `+catalogRows(table, "")+` t on t.id = c.`+col+`
 		where t.name = any($1)`, lookup)
 	if err != nil {
 		return nil, fmt.Errorf("storage: read the writers of %v: %w", lookup, err)
@@ -212,6 +263,13 @@ func admitWrites(ctx context.Context, q querier, lane writeLane, w KeyWriter, ro
 		}
 		w.bound = bound
 	}
+	if w.Kind == writerclass.Fanout && w.fanOwners == nil {
+		owners, err := fanBinding(ctx, q, w.Component, rows)
+		if err != nil {
+			return err
+		}
+		w.fanOwners = owners
+	}
 	keys := make([]string, len(rows))
 	for i, r := range rows {
 		keys[i] = r.key
@@ -251,6 +309,43 @@ func nodeBinding(ctx context.Context, q querier, w KeyWriter) (string, error) {
 	return c.ID, nil
 }
 
+// fanOwnerKey is one owner of a fan-out writer's set: its kind and id.
+func fanOwnerKey(kind, id string) string { return kind + "\x00" + id }
+
+// fanBinding reads, in one statement, which of the rows' owners the conduit
+// has bound: the fan-out writer's fence, re-read in the write's own
+// transaction whatever the ingest resolved before it, so a binding deleted
+// in between refuses the row. A conduit that is no uuid binds nothing.
+func fanBinding(ctx context.Context, q querier, conduit string, rows []keyedWrite) (map[string]bool, error) {
+	owners := map[string]bool{}
+	if !isUUID(conduit) {
+		return owners, nil
+	}
+	var ids []string
+	for _, r := range rows {
+		if isUUID(r.owner) {
+			ids = append(ids, r.owner)
+		}
+	}
+	if len(ids) == 0 {
+		return owners, nil
+	}
+	got, err := q.Query(ctx, `select owner_kind, coalesce(component_id, system_id)::text from identity_binding
+		where conduit_id = $1::uuid and coalesce(component_id, system_id) = any($2::uuid[])`, conduit, ids)
+	if err != nil {
+		return nil, fmt.Errorf("storage: read the conduit's bindings: %w", err)
+	}
+	defer got.Close()
+	for got.Next() {
+		var kind, id string
+		if err := got.Scan(&kind, &id); err != nil {
+			return nil, fmt.Errorf("storage: read the conduit's bindings: %w", err)
+		}
+		owners[fanOwnerKey(kind, id)] = true
+	}
+	return owners, got.Err()
+}
+
 // admitWrite holds one row to its key's resolved writer. Pure. Beyond the
 // class's ruling: a node writes only on the component its task collects for,
 // and a node-probe key only under the endpoint its task ran against (a node
@@ -268,6 +363,10 @@ func admitWrite(kw keyWriterOf, w KeyWriter, r keyedWrite) error {
 	}
 	if w.Kind == writerclass.Node && (w.bound == "" || r.ownerKind != "component" || r.owner != w.bound) {
 		refuse.Owner, refuse.Component, refuse.binding = r.owner, w.bound, true
+		return refuse
+	}
+	if w.Kind == writerclass.Fanout && !w.fanOwners[fanOwnerKey(r.ownerKind, r.owner)] {
+		refuse.Owner, refuse.Component, refuse.fanned = r.owner, w.Component, true
 		return refuse
 	}
 	switch {

@@ -363,10 +363,18 @@ telemetry: {
   }
   metric: {
     shape: sql_table
+  }
+  metric_declared: {
+    shape: sql_table
     id: bigint {constraint: primary_key}
     command_id: bigint {constraint: foreign_key}
-    component_id: uuid {constraint: foreign_key}
     event_id: bigint {constraint: foreign_key}
+    series_id: bigint {constraint: foreign_key}
+  }
+  metric_series: {
+    shape: sql_table
+    id: bigint {constraint: primary_key}
+    component_id: uuid {constraint: foreign_key}
     location_id: uuid {constraint: foreign_key}
     metric_type_id: uuid {constraint: foreign_key}
     node_id: uuid {constraint: foreign_key}
@@ -423,6 +431,14 @@ telemetry: {
 }
 
 collection: {
+  identity_binding: {
+    shape: sql_table
+    id: uuid {constraint: primary_key}
+    component_id: uuid {constraint: foreign_key}
+    conduit_id: uuid {constraint: foreign_key}
+    property_type_id: uuid {constraint: foreign_key}
+    system_id: uuid {constraint: foreign_key}
+  }
   node: {
     shape: sql_table
     principal_id: uuid {constraint: primary_key}
@@ -441,6 +457,12 @@ collection: {
     shape: sql_table
     id: text {constraint: primary_key}
     endpoint_id: uuid {constraint: foreign_key}
+  }
+  unbound_identity: {
+    shape: sql_table
+    conduit_id: uuid {constraint: primary_key}
+    property_type_id: uuid {constraint: primary_key}
+    value: text {constraint: primary_key}
   }
   unclaimed_source: {
     shape: sql_table
@@ -547,11 +569,17 @@ catalog.standard_metric.standard_id -> catalog.standard.id
 catalog.standard_property.property_type_id -> telemetry.property_type.id
 catalog.standard_property.standard_id -> catalog.standard.id
 catalog.system_type.parent_id -> catalog.system_type.id
+collection.identity_binding.component_id -> fleet.component.id
+collection.identity_binding.conduit_id -> fleet.component.id
+collection.identity_binding.property_type_id -> telemetry.property_type.id
+collection.identity_binding.system_id -> fleet.system.id
 collection.node.location_id -> fleet.location.id
 collection.node.principal_id -> identity.principal.id
 collection.node_log.node_id -> collection.node.principal_id
 collection.sim_impairment.component_id -> fleet.component.id
 collection.task.endpoint_id -> fleet.endpoint.id
+collection.unbound_identity.conduit_id -> fleet.component.id
+collection.unbound_identity.property_type_id -> telemetry.property_type.id
 collection.webhook_token.endpoint_id -> fleet.endpoint.id
 collection.webhook_token.secret_id -> config.secret.id
 config.credential.principal_id -> identity.principal.id
@@ -665,13 +693,14 @@ telemetry.event_rule_live.rule_id -> telemetry.event_rule.id
 telemetry.event_rule_state.component_id -> fleet.component.id
 telemetry.event_rule_state.rule_id -> telemetry.event_rule.id
 telemetry.log_line.component_id -> fleet.component.id
-telemetry.metric.command_id -> telemetry.command.id
-telemetry.metric.component_id -> fleet.component.id
-telemetry.metric.event_id -> telemetry.event.id
-telemetry.metric.location_id -> fleet.location.id
-telemetry.metric.metric_type_id -> telemetry.metric_type.id
-telemetry.metric.node_id -> collection.node.principal_id
-telemetry.metric.system_id -> fleet.system.id
+telemetry.metric_declared.command_id -> telemetry.command.id
+telemetry.metric_declared.event_id -> telemetry.event.id
+telemetry.metric_declared.series_id -> telemetry.metric_series.id
+telemetry.metric_series.component_id -> fleet.component.id
+telemetry.metric_series.location_id -> fleet.location.id
+telemetry.metric_series.metric_type_id -> telemetry.metric_type.id
+telemetry.metric_series.node_id -> collection.node.principal_id
+telemetry.metric_series.system_id -> fleet.system.id
 telemetry.notification.alarm_id -> telemetry.alarm.id
 telemetry.notification.component_id -> fleet.component.id
 telemetry.notification.notification_type_id -> telemetry.notification_type.id

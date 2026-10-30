@@ -404,7 +404,7 @@ type Gateway interface {
 	RenderSystemDraftLabel(ctx context.Context, draft SystemLabelDraft, create, locationRead scope.Set) (DraftLabel, error)
 	RenderLocationDraftLabel(ctx context.Context, draft LocationLabelDraft, create scope.Set) (DraftLabel, error)
 
-	UpsertComponentType(ctx context.Context, ct ComponentType) error
+	UpsertComponentType(ctx context.Context, ct ComponentType) (uuid.UUID, error)
 	ListComponentTypes(ctx context.Context) ([]ComponentType, error)
 	GetComponentType(ctx context.Context, ref string) (*ComponentType, error)
 	CreateComponentType(ctx context.Context, actorID string, ct ComponentType) (*ComponentType, error)
@@ -421,7 +421,7 @@ type Gateway interface {
 	// counterpart of component_type and a different question from standard,
 	// which stays the blueprint a system conforms to.
 	// ResolveSystemTypeFacts walks the tree in Go; no DB logic.
-	UpsertSystemType(ctx context.Context, st SystemType) error
+	UpsertSystemType(ctx context.Context, st SystemType) (uuid.UUID, error)
 	ListSystemTypes(ctx context.Context) ([]SystemType, error)
 	GetSystemType(ctx context.Context, ref string) (*SystemType, error)
 	CreateSystemType(ctx context.Context, actorID string, st SystemType) (*SystemType, error)
@@ -657,6 +657,12 @@ type Gateway interface {
 	RecordUnclaimedSources(ctx context.Context, us []UnclaimedSource) error
 	ListUnclaimedSources(ctx context.Context) ([]UnclaimedSource, error)
 	ClaimUnclaimedSource(ctx context.Context, host, transport, source string) (bool, error)
+	// ListUnboundIdentities reads a conduit's inbox of identities no binding
+	// places (#1282), scoped by component read on the conduit.
+	ListUnboundIdentities(ctx context.Context, conduitRef string, read scope.Set) ([]UnboundIdentity, error)
+	// ResolveIdentityBindings resolves the identities one ingest batch names
+	// against its conduit's bindings in one read (#1282), in system mode.
+	ResolveIdentityBindings(ctx context.Context, conduitID string, ids []IdentityKey) (*IdentityResolution, error)
 	// ComponentVerdict is one component's own verdict, by its id, from its
 	// active alarms: what a component's view reads without the fleet (#934).
 	ComponentVerdict(ctx context.Context, componentID string) (string, error)
@@ -723,7 +729,17 @@ type Gateway interface {
 	SweepCommandSettlements(ctx context.Context) error
 	// NodeSimDevices lists the components a simulator beside the node serves,
 	// within the component read scope.
+	// EnsureServicePrincipal and SetServiceToken are the trusted lane's
+	// (#1370): a service principal found or created by name, and its one
+	// token, replacing any before it.
+	EnsureServicePrincipal(ctx context.Context, actorID, name string) (string, error)
+	EnsureRole(ctx context.Context, actorID string, r Role) error
+	SetServiceToken(ctx context.Context, actorID, name string, hash []byte, prefix string) (bool, error)
 	NodeSimDevices(ctx context.Context, name string, read scope.Set) ([]SimDevice, error)
+	// NodeSimWebhooks reads the webhook subscription of each simulated
+	// component on the node (ADR-1370), keyed by component id: only for the
+	// simulator's own device list, never an operator's read.
+	NodeSimWebhooks(ctx context.Context, name string) (map[string]SimWebhook, error)
 	// GetSimImpairment and SetSimImpairment read and record what is broken on
 	// a simulated component (by resolved id; the caller checks scope).
 	GetSimImpairment(ctx context.Context, componentID string) (impair.Impairment, error)
@@ -841,8 +857,18 @@ type Gateway interface {
 	LatestValue(ctx context.Context, ownerKind, ownerID, key, instance, provenance string, read scope.Set) (*CurrentValue, error)
 	// PruneSamples is the provenance-aware retention primitive over one sample
 	// lane (metric or property): delete up to limit samples older than before,
-	// never a declared row and never the latest row of a series (#591, #417).
+	// never a declared or intended row; on the property lane never the latest
+	// row of a series (#591, #417), on the metric lane the latest row within
+	// retention (ADR-1275).
 	PruneSamples(ctx context.Context, lane string, before time.Time, limit int) (int64, error)
+	// EnsureMetricPartitions keeps the metric table partitioned through the
+	// month two ahead of the current one, returning what it created (#420).
+	EnsureMetricPartitions(ctx context.Context) ([]string, error)
+	// DropMetricPartitions drops each month of metric wholly past before and
+	// past every type's own window, returning what it dropped (#420).
+	DropMetricPartitions(ctx context.Context, before time.Time) ([]string, error)
+	// MetricPartitions lists the metric table's monthly partitions.
+	MetricPartitions(ctx context.Context) ([]MetricPartition, error)
 	// PruneSamplesOfType is PruneSamples for one type with a window of its
 	// own, which the lane's prune skips (#417).
 	PruneSamplesOfType(ctx context.Context, lane, typeID string, days int, before time.Time, limit int) (int64, error)
@@ -882,6 +908,16 @@ type Gateway interface {
 	AddMember(ctx context.Context, actorID, systemName, componentName string, read, action, componentRead, componentAction scope.Set) error
 	RemoveMember(ctx context.Context, actorID, systemName, componentName string, read, action, componentRead, componentAction scope.Set) error
 	SetPrimaryMember(ctx context.Context, actorID, systemName, componentName string, read, action, componentRead, componentAction scope.Set) error
+
+	// Identity bindings (#1385, ADR-1282): a conduit component's reported value
+	// under a match key, tied to the one system or component it names. A binding
+	// has two ends and costs a write on both: the conduit resolves in
+	// componentRead then componentUpdate, the owner in its own tier's read then
+	// update, and a move also needs update on the owner it leaves. The list
+	// names an owner only inside the caller's read on its tier and counts the rest.
+	ListIdentityBindings(ctx context.Context, conduit string, componentRead, systemRead scope.Set) (*IdentityBindingList, error)
+	PutIdentityBinding(ctx context.Context, actorID, conduit, key, value string, owner IdentityBindingOwner, sc IdentityBindingScopes) (*IdentityBinding, error)
+	DeleteIdentityBinding(ctx context.Context, actorID, conduit, key, value string, sc IdentityBindingScopes) error
 
 	// The role tier: a system's roles resolve from its standard (inherited) and its
 	// own ad-hoc declarations; assignment refuses a component whose product's

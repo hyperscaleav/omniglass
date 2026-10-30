@@ -5,7 +5,9 @@
 package simhub
 
 import (
+	"log/slog"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -17,9 +19,10 @@ import (
 // fleet's rate and only stops a misbehaving credential.
 const MaxHitsPerBatch = 10_000
 
-// knownProtocols are the protocols a simulated device answers. A hit naming
-// anything else is rejected rather than becoming a new map key.
-var knownProtocols = map[string]bool{"http": true, "snmp": true, "ssh": true, "telnet": true, "tcp": true, "udp": true}
+// maxToldProtocols bounds the notices the hub gives of protocols it does not
+// count, and the memory of which it has given: a credential reporting made-up
+// protocols can neither flood the log nor grow the registry.
+const maxToldProtocols = 16
 
 // DeviceHits is the hit tally for one simulated device.
 type DeviceHits struct {
@@ -63,11 +66,33 @@ type Registry struct {
 	mu    sync.Mutex
 	nodes map[string]*nodeState
 	now   func() time.Time
+	// told is the node and protocol pairs the hub has said it dropped hits
+	// of, so it says so once for each (at most maxToldProtocols).
+	told map[string]bool
 }
 
 // New returns an empty registry.
 func New() *Registry {
-	return &Registry{nodes: map[string]*nodeState{}, now: time.Now}
+	return &Registry{nodes: map[string]*nodeState{}, now: time.Now, told: map[string]bool{}}
+}
+
+// tell says once, for each node and protocol, that the hub drops hits of a
+// protocol it does not count (#1366: the websocket hits the hub rejected
+// without a word, so a component read as having none). The protocol is
+// clipped and made valid UTF-8, since the simulator's report is not trusted
+// with the log.
+func (r *Registry) tell(node, protocol string) {
+	protocol = strings.ToValidUTF8(protocol, "?")
+	if len(protocol) > 40 {
+		protocol = protocol[:40] + "..."
+	}
+	key := node + "\x00" + protocol
+	if r.told[key] || len(r.told) >= maxToldProtocols {
+		return
+	}
+	r.told[key] = true
+	slog.Warn("simulator hit dropped: the hub does not count this protocol", "facility", "simulation",
+		"node", node, "protocol", protocol)
 }
 
 // Pulled records a simulator's device-list pull: its capabilities, the time,
@@ -131,7 +156,11 @@ func (r *Registry) Report(node string, b collection.SimHitBatch) (accepted, reje
 	}
 	now := r.now()
 	for _, h := range b.Hits {
-		if !st.listed[h.ComponentID] || !knownProtocols[h.Protocol] || accepted == MaxHitsPerBatch {
+		known := collection.IsSimProtocol(h.Protocol)
+		if st.listed[h.ComponentID] && !known {
+			r.tell(node, h.Protocol)
+		}
+		if !st.listed[h.ComponentID] || !known || accepted == MaxHitsPerBatch {
 			rejected++
 			continue
 		}

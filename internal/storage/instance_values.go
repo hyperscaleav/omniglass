@@ -36,23 +36,35 @@ import (
 func latestObservedPerInstanceSQL(lane, value, col string) string {
 	return fmt.Sprintf(`with recursive inst(instance) as (
 			(select instance from %[1]s
-				where owner_kind = $1 and %[3]s = $2 and %[1]s_type_id = (select id from %[1]s_type where name = $3)
+				where owner_kind = $1 and %[3]s = $2 and %[1]s_type_id = (select k.id from %[1]s_type_in_effect() k where k.name = $3)
 				order by instance limit 1)
 			union all
 			select (select x.instance from %[1]s x
-					where x.owner_kind = $1 and x.%[3]s = $2 and x.%[1]s_type_id = (select id from %[1]s_type where name = $3)
+					where x.owner_kind = $1 and x.%[3]s = $2 and x.%[1]s_type_id = (select k.id from %[1]s_type_in_effect() k where k.name = $3)
 					  and x.instance > inst.instance
 					order by x.instance limit 1)
 				from inst where inst.instance is not null)
 		select n.value, n.ts, n.provenance, i.instance from inst i,
 			lateral (select %[2]s as value, ts, provenance, id from %[1]s
-				where owner_kind = $1 and %[3]s = $2 and %[1]s_type_id = (select id from %[1]s_type where name = $3)
+				where owner_kind = $1 and %[3]s = $2 and %[1]s_type_id = (select k.id from %[1]s_type_in_effect() k where k.name = $3)
 				  and instance = i.instance and provenance = 'observed'
 				order by ts desc, id desc limit 1) n
 		where i.instance is not null and n.value is not null
 		  and %[4]s
 		order by n.ts desc, n.id desc`, lane, value, col, liveInstanceSQL("i.instance", "$1", "$2", "$4"))
 }
+
+// latestObservedMetricPerInstanceSQL is latestObservedPerInstanceSQL on the
+// metric lane (#1275): the owner's observed series of the key, each one's
+// newest sample a probe of its own, the newest per live instance (an
+// instance has a series per source and collecting node), newest first.
+var latestObservedMetricPerInstanceSQL = `select x.value, x.ts, x.provenance, x.instance from (
+		select distinct on (s.instance) n.value, n.ts, n.id, s.provenance, s.instance
+		from metric_series s cross join lateral (` + metricNewestSQL("s.id") + `) n
+		where ` + metricSeriesWhere("s", "$1", "$2::uuid", "(select k.id from metric_type_in_effect() k where k.name = $3)") + `
+		  and s.provenance = 'observed' and ` + liveInstanceSQL("s.instance", "$1", "$2::uuid", "$4") + `
+		order by s.instance, n.ts desc, n.id desc) x
+	order by x.ts desc, x.id desc`
 
 // liveInstanceSQL is the one test of whether an observed instance is live
 // (ADR-0456), the predicate every owner-level read that reduces across
@@ -96,9 +108,9 @@ func latestIntendedSQL(col string) string {
 			(select distinct c.instance from command c
 				where c.owner_kind = $1 and c.%[2]s = $2
 				  and c.command_type_id in (select ct.id from command_type ct
-					where ct.target_property_type_id = (select id from property_type where name = $3))) i,
+					where ct.target_property_type_id in (select id from property_type where name = $3))) i,
 			lateral (select %[1]s as value, ts, provenance, id from property
-				where owner_kind = $1 and %[2]s = $2 and property_type_id = (select id from property_type where name = $3)
+				where owner_kind = $1 and %[2]s = $2 and property_type_id = (select id from property_type_in_effect() property_type where name = $3)
 				  and instance = i.instance and provenance = 'intended'
 				order by ts desc, id desc limit 1) n
 		where n.value is not null
@@ -154,8 +166,7 @@ func readPropertyValues(ctx context.Context, q querier, ownerID, key, sql string
 // ownerID is an already-resolved arc on every path that reaches it
 // (settlement), so it resolves scope-blind like latestMetricValue.
 func (p *PG) latestObservedMetricValues(ctx context.Context, q querier, ownerKind, ownerID, key string) ([]CurrentValue, error) {
-	col, err := ownerColumn(ownerKind)
-	if err != nil {
+	if _, err := ownerColumn(ownerKind); err != nil {
 		return nil, err
 	}
 	arc, err := p.ownerArcValue(ctx, q, ownerKind, ownerID)
@@ -164,7 +175,7 @@ func (p *PG) latestObservedMetricValues(ctx context.Context, q querier, ownerKin
 	} else if err != nil {
 		return nil, err
 	}
-	rows, err := q.Query(ctx, latestObservedPerInstanceSQL("metric", "value", col), ownerKind, arc, key, transportNames())
+	rows, err := q.Query(ctx, latestObservedMetricPerInstanceSQL, ownerKind, arc, key, transportNames())
 	if err != nil {
 		return nil, fmt.Errorf("storage: latest metric values %s/%s: %w", ownerID, key, err)
 	}

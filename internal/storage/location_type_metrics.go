@@ -88,7 +88,7 @@ func upsertLocationTypeMetricRow(ctx context.Context, q querier, locationTypeID 
 	}
 	lm, err := scanLocationTypeMetric(q.QueryRow(ctx, `
 		insert into location_type_metric (location_type_id, metric_type_id, default_value, required)
-		values ((select id from location_type where `+registryRefCol(locationTypeID)+` = $1), (select id from metric_type where name = $2), $3, $4)
+		values ((select id from `+refRows("location_type", locationTypeID)+` location_type where `+registryRefCol(locationTypeID)+` = $1), (select id from metric_type_in_effect() metric_type where name = $2), $3, $4)
 		on conflict (location_type_id, metric_type_id) do update
 			set default_value = excluded.default_value,
 			    required      = excluded.required,
@@ -106,7 +106,7 @@ func upsertLocationTypeMetricRow(ctx context.Context, q querier, locationTypeID 
 // unknown location type is indistinguishable from one with an empty contract,
 // since the read side has nothing to disclose.
 func (p *PG) ListLocationTypeMetrics(ctx context.Context, locationTypeID string) ([]LocationTypeMetric, error) {
-	rows, err := p.pool.Query(ctx, `select `+locationTypeMetricCols+` from location_type_metric where location_type_id = (select id from location_type where `+registryRefCol(locationTypeID)+` = $1) order by (select mt.name from metric_type mt where mt.id = location_type_metric.metric_type_id)`, locationTypeID)
+	rows, err := p.pool.Query(ctx, `select `+locationTypeMetricCols+` from location_type_metric where location_type_id = (select id from `+refRows("location_type", locationTypeID)+` location_type where `+registryRefCol(locationTypeID)+` = $1) order by (select mt.name from metric_type mt where mt.id = location_type_metric.metric_type_id)`, locationTypeID)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list location type metrics %q: %w", locationTypeID, err)
 	}
@@ -145,7 +145,7 @@ func (p *PG) SetLocationTypeMetric(ctx context.Context, actorID, locationTypeID 
 	// The before-image decides create vs update and gives the audit its old side.
 	var before any
 	prior, err := scanLocationTypeMetric(tx.QueryRow(ctx,
-		`select `+locationTypeMetricCols+` from location_type_metric where location_type_id = (select id from location_type where `+registryRefCol(locationTypeID)+` = $1) and metric_type_id = (select id from metric_type where name = $2)`,
+		`select `+locationTypeMetricCols+` from location_type_metric where location_type_id = (select id from `+refRows("location_type", locationTypeID)+` location_type where `+registryRefCol(locationTypeID)+` = $1) and metric_type_id = (select id from metric_type_in_effect() metric_type where name = $2)`,
 		locationTypeID, spec.MetricTypeName))
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
@@ -190,7 +190,7 @@ func (p *PG) DeleteLocationTypeMetric(ctx context.Context, actorID, locationType
 	// the withdrawn declaration and a missing row is caught without a second read.
 	before, err := scanLocationTypeMetric(tx.QueryRow(ctx, `
 		delete from location_type_metric
-		where location_type_id = (select id from location_type where `+registryRefCol(locationTypeID)+` = $1) and metric_type_id = (select id from metric_type where name = $2)
+		where location_type_id = (select id from `+refRows("location_type", locationTypeID)+` location_type where `+registryRefCol(locationTypeID)+` = $1) and metric_type_id = (select id from metric_type_in_effect() metric_type where name = $2)
 		returning `+locationTypeMetricCols, locationTypeID, metricName))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrTypeNotFound

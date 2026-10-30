@@ -452,11 +452,12 @@ func TestRunIdempotent(t *testing.T) {
 	if humans != 4 {
 		t.Errorf("human principals = %d, want 4", humans)
 	}
+	// The four people's grants, and the simulated pusher's one (#1370).
 	if err := conn.QueryRow(ctx, `select count(*) from principal_grant`).Scan(&grants); err != nil {
 		t.Fatalf("count grants: %v", err)
 	}
-	if grants != 4 {
-		t.Errorf("grants = %d, want 4", grants)
+	if grants != 5 {
+		t.Errorf("grants = %d, want 5", grants)
 	}
 
 	// The property primitive seeds one extra contract line on the QM55, one component
@@ -1694,11 +1695,37 @@ func TestSeededFleetIsSimulated(t *testing.T) {
 			t.Errorf("no %s attach in the simulated fleet", driver)
 		}
 	}
+	// The UCC platform's rooms are bound to their systems (#1282): four
+	// bindings on the conduit, the fifth room left unbound on purpose.
+	bindings := func() map[string]string {
+		got := map[string]string{}
+		rows, err := conn.Query(ctx, `select b.value, l.name from identity_binding b join component c on c.id = b.conduit_id
+			join system s on s.id = b.system_id join location l on l.id = s.location_id
+			where c.product_id = (select id from product where name = 'ucc-platform')`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var v, sys string
+			if err := rows.Scan(&v, &sys); err != nil {
+				t.Fatal(err)
+			}
+			got[v] = sys
+		}
+		return got
+	}
+	if got := bindings(); len(got) != 4 || got["zr-huddle-north"] != "huddle" || got["zr-boardroom-b"] != "" {
+		t.Errorf("ucc-platform's bindings = %v, want its four bound rooms (by their place) and zr-boardroom-b unbound", got)
+	}
 	if err := devseed.Run(ctx, gw, ""); err != nil {
 		t.Fatalf("second run: %v", err)
 	}
 	if after := count(); after != before {
 		t.Fatalf("a second run changed the simulated endpoints: %d to %d", before, after)
+	}
+	if got := bindings(); len(got) != 4 {
+		t.Errorf("a second run changed the bindings: %v", got)
 	}
 }
 
@@ -1796,12 +1823,12 @@ func TestSimulatedFleetAtRealPorts(t *testing.T) {
 		t.Errorf("demo DSP http endpoint = %q, want a simulated address at port 80", http)
 	}
 	// Probe targets below 1024 are served as declared; a lift would have
-	// moved them into 10001..11023.
+	// moved them into 10001..11023. A ping's target is a host alone.
 	var lifted, low int
 	if err := conn.QueryRow(ctx, `
 		select count(*) filter (where port between 10001 and 11023), count(*) filter (where port < 1024)
 		from (select split_part(params->>'target', ':', 2)::int as port
-		      from endpoint where params->>'target' like '127.60.%') t`).Scan(&lifted, &low); err != nil {
+		      from endpoint where params->>'target' like '127.60.%:%') t`).Scan(&lifted, &low); err != nil {
 		t.Fatal(err)
 	}
 	if lifted != 0 || low == 0 {

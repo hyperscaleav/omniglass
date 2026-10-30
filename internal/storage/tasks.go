@@ -197,6 +197,9 @@ type TaskOwner struct {
 	EndpointID   string
 	EndpointName string
 	Transport    string
+	// NodeID is the node the task's endpoint is placed on (its principal id),
+	// the collector a metric series records (#1275).
+	NodeID string
 }
 
 // ResolveTaskOwner binds the component a node's task collects for and, in the same
@@ -221,10 +224,11 @@ func (p *PG) ResolveTaskOwner(ctx context.Context, taskID, nodeName string) (Tas
 	// have the write side resolve it a second time is exactly the shape #627
 	// makes ambiguous.
 	err := p.pool.QueryRow(ctx, `
-		select i.component, (select n.name from node n where n.principal_id = i.node_name), i.id, i.name, i.transport
+		select i.component, (select n.name from node n where n.principal_id = i.node_name), i.id, i.name, i.transport,
+			coalesce(i.node_name::text, '')
 		from task t
 		join endpoint i on i.id = t.endpoint_id
-		where t.id = $1`, taskID).Scan(&componentID, &ifaceNode, &owner.EndpointID, &owner.EndpointName, &owner.Transport)
+		where t.id = $1`, taskID).Scan(&componentID, &ifaceNode, &owner.EndpointID, &owner.EndpointName, &owner.Transport, &owner.NodeID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return TaskOwner{}, false, nil
 	} else if err != nil {

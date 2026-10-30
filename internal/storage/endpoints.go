@@ -749,7 +749,7 @@ func (p *PG) RetryEndpoint(ctx context.Context, actorID, ref string, pin RetryPi
 		}
 		if _, err := tx.Exec(ctx, `
 			insert into property (owner_kind, component_id, property_type_id, instance, provenance, source, value)
-			values ('component', $1::uuid, (select id from property_type where name = $4), $2, '`+declaredProvenance+`', $5, to_jsonb($3::text))`,
+			values ('component', $1::uuid, (select id from property_type_in_effect() property_type where name = $4), $2, '`+declaredProvenance+`', $5, to_jsonb($3::text))`,
 			*before.ComponentID, before.Name, key, pinKeyOf[before.Transport], pinSource); err != nil {
 			return nil, fmt.Errorf("storage: pin a key for endpoint %q: %w", before.ID, err)
 		}
@@ -836,7 +836,7 @@ func latestRejection(ctx context.Context, q querier, componentID, instance strin
 	if err := q.QueryRow(ctx, `
 		select coalesce((select value #>> '{}' from property
 		 where owner_kind = 'component' and component_id = $1::uuid and instance = $2 and provenance = 'observed'
-		   and property_type_id = (select id from property_type where name = 'endpoint-rejection')
+		   and property_type_id = (select id from property_type where namespace = 'og' and name = 'endpoint-rejection')
 		 order by ts desc, id desc limit 1), '')`, componentID, instance).Scan(&v); err != nil {
 		return "", fmt.Errorf("storage: endpoint rejection: %w", err)
 	}
@@ -901,11 +901,11 @@ func keyPin(ctx context.Context, q querier, componentID, instance, property stri
 			(select nullif(value, 'null'::jsonb) #>> '{}' from property
 			 where owner_kind = 'component' and component_id = $1::uuid and instance = $2 and provenance = 'declared'
 			   and source = '`+pinSource+`'
-			   and property_type_id = (select id from property_type where name = $3)
+			   and property_type_id = (select id from property_type_in_effect() property_type where name = $3)
 			 order by id desc limit 1), ''),
 			coalesce((select o.value #>> '{}' from property o
 			 where o.owner_kind = 'component' and o.component_id = $1::uuid and o.instance = $2 and o.provenance = 'observed'
-			   and o.property_type_id = (select id from property_type where name = $3)
+			   and o.property_type_id = (select id from property_type_in_effect() property_type where name = $3)
 			   and not exists (`+retiredPinSQL("$1::text", "$2")+`)
 			 order by o.ts desc, o.id desc limit 1), '')`, componentID, instance, property).Scan(&declared, &pin); err != nil {
 		return "", "", fmt.Errorf("storage: %s pin: %w", property, err)

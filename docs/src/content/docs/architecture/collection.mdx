@@ -422,6 +422,14 @@ process through the Storage Gateway, so neither a node nor a push may write them
 reads them as it reads any metric
 ([ADR-1369](/architecture/decisions/#adr-1369-every-endpoint-reports-its-own-collection-once-a-report-window)).
 
+The [lab](/guides/lab/) exercises every collection method on both tiers (#1370): each seeded driver
+and each registry transport runs on a dev-fleet component, and counts only when it carries both, its
+built-in data (reads up, or, pushed to, has been heard) and collected values its driver emits landed
+from it. A driver that only connects does not count. Two methods carry one tier by nature: a bare
+`icmp` probe has no device API to read, so it counts on its built-in tier, and a push through
+`POST /telemetry:push` has no endpoint, so it counts on its collected tier alone. The coverage test
+and the live lab check are in [simulation](/architecture/simulation/#the-dev-fleet).
+
 One window for every endpoint type is the first step of the cadence model (#1373): each endpoint type's
 catalog entry holds its built-in data's defaults, a driver overrides them per endpoint type it uses, and
 an operator overrides them down the cascade.
@@ -704,7 +712,8 @@ request step posting the client's secret fields, a captured `access_token`, its 
 bearer header.
 
 The seeded `newtron-panel-web` reads the simulated Newtron panel's https API behind its form login,
-and `boreal-edge-web` the simulated Boreal display's web admin over digest (and drives its power).
+and `boreal-edge-web` the simulated Boreal display's web admin over digest (and drives its power);
+the [lab](/guides/lab/) runs both on its HQ boardroom (#1370).
 Proven over real sockets (`internal/collection/httpsession_integration_test.go`: one session across
 many requests, one re-login and replay on a lapse, a wrong password one attempt and never retried, a
 token renewed before its expiry, concurrent requests sharing one login, digest with MD5 and SHA-256
@@ -860,7 +869,7 @@ login's headers. The probe is http's (`https`'s over `wss`): a
 credential-free `GET /` whose answer, any status, is the transport rung, so reachability stays
 observed beneath a refused upgrade.
 
-The seeded `kestrel-ws` holds the simulated Kestrel bar's control socket over `wss`: its subscribe
+The seeded `kestrel-ws` (run in the [lab](/guides/lab/) on the HQ boardroom's bar, #1370) holds the simulated Kestrel bar's control socket over `wss`: its subscribe
 armed on every connection, its call, volume, mute and power pushed as they change, polls and the
 `set-volume` and `set-mute` commands answered by their ids (a command settling from its answer).
 Proven by the driver's validation and correlation tests (`internal/driver/websocket_test.go`), over
@@ -1082,8 +1091,9 @@ posted ([ADR-1185](/architecture/decisions/#adr-1185-the-client-address-believes
 `webhook-token` secret on the endpoint's component: sealed, revealed and copied only under
 `secret:reveal`, audited, deleted with the endpoint, and rotated by
 `POST /endpoints/{endpoint}:rotateToken`, after which the old token resolves to nothing. A sender
-posts to `/api/v1/webhooks/<token>`. The token names one endpoint, and so one component: nothing in
-the payload selects further.
+posts to `/api/v1/webhooks/<token>`. The token names one endpoint, and so one component: a payload
+naming an identity selects only among the owners bound to that component, and an identity bound to
+none lands in its unbound inbox ([the fan-out](#shared-api-collection-one-component-many-owners)).
 
 **The scheme.** A webhook driver declares how a post is authenticated in its session block, and
 never by default:
@@ -1232,34 +1242,129 @@ audited: a preview on the node (and on each secret it used), a run now on the en
 
 ## Shared-API collection: one component, many owners
 
-What is built today: a system owns the telemetry a push names it for and what a system calc rule
-derives from its members ([ADR-0422](/architecture/decisions/#adr-0422-a-system-owns-its-own-telemetry-and-a-location-owns-no-observed-sample)), and a webhook endpoint lands every post on its own
-component. A component that fans its values out to other owners is the design below. An endpoint
-stays a component's: system telemetry a node collects arrives through this fan-out, never through a
-system-owned endpoint.
+Some sources describe **many entities at once**: a SaaS or UCC platform, a controller fronting many
+components, a building gateway, an amplifier feeding many loudspeakers. The API is **one component**
+(one endpoint, one credential) whose data **fans out** to the entities it describes, not one
+component per described entity
+([ADR-1282](/architecture/decisions/#adr-1282-a-conduit-fans-each-identified-value-out-to-the-owner-its-binding-names-and-a-binding-costs-a-write-on-both-of-its-ends)).
 
-:::design[Shared-API fan-out and identity binding, tracked in #1282; the discovery_rule is its own design]
-Some sources describe **many entities at once**: a SaaS / UCC platform (Zoom, Teams), a controller fronting many devices, a building gateway. The API is **one component** (one endpoint, one credential) whose data **fans out** to the entities it describes, not one component per described entity.
+- **The conduit.** The component whose endpoint reports a value is the **conduit**: the path, not
+  the owner. Its driver function [names each record's identity](#a-function-reads-records-and-names-each-ones-identity)
+  (`ucc-room-id`, `zr-huddle-north`), and every sample the record yields carries it on the wire.
+- **One fan-out step for both arrivals.** The ingest resolves every identified sample in a batch
+  against the conduit's [identity bindings](#identity-binding-a-conduits-identity-tied-to-its-owner)
+  in one read and lands the batch in its one transaction under its receipt
+  ([ADR-0311](/architecture/decisions/#adr-0311-a-telemetry-batch-lands-once-in-one-transaction-under-its-receipt)).
+  On the node lane the conduit is the component confinement already holds the node to (the task's
+  endpoint's component), so a batch confinement orphans is dropped before any identity is read; on
+  the [webhook lane](#push-ingress-webhooks-on-the-server) it is the component the token's one
+  endpoint names. A node polling the API and the service posting to its webhook land the same rows.
+- **Nothing in a payload names an owner.** A payload names an identity, and only the bindings of
+  the conduit the batch is already confined to can turn it into an owner, so a compromised node or a
+  leaked webhook token reaches the owners bound to its own conduit, and nothing beyond.
+- **What a fanned sample is.** It is observed, admitted by the Storage Gateway only for a
+  `collected` key (the `fan-out` writer, held to an owner one of the conduit's bindings names,
+  re-read in the write's own transaction), lands once on its owner (never also on the conduit), at
+  the **empty instance**, and names its observer in `source` as `<conduit>/<endpoint>`, the conduit
+  held by its uuid and read by its current name, so a renamed conduit's history still names it
+  ([metrics and properties](/architecture/properties/#the-instance-dimension-many-values-of-one-name-on-one-owner)).
+  A sample with no identity lands on the conduit exactly as before. A log line never fans out: a
+  system owns none.
+- **The owner can be a system.** SaaS state that is telemetry *of* a room maps to **system-owned
+  samples**; a virtual component is for the genuine *member* case (its own topology node, a
+  `health_role`, a lifecycle). **Member -> component, telemetry -> system.**
+- **Unmatched identities are kept**, never dropped and never misfiled on the conduit: an identity no
+  binding places lands on no owner and is upserted into the conduit's **unbound inbox**
+  (`unbound_identity`: one row per match key and value, a count, first and last heard, the keys it
+  carried; 1024 rows per conduit, the least recently heard evicted, aged out after seven days), read
+  at `GET /components/{name}/unbound-identities` under `component:read` on the conduit. A webhook
+  post's raw line still lands on the conduit. The ingest warns once per conduit per window, never per
+  sample. Binding an inbox row makes the next value naming it land on its owner, with no restart, and
+  lets the row go.
+- **Bounds.** A batch about two hundred owners resolves them in one read and one fence, however many
+  there are; an identity is held to the engine's bounds again on the server (non-empty, at most 256
+  bytes, no control character) before it reaches a read or the inbox.
 
-- Its function pulls the batch in one call, **labeling each emitted sample with the external identity** it belongs to (a Zoom Room ID).
-- The function is the conduit, not the owner: ownership resolves **server-side** against a declared **identity config** (`zoom-room-id` on the target). **One primitive for pull and push**: a node polling the API and a [webhook endpoint](#push-ingress-webhooks-on-the-server) on the same component receiving posts about many owners bind through the same index, so the fan-out extends the webhook ingress rather than duplicating it.
-- **The owner can be a system.** SaaS state that is telemetry *of* a room maps to **system-owned samples**; a virtual component is for the genuine *member* case (its own topology node, a `health_role`, a lifecycle). **Member -> component, telemetry -> system.**
-- **Unmatched identities are orphans**, discovery candidates (below).
+The design's cascade-scoped index (an identity declared at a place or a system binding every member
+below it) and its fallback to an observed identity sample are not built: each would widen who can
+place a value on an owner without the conduit end's consent (ADR-1282, point 8). An event rule over a
+fanned key judges it on its owner like any of the owner's samples; a system owner's rule waits on
+event rules judging system samples (#1002).
 
 **Best practice**: map SaaS / cloud telemetry to system-owned samples wired into system health via a system-scoped `event_rule`; the vendor's own status is an input to that judgment, not the verdict, so corroborate a reported "offline" before downing the room ([health](/architecture/health/)).
 
-### Identity binding: the value-to-owner index
-
-Binding an externally-tagged row to an Omniglass owner is a lookup against the **value-to-owner index**: an **identity arc** on identity config, a `(property_type, value) -> owner` mapping where `property_type` is the **match key** (`zoom-room-id`) and `value` the emitted identity. The index resolves **in the cascade scope** the identity config is set at, so an identity declared at a system or location binds every member below it. A **declared identity config value wins**, falling back to the **observed identity sample** sharing the key; the [samples](/architecture/properties/) ownership-resolution machinery reads this same index.
-
 ### discovery_rule: orphans become candidates
 
-A `discovery_rule` turns the orphan stream, every emitted identity the index does not resolve (an unmatched shared-API `(property_type, value)`, plus a node's out-of-placement labels), into proposed entities: the onboarding win, no hand-mapping.
+:::design[The discovery_rule, tracked in #1395]
+A `discovery_rule` turns the orphan stream, every identity a conduit's unbound inbox holds plus a node's out-of-placement labels, into proposed bindings or entities: the onboarding win, no hand-mapping.
 
-- **Creates** candidate components or owners, each seeded with the identity that surfaced it (it becomes the new entity's identity arc), so the next batch resolves through the index.
+- **Creates** candidate components or owners, each seeded with the identity that surfaced it (it becomes an identity binding to the new entity), so the next batch resolves through it.
 - **Idempotent on re-discovery**: keyed on the `(property_type, value)` already bound, so a steady stream of the same orphan resolves to one candidate.
 - **Scope and standing**: a cascade **scope** and an `official` / private standing like the other rule families (`event_rule`, calc).
 :::
+
+### Identity binding: a conduit's identity tied to its owner
+
+An **identity binding** ties one value a conduit component reports under a **match key** to exactly
+one owner, a system or a component
+([ADR-1282](/architecture/decisions/#adr-1282-a-conduit-fans-each-identified-value-out-to-the-owner-its-binding-names-and-a-binding-costs-a-write-on-both-of-its-ends)).
+The match key is a registered property type (`ucc-room-id`), so every driver reporting that kind of
+identity shares one name, and the value is what the conduit reports (`R-415A`). One identity on one
+conduit has one owner; the same value on another conduit is another binding. A place or a node is no
+owner: neither owns an observed sample
+([ADR-0422](/architecture/decisions/#adr-0422-a-system-owns-its-own-telemetry-and-a-location-owns-no-observed-sample)).
+The conduit is never its own identity's owner: a value it reports with no identity already lands on
+it, so a binding naming the conduit is refused (422).
+
+A binding is a relationship with two ends, so it costs a write on both, the
+[ADR-0510](/architecture/decisions/#adr-0510-a-membership-or-a-role-assignment-costs-a-write-on-both-of-its-ends)
+rule: `component:update` on the conduit and the owner's update (`component:update`, or
+`system:update` for a system). One end alone is not enough in either direction. A principal scoped to
+a system could otherwise claim an identity that belongs to another owner and pull a conduit it cannot read onto its own
+system; a principal scoped to the conduit could write onto systems it cannot update. A move to another
+owner also costs update on the owner it leaves. Consent is given at write: a binding persists if its
+author later loses scope, as a membership does, and deleting the conduit or the owner deletes it. The
+[identity and access](/architecture/identity-access/) page has the refusal each end gives.
+
+Bindings are made under the conduit, beside the identities it reports:
+`GET /components/{name}/identity-bindings` lists them (an owner named only when the caller can read
+it, the rest counted), and `PUT` and `DELETE` on `/components/{name}/identity-bindings/{key}/{value}`
+bind and unbind one ([api](/architecture/api/)); the value is one percent-encoded path segment, so a
+value carrying a slash or a space (`room%2F1`) round-trips, through the generated CLI
+(`omniglass component identity-binding`) and the MCP tools as well. Every change is audited in its
+transaction, naming both ends.
+
+<SchemaTable
+  table="identity_binding"
+  notes={{
+    conduit_id: 'The conduit component: the path the value arrived on, not its owner',
+    property_type_id: 'The match key, a registered property type naming what kind of identity the value is',
+    value: 'The identity the conduit reports, 1 to 256 characters; unique per conduit and key',
+    owner_kind: 'component or system: the arc arm that is set',
+    component_id: 'The owning component, when owner_kind is component',
+    system_id: 'The owning system, when owner_kind is system',
+  }}
+/>
+
+The conduit's unbound inbox, one row per identity it reported that no binding places:
+
+<SchemaTable
+  table="unbound_identity"
+  notes={{
+    conduit_id: 'The conduit component that reported the identity',
+    property_type_id: 'The match key the identity was reported under',
+    value: 'The identity as the conduit reported it',
+    heard_count: 'How many samples named it while it was unbound',
+    first_heard_at: 'When the conduit first reported it',
+    last_heard_at: 'When the conduit last reported it; the inbox evicts the least recently heard past 1024 rows and lets go of a row unheard for seven days',
+    carried_type_ids: 'The metric, property and event types its samples carried, by id; the inbox read names them',
+  }}
+/>
+
+The design once described this index as declared on the owner and resolved in a cascade scope, so an
+identity set at a location or system bound every member below it, with an observed identity sample as
+the fallback. Both are deferred: each widens who can place a value on an owner without the conduit
+end's consent, so each waits for its own fence and a consumer that needs it.
 
 ## Drivers: the declarative menu
 
@@ -1413,6 +1518,55 @@ simulator: the Newtron panel's input push lands as the `video-input` property an
 change no listener claims as a raw log line, none of them in the node's self-logs; the Kestrel
 bar's feed reports a call starting and ending as named events, which `kestrel-api` lands as
 `call-started` and `call-ended` carrying the call's id.
+
+### A function reads records and names each one's identity
+
+Built (#1386, [ADR-1282](/architecture/decisions/#adr-1282-a-conduit-fans-each-identified-value-out-to-the-owner-its-binding-names-and-a-binding-costs-a-write-on-both-of-its-ends)):
+a service that speaks for many owners answers about all of them at once, one request listing
+every room or one post naming two. A poll or a listener may declare two fields for that:
+
+- **`records`**: a dotted path (the `jsonpath` grammar, object keys only) to an array in the JSON
+  body. Each element is one **record**, read as its own payload: a `jsonpath` reads from the
+  element, and a `regex` reads its compact JSON. The function's emits and its identity read once
+  per record. A path that misses, or lands on anything but an array, is one fault and lands
+  nothing; an empty array lands nothing and is no fault. At most 2048 records are read from one
+  payload; past that the rest are not read and one fault says how many. Records ride a JSON body
+  alone (an http poll or stream of format `json`, a webhook of format `json`), refused at write
+  anywhere else, and a function reading records with any metric, property or event emit must
+  declare an identity, or every record would land on the one conduit series.
+- **`identity`**: a match `key` and the `extract` that reads its value off each record (or off the
+  whole payload, without `records`). The key is a registered property type a driver may write
+  (`ucc-room-id`), refused at write when it is unregistered, a metric or an event type, reserved,
+  or a calc rule's output; the extract is held to the transport exactly as an emit's is. A JSON
+  number is read as its literal, so two ids past 2^53 stay two identities. The value is trimmed
+  and bounded: empty, longer than 256 bytes, or carrying a control character, it is a fault.
+
+Every metric, property and event a record yields carries its identity, onto the wire's
+`identity` field (the match key and the value) on the node's batch and on a webhook's. A record
+whose identity misses lands **nothing** (none of its samples, none of its events). Record faults
+collapse to one per kind per run however many records meet them (the identity missed on 10 of 30
+records, naming the first ten), so a renamed id field is one fault, not thousands: a
+`collection-failed` for a poll, the post's raw line for a webhook. A log
+line never carries an identity and always lands, since a log line stays on the conduit's component
+(a system owns none, [ADR-0422](/architecture/decisions/#adr-0422-a-system-owns-its-own-telemetry-and-a-location-owns-no-observed-sample)).
+A function that declares neither field bakes to the bytes it always did, so its task keeps its
+content hash. A [preview](#on-demand-validate-preview-and-run-a-poll-now) shows each sample's
+identity, so a spec is written against which room each value is about.
+
+```yaml
+polls:
+  - name: rooms
+    schedule: { every: 30s }
+    request: { path: /rooms }                       # {"rooms":[{"id":"r1","state":"in-call"}, ...]}
+    records: rooms
+    identity: { key: ucc-room-id, extract: { jsonpath: id } }
+    emits:
+      - { name: call-state, extract: { jsonpath: state } }   # one per room, each naming its room
+```
+
+The identity is a claim, never an owner: on the wire it names an identity, and only the bindings
+of the conduit the batch is already confined to may turn it into one. The push route has no
+identity field.
 
 ## Storage
 

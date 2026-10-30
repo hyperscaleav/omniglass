@@ -1,0 +1,1 @@
+{"ok": true, "protect": "{{ .State | get "status" | get "amp" | get "protect" }}"}

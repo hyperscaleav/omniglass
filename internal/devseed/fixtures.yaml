@@ -2086,6 +2086,12 @@ sim_secrets:
     label: Simulated SNMP community (revoked)
     secret_type: snmp-community
     fields: { community: revoked }
+  # The simulated Boreal display's web admin login (its digest face), for
+  # the boardroom display's web endpoint below (#1370).
+  - name: sim-boreal-login
+    label: Simulated Boreal display login
+    secret_type: basic-auth
+    fields: { username: admin, password: boreal }
   # The key the simulated UCC service signs its webhooks with (#1024).
   - name: sim-ucc-signing
     label: Simulated UCC webhook signing key
@@ -2097,10 +2103,21 @@ sim_endpoints:
   # no node and no address. Its token is minted at creation; point the
   # simulated service at it (its http api's POST /api/webhooks, with the
   # endpoint's URL and this key) and each meeting it starts or ends lands as
-  # call-started or call-ended and the call-state property.
+  # call-started or call-ended and the call-state property. In a lab the
+  # simulator subscribes the service itself (#1370, ADR-1370), so the posts
+  # flow from the start.
   - component: ucc-service
     driver: ucc-webhook
     label: Meeting webhooks
+    inputs: { signing-key: sim-ucc-signing }
+  # The account-wide meeting platform's webhooks (#1282): the same driver,
+  # whose room-naming listeners declare the ucc-room-id identity, so each
+  # post lands on the system bound to its room (the bindings below). Point
+  # the simulated ucc-platform at this endpoint's URL (its POST /api/webhooks)
+  # and each meeting it starts or ends, and its batched report, fans out.
+  - component: ucc-platform
+    driver: ucc-webhook
+    label: Room webhooks
     inputs: { signing-key: sim-ucc-signing }
   - component: huddle-touch
     driver: newtron-nvp-telnet
@@ -2126,13 +2143,12 @@ sim_endpoints:
   # A changed host key worth showing (#1078). The briefing place's touch panel
   # also answers NVP over its ssh console (admin / newtron, the rotated
   # secret), and this endpoint pins the host key the panel presented before it
-  # was reimaged. The simulated panel mints its own key when the simulator
-  # starts, so it never matches: a live node refuses the connection before
+  # was reimaged. The simulated panel's own key never matches it: a live node refuses the connection before
   # logging in and reads the session rejected, class host-key, naming both
   # keys beside Trust this key. Trusting the offered key makes it the pin and
   # the session comes up, which is the walkthrough (trust-a-changed-host-key).
-  # A restarted simulator mints another key, so the panel reads rejected again
-  # as a reimaged one would.
+  # The simulated panel's key is derived from its id, so a trusted key holds
+  # across a simulator restart, as a real panel's does.
   - component: briefing-touch
     driver: newtron-nvp-ssh
     label: Panel SSH
@@ -2152,6 +2168,47 @@ sim_endpoints:
     inputs: { community: sim-snmp-revoked }
     planted_fault: the endpoint names a community the panel's agent refuses
 
+
+  # Every collection method healthy on one place (#1370): the HQ boardroom
+  # runs each driver and transport the planted faults above break, and the
+  # three drivers the rest of the fleet never attaches, beside the defaults
+  # its components already carry (the bar's https API, the panel's NVP over
+  # tcp, the display's SNMP). The coverage test holds the set
+  # (TestEveryCollectionMethodRunsOnAHealthyLabComponent).
+  #
+  # The bar's control socket: JSON over wss on 9443, its key pinned on first
+  # use, the upgrade carrying the bar's login.
+  - component: bar-a
+    driver: kestrel-ws
+    label: Bar control socket
+    inputs: { login: sim-kestrel-login }
+  # The display's web admin over http digest.
+  - component: panel-a
+    driver: boreal-edge-web
+    label: Display web admin
+    inputs: { login: sim-boreal-login }
+  # The panel's https API behind its sign-in form.
+  - component: touch-a
+    driver: newtron-panel-web
+    label: Panel web
+    inputs: { login: sim-panel-login-rotated }
+  # The panel's NVP console over ssh and over telnet, with the right login
+  # and no stale pin: the healthy twins of the briefing's and the huddle's
+  # faults.
+  - component: touch-a
+    driver: newtron-nvp-ssh
+    label: Panel shell
+    inputs: { login: sim-panel-login-rotated }
+  - component: touch-a
+    driver: newtron-nvp-telnet
+    label: Panel Telnet
+    inputs: { login: sim-panel-login-rotated }
+  # A bare ping: icmp has no device API, so it is the one method that counts
+  # on its connection tier alone.
+  - component: touch-a
+    transport: icmp
+    label: Panel ping
+
 # Components that exist only beside the simulator (#1024), so the docs'
 # screenshots, seeded without it, carry none of them: the meeting platform's
 # cloud service, at headquarters, whose webhooks the server receives.
@@ -2159,3 +2216,31 @@ sim_components:
   - key: ucc-service
     product: ucc-service
     location: hq
+  # The meeting platform's account-wide plane (#1282): one component that
+  # speaks for every room, polled by ucc-rooms and posting room-naming
+  # webhooks, the conduit the bindings below fan out from.
+  - key: ucc-platform
+    product: ucc-platform
+    location: hq
+
+# The fan-out's identity bindings (#1282, ADR-1282): each room id the
+# simulated ucc-platform reports, tied on that conduit to the system it is
+# the room of, so each room's call state lands on its own system. The
+# platform's fifth room (zr-boardroom-b) is bound to nothing on purpose: its
+# values land in the conduit's unbound inbox until an operator binds it.
+sim_identity_bindings:
+  - { conduit: ucc-platform, key: ucc-room-id, value: zr-boardroom-a, system: boardroom-a }
+  - { conduit: ucc-platform, key: ucc-room-id, value: zr-huddle-north, system: huddle-north }
+  - { conduit: ucc-platform, key: ucc-room-id, value: zr-briefing-av, system: briefing-av }
+  - { conduit: ucc-platform, key: ucc-room-id, value: zr-auditorium-av, system: auditorium-av }
+
+# A first-party pusher (#1370): the simulated booking service, a scheduling
+# platform's integration that posts a place's bookings (booking-count,
+# booking-state) to POST /telemetry:push, owned by the place's system. A
+# service principal holding telemetry:push alone, scoped to that one system,
+# so it can push nowhere else and read nothing. The lab mints its token on
+# every run, as it does the node's, and the simulator beside the node pushes
+# with it. A push has no endpoint, so it counts on its collected tier alone.
+sim_pusher:
+  service: sim-booking-service
+  system: boardroom-a

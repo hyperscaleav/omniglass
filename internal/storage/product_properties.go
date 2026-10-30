@@ -34,6 +34,11 @@ type ProductPropertySpec struct {
 	PropertyTypeName string
 	DefaultValue     json.RawMessage
 	Required         bool
+	// ResolveIn is the one namespace the product and the property resolve in:
+	// og when the boot seed writes a shipped product's contract, so it lands on
+	// the shipped rows whatever an operator holds of the same names (#1432).
+	// Empty is the search path. Never set from a request.
+	ResolveIn string `json:"-"`
 }
 
 // product_id stores the product's uuid; its handle comes back beside it so a
@@ -83,19 +88,24 @@ func mapProductPropertyWriteErr(err error) error {
 // and the boot-seed path so both keep the same semantics. It runs on any
 // querier, so the seed path needs no transaction for its single statement.
 func upsertProductPropertyRow(ctx context.Context, q querier, productID string, spec ProductPropertySpec) (*ProductProperty, error) {
-	if _, err := resolveProductRef(ctx, q, productID); err != nil {
+	productRows, propertyRows := refRows("product", productID), refRows("property_type", spec.PropertyTypeName)
+	if spec.ResolveIn != "" {
+		productRows, propertyRows = catalogRows("product", spec.ResolveIn), catalogRows("property_type", spec.ResolveIn)
+	}
+	var known bool
+	if err := q.QueryRow(ctx, `select true from `+productRows+` product where `+registryRefCol(productID)+` = $1`, productID).Scan(&known); err != nil {
 		return nil, ErrTypeNotFound
 	}
 	if err := contractKey(spec.PropertyTypeName); err != nil {
 		return nil, err
 	}
-	if err := requireProperty(ctx, q, spec.PropertyTypeName); err != nil {
-		return nil, err
+	if err := q.QueryRow(ctx, `select true from `+propertyRows+` property_type where `+registryRefCol(spec.PropertyTypeName)+` = $1`, spec.PropertyTypeName).Scan(&known); err != nil {
+		return nil, ErrPropertyTypeNotFound
 	}
 	pp, err := scanProductProperty(q.QueryRow(ctx, `
 		insert into product_property (product_id, property_type_id, default_value, required)
-		values ((select id from product where `+registryRefCol(productID)+` = $1),
-		        (select id from property_type where name = $2), $3, $4)
+		values ((select id from `+productRows+` product where `+registryRefCol(productID)+` = $1),
+		        (select id from `+propertyRows+` property_type where `+registryRefCol(spec.PropertyTypeName)+` = $2), $3, $4)
 		on conflict (product_id, property_type_id) do update
 			set default_value = excluded.default_value,
 			    required      = excluded.required,
@@ -113,7 +123,7 @@ func upsertProductPropertyRow(ctx context.Context, q querier, productID string, 
 // product is indistinguishable from one with an empty contract, since the read
 // side has nothing to disclose.
 func (p *PG) ListProductProperties(ctx context.Context, productID string) ([]ProductProperty, error) {
-	rows, err := p.pool.Query(ctx, `select `+productPropertyCols+` from product_property where product_id = (select id from product where `+registryRefCol(productID)+` = $1) order by (select pr.name from property_type pr where pr.id = product_property.property_type_id)`, productID)
+	rows, err := p.pool.Query(ctx, `select `+productPropertyCols+` from product_property where product_id = (select id from `+refRows("product", productID)+` product where `+registryRefCol(productID)+` = $1) order by (select pr.name from property_type pr where pr.id = product_property.property_type_id)`, productID)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list product properties %q: %w", productID, err)
 	}
@@ -148,7 +158,7 @@ func (p *PG) SetProductProperty(ctx context.Context, actorID, productID string, 
 	// The before-image decides create vs update and gives the audit its old side.
 	var before any
 	prior, err := scanProductProperty(tx.QueryRow(ctx,
-		`select `+productPropertyCols+` from product_property where product_id = (select id from product where `+registryRefCol(productID)+` = $1) and property_type_id = (select id from property_type where name = $2)`,
+		`select `+productPropertyCols+` from product_property where product_id = (select id from `+refRows("product", productID)+` product where `+registryRefCol(productID)+` = $1) and property_type_id = (select id from property_type_in_effect() property_type where name = $2)`,
 		productID, spec.PropertyTypeName))
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
@@ -192,7 +202,7 @@ func (p *PG) DeleteProductProperty(ctx context.Context, actorID, productID, prop
 	// the withdrawn declaration and a missing row is caught without a second read.
 	before, err := scanProductProperty(tx.QueryRow(ctx, `
 		delete from product_property
-		where product_id = (select id from product where `+registryRefCol(productID)+` = $1) and property_type_id = (select id from property_type where name = $2)
+		where product_id = (select id from `+refRows("product", productID)+` product where `+registryRefCol(productID)+` = $1) and property_type_id = (select id from property_type_in_effect() property_type where name = $2)
 		returning `+productPropertyCols, productID, propertyName))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrTypeNotFound

@@ -1,0 +1,1 @@
+{"ok": true, "shutter": "{{ .State | get "status" | get "projector" | get "shutter" }}"}

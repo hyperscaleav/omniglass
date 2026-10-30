@@ -29,7 +29,7 @@ var Subsystems = []Cluster{
 		"registry_shadow",
 	}},
 	{Name: "telemetry", Tables: []string{
-		"property_type", "metric_type", "metric", "property",
+		"property_type", "metric_type", "metric", "metric_series", "metric_declared", "property",
 		"event_type", "event", "log_line", "alarm", "alarm_snooze", "severity_level", "event_rule", "event_rule_state", "event_rule_live",
 		"event_rule_condition", "calc_rule", "calc_rule_input", "calc_pending", "calc_rule_state",
 		"command_type", "command",
@@ -48,6 +48,10 @@ var Subsystems = []Cluster{
 		// The webhook transport (#1024): a webhook endpoint's token binding,
 		// and the inbox of senders no endpoint claims.
 		"webhook_token", "unclaimed_source",
+		// identity_binding ties a conduit component's reported identity to
+		// the system or component it names (#1385, ADR-1282); unbound_identity
+		// is the conduit's inbox of identities no binding places (#1388).
+		"identity_binding", "unbound_identity",
 	}},
 	{Name: "config", Tables: []string{
 		"setting_override", "variable",

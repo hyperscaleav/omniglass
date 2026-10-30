@@ -371,7 +371,7 @@ func TestTheDraftLabelRefusesWhatANamelessCreateRefuses(t *testing.T) {
 // therefore never have been noticed by hand.
 func TestTheDraftLabelRefusesAComponentTypeChainWithNoStem(t *testing.T) {
 	gw, ctx := seededGateway(t)
-	if err := gw.UpsertComponentType(ctx, storage.ComponentType{
+	if _, err := gw.UpsertComponentType(ctx, storage.ComponentType{
 		Name: "stemless", Label: "Stemless", Official: true,
 	}); err != nil {
 		t.Fatalf("upsert stemless type: %v", err)

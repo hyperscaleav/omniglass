@@ -55,6 +55,7 @@ type Server struct {
 	stopPrune       context.CancelFunc // ends the receipt retention pass
 	stopRetention   context.CancelFunc // ends the sample retention pass (#417)
 	orphans         *orphanTally       // the node lane's orphaned batches, warned and counted (#1200)
+	unboundWarn     unboundWarner      // a conduit's unbound identities, warned once per window (#1282)
 	registry        registryCache      // the ingest sample registry, kept until a catalog changes (#1279)
 	stopOrphanFlush context.CancelFunc // ends the orphan count's flush
 	sweepStop       sync.Once
@@ -214,6 +215,20 @@ func (s *Server) subscribe() error {
 	s.startRuleReconcile()
 	s.startCalcTick()
 
+	// The metric table holds a partition for this month and the next two
+	// before anything is ingested (#420): a sample whose month has none would
+	// be retried until one exists, so the boot makes sure, and refuses to
+	// start ingest when it cannot.
+	pctx, pdone := context.WithTimeout(context.Background(), partitionBootTimeout)
+	created, err := s.store.EnsureMetricPartitions(pctx)
+	pdone()
+	if err != nil {
+		return fmt.Errorf("bus: metric partitions: %w", err)
+	}
+	if len(created) > 0 {
+		slog.Info("metric partitions created", "facility", "retention", "created", created)
+	}
+
 	// The telemetry ingest path: a JetStream stream + durable consumer over the
 	// same internal client. It carries the node -> server sample flow.
 	if err := s.startTelemetryConsumer(); err != nil {
@@ -372,6 +387,9 @@ func (s *Server) publishTelemetry(ctx context.Context, b *ogv1.TelemetryBatch, i
 	}
 }
 
+// partitionBootTimeout bounds the boot's check of the metric partitions.
+const partitionBootTimeout = time.Minute
+
 // receiptPruneEvery is how often the server deletes telemetry receipts past
 // receiptHorizon; receiptPruneTimeout bounds one pass.
 const (
@@ -465,6 +483,13 @@ func (s *Server) subscribeSim() error {
 		if err != nil {
 			return // read failed; drop, the simulator re-pulls
 		}
+		// The webhook subscriptions of the components it simulates
+		// (ADR-1370): only here, and only from a lab-marked database for a
+		// component in the simulated block (the gateway's fence).
+		hooks, err := s.store.NodeSimWebhooks(context.Background(), node)
+		if err != nil {
+			return // read failed; drop, the simulator re-pulls
+		}
 		reply := collection.SimlistReply{Devices: make([]collection.SimDevice, 0, len(devices))}
 		ids := make([]string, 0, len(devices))
 		for _, d := range devices {
@@ -472,6 +497,9 @@ func (s *Server) subscribeSim() error {
 			if d.Impairment != nil {
 				imp := collection.SimImpairment(*d.Impairment)
 				sd.Impairment = &imp
+			}
+			if h, ok := hooks[d.ComponentID]; ok {
+				sd.Webhook = &collection.SimWebhook{Path: h.Path, Scheme: h.Scheme, Secret: h.Secret}
 			}
 			reply.Devices = append(reply.Devices, sd)
 			ids = append(ids, d.ComponentID)

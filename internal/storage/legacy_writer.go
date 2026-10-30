@@ -222,7 +222,7 @@ func (p *PG) WriterRulingViolations(ctx context.Context) ([]RulingViolation, err
 	offered, err := p.pool.Query(ctx, `
 		select distinct 'endpoint ' || c.name || '/' || o.instance, t.name
 		from property o
-		join property_type t on t.id = o.property_type_id
+		join property_type_in_effect() t on t.id = o.property_type_id
 		join component c on c.id = o.component_id
 		where o.provenance = 'observed' and t.name = any($1)
 		  and exists (`+retiredPinSQL("o.component_id::text", "o.instance")+`)

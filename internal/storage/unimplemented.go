@@ -529,6 +529,9 @@ func (UnimplementedGateway) WithSimAddressLock(_ context.Context, fn func() erro
 func (UnimplementedGateway) NodeSimDevices(context.Context, string, scope.Set) ([]SimDevice, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) NodeSimWebhooks(context.Context, string) (map[string]SimWebhook, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) ResolveTaskOwner(context.Context, string, string) (TaskOwner, bool, error) {
 	return TaskOwner{}, false, nil
 }
@@ -563,7 +566,9 @@ func (UnimplementedGateway) UpdateDriver(context.Context, string, string, Driver
 }
 func (UnimplementedGateway) DeleteDriver(context.Context, string, string) error { return nil }
 
-func (UnimplementedGateway) UpsertComponentType(context.Context, ComponentType) error { return nil }
+func (UnimplementedGateway) UpsertComponentType(context.Context, ComponentType) (uuid.UUID, error) {
+	return uuid.Nil, nil
+}
 func (UnimplementedGateway) ListComponentTypes(context.Context) ([]ComponentType, error) {
 	return nil, nil
 }
@@ -587,7 +592,9 @@ func (UnimplementedGateway) TypeIsWithin(context.Context, uuid.UUID, uuid.UUID) 
 	return false, nil
 }
 
-func (UnimplementedGateway) UpsertSystemType(context.Context, SystemType) error { return nil }
+func (UnimplementedGateway) UpsertSystemType(context.Context, SystemType) (uuid.UUID, error) {
+	return uuid.Nil, nil
+}
 func (UnimplementedGateway) ListSystemTypes(context.Context) ([]SystemType, error) {
 	return nil, nil
 }
@@ -729,6 +736,15 @@ func (UnimplementedGateway) LatestValue(context.Context, string, string, string,
 func (UnimplementedGateway) PruneSamples(context.Context, string, time.Time, int) (int64, error) {
 	return 0, nil
 }
+func (UnimplementedGateway) EnsureMetricPartitions(context.Context) ([]string, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DropMetricPartitions(context.Context, time.Time) ([]string, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) MetricPartitions(context.Context) ([]MetricPartition, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) PruneSamplesOfType(context.Context, string, string, int, time.Time, int) (int64, error) {
 	return 0, nil
 }
@@ -852,6 +868,15 @@ func (UnimplementedGateway) RemoveMember(context.Context, string, string, string
 	return nil
 }
 func (UnimplementedGateway) SetPrimaryMember(context.Context, string, string, string, scope.Set, scope.Set, scope.Set, scope.Set) error {
+	return nil
+}
+func (UnimplementedGateway) ListIdentityBindings(context.Context, string, scope.Set, scope.Set) (*IdentityBindingList, error) {
+	return &IdentityBindingList{}, nil
+}
+func (UnimplementedGateway) PutIdentityBinding(context.Context, string, string, string, string, IdentityBindingOwner, IdentityBindingScopes) (*IdentityBinding, error) {
+	return &IdentityBinding{}, nil
+}
+func (UnimplementedGateway) DeleteIdentityBinding(context.Context, string, string, string, string, IdentityBindingScopes) error {
 	return nil
 }
 func (UnimplementedGateway) AssignRole(context.Context, string, string, string, string, scope.Set, scope.Set, scope.Set, scope.Set) error {
@@ -1044,6 +1069,12 @@ func (UnimplementedGateway) RecordUnclaimedSources(context.Context, []UnclaimedS
 func (UnimplementedGateway) ListUnclaimedSources(context.Context) ([]UnclaimedSource, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) ResolveIdentityBindings(context.Context, string, []IdentityKey) (*IdentityResolution, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ListUnboundIdentities(context.Context, string, scope.Set) ([]UnboundIdentity, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) ClaimUnclaimedSource(context.Context, string, string, string) (bool, error) {
 	return false, nil
 }
@@ -1170,3 +1201,11 @@ func (UnimplementedGateway) TestPersonalRule(context.Context, string, string, Ru
 func (UnimplementedGateway) SetRuleOptOut(context.Context, string, string, string, bool) (*ActionRule, error) {
 	return nil, ErrActionRuleNotFound
 }
+
+func (UnimplementedGateway) EnsureServicePrincipal(context.Context, string, string) (string, error) {
+	return "", nil
+}
+func (UnimplementedGateway) SetServiceToken(context.Context, string, string, []byte, string) (bool, error) {
+	return false, nil
+}
+func (UnimplementedGateway) EnsureRole(context.Context, string, Role) error { return nil }

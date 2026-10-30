@@ -6300,6 +6300,68 @@
         ],
         "type": "object"
       },
+      "IdentityBindingBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/IdentityBindingBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "conduit": {
+            "description": "Name of the conduit component: the component whose endpoint reports the identity, the path rather than the owner",
+            "type": "string"
+          },
+          "conduit_id": {
+            "description": "The conduit component's uuid",
+            "type": "string"
+          },
+          "created_at": {
+            "description": "When the binding was made",
+            "format": "date-time",
+            "type": "string"
+          },
+          "key": {
+            "description": "The match key: a registered property type naming what kind of identity the value is (e.g. ucc-room-id)",
+            "type": "string"
+          },
+          "owner_id": {
+            "description": "The owner's uuid, the address to navigate by",
+            "type": "string"
+          },
+          "owner_kind": {
+            "description": "What kind of owner the identity names: a component or a system",
+            "enum": [
+              "component",
+              "system"
+            ],
+            "type": "string"
+          },
+          "owner_name": {
+            "description": "Name of the owner the identity's values land on",
+            "type": "string"
+          },
+          "value": {
+            "description": "The identity value the conduit reports (e.g. the id a UCC service gives one of the rooms it reports on)",
+            "type": "string"
+          }
+        },
+        "required": [
+          "conduit",
+          "conduit_id",
+          "key",
+          "value",
+          "owner_kind",
+          "owner_name",
+          "owner_id",
+          "created_at"
+        ],
+        "type": "object"
+      },
       "ImpairmentFields": {
         "additionalProperties": false,
         "properties": {
@@ -7015,6 +7077,45 @@
         },
         "required": [
           "groups"
+        ],
+        "type": "object"
+      },
+      "ListIdentityBindingsOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/ListIdentityBindingsOutputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "bindings": {
+            "description": "The bindings whose owner the caller can read, ordered by key then value",
+            "items": {
+              "$ref": "#/components/schemas/IdentityBindingBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "conduit": {
+            "description": "The conduit component, as addressed",
+            "type": "string"
+          },
+          "hidden": {
+            "description": "How many more bindings this conduit has whose owner is outside the caller's read: counted, never named",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "conduit",
+          "bindings",
+          "hidden"
         ],
         "type": "object"
       },
@@ -10522,6 +10623,41 @@
         ],
         "type": "object"
       },
+      "PutIdentityBindingInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/PutIdentityBindingInputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "owner": {
+            "description": "Name or uuid of the owner the identity's values land on, or a dotted address",
+            "examples": [
+              "hq.west.level-2.boardroom-a.$sys.av"
+            ],
+            "minLength": 1,
+            "type": "string"
+          },
+          "owner_kind": {
+            "description": "What kind of owner the identity names. A component or a system; a place or a node owns no observed sample, so neither is an owner here",
+            "enum": [
+              "component",
+              "system"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "owner_kind",
+          "owner"
+        ],
+        "type": "object"
+      },
       "RaiseAlarmInputBody": {
         "additionalProperties": false,
         "properties": {
@@ -11409,6 +11545,34 @@
             "minimum": 1,
             "type": "integer"
           },
+          "node_log_debug_days": {
+            "description": "Days a node's own debug log line is kept; unset follows log_debug_days",
+            "format": "int64",
+            "maximum": 36500,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "node_log_error_days": {
+            "description": "Days a node's own error, critical, alert or emergency log line is kept; unset follows log_error_days",
+            "format": "int64",
+            "maximum": 36500,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "node_log_info_days": {
+            "description": "Days a node's own info or notice log line, or one with no severity, is kept; unset follows log_info_days",
+            "format": "int64",
+            "maximum": 36500,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "node_log_warning_days": {
+            "description": "Days a node's own warning log line is kept; unset follows log_warning_days",
+            "format": "int64",
+            "maximum": 36500,
+            "minimum": 1,
+            "type": "integer"
+          },
           "property_days": {
             "default": 90,
             "description": "Days a property transition is kept, unless its type keeps its own (a property type's retention_days)",
@@ -12013,9 +12177,31 @@
         ],
         "type": "object"
       },
+      "RunIdentity": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "description": "The match key, a registered property type",
+            "type": "string"
+          },
+          "value": {
+            "description": "The value the record carried for it",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "value"
+        ],
+        "type": "object"
+      },
       "RunSample": {
         "additionalProperties": false,
         "properties": {
+          "identity": {
+            "$ref": "#/components/schemas/RunIdentity",
+            "description": "The identity the sample's record carried (a match key and its value), when its function declares one; the server lands it on the owner the conduit's binding names"
+          },
           "labels": {
             "additionalProperties": {
               "type": "string"
@@ -14939,6 +15125,86 @@
         "required": [
           "theme",
           "default_landing"
+        ],
+        "type": "object"
+      },
+      "UnboundIdentitiesOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/UnboundIdentitiesOutputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "component": {
+            "description": "The conduit component",
+            "type": "string"
+          },
+          "identities": {
+            "description": "The identities it reported that no binding places, most recently heard first",
+            "items": {
+              "$ref": "#/components/schemas/UnboundIdentityBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "component",
+          "identities"
+        ],
+        "type": "object"
+      },
+      "UnboundIdentityBody": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "description": "How many samples named it, across the window it has been heard in",
+            "format": "int64",
+            "type": "integer"
+          },
+          "first_heard_at": {
+            "description": "When the conduit first reported it unbound",
+            "format": "date-time",
+            "type": "string"
+          },
+          "key": {
+            "description": "The match key: the property type the driver's identity names (e.g. ucc-room-id)",
+            "type": "string"
+          },
+          "keys_carried": {
+            "description": "The metric, property and event keys its samples carried, which a binding would land on its owner",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "last_heard_at": {
+            "description": "When the conduit last reported it",
+            "format": "date-time",
+            "type": "string"
+          },
+          "value": {
+            "description": "The identity's value as the conduit reported it",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "value",
+          "count",
+          "first_heard_at",
+          "last_heard_at",
+          "keys_carried"
         ],
         "type": "object"
       },
@@ -19348,6 +19614,203 @@
         "x-omniglass-permission": "component:read"
       }
     },
+    "/components/{name}/identity-bindings": {
+      "get": {
+        "description": "The identity bindings of this conduit component: each value it reports under a match key (a registered property type, such as ucc-room-id) and the one system or component that value's samples land on. A component that speaks for many owners (a cloud service, a controller fronting many components) is the conduit, the path rather than the owner. Each binding is named only when its owner is inside the caller's read on its tier (system:read for a system owner, component:read for a component owner); the rest are counted in hidden, never named. Gated by component:read; a conduit outside it is a non-disclosing 404.",
+        "operationId": "list-identity-bindings",
+        "parameters": [
+          {
+            "description": "Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "description": "Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)",
+              "examples": [
+                "ucc-service-1"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListIdentityBindingsOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List the identities a conduit component fans out",
+        "x-omniglass-mcp": {},
+        "x-omniglass-permission": "component:read"
+      }
+    },
+    "/components/{name}/identity-bindings/{key}/{value}": {
+      "delete": {
+        "description": "Removes the binding of this value, reported by the conduit component under this match key, so its samples no longer land on the owner it named. Unbinding writes onto both ends, so it costs a write on both: gated by component:update on the conduit, and it also needs update on the binding's owner (component:update, or system:update for a system), a 403 naming it when the caller reads the owner but cannot write it. A binding whose owner the caller cannot read is a 404, as one that does not exist is: the list does not name it either.",
+        "operationId": "delete-identity-binding",
+        "parameters": [
+          {
+            "description": "Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "description": "Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)",
+              "examples": [
+                "ucc-service-1"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "The match key, a registered property type",
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "description": "The match key, a registered property type",
+              "examples": [
+                "ucc-room-id"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "The identity value the conduit reports, 1 to 256 characters",
+            "in": "path",
+            "name": "value",
+            "required": true,
+            "schema": {
+              "description": "The identity value the conduit reports, 1 to 256 characters",
+              "examples": [
+                "room-17c-415a"
+              ],
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Unbind an identity a conduit reports",
+        "x-omniglass-conditional-permission": "system:update",
+        "x-omniglass-mcp": {},
+        "x-omniglass-permission": "component:update"
+      },
+      "put": {
+        "description": "Ties this value, reported by the conduit component under this match key, to one owner, a system or a component, so the conduit's samples naming it land on that owner. One identity on one conduit has exactly one owner: a put naming the owner it is already bound to changes nothing, and one naming a different owner moves it. The match key must be a registered property type (422 otherwise), and the owner a component or a system other than the conduit itself (a place or a node owns no observed sample, and a value with no identity already lands on the conduit: each a 422). The value rides the path as one percent-encoded segment, so a value carrying a slash, a space or another reserved character is escaped (room%2F1) and round-trips. A binding writes onto both of its ends, so it costs a write on both: gated by component:update on the conduit, and it also needs the owner's update (component:update, or system:update for a system, refused with a 403 naming it before anything resolves). Each end resolves in its own tier's read scope and must be inside its update scope: an end outside the read scope is a non-disclosing 404, one readable but not writable a 403. A move also needs update on the owner it leaves; refused, it says the identity is bound to another owner but never which one.",
+        "operationId": "put-identity-binding",
+        "parameters": [
+          {
+            "description": "Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "description": "Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)",
+              "examples": [
+                "ucc-service-1"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "The match key, a registered property type",
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "description": "The match key, a registered property type",
+              "examples": [
+                "ucc-room-id"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "The identity value the conduit reports, 1 to 256 characters",
+            "in": "path",
+            "name": "value",
+            "required": true,
+            "schema": {
+              "description": "The identity value the conduit reports, 1 to 256 characters",
+              "examples": [
+                "room-17c-415a"
+              ],
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutIdentityBindingInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityBindingBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Bind an identity a conduit reports to its owner",
+        "x-omniglass-conditional-permission": "system:update",
+        "x-omniglass-mcp": {},
+        "x-omniglass-permission": "component:update"
+      }
+    },
     "/components/{name}/impairment": {
       "get": {
         "description": "The impairment an operator set on a simulated component (unplugged, or a degraded link), applied by the simulator beside its node when that simulator runs with impairments and NET_ADMIN. A healthy device reads all zero. Gated by simulation:read; the component resolves within the caller's component read scope.",
@@ -20040,6 +20503,52 @@
         },
         "summary": "Fire an operation at a simulated component",
         "x-omniglass-permission": "simulation:update"
+      }
+    },
+    "/components/{name}/unbound-identities": {
+      "get": {
+        "description": "A component that speaks for many owners (a conduit) lands each value its driver identifies on the owner an identity binding names; a value naming an identity it has no binding for lands on no owner and is kept here, one row per match key and value (a count, first and last heard, the keys it carried), bounded at 1024 per conduit with the least recently heard evicted, and aged out after seven days. Binding one (PUT .../identity-bindings/{key}/{value}) makes the next value naming it land on its owner. Gated by component:read; an out-of-scope conduit is a non-disclosing 404.",
+        "operationId": "list-unbound-identities",
+        "parameters": [
+          {
+            "description": "The conduit component's name, or a dotted address (e.g. hq.$comp.meetings-cloud)",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "description": "The conduit component's name, or a dotted address (e.g. hq.$comp.meetings-cloud)",
+              "examples": [
+                "hq.$comp.meetings-cloud"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnboundIdentitiesOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List the identities a conduit reported that no binding places",
+        "x-omniglass-mcp": {},
+        "x-omniglass-permission": "component:read"
       }
     },
     "/components/{name}:listTags": {
@@ -23682,7 +24191,7 @@
     },
     "/metric-types/{name}:setRetention": {
       "post": {
-        "description": "Sets how many days this type's samples are kept, overriding the metric lane's window (retention.metric_days), or with null returns it to the lane's. Works on an official type: a shipped type's definition is read-only, but how long an install keeps its samples is the install's, and the boot seed never resets it. The retention floor still holds: a type's latest value per series is never removed. 1 to 36,500 days. Audited as set_retention. Gated by metric_type:update and platform:update.",
+        "description": "Sets how many days this type's samples are kept, overriding the metric lane's window (retention.metric_days), or with null returns it to the lane's. Works on an official type: a shipped type's definition is read-only, but how long an install keeps its samples is the install's, and the boot seed never resets it. A command's intended values are never removed; a series with no sample inside the window reads as no reading within retention (ADR-1275). 1 to 36,500 days. Audited as set_retention. Gated by metric_type:update and platform:update.",
         "operationId": "set-metric-type-retention",
         "parameters": [
           {
@@ -24013,7 +24522,7 @@
     },
     "/nodes/{name}/simulation/components": {
       "post": {
-        "description": "Creates a component of a simulated product, at the lowest free address in the simulated block (127.60.0.0/16), with the endpoint the collector reaches it through placed on the node: a driver attach where the driver's inputs are known (an SNMP attach needs the sim-community secret, else it falls back), otherwise a reachability probe on a port the profile serves, lifted as the node's simulator lifts its ports. The simulator serves it from its next pull, with no restart. Gated by simulation:update, and also needs component:create and endpoint:create, each in the caller's own scope. A node with no simulator connected is a 409, and a product no profile simulates a 422.",
+        "description": "Creates a component of a simulated product, at the lowest free address in the simulated block (127.60.0.0/16), with the endpoint the collector reaches it through placed on the node: a driver attach where the driver's inputs are known (only when the platform secret the attach references exists, the community or the credential the face demands, else it falls back), otherwise a reachability probe on a port the profile serves, lifted as the node's simulator lifts its ports. The simulator serves it from its next pull, with no restart. Gated by simulation:update, and also needs component:create and endpoint:create, each in the caller's own scope. A node with no simulator connected is a 409, and a product no profile simulates a 422.",
         "operationId": "add-node-simulation-component",
         "parameters": [
           {
@@ -27216,7 +27725,7 @@
     },
     "/property-types/{name}": {
       "delete": {
-        "description": "Removes a custom property by name. Official properties are read-only. A property a calc rule writes is a 409 naming the rule. Gated by property_type:delete.",
+        "description": "Removes a custom property by name. Official properties are read-only. A property a calc rule writes is a 409 naming the rule, and one identity bindings use as their match key is a 409 counting them. Gated by property_type:delete.",
         "operationId": "delete-property-type",
         "parameters": [
           {

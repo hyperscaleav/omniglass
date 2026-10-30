@@ -1,6 +1,8 @@
 // Package seed installs ship-with reference data idempotently on every server
 // start: the boot-seed bucket. It upserts authoritative rows (the official
-// roles) through the Storage Gateway without touching operator-created data.
+// roles) through the Storage Gateway without touching operator-created data:
+// every shipped row lands in the og namespace, and an upsert's conflict update
+// applies only to an og row (#1431).
 // This is distinct from dbmate schema migrations (pure DDL, run once) and from
 // one-time data backfills.
 package seed
@@ -480,8 +482,9 @@ type notificationTypesDoc struct {
 }
 
 // seedNotificationTypes installs the ship-with notification types (#618),
-// authoritative on conflict; a template the sandbox refuses, or a name an
-// operator's type already holds, fails the seed run naming the row.
+// authoritative over their own og rows; a template the sandbox refuses fails
+// the seed run naming the row, and an operator's type of the same name is left
+// as it is (#1431).
 func seedNotificationTypes(ctx context.Context, gw storage.Gateway) error {
 	var doc notificationTypesDoc
 	if err := yaml.Unmarshal(notificationTypesYAML, &doc); err != nil {
@@ -593,18 +596,15 @@ func seedComponentTypes(ctx context.Context, gw storage.Gateway) error {
 			}
 			parentID = &pid
 		}
-		if err := gw.UpsertComponentType(ctx, storage.ComponentType{
+		id, err := gw.UpsertComponentType(ctx, storage.ComponentType{
 			Name: ct.ID, Official: true, Label: ct.Label,
 			Stem: nz(ct.Stem), Icon: nz(ct.Icon), Abbrev: nz(ct.Abbrev),
 			DefaultTags: ct.DefaultTags, ParentID: parentID,
-		}); err != nil {
+		})
+		if err != nil {
 			return fmt.Errorf("seed: component_type %s: %w", ct.ID, err)
 		}
-		got, err := gw.GetComponentType(ctx, ct.ID)
-		if err != nil {
-			return fmt.Errorf("seed: component_type %s: reload after upsert: %w", ct.ID, err)
-		}
-		resolved[ct.ID] = got.ID
+		resolved[ct.ID] = id
 	}
 	return nil
 }
@@ -635,17 +635,14 @@ func seedSystemTypes(ctx context.Context, gw storage.Gateway) error {
 			}
 			parentID = &pid
 		}
-		if err := gw.UpsertSystemType(ctx, storage.SystemType{
+		id, err := gw.UpsertSystemType(ctx, storage.SystemType{
 			Name: st.ID, Official: true, Label: st.Label,
 			Stem: nz(st.Stem), Icon: nz(st.Icon), Abbrev: nz(st.Abbrev), ParentID: parentID,
-		}); err != nil {
+		})
+		if err != nil {
 			return fmt.Errorf("seed: system_type %s: %w", st.ID, err)
 		}
-		got, err := gw.GetSystemType(ctx, st.ID)
-		if err != nil {
-			return fmt.Errorf("seed: system_type %s: reload after upsert: %w", st.ID, err)
-		}
-		resolved[st.ID] = got.ID
+		resolved[st.ID] = id
 	}
 	return nil
 }
@@ -683,6 +680,7 @@ func seedProducts(ctx context.Context, gw storage.Gateway) error {
 			}
 			if err := gw.UpsertProductProperty(ctx, p.ID, storage.ProductPropertySpec{
 				PropertyTypeName: prop.Name, DefaultValue: def, Required: prop.Required,
+				ResolveIn: storage.NamespaceOG,
 			}); err != nil {
 				return fmt.Errorf("seed: product %s property %s: %w", p.ID, prop.Name, err)
 			}

@@ -37,7 +37,9 @@ var (
 // ship-with set, mirroring the other type registries.
 type SecretType struct {
 	// ID is the uuid primary key, Name the renameable slug handle (ADR-0062).
-	ID                    string
+	ID string
+	// Namespace is who named the type (#318): og for the platform's.
+	Namespace             string
 	Name                  string
 	Official              bool
 	Label                 string
@@ -140,9 +142,9 @@ func (p *PG) UpsertSecretType(ctx context.Context, st SecretType) error {
 		return fmt.Errorf("storage: marshal secret_type %q schema: %w", st.ID, err)
 	}
 	if _, err := p.pool.Exec(ctx, `
-		insert into secret_type (name, official, label, schema, default_admin_sensitive)
-		values ($1, $2, $3, $4, $5)
-		on conflict (name) do update
+		insert into secret_type (namespace, name, official, label, schema, default_admin_sensitive)
+		values (case when $2 then 'og' else 'local' end, $1, $2, $3, $4, $5)
+		on conflict (namespace, name) do update
 			set official = excluded.official, label = excluded.label,
 			    schema = excluded.schema, default_admin_sensitive = excluded.default_admin_sensitive`,
 		st.Name, st.Official, labelOrNull(st.Label), schema, st.DefaultAdminSensitive); err != nil {
@@ -152,7 +154,7 @@ func (p *PG) UpsertSecretType(ctx context.Context, st SecretType) error {
 }
 
 func (p *PG) ListSecretTypes(ctx context.Context) ([]SecretType, error) {
-	rows, err := p.pool.Query(ctx, `select id, name, official, coalesce(label, ''), default_admin_sensitive, schema from secret_type order by name`)
+	rows, err := p.pool.Query(ctx, `select id, name, official, coalesce(label, ''), default_admin_sensitive, schema, namespace from secret_type order by name`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list secret_types: %w", err)
 	}
@@ -170,7 +172,7 @@ func (p *PG) ListSecretTypes(ctx context.Context) ([]SecretType, error) {
 
 func (p *PG) GetSecretType(ctx context.Context, id string) (*SecretType, error) {
 	st, err := scanSecretType(p.pool.QueryRow(ctx,
-		`select id, name, official, coalesce(label, ''), default_admin_sensitive, schema from secret_type where `+registryRefCol(id)+` = $1`, id))
+		`select id, name, official, coalesce(label, ''), default_admin_sensitive, schema, namespace from `+refRows("secret_type", id)+` secret_type where `+registryRefCol(id)+` = $1`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrUnknownSecretType
 	}
@@ -180,7 +182,7 @@ func (p *PG) GetSecretType(ctx context.Context, id string) (*SecretType, error) 
 func scanSecretType(row pgx.Row) (*SecretType, error) {
 	var st SecretType
 	var schema []byte
-	if err := row.Scan(&st.ID, &st.Name, &st.Official, &st.Label, &st.DefaultAdminSensitive, &schema); err != nil {
+	if err := row.Scan(&st.ID, &st.Name, &st.Official, &st.Label, &st.DefaultAdminSensitive, &schema, &st.Namespace); err != nil {
 		return nil, err
 	}
 	if err := json.Unmarshal(schema, &st.Fields); err != nil {
@@ -261,7 +263,7 @@ func (p *PG) CreateSecret(ctx context.Context, actorID string, spec SecretSpec, 
 	compID, sysID, locID := arcColumns(spec.OwnerKind, ownerID)
 	s, err := scanSecretRow(tx.QueryRow(ctx, `
 		insert into secret (name, label, secret_type, owner_kind, component_id, system_id, location_id, value, admin_sensitive)
-		values ($1, $2, (select id from secret_type where `+registryRefCol(spec.SecretType)+` = $3), $4, $5, $6, $7, $8, $9)
+		values ($1, $2, (select id from `+refRows("secret_type", spec.SecretType)+` secret_type where `+registryRefCol(spec.SecretType)+` = $3), $4, $5, $6, $7, $8, $9)
 		returning `+secretCols,
 		spec.Name, labelOrNull(spec.Label), spec.SecretType, spec.OwnerKind, compID, sysID, locID,
 		valueJSON, adminSensitive), shape)
@@ -890,7 +892,7 @@ func (p *PG) shapeIndex(ctx context.Context) (map[string]secret.Shape, error) {
 		return nil, err
 	}
 	out := make(map[string]secret.Shape, len(types))
-	for _, st := range types {
+	for _, st := range InEffect(types, func(t SecretType) (string, string) { return t.Namespace, t.Name }) {
 		out[st.Name] = st.Shape()
 	}
 	return out, nil

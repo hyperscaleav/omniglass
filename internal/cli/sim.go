@@ -57,6 +57,7 @@ func newSimCmd() *cobra.Command {
 			return simnode.Run(ctx, simnode.Config{
 				ServerURL: serverURL, Name: name, Token: token,
 				PortOffset: portOffset, Poll: poll, Impairments: impairments,
+				PushToken: config.Get("OMNIGLASS_SIM_PUSH_TOKEN"),
 			})
 		},
 	}

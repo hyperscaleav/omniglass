@@ -180,7 +180,7 @@ named `ListSystemRoles` / `SetSystemRole` / `DeleteSystemRole` rather than colli
 `UpsertRole`.
 :::
 
-A role is a **capability set**: permissions per `(resource, action)`, in a `role` table with a uuid `id`, a globally unique renameable `name`, and an **`official` boolean**: `official: true` ships with the binary, seeded via the boot phase (`ON CONFLICT DO UPDATE` can patch a default permission on release); `official: false` is operator-created via the IAM API. **No overrides**: the create paths refuse a collision with an official name and the seed phase fails-safe against an existing operator role, diverging from the shadowable registries (role override risks lockout with no compensating use case), so a role name resolves to exactly one row.
+A role is a **capability set**: permissions per `(resource, action)`, in a `role` table with a uuid `id`, a renameable `name` unique within its namespace ([ADR-0318](/architecture/decisions/#adr-0318-every-catalog-key-is-a-namespace-and-a-key): `og` for the shipped roles), and an **`official` boolean**: `official: true` ships with the binary, seeded via the boot phase (`ON CONFLICT DO UPDATE` can patch a default permission on release); `official: false` is operator-created via the IAM API. **No overrides**: the create paths refuse a collision with an official name and the seed phase never writes an operator's role, diverging from the shadowable registries (role override risks lockout with no compensating use case): a role name both the operator's `local` and the shipped `og` namespace hold reaches neither (#1432, fail closed), so its holders lose that role rather than gain the wrong one, and a grant naming it is refused as an unknown role (422).
 
 ### The five official roles
 
@@ -630,6 +630,43 @@ promise:
   system, withdrawing one of its roles, changing its standard) stays gated on the system alone: it acts
   only on components the system already holds (a primary moved to another system that holds the
   member, an occupant carried onto the new standard's role) and binds none it did not.
+
+- **An identity binding** is the same rule on a relationship whose owner end may be either tier
+  ([ADR-1282](/architecture/decisions/#adr-1282-a-conduit-fans-each-identified-value-out-to-the-owner-its-binding-names-and-a-binding-costs-a-write-on-both-of-its-ends),
+  [#1385](https://github.com/hyperscaleav/omniglass/issues/1385)). It ties a value a conduit
+  component reports to one system or component, so that owner receives the conduit's values for it,
+  and it costs `component:update` on the conduit and the owner's update. The routes live under the
+  conduit (`/components/{name}/identity-bindings/{key}/{value}`) and are gated on `component:update`;
+  a put naming a system owner publishes `system:update` as its conditional permission and refuses a
+  caller holding none with a 403 naming it before anything resolves. In the gateway each end gets the
+  read-then-action split in its own tier: the conduit in `component:read` then `component:update`, the
+  owner in `system:read` then `system:update` or the component pair (out of read the non-disclosing
+  404, readable but not writable a 403 naming the end). A put naming a different owner moves the
+  binding and also needs update on the owner it leaves, refused with a 403 that names neither that
+  owner nor its kind, since the caller may not read it. The list is a read of the conduit, so it names
+  an owner only inside the caller's read on its tier and counts the rest, and a delete of a binding
+  whose owner the caller cannot read is the same 404 as one that does not exist. One fact does pass,
+  and it is accepted: a put naming an identity already bound to an owner the caller cannot read is
+  refused with the move 403, so the caller learns that the identity is bound, never to whom (the
+  list's hidden count already says the conduit has bindings it cannot see). Neither end alone is
+  enough: a principal scoped to one system could otherwise claim an identity that belongs to another owner and pull a conduit
+  it cannot read onto its system, and one scoped to the conduit could write onto systems it cannot
+  update.
+
+  **The binding is the fence on a fanned write.** A value the conduit
+  [fans out](/architecture/collection/#shared-api-collection-one-component-many-owners) lands on an
+  owner other than the endpoint's component, authorized by the binding, which was checked on both
+  ends when it was written; the ingest's fan-out read runs in system mode, as the rest of ingest does.
+  Nothing in a payload names an owner: a payload names an identity, resolved only against the bindings
+  of the conduit the batch is already confined to (the node's own task's component at
+  `ResolveTaskOwner`, or the webhook token's one endpoint's component). The Storage Gateway holds every
+  fanned row to the `fan-out` writer: a `collected` key only (never a node-probe, platform,
+  command-lifecycle or calc-owned key), on an owner one of the conduit's bindings names, re-read in
+  the write's own transaction. A fanned sample then reads wherever its owner's samples read, under the
+  owner's `read` and scope-injected on the owner's tier, so a binding widens the conduit's reach onto
+  its owners and never the reach of anyone reading them. Consent is given at write: a binding persists
+  if its author later loses scope on either end, as a membership does. The conduit's unbound inbox is
+  read under `component:read` on the conduit and discloses only what that conduit heard.
 
 A guard inside the same primitive panics if the caller's scope was resolved for a resource that does
 not cover the config being checked against, catching a tier mismatch (a component-tier scope compared

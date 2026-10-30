@@ -16,11 +16,13 @@ import (
 // alphabetically by label; there is no ordering field.
 type Driver struct {
 	// ID is the uuid primary key, Name the renameable slug handle (ADR-0062).
-	ID       string
-	Name     string
-	Label    string
-	Version  string
-	Official bool
+	ID string
+	// Namespace is who named the driver (#318): og for the platform's.
+	Namespace string
+	Name      string
+	Label     string
+	Version   string
+	Official  bool
 	// Spec is the declarative body (internal/driver, #813): data, not code,
 	// validated against the catalogs at every write. Nil for a stub that has
 	// not been authored yet; a stub cannot be attached.
@@ -37,11 +39,11 @@ type DriverPatch struct {
 	Spec    []byte
 }
 
-const driverCols = `id, name, coalesce(label, ''), version, official, spec, created_at, updated_at`
+const driverCols = `id, name, coalesce(label, ''), version, official, spec, created_at, updated_at, namespace`
 
 func scanDriver(row pgx.Row) (*Driver, error) {
 	var d Driver
-	if err := row.Scan(&d.ID, &d.Name, &d.Label, &d.Version, &d.Official, &d.Spec, &d.CreatedAt, &d.UpdatedAt); err != nil {
+	if err := row.Scan(&d.ID, &d.Name, &d.Label, &d.Version, &d.Official, &d.Spec, &d.CreatedAt, &d.UpdatedAt, &d.Namespace); err != nil {
 		return nil, err
 	}
 	return &d, nil
@@ -55,7 +57,13 @@ func scanDriver(row pgx.Row) (*Driver, error) {
 // applies only when a field differs, and the re-derive runs only when it did,
 // so a boot does not walk every attached endpoint.
 func (p *PG) UpsertDriver(ctx context.Context, d Driver) error {
-	if err := p.validateDriverSpec(ctx, d.Spec); err != nil {
+	// A shipped driver validates against og, the catalog it shipped with: an
+	// operator's same-named key never decides whether a release boots (#1432).
+	ns := ""
+	if d.Official {
+		ns = NamespaceOG
+	}
+	if err := p.validateDriverSpecIn(ctx, d.Spec, ns); err != nil {
 		return fmt.Errorf("storage: upsert driver %q: %w", d.Name, err)
 	}
 	tx, err := p.pool.Begin(ctx)
@@ -65,9 +73,9 @@ func (p *PG) UpsertDriver(ctx context.Context, d Driver) error {
 	defer func() { _ = tx.Rollback(ctx) }()
 	var id string
 	err = tx.QueryRow(ctx, `
-		insert into driver (name, label, version, official, spec)
-		values ($1, $2, $3, $4, $5)
-		on conflict (name) do update
+		insert into driver (namespace, name, label, version, official, spec)
+		values (case when $4 then 'og' else 'local' end, $1, $2, $3, $4, $5)
+		on conflict (namespace, name) do update
 			set label = excluded.label,
 			    version      = excluded.version,
 			    official     = excluded.official,
@@ -116,7 +124,7 @@ func (p *PG) ListDrivers(ctx context.Context) ([]Driver, error) {
 
 // GetDriver resolves one driver by id. An unknown id is ErrTypeNotFound.
 func (p *PG) GetDriver(ctx context.Context, id string) (*Driver, error) {
-	d, err := scanDriver(p.pool.QueryRow(ctx, `select `+driverCols+` from driver where `+registryRefCol(id)+` = $1`, id))
+	d, err := scanDriver(p.pool.QueryRow(ctx, `select `+driverCols+` from `+refRows("driver", id)+` driver where `+registryRefCol(id)+` = $1`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrTypeNotFound
 	}
@@ -196,7 +204,7 @@ func (p *PG) UpdateDriver(ctx context.Context, actorID, id string, patch DriverP
 			version      = coalesce($3, version),
 			spec         = coalesce($5, spec),
 			updated_at   = now()
-		where `+registryRefCol(id)+` = $1
+		where id = (select id from `+refRows("driver", id)+` t where `+registryRefCol(id)+` = $1)
 		returning `+driverCols,
 		id, labelVal, patch.Version, setLabel, specOrNull(patch.Spec)))
 	if err != nil {
@@ -236,7 +244,7 @@ func (p *PG) DeleteDriver(ctx context.Context, actorID, id string) error {
 	}
 	var inUse bool
 	if err := tx.QueryRow(ctx, `select exists (
-			select 1 from endpoint e join driver d on d.id = e.driver_id
+			select 1 from endpoint e join `+refRows("driver", id)+` d on d.id = e.driver_id
 			where d.`+registryRefCol(id)+` = $1)`, id).Scan(&inUse); err != nil {
 		return fmt.Errorf("storage: driver in-use check %q: %w", id, err)
 	}
@@ -250,7 +258,7 @@ func (p *PG) DeleteDriver(ctx context.Context, actorID, id string) error {
 		}
 		return fmt.Errorf("storage: audit image driver %q: %w", id, err)
 	}
-	if _, err := tx.Exec(ctx, `delete from driver where `+registryRefCol(id)+` = $1`, id); err != nil {
+	if _, err := tx.Exec(ctx, `delete from driver where id = (select id from `+refRows("driver", id)+` t where `+registryRefCol(id)+` = $1)`, id); err != nil {
 		return fmt.Errorf("storage: delete driver %q: %w", id, err)
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "delete", "driver", auditImageID(before), before, nil); err != nil {

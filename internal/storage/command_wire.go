@@ -86,7 +86,7 @@ func (p *PG) PendingNodeCommands(ctx context.Context, node string) ([]CommandDel
 				c.id, ct.name as command_type, c.params, i.id as endpoint_id, i.transport,
 				i.params as endpoint_params, i.node_name, d.spec,
 				(select pr.value from property pr where pr.command_id = c.id and pr.provenance = 'intended' order by pr.ts desc limit 1) as intended_prop,
-				(select m.value from metric m where m.command_id = c.id and m.provenance = 'intended' order by m.ts desc limit 1) as intended_metric
+				(select m.value from metric_declared m where m.command_id = c.id order by m.ts desc limit 1) as intended_metric
 			from command c
 			join command_type ct on ct.id = c.command_type_id
 			join endpoint i on i.component = c.component_id and i.driver_id is not null
@@ -345,7 +345,7 @@ func (p *PG) settleFromResponse(ctx context.Context, tx pgx.Tx, commandID int64,
 	if !verdict.HasValue {
 		return &settlementOutcome{status: "settled", by: SettledByReply, reason: "the reply confirmed it"}, nil
 	}
-	ct, err := scanCommandType(tx.QueryRow(ctx, `select `+commandTypeCols+` from command_type where name = $1`, commandType))
+	ct, err := scanCommandType(tx.QueryRow(ctx, `select `+commandTypeCols+` from command_type_in_effect() command_type where name = $1`, commandType))
 	if err != nil {
 		return nil, fmt.Errorf("storage: command type %s: %w", commandType, err)
 	}
@@ -360,7 +360,7 @@ func (p *PG) settleFromResponse(ctx context.Context, tx pgx.Tx, commandID int64,
 	if ct.TargetPropertyType != "" {
 		var dataType string
 		var validation []byte
-		if err := tx.QueryRow(ctx, `select data_type, validation from property_type where name = $1`, ct.TargetPropertyType).Scan(&dataType, &validation); err != nil {
+		if err := tx.QueryRow(ctx, `select data_type, validation from property_type_in_effect() property_type where name = $1`, ct.TargetPropertyType).Scan(&dataType, &validation); err != nil {
 			return nil, fmt.Errorf("storage: property type %s: %w", ct.TargetPropertyType, err)
 		}
 		if err := key.ValidateValue(dataType, replyJSON(dataType, verdict.Value), validation); err != nil {
@@ -404,7 +404,7 @@ func writeReplyObservation(ctx context.Context, tx pgx.Tx, ownerKind, arc, key, 
 		return err
 	}
 	sql := fmt.Sprintf(`insert into property (ts, owner_kind, %s, property_type_id, instance, value, provenance, source)
-		values ($1, $2, $3, (select id from property_type where name = $4), $5, to_jsonb($6::text), 'observed', $7)`, col)
+		values ($1, $2, $3, (select id from property_type_in_effect() property_type where name = $4), $5, to_jsonb($6::text), 'observed', $7)`, col)
 	_, err = tx.Exec(ctx, sql, ts, ownerKind, arc, key, instance, value, source)
 	return err
 }

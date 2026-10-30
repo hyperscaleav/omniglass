@@ -36,7 +36,7 @@ var (
 // deleted-between-guard-and-write race).
 func registryAuditImage(ctx context.Context, tx pgx.Tx, table, ref string) (map[string]any, error) {
 	var img map[string]any
-	if err := tx.QueryRow(ctx, `select row_to_json(t) from `+table+` t where `+registryRefCol(ref)+` = $1`, ref).Scan(&img); err != nil {
+	if err := tx.QueryRow(ctx, `select row_to_json(t) from `+refRows(table, ref)+` t where `+registryRefCol(ref)+` = $1`, ref).Scan(&img); err != nil {
 		return nil, err
 	}
 	return img, nil
@@ -81,7 +81,7 @@ func registryRefCol(ref string) string {
 // absent, ErrTypeOfficial if seed-owned. Update and delete call it first.
 func guardTypeMutable(ctx context.Context, q querier, table, id string) error {
 	var official bool
-	err := q.QueryRow(ctx, `select official from `+table+` where `+registryRefCol(id)+` = $1`, id).Scan(&official)
+	err := q.QueryRow(ctx, `select official from `+refRows(table, id)+` t where `+registryRefCol(id)+` = $1`, id).Scan(&official)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrTypeNotFound
 	}
@@ -159,7 +159,7 @@ func deleteTypeRowLocked(ctx context.Context, p *PG, lock func(context.Context, 
 	// A registry is addressed by either form; the refs count and the delete both
 	// key on the row's uuid, so resolve it once.
 	var uid string
-	if err := tx.QueryRow(ctx, `select id from `+table+` where `+registryRefCol(id)+` = $1`, id).Scan(&uid); err != nil {
+	if err := tx.QueryRow(ctx, `select id from `+refRows(table, id)+` t where `+registryRefCol(id)+` = $1`, id).Scan(&uid); err != nil {
 		return ErrTypeNotFound
 	}
 	for _, ref := range refs {
@@ -214,7 +214,7 @@ func isReferencedViolation(err error) bool {
 // write is the named catalog error rather than a NULL that trips the arc opaquely.
 func requireProperty(ctx context.Context, q querier, ref string) error {
 	var known bool
-	if err := q.QueryRow(ctx, `select true from property_type where `+registryRefCol(ref)+` = $1`, ref).Scan(&known); err != nil {
+	if err := q.QueryRow(ctx, `select true from `+refRows("property_type", ref)+` property_type where `+registryRefCol(ref)+` = $1`, ref).Scan(&known); err != nil {
 		return ErrPropertyTypeNotFound
 	}
 	return nil
@@ -224,7 +224,7 @@ func requireProperty(ctx context.Context, q querier, ref string) error {
 // a contract write is ErrMetricTypeNotFound, never a NULL tripping the arc.
 func requireMetricType(ctx context.Context, q querier, ref string) error {
 	var known bool
-	if err := q.QueryRow(ctx, `select true from metric_type where `+registryRefCol(ref)+` = $1`, ref).Scan(&known); err != nil {
+	if err := q.QueryRow(ctx, `select true from `+refRows("metric_type", ref)+` metric_type where `+registryRefCol(ref)+` = $1`, ref).Scan(&known); err != nil {
 		return ErrMetricTypeNotFound
 	}
 	return nil
@@ -236,7 +236,7 @@ func requireMetricType(ctx context.Context, q querier, ref string) error {
 // the named error rather than a not-null violation from a NULL subselect.
 func requireRegistryRow(ctx context.Context, q querier, table, ref string) error {
 	var known bool
-	if err := q.QueryRow(ctx, `select true from `+table+` where `+registryRefCol(ref)+` = $1`, ref).Scan(&known); err != nil {
+	if err := q.QueryRow(ctx, `select true from `+refRows(table, ref)+` t where `+registryRefCol(ref)+` = $1`, ref).Scan(&known); err != nil {
 		return ErrTypeNotFound
 	}
 	return nil

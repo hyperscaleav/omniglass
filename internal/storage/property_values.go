@@ -168,13 +168,13 @@ func (p *PG) setPropertyTx(ctx context.Context, tx pgx.Tx, actorID, ownerKind, o
 			select `+declaredCurrentExpr+` as value
 			from property
 			where owner_kind = $1 and %s = $2
-			  and property_type_id = (select id from property_type where name = $3)
+			  and property_type_id = (select id from property_type_in_effect() property_type where name = $3)
 			  and instance = $4 and provenance = '`+declaredProvenance+`'
 			order by ts desc, id desc
 			limit 1
 		)
 		insert into property (owner_kind, %s, property_type_id, instance, provenance, value)
-		select $1, $2, (select id from property_type where name = $3), $4, '`+declaredProvenance+`', $5::jsonb
+		select $1, $2, (select id from property_type_in_effect() property_type where name = $3), $4, '`+declaredProvenance+`', $5::jsonb
 		where not exists (select 1 from cur where cur.value = $5::jsonb)
 		returning `+declaredSeriesCols, col, col)
 	pv, err := scanProperty(tx.QueryRow(ctx, sql, ownerKind, arc, propertyName, instance, []byte(value)))
@@ -205,7 +205,7 @@ func (p *PG) currentDeclared(ctx context.Context, q querier, col, ownerKind, arc
 		select `+declaredSeriesCols+`
 		from property
 		where owner_kind = $1 and %s = $2
-		  and property_type_id = (select id from property_type where name = $3)
+		  and property_type_id = (select id from property_type_in_effect() property_type where name = $3)
 		  and instance = $4 and provenance = '`+declaredProvenance+`'
 		order by ts desc, id desc
 		limit 1`, col)
@@ -249,13 +249,13 @@ func (p *PG) ClearProperty(ctx context.Context, actorID, ownerKind, ownerID, pro
 			select `+declaredCurrentExpr+` as value
 			from property
 			where owner_kind = $1 and %s = $2
-			  and property_type_id = (select id from property_type where name = $3)
+			  and property_type_id = (select id from property_type_in_effect() property_type where name = $3)
 			  and instance = $4 and provenance = '`+declaredProvenance+`'
 			order by ts desc, id desc
 			limit 1
 		)
 		insert into property (owner_kind, %s, property_type_id, instance, provenance, value)
-		select $1, $2, (select id from property_type where name = $3), $4, '`+declaredProvenance+`', 'null'::jsonb
+		select $1, $2, (select id from property_type_in_effect() property_type where name = $3), $4, '`+declaredProvenance+`', 'null'::jsonb
 		from cur
 		where cur.value is not null
 		returning id::text`, col, col)

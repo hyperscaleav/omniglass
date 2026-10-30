@@ -80,13 +80,13 @@ products:
   - id: boreal-beam-340
     label: Boreal Beam 340
     vendor_id: boreal
-    driver_id: snmp-generic
+    driver_id: boreal-beam-snmp
     kind: device
     component_type: projector
   - id: boreal-cast-m1
     label: Boreal Cast M1
     vendor_id: boreal
-    driver_id: http-json
+    driver_id: boreal-cast-api
     kind: device
     component_type: media-player
   # Kestrel: video conferencing and cameras.
@@ -117,13 +117,13 @@ products:
   - id: lyra-arc-a2
     label: Lyra Arc A2
     vendor_id: lyra
-    driver_id: snmp-generic
+    driver_id: lyra-arc-snmp
     kind: device
     component_type: ceiling-mic
   - id: lyra-hx-1
     label: Lyra HX-1
     vendor_id: lyra
-    driver_id: snmp-generic
+    driver_id: lyra-hx-snmp
     kind: device
     component_type: wireless-mic
   - id: lyra-gn-12
@@ -173,7 +173,7 @@ products:
   - id: polaris-amp-4100
     label: Polaris Amp 4-100
     vendor_id: polaris
-    driver_id: snmp-generic
+    driver_id: polaris-amp-snmp
     kind: device
     component_type: amplifier
   - id: polaris-sky-c6
@@ -195,6 +195,17 @@ products:
   - id: ucc-service
     label: Shinra UCC Platform
     vendor_id: shinra-cloud
+    kind: service
+    component_type: generic-service
+  # The same platform's account-wide plane (the simulator's ucc-platform,
+  # #1282): one component that speaks for every room on the account, polled
+  # by ucc-rooms (the room list read as records, one per room) and posting
+  # room-naming webhooks ucc-webhook reads, each value landing on the system
+  # its room id is bound to.
+  - id: ucc-platform
+    label: Shinra UCC Platform (account)
+    vendor_id: shinra-cloud
+    driver_id: ucc-rooms
     kind: service
     component_type: generic-service
   # The generic floor.

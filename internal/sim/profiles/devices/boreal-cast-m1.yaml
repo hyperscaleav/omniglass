@@ -1,0 +1,119 @@
+# yaml-language-server: $schema=schema.json
+# Boreal Cast M1, Digital Signage Media Player
+#
+# Boreal is the lab's fictional display manufacturer. The Cast M1 is the
+# small media player behind a lobby or corridor sign: it holds a playlist
+# on local storage and plays it to the display it drives, all day. What
+# an operator watches it for is whether it is playing, what it is
+# playing, and whether its storage is filling up.
+#
+# Its one face is an HTTP JSON API behind an api key header
+# (X-Boreal-Key), the way signage players are integrated with a content
+# management system: no SNMP, no command line.
+
+name: boreal-cast-m1
+manufacturer: Boreal
+model: "Cast M1"
+device_type: media-player
+slug_prefix: player
+
+doc:
+  summary: "Boreal Cast M1 digital signage media player"
+  description: |
+    Compact signage media player. Plays a local playlist to the display
+    it drives; reports and controls playback, and reports its storage,
+    over an HTTP JSON API behind an api key header.
+
+interfaces:
+  - name: http-api
+    protocol: http
+    port: 80
+    doc: { summary: "Cast JSON API", tags: [management, api] }
+    auth:
+      type: header
+      header: "X-Boreal-Key"
+      api_key: "boreal-cast-key"
+      enforce: true
+    api_surface: boreal-cast
+    routes:
+      - match: "GET /api/status"
+        template: api/boreal-cast/status.json.gotempl
+        doc: { summary: "Player identity, uptime and storage", tags: [api, status] }
+
+      - match: "GET /api/playback"
+        template: api/boreal-cast/playback.json.gotempl
+        doc: { summary: "Playback state and the item playing", tags: [api, data] }
+
+      - match: "POST /api/playback"
+        template: api/boreal-cast/playback.json.gotempl
+        doc: { summary: "Play, pause or stop the playlist", tags: [api, control] }
+        example: |
+          {"state": "paused"}
+        mutations:
+          - path: status.playback.state
+            value: "{{ .Request.Body.state }}"
+            enum: [playing, paused, stopped]
+
+      - match: "POST /api/admin/reboot"
+        template: api/boreal-cast/reboot-ack.json.gotempl
+        doc: { summary: "Reboot player (clears uptime, restarts the playlist)", tags: [api, admin] }
+        example: "{}"
+        mutations:
+          - { path: status.device.boot_epoch, value: "{{ now }}" }
+          - { path: status.playback.state, value: "{{ .Defaults.status.playback.state }}" }
+          - { path: status.playback.index, value: "{{ .Defaults.status.playback.index }}" }
+          - { path: status.playback.content, value: "{{ .Defaults.status.playback.content }}" }
+
+  - name: icmp
+    protocol: icmp
+    doc: { summary: "ICMP ping reachability", tags: [monitoring] }
+
+computed:
+  - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
+
+# Playback moves along: while playing, each tick steps to the next item of
+# the four-item playlist, wrapping at the end; paused or stopped, it holds.
+# Storage fills slowly as content syncs down, between bounds. A scenario
+# timeline can stop playback or fill the disk later.
+behaviors:
+  - name: playlist_advance
+    schedule:
+      interval: 90s
+    mutations:
+      - path: status.playback.index
+        value: '{{ $i := printf "%v" .State.status.playback.index }}{{ if ne (printf "%v" .State.status.playback.state) "playing" }}{{ $i }}{{ else if eq $i "3" }}0{{ else }}{{ add .State.status.playback.index 1 }}{{ end }}'
+      # The item at the (new) index: the playlist, in order.
+      - path: status.playback.content
+        value: '{{ $i := printf "%v" .State.status.playback.index }}{{ if eq $i "0" }}Welcome loop{{ else if eq $i "1" }}Wayfinding{{ else if eq $i "2" }}Today''s events{{ else }}Safety notice{{ end }}'
+
+  - name: storage_drift
+    schedule:
+      interval: 300s
+    mutations:
+      - path: status.storage.used_percent
+        value: "{{ round 1 (clamp 20.0 90.0 (randStep 0.5 .State.status.storage.used_percent)) }}"
+
+defaults:
+  status:
+    device:
+      boot_epoch: 0
+    playback:
+      state: playing
+      index: 0
+      content: "Welcome loop"
+    storage:
+      used_percent: 41.5
+      total_gb: 64
+    network:
+      ipv4:
+        address: ""
+        mac: ""
+  configuration:
+    device:
+      serial: ""
+      model: "Cast M1"
+      manufacturer: "Boreal"
+    firmware:
+      version: "4.2.0"
+    network:
+      hostname: ""

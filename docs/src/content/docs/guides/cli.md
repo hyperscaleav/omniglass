@@ -316,7 +316,7 @@ omniglass endpoint create \
 # (a poll task per poll function, a standing listen task per listener). Secret
 # inputs are references: the NAME of a secret of the declared shape, never a value.
 omniglass endpoint create \
-  --driver snmp-generic --component amp-1 --node edge-hq \
+  --driver polaris-amp-snmp --component amp-1 --node edge-hq \
   --inputs '{"host":"10.0.0.40","community":"lab-community"}'  # needs endpoint:create
 
 omniglass endpoint list
@@ -395,6 +395,20 @@ pushed property nothing declares reads `want: null`, its `is`, and no drift), an
 omniglass system metric list huddle-1                                                  # needs system:read
 omniglass system property list huddle-1 | jq -c '.properties[] | {property_type_name, reconciliation}'   # needs system:read
 omniglass system property sample list huddle-1 video-input                             # needs system:read
+```
+
+A component that speaks for many owners (a cloud service, a controller fronting many components) is a
+**conduit**: each value its driver identifies lands on the system or component an identity binding
+names ([shared-API collection](/architecture/collection/#shared-api-collection-one-component-many-owners)).
+Bind, list and unbind under the conduit; a binding costs update on the conduit and on the owner.
+What it reported that no binding places waits in its unbound inbox:
+
+```sh
+omniglass component identity-binding list 'hq.$comp.meetings-cloud'                       # needs component:read
+omniglass component identity-binding update 'hq.$comp.meetings-cloud' ucc-room-id zr-boardroom-b \
+  --owner-kind system --owner 'hq.west.level-2.boardroom-b.$sys.boardroom'               # needs component:update and system:update
+omniglass component identity-binding delete 'hq.$comp.meetings-cloud' ucc-room-id zr-boardroom-b
+omniglass component unbound-identity list 'hq.$comp.meetings-cloud'                        # needs component:read
 ```
 
 ## Secrets

@@ -26,6 +26,23 @@ import (
 // container binds; seed-dev --sim-port-offset lifts them for one run
 // unprivileged on a host.
 
+// simSecrets are the platform secrets the simulated fleet's attaches
+// reference (simfleet.AttachSecret), each holding what the simulated face
+// demands: the SNMP community, and the http attaches' credentials (#902). A
+// test holds each to the profiles it is attached to.
+var simSecrets = []storage.SecretSpec{
+	{Name: simfleet.CommunitySecret, Label: "Simulated fleet SNMP community", SecretType: "snmp-community",
+		OwnerKind: "platform", Fields: map[string]string{"community": "public"}},
+	{Name: simfleet.KestrelLoginSecret, Label: "Simulated Kestrel bar login", SecretType: "basic-auth",
+		OwnerKind: "platform", Fields: map[string]string{"username": "admin", "password": "kestrel"}},
+	{Name: simfleet.CensusKeySecret, Label: "Simulated Tessellate sensor api key", SecretType: "api-key",
+		OwnerKind: "platform", Fields: map[string]string{"key": "census-lab-key"}},
+	{Name: simfleet.UCCTokenSecret, Label: "Simulated UCC platform api token", SecretType: "api-key",
+		OwnerKind: "platform", Fields: map[string]string{"key": "ucc-lab-token"}},
+	{Name: simfleet.CastKeySecret, Label: "Simulated Boreal Cast player api key", SecretType: "api-key",
+		OwnerKind: "platform", Fields: map[string]string{"key": "boreal-cast-key"}},
+}
+
 // seedSimFleet lands the plan through the gateway: the community secret,
 // then each planned component's endpoints on the dev node. A component that
 // already has an endpoint is left alone, so a re-run changes nothing. Only the
@@ -36,19 +53,7 @@ func seedSimFleet(ctx context.Context, gw storage.Gateway, actorID string, portO
 	if err != nil {
 		return fmt.Errorf("devseed: load simulator catalog: %w", err)
 	}
-	if _, err := gw.CreateSecret(ctx, actorID, storage.SecretSpec{
-		Name: simfleet.CommunitySecret, Label: "Simulated fleet SNMP community", SecretType: "snmp-community",
-		OwnerKind: "platform", Fields: map[string]string{"community": "public"},
-	}, all, true); err != nil && !errors.Is(err, storage.ErrSecretExists) {
-		return fmt.Errorf("devseed: create simulator community secret: %w", err)
-	}
-	// The http attaches' credentials (#902): what the simulated faces demand.
-	for _, sec := range []storage.SecretSpec{
-		{Name: simfleet.KestrelLoginSecret, Label: "Simulated Kestrel bar login", SecretType: "basic-auth",
-			OwnerKind: "platform", Fields: map[string]string{"username": "admin", "password": "kestrel"}},
-		{Name: simfleet.CensusKeySecret, Label: "Simulated Tessellate sensor api key", SecretType: "api-key",
-			OwnerKind: "platform", Fields: map[string]string{"key": "census-lab-key"}},
-	} {
+	for _, sec := range simSecrets {
 		if _, err := gw.CreateSecret(ctx, actorID, sec, all, true); err != nil && !errors.Is(err, storage.ErrSecretExists) {
 			return fmt.Errorf("devseed: create simulator secret %s: %w", sec.Name, err)
 		}
@@ -58,7 +63,7 @@ func seedSimFleet(ctx context.Context, gw storage.Gateway, actorID string, portO
 		return fmt.Errorf("devseed: list products: %w", err)
 	}
 	drivers := map[string]string{}
-	for _, p := range products {
+	for _, p := range storage.InEffect(products, func(p storage.Product) (string, string) { return p.Namespace, p.Name }) {
 		if p.DriverName != nil {
 			drivers[p.Name] = *p.DriverName
 		}
@@ -209,7 +214,7 @@ func seedSimEndpoints(ctx context.Context, gw storage.Gateway, actorID string, d
 		return fmt.Errorf("devseed: list drivers: %w", err)
 	}
 	specs := map[string]*driver.Spec{}
-	for _, d := range drivers {
+	for _, d := range storage.InEffect(drivers, func(d storage.Driver) (string, string) { return d.Namespace, d.Name }) {
 		if len(d.Spec) == 0 {
 			continue
 		}
@@ -232,6 +237,12 @@ func seedSimEndpoints(ctx context.Context, gw storage.Gateway, actorID string, d
 		compID, ok := compIDs[se.Component]
 		if !ok {
 			return fmt.Errorf("devseed: simulated endpoint references unknown component key %q", se.Component)
+		}
+		if se.Driver == "" {
+			if err := seedSimProbe(ctx, gw, actorID, se, compID, endpoints); err != nil {
+				return err
+			}
+			continue
 		}
 		spec, ok := specs[se.Driver]
 		if !ok {
@@ -292,6 +303,73 @@ func seedSimEndpoints(ctx context.Context, gw storage.Gateway, actorID string, d
 				return fmt.Errorf("devseed: pin the host key of the simulated %s endpoint on %s: %w", se.Driver, se.Component, err)
 			}
 		}
+	}
+	return nil
+}
+
+// IdentityBinding is one fixture binding: a conduit component's identity tied
+// to the system it names (#1282).
+type IdentityBinding struct {
+	Conduit string `yaml:"conduit"`
+	Key     string `yaml:"key"`
+	Value   string `yaml:"value"`
+	System  string `yaml:"system"`
+}
+
+// seedIdentityBindings ties the simulated conduit's identities to their
+// systems through the gateway's own binding write, each by the uuids the
+// seed made (a component name is unique only in its placement). A re-put to
+// the same owner is a no-op, so a re-seed writes nothing.
+func seedIdentityBindings(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, compIDs, sysIDs map[string]string) error {
+	all := scope.Set{All: true}
+	sc := storage.IdentityBindingScopes{ComponentRead: all, ComponentUpdate: all, SystemRead: all, SystemUpdate: all}
+	for _, b := range doc.SimIdentityBindings {
+		conduit, ok := compIDs[b.Conduit]
+		if !ok {
+			return fmt.Errorf("devseed: identity binding names conduit %q, which the fleet has no component for", b.Conduit)
+		}
+		sys, ok := sysIDs[b.System]
+		if !ok {
+			return fmt.Errorf("devseed: identity binding names system %q, which the fleet has none of", b.System)
+		}
+		if _, err := gw.PutIdentityBinding(ctx, actorID, conduit, b.Key, b.Value, storage.IdentityBindingOwner{Kind: "system", Name: sys}, sc); err != nil {
+			return fmt.Errorf("devseed: bind %s %s=%s to %s: %w", b.Conduit, b.Key, b.Value, b.System, err)
+		}
+	}
+	return nil
+}
+
+// seedSimProbe lands a fixture's bare probe (#1370): an endpoint of the
+// transport alone, no driver, targeting the component's simulated address on
+// the dev node. Its target is the host, which is what an icmp probe pings.
+// Idempotent: a component already holding an endpoint of the transport is
+// left alone.
+func seedSimProbe(ctx context.Context, gw storage.Gateway, actorID string, se SimEndpoint, compID string, endpoints []storage.Endpoint) error {
+	if se.Transport == "" {
+		return fmt.Errorf("devseed: simulated endpoint on %s names neither a driver nor a transport", se.Component)
+	}
+	host := ""
+	for _, e := range endpoints {
+		if e.ComponentID == nil || *e.ComponentID != compID {
+			continue
+		}
+		if e.Transport == se.Transport {
+			return nil
+		}
+		if h := storage.TargetHost(endpointTarget(e.Params)); strings.HasPrefix(h, "127.60.") {
+			host = h
+		}
+	}
+	if host == "" {
+		return fmt.Errorf("devseed: simulated %s probe on %s: the component has no simulated address", se.Transport, se.Component)
+	}
+	all := scope.Set{All: true}
+	comp, node := compID, reachNode
+	if _, err := gw.CreateEndpoint(ctx, actorID, storage.EndpointSpec{
+		Transport: se.Transport, Label: se.Label, Component: &comp, Node: &node,
+		Params: []byte(fmt.Sprintf(`{"target":%q}`, host)), SecretRead: all, CanAdmin: true,
+	}, all); err != nil {
+		return fmt.Errorf("devseed: create simulated %s probe on %s: %w", se.Transport, se.Component, err)
 	}
 	return nil
 }

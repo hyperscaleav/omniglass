@@ -2,6 +2,7 @@ package collection
 
 import (
 	"errors"
+	"slices"
 	"time"
 )
 
@@ -80,6 +81,24 @@ type SimDevice struct {
 	Address     string `json:"address"`
 	// Impairment is what the operator has broken on the device, if anything.
 	Impairment *SimImpairment `json:"impairment,omitempty"`
+	// Webhook is where the simulated device posts its webhooks, for a
+	// device whose component holds a webhook endpoint (ADR-1370): the
+	// simulator plays the external service, so it holds what that service
+	// would, the endpoint's path (its token) and the secret it signs with.
+	// Handed out only by a lab-marked database, only for a component in the
+	// simulated block, and only on this list; never a node's worklist.
+	Webhook *SimWebhook `json:"webhook,omitempty"`
+}
+
+// SimWebhook is a simulated device's webhook subscription: the path on the
+// server it posts to (the simulator prefixes the server URL it already
+// reaches), and how each post is signed, as the device's own subscribe
+// route takes it (scheme hmac, token, basic or none; secret the hmac key,
+// the token, or user:password).
+type SimWebhook struct {
+	Path   string `json:"path"`
+	Scheme string `json:"scheme"`
+	Secret string `json:"secret,omitempty"`
 }
 
 // SimImpairment is what is wrong with a simulated device: unplugged (dark
@@ -107,6 +126,24 @@ type SimImpairmentStatus struct {
 type SimlistReply struct {
 	Devices []SimDevice `json:"devices"`
 }
+
+// simProtocols are the protocols a simulated device reports a hit by: the
+// profile schema's interface protocols, less icmp (the kernel answers it, so
+// the simulator sees no request) and https (the schema allows it, but no face
+// serves it: https is http with tls, and reports as http). Two tests hold the
+// list, one to the schema's list and one to the simulator's own sources (every
+// protocol its hit emitters name and its binder serves), so a protocol the
+// simulator gains cannot be dropped by a hub that was never told (#1366).
+var simProtocols = []string{"http", "snmp", "ssh", "telnet", "tcp", "udp", "websocket"}
+
+// SimProtocols is the protocols a simulated device reports a hit by, a fresh
+// slice.
+func SimProtocols() []string { return slices.Clone(simProtocols) }
+
+// IsSimProtocol reports a protocol a simulated device reports a hit by. The
+// hub counts only these, so a hit naming anything else is rejected rather
+// than becoming a new key in its tally.
+func IsSimProtocol(p string) bool { return slices.Contains(simProtocols, p) }
 
 // SimHit is one request a simulated device answered.
 type SimHit struct {

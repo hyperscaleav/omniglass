@@ -1,0 +1,10 @@
+{
+  "rooms": [
+  {{- $sep := "" }}
+  {{- range $id, $r := (.State | get "status" | get "rooms") }}{{ $sep }}
+    {{/* @field status.rooms.*.state string "idle or in-call" */}}
+    {"id": {{ marshal $id }}, "name": {{ marshal (or (index $r "name") $id) }}, "state": {{ marshal (or (index $r "state") "idle") }}, "meeting": {{ marshal (or (index $r "meeting") "") }}, "participants": {{ or (index $r "participants") 0 }}}
+  {{- $sep = "," }}
+  {{- end }}
+  ]
+}

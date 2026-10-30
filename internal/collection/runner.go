@@ -8,6 +8,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
 	"github.com/hyperscaleav/omniglass/internal/driver"
+	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
 )
 
 // The canonical reachability sample names the tcp probe emits, declared once
@@ -60,11 +61,27 @@ type Sample struct {
 	// Emit is a driver emit's index in its function, which tells apart two
 	// that share a name in a plain poll's change memory.
 	Emit int
+	// Record and Identity are the driver record the sample came from
+	// (#1386): its index in the function's records and the identity it
+	// read, which the batch carries on the wire. A log line carries none.
+	Record   int
+	Identity *driver.Identity
+}
+
+// WireIdentity is a sample's identity as the wire carries it (#1386): nil
+// when it carries none, so an unidentified sample encodes as it always did.
+// The node's batch builder and the webhook's both use it.
+func WireIdentity(id *driver.Identity) *ogv1.Identity {
+	if id == nil {
+		return nil
+	}
+	return &ogv1.Identity{Key: id.Key, Value: id.Value}
 }
 
 // FromEmitted maps one interpreted driver emit to the sample a batch carries.
 func FromEmitted(e driver.Emitted) Sample {
-	s := Sample{Name: e.Name, Value: e.Value, Text: e.Text, IsText: e.IsText, TS: e.TS, Clamped: e.Clamped, Emit: e.Emit}
+	s := Sample{Name: e.Name, Value: e.Value, Text: e.Text, IsText: e.IsText, TS: e.TS, Clamped: e.Clamped, Emit: e.Emit,
+		Record: e.Record, Identity: e.Identity}
 	if e.Lane == driver.LaneEvent || e.Lane == driver.LaneLog {
 		s.Lane, s.Attributes, s.Severity, s.Facility, s.Source = e.Lane, e.Attributes, e.Severity, e.Facility, e.Source
 	}

@@ -31,6 +31,135 @@ drivers:
             # sysUpTime is timeticks (hundredths); the declared scale lands it
             # in the canon's seconds.
             - { name: uptime, extract: { oid: "1.3.6.1.2.1.1.3.0" }, transform: { scale: 0.01 } }
+  - id: lyra-arc-snmp
+    label: Lyra Arc SNMP
+    version: "1.0.0"
+    spec:
+      version: 1
+      # The Lyra Arc ceiling array over v2c (#894), from the microphone's branch
+      # of the Lyra enterprise arc (1.3.6.1.4.1.55530.1): mute and the input
+      # level. Identity sits at .5, sysDescr and sysUpTime are MIB-II's.
+      transport: snmp
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "161" }
+        - { name: community, kind: secret, secret_type: snmp-community, required: true }
+      polls:
+        - name: identity
+          schedule: { every: 5m }
+          request: { get: ["1.3.6.1.2.1.1.1.0", "1.3.6.1.4.1.55530.5.2.0", "1.3.6.1.4.1.55530.5.1.0"] }
+          emits:
+            - { name: model-number, extract: { oid: "1.3.6.1.2.1.1.1.0" } }
+            - { name: serial-number, extract: { oid: "1.3.6.1.4.1.55530.5.2.0" } }
+            - { name: firmware-version, extract: { oid: "1.3.6.1.4.1.55530.5.1.0" } }
+        - name: status
+          schedule: { every: 30s }
+          request:
+            get: ["1.3.6.1.2.1.1.3.0", "1.3.6.1.4.1.55530.1.1.0", "1.3.6.1.4.1.55530.1.2.0"]
+          emits:
+            - { name: uptime, extract: { oid: "1.3.6.1.2.1.1.3.0" }, transform: { scale: 0.01 } }
+            - { name: mute, extract: { oid: "1.3.6.1.4.1.55530.1.1.0" } }
+            - { name: audio-level, extract: { oid: "1.3.6.1.4.1.55530.1.2.0" } }
+  - id: lyra-hx-snmp
+    label: Lyra HX SNMP
+    version: "1.0.0"
+    spec:
+      version: 1
+      # The Lyra HX wireless receiver over v2c (#894): the Arc's mute and level,
+      # and the transmitter's battery from the wireless branch (.55530.2). The
+      # Arc has no battery, so it has a driver of its own.
+      transport: snmp
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "161" }
+        - { name: community, kind: secret, secret_type: snmp-community, required: true }
+      polls:
+        - name: identity
+          schedule: { every: 5m }
+          request: { get: ["1.3.6.1.2.1.1.1.0", "1.3.6.1.4.1.55530.5.2.0", "1.3.6.1.4.1.55530.5.1.0"] }
+          emits:
+            - { name: model-number, extract: { oid: "1.3.6.1.2.1.1.1.0" } }
+            - { name: serial-number, extract: { oid: "1.3.6.1.4.1.55530.5.2.0" } }
+            - { name: firmware-version, extract: { oid: "1.3.6.1.4.1.55530.5.1.0" } }
+        - name: status
+          schedule: { every: 30s }
+          request:
+            get: ["1.3.6.1.2.1.1.3.0", "1.3.6.1.4.1.55530.1.1.0", "1.3.6.1.4.1.55530.1.2.0", "1.3.6.1.4.1.55530.2.1.0"]
+          emits:
+            - { name: uptime, extract: { oid: "1.3.6.1.2.1.1.3.0" }, transform: { scale: 0.01 } }
+            - { name: mute, extract: { oid: "1.3.6.1.4.1.55530.1.1.0" } }
+            - { name: audio-level, extract: { oid: "1.3.6.1.4.1.55530.1.2.0" } }
+            # The receiver reports a percentage; the canon stores the ratio.
+            - { name: battery-charge, extract: { oid: "1.3.6.1.4.1.55530.2.1.0" }, transform: { scale: 0.01 } }
+  - id: boreal-beam-snmp
+    label: Boreal Beam SNMP
+    version: "1.0.0"
+    spec:
+      version: 1
+      # The Boreal projector's state over v2c (#899), from the projector's
+      # branch of the Boreal enterprise arc (1.3.6.1.4.1.55520.6): the
+      # light-source hours a projector is serviced by, the shutter and the
+      # input, beside the device power every Boreal agent keeps at .1.1.1.0.
+      # Its identity sits at .5, sysDescr and sysUpTime are MIB-II's. Power,
+      # the shutter and the input are set over the projector's web admin, a
+      # control face this driver does not speak.
+      transport: snmp
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "161" }
+        - { name: community, kind: secret, secret_type: snmp-community, required: true }
+      polls:
+        - name: identity
+          schedule: { every: 5m }
+          request: { get: ["1.3.6.1.2.1.1.1.0", "1.3.6.1.4.1.55520.5.2.0", "1.3.6.1.4.1.55520.5.1.0"] }
+          emits:
+            - { name: model-number, extract: { oid: "1.3.6.1.2.1.1.1.0" } }
+            - { name: serial-number, extract: { oid: "1.3.6.1.4.1.55520.5.2.0" } }
+            - { name: firmware-version, extract: { oid: "1.3.6.1.4.1.55520.5.1.0" } }
+        - name: status
+          schedule: { every: 30s }
+          request:
+            get: ["1.3.6.1.2.1.1.3.0", "1.3.6.1.4.1.55520.1.1.1.0", "1.3.6.1.4.1.55520.6.1.0", "1.3.6.1.4.1.55520.6.2.0", "1.3.6.1.4.1.55520.6.3.0"]
+          emits:
+            - { name: uptime, extract: { oid: "1.3.6.1.2.1.1.3.0" }, transform: { scale: 0.01 } }
+            - { name: power-state, extract: { oid: "1.3.6.1.4.1.55520.1.1.1.0" } }
+            - { name: light-source-hours, extract: { oid: "1.3.6.1.4.1.55520.6.1.0" } }
+            - { name: shutter-state, extract: { oid: "1.3.6.1.4.1.55520.6.2.0" } }
+            - { name: video-input, extract: { oid: "1.3.6.1.4.1.55520.6.3.0" } }
+  - id: polaris-amp-snmp
+    label: Polaris Amp SNMP
+    version: "1.0.0"
+    spec:
+      version: 1
+      # The Polaris amplifier's operating state over v2c (#898), from the
+      # amplifier's branch of the Polaris enterprise arc (1.3.6.1.4.1.55540.3):
+      # chassis power and protect, the heatsink temperature and the fan. Its
+      # identity sits where every Polaris agent keeps it (.5), sysDescr and
+      # sysUpTime are MIB-II's. Standby and the protect reset are the
+      # amplifier's HTTP API, a control face this driver does not speak.
+      transport: snmp
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "161" }
+        - { name: community, kind: secret, secret_type: snmp-community, required: true }
+      polls:
+        - name: identity
+          schedule: { every: 5m }
+          request: { get: ["1.3.6.1.2.1.1.1.0", "1.3.6.1.4.1.55540.5.2.0", "1.3.6.1.4.1.55540.5.1.0"] }
+          emits:
+            - { name: model-number, extract: { oid: "1.3.6.1.2.1.1.1.0" } }
+            - { name: serial-number, extract: { oid: "1.3.6.1.4.1.55540.5.2.0" } }
+            - { name: firmware-version, extract: { oid: "1.3.6.1.4.1.55540.5.1.0" } }
+        - name: status
+          schedule: { every: 30s }
+          request:
+            get: ["1.3.6.1.2.1.1.3.0", "1.3.6.1.4.1.55540.3.1.0", "1.3.6.1.4.1.55540.3.2.0", "1.3.6.1.4.1.55540.3.3.0", "1.3.6.1.4.1.55540.3.4.0"]
+          emits:
+            - { name: uptime, extract: { oid: "1.3.6.1.2.1.1.3.0" }, transform: { scale: 0.01 } }
+            - { name: power-state, extract: { oid: "1.3.6.1.4.1.55540.3.1.0" } }
+            - { name: protect-state, extract: { oid: "1.3.6.1.4.1.55540.3.2.0" } }
+            - { name: temperature, extract: { oid: "1.3.6.1.4.1.55540.3.3.0" } }
+            - { name: fan-speed, extract: { oid: "1.3.6.1.4.1.55540.3.4.0" } }
   - id: kestrel-api
     label: Kestrel Device API
     version: "1.0.0"
@@ -443,6 +572,41 @@ drivers:
           request: { path: /api/occupancy }
           emits:
             - { name: occupancy-state, extract: { jsonpath: vacant }, transform: { map: { "true": vacant, "false": occupied } } }
+  - id: boreal-cast-api
+    label: Boreal Cast API
+    version: "1.0.0"
+    spec:
+      version: 1
+      # The Boreal Cast media player's JSON API over plain http on 80 (#893),
+      # every request carrying its api key in the X-Boreal-Key header:
+      # identity and storage from its status, what it is playing from its
+      # playback route.
+      transport: http
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "80" }
+        - { name: key, kind: secret, secret_type: api-key, required: true }
+      session:
+        credential: key
+        scheme: api-key
+        api_key: { in: header, name: X-Boreal-Key }
+      polls:
+        - name: status
+          schedule: { every: 5m }
+          request: { path: /api/status }
+          emits:
+            - { name: model-number, extract: { jsonpath: device.model } }
+            - { name: serial-number, extract: { jsonpath: device.serial } }
+            - { name: firmware-version, extract: { jsonpath: device.firmware } }
+            - { name: uptime, extract: { jsonpath: device.uptime } }
+            # The player reports a percentage; the canon stores the ratio.
+            - { name: storage-utilization, extract: { jsonpath: storage.used_percent }, transform: { scale: 0.01 } }
+        - name: playback
+          schedule: { every: 30s }
+          request: { path: /api/playback }
+          emits:
+            - { name: playback-state, extract: { jsonpath: state } }
+            - { name: content-name, extract: { jsonpath: content } }
   - id: newtron-panel-web
     label: Newtron Panel Web
     version: "1.0.0"
@@ -550,3 +714,61 @@ drivers:
               attributes:
                 meeting: { extract: { jsonpath: meeting } }
             - { name: call-state, extract: { jsonpath: event }, transform: { map: { meeting.ended: idle } } }
+        # The account-wide platform's posts (#1282, ADR-1282): each names the
+        # room it is about by id, so the driver declares an identity and the
+        # ingest lands the call on the system or component bound to that room
+        # on this component (the conduit). A room nobody bound lands in the
+        # conduit's unbound inbox. The per-room posts above name no identity
+        # and land on this component, as before.
+        - name: room-meeting-started
+          match: { header: { name: X-UCC-Event, equals: room.meeting.started } }
+          identity: { key: ucc-room-id, extract: { jsonpath: room_id } }
+          emits:
+            - name: call-started
+              message: { value: "Meeting started" }
+              attributes:
+                meeting: { extract: { jsonpath: meeting } }
+            - { name: call-state, extract: { jsonpath: event }, transform: { map: { room.meeting.started: active } } }
+        - name: room-meeting-ended
+          match: { header: { name: X-UCC-Event, equals: room.meeting.ended } }
+          identity: { key: ucc-room-id, extract: { jsonpath: room_id } }
+          emits:
+            - { name: call-ended, message: { value: "Meeting ended" } }
+            - { name: call-state, extract: { jsonpath: event }, transform: { map: { room.meeting.ended: idle } } }
+        # The batched report names every room at once: one record per room.
+        - name: rooms-state
+          match: { header: { name: X-UCC-Event, equals: rooms.state } }
+          records: rooms
+          identity: { key: ucc-room-id, extract: { jsonpath: room_id } }
+          emits:
+            - { name: call-state, extract: { jsonpath: state }, transform: { map: { in-call: active, idle: idle } } }
+  - id: ucc-rooms
+    label: UCC Rooms
+    version: "1.0.0"
+    spec:
+      version: 1
+      # The account-wide meeting platform's room list (#1282): one poll of
+      # GET /api/rooms reads every room on the account, one record per room,
+      # each naming its room by id, so each room's call state and
+      # participant count land on the system or component bound to that id
+      # on this component (the conduit). The platform answers over https on
+      # 443, its key pinned on first use, every request carrying its token.
+      transport: https
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "443" }
+        - { name: tls-mode, kind: string, default: pin }
+        - { name: token, kind: secret, secret_type: api-key, required: true }
+      session:
+        credential: token
+        scheme: api-key
+        api_key: { in: header, name: X-UCC-Token }
+      polls:
+        - name: rooms
+          schedule: { every: 30s }
+          request: { path: /api/rooms }
+          records: rooms
+          identity: { key: ucc-room-id, extract: { jsonpath: id } }
+          emits:
+            - { name: call-state, extract: { jsonpath: state }, transform: { map: { in-call: active, idle: idle } } }
+            - { name: participant-count, extract: { jsonpath: participants } }

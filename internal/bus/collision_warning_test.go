@@ -120,3 +120,53 @@ func TestTheConsumerLogsACollisionOnceAcrossBatches(t *testing.T) {
 		t.Fatalf("100 batches while a collision stood logged it %d times, want once", n)
 	}
 }
+
+// A name the platform ships that an operator already holds in another catalog is
+// not a collision (#1307): the operator's row resolves and their samples land
+// where they always did. It is still said, since it changes what the name means
+// on this install: once when the registry is built with it, and with the
+// collision reminder's cadence, never per batch, and nothing once it is gone.
+func TestAShadowedOfficialNameIsToldOnRebuildAndHourlyNotPerBatch(t *testing.T) {
+	var logged bytes.Buffer
+	now := time.Date(2026, 10, 29, 4, 0, 0, 0, time.UTC)
+	cache := &registryCache{
+		now: func() time.Time { return now },
+		log: slog.New(slog.NewTextHandler(&logged, nil)),
+	}
+	store := &catalogStore{fp: "a",
+		metrics:    []storage.MetricType{{Name: "input", Official: true}},
+		properties: []storage.PropertyType{{Name: "input"}, {Name: "power"}},
+	}
+	told := func() int { return strings.Count(logged.String(), "shadowed by an operator") }
+	batch := func(after time.Duration) {
+		t.Helper()
+		now = now.Add(after)
+		if _, _, err := cache.get(context.Background(), store); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	batch(0)
+	if told() != 1 || !strings.Contains(logged.String(), "input") {
+		t.Fatalf("building a registry with a shadowed name: %d notices, want 1 naming input:\n%s", told(), logged.String())
+	}
+	if strings.Contains(logged.String(), "registry name collision") {
+		t.Fatalf("a shadowed name was reported as a collision:\n%s", logged.String())
+	}
+	for i := 0; i < 100; i++ {
+		batch(2 * time.Second)
+	}
+	if told() != 1 {
+		t.Fatalf("100 batches while the shadow held: %d notices, want still 1", told())
+	}
+	batch(time.Hour)
+	if told() != 2 {
+		t.Fatalf("an hour on: %d notices, want the reminder (2)", told())
+	}
+	store.fp, store.properties = "b", []storage.PropertyType{{Name: "power"}}
+	batch(2 * time.Second)
+	batch(3 * time.Hour)
+	if told() != 2 {
+		t.Fatalf("after the operator's row was renamed away: %d notices, want still 2", told())
+	}
+}

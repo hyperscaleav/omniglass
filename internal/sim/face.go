@@ -19,7 +19,7 @@ func EphemeralPorts(int) int { return 0 }
 // the address it bound.
 type Face struct {
 	Name     string         // the profile interface's name
-	Protocol string         // http, ssh, telnet, tcp, snmp or udp
+	Protocol string         // http, ssh, telnet, tcp, snmp, udp or websocket
 	TLS      bool           // served behind TLS: an https face, or a tcp line face over tls (#1035)
 	Declared int            // the port the profile declares
 	Addr     netip.AddrPort // the address bound: under EphemeralPorts, its port is the kernel's pick

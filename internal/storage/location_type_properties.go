@@ -90,7 +90,7 @@ func upsertLocationTypePropertyRow(ctx context.Context, q querier, locationTypeI
 	}
 	pp, err := scanLocationTypeProperty(q.QueryRow(ctx, `
 		insert into location_type_property (location_type_id, property_type_id, default_value, required)
-		values ((select id from location_type where `+registryRefCol(locationTypeID)+` = $1), (select id from property_type where name = $2), $3, $4)
+		values ((select id from `+refRows("location_type", locationTypeID)+` location_type where `+registryRefCol(locationTypeID)+` = $1), (select id from property_type_in_effect() property_type where name = $2), $3, $4)
 		on conflict (location_type_id, property_type_id) do update
 			set default_value = excluded.default_value,
 			    required      = excluded.required,
@@ -108,7 +108,7 @@ func upsertLocationTypePropertyRow(ctx context.Context, q querier, locationTypeI
 // location type is indistinguishable from one with an empty contract, since the read
 // side has nothing to disclose.
 func (p *PG) ListLocationTypeProperties(ctx context.Context, locationTypeID string) ([]LocationTypeProperty, error) {
-	rows, err := p.pool.Query(ctx, `select `+locationTypePropertyCols+` from location_type_property where location_type_id = (select id from location_type where `+registryRefCol(locationTypeID)+` = $1) order by (select pr.name from property_type pr where pr.id = location_type_property.property_type_id)`, locationTypeID)
+	rows, err := p.pool.Query(ctx, `select `+locationTypePropertyCols+` from location_type_property where location_type_id = (select id from `+refRows("location_type", locationTypeID)+` location_type where `+registryRefCol(locationTypeID)+` = $1) order by (select pr.name from property_type pr where pr.id = location_type_property.property_type_id)`, locationTypeID)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list location type properties %q: %w", locationTypeID, err)
 	}
@@ -150,7 +150,7 @@ func (p *PG) SetLocationTypeProperty(ctx context.Context, actorID, locationTypeI
 	// The before-image decides create vs update and gives the audit its old side.
 	var before any
 	prior, err := scanLocationTypeProperty(tx.QueryRow(ctx,
-		`select `+locationTypePropertyCols+` from location_type_property where location_type_id = (select id from location_type where `+registryRefCol(locationTypeID)+` = $1) and property_type_id = (select id from property_type where name = $2)`,
+		`select `+locationTypePropertyCols+` from location_type_property where location_type_id = (select id from `+refRows("location_type", locationTypeID)+` location_type where `+registryRefCol(locationTypeID)+` = $1) and property_type_id = (select id from property_type_in_effect() property_type where name = $2)`,
 		locationTypeID, spec.PropertyTypeName))
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
@@ -195,7 +195,7 @@ func (p *PG) DeleteLocationTypeProperty(ctx context.Context, actorID, locationTy
 	// the withdrawn declaration and a missing row is caught without a second read.
 	before, err := scanLocationTypeProperty(tx.QueryRow(ctx, `
 		delete from location_type_property
-		where location_type_id = (select id from location_type where `+registryRefCol(locationTypeID)+` = $1) and property_type_id = (select id from property_type where name = $2)
+		where location_type_id = (select id from `+refRows("location_type", locationTypeID)+` location_type where `+registryRefCol(locationTypeID)+` = $1) and property_type_id = (select id from property_type_in_effect() property_type where name = $2)
 		returning `+locationTypePropertyCols, locationTypeID, propertyName))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrTypeNotFound

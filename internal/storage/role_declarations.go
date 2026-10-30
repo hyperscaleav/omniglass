@@ -57,7 +57,7 @@ func roleOwnerExpr(ownerKind string) string {
 	if ownerKind == "system" {
 		return `(select id from system where name = $2 or id::text = $2)`
 	}
-	return `(select id from standard where name = $2 or id::text = $2)`
+	return `(select id from standard where id::text = $2 or id = (select e.id from standard_in_effect() e where e.name = $2))`
 }
 
 // roleOwnerArg resolves ownerID once for the role-owner arc, ambiguity-safe
@@ -88,10 +88,10 @@ func (p *PG) roleOwnerArg(ctx context.Context, q querier, ownerKind, ownerID str
 }
 
 // standardRef resolves a standard by name or uuid to its id and name, or
-// ErrUnknownStandard. Standard names are globally unique, so there is no
-// ambiguity to judge.
+// ErrUnknownStandard. A bare name resolves along the search path (#1432), so it
+// names one standard.
 func standardRef(ctx context.Context, q querier, ref string) (id, name string, err error) {
-	err = q.QueryRow(ctx, `select id, name from standard where `+registryRefCol(ref)+` = $1`, ref).Scan(&id, &name)
+	err = q.QueryRow(ctx, `select id, name from `+refRows("standard", ref)+` standard where `+registryRefCol(ref)+` = $1`, ref).Scan(&id, &name)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", "", ErrUnknownStandard
 	}
@@ -437,7 +437,7 @@ func (p *PG) SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID stri
 		if len(spec.AcceptedTypes) > 0 {
 			if _, err := tx.Exec(ctx, `
 				insert into system_role_type (role_id, component_type_id)
-				select $1, (select id from component_type where name = c or id::text = c)
+				select $1, (select id from component_type where id::text = c or id = (select e.id from component_type_in_effect() e where e.name = c))
 				from unnest($2::text[]) c
 				on conflict (role_id, component_type_id) do nothing`, r.ID, spec.AcceptedTypes); err != nil {
 				return nil, mapRoleWriteErr(err)
@@ -453,7 +453,7 @@ func (p *PG) SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID stri
 		if len(spec.PinnedProducts) > 0 {
 			if _, err := tx.Exec(ctx, `
 				insert into system_role_product (role_id, product_id)
-				select $1, (select id from product where name = c or id::text = c)
+				select $1, (select id from product where id::text = c or id = (select e.id from product_in_effect() e where e.name = c))
 				from unnest($2::text[]) c
 				on conflict (role_id, product_id) do nothing`, r.ID, spec.PinnedProducts); err != nil {
 				return nil, mapRoleWriteErr(err)
@@ -686,7 +686,7 @@ func insertSeededSlot(ctx context.Context, tx pgx.Tx, roleID string, types, prod
 	if len(types) > 0 {
 		if _, err := tx.Exec(ctx, `
 			insert into system_role_type (role_id, component_type_id)
-			select $1, (select id from component_type where name = c or id::text = c)
+			select $1, (select id from component_type where id::text = c or id = (select e.id from component_type_in_effect() e where e.name = c))
 			from unnest($2::text[]) c
 			on conflict (role_id, component_type_id) do nothing`, roleID, types); err != nil {
 			return mapRoleWriteErr(err)
@@ -695,7 +695,7 @@ func insertSeededSlot(ctx context.Context, tx pgx.Tx, roleID string, types, prod
 	if len(products) > 0 {
 		if _, err := tx.Exec(ctx, `
 			insert into system_role_product (role_id, product_id)
-			select $1, (select id from product where name = c or id::text = c)
+			select $1, (select id from product where id::text = c or id = (select e.id from product_in_effect() e where e.name = c))
 			from unnest($2::text[]) c
 			on conflict (role_id, product_id) do nothing`, roleID, products); err != nil {
 			return mapRoleWriteErr(err)

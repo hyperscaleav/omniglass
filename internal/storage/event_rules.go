@@ -75,6 +75,9 @@ type EventRule struct {
 	CriteriaWarnings []CriteriaFault `json:"-"`
 	// The event types' ids, resolved from their names on a write.
 	fireTypeID, clearTypeID string
+	// resolveIn is the one namespace the rule's names resolve in, og for a
+	// rule the boot seed ships; empty is the search path (#1432).
+	resolveIn string
 	// dataType is the sample key's property data type (string, bool, json)
 	// on the property lane, "" on the metric lane or for a key that is gone:
 	// it types the value the criteria read (#957).
@@ -151,7 +154,7 @@ func ruleCols(a string) string {
 	(extract(epoch from %[1]sfire_sustain) * 1000000)::bigint, (extract(epoch from %[1]sclear_sustain) * 1000000)::bigint,
 	coalesce(%[1]sseverity, ''), (select name from event_type where id = %[1]sfire_event_type_id),
 	coalesce((select name from event_type where id = %[1]sclear_event_type_id), ''), %[1]smessage, %[1]senabled, %[1]sofficial, %[1]sversion, %[1]screated_at, %[1]supdated_at,
-	coalesce((select data_type from property_type where name = %[1]ssample_key and %[1]ssample_lane = 'property'), '')`, a)
+	coalesce((select data_type from property_type_in_effect() property_type where name = %[1]ssample_key and %[1]ssample_lane = 'property'), '')`, a)
 }
 
 var eventRuleCols = ruleCols("")
@@ -283,7 +286,7 @@ func resolveRuleEventTypes(ctx context.Context, q querier, r *EventRule) error {
 			return "", invalidRule("%s %q: %s", field, name, writerclass.Refusal(c, name, writerclass.EventRule, ""))
 		}
 		var id string
-		err := q.QueryRow(ctx, `select id::text from event_type where name = $1`, name).Scan(&id)
+		err := q.QueryRow(ctx, `select t.id::text from `+catalogRows("event_type", r.resolveIn)+` t where t.name = $1`, name).Scan(&id)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "", invalidRule("%s %q is not a registered event type", field, name)
 		}
@@ -306,18 +309,24 @@ func resolveRuleEventTypes(ctx context.Context, q querier, r *EventRule) error {
 }
 
 func resolveRuleLane(ctx context.Context, q querier, r *EventRule) error {
-	var isProperty, isMetric bool
-	if err := q.QueryRow(ctx, `select exists (select 1 from property_type where name = $1),
-		exists (select 1 from metric_type where name = $1)`, r.SampleKey).Scan(&isProperty, &isMetric); err != nil {
+	// The lane is the one the ingest registry resolves the name to (#1307,
+	// #1432): the search path, local then og. A shipped rule resolves inside og
+	// (resolveIn), the catalog it shipped against.
+	holders, err := nameHolders(ctx, q, r.SampleKey)
+	if err != nil {
 		return fmt.Errorf("storage: check rule sample key: %w", err)
 	}
-	switch {
-	case isProperty:
+	h, _, _ := ResolveNameLane(r.SampleKey, holders)
+	if r.resolveIn != "" {
+		h, _ = ResolveNameIn(r.resolveIn, holders)
+	}
+	switch h.Lane {
+	case "property":
 		r.SampleLane = rules.LaneProperty
-		if err := q.QueryRow(ctx, `select data_type from property_type where name = $1`, r.SampleKey).Scan(&r.dataType); err != nil {
+		if err := q.QueryRow(ctx, `select data_type from property_type where name = $1 and namespace = $2`, r.SampleKey, h.Namespace).Scan(&r.dataType); err != nil {
 			return fmt.Errorf("storage: check rule sample key: %w", err)
 		}
-	case isMetric:
+	case "metric":
 		r.SampleLane, r.dataType = rules.LaneMetric, ""
 	default:
 		return invalidRule("sample key %q is not a registered property or metric", r.SampleKey)
@@ -392,7 +401,7 @@ func resolveSelector(ctx context.Context, q querier, sel *EventRuleSelector, kep
 			continue
 		}
 		var ok bool
-		if err := q.QueryRow(ctx, `select exists (select 1 from component_type where name = $1)`, t).Scan(&ok); err != nil {
+		if err := q.QueryRow(ctx, `select exists (select 1 from component_type_in_effect() component_type where name = $1)`, t).Scan(&ok); err != nil {
 			return fmt.Errorf("storage: check rule component type: %w", err)
 		}
 		if !ok {
@@ -536,7 +545,7 @@ func countRuleState(ctx context.Context, q querier, r *EventRule, visible scope.
 // live state as counts over the components the visible scope admits.
 func (p *PG) GetEventRule(ctx context.Context, name string, visible scope.Set) (*EventRule, error) {
 	var judged *time.Time
-	r, err := scanEventRuleTrailing(p.pool.QueryRow(ctx, `select `+ruleCols("r.")+`, lj.last_judged_at from event_rule r
+	r, err := scanEventRuleTrailing(p.pool.QueryRow(ctx, `select `+ruleCols("r.")+`, lj.last_judged_at from event_rule_in_effect() r
 		left join event_rule_live lj on lj.rule_id = r.id where r.name = $1`, name), &judged)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrEventRuleNotFound
@@ -607,7 +616,7 @@ func (p *PG) CreateEventRule(ctx context.Context, actorID string, spec EventRule
 }
 
 func lockMutableEventRule(ctx context.Context, tx pgx.Tx, name string) (EventRule, error) {
-	r, err := scanEventRule(tx.QueryRow(ctx, `select `+eventRuleCols+` from event_rule where name = $1 for update`, name))
+	r, err := scanEventRule(tx.QueryRow(ctx, `select `+eventRuleCols+` from event_rule where id = (select r.id from event_rule_in_effect() r where r.name = $1) for update`, name))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return r, ErrEventRuleNotFound
 	}
@@ -917,17 +926,17 @@ func sameAuthoredRule(a, b EventRule) bool {
 	return pick(a) == pick(b)
 }
 
-// UpsertEventRule installs an official rule from the boot seed,
-// authoritative on conflict; an operator's rules keep distinct names and are
-// untouched. An official rule never takes over an operator's: a name an
-// operator rule already holds is refused, naming it. A re-seed that changes
+// UpsertEventRule installs an official rule from the boot seed, in the og
+// namespace and authoritative over its own row only (#1431): an operator's
+// rule of the same name is left exactly as it is, and the shipped rule is
+// neither compiled nor written. A re-seed that changes
 // nothing writes nothing (no version bump); one that inserts or changes the
 // rule settles its live state as an operator's create or edit does.
 func (p *PG) UpsertEventRule(ctx context.Context, spec EventRuleSpec) error {
 	r := EventRule{Name: spec.Name, Label: spec.Label, Description: spec.Description, Selector: spec.Selector,
 		SampleKey: spec.SampleKey, FireCriteria: spec.Fire, ClearCriteria: spec.Clear, FireSustain: spec.FireSustain,
 		ClearSustain: spec.ClearSustain, Severity: spec.Severity, FireEventType: spec.FireEventType,
-		ClearEventType: spec.ClearEventType, Message: spec.Message, Enabled: true}
+		ClearEventType: spec.ClearEventType, Message: spec.Message, Enabled: true, resolveIn: NamespaceOG}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("storage: begin upsert event rule: %w", err)
@@ -936,14 +945,14 @@ func (p *PG) UpsertEventRule(ctx context.Context, spec EventRuleSpec) error {
 	if err := prepareEventRule(ctx, tx, &r, checkAll); err != nil {
 		return fmt.Errorf("storage: official event rule %q: %w", r.Name, err)
 	}
-	existing, err := scanEventRule(tx.QueryRow(ctx, `select `+eventRuleCols+` from event_rule where name = $1 for update`, r.Name))
+	// The shipped rule's own og row; an operator's rule of the same name is a
+	// different row and is never read or written here (#1432).
+	existing, err := scanEventRule(tx.QueryRow(ctx, `select `+eventRuleCols+` from event_rule where namespace = 'og' and name = $1 for update`, r.Name))
 	var old *EventRule
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 	case err != nil:
 		return fmt.Errorf("storage: read event rule %q: %w", r.Name, err)
-	case !existing.Official:
-		return fmt.Errorf("%w: the operator rule %q holds the name of an official rule; rename it", ErrEventRuleExists, r.Name)
 	default:
 		if sameAuthoredRule(existing, r) {
 			return nil
@@ -954,12 +963,12 @@ func (p *PG) UpsertEventRule(ctx context.Context, spec EventRuleSpec) error {
 	if err != nil {
 		return err
 	}
-	upserted, err := scanEventRule(tx.QueryRow(ctx, `insert into event_rule (name, label, description, selector, sample_key, sample_lane,
+	upserted, err := scanEventRule(tx.QueryRow(ctx, `insert into event_rule (namespace, name, label, description, selector, sample_key, sample_lane,
 		fire_criteria, clear_criteria, fire_sustain, clear_sustain, severity, message, enabled, official,
 		fire_event_type_id, clear_event_type_id)
-		values ($1, $2, $3, $4, $5, $6, $7, $8, make_interval(secs => $9::float8 / 1000000), make_interval(secs => $10::float8 / 1000000), $11, $12, true, true,
+		values ('og', $1, $2, $3, $4, $5, $6, $7, $8, make_interval(secs => $9::float8 / 1000000), make_interval(secs => $10::float8 / 1000000), $11, $12, true, true,
 		$13::uuid, $14::uuid)
-		on conflict (name) do update set label = excluded.label, description = excluded.description, selector = excluded.selector,
+		on conflict (namespace, name) do update set label = excluded.label, description = excluded.description, selector = excluded.selector,
 			sample_key = excluded.sample_key, sample_lane = excluded.sample_lane, fire_criteria = excluded.fire_criteria,
 			clear_criteria = excluded.clear_criteria, fire_sustain = excluded.fire_sustain, clear_sustain = excluded.clear_sustain,
 			severity = excluded.severity, message = excluded.message, fire_event_type_id = excluded.fire_event_type_id,

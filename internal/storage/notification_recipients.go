@@ -156,7 +156,7 @@ func admitReaders(principalIDs []string, grants map[string][]scope.Grant, idx rb
 // roleIndexOf reads the role index in one statement, the same shape the API
 // caches from ListRoles.
 func roleIndexOf(ctx context.Context, q querier) (rbac.RoleIndex, error) {
-	rows, err := q.Query(ctx, `select name, permissions, inherits from role`)
+	rows, err := q.Query(ctx, `select name, permissions, inherits from role_in_effect() role`)
 	if err != nil {
 		return rbac.RoleIndex{}, fmt.Errorf("storage: read role index: %w", err)
 	}

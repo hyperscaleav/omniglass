@@ -87,7 +87,7 @@ type FleetView struct {
 func latestVerdict(ownerCol, table string) string {
 	return `coalesce((select v.value #>> '{}' from property v
 		where v.` + ownerCol + ` = ` + table + `.id
-		  and v.property_type_id = (select id from property_type where name = 'health')
+		  and v.property_type_id = (select id from property_type where namespace = 'og' and name = 'health')
 		  and v.instance = '' and v.provenance = 'calculated'
 		order by v.id desc limit 1), 'healthy')`
 }

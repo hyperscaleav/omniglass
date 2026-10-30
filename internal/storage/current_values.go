@@ -228,7 +228,7 @@ func (p *PG) latestValue(ctx context.Context, q querier, ownerKind, ownerID, key
 	}
 	sql := fmt.Sprintf(`select `+declaredCurrentExpr+`, ts, provenance from property
 		where owner_kind = $1 and %s = $2
-		  and property_type_id = (select id from property_type where name = $3)
+		  and property_type_id = (select id from property_type_in_effect() property_type where name = $3)
 		  and instance = $4 and provenance = $5
 		order by ts desc, id desc
 		limit 1`, col)
