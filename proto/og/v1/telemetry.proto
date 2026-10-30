@@ -142,6 +142,14 @@ message MetricSample {
   // task, the webhook's endpoint). The push route never sets it. Unset, the
   // sample lands on the conduit as before.
   Identity identity = 6;
+
+  // namespace is the catalog namespace the name is read in (#318, #1433):
+  // "og" for the platform's row, "local" for the operator's, or another the
+  // operator named. Empty walks the search path, the operator's row first,
+  // then the platform's. Set, the name is read in that namespace only, so a
+  // sample naming og lands on og's row even where the operator's row of the
+  // same name shadows it; a namespace holding no such row drops the sample.
+  string namespace = 7;
 }
 
 // PropertySample is one categorical observation: a registered property_type name
@@ -169,6 +177,9 @@ message PropertySample {
 
   // identity follows the same rule as MetricSample.identity.
   Identity identity = 6;
+
+  // namespace follows the same rule as MetricSample.namespace.
+  string namespace = 7;
 }
 
 // EventSample is one natively caught occurrence: a registered event_type name
@@ -194,6 +205,9 @@ message EventSample {
 
   // identity follows the same rule as MetricSample.identity.
   Identity identity = 6;
+
+  // namespace follows the same rule as MetricSample.namespace.
+  string namespace = 7;
 }
 
 // Identity is a record's identity (#1386): the match key, a registered

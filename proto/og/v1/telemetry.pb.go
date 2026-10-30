@@ -301,7 +301,14 @@ type MetricSample struct {
 	// bindings of the conduit the batch is already confined to (the node lane's
 	// task, the webhook's endpoint). The push route never sets it. Unset, the
 	// sample lands on the conduit as before.
-	Identity      *Identity `protobuf:"bytes,6,opt,name=identity,proto3" json:"identity,omitempty"`
+	Identity *Identity `protobuf:"bytes,6,opt,name=identity,proto3" json:"identity,omitempty"`
+	// namespace is the catalog namespace the name is read in (#318, #1433):
+	// "og" for the platform's row, "local" for the operator's, or another the
+	// operator named. Empty walks the search path, the operator's row first,
+	// then the platform's. Set, the name is read in that namespace only, so a
+	// sample naming og lands on og's row even where the operator's row of the
+	// same name shadows it; a namespace holding no such row drops the sample.
+	Namespace     string `protobuf:"bytes,7,opt,name=namespace,proto3" json:"namespace,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -378,6 +385,13 @@ func (x *MetricSample) GetIdentity() *Identity {
 	return nil
 }
 
+func (x *MetricSample) GetNamespace() string {
+	if x != nil {
+		return x.Namespace
+	}
+	return ""
+}
+
 // PropertySample is one categorical observation: a registered property_type name
 // plus its value as canonical JSON text ("\"up\"", "true"), so one field carries
 // every data_type the catalog declares (string/bool/json) and the ingest
@@ -398,7 +412,9 @@ type PropertySample struct {
 	// labels follow the same rule as MetricSample.labels.
 	Labels map[string]string `protobuf:"bytes,5,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	// identity follows the same rule as MetricSample.identity.
-	Identity      *Identity `protobuf:"bytes,6,opt,name=identity,proto3" json:"identity,omitempty"`
+	Identity *Identity `protobuf:"bytes,6,opt,name=identity,proto3" json:"identity,omitempty"`
+	// namespace follows the same rule as MetricSample.namespace.
+	Namespace     string `protobuf:"bytes,7,opt,name=namespace,proto3" json:"namespace,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -475,6 +491,13 @@ func (x *PropertySample) GetIdentity() *Identity {
 	return nil
 }
 
+func (x *PropertySample) GetNamespace() string {
+	if x != nil {
+		return x.Namespace
+	}
+	return ""
+}
+
 // EventSample is one natively caught occurrence: a registered event_type name
 // plus a human-readable message and/or a structured JSON payload. An entry
 // carrying neither says nothing and is dropped at ingest.
@@ -493,7 +516,9 @@ type EventSample struct {
 	// instance follows the same rule as MetricSample.instance.
 	Instance string `protobuf:"bytes,5,opt,name=instance,proto3" json:"instance,omitempty"`
 	// identity follows the same rule as MetricSample.identity.
-	Identity      *Identity `protobuf:"bytes,6,opt,name=identity,proto3" json:"identity,omitempty"`
+	Identity *Identity `protobuf:"bytes,6,opt,name=identity,proto3" json:"identity,omitempty"`
+	// namespace follows the same rule as MetricSample.namespace.
+	Namespace     string `protobuf:"bytes,7,opt,name=namespace,proto3" json:"namespace,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -568,6 +593,13 @@ func (x *EventSample) GetIdentity() *Identity {
 		return x.Identity
 	}
 	return nil
+}
+
+func (x *EventSample) GetNamespace() string {
+	if x != nil {
+		return x.Namespace
+	}
+	return ""
 }
 
 // Identity is a record's identity (#1386): the match key, a registered
@@ -767,17 +799,18 @@ const file_proto_og_v1_telemetry_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\b\x05\x10\x06R\asamples\"-\n" +
 	"\x05Owner\x12\x12\n" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x10\n" +
-	"\x03ref\x18\x02 \x01(\tR\x03ref\"\xa1\x02\n" +
+	"\x03ref\x18\x02 \x01(\tR\x03ref\"\xbf\x02\n" +
 	"\fMetricSample\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x01R\x05value\x12*\n" +
 	"\x02ts\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x02ts\x12\x1a\n" +
 	"\binstance\x18\x04 \x01(\tR\binstance\x127\n" +
 	"\x06labels\x18\x05 \x03(\v2\x1f.og.v1.MetricSample.LabelsEntryR\x06labels\x12+\n" +
-	"\bidentity\x18\x06 \x01(\v2\x0f.og.v1.IdentityR\bidentity\x1a9\n" +
+	"\bidentity\x18\x06 \x01(\v2\x0f.og.v1.IdentityR\bidentity\x12\x1c\n" +
+	"\tnamespace\x18\a \x01(\tR\tnamespace\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xae\x02\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xcc\x02\n" +
 	"\x0ePropertySample\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1d\n" +
 	"\n" +
@@ -785,17 +818,19 @@ const file_proto_og_v1_telemetry_proto_rawDesc = "" +
 	"\x02ts\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x02ts\x12\x1a\n" +
 	"\binstance\x18\x04 \x01(\tR\binstance\x129\n" +
 	"\x06labels\x18\x05 \x03(\v2!.og.v1.PropertySample.LabelsEntryR\x06labels\x12+\n" +
-	"\bidentity\x18\x06 \x01(\v2\x0f.og.v1.IdentityR\bidentity\x1a9\n" +
+	"\bidentity\x18\x06 \x01(\v2\x0f.og.v1.IdentityR\bidentity\x12\x1c\n" +
+	"\tnamespace\x18\a \x01(\tR\tnamespace\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xca\x01\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xe8\x01\n" +
 	"\vEventSample\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\x18\n" +
 	"\apayload\x18\x03 \x01(\fR\apayload\x12*\n" +
 	"\x02ts\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x02ts\x12\x1a\n" +
 	"\binstance\x18\x05 \x01(\tR\binstance\x12+\n" +
-	"\bidentity\x18\x06 \x01(\v2\x0f.og.v1.IdentityR\bidentity\"2\n" +
+	"\bidentity\x18\x06 \x01(\v2\x0f.og.v1.IdentityR\bidentity\x12\x1c\n" +
+	"\tnamespace\x18\a \x01(\tR\tnamespace\"2\n" +
 	"\bIdentity\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value\"\x9a\x02\n" +

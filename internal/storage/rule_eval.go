@@ -1057,6 +1057,19 @@ func sampleKeys[T any](evs []T, key func(T) string) []string {
 	return out
 }
 
+// bareWrites is the writes of evs whose key walks the search path (an empty
+// namespace): the rows an event or calc rule, addressing a key by its bare
+// name, can judge (#1433).
+func bareWrites[T any](evs []T, namespace func(T) string) []T {
+	out := make([]T, 0, len(evs))
+	for _, ev := range evs {
+		if namespace(ev) == "" {
+			out = append(out, ev)
+		}
+	}
+	return out
+}
+
 // RuleOpenAlarm is an open alarm a rule raised, on one component and
 // instance.
 type RuleOpenAlarm struct {

@@ -187,24 +187,24 @@ func planFanOut(fanned *ogv1.TelemetryBatch, conduitID, conduitName, endpoint st
 		return o, true
 	}
 	for _, m := range fanned.GetMetrics() {
-		_, known := reg.Metric(m.GetName())
+		_, known := reg.MetricIn(m.GetNamespace(), m.GetName())
 		if o, ok := route(m.GetIdentity(), m.GetName(), known); ok {
 			b := sub(o)
-			b.Metrics = append(b.Metrics, &ogv1.MetricSample{Name: m.GetName(), Value: m.GetValue(), Ts: m.GetTs()})
+			b.Metrics = append(b.Metrics, &ogv1.MetricSample{Namespace: m.GetNamespace(), Name: m.GetName(), Value: m.GetValue(), Ts: m.GetTs()})
 		}
 	}
 	for _, s := range fanned.GetProperties() {
-		_, known := reg.Property(s.GetName())
+		_, known := reg.PropertyIn(s.GetNamespace(), s.GetName())
 		if o, ok := route(s.GetIdentity(), s.GetName(), known); ok {
 			b := sub(o)
-			b.Properties = append(b.Properties, &ogv1.PropertySample{Name: s.GetName(), ValueJson: s.GetValueJson(), Ts: s.GetTs()})
+			b.Properties = append(b.Properties, &ogv1.PropertySample{Namespace: s.GetNamespace(), Name: s.GetName(), ValueJson: s.GetValueJson(), Ts: s.GetTs()})
 		}
 	}
 	for _, e := range fanned.GetEvents() {
-		_, known := reg.Event(e.GetName())
+		_, known := reg.EventIn(e.GetNamespace(), e.GetName())
 		if o, ok := route(e.GetIdentity(), e.GetName(), known); ok {
 			b := sub(o)
-			b.Events = append(b.Events, &ogv1.EventSample{Name: e.GetName(), Message: e.GetMessage(), Payload: e.GetPayload(), Ts: e.GetTs()})
+			b.Events = append(b.Events, &ogv1.EventSample{Namespace: e.GetNamespace(), Name: e.GetName(), Message: e.GetMessage(), Payload: e.GetPayload(), Ts: e.GetTs()})
 		}
 	}
 	// The empty instance: a sub-batch's samples carry none, and the owner

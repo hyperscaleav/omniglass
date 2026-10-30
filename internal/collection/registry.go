@@ -23,6 +23,11 @@ type Registry struct {
 	metrics    map[string]storage.MetricType
 	properties map[string]storage.PropertyType
 	events     map[string]storage.EventType
+	// qualified holds, per lane, the row each (namespace, name) a sample can
+	// name resolves to (storage.ResolveNameIn), shadowed or not (#1433).
+	qualifiedMetrics    map[qualifiedName]storage.MetricType
+	qualifiedProperties map[qualifiedName]storage.PropertyType
+	qualifiedEvents     map[qualifiedName]storage.EventType
 	// collisions are names registered in more than one catalog that nothing
 	// can resolve. The catalogs are separate tables with separate uniqueness,
 	// so nothing at the schema level stops a name existing in two of them.
@@ -133,8 +138,37 @@ func NewRegistry(metricTypes []storage.MetricType, propertyTypes []storage.Prope
 			events[et.Name] = et
 		}
 	}
-	return Registry{metrics: metrics, properties: properties, events: events, collisions: collisions, shadowed: shadowed}
+	// The row each qualified name resolves to: one holder in that namespace,
+	// across the three catalogs, as a bare name's tier resolves.
+	inNamespace := func(lane, namespace, name string) bool {
+		h, ok := storage.ResolveNameIn(namespace, holders[name])
+		return ok && h.Lane == lane
+	}
+	qm := make(map[qualifiedName]storage.MetricType, len(metricTypes))
+	qp := make(map[qualifiedName]storage.PropertyType, len(propertyTypes))
+	qe := make(map[qualifiedName]storage.EventType, len(eventTypes))
+	for _, mt := range metricTypes {
+		if inNamespace("metric", mt.Namespace, mt.Name) {
+			qm[qualifiedName{mt.Namespace, mt.Name}] = mt
+		}
+	}
+	for _, pt := range propertyTypes {
+		if inNamespace("property", pt.Namespace, pt.Name) {
+			qp[qualifiedName{pt.Namespace, pt.Name}] = pt
+		}
+	}
+	for _, et := range eventTypes {
+		if inNamespace("event", et.Namespace, et.Name) {
+			qe[qualifiedName{et.Namespace, et.Name}] = et
+		}
+	}
+	return Registry{metrics: metrics, properties: properties, events: events,
+		qualifiedMetrics: qm, qualifiedProperties: qp, qualifiedEvents: qe,
+		collisions: collisions, shadowed: shadowed}
 }
+
+// qualifiedName is a name read in one namespace.
+type qualifiedName struct{ namespace, name string }
 
 // Collisions returns the names registered in more than one catalog that resolve
 // to nothing. Empty in a healthy install; non-empty means two operator rows (or
@@ -168,6 +202,35 @@ func (r Registry) Property(name string) (storage.PropertyType, bool) {
 // caller can validate the payload against payload_schema.
 func (r Registry) Event(name string) (storage.EventType, bool) {
 	et, ok := r.events[name]
+	return et, ok
+}
+
+// MetricIn resolves name in namespace on the metric lane (#1433): an empty
+// namespace walks the search path (Metric); a set one reads that namespace
+// only, reaching an og row the operator's row of the name shadows.
+func (r Registry) MetricIn(namespace, name string) (storage.MetricType, bool) {
+	if namespace == "" {
+		return r.Metric(name)
+	}
+	mt, ok := r.qualifiedMetrics[qualifiedName{namespace, name}]
+	return mt, ok
+}
+
+// PropertyIn resolves name in namespace on the property lane, as MetricIn.
+func (r Registry) PropertyIn(namespace, name string) (storage.PropertyType, bool) {
+	if namespace == "" {
+		return r.Property(name)
+	}
+	pt, ok := r.qualifiedProperties[qualifiedName{namespace, name}]
+	return pt, ok
+}
+
+// EventIn resolves name in namespace on the event lane, as MetricIn.
+func (r Registry) EventIn(namespace, name string) (storage.EventType, bool) {
+	if namespace == "" {
+		return r.Event(name)
+	}
+	et, ok := r.qualifiedEvents[qualifiedName{namespace, name}]
 	return et, ok
 }
 

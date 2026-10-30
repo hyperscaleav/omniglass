@@ -21,6 +21,8 @@ import (
 type PropertySampleWrite struct {
 	OwnerKind string
 	OwnerID   string
+	// Namespace is read as MetricSampleWrite.Namespace.
+	Namespace string
 	Key       string
 	Instance  string
 	Value     string
@@ -90,8 +92,10 @@ func (p *PG) writePropertySamples(ctx context.Context, tx pgx.Tx, w KeyWriter, e
 			return fmt.Errorf("storage: property sample %s/%s: %w", ev.OwnerID, ev.Key, err)
 		}
 		arcs[i] = arc
-		rows[i] = keyedWrite{key: ev.Key, instance: ev.Instance, ownerKind: ev.OwnerKind, owner: arc}
-		marks.add(ev.OwnerKind, arc, rules.LaneProperty, ev.Key)
+		rows[i] = keyedWrite{namespace: ev.Namespace, key: ev.Key, instance: ev.Instance, ownerKind: ev.OwnerKind, owner: arc}
+		if ev.Namespace == "" {
+			marks.add(ev.OwnerKind, arc, rules.LaneProperty, ev.Key)
+		}
 	}
 	// Every row is held to its key's writer class, and to the owner it will
 	// land on, before anything lands.
@@ -115,7 +119,7 @@ func (p *PG) writePropertySamples(ctx context.Context, tx pgx.Tx, w KeyWriter, e
 	}
 	// The event rules reading this batch's keys judge each sample as it lands
 	// (#919), in this transaction.
-	eval, err := p.newRuleEvaluator(ctx, tx, sampleKeys(evs, func(e PropertySampleWrite) string { return e.Key }))
+	eval, err := p.newRuleEvaluator(ctx, tx, sampleKeys(bareWrites(evs, func(e PropertySampleWrite) string { return e.Namespace }), func(e PropertySampleWrite) string { return e.Key }))
 	if err != nil {
 		return err
 	}
@@ -144,22 +148,27 @@ func (p *PG) writePropertySamples(ctx context.Context, tx pgx.Tx, w KeyWriter, e
 				select 1 from (
 					select value from property
 					where owner_kind = $2 and %s = $3
-					  and property_type_id = (select id from property_type_in_effect() property_type where name = $4)
+					  and property_type_id = `+propertyTypeIn+`
 					  and instance = $5 and provenance = $7
 					order by ts desc, id desc
 					limit 1) latest
 				where latest.value = to_jsonb($6::text))`, col)
 		}
 		sql := fmt.Sprintf(`insert into property (ts, owner_kind, %s, property_type_id, instance, value, provenance, source, source_rule, source_rule_version, source_rule_id, source_conduit_id)
-			select $1::timestamptz, $2::text, $3::uuid, (select id from property_type_in_effect() property_type where name = $4::text), $5::text, to_jsonb($6::text),
+			select $1::timestamptz, $2::text, $3::uuid, `+propertyTypeIn+`, $5::text, to_jsonb($6::text),
 				$7::text, $8::text, $9::text, $10::bigint, $11::uuid, $12::uuid%s
 			returning id`, col, guard)
 		var id int64
-		err := tx.QueryRow(ctx, sql, ts, ev.OwnerKind, arcs[i], ev.Key, ev.Instance, ev.Value, provenance, ev.Source, sourceRule, sourceVersion, sourceRuleID, w.sourceConduit()).Scan(&id)
+		err := tx.QueryRow(ctx, sql, ts, ev.OwnerKind, arcs[i], ev.Key, ev.Instance, ev.Value, provenance, ev.Source, sourceRule, sourceVersion, sourceRuleID, w.sourceConduit(), ev.Namespace).Scan(&id)
 		if errors.Is(err, pgx.ErrNoRows) {
 			continue // an unchanged value: the series is transition-only
 		} else if err != nil {
 			return fmt.Errorf("storage: insert property sample %s/%s: %w", ev.OwnerID, ev.Key, err)
+		}
+		// A qualified row is one no rule and no command type addresses: each
+		// reads the key by its bare name, which reaches another row.
+		if ev.Namespace != "" {
+			continue
 		}
 		// An observation may be what a pending command was waiting on.
 		if targeted[ev.Key] {
@@ -173,6 +182,12 @@ func (p *PG) writePropertySamples(ctx context.Context, tx pgx.Tx, w KeyWriter, e
 	}
 	return eval.stampJudged(ctx, tx)
 }
+
+// propertyTypeIn is the property write's type id: $4 read along the search
+// path when the namespace $13 is empty, else in $13 only (#1433).
+const propertyTypeIn = `coalesce(
+	(select id from property_type_in_effect() where name = $4::text and $13::text = ''),
+	(select id from property_type where namespace = $13::text and name = $4::text and $13::text <> ''))`
 
 // lockPropertySeries takes the transition lock of every property series the
 // batch writes, for the rest of the caller's transaction, in sorted order (so

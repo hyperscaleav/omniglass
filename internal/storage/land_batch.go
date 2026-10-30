@@ -69,13 +69,13 @@ type FannedRows struct {
 func (f *FannedRows) keyed() []keyedWrite {
 	var out []keyedWrite
 	for _, r := range f.Metrics {
-		out = append(out, keyedWrite{key: r.Key, ownerKind: r.OwnerKind, owner: r.OwnerID})
+		out = append(out, keyedWrite{namespace: r.Namespace, key: r.Key, ownerKind: r.OwnerKind, owner: r.OwnerID})
 	}
 	for _, r := range f.Properties {
-		out = append(out, keyedWrite{key: r.Key, ownerKind: r.OwnerKind, owner: r.OwnerID})
+		out = append(out, keyedWrite{namespace: r.Namespace, key: r.Key, ownerKind: r.OwnerKind, owner: r.OwnerID})
 	}
 	for _, r := range f.Events {
-		out = append(out, keyedWrite{key: r.Key, ownerKind: r.OwnerKind, owner: r.OwnerID})
+		out = append(out, keyedWrite{namespace: r.Namespace, key: r.Key, ownerKind: r.OwnerKind, owner: r.OwnerID})
 	}
 	return out
 }

@@ -20,6 +20,12 @@ import (
 type MetricSampleWrite struct {
 	OwnerKind string
 	OwnerID   string
+	// Namespace is the catalog namespace Key is read in (#1433): empty walks
+	// the search path (the operator's row, then the platform's); set, Key is
+	// read in that namespace only, and no such row there refuses the write.
+	// A row so qualified is judged by no event rule and marks no calc rule:
+	// both address a key by its bare name, which reaches another row.
+	Namespace string
 	Key       string
 	Instance  string
 	Value     float64
@@ -179,13 +185,15 @@ func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs
 			return fmt.Errorf("storage: sample %s/%s: %w", ev.OwnerID, ev.Key, err)
 		}
 		arcs[i] = arc
-		rows[i] = keyedWrite{key: ev.Key, instance: ev.Instance, ownerKind: ev.OwnerKind, owner: arc}
-		marks.add(ev.OwnerKind, arc, rules.LaneMetric, ev.Key)
+		rows[i] = keyedWrite{namespace: ev.Namespace, key: ev.Key, instance: ev.Instance, ownerKind: ev.OwnerKind, owner: arc}
+		if ev.Namespace == "" {
+			marks.add(ev.OwnerKind, arc, rules.LaneMetric, ev.Key)
+		}
 	}
 	if err := admitWrites(ctx, tx, writeMetric, w, rows); err != nil {
 		return err
 	}
-	keys := sampleKeys(evs, func(e MetricSampleWrite) string { return e.Key })
+	keys := sampleKeys(bareWrites(evs, func(e MetricSampleWrite) string { return e.Namespace }), func(e MetricSampleWrite) string { return e.Key })
 	eval, err := p.newRuleEvaluator(ctx, tx, keys)
 	if err != nil {
 		return err
@@ -223,7 +231,8 @@ func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs
 	}
 	// metricInsertSQL lands metric samples in one statement: $1..$7 are the
 	// samples' ts, owner kinds, owner ids, type names, instances, values and
-	// sources, in the batch's order; $8 the provenance, $9..$11 a calculated
+	// sources, in the batch's order, with $14 their namespaces (empty for the
+	// search path, #1433); $8 the provenance, $9..$11 a calculated
 	// sample's rule lineage, $12 the collecting node (null for none), $13 a
 	// fanned sample's conduit (source_conduit_id, #1282; null for none).
 	//
@@ -234,10 +243,11 @@ func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs
 	// series_id's NOT NULL, as it does for an unknown type name. The ingest
 	// redelivers such a batch (IsRefusedWrite), which finds the series committed.
 	const metricInsertSQL = `with u as (
-		select u.ts, u.owner_kind, u.owner::uuid as owner, mt.id as type_id, u.instance, u.value, u.source, u.ord
-		from unnest($1::timestamptz[], $2::text[], $3::text[], $4::text[], $5::text[], $6::float8[], $7::text[])
-			with ordinality as u(ts, owner_kind, owner, key, instance, value, source, ord)
-		left join metric_type_in_effect() mt on mt.name = u.key
+		select u.ts, u.owner_kind, u.owner::uuid as owner, coalesce(mt.id, qt.id) as type_id, u.instance, u.value, u.source, u.ord
+		from unnest($1::timestamptz[], $2::text[], $3::text[], $4::text[], $5::text[], $6::float8[], $7::text[], $14::text[])
+			with ordinality as u(ts, owner_kind, owner, key, instance, value, source, ns, ord)
+		left join metric_type_in_effect() mt on mt.name = u.key and u.ns = ''
+		left join metric_type qt on qt.namespace = u.ns and qt.name = u.key and u.ns <> ''
 	),
 	k as (select distinct type_id, owner_kind, owner, instance, source from u where type_id is not null),
 	known as (
@@ -286,12 +296,13 @@ func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs
 		instances := make([]string, len(idx))
 		values := make([]float64, len(idx))
 		sources := make([]string, len(idx))
+		namespaces := make([]string, len(idx))
 		for j, i := range idx {
 			ts[j], kinds[j], owners[j], keys[j] = stamps[i], evs[i].OwnerKind, arcs[i], evs[i].Key
-			instances[j], values[j], sources[j] = evs[i].Instance, evs[i].Value, evs[i].Source
+			instances[j], values[j], sources[j], namespaces[j] = evs[i].Instance, evs[i].Value, evs[i].Source, evs[i].Namespace
 		}
 		_, err := tx.Exec(ctx, metricInsertSQL,
-			ts, kinds, owners, keys, instances, values, sources, provenance, sourceRule, sourceVersion, sourceRuleID, collector, w.sourceConduit())
+			ts, kinds, owners, keys, instances, values, sources, provenance, sourceRule, sourceVersion, sourceRuleID, collector, w.sourceConduit(), namespaces)
 		if err != nil {
 			named := make([]string, 0, len(idx))
 			for _, i := range idx {
@@ -310,6 +321,9 @@ func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs
 			if err := insert([]int{i}); err != nil {
 				return err
 			}
+		}
+		if ev.Namespace != "" {
+			continue
 		}
 		if err := eval.observe(ctx, tx, rules.LaneMetric, ev.OwnerKind, arcs[i], ev.Key, ev.Instance, ts, ev.Value); err != nil {
 			return err
@@ -434,7 +448,7 @@ func (p *PG) ListMetricSeries(ctx context.Context, ownerKind, ownerRef, key stri
 // metricSeriesKey names a sample's series within one batch: its owner, key and
 // instance (the batch's writer fixes the provenance).
 func metricSeriesKey(ev MetricSampleWrite, arc string) string {
-	return ev.OwnerKind + "\x00" + arc + "\x00" + ev.Key + "\x00" + ev.Instance
+	return ev.OwnerKind + "\x00" + arc + "\x00" + ev.Namespace + "\x00" + ev.Key + "\x00" + ev.Instance
 }
 
 // metricNewestSQL is one metric series' newest hot-tier sample (ts, id, value

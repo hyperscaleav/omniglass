@@ -219,3 +219,44 @@ func TestAReservedKeyIsNeverShadowed(t *testing.T) {
 		t.Error("an operator row took a reserved key")
 	}
 }
+
+// A qualified name reaches its namespace's row (#1433): og/x resolves to the
+// platform's row even while the operator's x shadows it, an empty namespace
+// walks the search path, and a namespace holding no x, or holding it in two
+// catalogs, resolves to nothing.
+func TestAQualifiedNameReachesItsNamespacesRow(t *testing.T) {
+	reg := collection.NewRegistry(
+		[]storage.MetricType{{Name: "x", Official: true, Label: "og"}, {Name: "x", Label: "local"}, {Name: "y", Namespace: "acme"}},
+		[]storage.PropertyType{{Name: "dup", Namespace: "acme"}},
+		[]storage.EventType{{Name: "dup", Namespace: "acme"}, {Name: "e", Official: true}},
+	)
+	for _, c := range []struct {
+		namespace, name string
+		ok              bool
+		label           string
+	}{
+		{"og", "x", true, "og"},
+		{"local", "x", true, "local"},
+		{"", "x", true, "local"},
+		{"acme", "x", false, ""},
+		{"acme", "y", true, ""},
+		{"", "y", false, ""},
+	} {
+		mt, ok := reg.MetricIn(c.namespace, c.name)
+		if ok != c.ok || mt.Label != c.label {
+			t.Errorf("MetricIn(%q, %q) = %q %v, want %q %v", c.namespace, c.name, mt.Label, ok, c.label, c.ok)
+		}
+	}
+	if _, ok := reg.PropertyIn("acme", "dup"); ok {
+		t.Error("acme/dup resolved on the property lane; acme holds it in two catalogs")
+	}
+	if _, ok := reg.EventIn("acme", "dup"); ok {
+		t.Error("acme/dup resolved on the event lane; acme holds it in two catalogs")
+	}
+	if _, ok := reg.EventIn("og", "e"); !ok {
+		t.Error("og/e did not resolve on the event lane")
+	}
+	if _, ok := reg.PropertyIn("og", "e"); ok {
+		t.Error("og/e resolved on the property lane; it is an event")
+	}
+}

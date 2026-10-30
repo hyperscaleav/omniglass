@@ -240,3 +240,41 @@ func TestNodeLogWritesStampTheNode(t *testing.T) {
 		}
 	}
 }
+
+// A sample naming its namespace lands there (#1433): og/x while the operator's
+// x shadows it carries og to the write; a namespace that is the one the bare
+// name resolves to writes bare, so the rules reading the key still see it; a
+// namespace holding no x drops the sample.
+func TestDerivedSamplesCarryTheirNamespace(t *testing.T) {
+	reg := collection.NewRegistry(
+		[]storage.MetricType{{Name: "x", Official: true}, {Name: "x"}},
+		[]storage.PropertyType{{Name: "p", DataType: "string", Official: true}, {Name: "p", DataType: "string"}},
+		[]storage.EventType{{Name: "e", Official: true}, {Name: "e"}},
+	)
+	ev := &ogv1.TelemetryBatch{
+		Metrics: []*ogv1.MetricSample{
+			{Namespace: "og", Name: "x", Value: 1}, {Namespace: "local", Name: "x", Value: 2},
+			{Name: "x", Value: 3}, {Namespace: "acme", Name: "x", Value: 4},
+		},
+		Properties: []*ogv1.PropertySample{{Namespace: "og", Name: "p", ValueJson: `"a"`}, {Namespace: "acme", Name: "p", ValueJson: `"b"`}},
+		Events:     []*ogv1.EventSample{{Namespace: "og", Name: "e", Message: "m"}, {Namespace: "acme", Name: "e", Message: "n"}},
+	}
+	arc := sampleArc{Kind: "component", ID: "disp-1"}
+	w := storage.PushWriter()
+	m := deriveMetrics(ev, arc, storage.TaskOwner{}, reg, w)
+	want := []string{"og", "", ""}
+	if len(m) != len(want) {
+		t.Fatalf("metrics = %+v, want %d: acme holds no x", m, len(want))
+	}
+	for i, ns := range want {
+		if m[i].Namespace != ns {
+			t.Errorf("metric %v carries namespace %q, want %q", m[i].Value, m[i].Namespace, ns)
+		}
+	}
+	if p := deriveProperties(ev, arc, storage.TaskOwner{}, reg, w); len(p) != 1 || p[0].Namespace != "og" {
+		t.Errorf("properties = %+v, want og/p only", p)
+	}
+	if e := deriveEvents(ev, arc, storage.TaskOwner{}, reg, w); len(e) != 1 || e[0].Namespace != "og" {
+		t.Errorf("events = %+v, want og/e only", e)
+	}
+}

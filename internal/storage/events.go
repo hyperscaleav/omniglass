@@ -17,8 +17,11 @@ import (
 // nil when absent. It is NOT a log line: raw log text lands on the log_line lane
 // instead (ADR-0066), and only a derivation rule turns one into an event.
 type EventWrite struct {
-	OwnerKind  string
-	OwnerID    string
+	OwnerKind string
+	OwnerID   string
+	// Namespace is read as MetricSampleWrite.Namespace; an event has no rule
+	// judging it at write, so only the row it lands on differs.
+	Namespace  string
 	Key        string
 	Instance   string
 	Origin     string
@@ -98,7 +101,7 @@ func (p *PG) writeEvents(ctx context.Context, tx pgx.Tx, w KeyWriter, evs []Even
 			return err
 		}
 		arcs[i] = arc
-		rows[i] = keyedWrite{key: ev.Key, instance: ev.Instance, ownerKind: ev.OwnerKind, owner: arc}
+		rows[i] = keyedWrite{namespace: ev.Namespace, key: ev.Key, instance: ev.Instance, ownerKind: ev.OwnerKind, owner: arc}
 	}
 	if err := admitWrites(ctx, tx, writeEvent, w, rows); err != nil {
 		return err
@@ -126,8 +129,11 @@ func (p *PG) writeEvents(ctx context.Context, tx pgx.Tx, w KeyWriter, evs []Even
 			origin = "caught"
 		}
 		sql := fmt.Sprintf(`insert into event (ts, owner_kind, %s, event_type_id, instance, origin, message, attributes, provenance, source, source_conduit_id)
-			values ($1, $2, $3, (select id from event_type_in_effect() event_type where name = $4), $5, $6, $7, $8, 'observed', $9, $10::uuid)`, col)
-		if _, err := tx.Exec(ctx, sql, ts, ev.OwnerKind, arcs[i], ev.Key, ev.Instance, origin, ev.Message, attrs, ev.Source, w.sourceConduit()); err != nil {
+			values ($1, $2, $3, coalesce(
+				(select id from event_type_in_effect() where name = $4::text and $11::text = ''),
+				(select id from event_type where namespace = $11::text and name = $4::text and $11::text <> '')),
+				$5, $6, $7, $8, 'observed', $9, $10::uuid)`, col)
+		if _, err := tx.Exec(ctx, sql, ts, ev.OwnerKind, arcs[i], ev.Key, ev.Instance, origin, ev.Message, attrs, ev.Source, w.sourceConduit(), ev.Namespace); err != nil {
 			return fmt.Errorf("storage: insert event %s/%s: %w", ev.OwnerID, ev.Key, err)
 		}
 	}

@@ -191,52 +191,60 @@ func classOf(name string, calc *CalcWriter) writerclass.Class {
 	return writerclass.Of(name, calc != nil)
 }
 
-// keyWriters resolves each key's writer: the reserved class by name, from code;
-// else calc when a calc rule outputs it, from the catalog in one read; else
-// collected. An event key is reserved or collected: no rule outputs an event.
-func keyWriters(ctx context.Context, q querier, lane writeLane, keys []string) (map[string]keyWriterOf, error) {
-	out := make(map[string]keyWriterOf, len(keys))
-	var lookup []string
-	for _, k := range keys {
-		if _, seen := out[k]; seen {
+// keyWriters resolves each row's key's writer: the reserved class by name, from
+// code; else calc when a calc rule outputs the row the key reads in its
+// namespace (the search path when none, #1433), from the catalog in one read
+// per namespace; else collected. An event key is reserved or collected: no
+// rule outputs an event. The map is keyed by keyedWrite.ref.
+func keyWriters(ctx context.Context, q querier, lane writeLane, rows []keyedWrite) (map[string]keyWriterOf, error) {
+	out := make(map[string]keyWriterOf, len(rows))
+	lookup := map[string][]string{}
+	var namespaces []string
+	for _, r := range rows {
+		ref := r.ref()
+		if _, seen := out[ref]; seen {
 			continue
 		}
-		if c, ok := writerclass.Reserved(k); ok {
-			out[k] = keyWriterOf{class: c}
+		if c, ok := writerclass.Reserved(r.key); ok {
+			out[ref] = keyWriterOf{class: c}
 			continue
 		}
-		out[k] = keyWriterOf{class: writerclass.Collected}
+		out[ref] = keyWriterOf{class: writerclass.Collected}
 		if lane != writeEvent {
-			lookup = append(lookup, k)
+			if _, ok := lookup[r.namespace]; !ok {
+				namespaces = append(namespaces, r.namespace)
+			}
+			lookup[r.namespace] = append(lookup[r.namespace], r.key)
 		}
-	}
-	if len(lookup) == 0 {
-		return out, nil
 	}
 	col, table := "output_metric_type_id", "metric_type"
 	if lane == writeProperty {
 		col, table = "output_property_type_id", "property_type"
 	}
-	rows, err := q.Query(ctx, `select t.name, c.id::text, c.name from calc_rule c join `+catalogRows(table, "")+` t on t.id = c.`+col+`
-		where t.name = any($1)`, lookup)
-	if err != nil {
-		return nil, fmt.Errorf("storage: read the writers of %v: %w", lookup, err)
-	}
-	type owned struct{ key, id, name string }
-	claims, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (owned, error) {
-		var o owned
-		return o, r.Scan(&o.key, &o.id, &o.name)
-	})
-	if err != nil {
-		return nil, fmt.Errorf("storage: read the writers of %v: %w", lookup, err)
-	}
-	for _, c := range claims {
-		kw := out[c.key]
-		if kw.rules == nil {
-			kw = keyWriterOf{class: writerclass.Calc, rules: map[string]string{}}
+	for _, ns := range namespaces {
+		keys := lookup[ns]
+		rows, err := q.Query(ctx, `select t.name, c.id::text, c.name from calc_rule c join `+catalogRows(table, ns)+` t on t.id = c.`+col+`
+		where t.name = any($1)`, keys)
+		if err != nil {
+			return nil, fmt.Errorf("storage: read the writers of %v: %w", keys, err)
 		}
-		kw.rules[c.id] = c.name
-		out[c.key] = kw
+		type owned struct{ key, id, name string }
+		claims, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (owned, error) {
+			var o owned
+			return o, r.Scan(&o.key, &o.id, &o.name)
+		})
+		if err != nil {
+			return nil, fmt.Errorf("storage: read the writers of %v: %w", keys, err)
+		}
+		for _, c := range claims {
+			ref := keyedWrite{namespace: ns, key: c.key}.ref()
+			kw := out[ref]
+			if kw.rules == nil {
+				kw = keyWriterOf{class: writerclass.Calc, rules: map[string]string{}}
+			}
+			kw.rules[c.id] = c.name
+			out[ref] = kw
+		}
 	}
 	return out, nil
 }
@@ -244,8 +252,20 @@ func keyWriters(ctx context.Context, q querier, lane writeLane, keys []string) (
 // keyedWrite is one row a write path is about to land: its key and instance,
 // and its resolved owner arc (kind and id), which a node's writer is held to.
 type keyedWrite struct {
+	// namespace is the catalog namespace key reads in; empty walks the search
+	// path (#1433).
+	namespace        string
 	key, instance    string
 	ownerKind, owner string
+}
+
+// ref is the row's key as keyWriters indexes it: the bare key, or the key
+// qualified by its namespace.
+func (r keyedWrite) ref() string {
+	if r.namespace == "" {
+		return r.key
+	}
+	return r.namespace + "/" + r.key
 }
 
 // admitWrites is the gateway's write check, run by every path that lands a
@@ -270,16 +290,12 @@ func admitWrites(ctx context.Context, q querier, lane writeLane, w KeyWriter, ro
 		}
 		w.fanOwners = owners
 	}
-	keys := make([]string, len(rows))
-	for i, r := range rows {
-		keys[i] = r.key
-	}
-	writers, err := keyWriters(ctx, q, lane, keys)
+	writers, err := keyWriters(ctx, q, lane, rows)
 	if err != nil {
 		return err
 	}
 	for _, r := range rows {
-		if err := admitWrite(writers[r.key], w, r); err != nil {
+		if err := admitWrite(writers[r.ref()], w, r); err != nil {
 			return err
 		}
 	}
