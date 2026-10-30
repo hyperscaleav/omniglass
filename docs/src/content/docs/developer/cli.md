@@ -166,6 +166,18 @@ A name is a lookup, so it lands on whatever the one row you can see by that name
 answers with the row it reached (a secret's `owner_kind` and `owner_name`), and a script that must
 never drift, a credential rotation above all, addresses `<owner>/<name>` or stores the uuid.
 
+### A pushed sample may name its namespace
+
+A `telemetry push` item may name the catalog namespace its name is read in. Omitted, the name walks the
+search path (your `local` type first, then the platform's `og` one); `"namespace":"og"` reaches the
+platform's type even where a type of yours of the same name shadows it, and a namespace holding no such
+type comes back under `rejected`, naming the namespace:
+
+```sh
+omniglass telemetry push --owner '{"kind":"component","ref":"codec-1"}' \
+  --metrics '[{"namespace":"og","name":"room-temperature","value":21.5}]'   # needs telemetry:push
+```
+
 ### An unknown verb is a failure
 
 A group (`component`, `component alarm`, `sim`) only routes to its subcommands. Run bare it prints
