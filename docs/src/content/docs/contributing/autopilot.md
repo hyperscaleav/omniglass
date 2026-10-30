@@ -94,9 +94,10 @@ on a host the architect provisions once, and the session works in the machine's 
 clone of the repo. The worker has to be up, with the bridge connected, when the Routine
 fires; a day it is not is a day the autopilot does not wake.
 
-The worker needs, beyond Go, Node, and Docker: an authenticated `gh` with the `gh image`
-extension (a bridge session reaches GitHub through `gh`, not the cloud sandbox's MCP
-tools), the `d2` binary for any docs diagram, and the Playwright Chromium
+The worker needs, beyond Go, Node, and Docker: `gh` with the `gh image` extension (a
+bridge session reaches GitHub through `gh`, not the cloud sandbox's MCP tools), wired to
+act as the agent App (below), the
+`d2` binary for any docs diagram, and the Playwright Chromium
 (`cd web && npx playwright install chromium`).
 
 The prompt is intentionally thin, so the behavior lives in the versioned skill rather
@@ -116,3 +117,36 @@ architect approves PRs.
 Changing what the autopilot does is a PR against the skill; changing when it runs is a
 Routine edit. That split is deliberate: the contract is reviewable history, the schedule
 is a dial.
+
+## Who acts as whom
+
+Agent work is authored by its own GitHub identity, the `hyperscale-agent` GitHub App, never
+by the architect's account
+([#1281](https://github.com/hyperscaleav/omniglass/issues/1281)). Its commits, pushes, PRs,
+comments and board moves read as `hyperscale-agent[bot]`, so the architect reviews and
+approves agent PRs as a real second party, and a leaked agent credential reaches this one
+repo for an hour instead of everything an org owner can touch.
+
+| Surface | Acts as | Why |
+|---|---|---|
+| Autopilot and other agent sessions on the worker | `hyperscale-agent[bot]` | The worker reaches GitHub directly, so the App's token is the one GitHub sees. |
+| Interactive sessions in the cloud sandbox | the architect | The sandbox's egress proxy replaces any GitHub credential with the connected account's (tested on #1281). The architect is driving, so the attribution is honest. |
+| The claude.ai GitHub connector | the architect | It is the architect's approval channel, not an agent. |
+
+So any work that must not act as the architect runs on the worker, never in the sandbox.
+
+The identity tooling is shared by every Hyperscale AV product and lives in
+[hyperscaleav/agent-harness](https://github.com/hyperscaleav/agent-harness): its
+`agent-token` mints the App's token narrowed to this repo and is the clone's only git
+credential helper, and its `gh` shim gives every `gh` call (the skills' and
+`scripts/board.sh`'s included) a fresh App token. Its
+[identity guide](https://github.com/hyperscaleav/agent-harness/blob/main/docs/identity.md)
+covers creating the App, wiring the worker and proving it. With `AGENT_APP_ID` set, this
+repo's SessionStart check proves at minute zero that a token mints, that `gh` resolves to
+the shim, and that the clone's author is the bot, and names what is missing if not.
+
+The architect merges agent PRs. With a separate author, the `main` ruleset can require one
+approving review from the code owners, and the architect stays on the bypass list (pull
+requests only) to merge their own work; the bot never is. That tightening lands after the
+first bot-authored PR proves the wiring, and whether auto-merge returns is a new decision,
+not this one ([ADR-0859](/architecture/decisions/#adr-0859-the-autopilot-never-arms-auto-merge-the-architects-merge-is-the-approval)).
