@@ -267,24 +267,20 @@ func fanGroups(ctx context.Context, bt *batchTx, groups []landGroup) error {
 // a tick whose groups each bring keys of their own (many drivers, each its own
 // metric and property names) costs what a tick of one group does (#1582).
 func primeKeyWriters(ctx context.Context, bt *batchTx, groups []landGroup) error {
-	var metrics, props []string
+	var metrics, props []keyedWrite
 	for _, g := range groups {
 		sets := []IngestGroup{g.IngestGroup}
 		if f := g.Fanned; f != nil {
 			sets = append(sets, IngestGroup{Metrics: f.Metrics, Properties: f.Properties})
 		}
 		for _, s := range sets {
-			for _, r := range metricKeyed(s.Metrics) {
-				metrics = append(metrics, r.key)
-			}
-			for _, r := range propertyKeyed(s.Properties) {
-				props = append(props, r.key)
-			}
+			metrics = append(metrics, metricKeyed(s.Metrics)...)
+			props = append(props, propertyKeyed(s.Properties)...)
 		}
 	}
 	for _, l := range []struct {
 		lane writeLane
-		keys []string
+		keys []keyedWrite
 	}{{writeMetric, metrics}, {writeProperty, props}} {
 		if len(l.keys) == 0 {
 			continue
@@ -353,7 +349,7 @@ func (p *PG) admitGroup(ctx context.Context, tx pgx.Tx, g landGroup) error {
 func propertyKeyed(evs []PropertySampleWrite) []keyedWrite {
 	out := make([]keyedWrite, 0, len(evs))
 	for _, ev := range cleanPropertyWrites(evs) {
-		out = append(out, keyedWrite{key: ev.Key, instance: ev.Instance, ownerKind: ev.OwnerKind, owner: ev.OwnerID})
+		out = append(out, keyedWrite{namespace: ev.Namespace, key: ev.Key, instance: ev.Instance, ownerKind: ev.OwnerKind, owner: ev.OwnerID})
 	}
 	return out
 }
@@ -362,7 +358,7 @@ func propertyKeyed(evs []PropertySampleWrite) []keyedWrite {
 func metricKeyed(evs []MetricSampleWrite) []keyedWrite {
 	out := make([]keyedWrite, 0, len(evs))
 	for _, ev := range cleanMetricWrites(evs) {
-		out = append(out, keyedWrite{key: ev.Key, instance: ev.Instance, ownerKind: ev.OwnerKind, owner: ev.OwnerID})
+		out = append(out, keyedWrite{namespace: ev.Namespace, key: ev.Key, instance: ev.Instance, ownerKind: ev.OwnerKind, owner: ev.OwnerID})
 	}
 	return out
 }
@@ -371,7 +367,7 @@ func metricKeyed(evs []MetricSampleWrite) []keyedWrite {
 func eventKeyed(evs []EventWrite) []keyedWrite {
 	out := make([]keyedWrite, 0, len(evs))
 	for _, ev := range cleanEventWrites(evs) {
-		out = append(out, keyedWrite{key: ev.Key, instance: ev.Instance, ownerKind: ev.OwnerKind, owner: ev.OwnerID})
+		out = append(out, keyedWrite{namespace: ev.Namespace, key: ev.Key, instance: ev.Instance, ownerKind: ev.OwnerKind, owner: ev.OwnerID})
 	}
 	return out
 }

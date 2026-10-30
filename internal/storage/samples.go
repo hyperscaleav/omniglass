@@ -23,6 +23,12 @@ import (
 type MetricSampleWrite struct {
 	OwnerKind string
 	OwnerID   string
+	// Namespace is the catalog namespace Key is read in (#1433): empty walks
+	// the search path (the operator's row, then the platform's); set, Key is
+	// read in that namespace only, and no such row there refuses the write.
+	// A row so qualified is judged by no event rule and marks no calc rule:
+	// both address a key by its bare name, which reaches another row.
+	Namespace string
 	Key       string
 	Instance  string
 	Value     float64
@@ -249,15 +255,17 @@ func (p *PG) writeMetricSets(ctx context.Context, tx pgx.Tx, sets []metricSet) e
 				return fmt.Errorf("storage: sample %s/%s: %w", ev.OwnerID, ev.Key, err)
 			}
 			arcs = append(arcs, arc)
-			rows[i] = keyedWrite{key: ev.Key, instance: ev.Instance, ownerKind: ev.OwnerKind, owner: arc}
-			marks.add(ev.OwnerKind, arc, rules.LaneMetric, ev.Key)
+			rows[i] = keyedWrite{namespace: ev.Namespace, key: ev.Key, instance: ev.Instance, ownerKind: ev.OwnerKind, owner: arc}
+			if ev.Namespace == "" {
+				marks.add(ev.OwnerKind, arc, rules.LaneMetric, ev.Key)
+			}
 		}
 		if err := admitWrites(ctx, tx, writeMetric, set.w, rows); err != nil {
 			return err
 		}
 		evs = append(evs, setEvs...)
 	}
-	keys := sampleKeys(evs, func(e MetricSampleWrite) string { return e.Key })
+	keys := sampleKeys(bareWrites(evs, func(e MetricSampleWrite) string { return e.Namespace }), func(e MetricSampleWrite) string { return e.Key })
 	eval, err := p.newRuleEvaluator(ctx, tx, keys)
 	if err != nil {
 		return err
@@ -317,7 +325,8 @@ func (p *PG) writeMetricSets(ctx context.Context, tx pgx.Tx, sets []metricSet) e
 	}
 	// metricInsertSQL lands metric samples in one statement: $1..$7 are the
 	// samples' ts, owner kinds, owner ids, type names, instances, values and
-	// sources, in the batch's order; $8 the provenance, $9..$11 a calculated
+	// sources, in the batch's order, with $14 their namespaces (empty for the
+	// search path, #1433); $8 the provenance, $9..$11 a calculated
 	// sample's rule lineage, $12 the collecting outpost (null for none), $13 a
 	// fanned sample's conduit (source_conduit_id, #1282; null for none).
 	//
@@ -341,10 +350,11 @@ func (p *PG) writeMetricSets(ctx context.Context, tx pgx.Tx, sets []metricSet) e
 	// series_id's NOT NULL, as it does for an unknown type name. The ingest
 	// redelivers such a batch (IsRefusedWrite), which finds the series committed.
 	const metricInsertSQL = `with u as (
-		select u.ts, u.owner_kind, u.owner::uuid as owner, mt.id as type_id, u.instance, u.value, u.source, u.ord
-		from unnest($1::timestamptz[], $2::text[], $3::text[], $4::text[], $5::text[], $6::float8[], $7::text[])
-			with ordinality as u(ts, owner_kind, owner, key, instance, value, source, ord)
-		left join metric_type_in_effect() mt on mt.name = u.key
+		select u.ts, u.owner_kind, u.owner::uuid as owner, coalesce(mt.id, qt.id) as type_id, u.instance, u.value, u.source, u.ord
+		from unnest($1::timestamptz[], $2::text[], $3::text[], $4::text[], $5::text[], $6::float8[], $7::text[], $14::text[])
+			with ordinality as u(ts, owner_kind, owner, key, instance, value, source, ns, ord)
+		left join metric_type_in_effect() mt on mt.name = u.key and u.ns = ''
+		left join metric_type qt on qt.namespace = u.ns and qt.name = u.key and u.ns <> ''
 	),
 	k as (select distinct type_id, owner_kind, owner, instance, source from u where type_id is not null),
 	known as (
@@ -406,12 +416,13 @@ func (p *PG) writeMetricSets(ctx context.Context, tx pgx.Tx, sets []metricSet) e
 		instances := make([]string, len(idx))
 		values := make([]float64, len(idx))
 		sources := make([]string, len(idx))
+		namespaces := make([]string, len(idx))
 		for j, i := range idx {
 			ts[j], kinds[j], owners[j], keys[j] = stamps[i], evs[i].OwnerKind, arcs[i], evs[i].Key
-			instances[j], values[j], sources[j] = evs[i].Instance, evs[i].Value, evs[i].Source
+			instances[j], values[j], sources[j], namespaces[j] = evs[i].Instance, evs[i].Value, evs[i].Source, evs[i].Namespace
 		}
 		rows, err := tx.Query(ctx, metricInsertSQL,
-			ts, kinds, owners, keys, instances, values, sources, provenance, sourceRule, sourceVersion, sourceRuleID, collector, w.sourceConduit())
+			ts, kinds, owners, keys, instances, values, sources, provenance, sourceRule, sourceVersion, sourceRuleID, collector, w.sourceConduit(), namespaces)
 		if err == nil {
 			for rows.Next() {
 				var id, series int64
@@ -446,8 +457,12 @@ func (p *PG) writeMetricSets(ctx context.Context, tx pgx.Tx, sets []metricSet) e
 				return err
 			}
 		}
-		if err := eval.observe(ctx, tx, rules.LaneMetric, ev.OwnerKind, arcs[i], ev.Key, ev.Instance, ts, ev.Value); err != nil {
-			return err
+		// A qualified row is one no rule addresses: each reads the key by its
+		// bare name, which reaches another row (#1433).
+		if ev.Namespace == "" {
+			if err := eval.observe(ctx, tx, rules.LaneMetric, ev.OwnerKind, arcs[i], ev.Key, ev.Instance, ts, ev.Value); err != nil {
+				return err
+			}
 		}
 		landedRows(ctx, tail.Row{Lane: tail.LaneMetric, OwnerKind: ev.OwnerKind, OwnerID: arcs[i], Key: ev.Key, Instance: ev.Instance, TS: ts, Number: ev.Value})
 	}
@@ -476,7 +491,7 @@ const tooOldSlack = 23 * time.Hour
 func dropTooOldSamples(ctx context.Context, tx pgx.Tx, evs []MetricSampleWrite, arcs []string, stamps []time.Time, laneDays func() (int, error)) ([]MetricSampleWrite, []string, []time.Time, error) {
 	var cand []int
 	var ts []time.Time
-	var keys []string
+	var keys, nss []string
 	now, err := dbNow(ctx, tx)
 	if err != nil {
 		return nil, nil, nil, err
@@ -484,7 +499,7 @@ func dropTooOldSamples(ctx context.Context, tx pgx.Tx, evs []MetricSampleWrite, 
 	horizon := now.Add(-tooOldSlack)
 	for i, at := range stamps {
 		if at.Before(horizon) {
-			cand, ts, keys = append(cand, i), append(ts, at), append(keys, evs[i].Key)
+			cand, ts, keys, nss = append(cand, i), append(ts, at), append(keys, evs[i].Key), append(nss, evs[i].Namespace)
 		}
 	}
 	if len(cand) == 0 {
@@ -495,10 +510,12 @@ func dropTooOldSamples(ctx context.Context, tx pgx.Tx, evs []MetricSampleWrite, 
 		return nil, nil, nil, err
 	}
 	rows, err := tx.Query(ctx, `select u.ord, extract(epoch from now() - u.ts)
-		from unnest($1::timestamptz[], $2::text[]) with ordinality as u(ts, key, ord)
-		join metric_type_in_effect() mt on mt.name = u.key
-		where u.ts < now() - make_interval(days => coalesce(mt.retention_days, $3::int))
-		order by u.ord`, ts, keys, lane)
+		from unnest($1::timestamptz[], $2::text[], $4::text[]) with ordinality as u(ts, key, ns, ord)
+		left join metric_type_in_effect() mt on mt.name = u.key and u.ns = ''
+		left join metric_type qt on qt.namespace = u.ns and qt.name = u.key and u.ns <> ''
+		where coalesce(mt.id, qt.id) is not null
+			and u.ts < now() - make_interval(days => coalesce(mt.retention_days, qt.retention_days, $3::int))
+		order by u.ord`, ts, keys, lane, nss)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("storage: hold the samples to their windows: %w", err)
 	}
@@ -689,5 +706,5 @@ func (p *PG) ListMetricSeries(ctx context.Context, ownerKind, ownerRef, key stri
 // metricSeriesKey names a sample's series within one batch: its owner, key and
 // instance (the batch's writer fixes the provenance).
 func metricSeriesKey(ev MetricSampleWrite, arc string) string {
-	return ev.OwnerKind + "\x00" + arc + "\x00" + ev.Key + "\x00" + ev.Instance
+	return ev.OwnerKind + "\x00" + arc + "\x00" + ev.Namespace + "\x00" + ev.Key + "\x00" + ev.Instance
 }

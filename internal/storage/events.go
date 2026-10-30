@@ -20,8 +20,11 @@ import (
 // nil when absent. It is NOT a log line: raw log text lands on the log_line lane
 // instead (ADR-0066), and only a derivation rule turns one into an event.
 type EventWrite struct {
-	OwnerKind  string
-	OwnerID    string
+	OwnerKind string
+	OwnerID   string
+	// Namespace is read as MetricSampleWrite.Namespace; an event has no rule
+	// judging it at write, so only the row it lands on differs.
+	Namespace  string
 	Key        string
 	Instance   string
 	Origin     string
@@ -121,7 +124,7 @@ func (p *PG) writeEventSets(ctx context.Context, tx pgx.Tx, sets []eventSet) err
 				return err
 			}
 			arcs = append(arcs, arc)
-			rows[i] = keyedWrite{key: ev.Key, instance: ev.Instance, ownerKind: ev.OwnerKind, owner: arc}
+			rows[i] = keyedWrite{namespace: ev.Namespace, key: ev.Key, instance: ev.Instance, ownerKind: ev.OwnerKind, owner: arc}
 		}
 		if err := admitWrites(ctx, tx, writeEvent, set.w, rows); err != nil {
 			return err
@@ -143,6 +146,7 @@ func (p *PG) writeEventSets(ctx context.Context, tx pgx.Tx, sets []eventSet) err
 	// fails the statement as a data exception (IsRefusedWrite).
 	attrs := make([]*string, len(evs))
 	sources := make([]string, len(evs))
+	namespaces := make([]string, len(evs))
 	for i, ev := range evs {
 		at := ev.TS
 		if at.IsZero() {
@@ -159,15 +163,15 @@ func (p *PG) writeEventSets(ctx context.Context, tx pgx.Tx, sets []eventSet) err
 		if origins[i] == "" {
 			origins[i] = "caught"
 		}
-		kinds[i], keys[i], instances[i], messages[i], sources[i] = ev.OwnerKind, ev.Key, ev.Instance, ev.Message, ev.Source
+		kinds[i], keys[i], instances[i], messages[i], sources[i], namespaces[i] = ev.OwnerKind, ev.Key, ev.Instance, ev.Message, ev.Source, ev.Namespace
 	}
 	// Each row's id is drawn in its own CTE row beside its ordinal and the
 	// insert writes that id, so the ids come back paired with the batch's
 	// order by construction, not by trusting the sequence to follow the
 	// insert's row order.
 	rows, err := tx.Query(ctx, `with u as (
-			select * from unnest($1::timestamptz[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[], $9::text[])
-				with ordinality as u(ts, kind, owner, key, instance, origin, message, attrs, source, ord)
+			select * from unnest($1::timestamptz[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[], $9::text[], $11::text[])
+				with ordinality as u(ts, kind, owner, key, instance, origin, message, attrs, source, ns, ord)
 		), a as (
 			select u.ord, nextval(pg_get_serial_sequence('event', 'id')) as id from u
 		), ins as (
@@ -178,14 +182,15 @@ func (p *PG) writeEventSets(ctx context.Context, tx pgx.Tx, sets []eventSet) err
 				case when u.kind = 'system' then u.owner::uuid end,
 				case when u.kind = 'location' then u.owner::uuid end,
 				case when u.kind = 'outpost' then u.owner::uuid end,
-				et.id, u.instance, u.origin, u.message, u.attrs::jsonb, 'observed', u.source, $10::uuid
+				coalesce(et.id, qt.id), u.instance, u.origin, u.message, u.attrs::jsonb, 'observed', u.source, $10::uuid
 			from u
 			join a on a.ord = u.ord
-			left join event_type_in_effect() et on et.name = u.key
+			left join event_type_in_effect() et on et.name = u.key and u.ns = ''
+			left join event_type qt on qt.namespace = u.ns and qt.name = u.key and u.ns <> ''
 			returning id
 		)
 		select a.id from a join ins on ins.id = a.id order by a.ord`,
-		ts, kinds, arcs, keys, instances, origins, messages, attrs, sources, w.sourceConduit())
+		ts, kinds, arcs, keys, instances, origins, messages, attrs, sources, w.sourceConduit(), namespaces)
 	var ids []int64
 	if err == nil {
 		ids, err = pgx.CollectRows(rows, pgx.RowTo[int64])
