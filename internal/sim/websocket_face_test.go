@@ -137,6 +137,12 @@ func TestWebSocketFaceRefusesAWrongCredentialBeforeTheUpgrade(t *testing.T) {
 	if _, _, err := dialWS(t, "ws://"+addr+"/api/ws", basicHeader("admin", "kestrel")); err != nil {
 		t.Fatalf("the right credential = %v", err)
 	}
+	// The client's dial returns once it reads the 101; the face counts the
+	// upgrade after its own Upgrade returns, so the count is waited for, not
+	// read once (#1451).
+	for deadline := time.Now().Add(3 * time.Second); dev.WebSocketUpgrades() == 0 && time.Now().Before(deadline); {
+		time.Sleep(5 * time.Millisecond)
+	}
 	if dev.WebSocketAttempts() != 2 || dev.WebSocketRefusals() != 1 || dev.WebSocketUpgrades() != 1 {
 		t.Fatalf("attempts %d refusals %d upgrades %d, want 2, 1, 1", dev.WebSocketAttempts(), dev.WebSocketRefusals(), dev.WebSocketUpgrades())
 	}
