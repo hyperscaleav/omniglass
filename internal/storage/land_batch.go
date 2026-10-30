@@ -260,12 +260,15 @@ func (p *PG) lockInOrder(ctx context.Context, tx pgx.Tx, b IngestBatch) error {
 		marks.add(ownerKind, arc, lane, key)
 		return nil
 	}
-	for _, ev := range props {
+	// A qualified row marks nothing: a calc rule reads a key by its bare
+	// name, which reaches another row (#1433). Its event rule rows above are
+	// only over-locked, a superset taken first.
+	for _, ev := range bareWrites(props, func(e PropertySampleWrite) string { return e.Namespace }) {
 		if err := mark(ev.OwnerKind, ev.OwnerID, rules.LaneProperty, ev.Key); err != nil {
 			return err
 		}
 	}
-	for _, ev := range metrics {
+	for _, ev := range bareWrites(metrics, func(e MetricSampleWrite) string { return e.Namespace }) {
 		if err := mark(ev.OwnerKind, ev.OwnerID, rules.LaneMetric, ev.Key); err != nil {
 			return err
 		}

@@ -188,3 +188,64 @@ func TestAQualifiedSampleIsHeldToItsOwnRowsWriter(t *testing.T) {
 		t.Errorf("a push of og/calc-out was refused: %v; no rule outputs og's row", err)
 	}
 }
+
+// A landed batch marks no calc rule for a qualified sample (#1433): the rule
+// reads calc-in by its bare name, the operator's row, so og/calc-in landing
+// on the platform's row leaves it un-pending, while a bare calc-in marks it.
+func TestALandedQualifiedSampleMarksNoCalcRule(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	t.Cleanup(gw.Close)
+	all := scope.Set{All: true}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "codec-1"}, all, all, all, all); err != nil {
+		t.Fatalf("component: %v", err)
+	}
+	for _, name := range []string{"calc-in", "calc-out"} {
+		if _, err := gw.CreateMetricType(ctx, "", storage.MetricTypeSpec{Name: name, DataType: "float"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := gw.UpsertMetricType(ctx, storage.MetricType{Name: "calc-in", DataType: "float", Official: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gw.CreateCalcRule(ctx, "", storage.CalcRuleSpec{Name: "calc", OwnerKind: rules.OwnerComponent,
+		Inputs: []rules.CalcInput{{Alias: "t", Key: "calc-in"}}, Reduce: rules.CalcReduce{Expr: "avg(t)"},
+		OutputKey: "calc-out"}, all); err != nil {
+		t.Fatalf("calc rule: %v", err)
+	}
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close(ctx) })
+	pending := func() int {
+		var n int
+		if err := conn.QueryRow(ctx, `select count(*) from calc_pending`).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	land := func(id, namespace string) {
+		t.Helper()
+		if _, err := gw.LandBatch(ctx, storage.IngestBatch{BatchID: id, Writer: storage.PushWriter(),
+			Metrics: []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: "codec-1", Namespace: namespace, Key: "calc-in", Value: 1, Source: "push"}},
+		}); err != nil {
+			t.Fatalf("land %s: %v", id, err)
+		}
+	}
+	land("qualified", "og")
+	if n := pending(); n != 0 {
+		t.Errorf("og/calc-in marked %d calc rules pending; the rule reads the operator's calc-in", n)
+	}
+	land("bare", "")
+	if n := pending(); n != 1 {
+		t.Errorf("a bare calc-in marked %d calc rules pending, want 1", n)
+	}
+}

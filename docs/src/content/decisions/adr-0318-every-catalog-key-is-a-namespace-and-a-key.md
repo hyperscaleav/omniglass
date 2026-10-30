@@ -48,6 +48,11 @@ refs: [318, 1431, 1432, 1433, 1434, 1307, 144]
     shipped row's references (a product's vendor, driver and type, a child type's parent, a command's
     target, a rule's key and events, a product's contract) resolve inside `og`, and a shipped driver
     validates against `og`.
+  - **The wire's namespace** (#1433): a telemetry sample and a push item carry `namespace`, read
+    in that namespace only when set. A sample onto the row its bare name already reaches is written
+    bare; one onto any other row lands there, held to that row's writer class, and is judged by no
+    event rule, marks no calc rule and settles no command, since each reads a key by its bare name.
+    A driver emit naming its namespace is #1456.
   - **Rulings (#318, 2026-10-29):** a role refuses ambiguity rather than shadow (a name both `local`
     and `og` hold reaches neither, so its holders lose the role, never gain the wrong one; operators
     have no role-create path yet, and exact role references come with one), and severity levels are
