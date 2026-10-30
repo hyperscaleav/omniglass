@@ -387,6 +387,16 @@ omniglass telemetry push --owner '{"kind":"system","ref":"huddle-1"}' --source r
   --properties '[{"name":"video-input","value":"hdmi2"}]'                          # needs telemetry:push
 ```
 
+An item may name the catalog namespace its name is read in. Omitted, the name walks the search path
+(your `local` type first, then the platform's `og` one); `"namespace":"og"` reaches the platform's type
+even where a type of yours of the same name shadows it, and a namespace holding no such type comes
+back under `rejected`, naming the namespace:
+
+```sh
+omniglass telemetry push --owner '{"kind":"component","ref":"codec-1"}' \
+  --metrics '[{"namespace":"og","name":"room-temperature","value":21.5}]'                  # needs telemetry:push
+```
+
 A system's samples read on its own surfaces: its metrics (an observed or a calculated series), its
 properties (declared, a calc rule's, or observed by a push, each row carrying its reconciliation, so a
 pushed property nothing declares reads `want: null`, its `is`, and no drift), and one series' history:
