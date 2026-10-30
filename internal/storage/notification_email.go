@@ -218,7 +218,7 @@ func (p *PG) mailRelay(ctx context.Context, q querier) (*MailRelay, string, erro
 func platformBasicAuthSecret(ctx context.Context, q querier, name string) (string, error) {
 	var id string
 	err := q.QueryRow(ctx, `select s.id::text from secret s join secret_type st on st.id = s.secret_type
-		where s.owner_kind = 'platform' and s.name = $1 and st.name = 'basic-auth'`, name).Scan(&id)
+		where s.owner_kind = 'platform' and s.name = $1 and st.namespace = 'og' and st.name = 'basic-auth'`, name).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", ErrSecretNotFound
 	}

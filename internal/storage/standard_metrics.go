@@ -90,7 +90,7 @@ func upsertStandardMetricRow(ctx context.Context, q querier, standardID string, 
 	}
 	sm, err := scanStandardMetric(q.QueryRow(ctx, `
 		insert into standard_metric (standard_id, metric_type_id, default_value, required)
-		values ((select id from standard where `+registryRefCol(standardID)+` = $1), (select id from metric_type where name = $2), $3, $4)
+		values ((select id from `+refRows("standard", standardID)+` standard where `+registryRefCol(standardID)+` = $1), (select id from metric_type_in_effect() metric_type where name = $2), $3, $4)
 		on conflict (standard_id, metric_type_id) do update
 			set default_value = excluded.default_value,
 			    required      = excluded.required,
@@ -108,7 +108,7 @@ func upsertStandardMetricRow(ctx context.Context, q querier, standardID string, 
 // standard is indistinguishable from one with an empty contract, since the read
 // side has nothing to disclose.
 func (p *PG) ListStandardMetrics(ctx context.Context, standardID string) ([]StandardMetric, error) {
-	rows, err := p.pool.Query(ctx, `select `+standardMetricCols+` from standard_metric where standard_id = (select id from standard where `+registryRefCol(standardID)+` = $1) order by (select mt.name from metric_type mt where mt.id = standard_metric.metric_type_id)`, standardID)
+	rows, err := p.pool.Query(ctx, `select `+standardMetricCols+` from standard_metric where standard_id = (select id from `+refRows("standard", standardID)+` standard where `+registryRefCol(standardID)+` = $1) order by (select mt.name from metric_type mt where mt.id = standard_metric.metric_type_id)`, standardID)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list standard metrics %q: %w", standardID, err)
 	}
@@ -143,7 +143,7 @@ func (p *PG) SetStandardMetric(ctx context.Context, actorID, standardID string, 
 	// The before-image decides create vs update and gives the audit its old side.
 	var before any
 	prior, err := scanStandardMetric(tx.QueryRow(ctx,
-		`select `+standardMetricCols+` from standard_metric where standard_id = (select id from standard where `+registryRefCol(standardID)+` = $1) and metric_type_id = (select id from metric_type where name = $2)`,
+		`select `+standardMetricCols+` from standard_metric where standard_id = (select id from `+refRows("standard", standardID)+` standard where `+registryRefCol(standardID)+` = $1) and metric_type_id = (select id from metric_type_in_effect() metric_type where name = $2)`,
 		standardID, spec.MetricTypeName))
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
@@ -187,7 +187,7 @@ func (p *PG) DeleteStandardMetric(ctx context.Context, actorID, standardID, metr
 	// the withdrawn declaration and a missing row is caught without a second read.
 	before, err := scanStandardMetric(tx.QueryRow(ctx, `
 		delete from standard_metric
-		where standard_id = (select id from standard where `+registryRefCol(standardID)+` = $1) and metric_type_id = (select id from metric_type where name = $2)
+		where standard_id = (select id from `+refRows("standard", standardID)+` standard where `+registryRefCol(standardID)+` = $1) and metric_type_id = (select id from metric_type_in_effect() metric_type where name = $2)
 		returning `+standardMetricCols, standardID, metricName))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrTypeNotFound

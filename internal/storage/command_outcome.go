@@ -80,7 +80,7 @@ func writeLifecycleEvent(ctx context.Context, q txQuerier, id int64, ownerKind, 
 	msg := fmt.Sprintf("command %s %s (id %d)", commandType, statusWords(o.status), id)
 	var eventID int64
 	sql := fmt.Sprintf(`insert into event (owner_kind, %s, event_type_id, instance, origin, message, attributes, provenance, source)
-		values ($1, $2, (select id from event_type where name = $3), $4, 'caused', $5, $6, 'observed', 'command')
+		values ($1, $2, (select id from event_type_in_effect() event_type where name = $3), $4, 'caused', $5, $6, 'observed', 'command')
 		returning id`, col)
 	if err := q.QueryRow(ctx, sql, ownerKind, arc, key, instance, msg, string(attrs)).Scan(&eventID); err != nil {
 		return fmt.Errorf("storage: record command %d lifecycle event: %w", id, err)

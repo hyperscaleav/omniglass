@@ -71,30 +71,33 @@ func scanSeverityLevel(row pgx.Row) (SeverityLevel, error) {
 	return l, err
 }
 
-// UpsertSeverityLevel installs an official level, authoritative on conflict
-// (the boot-seed bucket); an operator's own levels keep distinct names and
-// are untouched. An official level never takes over an operator's: a name or
-// rank an operator level already holds is refused, naming it, so a release
-// that ships a new official level in a gap an operator used stops the boot
-// with what to change rather than silently overwriting or failing opaquely.
+// UpsertSeverityLevel installs an official level in the og namespace,
+// authoritative over its own row only (the boot-seed bucket, #1431). An
+// official level never takes over an operator's: one of the same name is left
+// exactly as it is, and a rank a differently named operator level holds is
+// refused, naming it, so a release that ships a new level in a gap an operator
+// used stops the boot with what to change rather than silently overwriting or
+// failing opaquely. Ranks under namespaces are settled with the search path
+// (#1432).
 func (p *PG) UpsertSeverityLevel(ctx context.Context, l SeverityLevel) error {
 	if err := validateSeverityLevel(l.Name, l.Color, l.Rank); err != nil {
 		return fmt.Errorf("storage: upsert severity level %q: %w", l.Name, err)
 	}
 	var holder string
 	err := p.pool.QueryRow(ctx, `select name from severity_level
-		where (name = $1 or rank = $2) and not official limit 1`, l.Name, l.Rank).Scan(&holder)
+		where rank = $2 and name <> $1 and not official limit 1`, l.Name, l.Rank).Scan(&holder)
 	if err == nil {
-		return fmt.Errorf("%w: the operator level %q holds the name or rank of the official level %q (rank %d); rename or re-rank it",
+		return fmt.Errorf("%w: the operator level %q holds the rank of the official level %q (rank %d); re-rank it",
 			ErrSeverityLevelExists, holder, l.Name, l.Rank)
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return fmt.Errorf("storage: check severity level %q: %w", l.Name, err)
 	}
-	if _, err := p.pool.Exec(ctx, `insert into severity_level (name, label, color, rank, official)
-		values ($1, $2, $3, $4, $5)
+	if _, err := p.pool.Exec(ctx, `insert into severity_level (namespace, name, label, color, rank, official)
+		values (case when $5 then 'og' else 'local' end, $1, $2, $3, $4, $5)
 		on conflict (name) do update set label = excluded.label, color = excluded.color,
-			rank = excluded.rank, official = excluded.official, updated_at = now()`,
+			rank = excluded.rank, official = excluded.official, updated_at = now()
+		where severity_level.namespace = excluded.namespace`,
 		l.Name, labelOrNull(l.Label), l.Color, l.Rank, l.Official); err != nil {
 		if isUniqueViolation(err) {
 			return fmt.Errorf("%w: another level holds rank %d", ErrSeverityLevelExists, l.Rank)

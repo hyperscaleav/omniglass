@@ -354,7 +354,7 @@ func identityLockKey(conduitID, keyID, value string) string {
 // type delete to refuse with (nil when none do).
 func identityKeyInUse(ctx context.Context, q txQuerier, key string) error {
 	var n int
-	if err := q.QueryRow(ctx, `select count(*) from identity_binding b join property_type pt on pt.id = b.property_type_id
+	if err := q.QueryRow(ctx, `select count(*) from identity_binding b join property_type_in_effect() pt on pt.id = b.property_type_id
 		where pt.name = $1`, key).Scan(&n); err != nil {
 		return fmt.Errorf("storage: count identity bindings on %q: %w", key, err)
 	}
@@ -381,7 +381,7 @@ func validIdentityValue(value string) error {
 // identityKeyID resolves a match key to its registered property type's id.
 func identityKeyID(ctx context.Context, q txQuerier, key string) (string, error) {
 	var id string
-	err := q.QueryRow(ctx, `select id from property_type where name = $1`, key).Scan(&id)
+	err := q.QueryRow(ctx, `select id from property_type_in_effect() property_type where name = $1`, key).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", ErrIdentityBindingKeyUnregistered
 	}

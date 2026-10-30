@@ -448,7 +448,7 @@ func rulesOn(ctx context.Context, q querier, transition string) ([]queuedRule, e
 			coalesce(array_agg(nt.kind order by nt.name) filter (where nt.id is not null), '{}'),
 			coalesce(r.owner_principal_id::text, ''), coalesce(oh.username, ''), r.channels, r.opt_out_allowed
 		from action_rule r
-		join notification_type t on t.id = coalesce(r.notification_type_id, (select id from notification_type where name = $2 and official))
+		join notification_type t on t.id = coalesce(r.notification_type_id, (select id from notification_type where namespace = 'og' and name = $2))
 		left join action_rule_target art on art.rule_id = r.id
 		left join notification_target nt on nt.id = art.target_id and nt.enabled
 		left join principal op on op.id = r.owner_principal_id

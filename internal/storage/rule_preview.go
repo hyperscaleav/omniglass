@@ -121,7 +121,7 @@ func (p *PG) PreviewEventRule(ctx context.Context, spec RulePreviewSpec, visible
 	}
 	_, typeTable, _ := laneTables(r.SampleLane)
 	var typeID string
-	if err := tx.QueryRow(ctx, `select id::text from `+typeTable+` where name = $1`, r.SampleKey).Scan(&typeID); err != nil {
+	if err := tx.QueryRow(ctx, `select t.id::text from `+catalogRows(typeTable, "")+` t where t.name = $1`, r.SampleKey).Scan(&typeID); err != nil {
 		return nil, fmt.Errorf("storage: rule preview key: %w", err)
 	}
 	until, err := dbNow(ctx, tx)
@@ -272,7 +272,7 @@ func judgedInArrival(window []previewSample) []previewSample {
 func previewSelectorIDs(ctx context.Context, q querier, sel EventRuleSelector, visible scope.Set) ([]string, error) {
 	for _, t := range sel.ComponentTypes {
 		var ok bool
-		if err := q.QueryRow(ctx, `select exists (select 1 from component_type where name = $1)`, t).Scan(&ok); err != nil {
+		if err := q.QueryRow(ctx, `select exists (select 1 from component_type_in_effect() component_type where name = $1)`, t).Scan(&ok); err != nil {
 			return nil, fmt.Errorf("storage: check rule component type: %w", err)
 		}
 		if !ok {
@@ -295,7 +295,7 @@ func previewSelectorIDs(ctx context.Context, q querier, sel EventRuleSelector, v
 // those it names and those whose type falls within a type it names.
 func previewCandidates(ctx context.Context, q querier, sel EventRuleSelector, ids []string, visible scope.Set) ([]previewCandidate, error) {
 	f := newReadFilter(componentTable, visible, 4)
-	sub := `sub(id) as (select id from component_type where name = any($2)
+	sub := `sub(id) as (select id from component_type_in_effect() component_type where name = any($2)
 			union select ct.id from component_type ct join sub on ct.parent_id = sub.id)`
 	with := "with recursive " + sub + " "
 	if f.With != "" {

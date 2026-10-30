@@ -37,12 +37,12 @@ type PropertyTypePatch struct {
 }
 
 var propertyCols = `id, name, coalesce(label, ''), data_type, validation, fusion_policy, description, official, retention_days, ` +
-	calcWriterCol("output_property_type_id", "property_type")
+	calcWriterCol("output_property_type_id", "property_type") + `, namespace`
 
 func scanPropertyType(row pgx.Row) (*PropertyType, error) {
 	var prop PropertyType
 	var writer []byte
-	if err := row.Scan(&prop.ID, &prop.Name, &prop.Label, &prop.DataType, &prop.Validation, &prop.FusionPolicy, &prop.Description, &prop.Official, &prop.RetentionDays, &writer); err != nil {
+	if err := row.Scan(&prop.ID, &prop.Name, &prop.Label, &prop.DataType, &prop.Validation, &prop.FusionPolicy, &prop.Description, &prop.Official, &prop.RetentionDays, &writer, &prop.Namespace); err != nil {
 		return nil, err
 	}
 	prop.WrittenBy = parseCalcWriter(writer)
@@ -56,7 +56,7 @@ func (p *PG) GetPropertyType(ctx context.Context, name string) (*PropertyType, e
 	if err := RejectAddressForm("property_type", name); err != nil {
 		return nil, err
 	}
-	prop, err := scanPropertyType(p.pool.QueryRow(ctx, `select `+propertyCols+` from property_type where name = $1`, name))
+	prop, err := scanPropertyType(p.pool.QueryRow(ctx, `select `+propertyCols+` from property_type_in_effect() property_type where name = $1`, name))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrPropertyTypeNotFound
 	}
@@ -73,7 +73,7 @@ func guardPropertyMutable(ctx context.Context, q querier, name string) error {
 		return err
 	}
 	var official bool
-	err := q.QueryRow(ctx, `select official from property_type where name = $1`, name).Scan(&official)
+	err := q.QueryRow(ctx, `select official from property_type_in_effect() property_type where name = $1`, name).Scan(&official)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrPropertyTypeNotFound
 	}
@@ -111,8 +111,8 @@ func (p *PG) CreatePropertyType(ctx context.Context, actorID string, spec Proper
 	// it here where the operator can still choose a different one.
 	var clash bool
 	if err := tx.QueryRow(ctx,
-		`select exists (select 1 from event_type where name = $1)
-		     or exists (select 1 from metric_type where name = $1)`, spec.Name).Scan(&clash); err != nil {
+		`select exists (select 1 from event_type_in_effect() event_type where name = $1)
+		     or exists (select 1 from metric_type_in_effect() metric_type where name = $1)`, spec.Name).Scan(&clash); err != nil {
 		return nil, fmt.Errorf("storage: check registry clash for %q: %w", spec.Name, err)
 	}
 	if clash {
@@ -169,11 +169,11 @@ func (p *PG) UpdatePropertyType(ctx context.Context, actorID, name string, patch
 			label = case when $5::boolean then $2 else label end,
 			description  = coalesce($3, description),
 			validation   = coalesce($4, validation)
-		where name = $1`,
+		where id = (select id from property_type_in_effect() property_type where name = $1)`,
 		name, labelVal, patch.Description, patch.Validation, setLabel); err != nil {
 		return nil, fmt.Errorf("storage: update property %q: %w", name, err)
 	}
-	prop, err := scanPropertyType(tx.QueryRow(ctx, `select `+propertyCols+` from property_type where name = $1`, name))
+	prop, err := scanPropertyType(tx.QueryRow(ctx, `select `+propertyCols+` from property_type_in_effect() property_type where name = $1`, name))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrPropertyTypeNotFound
@@ -224,7 +224,7 @@ func (p *PG) DeletePropertyType(ctx context.Context, actorID, name string) error
 	if _, err := tx.Exec(ctx, `savepoint type_delete`); err != nil {
 		return fmt.Errorf("storage: savepoint: %w", err)
 	}
-	if _, err := tx.Exec(ctx, `delete from property_type where name = $1`, name); err != nil {
+	if _, err := tx.Exec(ctx, `delete from property_type where id = (select id from property_type_in_effect() property_type where name = $1)`, name); err != nil {
 		if _, rerr := tx.Exec(ctx, `rollback to savepoint type_delete`); rerr == nil {
 			if inUse := calcOutputInUse(ctx, tx, rules.LaneProperty, name, err); inUse != nil {
 				return inUse

@@ -584,7 +584,7 @@ func generateComponentName(ctx context.Context, tx pgx.Tx, stem string, parentID
 // component_type it is minting a stem from.
 func genericDeviceProductID(ctx context.Context, q querier) (string, error) {
 	var id string
-	if err := q.QueryRow(ctx, `select id from product where name = 'generic-device'`).Scan(&id); err != nil {
+	if err := q.QueryRow(ctx, `select id from product where namespace = 'og' and name = 'generic-device'`).Scan(&id); err != nil {
 		return "", fmt.Errorf("storage: resolve generic-device product: %w", err)
 	}
 	return id, nil
@@ -788,7 +788,7 @@ func systemTypeStemMoved(ctx context.Context, q querier, fromTypeID, toTypeID *s
 // fork whose image carries no rule, so reading the official column here would
 // keep naming locations from a rule the operator had already turned off.
 func locationNameRule(ctx context.Context, q querier, locationTypeID string) (*NameRule, error) {
-	lt, err := scanLocationTypeResolved(q.QueryRow(ctx, locationTypeResolved+` where lt.`+registryRefCol(locationTypeID)+` = $1`, locationTypeID))
+	lt, err := scanLocationTypeResolved(q.QueryRow(ctx, locationTypeResolved+` where lt.id = (select r.id from `+refRows("location_type", locationTypeID)+` r where r.`+registryRefCol(locationTypeID)+` = $1)`, locationTypeID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrUnknownType
 	}

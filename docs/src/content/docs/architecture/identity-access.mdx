@@ -180,7 +180,7 @@ named `ListSystemRoles` / `SetSystemRole` / `DeleteSystemRole` rather than colli
 `UpsertRole`.
 :::
 
-A role is a **capability set**: permissions per `(resource, action)`, in a `role` table with a uuid `id`, a globally unique renameable `name`, and an **`official` boolean**: `official: true` ships with the binary, seeded via the boot phase (`ON CONFLICT DO UPDATE` can patch a default permission on release); `official: false` is operator-created via the IAM API. **No overrides**: the create paths refuse a collision with an official name and the seed phase fails-safe against an existing operator role, diverging from the shadowable registries (role override risks lockout with no compensating use case), so a role name resolves to exactly one row.
+A role is a **capability set**: permissions per `(resource, action)`, in a `role` table with a uuid `id`, a renameable `name` unique within its namespace ([ADR-0318](/architecture/decisions/#adr-0318-every-catalog-key-is-a-namespace-and-a-key): `og` for the shipped roles), and an **`official` boolean**: `official: true` ships with the binary, seeded via the boot phase (`ON CONFLICT DO UPDATE` can patch a default permission on release); `official: false` is operator-created via the IAM API. **No overrides**: the create paths refuse a collision with an official name and the seed phase never writes an operator's role, diverging from the shadowable registries (role override risks lockout with no compensating use case): a role name both the operator's `local` and the shipped `og` namespace hold reaches neither (#1432, fail closed), so its holders lose that role rather than gain the wrong one, and a grant naming it is refused as an unknown role (422).
 
 ### The five official roles
 

@@ -217,12 +217,28 @@
       "name": "label_rule",
       "type": "text",
       "nullable": true
+     },
+     {
+      "name": "namespace",
+      "type": "text",
+      "nullable": false,
+      "default": "'local'::text"
+     }
+    ],
+    "checks": [
+     {
+      "name": "component_type_namespace_check",
+      "expr": "CHECK ((namespace ~ '^[a-z0-9][a-z0-9-]*$'::text))"
+     },
+     {
+      "name": "component_type_og_official_check",
+      "expr": "CHECK (((namespace \u003c\u003e 'og'::text) OR official))"
      }
     ],
     "uniques": [
      {
-      "name": "component_type_name_key",
-      "definition": "CREATE UNIQUE INDEX component_type_name_key ON public.component_type USING btree (name)"
+      "name": "component_type_namespace_name_key",
+      "definition": "CREATE UNIQUE INDEX component_type_namespace_name_key ON public.component_type USING btree (namespace, name)"
      }
     ]
    },
@@ -273,12 +289,28 @@
       "name": "spec",
       "type": "jsonb",
       "nullable": true
+     },
+     {
+      "name": "namespace",
+      "type": "text",
+      "nullable": false,
+      "default": "'local'::text"
+     }
+    ],
+    "checks": [
+     {
+      "name": "driver_namespace_check",
+      "expr": "CHECK ((namespace ~ '^[a-z0-9][a-z0-9-]*$'::text))"
+     },
+     {
+      "name": "driver_og_official_check",
+      "expr": "CHECK (((namespace \u003c\u003e 'og'::text) OR official))"
      }
     ],
     "uniques": [
      {
-      "name": "driver_name_key",
-      "definition": "CREATE UNIQUE INDEX driver_name_key ON public.driver USING btree (name)"
+      "name": "driver_namespace_name_key",
+      "definition": "CREATE UNIQUE INDEX driver_namespace_name_key ON public.driver USING btree (namespace, name)"
      }
     ]
    },
@@ -361,18 +393,32 @@
       "name": "label_rule",
       "type": "text",
       "nullable": true
+     },
+     {
+      "name": "namespace",
+      "type": "text",
+      "nullable": false,
+      "default": "'local'::text"
      }
     ],
     "checks": [
      {
       "name": "product_kind_check",
       "expr": "CHECK ((kind = ANY (ARRAY['device'::text, 'app'::text, 'service'::text])))"
+     },
+     {
+      "name": "product_namespace_check",
+      "expr": "CHECK ((namespace ~ '^[a-z0-9][a-z0-9-]*$'::text))"
+     },
+     {
+      "name": "product_og_official_check",
+      "expr": "CHECK (((namespace \u003c\u003e 'og'::text) OR official))"
      }
     ],
     "uniques": [
      {
-      "name": "product_name_key",
-      "definition": "CREATE UNIQUE INDEX product_name_key ON public.product USING btree (name)"
+      "name": "product_namespace_name_key",
+      "definition": "CREATE UNIQUE INDEX product_namespace_name_key ON public.product USING btree (namespace, name)"
      }
     ]
    },
@@ -570,12 +616,28 @@
       "name": "map",
       "type": "jsonb",
       "nullable": true
+     },
+     {
+      "name": "namespace",
+      "type": "text",
+      "nullable": false,
+      "default": "'local'::text"
+     }
+    ],
+    "checks": [
+     {
+      "name": "standard_namespace_check",
+      "expr": "CHECK ((namespace ~ '^[a-z0-9][a-z0-9-]*$'::text))"
+     },
+     {
+      "name": "standard_og_official_check",
+      "expr": "CHECK (((namespace \u003c\u003e 'og'::text) OR official))"
      }
     ],
     "uniques": [
      {
-      "name": "standard_name_key",
-      "definition": "CREATE UNIQUE INDEX standard_name_key ON public.standard USING btree (name)"
+      "name": "standard_namespace_name_key",
+      "definition": "CREATE UNIQUE INDEX standard_namespace_name_key ON public.standard USING btree (namespace, name)"
      }
     ]
    },
@@ -750,12 +812,28 @@
       "name": "label_rule",
       "type": "text",
       "nullable": true
+     },
+     {
+      "name": "namespace",
+      "type": "text",
+      "nullable": false,
+      "default": "'local'::text"
+     }
+    ],
+    "checks": [
+     {
+      "name": "system_type_namespace_check",
+      "expr": "CHECK ((namespace ~ '^[a-z0-9][a-z0-9-]*$'::text))"
+     },
+     {
+      "name": "system_type_og_official_check",
+      "expr": "CHECK (((namespace \u003c\u003e 'og'::text) OR official))"
      }
     ],
     "uniques": [
      {
-      "name": "system_type_name_key",
-      "definition": "CREATE UNIQUE INDEX system_type_name_key ON public.system_type USING btree (name)"
+      "name": "system_type_namespace_name_key",
+      "definition": "CREATE UNIQUE INDEX system_type_namespace_name_key ON public.system_type USING btree (namespace, name)"
      }
     ]
    },
@@ -819,18 +897,32 @@
       "nullable": false,
       "default": "uuidv7()",
       "pk": true
+     },
+     {
+      "name": "namespace",
+      "type": "text",
+      "nullable": false,
+      "default": "'local'::text"
      }
     ],
     "checks": [
      {
       "name": "vendor_kind_check",
       "expr": "CHECK ((kind = ANY (ARRAY['manufacturer'::text, 'integrator'::text, 'developer'::text])))"
+     },
+     {
+      "name": "vendor_namespace_check",
+      "expr": "CHECK ((namespace ~ '^[a-z0-9][a-z0-9-]*$'::text))"
+     },
+     {
+      "name": "vendor_og_official_check",
+      "expr": "CHECK (((namespace \u003c\u003e 'og'::text) OR official))"
      }
     ],
     "uniques": [
      {
-      "name": "vendor_name_key",
-      "definition": "CREATE UNIQUE INDEX vendor_name_key ON public.vendor USING btree (name)"
+      "name": "vendor_namespace_name_key",
+      "definition": "CREATE UNIQUE INDEX vendor_namespace_name_key ON public.vendor USING btree (namespace, name)"
      }
     ]
    }
@@ -1631,12 +1723,28 @@
       "nullable": false,
       "default": "uuidv7()",
       "pk": true
+     },
+     {
+      "name": "namespace",
+      "type": "text",
+      "nullable": false,
+      "default": "'local'::text"
+     }
+    ],
+    "checks": [
+     {
+      "name": "secret_type_namespace_check",
+      "expr": "CHECK ((namespace ~ '^[a-z0-9][a-z0-9-]*$'::text))"
+     },
+     {
+      "name": "secret_type_og_official_check",
+      "expr": "CHECK (((namespace \u003c\u003e 'og'::text) OR official))"
      }
     ],
     "uniques": [
      {
-      "name": "secret_type_name_key",
-      "definition": "CREATE UNIQUE INDEX secret_type_name_key ON public.secret_type USING btree (name)"
+      "name": "secret_type_namespace_name_key",
+      "definition": "CREATE UNIQUE INDEX secret_type_namespace_name_key ON public.secret_type USING btree (namespace, name)"
      }
     ]
    },
@@ -2363,18 +2471,32 @@
       "name": "name_rule",
       "type": "jsonb",
       "nullable": true
+     },
+     {
+      "name": "namespace",
+      "type": "text",
+      "nullable": false,
+      "default": "'local'::text"
      }
     ],
     "checks": [
      {
       "name": "location_type_name_rule_check",
       "expr": "CHECK (((name_rule IS NULL) OR (jsonb_typeof(name_rule) = 'object'::text)))"
+     },
+     {
+      "name": "location_type_namespace_check",
+      "expr": "CHECK ((namespace ~ '^[a-z0-9][a-z0-9-]*$'::text))"
+     },
+     {
+      "name": "location_type_og_official_check",
+      "expr": "CHECK (((namespace \u003c\u003e 'og'::text) OR official))"
      }
     ],
     "uniques": [
      {
-      "name": "location_type_name_key",
-      "definition": "CREATE UNIQUE INDEX location_type_name_key ON public.location_type USING btree (name)"
+      "name": "location_type_namespace_name_key",
+      "definition": "CREATE UNIQUE INDEX location_type_namespace_name_key ON public.location_type USING btree (namespace, name)"
      }
     ]
    },
@@ -3072,12 +3194,28 @@
       "nullable": false,
       "default": "uuidv7()",
       "pk": true
+     },
+     {
+      "name": "namespace",
+      "type": "text",
+      "nullable": false,
+      "default": "'local'::text"
+     }
+    ],
+    "checks": [
+     {
+      "name": "role_namespace_check",
+      "expr": "CHECK ((namespace ~ '^[a-z0-9][a-z0-9-]*$'::text))"
+     },
+     {
+      "name": "role_og_official_check",
+      "expr": "CHECK (((namespace \u003c\u003e 'og'::text) OR official))"
      }
     ],
     "uniques": [
      {
-      "name": "role_name_key",
-      "definition": "CREATE UNIQUE INDEX role_name_key ON public.role USING btree (name)"
+      "name": "role_namespace_name_key",
+      "definition": "CREATE UNIQUE INDEX role_namespace_name_key ON public.role USING btree (namespace, name)"
      }
     ]
    },
@@ -3490,12 +3628,26 @@
       "type": "boolean",
       "nullable": false,
       "default": "false"
+     },
+     {
+      "name": "namespace",
+      "type": "text",
+      "nullable": false,
+      "default": "'local'::text"
      }
     ],
     "checks": [
      {
       "name": "action_rule_channels_check",
       "expr": "CHECK ((((owner_principal_id IS NULL) AND (cardinality(channels) = 0)) OR ((owner_principal_id IS NOT NULL) AND (cardinality(channels) \u003e 0) AND (channels \u003c@ ARRAY['inbox'::text, 'email'::text]))))"
+     },
+     {
+      "name": "action_rule_namespace_check",
+      "expr": "CHECK ((namespace ~ '^[a-z0-9][a-z0-9-]*$'::text))"
+     },
+     {
+      "name": "action_rule_og_official_check",
+      "expr": "CHECK (((namespace \u003c\u003e 'og'::text) OR official))"
      },
      {
       "name": "action_rule_on_check",
@@ -3509,7 +3661,7 @@
      },
      {
       "name": "action_rule_platform_name_key",
-      "definition": "CREATE UNIQUE INDEX action_rule_platform_name_key ON public.action_rule USING btree (name) WHERE (owner_principal_id IS NULL)"
+      "definition": "CREATE UNIQUE INDEX action_rule_platform_name_key ON public.action_rule USING btree (namespace, name) WHERE (owner_principal_id IS NULL)"
      }
     ]
    },
@@ -3826,9 +3978,23 @@
       "type": "timestamp with time zone",
       "nullable": false,
       "default": "now()"
+     },
+     {
+      "name": "namespace",
+      "type": "text",
+      "nullable": false,
+      "default": "'local'::text"
      }
     ],
     "checks": [
+     {
+      "name": "calc_rule_namespace_check",
+      "expr": "CHECK ((namespace ~ '^[a-z0-9][a-z0-9-]*$'::text))"
+     },
+     {
+      "name": "calc_rule_og_official_check",
+      "expr": "CHECK (((namespace \u003c\u003e 'og'::text) OR official))"
+     },
      {
       "name": "calc_rule_output_check",
       "expr": "CHECK ((((output_lane = 'property'::text) AND (output_property_type_id IS NOT NULL) AND (output_metric_type_id IS NULL)) OR ((output_lane = 'metric'::text) AND (output_metric_type_id IS NOT NULL) AND (output_property_type_id IS NULL))))"
@@ -3848,8 +4014,8 @@
     ],
     "uniques": [
      {
-      "name": "calc_rule_name_key",
-      "definition": "CREATE UNIQUE INDEX calc_rule_name_key ON public.calc_rule USING btree (name)"
+      "name": "calc_rule_namespace_name_key",
+      "definition": "CREATE UNIQUE INDEX calc_rule_namespace_name_key ON public.calc_rule USING btree (namespace, name)"
      }
     ]
    },
@@ -4254,9 +4420,23 @@
       "nullable": true,
       "fk": true,
       "fk_target": "metric_type.id"
+     },
+     {
+      "name": "namespace",
+      "type": "text",
+      "nullable": false,
+      "default": "'local'::text"
      }
     ],
     "checks": [
+     {
+      "name": "command_type_namespace_check",
+      "expr": "CHECK ((namespace ~ '^[a-z0-9][a-z0-9-]*$'::text))"
+     },
+     {
+      "name": "command_type_og_official_check",
+      "expr": "CHECK (((namespace \u003c\u003e 'og'::text) OR official))"
+     },
      {
       "name": "command_type_target_arc_check",
       "expr": "CHECK (((target_property_type_id IS NULL) OR (target_metric_type_id IS NULL)))"
@@ -4264,8 +4444,8 @@
     ],
     "uniques": [
      {
-      "name": "command_type_name_key",
-      "definition": "CREATE UNIQUE INDEX command_type_name_key ON public.command_type USING btree (name)"
+      "name": "command_type_namespace_name_key",
+      "definition": "CREATE UNIQUE INDEX command_type_namespace_name_key ON public.command_type USING btree (namespace, name)"
      }
     ]
    },
@@ -4545,6 +4725,12 @@
       "nullable": true,
       "fk": true,
       "fk_target": "event_type.id"
+     },
+     {
+      "name": "namespace",
+      "type": "text",
+      "nullable": false,
+      "default": "'local'::text"
      }
     ],
     "checks": [
@@ -4557,14 +4743,22 @@
       "expr": "CHECK ((fire_sustain \u003e= '00:00:00'::interval))"
      },
      {
+      "name": "event_rule_namespace_check",
+      "expr": "CHECK ((namespace ~ '^[a-z0-9][a-z0-9-]*$'::text))"
+     },
+     {
+      "name": "event_rule_og_official_check",
+      "expr": "CHECK (((namespace \u003c\u003e 'og'::text) OR official))"
+     },
+     {
       "name": "event_rule_sample_lane_check",
       "expr": "CHECK ((sample_lane = ANY (ARRAY['property'::text, 'metric'::text])))"
      }
     ],
     "uniques": [
      {
-      "name": "event_rule_name_key",
-      "definition": "CREATE UNIQUE INDEX event_rule_name_key ON public.event_rule USING btree (name)"
+      "name": "event_rule_namespace_name_key",
+      "definition": "CREATE UNIQUE INDEX event_rule_namespace_name_key ON public.event_rule USING btree (namespace, name)"
      }
     ]
    },
@@ -4701,12 +4895,28 @@
       "type": "timestamp with time zone",
       "nullable": false,
       "default": "now()"
+     },
+     {
+      "name": "namespace",
+      "type": "text",
+      "nullable": false,
+      "default": "'local'::text"
+     }
+    ],
+    "checks": [
+     {
+      "name": "event_type_namespace_check",
+      "expr": "CHECK ((namespace ~ '^[a-z0-9][a-z0-9-]*$'::text))"
+     },
+     {
+      "name": "event_type_og_official_check",
+      "expr": "CHECK (((namespace \u003c\u003e 'og'::text) OR official))"
      }
     ],
     "uniques": [
      {
-      "name": "event_type_name_key",
-      "definition": "CREATE UNIQUE INDEX event_type_name_key ON public.event_type USING btree (name)"
+      "name": "event_type_namespace_name_key",
+      "definition": "CREATE UNIQUE INDEX event_type_namespace_name_key ON public.event_type USING btree (namespace, name)"
      }
     ]
    },
@@ -5026,6 +5236,12 @@
       "name": "retention_days",
       "type": "integer",
       "nullable": true
+     },
+     {
+      "name": "namespace",
+      "type": "text",
+      "nullable": false,
+      "default": "'local'::text"
      }
     ],
     "checks": [
@@ -5034,14 +5250,22 @@
       "expr": "CHECK ((data_type = ANY (ARRAY['int'::text, 'float'::text])))"
      },
      {
+      "name": "metric_type_namespace_check",
+      "expr": "CHECK ((namespace ~ '^[a-z0-9][a-z0-9-]*$'::text))"
+     },
+     {
+      "name": "metric_type_og_official_check",
+      "expr": "CHECK (((namespace \u003c\u003e 'og'::text) OR official))"
+     },
+     {
       "name": "metric_type_retention_days_check",
       "expr": "CHECK (((retention_days IS NULL) OR ((retention_days \u003e= 1) AND (retention_days \u003c= 36500))))"
      }
     ],
     "uniques": [
      {
-      "name": "metric_type_handle_key",
-      "definition": "CREATE UNIQUE INDEX metric_type_handle_key ON public.metric_type USING btree (name)"
+      "name": "metric_type_namespace_name_key",
+      "definition": "CREATE UNIQUE INDEX metric_type_namespace_name_key ON public.metric_type USING btree (namespace, name)"
      }
     ]
    },
@@ -5359,12 +5583,28 @@
       "type": "timestamp with time zone",
       "nullable": false,
       "default": "now()"
+     },
+     {
+      "name": "namespace",
+      "type": "text",
+      "nullable": false,
+      "default": "'local'::text"
+     }
+    ],
+    "checks": [
+     {
+      "name": "notification_type_namespace_check",
+      "expr": "CHECK ((namespace ~ '^[a-z0-9][a-z0-9-]*$'::text))"
+     },
+     {
+      "name": "notification_type_og_official_check",
+      "expr": "CHECK (((namespace \u003c\u003e 'og'::text) OR official))"
      }
     ],
     "uniques": [
      {
-      "name": "notification_type_name_key",
-      "definition": "CREATE UNIQUE INDEX notification_type_name_key ON public.notification_type USING btree (name)"
+      "name": "notification_type_namespace_name_key",
+      "definition": "CREATE UNIQUE INDEX notification_type_namespace_name_key ON public.notification_type USING btree (namespace, name)"
      }
     ]
    },
@@ -5555,6 +5795,12 @@
       "name": "retention_days",
       "type": "integer",
       "nullable": true
+     },
+     {
+      "name": "namespace",
+      "type": "text",
+      "nullable": false,
+      "default": "'local'::text"
      }
     ],
     "checks": [
@@ -5563,14 +5809,22 @@
       "expr": "CHECK ((data_type = ANY (ARRAY['string'::text, 'bool'::text, 'json'::text])))"
      },
      {
+      "name": "property_type_namespace_check",
+      "expr": "CHECK ((namespace ~ '^[a-z0-9][a-z0-9-]*$'::text))"
+     },
+     {
+      "name": "property_type_og_official_check",
+      "expr": "CHECK (((namespace \u003c\u003e 'og'::text) OR official))"
+     },
+     {
       "name": "property_type_retention_days_check",
       "expr": "CHECK (((retention_days IS NULL) OR ((retention_days \u003e= 1) AND (retention_days \u003c= 36500))))"
      }
     ],
     "uniques": [
      {
-      "name": "property_type_handle_key",
-      "definition": "CREATE UNIQUE INDEX property_type_handle_key ON public.property_type USING btree (name)"
+      "name": "property_type_namespace_name_key",
+      "definition": "CREATE UNIQUE INDEX property_type_namespace_name_key ON public.property_type USING btree (namespace, name)"
      }
     ]
    },
@@ -5621,9 +5875,23 @@
       "type": "timestamp with time zone",
       "nullable": false,
       "default": "now()"
+     },
+     {
+      "name": "namespace",
+      "type": "text",
+      "nullable": false,
+      "default": "'local'::text"
      }
     ],
     "checks": [
+     {
+      "name": "severity_level_namespace_check",
+      "expr": "CHECK ((namespace ~ '^[a-z0-9][a-z0-9-]*$'::text))"
+     },
+     {
+      "name": "severity_level_og_official_check",
+      "expr": "CHECK (((namespace \u003c\u003e 'og'::text) OR official))"
+     },
      {
       "name": "severity_level_rank_check",
       "expr": "CHECK ((rank \u003e 0))"

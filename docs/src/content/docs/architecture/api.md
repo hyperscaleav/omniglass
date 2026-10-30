@@ -744,7 +744,7 @@ answering 200 with `forked: true` under the same id, `DELETE` is still 422 (a fo
 ownership), and `POST /component-types/{id}:restore` discards the fork (409 when there is none) so later
 releases reach the row again. `component_type` is the first adopter; `official` and `forked` together
 are the row's origin (shipped, yours, or yours overriding shipped). The `{ref}` grammar is unchanged
-either way: one uuid and one name per logical row, forked or not, and the namespace never appears in a
+either way: one uuid per logical row, forked or not (a name names one row per namespace, ADR-0318), and the fork never appears in a
 URL.
 
 A **nested** registry (`component_type`, `system_type`) returns the flat set with each row's parent

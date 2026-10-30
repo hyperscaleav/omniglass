@@ -237,7 +237,7 @@ func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs
 		select u.ts, u.owner_kind, u.owner::uuid as owner, mt.id as type_id, u.instance, u.value, u.source, u.ord
 		from unnest($1::timestamptz[], $2::text[], $3::text[], $4::text[], $5::text[], $6::float8[], $7::text[])
 			with ordinality as u(ts, owner_kind, owner, key, instance, value, source, ord)
-		left join metric_type mt on mt.name = u.key
+		left join metric_type_in_effect() mt on mt.name = u.key
 	),
 	k as (select distinct type_id, owner_kind, owner, instance, source from u where type_id is not null),
 	known as (
@@ -341,7 +341,7 @@ func (p *PG) LatestMetric(ctx context.Context, componentRef, key string) (*Metri
 	err = p.pool.QueryRow(ctx, `
 		select n.ts, s.owner_kind, mt.name, s.instance, n.value, s.provenance, `+sourceRendered("s")+`
 		from metric_series s
-		join metric_type mt on mt.id = s.metric_type_id
+		join metric_type_in_effect() mt on mt.id = s.metric_type_id
 		cross join lateral (`+metricNewestSQL("s.id")+`) n
 		where s.owner_id = $1::uuid and s.owner_kind = 'component' and mt.name = $2 and s.provenance = 'observed'
 		order by n.ts desc, n.id desc
@@ -374,7 +374,7 @@ func (p *PG) LatestMetricInstance(ctx context.Context, componentRef, key, instan
 	err = p.pool.QueryRow(ctx, `
 		select n.ts, s.owner_kind, mt.name, s.instance, n.value, s.provenance, `+sourceRendered("s")+`
 		from metric_series s
-		join metric_type mt on mt.id = s.metric_type_id
+		join metric_type_in_effect() mt on mt.id = s.metric_type_id
 		cross join lateral (`+metricNewestSQL("s.id")+`) n
 		where s.owner_id = $1::uuid and s.owner_kind = 'component' and mt.name = $2 and s.instance = $3
 		  and s.provenance = 'observed'
@@ -407,7 +407,7 @@ func (p *PG) ListMetricSeries(ctx context.Context, ownerKind, ownerRef, key stri
 	rows, err := p.pool.Query(ctx, fmt.Sprintf(`
 		select x.ts, s.owner_kind, mt.name, s.instance, x.value, s.provenance, `+sourceRendered("s")+`
 		from metric_series s
-		join metric_type mt on mt.id = s.metric_type_id
+		join metric_type_in_effect() mt on mt.id = s.metric_type_id
 		cross join lateral (
 			select m.ts, m.id, m.value from metric m where m.series_id = s.id
 			union all

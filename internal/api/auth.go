@@ -135,6 +135,7 @@ func (a *authenticator) roleIndex(ctx context.Context) (rbac.RoleIndex, error) {
 			a.idxErr = err
 			return
 		}
+		roles = storage.RolesInEffect(roles)
 		rr := make([]rbac.Role, 0, len(roles))
 		for _, r := range roles {
 			rr = append(rr, rbac.Role{ID: r.Name, Permissions: r.Permissions, Inherits: r.Inherits})

@@ -1,6 +1,7 @@
 package storage_test
 
 import (
+	"context"
 	"encoding/json"
 	"regexp"
 	"slices"
@@ -14,6 +15,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/writerclass"
+	"github.com/jackc/pgx/v5"
 )
 
 // The one-time backfill that holds legacy rows to the one-writer ruling
@@ -41,10 +43,40 @@ func legacyBackfillSQL(t *testing.T) (up, down string) {
 // belowNarrowMetric stands a fixture's database just below the narrow metric
 // lane (#1275): the backfill is frozen at the wide metric table it ran
 // against, so it runs there, as it did on every install.
+//
+// Rolling back below the lane also rolls back every later migration, and the
+// gateway the fixtures write through depends on some of them (the catalog
+// namespace and its search path, #318). Those are re-applied: each migration
+// newer than the lane that is not part of it, run as its own up section. A
+// migration is idempotent by house rule, so the forward migrate after the
+// backfill runs it again harmlessly.
 func belowNarrowMetric(t *testing.T, dsn string) {
 	t.Helper()
 	if err := migrate.RollbackBelow(dsn, metricNarrowVersion); err != nil {
 		t.Fatalf("roll back below the narrow metric lane: %v", err)
+	}
+	entries, err := db.FS.ReadDir("migrations")
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn, err := pgx.Connect(context.Background(), dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close(context.Background()) }()
+	for _, e := range entries {
+		version, _, _ := strings.Cut(e.Name(), "_")
+		if version <= metricWideDropVersion {
+			continue
+		}
+		raw, err := db.FS.ReadFile("migrations/" + e.Name())
+		if err != nil {
+			t.Fatal(err)
+		}
+		up, _, _ := strings.Cut(string(raw), "-- migrate:down")
+		if _, err := conn.Exec(context.Background(), strings.TrimPrefix(up, "-- migrate:up")); err != nil {
+			t.Fatalf("re-apply %s beside the wide metric lane: %v", e.Name(), err)
+		}
 	}
 }
 

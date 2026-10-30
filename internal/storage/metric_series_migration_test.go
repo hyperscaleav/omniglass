@@ -22,6 +22,10 @@ import (
 
 const metricNarrowVersion = "20261029132025"
 
+// metricWideDropVersion is the swap's last step, named rather than assumed to
+// be the newest migration, so the test holds as later ones land on top.
+const metricWideDropVersion = "20261029132031"
+
 const metricBackfillFile = "migrations/20261029132028_metric_series_backfill.sql"
 
 // wideMetricCols is the wide table's every column, in the order the snapshot
@@ -231,7 +235,7 @@ func TestNarrowMetricBackfillRefusesALostRow(t *testing.T) {
 	// The swap's last step undone: the wide table back, empty, beside a full
 	// narrow lane. One row in it the narrow lane does not hold, and the copy
 	// (which copies nothing into a lane that is not empty) must refuse.
-	if err := migrate.RollbackOne(dsn); err != nil {
+	if err := migrate.RollbackBelow(dsn, metricWideDropVersion); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := conn.Exec(ctx, `insert into metric_wide (owner_kind, component_id, metric_type_id, value)

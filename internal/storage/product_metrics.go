@@ -95,8 +95,8 @@ func upsertProductMetricRow(ctx context.Context, q querier, productID string, sp
 	}
 	pm, err := scanProductMetric(q.QueryRow(ctx, `
 		insert into product_metric (product_id, metric_type_id, default_value, required)
-		values ((select id from product where `+registryRefCol(productID)+` = $1),
-		        (select id from metric_type where name = $2), $3, $4)
+		values ((select id from `+refRows("product", productID)+` product where `+registryRefCol(productID)+` = $1),
+		        (select id from metric_type_in_effect() metric_type where name = $2), $3, $4)
 		on conflict (product_id, metric_type_id) do update
 			set default_value = excluded.default_value,
 			    required      = excluded.required,
@@ -114,7 +114,7 @@ func upsertProductMetricRow(ctx context.Context, q querier, productID string, sp
 // is indistinguishable from one with an empty contract, since the read side has
 // nothing to disclose.
 func (p *PG) ListProductMetrics(ctx context.Context, productID string) ([]ProductMetric, error) {
-	rows, err := p.pool.Query(ctx, `select `+productMetricCols+` from product_metric where product_id = (select id from product where `+registryRefCol(productID)+` = $1) order by (select mt.name from metric_type mt where mt.id = product_metric.metric_type_id)`, productID)
+	rows, err := p.pool.Query(ctx, `select `+productMetricCols+` from product_metric where product_id = (select id from `+refRows("product", productID)+` product where `+registryRefCol(productID)+` = $1) order by (select mt.name from metric_type mt where mt.id = product_metric.metric_type_id)`, productID)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list product metrics %q: %w", productID, err)
 	}
@@ -149,7 +149,7 @@ func (p *PG) SetProductMetric(ctx context.Context, actorID, productID string, sp
 	// The before-image decides create vs update and gives the audit its old side.
 	var before any
 	prior, err := scanProductMetric(tx.QueryRow(ctx,
-		`select `+productMetricCols+` from product_metric where product_id = (select id from product where `+registryRefCol(productID)+` = $1) and metric_type_id = (select id from metric_type where name = $2)`,
+		`select `+productMetricCols+` from product_metric where product_id = (select id from `+refRows("product", productID)+` product where `+registryRefCol(productID)+` = $1) and metric_type_id = (select id from metric_type_in_effect() metric_type where name = $2)`,
 		productID, spec.MetricTypeName))
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
@@ -193,7 +193,7 @@ func (p *PG) DeleteProductMetric(ctx context.Context, actorID, productID, metric
 	// the withdrawn declaration and a missing row is caught without a second read.
 	before, err := scanProductMetric(tx.QueryRow(ctx, `
 		delete from product_metric
-		where product_id = (select id from product where `+registryRefCol(productID)+` = $1) and metric_type_id = (select id from metric_type where name = $2)
+		where product_id = (select id from `+refRows("product", productID)+` product where `+registryRefCol(productID)+` = $1) and metric_type_id = (select id from metric_type_in_effect() metric_type where name = $2)
 		returning `+productMetricCols, productID, metricName))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrTypeNotFound

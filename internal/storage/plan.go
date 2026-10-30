@@ -157,7 +157,7 @@ func (p *PG) createPlanTx(ctx context.Context, tx pgx.Tx, actorID string, plan P
 	out := &Planned{}
 	for _, f := range plan.Standards {
 		var exists bool
-		if err := tx.QueryRow(ctx, `select exists (select 1 from standard where name = $1)`, f.Name).Scan(&exists); err != nil {
+		if err := tx.QueryRow(ctx, `select exists (select 1 from standard_in_effect() standard where name = $1)`, f.Name).Scan(&exists); err != nil {
 			return nil, fmt.Errorf("storage: plan standard %s: %w", f.Name, err)
 		}
 		if exists {

@@ -104,7 +104,7 @@ func (p *PG) createStandardFromTemplateTx(ctx context.Context, tx pgx.Tx, actorI
 	var parent *string
 	if f.Parent != "" {
 		var id string
-		err := tx.QueryRow(ctx, `select id from standard where `+registryRefCol(f.Parent)+` = $1`, f.Parent).Scan(&id)
+		err := tx.QueryRow(ctx, `select id from `+refRows("standard", f.Parent)+` standard where `+registryRefCol(f.Parent)+` = $1`, f.Parent).Scan(&id)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("%w: %q", ErrTemplateParentMissing, f.Parent)
 		}

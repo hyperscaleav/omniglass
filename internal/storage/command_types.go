@@ -73,14 +73,19 @@ func (p *PG) UpsertCommandType(ctx context.Context, ct CommandType) error {
 	if err := checkSettleWindow(ct.SettleWindowSeconds); err != nil {
 		return fmt.Errorf("storage: upsert command type %q: %w", ct.Name, err)
 	}
-	propID, metricID, err := resolveTargets(ctx, p.pool, ct.TargetPropertyType, ct.TargetMetricType)
+	// A shipped command type targets a shipped key (#1432).
+	ns := ""
+	if ct.Official {
+		ns = NamespaceOG
+	}
+	propID, metricID, err := resolveTargets(ctx, p.pool, ct.TargetPropertyType, ct.TargetMetricType, ns)
 	if err != nil {
 		return fmt.Errorf("storage: upsert command type %q: %w", ct.Name, err)
 	}
 	_, err = p.pool.Exec(ctx, `
-		insert into command_type (name, label, description, params_schema, settle_window_seconds, target_property_type_id, target_metric_type_id, official)
-		values ($1, $2, $3, $4, $5, $6, $7, $8)
-		on conflict (name) do update set
+		insert into command_type (namespace, name, label, description, params_schema, settle_window_seconds, target_property_type_id, target_metric_type_id, official)
+		values (case when $8 then 'og' else 'local' end, $1, $2, $3, $4, $5, $6, $7, $8)
+		on conflict (namespace, name) do update set
 			label = excluded.label, description = excluded.description,
 			params_schema = excluded.params_schema, settle_window_seconds = excluded.settle_window_seconds,
 			target_property_type_id = excluded.target_property_type_id,
@@ -115,7 +120,7 @@ func (p *PG) GetCommandType(ctx context.Context, name string) (*CommandType, err
 	if err := RejectAddressForm("command_type", name); err != nil {
 		return nil, err
 	}
-	ct, err := scanCommandType(p.pool.QueryRow(ctx, `select `+commandTypeCols+` from command_type where name = $1`, name))
+	ct, err := scanCommandType(p.pool.QueryRow(ctx, `select `+commandTypeCols+` from command_type_in_effect() command_type where name = $1`, name))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrCommandTypeNotFound
 	}
@@ -155,7 +160,7 @@ func guardCommandTypeMutable(ctx context.Context, q querier, name string) error 
 		return err
 	}
 	var official bool
-	err := q.QueryRow(ctx, `select official from command_type where name = $1`, name).Scan(&official)
+	err := q.QueryRow(ctx, `select official from command_type_in_effect() command_type where name = $1`, name).Scan(&official)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrCommandTypeNotFound
 	}
@@ -204,13 +209,13 @@ func checkSettleWindow(seconds int) error {
 // rollup's, a calc rule's output that rule's. The create, the retarget and the
 // seed all resolve here, and the issue holds the stored target to the same
 // check, so a command type stored before this refusal opens nothing either.
-func resolveTarget(ctx context.Context, q querier, catalog, name string) (*string, error) {
+func resolveTarget(ctx context.Context, q querier, catalog, name, namespace string) (*string, error) {
 	if name == "" {
 		return nil, nil
 	}
 	noun := strings.TrimSuffix(catalog, "_type")
 	var id string
-	err := q.QueryRow(ctx, `select id from `+catalog+` where name = $1`, name).Scan(&id)
+	err := q.QueryRow(ctx, `select t.id from `+catalogRows(catalog, namespace)+` t where t.name = $1`, name).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, fmt.Errorf("%w: target %s %q is not registered", ErrCommandTypeInvalid, noun, name)
 	}
@@ -230,14 +235,14 @@ func resolveTarget(ctx context.Context, q querier, catalog, name string) (*strin
 // resolveTargets resolves both target arms at once, refusing when both are set:
 // the exclusive arc surfaces here as a named refusal, with the schema's CHECK as
 // the backstop rather than the message.
-func resolveTargets(ctx context.Context, q querier, propertyName, metricName string) (propID, metricID *string, err error) {
+func resolveTargets(ctx context.Context, q querier, propertyName, metricName, namespace string) (propID, metricID *string, err error) {
 	if propertyName != "" && metricName != "" {
 		return nil, nil, ErrCommandTypeTargetArc
 	}
-	if propID, err = resolveTarget(ctx, q, "property_type", propertyName); err != nil {
+	if propID, err = resolveTarget(ctx, q, "property_type", propertyName, namespace); err != nil {
 		return nil, nil, err
 	}
-	if metricID, err = resolveTarget(ctx, q, "metric_type", metricName); err != nil {
+	if metricID, err = resolveTarget(ctx, q, "metric_type", metricName, namespace); err != nil {
 		return nil, nil, err
 	}
 	return propID, metricID, nil
@@ -263,7 +268,7 @@ func (p *PG) CreateCommandType(ctx context.Context, actorID string, spec Command
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	propTarget, metricTarget, err := resolveTargets(ctx, tx, spec.TargetPropertyType, spec.TargetMetricType)
+	propTarget, metricTarget, err := resolveTargets(ctx, tx, spec.TargetPropertyType, spec.TargetMetricType, "")
 	if err != nil {
 		return nil, err
 	}
@@ -323,13 +328,13 @@ func (p *PG) UpdateCommandType(ctx context.Context, actorID, name string, patch 
 	}
 	var propTarget, metricTarget *string
 	if patch.TargetPropertyType != nil {
-		propTarget, err = resolveTarget(ctx, tx, "property_type", *patch.TargetPropertyType)
+		propTarget, err = resolveTarget(ctx, tx, "property_type", *patch.TargetPropertyType, "")
 		if err != nil {
 			return nil, err
 		}
 	}
 	if patch.TargetMetricType != nil {
-		metricTarget, err = resolveTarget(ctx, tx, "metric_type", *patch.TargetMetricType)
+		metricTarget, err = resolveTarget(ctx, tx, "metric_type", *patch.TargetMetricType, "")
 		if err != nil {
 			return nil, err
 		}
@@ -351,12 +356,12 @@ func (p *PG) UpdateCommandType(ctx context.Context, actorID, name string, patch 
 				when $8::boolean then $9::uuid
 				when $6::boolean and $7::uuid is not null then null
 				else target_metric_type_id end
-		where name = $1`,
+		where id = (select id from command_type_in_effect() command_type where name = $1)`,
 		name, labelVal, patch.Description, schemaArg(patch.ParamsSchema), patch.SettleWindowSeconds,
 		patch.TargetPropertyType != nil, propTarget, patch.TargetMetricType != nil, metricTarget, setLabel); err != nil {
 		return nil, fmt.Errorf("storage: update command type %q: %w", name, err)
 	}
-	ct, err := scanCommandType(tx.QueryRow(ctx, `select `+commandTypeCols+` from command_type where name = $1`, name))
+	ct, err := scanCommandType(tx.QueryRow(ctx, `select `+commandTypeCols+` from command_type_in_effect() command_type where name = $1`, name))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrCommandTypeNotFound
@@ -394,7 +399,7 @@ func (p *PG) DeleteCommandType(ctx context.Context, actorID, name string) error 
 		}
 		return fmt.Errorf("storage: audit image command_type %q: %w", name, err)
 	}
-	if _, err := tx.Exec(ctx, `delete from command_type where name = $1`, name); err != nil {
+	if _, err := tx.Exec(ctx, `delete from command_type where id = (select id from command_type_in_effect() command_type where name = $1)`, name); err != nil {
 		return fmt.Errorf("storage: delete command type %q: %w", name, err)
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "delete", "command_type", auditImageID(before), before, nil); err != nil {

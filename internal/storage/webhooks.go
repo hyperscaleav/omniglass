@@ -91,7 +91,7 @@ func (p *PG) mintWebhookToken(ctx context.Context, tx pgx.Tx, actorID, endpointI
 	}
 	s, err := scanSecretRow(tx.QueryRow(ctx, `
 		insert into secret (name, label, secret_type, owner_kind, component_id, value, admin_sensitive)
-		values ($1, 'Webhook token', (select id from secret_type where name = $1), 'component', $2, $3, false)
+		values ($1, 'Webhook token', (select id from secret_type_in_effect() secret_type where name = $1), 'component', $2, $3, false)
 		returning `+secretCols, WebhookTokenSecret, componentID, valueJSON), st.Shape())
 	if err != nil {
 		return mapSecretWriteErr(err)

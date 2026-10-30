@@ -566,7 +566,9 @@ func (UnimplementedGateway) UpdateDriver(context.Context, string, string, Driver
 }
 func (UnimplementedGateway) DeleteDriver(context.Context, string, string) error { return nil }
 
-func (UnimplementedGateway) UpsertComponentType(context.Context, ComponentType) error { return nil }
+func (UnimplementedGateway) UpsertComponentType(context.Context, ComponentType) (uuid.UUID, error) {
+	return uuid.Nil, nil
+}
 func (UnimplementedGateway) ListComponentTypes(context.Context) ([]ComponentType, error) {
 	return nil, nil
 }
@@ -590,7 +592,9 @@ func (UnimplementedGateway) TypeIsWithin(context.Context, uuid.UUID, uuid.UUID) 
 	return false, nil
 }
 
-func (UnimplementedGateway) UpsertSystemType(context.Context, SystemType) error { return nil }
+func (UnimplementedGateway) UpsertSystemType(context.Context, SystemType) (uuid.UUID, error) {
+	return uuid.Nil, nil
+}
 func (UnimplementedGateway) ListSystemTypes(context.Context) ([]SystemType, error) {
 	return nil, nil
 }

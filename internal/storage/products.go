@@ -53,7 +53,9 @@ type Product struct {
 	// ID is the uuid primary key, Name the renameable name. Its two
 	// references carry both forms for the same reason the fleet bodies do: the
 	// id is what the row points at, the name is what an operator reads and types.
-	ID                string
+	ID string
+	// Namespace is who named the product (#318): og for the platform's.
+	Namespace         string
 	Name              string
 	Label             string
 	VendorID          *string
@@ -111,13 +113,18 @@ const productCols = `id, name, coalesce(label, ''),
 	parent_product_id, (select q.name from product q where q.id = product.parent_product_id) as parent_handle,
 	(select ct.name from component_type ct where ct.id = product.component_type_id) as component_type_handle, component_type_id,
 	icon, label_rule,
-	official, created_at, updated_at`
+	official, created_at, updated_at, namespace`
 
 // resolveProductRef turns a handle or uuid into the product's uuid, for the
 // columns that store one.
 func resolveProductRef(ctx context.Context, q querier, ref string) (string, error) {
-	var id string
-	if err := q.QueryRow(ctx, `select id from product where `+registryRefCol(ref)+` = $1`, ref).Scan(&id); err != nil {
+	return resolveProductRefIn(ctx, q, ref, "")
+}
+
+// resolveProductRefIn resolves in one namespace, or along the search path when it is empty.
+func resolveProductRefIn(ctx context.Context, q querier, ref, namespace string) (string, error) {
+	id, err := resolveRefIn(ctx, q, "product", ref, namespace)
+	if err != nil {
 		return "", ErrProductRefNotFound
 	}
 	return id, nil
@@ -125,8 +132,13 @@ func resolveProductRef(ctx context.Context, q querier, ref string) (string, erro
 
 // resolveVendorRef does the same for a vendor reference.
 func resolveVendorRef(ctx context.Context, q querier, ref string) (string, error) {
-	var id string
-	if err := q.QueryRow(ctx, `select id from vendor where `+registryRefCol(ref)+` = $1`, ref).Scan(&id); err != nil {
+	return resolveVendorRefIn(ctx, q, ref, "")
+}
+
+// resolveVendorRefIn resolves in one namespace, or along the search path when it is empty.
+func resolveVendorRefIn(ctx context.Context, q querier, ref, namespace string) (string, error) {
+	id, err := resolveRefIn(ctx, q, "vendor", ref, namespace)
+	if err != nil {
 		return "", ErrProductRefNotFound
 	}
 	return id, nil
@@ -136,22 +148,28 @@ func resolveVendorRef(ctx context.Context, q querier, ref string) (string, error
 // supplied (handle or uuid) to the uuids the columns store. An unknown reference
 // is ErrProductRefNotFound rather than a NULL that would silently unlink it.
 func productRefs(ctx context.Context, q querier, m *Product) error {
+	// A shipped product's references are shipped rows: they resolve in og,
+	// whatever an operator holds of the same names (#1432).
+	ns := ""
+	if m.Official {
+		ns = NamespaceOG
+	}
 	if m.VendorID != nil && *m.VendorID != "" {
-		id, err := resolveVendorRef(ctx, q, *m.VendorID)
+		id, err := resolveVendorRefIn(ctx, q, *m.VendorID, ns)
 		if err != nil {
 			return err
 		}
 		m.VendorID = &id
 	}
 	if m.DriverID != nil && *m.DriverID != "" {
-		id, err := resolveDriverRef(ctx, q, *m.DriverID)
+		id, err := resolveDriverRefIn(ctx, q, *m.DriverID, ns)
 		if err != nil {
 			return err
 		}
 		m.DriverID = &id
 	}
 	if m.ParentProductID != nil && *m.ParentProductID != "" {
-		id, err := resolveProductRef(ctx, q, *m.ParentProductID)
+		id, err := resolveProductRefIn(ctx, q, *m.ParentProductID, ns)
 		if err != nil {
 			return err
 		}
@@ -162,8 +180,13 @@ func productRefs(ctx context.Context, q querier, m *Product) error {
 
 // resolveDriverRef turns a driver handle or uuid into the driver's uuid.
 func resolveDriverRef(ctx context.Context, q querier, ref string) (string, error) {
-	var id string
-	if err := q.QueryRow(ctx, `select id from driver where `+registryRefCol(ref)+` = $1`, ref).Scan(&id); err != nil {
+	return resolveDriverRefIn(ctx, q, ref, "")
+}
+
+// resolveDriverRefIn resolves in one namespace, or along the search path when it is empty.
+func resolveDriverRefIn(ctx context.Context, q querier, ref, namespace string) (string, error) {
+	id, err := resolveRefIn(ctx, q, "driver", ref, namespace)
+	if err != nil {
 		return "", ErrProductRefNotFound
 	}
 	return id, nil
@@ -175,8 +198,13 @@ func resolveDriverRef(ctx context.Context, q querier, ref string) (string, error
 // too: from a product write's point of view, an unknown component_type is no
 // different from an unknown vendor or driver.
 func resolveComponentTypeRef(ctx context.Context, q querier, ref string) (string, error) {
-	var id string
-	if err := q.QueryRow(ctx, `select id from component_type where `+registryRefCol(ref)+` = $1`, ref).Scan(&id); err != nil {
+	return resolveComponentTypeRefIn(ctx, q, ref, "")
+}
+
+// resolveComponentTypeRefIn resolves in one namespace, or along the search path when it is empty.
+func resolveComponentTypeRefIn(ctx context.Context, q querier, ref, namespace string) (string, error) {
+	id, err := resolveRefIn(ctx, q, "component_type", ref, namespace)
+	if err != nil {
 		return "", ErrProductRefNotFound
 	}
 	return id, nil
@@ -204,7 +232,7 @@ func genericComponentTypeForKind(kind string) string {
 
 func scanProduct(row pgx.Row) (*Product, error) {
 	var m Product
-	if err := row.Scan(&m.ID, &m.Name, &m.Label, &m.VendorID, &m.VendorName, &m.DriverID, &m.DriverName, &m.Kind, &m.ParentProductID, &m.ParentProductName, &m.ComponentType, &m.ComponentTypeID, &m.Icon, &m.LabelRule, &m.Official, &m.CreatedAt, &m.UpdatedAt); err != nil {
+	if err := row.Scan(&m.ID, &m.Name, &m.Label, &m.VendorID, &m.VendorName, &m.DriverID, &m.DriverName, &m.Kind, &m.ParentProductID, &m.ParentProductName, &m.ComponentType, &m.ComponentTypeID, &m.Icon, &m.LabelRule, &m.Official, &m.CreatedAt, &m.UpdatedAt, &m.Namespace); err != nil {
 		return nil, err
 	}
 	return &m, nil
@@ -248,14 +276,18 @@ func (p *PG) UpsertProduct(ctx context.Context, m Product) error {
 	if componentTypeRef == "" {
 		componentTypeRef = genericComponentTypeForKind(m.Kind)
 	}
-	componentTypeID, err := resolveComponentTypeRef(ctx, tx, componentTypeRef)
+	ns := ""
+	if m.Official {
+		ns = NamespaceOG
+	}
+	componentTypeID, err := resolveComponentTypeRefIn(ctx, tx, componentTypeRef, ns)
 	if err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx, `
-		insert into product (name, label, vendor_id, driver_id, kind, parent_product_id, component_type_id, icon, label_rule, official)
-		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-		on conflict (name) do update
+		insert into product (namespace, name, label, vendor_id, driver_id, kind, parent_product_id, component_type_id, icon, label_rule, official)
+		values (case when $10 then 'og' else 'local' end, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		on conflict (namespace, name) do update
 			set label      = excluded.label,
 			    vendor_id         = excluded.vendor_id,
 			    driver_id         = excluded.driver_id,
@@ -301,7 +333,7 @@ func (p *PG) ListProducts(ctx context.Context) ([]Product, error) {
 
 // GetProduct resolves one product by id. An unknown id is ErrTypeNotFound.
 func (p *PG) GetProduct(ctx context.Context, id string) (*Product, error) {
-	m, err := scanProduct(p.pool.QueryRow(ctx, `select `+productCols+` from product where `+registryRefCol(id)+` = $1`, id))
+	m, err := scanProduct(p.pool.QueryRow(ctx, `select `+productCols+` from `+refRows("product", id)+` product where `+registryRefCol(id)+` = $1`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrTypeNotFound
 	}
@@ -438,7 +470,7 @@ func (p *PG) UpdateProduct(ctx context.Context, actorID, id string, patch Produc
 				else $9::text
 			end,
 			updated_at        = now()
-		where `+registryRefCol(id)+` = $1
+		where id = (select id from `+refRows("product", id)+` t where `+registryRefCol(id)+` = $1)
 		returning `+productCols,
 		id, labelVal, resolved.VendorID, resolved.DriverID, patch.Kind, resolved.ParentProductID, componentTypeID, patch.Icon, patch.LabelRule, setLabel))
 	if err != nil {
@@ -492,7 +524,7 @@ func (p *PG) DeleteProduct(ctx context.Context, actorID, id string) error {
 	if err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `delete from product where `+registryRefCol(id)+` = $1`, id); err != nil {
+	if _, err := tx.Exec(ctx, `delete from product where id = (select id from `+refRows("product", id)+` t where `+registryRefCol(id)+` = $1)`, id); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23503" {
 			return ErrTypeInUse

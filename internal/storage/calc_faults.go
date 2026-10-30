@@ -147,10 +147,10 @@ func calcOutputInUse(ctx context.Context, q querier, lane rules.Lane, key string
 	if lane == rules.LaneProperty {
 		col, table = "output_property_type_id", "property_type"
 	}
-	sql := `select c.name from calc_rule c join ` + table + ` t on t.id = c.` + col + ` where t.name = $1 order by c.name`
+	sql := `select c.name from calc_rule c join ` + catalogRows(table, "") + ` t on t.id = c.` + col + ` where t.name = $1 order by c.name`
 	if reads {
 		col = strings.TrimPrefix(col, "output_")
-		sql = `select distinct c.name from calc_rule c join calc_rule_input i on i.rule_id = c.id join ` + table + ` t on t.id = i.` + col + `
+		sql = `select distinct c.name from calc_rule c join calc_rule_input i on i.rule_id = c.id join ` + catalogRows(table, "") + ` t on t.id = i.` + col + `
 			where t.name = $1 order by c.name`
 	}
 	rows, qerr := q.Query(ctx, sql, key)

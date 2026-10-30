@@ -253,11 +253,16 @@ func TestOfficialEventRules(t *testing.T) {
 	if _, err := gw.UpdateEventRule(ctx, "", "reachability-lost", storage.EventRulePatch{Enabled: &off}, all); !errors.Is(err, storage.ErrEventRuleOfficial) {
 		t.Fatalf("editing the official rule: err %v, want ErrEventRuleOfficial", err)
 	}
-	if _, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: "mine", SampleKey: "room-temperature", Fire: criteria("gt", 1), Severity: "info"}, all); err != nil {
+	created, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: "mine", SampleKey: "room-temperature", Fire: criteria("gt", 1), Severity: "info"}, all)
+	if err != nil {
 		t.Fatal(err)
 	}
-	err = gw.UpsertEventRule(ctx, storage.EventRuleSpec{FireEventType: "condition-started", Name: "mine", SampleKey: "room-temperature", Fire: criteria("gt", 2), Severity: "info"})
-	if !errors.Is(err, storage.ErrEventRuleExists) {
-		t.Fatalf("an official rule named like an operator's: err %v, want ErrEventRuleExists", err)
+	// An official rule named like an operator's never writes it, and the boot
+	// goes on (#1431).
+	if err := gw.UpsertEventRule(ctx, storage.EventRuleSpec{FireEventType: "condition-started", Name: "mine", SampleKey: "room-temperature", Fire: criteria("gt", 2), Severity: "info"}); err != nil {
+		t.Fatalf("an official rule named like an operator's: err %v, want nil", err)
+	}
+	if mine, err := gw.GetEventRule(ctx, "mine", all); err != nil || mine.Official || mine.Version != created.Version || mine.UpdatedAt != created.UpdatedAt {
+		t.Fatalf("the operator's rule after the seed = %+v (err %v), want it untouched", mine, err)
 	}
 }

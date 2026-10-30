@@ -152,7 +152,7 @@ func (p *PG) IssueCommand(ctx context.Context, actorID, ownerKind, ownerID, comm
 	}
 	var causedID int64
 	eventSQL := fmt.Sprintf(`insert into event (owner_kind, %s, event_type_id, instance, origin, message, attributes, provenance, source)
-		values ($1, $2, (select id from event_type where name = $6), $3, 'caused', $4, $5, 'observed', 'command')
+		values ($1, $2, (select id from event_type_in_effect() event_type where name = $6), $3, 'caused', $4, $5, 'observed', 'command')
 		returning id`, col)
 	msg := fmt.Sprintf("command %s issued", commandType)
 	if err := tx.QueryRow(ctx, eventSQL, ownerKind, arc, instance, msg, attrs, commandIssuedEvent).Scan(&causedID); err != nil {
@@ -172,7 +172,7 @@ func (p *PG) IssueCommand(ctx context.Context, actorID, ownerKind, ownerID, comm
 	// lifecycle event, since nothing settled it but the issue itself.
 	cmdSQL := fmt.Sprintf(`insert into command (owner_kind, %s, command_type_id, instance, params, actor, caused_event_id, status, settled_at,
 			settled_by, reason)
-		values ($1, $2, (select id from command_type where name = $3), $4, $5, $6, $7, $8,
+		values ($1, $2, (select id from command_type_in_effect() command_type where name = $3), $4, $5, $6, $7, $8,
 		        case when $8 = 'issued' then null else now() end,
 		        case when $8 = 'issued' then null else '`+SettledByIssue+`' end,
 		        case when $8 = 'issued' then null else '`+fireAndForgetReason+`' end)
@@ -192,7 +192,7 @@ func (p *PG) IssueCommand(ctx context.Context, actorID, ownerKind, ownerID, comm
 			// this is its first command.
 			metricSQL := fmt.Sprintf(`with series as (
 					insert into metric_series (metric_type_id, owner_kind, %s, instance, provenance, source)
-					values ((select id from metric_type where name = $3), $1, $2, $4, 'intended', 'command')
+					values ((select id from metric_type_in_effect() metric_type where name = $3), $1, $2, $4, 'intended', 'command')
 					on conflict (owner_id, metric_type_id, instance, provenance, source, collector_node_id, source_conduit_id)
 						do update set source = excluded.source
 					returning id)
@@ -203,7 +203,7 @@ func (p *PG) IssueCommand(ctx context.Context, actorID, ownerKind, ownerID, comm
 			}
 		} else {
 			propSQL := fmt.Sprintf(`insert into property (owner_kind, %s, property_type_id, instance, provenance, value, source, event_id, command_id)
-				values ($1, $2, (select id from property_type where name = $3), $4, 'intended',
+				values ($1, $2, (select id from property_type_in_effect() property_type where name = $3), $4, 'intended',
 				        $5::jsonb, 'command', $6, $7)`, col)
 			if _, err := tx.Exec(ctx, propSQL, ownerKind, arc, ct.TargetPropertyType, instance, []byte(value), causedID, cmd.ID); err != nil {
 				return nil, fmt.Errorf("storage: open intended value for %q: %w", commandType, err)

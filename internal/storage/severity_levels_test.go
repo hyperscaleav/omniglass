@@ -148,23 +148,22 @@ func TestSeverityReRankMovesHealth(t *testing.T) {
 	}
 }
 
-// An official level never takes over an operator's: a name or a rank an
-// operator level already holds is refused with a message naming it, not
-// silently overwritten and not a raw constraint error.
-func TestSeverityOfficialUpsertRefusesAnOperatorLevel(t *testing.T) {
+// An official level never takes over an operator's (#1431): one of the same
+// name leaves it alone and the boot goes on; a rank a differently named
+// operator level holds is refused with a message naming it, not silently
+// overwritten and not a raw constraint error.
+func TestSeverityOfficialUpsertLeavesAnOperatorLevelAlone(t *testing.T) {
 	f := newHealthFixture(t)
 	ctx := context.Background()
 	if _, err := f.gw.CreateSeverityLevel(ctx, "", storage.SeverityLevel{Name: "p1", Color: "red", Rank: 45}, all); err != nil {
 		t.Fatal(err)
 	}
-	for _, l := range []storage.SeverityLevel{
-		{Name: "p1", Color: "red", Rank: 60, Official: true},
-		{Name: "catastrophe", Color: "darkred", Rank: 45, Official: true},
-	} {
-		err := f.gw.UpsertSeverityLevel(ctx, l)
-		if !errors.Is(err, storage.ErrSeverityLevelExists) || !strings.Contains(err.Error(), "p1") {
-			t.Errorf("official %+v: err %v, want ErrSeverityLevelExists naming the operator level p1", l, err)
-		}
+	if err := f.gw.UpsertSeverityLevel(ctx, storage.SeverityLevel{Name: "p1", Color: "red", Rank: 60, Official: true}); err != nil {
+		t.Errorf("an official level named like the operator's: err %v, want nil", err)
+	}
+	err := f.gw.UpsertSeverityLevel(ctx, storage.SeverityLevel{Name: "catastrophe", Color: "darkred", Rank: 45, Official: true})
+	if !errors.Is(err, storage.ErrSeverityLevelExists) || !strings.Contains(err.Error(), "p1") {
+		t.Errorf("an official level at the operator's rank: err %v, want ErrSeverityLevelExists naming the operator level p1", err)
 	}
 	if got, _ := f.gw.GetSeverityLevel(ctx, "p1"); got == nil || got.Official || got.Rank != 45 {
 		t.Fatalf("p1 = %+v, want the operator's level untouched", got)

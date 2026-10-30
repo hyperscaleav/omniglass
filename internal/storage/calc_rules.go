@@ -195,7 +195,7 @@ func scanCalcRule(row pgx.Row) (CalcRule, error) {
 // readCalcRule reads one rule by name or uuid (a name is never uuid-shaped),
 // optionally locking it.
 func readCalcRule(ctx context.Context, q querier, ref string, lock bool) (CalcRule, error) {
-	sql := calcRuleSelect + ` where c.name = $1 or c.id::text = $1`
+	sql := calcRuleSelect + ` where c.id::text = $1 or c.id = (select e.id from calc_rule_in_effect() e where e.name = $1)`
 	if lock {
 		sql += ` for update of c`
 	}
@@ -268,26 +268,26 @@ type sampleKey struct {
 // resolves the name to (the same rule resolveRuleLane takes: an operator's row
 // shadows an official one, #1307), or by id in either.
 func resolveSampleKey(ctx context.Context, q querier, ref string) (sampleKey, bool, error) {
-	col := "name"
-	if isUUID(ref) {
-		col = "id::text"
-	}
+	// By id, either catalog; by name, the one row the search path resolves
+	// the name to (namespace and catalog both).
+	where, args := `id::text = $1`, []any{ref}
 	var k sampleKey
 	inProperty, inMetric := true, true
-	if col == "name" {
+	if !isUUID(ref) {
 		holders, err := nameHolders(ctx, q, ref)
 		if err != nil {
 			return k, false, err
 		}
-		lane, _, _ := ResolveNameLane(ref, holders)
-		inProperty, inMetric = lane == "property", lane == "metric"
+		h, _, _ := ResolveNameLane(ref, holders)
+		inProperty, inMetric = h.Lane == "property", h.Lane == "metric"
+		where, args = `name = $1 and namespace = $2`, []any{ref, h.Namespace}
 	}
 	if !inProperty && !inMetric {
 		return k, false, nil
 	}
 	err := pgx.ErrNoRows
 	if inProperty {
-		err = q.QueryRow(ctx, `select id::text, name, data_type from property_type where `+col+` = $1`, ref).Scan(&k.id, &k.name, &k.dataType)
+		err = q.QueryRow(ctx, `select id::text, name, data_type from property_type where `+where, args...).Scan(&k.id, &k.name, &k.dataType)
 	}
 	if err == nil {
 		k.lane = rules.LaneProperty
@@ -298,7 +298,7 @@ func resolveSampleKey(ctx context.Context, q querier, ref string) (sampleKey, bo
 		return k, false, fmt.Errorf("storage: resolve sample key %q: %w", ref, err)
 	}
 	if inMetric {
-		err = q.QueryRow(ctx, `select id::text, name from metric_type where `+col+` = $1`, ref).Scan(&k.id, &k.name)
+		err = q.QueryRow(ctx, `select id::text, name from metric_type where `+where, args...).Scan(&k.id, &k.name)
 	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return k, false, nil
@@ -905,7 +905,7 @@ func resolveSystemSelector(ctx context.Context, q querier, sel *CalcRuleSelector
 			continue
 		}
 		var ok bool
-		if err := q.QueryRow(ctx, `select exists (select 1 from system_type where name = $1)`, t).Scan(&ok); err != nil {
+		if err := q.QueryRow(ctx, `select exists (select 1 from system_type_in_effect() system_type where name = $1)`, t).Scan(&ok); err != nil {
 			return fmt.Errorf("storage: check rule system type: %w", err)
 		}
 		if !ok {

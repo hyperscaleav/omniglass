@@ -132,7 +132,7 @@ func (e *ruleEvaluator) typeID(ctx context.Context, tx pgx.Tx, name string) (uui
 		return id, true
 	}
 	var s string
-	if err := tx.QueryRow(ctx, `select id::text from component_type where name = $1`, name).Scan(&s); err != nil {
+	if err := tx.QueryRow(ctx, `select id::text from component_type_in_effect() component_type where name = $1`, name).Scan(&s); err != nil {
 		return uuid.UUID{}, false
 	}
 	id, err := uuid.Parse(s)
@@ -350,13 +350,13 @@ func (e *ruleEvaluator) stampJudged(ctx context.Context, tx pgx.Tx) error {
 //
 // It returns the ids of the rules that judged the sample.
 func (e *ruleEvaluator) judge(ctx context.Context, tx pgx.Tx, lane rules.Lane, ownerID, key, instance string, ts time.Time, value any) ([]string, error) {
-	newer := `select exists (select 1 from property s join property_type t on t.id = s.property_type_id
+	newer := `select exists (select 1 from property s join property_type_in_effect() t on t.id = s.property_type_id
 		where s.component_id = $1::uuid and t.name = $2 and s.instance = $3 and s.ts > $4)`
 	if lane == rules.LaneMetric {
 		// The metric lane's samples are its hot tier: a command's intended
 		// row (the declared tier) is not an observation and judges nothing
 		// (#1275).
-		newer = `select exists (select 1 from metric_series s join metric_type t on t.id = s.metric_type_id
+		newer = `select exists (select 1 from metric_series s join metric_type_in_effect() t on t.id = s.metric_type_id
 			join metric m on m.series_id = s.id
 			where s.owner_id = $1::uuid and s.owner_kind = 'component' and t.name = $2 and s.instance = $3 and m.ts > $4)`
 	}
@@ -511,7 +511,7 @@ func newestSamples(ctx context.Context, tx pgx.Tx, lane rules.Lane, key, compone
 		// Each component series' newest sample, one probe a series rather
 		// than a read of the key's history.
 		q = `select distinct on (s.owner_id, s.instance) s.owner_id::text, s.instance, n.value
-			from metric_series s join metric_type t on t.id = s.metric_type_id
+			from metric_series s join metric_type_in_effect() t on t.id = s.metric_type_id
 			cross join lateral (` + metricNewestSQL("s.id") + `) n
 			where t.name = $1 and s.owner_kind = 'component'
 			order by s.owner_id, s.instance, n.ts desc, n.id desc`
@@ -538,7 +538,7 @@ func newestSamples(ctx context.Context, tx pgx.Tx, lane rules.Lane, key, compone
 func newestOfSeries(ctx context.Context, tx pgx.Tx, lane rules.Lane, key, componentID, instance string) ([]seriesSample, error) {
 	_, typeTable, _ := laneTables(lane)
 	var typeID string
-	err := tx.QueryRow(ctx, `select id::text from `+typeTable+` where name = $1`, key).Scan(&typeID)
+	err := tx.QueryRow(ctx, `select t.id::text from `+catalogRows(typeTable, "")+` t where t.name = $1`, key).Scan(&typeID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -707,7 +707,7 @@ func writeRuleEvent(ctx context.Context, tx pgx.Tx, r EventRule, eventType strin
 	}
 	if _, err := tx.Exec(ctx, `insert into event (owner_kind, component_id, event_type_id, instance, origin, message, attributes,
 			provenance, source, source_rule, source_rule_version, derived_by_rule_id, alarm_id)
-		values ('component', $1::uuid, (select id from event_type where name = $2), $3, 'derived', $4, $5::jsonb,
+		values ('component', $1::uuid, (select id from event_type_in_effect() event_type where name = $2), $3, 'derived', $4, $5::jsonb,
 			'observed', 'rule', $6, $7, $8::uuid, $9::uuid)`,
 		comp.ID, eventType, instance, ruleMessage(r), string(b), r.Name, r.Version, r.ID, nullIfEmpty(alarmID)); err != nil {
 		return fmt.Errorf("storage: rule %s event %s on %s: %w", r.Name, eventType, comp.Name, err)

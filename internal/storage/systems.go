@@ -287,9 +287,10 @@ func mapStandardWriteErr(err error) error {
 // re-running the same id updates it in place.
 func (p *PG) UpsertStandard(ctx context.Context, st Standard) error {
 	_, err := p.pool.Exec(ctx, `
-		insert into standard (name, official, label, parent_standard_id, label_rule)
-		values ($1, $2, $3, (select id from standard where name = nullif($4, '')), $5)
-		on conflict (name) do update
+		insert into standard (namespace, name, official, label, parent_standard_id, label_rule)
+		values (case when $2 then 'og' else 'local' end, $1, $2, $3,
+			(select id from standard where name = nullif($4, '') and namespace = case when $2 then 'og' else 'local' end), $5)
+		on conflict (namespace, name) do update
 			set official           = excluded.official,
 			    label       = excluded.label,
 			    parent_standard_id = excluded.parent_standard_id,
@@ -324,7 +325,7 @@ func (p *PG) ListStandards(ctx context.Context) ([]Standard, error) {
 
 // GetStandard resolves one standard by id. An unknown id is ErrTypeNotFound.
 func (p *PG) GetStandard(ctx context.Context, id string) (*Standard, error) {
-	st, err := scanStandard(p.pool.QueryRow(ctx, `select `+standardCols+` from standard where `+registryRefCol(id)+` = $1`, id))
+	st, err := scanStandard(p.pool.QueryRow(ctx, `select `+standardCols+` from `+refRows("standard", id)+` standard where `+registryRefCol(id)+` = $1`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrTypeNotFound
 	}
@@ -363,13 +364,13 @@ func (p *PG) CreateStandard(ctx context.Context, actorID string, st Standard) (*
 
 	if st.ParentStandardID != nil && *st.ParentStandardID != "" {
 		var known bool
-		if err := tx.QueryRow(ctx, `select true from standard where `+registryRefCol(*st.ParentStandardID)+` = $1`, *st.ParentStandardID).Scan(&known); err != nil {
+		if err := tx.QueryRow(ctx, `select true from `+refRows("standard", *st.ParentStandardID)+` standard where `+registryRefCol(*st.ParentStandardID)+` = $1`, *st.ParentStandardID).Scan(&known); err != nil {
 			return nil, ErrParentStandardNotFound
 		}
 	}
 	created, err := scanStandard(tx.QueryRow(ctx, `
 		insert into standard (name, official, label, parent_standard_id, label_rule)
-		values ($1, false, $2, (select id from standard where name = $3 or id::text = $3), $4)
+		values ($1, false, $2, (select id from standard where id::text = $3 or id = (select e.id from standard_in_effect() e where e.name = $3)), $4)
 		returning `+standardCols,
 		st.Name, labelOrNull(st.Label), st.ParentStandardID, nilIfEmpty(st.LabelRule)))
 	if err != nil {
@@ -416,7 +417,7 @@ func (p *PG) UpdateStandard(ctx context.Context, actorID, id string, patch Stand
 	st, err := scanStandard(tx.QueryRow(ctx, `
 		update standard set
 			label       = case when $5::boolean then $2 else label end,
-			parent_standard_id = coalesce((select id from standard where name = $3 or id::text = $3), parent_standard_id),
+			parent_standard_id = coalesce((select id from standard where id::text = $3 or id = (select e.id from standard_in_effect() e where e.name = $3)), parent_standard_id),
 			-- An explicit empty string CLEARS the rule; see UpdateComponentType's
 			-- own label_rule CASE for why this is not a coalesce.
 			label_rule         = case
@@ -431,7 +432,7 @@ func (p *PG) UpdateStandard(ctx context.Context, actorID, id string, patch Stand
 				else map
 			end,
 			updated_at         = now()
-		where `+registryRefCol(id)+` = $1
+		where id = (select id from `+refRows("standard", id)+` t where `+registryRefCol(id)+` = $1)
 		returning `+standardCols,
 		id, labelVal, patch.ParentStandardID, patch.LabelRule, setLabel, patch.Map != nil, mapPatchValue(patch.Map)))
 	if err != nil {
@@ -470,7 +471,7 @@ func (p *PG) DeleteStandard(ctx context.Context, actorID, id string) error {
 		if err := lockRoleNames(ctx, q); err != nil {
 			return err
 		}
-		if _, err := q.Exec(ctx, `select 1 from standard where `+registryRefCol(id)+` = $1 for update`, id); err != nil {
+		if _, err := q.Exec(ctx, `select 1 from standard where id = (select r.id from `+refRows("standard", id)+` r where r.`+registryRefCol(id)+` = $1) for update`, id); err != nil {
 			return fmt.Errorf("storage: lock standard %s: %w", id, err)
 		}
 		return nil
@@ -688,7 +689,7 @@ func (p *PG) createSystemTx(ctx context.Context, tx pgx.Tx, actorID string, spec
 	var standardID *string
 	if spec.StandardID != nil {
 		var sid string
-		err := tx.QueryRow(ctx, `select id from standard where `+registryRefCol(*spec.StandardID)+` = $1`, *spec.StandardID).Scan(&sid)
+		err := tx.QueryRow(ctx, `select id from `+refRows("standard", *spec.StandardID)+` standard where `+registryRefCol(*spec.StandardID)+` = $1`, *spec.StandardID).Scan(&sid)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrUnknownStandard
 		} else if err != nil {
@@ -703,7 +704,7 @@ func (p *PG) createSystemTx(ctx context.Context, tx pgx.Tx, actorID string, spec
 	var systemTypeID *string
 	if spec.SystemTypeID != nil {
 		var tid string
-		err := tx.QueryRow(ctx, `select id from system_type where `+registryRefCol(*spec.SystemTypeID)+` = $1`, *spec.SystemTypeID).Scan(&tid)
+		err := tx.QueryRow(ctx, `select id from `+refRows("system_type", *spec.SystemTypeID)+` system_type where `+registryRefCol(*spec.SystemTypeID)+` = $1`, *spec.SystemTypeID).Scan(&tid)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrUnknownSystemType
 		} else if err != nil {
@@ -876,7 +877,7 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 	var systemTypePatchID *string
 	if patch.SystemTypeID != nil && *patch.SystemTypeID != "" {
 		var tid string
-		if err := tx.QueryRow(ctx, `select id from system_type where `+registryRefCol(*patch.SystemTypeID)+` = $1`, *patch.SystemTypeID).Scan(&tid); err != nil {
+		if err := tx.QueryRow(ctx, `select id from `+refRows("system_type", *patch.SystemTypeID)+` system_type where `+registryRefCol(*patch.SystemTypeID)+` = $1`, *patch.SystemTypeID).Scan(&tid); err != nil {
 			return nil, ErrUnknownSystemType
 		}
 		systemTypePatchID = &tid
@@ -1027,7 +1028,7 @@ func resolveStandardPatch(ctx context.Context, q querier, ref *string) (*string,
 		return nil, nil
 	}
 	var id string
-	if err := q.QueryRow(ctx, `select id from standard where `+registryRefCol(*ref)+` = $1`, *ref).Scan(&id); err != nil {
+	if err := q.QueryRow(ctx, `select id from `+refRows("standard", *ref)+` standard where `+registryRefCol(*ref)+` = $1`, *ref).Scan(&id); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrUnknownStandard
 		}

@@ -538,7 +538,7 @@ the release owns. They now **fork** it
   keyed on the shipped row's own uuid, and every read resolves the shadow over the official row.
 - The shipped row is **never written**, so the next release can still improve it, and **restore**
   (`POST /component-types/{id}:restore`) discards the shadow to take those improvements back.
-- The **address never changes**: one uuid and one name per logical row, forked or not, so foreign
+- The **address never changes**: one uuid per logical row, forked or not (a name names one row per namespace, ADR-0318), so foreign
   keys, the tree walks, the audit trail and the URL all keep naming what they already named. The
   namespace is not an addressing concept and never reaches a caller.
 - A fork restates **facts**, never **structure**: the uuid, the name, the `official` flag and the

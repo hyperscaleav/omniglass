@@ -71,13 +71,13 @@ func writeUnboundIdentities(ctx context.Context, tx pgx.Tx, us []UnboundIdentity
 		insert into unbound_identity (conduit_id, property_type_id, value, heard_count, first_heard_at, last_heard_at, carried_type_ids)
 		select u.conduit::uuid, t.id, u.value, u.n, u.first_at, u.last_at, array(
 			select coalesce(mt.id, pt.id, et.id) from unnest(u.keys::text[]) as k(name)
-			left join metric_type mt on mt.name = k.name
-			left join property_type pt on pt.name = k.name
-			left join event_type et on et.name = k.name
+			left join metric_type_in_effect() mt on mt.name = k.name
+			left join property_type_in_effect() pt on pt.name = k.name
+			left join event_type_in_effect() et on et.name = k.name
 			where coalesce(mt.id, pt.id, et.id) is not null)
 		from unnest($1::text[], $2::text[], $3::text[], $4::bigint[], $5::timestamptz[], $6::timestamptz[], $7::text[])
 			as u(conduit, key, value, n, first_at, last_at, keys)
-		join property_type t on t.name = u.key
+		join property_type_in_effect() t on t.name = u.key
 		where not exists (select 1 from identity_binding b
 			where b.conduit_id = u.conduit::uuid and b.property_type_id = t.id and b.value = u.value)
 		on conflict (conduit_id, property_type_id, value) do update set

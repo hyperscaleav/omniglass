@@ -268,7 +268,7 @@ func (p *PG) intendedSeries(ctx context.Context, q querier, ct *CommandType, own
 	sql := fmt.Sprintf(`select coalesce((select `+commandSeriesSQL+` from command c where c.id = s.command_id), '')
 		from property s
 		where s.owner_kind = $1 and s.%[1]s = $2
-		  and s.property_type_id = (select id from property_type where name = $3)
+		  and s.property_type_id = (select k.id from property_type_in_effect() k where k.name = $3)
 		  and s.instance = $4 and s.provenance = 'intended'
 		order by s.ts desc, s.id desc
 		limit 1`, col)
@@ -278,7 +278,7 @@ func (p *PG) intendedSeries(ctx context.Context, q querier, ct *CommandType, own
 		sql = `select coalesce((select ` + commandSeriesSQL + ` from command c where c.id = d.command_id), '')
 		from metric_series s
 		join metric_declared d on d.series_id = s.id
-		where ` + metricSeriesWhere("s", "$1", "$2::uuid", "(select id from metric_type where name = $3)") + `
+		where ` + metricSeriesWhere("s", "$1", "$2::uuid", "(select k.id from metric_type_in_effect() k where k.name = $3)") + `
 		  and s.instance = $4 and s.provenance = 'intended'
 		order by d.ts desc, d.id desc
 		limit 1`
@@ -321,7 +321,7 @@ func (p *PG) settleOnObservation(ctx context.Context, q txQuerier, ownerKind, ar
 	}
 	rows.Close()
 	for _, name := range types {
-		ct, err := scanCommandType(q.QueryRow(ctx, `select `+commandTypeCols+` from command_type where name = $1`, name))
+		ct, err := scanCommandType(q.QueryRow(ctx, `select `+commandTypeCols+` from command_type_in_effect() command_type where name = $1`, name))
 		if err != nil {
 			return fmt.Errorf("storage: command type %s: %w", name, err)
 		}
@@ -501,7 +501,7 @@ func (p *PG) latestMetricValue(ctx context.Context, q querier, ownerKind, ownerI
 	}
 	sql := `select n.value, n.ts, s.provenance from metric_series s
 		cross join lateral (` + newest + `) n
-		where ` + metricSeriesWhere("s", "$1", "$2::uuid", "(select id from metric_type where name = $3)") + `
+		where ` + metricSeriesWhere("s", "$1", "$2::uuid", "(select k.id from metric_type_in_effect() k where k.name = $3)") + `
 		  and s.instance = $4 and s.provenance = $5
 		order by n.ts desc, n.id desc
 		limit 1`

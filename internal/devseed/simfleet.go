@@ -63,7 +63,7 @@ func seedSimFleet(ctx context.Context, gw storage.Gateway, actorID string, portO
 		return fmt.Errorf("devseed: list products: %w", err)
 	}
 	drivers := map[string]string{}
-	for _, p := range products {
+	for _, p := range storage.InEffect(products, func(p storage.Product) (string, string) { return p.Namespace, p.Name }) {
 		if p.DriverName != nil {
 			drivers[p.Name] = *p.DriverName
 		}
@@ -214,7 +214,7 @@ func seedSimEndpoints(ctx context.Context, gw storage.Gateway, actorID string, d
 		return fmt.Errorf("devseed: list drivers: %w", err)
 	}
 	specs := map[string]*driver.Spec{}
-	for _, d := range drivers {
+	for _, d := range storage.InEffect(drivers, func(d storage.Driver) (string, string) { return d.Namespace, d.Name }) {
 		if len(d.Spec) == 0 {
 			continue
 		}

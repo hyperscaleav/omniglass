@@ -105,12 +105,14 @@ func mapSystemTypeWriteErr(err error) error {
 // phase's write. Authoritative (ON CONFLICT DO UPDATE) like component_type's,
 // not seed-if-absent like location_type's example content: the coarse taxonomy
 // is shipped reference data a fleet reads, not content it owns. Idempotent:
-// re-seeding the same name updates it in place, id stable.
-func (p *PG) UpsertSystemType(ctx context.Context, st SystemType) error {
-	_, err := p.pool.Exec(ctx, `
-		insert into system_type (name, label, stem, icon, abbrev, label_rule, official, parent_id)
-		values ($1, $2, $3, $4, $5, $6, $7, $8)
-		on conflict (name) do update
+// re-seeding the same name updates it in place, id stable. It returns the
+// row's id, so the seed names the row it wrote (#1432).
+func (p *PG) UpsertSystemType(ctx context.Context, st SystemType) (uuid.UUID, error) {
+	var id uuid.UUID
+	err := p.pool.QueryRow(ctx, `
+		insert into system_type (namespace, name, label, stem, icon, abbrev, label_rule, official, parent_id)
+		values (case when $7 then 'og' else 'local' end, $1, $2, $3, $4, $5, $6, $7, $8)
+		on conflict (namespace, name) do update
 			set label = excluded.label,
 			    stem         = excluded.stem,
 			    icon         = excluded.icon,
@@ -118,12 +120,13 @@ func (p *PG) UpsertSystemType(ctx context.Context, st SystemType) error {
 			    label_rule   = excluded.label_rule,
 			    official     = excluded.official,
 			    parent_id    = excluded.parent_id,
-			    updated_at   = now()`,
-		st.Name, labelOrNull(st.Label), st.Stem, st.Icon, st.Abbrev, nilIfEmpty(st.LabelRule), st.Official, st.ParentID)
+			    updated_at   = now()
+		returning id`,
+		st.Name, labelOrNull(st.Label), st.Stem, st.Icon, st.Abbrev, nilIfEmpty(st.LabelRule), st.Official, st.ParentID).Scan(&id)
 	if err != nil {
-		return fmt.Errorf("storage: upsert system_type %q: %w", st.Name, mapSystemTypeWriteErr(err))
+		return uuid.Nil, fmt.Errorf("storage: upsert system_type %q: %w", st.Name, mapSystemTypeWriteErr(err))
 	}
-	return nil
+	return id, nil
 }
 
 // ListSystemTypes returns every system_type, ordered alphabetically by
@@ -149,7 +152,7 @@ func (p *PG) ListSystemTypes(ctx context.Context) ([]SystemType, error) {
 // GetSystemType resolves one system_type by name or id. An unknown ref is
 // ErrTypeNotFound.
 func (p *PG) GetSystemType(ctx context.Context, ref string) (*SystemType, error) {
-	st, err := scanSystemType(p.pool.QueryRow(ctx, `select `+systemTypeCols+` from system_type where `+registryRefCol(ref)+` = $1`, ref))
+	st, err := scanSystemType(p.pool.QueryRow(ctx, `select `+systemTypeCols+` from `+refRows("system_type", ref)+` system_type where `+registryRefCol(ref)+` = $1`, ref))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrTypeNotFound
 	}
@@ -247,7 +250,7 @@ func (p *PG) UpdateSystemType(ctx context.Context, actorID, ref string, patch Sy
 	// only when the patch actually clears, so an ordinary edit pays nothing.
 	if patch.Stem != nil && *patch.Stem == "" {
 		var parentID *uuid.UUID
-		if err := tx.QueryRow(ctx, `select parent_id from system_type where `+registryRefCol(ref)+` = $1`, ref).Scan(&parentID); err != nil {
+		if err := tx.QueryRow(ctx, `select parent_id from `+refRows("system_type", ref)+` system_type where id = (select id from `+refRows("system_type", ref)+` t where `+registryRefCol(ref)+` = $1)`, ref).Scan(&parentID); err != nil {
 			return nil, fmt.Errorf("storage: load system_type %q parent: %w", ref, err)
 		}
 		if clearsARootStem(patch.Stem, parentID) {
@@ -276,7 +279,7 @@ func (p *PG) UpdateSystemType(ctx context.Context, actorID, ref string, patch Sy
 			abbrev       = case when $5::text is null then abbrev     else nullif($5::text, '') end,
 			label_rule   = case when $6::text is null then label_rule else nullif($6::text, '') end,
 			updated_at   = now()
-		where `+registryRefCol(ref)+` = $1
+		where id = (select id from `+refRows("system_type", ref)+` t where `+registryRefCol(ref)+` = $1)
 		returning `+systemTypeCols,
 		ref, labelVal, patch.Stem, patch.Icon, patch.Abbrev, patch.LabelRule, setLabel))
 	if err != nil {

@@ -962,7 +962,7 @@ func resetCalcRuleWork(ctx context.Context, tx pgx.Tx, r CalcRule) error {
 		ids = []string{}
 	}
 	if _, err := tx.Exec(ctx, `with recursive accepted(id) as (
-			select id from component_type where name = any($3::text[])
+			select id from component_type_in_effect() component_type where name = any($3::text[])
 			union
 			select ct.id from component_type ct join accepted a on ct.parent_id = a.id
 		)

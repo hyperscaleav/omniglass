@@ -16,7 +16,9 @@ import (
 // inherits names parent role ids. official roles ship with the binary and are
 // kept authoritative by the boot-seed phase.
 type Role struct {
-	ID          string
+	ID string
+	// Namespace is who named the role (#318): og for the platform's.
+	Namespace   string
 	Name        string
 	Official    bool
 	Permissions []string
@@ -38,9 +40,9 @@ func (p *PG) UpsertRole(ctx context.Context, r Role) error {
 		r.Inherits = []string{}
 	}
 	_, err := p.pool.Exec(ctx, `
-		insert into role (name, official, permissions, inherits, label, description)
-		values ($1, $2, $3, $4, $5, $6)
-		on conflict (name) do update
+		insert into role (namespace, name, official, permissions, inherits, label, description)
+		values (case when $2 then 'og' else 'local' end, $1, $2, $3, $4, $5, $6)
+		on conflict (namespace, name) do update
 			set official     = excluded.official,
 			    permissions  = excluded.permissions,
 			    inherits     = excluded.inherits,
@@ -121,7 +123,7 @@ func (p *PG) BootstrapOwner(ctx context.Context, spec OwnerSpec) (created bool, 
 		}
 	}
 	if _, err := tx.Exec(ctx,
-		`insert into principal_grant (principal_id, role_id, scope_kind) values ($1, (select id from role where name = 'owner'), 'all')`,
+		`insert into principal_grant (principal_id, role_id, scope_kind) values ($1, (select id from role where namespace = 'og' and name = 'owner'), 'all')`,
 		pid); err != nil {
 		return false, fmt.Errorf("storage: bootstrap grant: %w", err)
 	}
@@ -1250,7 +1252,7 @@ func (p *PG) CreateGrant(ctx context.Context, actorID, principalID string, spec 
 
 	var gid string
 	err = tx.QueryRow(ctx,
-		`insert into principal_grant (principal_id, role_id, scope_kind, scope_id, scope_op) values ($1, (select id from role where `+registryRefCol(spec.Role)+` = $2), $3, $4, $5) returning id`,
+		`insert into principal_grant (principal_id, role_id, scope_kind, scope_id, scope_op) values ($1, (select id from `+refRows("role", spec.Role)+` role where `+registryRefCol(spec.Role)+` = $2), $3, $4, $5) returning id`,
 		principalID, spec.Role, spec.ScopeKind, nullize(spec.ScopeID), spec.ScopeOp).Scan(&gid)
 	if err != nil {
 		return nil, mapGrantWriteErr(err)
@@ -1374,7 +1376,7 @@ func activeOwnerRemains(ctx context.Context, tx pgx.Tx) (bool, error) {
 		select exists(
 			select 1 from principal_grant g
 			join principal pr on pr.id = g.principal_id
-			where g.role_id = (select id from role where name = 'owner') and g.scope_kind = 'all' and pr.active
+			where g.role_id = (select id from role where namespace = 'og' and name = 'owner') and g.scope_kind = 'all' and pr.active
 		)`).Scan(&ok)
 	return ok, err
 }
@@ -1619,7 +1621,7 @@ func (p *PG) loadPrincipal(ctx context.Context, pr *Principal) error {
 
 // ListRoles returns every role, for building the in-process role index.
 func (p *PG) ListRoles(ctx context.Context) ([]Role, error) {
-	rows, err := p.pool.Query(ctx, `select id, name, official, permissions, inherits, coalesce(label, ''), coalesce(description, '') from role order by name`)
+	rows, err := p.pool.Query(ctx, `select id, name, official, permissions, inherits, coalesce(label, ''), coalesce(description, ''), namespace from role order by name`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list roles: %w", err)
 	}
@@ -1627,12 +1629,35 @@ func (p *PG) ListRoles(ctx context.Context) ([]Role, error) {
 	var out []Role
 	for rows.Next() {
 		var r Role
-		if err := rows.Scan(&r.ID, &r.Name, &r.Official, &r.Permissions, &r.Inherits, &r.Label, &r.Description); err != nil {
+		if err := rows.Scan(&r.ID, &r.Name, &r.Official, &r.Permissions, &r.Inherits, &r.Label, &r.Description, &r.Namespace); err != nil {
 			return nil, fmt.Errorf("storage: scan role: %w", err)
 		}
 		out = append(out, r)
 	}
 	return out, rows.Err()
+}
+
+// RolesInEffect is the roles a bare role name reaches (#1432): a role refuses
+// ambiguity rather than shadow (the #318 ruling), so a name both the operator's
+// local and the platform's og namespace hold reaches neither, and a role in any
+// other namespace is never reached by a bare name. The permission index is built
+// from these, so an ambiguous name fails closed: its holders lose the role
+// rather than gain the wrong one. (Operators have no role-create path yet;
+// grants that name a role exactly come with it.)
+func RolesInEffect(roles []Role) []Role {
+	held := map[string]int{}
+	for _, r := range roles {
+		if r.Namespace == NamespaceLocal || r.Namespace == NamespaceOG || r.Namespace == "" {
+			held[r.Name]++
+		}
+	}
+	out := make([]Role, 0, len(roles))
+	for _, r := range roles {
+		if (r.Namespace == NamespaceLocal || r.Namespace == NamespaceOG || r.Namespace == "") && held[r.Name] == 1 {
+			out = append(out, r)
+		}
+	}
+	return out
 }
 
 // EnsureServicePrincipal finds the service principal of that name, or creates
@@ -1740,7 +1765,10 @@ func (p *PG) EnsureRole(ctx context.Context, actorID string, r Role) error {
 	defer func() { _ = tx.Rollback(ctx) }()
 	var official bool
 	var perms []string
-	err = tx.QueryRow(ctx, `select official, permissions from role where name = $1`, r.Name).Scan(&official, &perms)
+	// A role of the name in either tier answers (#1432): a shipped one is a
+	// conflict, and an operator's is the one wanted only with these permissions.
+	err = tx.QueryRow(ctx, `select official, permissions from role where name = $1 and namespace in ('local', 'og')
+		order by official desc limit 1`, r.Name).Scan(&official, &perms)
 	if err == nil {
 		if official || !sameStrings(perms, r.Permissions) {
 			return ErrRoleConflict
