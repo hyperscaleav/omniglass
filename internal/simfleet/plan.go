@@ -37,15 +37,17 @@ const (
 // references, keyed by driver: an attach is offered only to a caller who can
 // read it.
 var AttachSecret = map[string]string{
-	"snmp-generic":     CommunitySecret,
-	"boreal-beam-snmp": CommunitySecret,
-	"polaris-amp-snmp": CommunitySecret,
-	"kestrel-api":      KestrelLoginSecret,
-	"http-json":        CensusKeySecret,
-	"ucc-rooms":        UCCTokenSecret,
-	"boreal-cast-api":  CastKeySecret,
-	"lyra-arc-snmp":    CommunitySecret,
-	"lyra-hx-snmp":     CommunitySecret,
+	"snmp-generic":           CommunitySecret,
+	"boreal-beam-snmp":       CommunitySecret,
+	"polaris-amp-snmp":       CommunitySecret,
+	"kestrel-api":            KestrelLoginSecret,
+	"http-json":              CensusKeySecret,
+	"ucc-rooms":              UCCTokenSecret,
+	"boreal-cast-api":        CastKeySecret,
+	"lyra-arc-snmp":          CommunitySecret,
+	"lyra-hx-snmp":           CommunitySecret,
+	"meridian-switcher-snmp": CommunitySecret,
+	"meridian-extender-snmp": CommunitySecret,
 }
 
 // AddressCap is how many addresses the simulated block holds: 256 third
@@ -149,11 +151,13 @@ func Plan(comps []Component, used map[string]bool, cat Catalog) ([]Device, error
 // then its products get a probe (the dev seed's test fails for a spec'd
 // driver with simulated products that is missing).
 var Attach = map[string]func(addr string, shift func(int) int) map[string]string{
-	"snmp-generic":     snmpAttach,
-	"boreal-beam-snmp": snmpAttach,
-	"polaris-amp-snmp": snmpAttach,
-	"lyra-arc-snmp":    snmpAttach,
-	"lyra-hx-snmp":     snmpAttach,
+	"snmp-generic":           snmpAttach,
+	"boreal-beam-snmp":       snmpAttach,
+	"polaris-amp-snmp":       snmpAttach,
+	"lyra-arc-snmp":          snmpAttach,
+	"lyra-hx-snmp":           snmpAttach,
+	"meridian-switcher-snmp": snmpAttach,
+	"meridian-extender-snmp": snmpAttach,
 	"newtron-nvp": func(addr string, _ func(int) int) map[string]string {
 		return map[string]string{"host": addr} // 51325, the spec's default, needs no privilege
 	},

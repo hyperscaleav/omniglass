@@ -91,6 +91,69 @@ drivers:
             - { name: audio-level, extract: { oid: "1.3.6.1.4.1.55530.1.2.0" } }
             # The receiver reports a percentage; the canon stores the ratio.
             - { name: battery-charge, extract: { oid: "1.3.6.1.4.1.55530.2.1.0" }, transform: { scale: 0.01 } }
+  - id: meridian-switcher-snmp
+    label: Meridian Switcher SNMP
+    version: "1.0.0"
+    spec:
+      version: 1
+      # The Meridian presentation switcher over v2c (#895), from the switcher's
+      # branch of the Meridian enterprise arc (1.3.6.1.4.1.55550.1): the routed
+      # input and the signal on it. Identity sits at .5, sysDescr and sysUpTime
+      # are MIB-II's. The route is set over the switcher's HTTP API, a control
+      # face this driver does not speak. snmp-generic reads only the MIB-II
+      # scalars, so it cannot reach either signal.
+      transport: snmp
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "161" }
+        - { name: community, kind: secret, secret_type: snmp-community, required: true }
+      polls:
+        - name: identity
+          schedule: { every: 5m }
+          request: { get: ["1.3.6.1.2.1.1.1.0", "1.3.6.1.4.1.55550.5.2.0", "1.3.6.1.4.1.55550.5.1.0"] }
+          emits:
+            - { name: model-number, extract: { oid: "1.3.6.1.2.1.1.1.0" } }
+            - { name: serial-number, extract: { oid: "1.3.6.1.4.1.55550.5.2.0" } }
+            - { name: firmware-version, extract: { oid: "1.3.6.1.4.1.55550.5.1.0" } }
+        - name: status
+          schedule: { every: 30s }
+          request:
+            get: ["1.3.6.1.2.1.1.3.0", "1.3.6.1.4.1.55550.1.1.0", "1.3.6.1.4.1.55550.1.2.0"]
+          emits:
+            - { name: uptime, extract: { oid: "1.3.6.1.2.1.1.3.0" }, transform: { scale: 0.01 } }
+            - { name: video-input, extract: { oid: "1.3.6.1.4.1.55550.1.1.0" } }
+            - { name: signal-state, extract: { oid: "1.3.6.1.4.1.55550.1.2.0" } }
+  - id: meridian-extender-snmp
+    label: Meridian Extender SNMP
+    version: "1.0.0"
+    spec:
+      version: 1
+      # The Meridian AV extender over v2c (#895), from the extender's branch of
+      # the Meridian enterprise arc (1.3.6.1.4.1.55550.2): the link to its
+      # transmitter and the signal on its input. Identity sits at .5, sysDescr
+      # and sysUpTime are MIB-II's. An extender has no route, so it has a
+      # driver of its own beside the switcher's.
+      transport: snmp
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "161" }
+        - { name: community, kind: secret, secret_type: snmp-community, required: true }
+      polls:
+        - name: identity
+          schedule: { every: 5m }
+          request: { get: ["1.3.6.1.2.1.1.1.0", "1.3.6.1.4.1.55550.5.2.0", "1.3.6.1.4.1.55550.5.1.0"] }
+          emits:
+            - { name: model-number, extract: { oid: "1.3.6.1.2.1.1.1.0" } }
+            - { name: serial-number, extract: { oid: "1.3.6.1.4.1.55550.5.2.0" } }
+            - { name: firmware-version, extract: { oid: "1.3.6.1.4.1.55550.5.1.0" } }
+        - name: status
+          schedule: { every: 30s }
+          request:
+            get: ["1.3.6.1.2.1.1.3.0", "1.3.6.1.4.1.55550.2.1.0", "1.3.6.1.4.1.55550.2.2.0"]
+          emits:
+            - { name: uptime, extract: { oid: "1.3.6.1.2.1.1.3.0" }, transform: { scale: 0.01 } }
+            - { name: link-state, extract: { oid: "1.3.6.1.4.1.55550.2.1.0" } }
+            - { name: signal-state, extract: { oid: "1.3.6.1.4.1.55550.2.2.0" } }
   - id: boreal-beam-snmp
     label: Boreal Beam SNMP
     version: "1.0.0"
