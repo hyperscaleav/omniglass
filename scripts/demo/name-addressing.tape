@@ -1,7 +1,7 @@
 # Every operator resource answers to its name
 #
 # A component by its dotted address, an endpoint as <component>/<endpoint> (by a
-# bare component name too, where only one of that name speaks telnet), the
+# bare component name too, where only one of that name speaks udp), the
 # endpoint retried by name, a secret rotated by name and, sealed at a second
 # owner, refused with the two spellings that resolve; a group, its member, a file
 # and a grant's scope by name; and the uuid each answer carries, still working.
@@ -23,13 +23,13 @@ Wait
 Type `omniglass endpoint get "$panel/telnet" | jq -c '{component, name, label, driver}'`
 Enter
 Wait
-Type "# 36 components are named panel-1, but only the huddle's speaks telnet, so the bare name resolves"
+Type "# 36 components are named panel-1, but only the huddle's speaks udp, so the bare name resolves"
 Enter
 Wait
 Type `omniglass component list | jq '[.components[] | select(.name == "panel-1")] | length'`
 Enter
 Wait
-Type `omniglass endpoint get panel-1/telnet | jq -c '{component, name, label}'`
+Type `omniglass endpoint get panel-1/udp | jq -c '{component, name, label}'`
 Enter
 Wait
 

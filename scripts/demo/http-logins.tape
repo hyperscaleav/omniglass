@@ -18,6 +18,12 @@ Type `omniglass component simulation get "$display" | jq -c '{address, http: [.s
 Enter
 Wait
 
+Hide
+Type `demo_hush 'panel_host=$(omniglass component simulation get "$panel" | jq -r .address) display_host=$(omniglass component simulation get "$display" | jq -r .address)'`
+Enter
+Wait
+Show
+
 Type "# A login secret each, and the shipped http driver that logs in with it"
 Enter
 Wait
@@ -27,10 +33,10 @@ Wait
 Type `omniglass secret create --name demo-display-login --owner-kind platform --secret-type basic-auth --fields '{"username":"admin","password":"boreal"}' | jq -c '{name, fields: [.fields[] | {name, value}]}'`
 Enter
 Wait
-Type `omniglass endpoint create --component "$panel" --driver newtron-panel-web --node edge-hq --label 'Panel web API' --inputs '{"host":"127.60.0.17","port":"443","login":"demo-panel-login"}' | jq -c '{name, driver}'`
+Type `omniglass endpoint create --component "$panel" --driver newtron-panel-web --node edge-hq --label 'Panel web API' --inputs '{"host":"'$panel_host'","port":"443","login":"demo-panel-login"}' | jq -c '{name, driver}'`
 Enter
 Wait
-Type `omniglass endpoint create --component "$display" --driver boreal-edge-web --node edge-hq --label 'Display web admin' --inputs '{"host":"127.60.0.20","port":"80","login":"demo-display-login"}' | jq -c '{name, driver}'`
+Type `omniglass endpoint create --component "$display" --driver boreal-edge-web --node edge-hq --label 'Display web admin' --inputs '{"host":"'$display_host'","port":"80","login":"demo-display-login"}' | jq -c '{name, driver}'`
 Enter
 Wait
 
