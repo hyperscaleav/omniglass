@@ -225,9 +225,9 @@ func TestFixturesKeepLabelsOnlyWhereTheOverrideIsThePoint(t *testing.T) {
 		t.Fatalf("parse fixtures: %v", err)
 	}
 
-	// The component with no product: with no classification to read, the
-	// component rule can only render "Generic Device 1", so the operator's own
-	// words are the only thing that says what the box is. The recording service
+	// The power conditioner: the shipped rule would render "Power Device 1" from
+	// its product's class, so the operator's own words are what say what the box
+	// does (#1368). The recording service
 	// is pinned for the fleet-wide fact its generic-service classification
 	// cannot render: "Service 1" says nothing about what depends on it.
 	wantComponentLabels := map[string]bool{"power": true, "recording-service": true}
@@ -740,7 +740,7 @@ func TestSeededNamesComeFromTheGenerator(t *testing.T) {
 		// Room B's panel is the first display in ITS room: the ordinal resets
 		// across the air wall because the bucket is the room.
 		{what: "room B's panel", table: "component", place: "boardroom-b", name: "display-1", ordinal: 1, generated: true},
-		{what: "the power conditioner", table: "component", place: "boardroom-a", name: "device-1", ordinal: 1, generated: true},
+		{what: "the power conditioner", table: "component", place: "boardroom-a", name: "power-1", ordinal: 1, generated: true},
 		{what: "the auditorium display", table: "component", place: "auditorium", name: "display-1", ordinal: 1, generated: true},
 		{what: "the DSP", table: "component", place: "boardroom-a", name: "dsp", generated: false},
 
@@ -903,9 +903,9 @@ func TestSeededLabelsRenderFromTheirRules(t *testing.T) {
 		// the air wall.
 		{table: "component", place: "boardroom-b", name: "display-1", label: "Display 1", platform: true},
 		{table: "component", place: "auditorium", name: "display-1", label: "Display 1", platform: true},
-		// The unclassified box: the rule can only say "Generic Device 1", so
-		// the operator's words win and keep the pen.
-		{table: "component", place: "boardroom-a", name: "device-1", label: "Power Conditioner", platform: false},
+		// The power conditioner: the rule would say "Power Device 1", so the
+		// operator's words win and keep the pen.
+		{table: "component", place: "boardroom-a", name: "power-1", label: "Power Conditioner", platform: false},
 		{table: "component", place: "boardroom-a", name: "dsp", label: "Boardroom DSP", platform: false},
 		// The two halves of the divisible room are two ROOMS now, so each half
 		// is the first `board` system in its own bucket and both mint plain
@@ -1055,7 +1055,7 @@ func TestSeededStaffingLandsOnTheRightDevices(t *testing.T) {
 		select count(*) from system_member m
 		join system s on s.id = m.system_id
 		join component c on c.id = m.component_id
-		where s.name = 'boardroom' and c.name = 'device-1'
+		where s.name = 'boardroom' and c.name = 'power-1'
 		  and not exists (select 1 from system_role_assignment a
 		    where a.system_id = m.system_id and a.component_id = m.component_id)`).Scan(&unstaffed); err != nil {
 		t.Fatalf("read the unstaffed member: %v", err)

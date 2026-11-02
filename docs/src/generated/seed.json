@@ -353,6 +353,30 @@
    "description": "Whether a component is on, off, or in standby. A settable state: the set-power command tells the component which to enter, and its report settles it."
   },
   {
+   "name": "outlet-1-state",
+   "data_type": "string",
+   "label": "Outlet 1 State",
+   "description": "Whether the first outlet of a power conditioner is switched on or off, as the component reports it."
+  },
+  {
+   "name": "outlet-2-state",
+   "data_type": "string",
+   "label": "Outlet 2 State",
+   "description": "Whether the second outlet of a power conditioner is switched on or off, as the component reports it."
+  },
+  {
+   "name": "outlet-3-state",
+   "data_type": "string",
+   "label": "Outlet 3 State",
+   "description": "Whether the third outlet of a power conditioner is switched on or off, as the component reports it."
+  },
+  {
+   "name": "outlet-4-state",
+   "data_type": "string",
+   "label": "Outlet 4 State",
+   "description": "Whether the fourth outlet of a power conditioner is switched on or off, as the component reports it."
+  },
+  {
    "name": "mute",
    "data_type": "string",
    "label": "Mute",
@@ -569,6 +593,21 @@
    "unit": "rpm",
    "label": "Fan Speed",
    "description": "The speed a component reports of its cooling fan, in revolutions per minute."
+  },
+  {
+   "name": "voltage",
+   "data_type": "float",
+   "unit": "V",
+   "label": "Voltage",
+   "description": "The voltage a component reports at its input, in volts."
+  },
+  {
+   "name": "current",
+   "data_type": "float",
+   "unit": "A",
+   "precision": 2,
+   "label": "Current",
+   "description": "The total current a component reports drawing, in amperes."
   },
   {
    "name": "storage-utilization",
@@ -2630,6 +2669,12 @@
    "website": "https://boreal.example"
   },
   {
+   "id": "ferrite",
+   "label": "Ferrite",
+   "kind": "manufacturer",
+   "website": "https://ferrite.example"
+  },
+  {
    "id": "kestrel",
    "label": "Kestrel",
    "kind": "manufacturer",
@@ -2704,6 +2749,13 @@
   {
    "id": "polaris-amp-snmp",
    "label": "Polaris Amp SNMP",
+   "version": "1.0.0",
+   "transport": "snmp",
+   "polls": 2
+  },
+  {
+   "id": "ferrite-pdu-snmp",
+   "label": "Ferrite PDU SNMP",
    "version": "1.0.0",
    "transport": "snmp",
    "polls": 2
@@ -3029,6 +3081,14 @@
    "vendor_id": "newtron",
    "driver_id": "newtron-nvp",
    "component_type": "control-processor",
+   "kind": "device"
+  },
+  {
+   "id": "ferrite-pdu-4c",
+   "label": "Ferrite PDU 4C",
+   "vendor_id": "ferrite",
+   "driver_id": "ferrite-pdu-snmp",
+   "component_type": "power-device",
    "kind": "device"
   },
   {

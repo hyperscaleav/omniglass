@@ -46,6 +46,7 @@ var AttachSecret = map[string]string{
 	"boreal-cast-api":  CastKeySecret,
 	"lyra-arc-snmp":    CommunitySecret,
 	"lyra-hx-snmp":     CommunitySecret,
+	"ferrite-pdu-snmp": CommunitySecret,
 }
 
 // AddressCap is how many addresses the simulated block holds: 256 third
@@ -154,6 +155,7 @@ var Attach = map[string]func(addr string, shift func(int) int) map[string]string
 	"polaris-amp-snmp": snmpAttach,
 	"lyra-arc-snmp":    snmpAttach,
 	"lyra-hx-snmp":     snmpAttach,
+	"ferrite-pdu-snmp": snmpAttach,
 	"newtron-nvp": func(addr string, _ func(int) int) map[string]string {
 		return map[string]string{"host": addr} // 51325, the spec's default, needs no privilege
 	},

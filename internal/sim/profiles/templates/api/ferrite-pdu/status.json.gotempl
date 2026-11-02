@@ -1,0 +1,17 @@
+{
+  "Agent": {
+    "Model": "{{ .State | get "configuration" | get "device" | get "model" }}",
+    "SerialNumber": "{{ .State | get "configuration" | get "device" | get "serial" }}",
+    "Version": "{{ .State | get "configuration" | get "firmware" | get "version" }}",
+    "Uptime": {{ .State | get "status" | get "device" | get "uptime" }}
+  },
+  "GlobalMeasure": {
+    "VoltageMv": {{ .State | get "status" | get "mains" | get "voltage_mv" }},
+    "TotalCurrent": {{ .State | get "status" | get "load" | get "total_current_ma" }}
+  },
+  "Outputs": [
+{{- range $i, $o := .State.status.outlets }}{{ if $i }},{{ end }}
+    {"ID": {{ $o.id }}, "Name": {{ $o.name | marshal }}, "State": {{ if eq $o.state "on" }}1{{ else }}0{{ end }}, "Current": {{ $o.current_ma }}}
+{{- end }}
+  ]
+}
