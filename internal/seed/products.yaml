@@ -104,13 +104,13 @@ products:
   - id: kestrel-relay-c1
     label: Kestrel Relay C1
     vendor_id: kestrel
-    driver_id: kestrel-api
+    driver_id: kestrel-relay-api
     kind: device
     component_type: codec
   - id: kestrel-gaze-p2
     label: Kestrel Gaze P2
     vendor_id: kestrel
-    driver_id: kestrel-api
+    driver_id: kestrel-gaze-api
     kind: device
     component_type: ptz-camera
   # Lyra: microphones, by form factor.

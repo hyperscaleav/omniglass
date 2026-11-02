@@ -41,11 +41,15 @@ var AttachSecret = map[string]string{
 	"boreal-beam-snmp": CommunitySecret,
 	"polaris-amp-snmp": CommunitySecret,
 	"kestrel-api":      KestrelLoginSecret,
-	"http-json":        CensusKeySecret,
-	"ucc-rooms":        UCCTokenSecret,
-	"boreal-cast-api":  CastKeySecret,
-	"lyra-arc-snmp":    CommunitySecret,
-	"lyra-hx-snmp":     CommunitySecret,
+	// The Relay codec and the Gaze camera answer behind the same login the
+	// VRoom does (#897).
+	"kestrel-relay-api": KestrelLoginSecret,
+	"kestrel-gaze-api":  KestrelLoginSecret,
+	"http-json":         CensusKeySecret,
+	"ucc-rooms":         UCCTokenSecret,
+	"boreal-cast-api":   CastKeySecret,
+	"lyra-arc-snmp":     CommunitySecret,
+	"lyra-hx-snmp":      CommunitySecret,
 }
 
 // AddressCap is how many addresses the simulated block holds: 256 third
@@ -159,9 +163,11 @@ var Attach = map[string]func(addr string, shift func(int) int) map[string]string
 	},
 	// The Kestrel bar's https API on 443, its key pinned on first use (the
 	// spec's default mode), and the Tessellate sensor's http API on 80.
-	"kestrel-api": func(addr string, shift func(int) int) map[string]string {
-		return map[string]string{"host": addr, "port": strconv.Itoa(shift(443)), "login": KestrelLoginSecret}
-	},
+	"kestrel-api": kestrelAttach,
+	// The Relay C1 codec and the Gaze P2 camera speak the same https API
+	// on 443 behind the same login (#897).
+	"kestrel-relay-api": kestrelAttach,
+	"kestrel-gaze-api":  kestrelAttach,
 	"http-json": func(addr string, shift func(int) int) map[string]string {
 		return map[string]string{"host": addr, "port": strconv.Itoa(shift(80)), "key": CensusKeySecret}
 	},
@@ -174,6 +180,13 @@ var Attach = map[string]func(addr string, shift func(int) int) map[string]string
 	"ucc-rooms": func(addr string, shift func(int) int) map[string]string {
 		return map[string]string{"host": addr, "port": strconv.Itoa(shift(443)), "token": UCCTokenSecret}
 	},
+}
+
+// kestrelAttach is a Kestrel https driver's inputs: the device's API on 443
+// (shifted where the simulator lifts it), its key pinned on first use, and
+// the simulated login.
+func kestrelAttach(addr string, shift func(int) int) map[string]string {
+	return map[string]string{"host": addr, "port": strconv.Itoa(shift(443)), "login": KestrelLoginSecret}
 }
 
 // snmpAttach is an snmp driver's inputs: the device's agent on 161 (shifted

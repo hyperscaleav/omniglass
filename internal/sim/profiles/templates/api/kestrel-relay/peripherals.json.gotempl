@@ -1,0 +1,3 @@
+{
+  "connected": {{ .State | get "status" | get "peripherals" | get "connected" }}
+}
