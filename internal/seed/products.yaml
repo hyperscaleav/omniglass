@@ -208,6 +208,15 @@ products:
     driver_id: ucc-rooms
     kind: service
     component_type: generic-service
+  # The fleet's central recording service (the simulator's recording-service,
+  # #1363): a software service watched over its own https API, by a driver of
+  # its own.
+  - id: recording-service
+    label: Shinra Recording Service
+    vendor_id: shinra-cloud
+    driver_id: recording-service-api
+    kind: service
+    component_type: generic-service
   # The generic floor.
   - id: generic-device
     label: Generic Device
