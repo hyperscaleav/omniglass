@@ -401,6 +401,12 @@
    "description": "Whether a space is booked now (a meeting in progress) or free, as its scheduling service reports it."
   },
   {
+   "name": "program-state",
+   "data_type": "string",
+   "label": "Program State",
+   "description": "Whether a control processor is running its loaded program or has it stopped, as the processor reports it."
+  },
+  {
    "name": "serial-number",
    "data_type": "string",
    "label": "Serial number",
@@ -2736,6 +2742,23 @@
    "commands": 1
   },
   {
+   "id": "newtron-core-nvp",
+   "label": "Newtron Core NVP",
+   "version": "1.0.0",
+   "transport": "tcp",
+   "polls": 2,
+   "listeners": 3,
+   "commands": 1
+  },
+  {
+   "id": "newtron-slate-nvp",
+   "label": "Newtron Slate NVP",
+   "version": "1.0.0",
+   "transport": "tcp",
+   "polls": 1,
+   "listeners": 1
+  },
+  {
    "id": "newtron-nvp-telnet",
    "label": "Newtron NVP over Telnet",
    "version": "1.0.0",
@@ -3019,7 +3042,7 @@
    "id": "newtron-slate-5",
    "label": "Newtron Slate 5",
    "vendor_id": "newtron",
-   "driver_id": "newtron-nvp",
+   "driver_id": "newtron-slate-nvp",
    "component_type": "scheduling-panel",
    "kind": "device"
   },
@@ -3027,7 +3050,7 @@
    "id": "newtron-core-3",
    "label": "Newtron Core CP-3",
    "vendor_id": "newtron",
-   "driver_id": "newtron-nvp",
+   "driver_id": "newtron-core-nvp",
    "component_type": "control-processor",
    "kind": "device"
   },

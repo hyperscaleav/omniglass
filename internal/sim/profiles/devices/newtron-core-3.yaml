@@ -1,0 +1,104 @@
+# yaml-language-server: $schema=schema.json
+# Newtron Core CP-3, control processor
+#
+# The processor a room's control program runs on: it holds the program that
+# starts a meeting and selects sources, drives the devices wired to its
+# control ports (serial, IR, relays), and serves the touch panels that
+# connect to it. A touch panel's surface is a subset of its own, so the
+# panel's room and source control is the shared nvp-room surface (#896), and
+# the program, ports and connected panels are the processor's alone.
+
+name: newtron-core-3
+manufacturer: Newtron
+model: "Core CP-3"
+device_type: control-processor
+slug_prefix: control-processor
+
+doc:
+  summary: "Newtron Core CP-3, room control processor"
+  description: |
+    Runs a room's control program. Answers the NVP line protocol with the
+    touch panel's room and source control, and with its program state, its
+    control ports and the panels connected to it.
+
+interfaces:
+  # NVP: the newtron-core-nvp driver's line protocol (TCP 51325, CRLF lines,
+  # no banner). GET PROGRAM reports whether the control program runs and SET
+  # PROGRAM starts or stops it (the sim matches whole lines, so each state is
+  # listed); SUBSCRIBE PROGRAM pushes "EVT PROGRAM <state>" on change. GET
+  # PORTS lists the control ports with their states, GET PANELS counts the
+  # touch panels connected.
+  - name: nvp
+    protocol: tcp
+    port: 51325
+    doc:
+      summary: "NVP line protocol: room control, program state, control ports and connected panels"
+      tags: [control, persistent-session, raw-tcp]
+    api_surface: newtron-nvp
+    persistent: true
+    line_ending: "\r\n"
+    include: [nvp-room]
+    subjects:
+      - match: "status.control.program"
+        path: "status.control.program"
+        publish_token: "PROGRAM"
+        push_format: "EVT PROGRAM {{ .Raw }}"
+    commands:
+      - match: "GET PROGRAM"
+        response: 'PROGRAM {{ .State | get "status" | get "control" | get "program" }}'
+      - match: "SET PROGRAM running"
+        response: "PROGRAM running"
+        mutations:
+          - { path: status.control.program, value: "running" }
+      - match: "SET PROGRAM stopped"
+        response: "PROGRAM stopped"
+        mutations:
+          - { path: status.control.program, value: "stopped" }
+      - match: "GET PORTS"
+        response: 'PORTS {{ .State | get "status" | get "control" | get "ports" }}'
+      - match: "GET PANELS"
+        response: 'PANELS {{ .State | get "status" | get "control" | get "panels" }}'
+      - match: "SUBSCRIBE PROGRAM"
+        action: subscribe
+        subject: "status.control.program"
+        token: "PROGRAM"
+        response: "OK"
+      - match: "UNSUBSCRIBE PROGRAM"
+        action: unsubscribe
+        subject: "status.control.program"
+        response: "OK"
+
+  - name: icmp
+    protocol: icmp
+    doc: { summary: "ICMP ping reachability", tags: [monitoring] }
+
+# Read-derived uptime: now - boot_epoch, seeded at device start. No timer.
+computed:
+  - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
+
+defaults:
+  status:
+    device:
+      # Anchor for the computed uptime field; 0 is seeded to the start time.
+      boot_epoch: 0
+    panel:
+      occupancy: false
+    room:
+      scene: "idle"
+      source: "none"
+    diagnostics:
+      log: ""
+    video:
+      input: "hdmi1"
+    control:
+      # Whether the control program runs: running or stopped.
+      program: "running"
+      ports: "com1=connected com2=connected ir1=idle relay1=open"
+      panels: 3
+  configuration:
+    device:
+      serial: ""
+      model: "Core CP-3"
+      manufacturer: "Newtron"
+    firmware:
+      version: "4.1.2"

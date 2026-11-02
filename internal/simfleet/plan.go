@@ -149,14 +149,14 @@ func Plan(comps []Component, used map[string]bool, cat Catalog) ([]Device, error
 // then its products get a probe (the dev seed's test fails for a spec'd
 // driver with simulated products that is missing).
 var Attach = map[string]func(addr string, shift func(int) int) map[string]string{
-	"snmp-generic":     snmpAttach,
-	"boreal-beam-snmp": snmpAttach,
-	"polaris-amp-snmp": snmpAttach,
-	"lyra-arc-snmp":    snmpAttach,
-	"lyra-hx-snmp":     snmpAttach,
-	"newtron-nvp": func(addr string, _ func(int) int) map[string]string {
-		return map[string]string{"host": addr} // 51325, the spec's default, needs no privilege
-	},
+	"snmp-generic":      snmpAttach,
+	"boreal-beam-snmp":  snmpAttach,
+	"polaris-amp-snmp":  snmpAttach,
+	"lyra-arc-snmp":     snmpAttach,
+	"lyra-hx-snmp":      snmpAttach,
+	"newtron-nvp":       nvpAttach,
+	"newtron-core-nvp":  nvpAttach,
+	"newtron-slate-nvp": nvpAttach,
 	// The Kestrel bar's https API on 443, its key pinned on first use (the
 	// spec's default mode), and the Tessellate sensor's http API on 80.
 	"kestrel-api": func(addr string, shift func(int) int) map[string]string {
@@ -174,6 +174,12 @@ var Attach = map[string]func(addr string, shift func(int) int) map[string]string
 	"ucc-rooms": func(addr string, shift func(int) int) map[string]string {
 		return map[string]string{"host": addr, "port": strconv.Itoa(shift(443)), "token": UCCTokenSecret}
 	},
+}
+
+// nvpAttach is a Newtron NVP driver's inputs: the device's line protocol on
+// 51325, the spec's default, which needs no privilege and no secret.
+func nvpAttach(addr string, _ func(int) int) map[string]string {
+	return map[string]string{"host": addr}
 }
 
 // snmpAttach is an snmp driver's inputs: the device's agent on 161 (shifted

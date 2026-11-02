@@ -346,7 +346,8 @@ drivers:
         - { name: host, kind: string, required: true }
         - { name: port, kind: number, default: "51325" }
       polls:
-        - name: status
+        - &nvp_input_poll
+          name: status
           schedule: { every: 30s }
           # The reply shape picks GET INPUT's answer out of the EVT pushes
           # sharing the held session (#817); the panel refuses with a -ERR
@@ -369,7 +370,8 @@ drivers:
       # SCENE pushes) lands whole as a log line, raw arrival.
       unmatched: log
       listeners:
-        - name: events
+        - &nvp_events_listener
+          name: events
           arm: ["SUBSCRIBE INPUT", "SUBSCRIBE SCENE"]
           match: { prefix: "EVT INPUT " }
           emits:
@@ -378,7 +380,8 @@ drivers:
               message: { value: "Video input changed" }
               attributes:
                 input: { extract: { regex: "^EVT INPUT (\\S+)$" } }
-        - name: logs
+        - &nvp_logs_listener
+          name: logs
           arm: ["SUBSCRIBE LOG"]
           match: { prefix: "LOG " }
           emits:
@@ -389,9 +392,64 @@ drivers:
       commands:
         # The panel answers SET INPUT with the input it now shows, so the
         # reply settles the command (ADR-0141).
-        - command_type: set-input
+        - &nvp_set_input_command
+          command_type: set-input
           request: { line: "SET INPUT ${value}", reply: { prefix: "INPUT ", error: { prefix: "-ERR" } } }
           settle: { from: response, extract: { regex: "^INPUT (\\S+)$" } }
+  - id: newtron-core-nvp
+    label: Newtron Core NVP
+    version: "1.0.0"
+    spec:
+      version: 1
+      transport: tcp
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "51325" }
+      # The full processor speaks the panel's room surface and its own (#896):
+      # the panel's input poll, listeners and set-input command are reused
+      # whole, and the processor adds its program state, polled and pushed.
+      polls:
+        - *nvp_input_poll
+        - name: program
+          schedule: { every: 30s }
+          request: { line: "GET PROGRAM", reply: { prefix: "PROGRAM ", error: { prefix: "-ERR" } } }
+          emits:
+            - { name: program-state, extract: { regex: "^PROGRAM (\\S+)$" } }
+      unmatched: log
+      listeners:
+        - *nvp_events_listener
+        - *nvp_logs_listener
+        - name: program-events
+          arm: ["SUBSCRIBE PROGRAM"]
+          match: { prefix: "EVT PROGRAM " }
+          emits:
+            - { name: program-state, extract: { regex: "^EVT PROGRAM (\\S+)$" } }
+      commands:
+        - *nvp_set_input_command
+  - id: newtron-slate-nvp
+    label: Newtron Slate NVP
+    version: "1.0.0"
+    spec:
+      version: 1
+      transport: tcp
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "51325" }
+      # A room scheduling panel has no inputs to switch: it reports whether
+      # its room is booked, polled and pushed (#896).
+      polls:
+        - name: booking
+          schedule: { every: 30s }
+          request: { line: "GET BOOKING", reply: { prefix: "BOOKING ", error: { prefix: "-ERR" } } }
+          emits:
+            - { name: booking-state, extract: { regex: "^BOOKING (\\S+)$" } }
+      unmatched: log
+      listeners:
+        - name: booking-events
+          arm: ["SUBSCRIBE BOOKING"]
+          match: { prefix: "EVT BOOKING " }
+          emits:
+            - { name: booking-state, extract: { regex: "^EVT BOOKING (\\S+)$" } }
   - id: newtron-nvp-telnet
     label: Newtron NVP over Telnet
     version: "1.0.0"
