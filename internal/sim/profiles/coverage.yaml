@@ -7,8 +7,6 @@ unsimulated:
   kestrel-relay-c1: "#897: a codec, not a video bar"
   meridian-mx-84: "#895: no Meridian profile yet"
   meridian-xl-1: "#895: no Meridian profile yet"
-  newtron-core-3: "#896: a control processor; the panel's surface is a subset of it"
-  newtron-slate-5: "#896: a scheduling panel, not a touch panel"
 
 # Seeded products with no network interface: there is nothing on them to
 # collect from, so nothing simulates them, and each says how the fleet watches

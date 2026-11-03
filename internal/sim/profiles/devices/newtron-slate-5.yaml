@@ -1,0 +1,86 @@
+# yaml-language-server: $schema=schema.json
+# Newtron Slate 5, scheduling panel
+#
+# The panel mounted at a room's door that shows whether the room is booked
+# and what is next. It is not a touch panel: it controls nothing in the room,
+# so it answers the NVP line protocol with its room's booking alone (#896).
+
+name: newtron-slate-5
+manufacturer: Newtron
+model: "Slate 5"
+device_type: scheduling-panel
+slug_prefix: scheduling-panel
+
+doc:
+  summary: "Newtron Slate 5, room scheduling panel"
+  description: |
+    Shows a room's booking at its door. Answers the NVP line protocol with
+    the room's booking state and its next meeting, and takes a booking or
+    releases it from the panel.
+
+interfaces:
+  # NVP: the newtron-slate-nvp driver's line protocol (TCP 51325, CRLF lines,
+  # no banner). GET BOOKING reports booked or free, BOOK takes the room and
+  # RELEASE frees it; SUBSCRIBE BOOKING pushes "EVT BOOKING <state>" on
+  # change. GET NEXT reports the next meeting.
+  - name: nvp
+    protocol: tcp
+    port: 51325
+    doc:
+      summary: "NVP line protocol: the room's booking and its next meeting"
+      tags: [control, persistent-session, raw-tcp]
+    api_surface: newtron-nvp
+    persistent: true
+    line_ending: "\r\n"
+    subjects:
+      - match: "status.room.booking"
+        path: "status.room.booking"
+        publish_token: "BOOKING"
+        push_format: "EVT BOOKING {{ .Raw }}"
+    commands:
+      - match: "GET BOOKING"
+        response: 'BOOKING {{ .State | get "status" | get "room" | get "booking" }}'
+      - match: "BOOK"
+        response: "BOOKING booked"
+        mutations:
+          - { path: status.room.booking, value: "booked" }
+      - match: "RELEASE"
+        response: "BOOKING free"
+        mutations:
+          - { path: status.room.booking, value: "free" }
+      - match: "GET NEXT"
+        response: 'NEXT {{ .State | get "status" | get "room" | get "next_meeting" }}'
+      - match: "SUBSCRIBE BOOKING"
+        action: subscribe
+        subject: "status.room.booking"
+        token: "BOOKING"
+        response: "OK"
+      - match: "UNSUBSCRIBE BOOKING"
+        action: unsubscribe
+        subject: "status.room.booking"
+        response: "OK"
+
+  - name: icmp
+    protocol: icmp
+    doc: { summary: "ICMP ping reachability", tags: [monitoring] }
+
+# Read-derived uptime: now - boot_epoch, seeded at device start. No timer.
+computed:
+  - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
+
+defaults:
+  status:
+    device:
+      # Anchor for the computed uptime field; 0 is seeded to the start time.
+      boot_epoch: 0
+    room:
+      # Whether the room is booked now: booked or free.
+      booking: "free"
+      next_meeting: "none"
+  configuration:
+    device:
+      serial: ""
+      model: "Slate 5"
+      manufacturer: "Newtron"
+    firmware:
+      version: "2.3.0"
