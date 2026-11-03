@@ -41,6 +41,8 @@ var simSecrets = []storage.SecretSpec{
 		OwnerKind: "platform", Fields: map[string]string{"key": "ucc-lab-token"}},
 	{Name: simfleet.CastKeySecret, Label: "Simulated Boreal Cast player api key", SecretType: "api-key",
 		OwnerKind: "platform", Fields: map[string]string{"key": "boreal-cast-key"}},
+	{Name: simfleet.RecordingKeySecret, Label: "Simulated recording service api key", SecretType: "api-key",
+		OwnerKind: "platform", Fields: map[string]string{"key": "recording-lab-key"}},
 }
 
 // seedSimFleet lands the plan through the gateway: the community secret,

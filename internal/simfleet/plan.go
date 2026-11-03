@@ -31,21 +31,25 @@ const (
 	// CastKeySecret is the simulated Boreal Cast media player's api key
 	// (#893), sent in the header its API demands.
 	CastKeySecret = "sim-cast-key"
+	// RecordingKeySecret is the simulated recording service's api key
+	// (#1363), sent in the header its API demands.
+	RecordingKeySecret = "sim-recording-key"
 )
 
 // AttachSecret is the platform secret each driver's simulated attach
 // references, keyed by driver: an attach is offered only to a caller who can
 // read it.
 var AttachSecret = map[string]string{
-	"snmp-generic":     CommunitySecret,
-	"boreal-beam-snmp": CommunitySecret,
-	"polaris-amp-snmp": CommunitySecret,
-	"kestrel-api":      KestrelLoginSecret,
-	"http-json":        CensusKeySecret,
-	"ucc-rooms":        UCCTokenSecret,
-	"boreal-cast-api":  CastKeySecret,
-	"lyra-arc-snmp":    CommunitySecret,
-	"lyra-hx-snmp":     CommunitySecret,
+	"snmp-generic":          CommunitySecret,
+	"boreal-beam-snmp":      CommunitySecret,
+	"polaris-amp-snmp":      CommunitySecret,
+	"kestrel-api":           KestrelLoginSecret,
+	"http-json":             CensusKeySecret,
+	"ucc-rooms":             UCCTokenSecret,
+	"boreal-cast-api":       CastKeySecret,
+	"recording-service-api": RecordingKeySecret,
+	"lyra-arc-snmp":         CommunitySecret,
+	"lyra-hx-snmp":          CommunitySecret,
 }
 
 // AddressCap is how many addresses the simulated block holds: 256 third
@@ -168,6 +172,11 @@ var Attach = map[string]func(addr string, shift func(int) int) map[string]string
 	// The Boreal Cast media player's http API on 80, its key in a header.
 	"boreal-cast-api": func(addr string, shift func(int) int) map[string]string {
 		return map[string]string{"host": addr, "port": strconv.Itoa(shift(80)), "key": CastKeySecret}
+	},
+	// The recording service's https API on 443 (#1363), its key pinned on
+	// first use, its key in the header the service demands.
+	"recording-service-api": func(addr string, shift func(int) int) map[string]string {
+		return map[string]string{"host": addr, "port": strconv.Itoa(shift(443)), "key": RecordingKeySecret}
 	},
 	// The UCC platform's https API on 443 (#1282), its key pinned on first
 	// use, its token in the header the platform demands.
