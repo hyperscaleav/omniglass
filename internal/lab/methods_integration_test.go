@@ -100,21 +100,6 @@ func methodsExercised(ctx context.Context, c *http.Client, base string, planted 
 			} `json:"verdict"`
 		} `json:"endpoints"`
 	}
-	type metrics struct {
-		Metrics []struct {
-			Name      string `json:"metric_type_name"`
-			Instance  string `json:"instance"`
-			Instances []struct {
-				Instance string `json:"instance"`
-			} `json:"instances"`
-		} `json:"metrics"`
-	}
-	type samples struct {
-		Samples []struct {
-			Instance string `json:"instance"`
-			Source   string `json:"source"`
-		} `json:"samples"`
-	}
 	reaches := map[string]reach{}
 	up := func(compID, epID, transport string) (bool, error) {
 		r, ok := reaches[compID]
@@ -135,60 +120,6 @@ func methodsExercised(ctx context.Context, c *http.Client, base string, planted 
 		}
 		return false, nil
 	}
-	// landed reports a value the endpoint's driver emits, landed from it: a
-	// metric or property sample on its component under its endpoint, or a
-	// property sample on an owner its component (a conduit) binds, whose
-	// source names the endpoint.
-	landed := func(compID, comp, ep string, keys []string) (bool, error) {
-		var m metrics
-		if err := get("/components/"+compID+"/metrics", &m); err != nil {
-			return false, err
-		}
-		want := map[string]bool{}
-		for _, k := range keys {
-			want[k] = true
-		}
-		for _, x := range m.Metrics {
-			if !want[x.Name] {
-				continue
-			}
-			if x.Instance == ep {
-				return true, nil
-			}
-			for _, i := range x.Instances {
-				if i.Instance == ep {
-					return true, nil
-				}
-			}
-		}
-		owners := []string{"/components/" + compID}
-		var b struct {
-			Bindings []struct {
-				OwnerKind string `json:"owner_kind"`
-				OwnerID   string `json:"owner_id"`
-			} `json:"bindings"`
-		}
-		if err := get("/components/"+compID+"/identity-bindings", &b); err == nil {
-			for _, x := range b.Bindings {
-				owners = append(owners, "/"+x.OwnerKind+"s/"+x.OwnerID)
-			}
-		}
-		for _, owner := range owners {
-			for _, k := range keys {
-				var s samples
-				if err := get(owner+"/properties/"+url.PathEscape(k)+"/samples", &s); err != nil {
-					continue // a metric key, or nothing of it here
-				}
-				for _, x := range s.Samples {
-					if (owner == owners[0] && x.Instance == ep) || x.Source == comp+"/"+ep {
-						return true, nil
-					}
-				}
-			}
-		}
-		return false, nil
-	}
-
 	exercised := map[string]bool{}
 	for _, e := range eps.Endpoints {
 		if e.ComponentID == "" || isPlanted[e.Label] {
@@ -205,7 +136,7 @@ func methodsExercised(ctx context.Context, c *http.Client, base string, planted 
 			continue
 		}
 		if e.Driver != "" {
-			got, err := landed(e.ComponentID, e.Component, e.Name, emits[e.Driver])
+			got, err := landed(get, e.ComponentID, e.Component, e.Name, emits[e.Driver])
 			if err != nil {
 				return nil, err
 			}
@@ -268,3 +199,135 @@ func systemPushed(ctx context.Context, get func(string, any) error) (bool, error
 	}
 	return false, nil
 }
+
+// landed reports a value the endpoint's driver emits, landed from it: a
+// metric or property sample on its component under its endpoint, or a
+// property sample on an owner its component (a conduit) binds, whose
+// source names the endpoint.
+func landed(get func(string, any) error, compID, comp, ep string, keys []string) (bool, error) {
+	var m metricsRead
+	if err := get("/components/"+compID+"/metrics", &m); err != nil {
+		return false, err
+	}
+	want := map[string]bool{}
+	for _, k := range keys {
+		want[k] = true
+	}
+	for _, x := range m.Metrics {
+		if !want[x.Name] {
+			continue
+		}
+		if x.Instance == ep {
+			return true, nil
+		}
+		for _, i := range x.Instances {
+			if i.Instance == ep {
+				return true, nil
+			}
+		}
+	}
+	owners := []string{"/components/" + compID}
+	var b struct {
+		Bindings []struct {
+			OwnerKind string `json:"owner_kind"`
+			OwnerID   string `json:"owner_id"`
+		} `json:"bindings"`
+	}
+	if err := get("/components/"+compID+"/identity-bindings", &b); err == nil {
+		for _, x := range b.Bindings {
+			owners = append(owners, "/"+x.OwnerKind+"s/"+x.OwnerID)
+		}
+	}
+	for _, owner := range owners {
+		for _, k := range keys {
+			var s samplesRead
+			if err := get(owner+"/properties/"+url.PathEscape(k)+"/samples", &s); err != nil {
+				continue // a metric key, or nothing of it here
+			}
+			for _, x := range s.Samples {
+				if (owner == owners[0] && x.Instance == ep) || x.Source == comp+"/"+ep {
+					return true, nil
+				}
+			}
+		}
+	}
+	return false, nil
+}
+
+type metricsRead struct {
+	Metrics []struct {
+		Name      string `json:"metric_type_name"`
+		Instance  string `json:"instance"`
+		Instances []struct {
+			Instance string `json:"instance"`
+		} `json:"instances"`
+	} `json:"metrics"`
+}
+type samplesRead struct {
+	Samples []struct {
+		Instance string `json:"instance"`
+		Source   string `json:"source"`
+	} `json:"samples"`
+}
+
+// classFloor is the lab's own account of the class-signal floor (#1266, ruled
+// 2026-10-28) for the Newtron touch panels, until #1371 holds every class to
+// it: after the warm-up, each placed Panel 7 carries a collected value of its
+// class beyond video-input, identity and uptime (its room's scene state),
+// landed from an endpoint of its own. It returns the panels missing one.
+func classFloor(ctx context.Context, c *http.Client, base string) ([]string, error) {
+	get := func(path string, into any) error { return getJSON(ctx, c, base+"/api/v1"+path, into) }
+	var comps struct {
+		Components []struct {
+			ID      string `json:"id"`
+			Name    string `json:"name"`
+			Product string `json:"product"`
+		} `json:"components"`
+	}
+	if err := get("/components?limit=1000", &comps); err != nil {
+		return nil, err
+	}
+	var eps struct {
+		Endpoints []struct {
+			Name        string `json:"name"`
+			ComponentID string `json:"component_id"`
+		} `json:"endpoints"`
+	}
+	if err := get("/endpoints?limit=1000", &eps); err != nil {
+		return nil, err
+	}
+	var missing []string
+	placed := 0
+	for _, comp := range comps.Components {
+		if comp.Product != "newtron-panel-7" {
+			continue
+		}
+		placed++
+		got := false
+		for _, e := range eps.Endpoints {
+			if e.ComponentID != comp.ID {
+				continue
+			}
+			ok, err := landed(get, comp.ID, comp.Name, e.Name, panelClassSignals)
+			if err != nil {
+				return nil, err
+			}
+			if ok {
+				got = true
+				break
+			}
+		}
+		if !got {
+			missing = append(missing, comp.Name)
+		}
+	}
+	if placed == 0 {
+		return nil, fmt.Errorf("the lab places no newtron-panel-7")
+	}
+	sort.Strings(missing)
+	return missing, nil
+}
+
+// panelClassSignals are the properties a Newtron touch panel's class reports
+// beyond video-input.
+var panelClassSignals = []string{"scene-state"}

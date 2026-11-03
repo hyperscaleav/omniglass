@@ -47,6 +47,10 @@ func TestTestsDoNotBorrowTheSeedCatalog(t *testing.T) {
 		// service; a driver is named for its product, so the product id is
 		// in the name it loads (#1363).
 		"internal/node/run_recording_service_test.go": true,
+		// States the class-signal floor for the shipped Newtron touch panel
+		// on the running lab, so naming the product is what it tests, until
+		// #1371 holds the floor for every class (#1494).
+		"internal/lab/methods_integration_test.go": true,
 	}
 
 	raw, err := seed.FactsJSON()
