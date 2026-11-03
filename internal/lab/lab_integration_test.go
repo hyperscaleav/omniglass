@@ -158,6 +158,23 @@ func TestIntegrationLabOnARealDaemon(t *testing.T) {
 		}
 	})
 
+	// The floor for the lab's DSPs (#1493, until #1371 holds it for every
+	// component): each placed Polaris DSP 16 carries a collected program mute
+	// and level beyond identity and uptime.
+	t.Run("every Polaris DSP 16 carries its mute and level", func(t *testing.T) {
+		deadline := time.Now().Add(4 * time.Minute)
+		for {
+			missing, err := dspFloor(ctx, client, lab.BaseURL)
+			if err == nil && len(missing) == 0 {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("after the warm-up, the DSPs lack: %v (%v)", missing, err)
+			}
+			time.Sleep(10 * time.Second)
+		}
+	})
+
 	// An impairment set through the API takes a simulated component's
 	// reachability down in the lab; an empty one brings it back.
 	t.Run("an unplugged component goes down and comes back", func(t *testing.T) {

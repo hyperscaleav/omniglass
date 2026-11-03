@@ -10,5 +10,9 @@
     "active_channels": {{ .State | get "status" | get "dsp" | get "active_channels" }},
     "temperature": {{ .State | get "status" | get "dsp" | get "temperature" }},
     "fan_rpm": {{ .State | get "status" | get "dsp" | get "fan_rpm" }}
+  },
+  "output": {
+    "mute": {{ .State | get "status" | get "output" | get "mute" }},
+    "level_db": {{ .State | get "status" | get "output" | get "level_db" }}
   }
 }
