@@ -1499,9 +1499,9 @@ The samples behind the effective read's latest value for one series, newest firs
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--hours` | int | `0` | The window in hours, counted back from now; 24 when unset |
+| `--instance` | string | (none) | The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution |
 | `--limit` | int | `0` | The row cap, newest kept; 500 when unset. Ignored when a resolution is set |
 | `--resolution` | int | `0` | The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused |
-| `--instance` | string | (none) | The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution |
 
 Example:
 
@@ -1599,9 +1599,9 @@ The change history behind the effective value for one property series, newest fi
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--hours` | int | `0` | The window in hours, counted back from now; 24 when unset |
+| `--instance` | string | (none) | The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution |
 | `--limit` | int | `0` | The row cap, newest kept; 500 when unset. Ignored when a resolution is set |
 | `--resolution` | int | `0` | The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused |
-| `--instance` | string | (none) | The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution |
 
 Example:
 
@@ -6317,9 +6317,9 @@ The samples behind the effective read's latest value for one series, newest firs
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--hours` | int | `0` | The window in hours, counted back from now; 24 when unset |
+| `--instance` | string | (none) | The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution |
 | `--limit` | int | `0` | The row cap, newest kept; 500 when unset. Ignored when a resolution is set |
 | `--resolution` | int | `0` | The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused |
-| `--instance` | string | (none) | The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution |
 
 Example:
 
@@ -6417,9 +6417,9 @@ The change history behind the effective value for one property series, newest fi
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--hours` | int | `0` | The window in hours, counted back from now; 24 when unset |
+| `--instance` | string | (none) | The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution |
 | `--limit` | int | `0` | The row cap, newest kept; 500 when unset. Ignored when a resolution is set |
 | `--resolution` | int | `0` | The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused |
-| `--instance` | string | (none) | The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution |
 
 Example:
 
