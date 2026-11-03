@@ -42,6 +42,7 @@ const (
 var AttachSecret = map[string]string{
 	"snmp-generic":     CommunitySecret,
 	"boreal-beam-snmp": CommunitySecret,
+	"boreal-edge-snmp": CommunitySecret,
 	"polaris-amp-snmp": CommunitySecret,
 	"kestrel-api":      KestrelLoginSecret,
 	// The Relay codec and the Gaze camera answer behind the same login the
@@ -162,6 +163,7 @@ func Plan(comps []Component, used map[string]bool, cat Catalog) ([]Device, error
 var Attach = map[string]func(addr string, shift func(int) int) map[string]string{
 	"snmp-generic":      snmpAttach,
 	"boreal-beam-snmp":  snmpAttach,
+	"boreal-edge-snmp":  snmpAttach,
 	"polaris-amp-snmp":  snmpAttach,
 	"lyra-arc-snmp":     snmpAttach,
 	"lyra-hx-snmp":      snmpAttach,

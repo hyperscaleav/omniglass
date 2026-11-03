@@ -83,7 +83,7 @@ func TestDryRunNamesTheTemplateAndTheWithdrawnRow(t *testing.T) {
 	all := strings.Join(got, "\n")
 	for _, want := range []string{
 		`component_template gone-display: names product "withdrawn-panel"`,
-		`component_template odd-preset: presets input "baud", which driver "snmp-generic" does not declare`,
+		`component_template odd-preset: presets input "baud", which driver "boreal-edge-snmp" does not declare`,
 		`standard_template odd-standard: role a accepts component type "hologram"`,
 		`standard_template odd-standard: declares metric "no-such-metric"`,
 		`place_template odd-places: places a campus under a floor`,
