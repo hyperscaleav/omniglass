@@ -3,8 +3,6 @@
 # holds every other such product to a profile, so a new seeded product
 # either gains one or is listed here.
 unsimulated:
-  kestrel-gaze-p2: "#897: a PTZ camera, not a video bar"
-  kestrel-relay-c1: "#897: a codec, not a video bar"
   meridian-mx-84: "#895: no Meridian profile yet"
   meridian-xl-1: "#895: no Meridian profile yet"
 

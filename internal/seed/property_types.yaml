@@ -143,6 +143,16 @@ property_types:
     validation: { enum: [active, idle] }
     label: Call State
     description: Whether a conferencing component is in a call (active) or not (idle).
+  - name: content-sharing-state
+    data_type: string
+    validation: { enum: [sharing, idle] }
+    label: Content Sharing State
+    description: Whether a conferencing component is sharing content (a presentation) from a source or not (idle).
+  - name: tracking-state
+    data_type: string
+    validation: { enum: [tracking, manual] }
+    label: Tracking State
+    description: Whether a camera is following a presenter on its own (tracking) or holds where it was pointed (manual).
   - name: occupancy-state
     data_type: string
     validation: { enum: [occupied, vacant] }

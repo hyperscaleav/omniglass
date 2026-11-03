@@ -365,6 +365,18 @@
    "description": "Whether a conferencing component is in a call (active) or not (idle)."
   },
   {
+   "name": "content-sharing-state",
+   "data_type": "string",
+   "label": "Content Sharing State",
+   "description": "Whether a conferencing component is sharing content (a presentation) from a source or not (idle)."
+  },
+  {
+   "name": "tracking-state",
+   "data_type": "string",
+   "label": "Tracking State",
+   "description": "Whether a camera is following a presenter on its own (tracking) or holds where it was pointed (manual)."
+  },
+  {
    "name": "occupancy-state",
    "data_type": "string",
    "label": "Occupancy State",
@@ -587,6 +599,42 @@
    "unit": "rpm",
    "label": "Fan Speed",
    "description": "The speed a component reports of its cooling fan, in revolutions per minute."
+  },
+  {
+   "name": "pan-angle",
+   "data_type": "float",
+   "unit": "deg",
+   "precision": 1,
+   "label": "Pan Angle",
+   "description": "How far a camera reports it is panned from its centre, in degrees (negative to the left, positive to the right)."
+  },
+  {
+   "name": "tilt-angle",
+   "data_type": "float",
+   "unit": "deg",
+   "precision": 1,
+   "label": "Tilt Angle",
+   "description": "How far a camera reports it is tilted from level, in degrees (negative down, positive up)."
+  },
+  {
+   "name": "zoom-level",
+   "data_type": "float",
+   "unit": "x",
+   "precision": 1,
+   "label": "Zoom Level",
+   "description": "The magnification a camera reports, as a multiple of its widest view (1 is the widest)."
+  },
+  {
+   "name": "camera-preset",
+   "data_type": "int",
+   "label": "Camera Preset",
+   "description": "The number of the stored position a camera reports it is on; 0 when it is on none (it was pointed by hand or is tracking)."
+  },
+  {
+   "name": "peripheral-count",
+   "data_type": "int",
+   "label": "Peripheral Count",
+   "description": "How many peripherals (cameras, microphones, touch panels) a component reports attached to it."
   },
   {
    "name": "storage-utilization",
@@ -2753,6 +2801,20 @@
    "commands": 3
   },
   {
+   "id": "kestrel-relay-api",
+   "label": "Kestrel Relay API",
+   "version": "1.0.0",
+   "transport": "https",
+   "polls": 4
+  },
+  {
+   "id": "kestrel-gaze-api",
+   "label": "Kestrel Gaze API",
+   "version": "1.0.0",
+   "transport": "https",
+   "polls": 2
+  },
+  {
    "id": "kestrel-ws",
    "label": "Kestrel Control Socket",
    "version": "1.0.0",
@@ -3016,7 +3078,7 @@
    "id": "kestrel-relay-c1",
    "label": "Kestrel Relay C1",
    "vendor_id": "kestrel",
-   "driver_id": "kestrel-api",
+   "driver_id": "kestrel-relay-api",
    "component_type": "codec",
    "kind": "device"
   },
@@ -3024,7 +3086,7 @@
    "id": "kestrel-gaze-p2",
    "label": "Kestrel Gaze P2",
    "vendor_id": "kestrel",
-   "driver_id": "kestrel-api",
+   "driver_id": "kestrel-gaze-api",
    "component_type": "ptz-camera",
    "kind": "device"
   },
