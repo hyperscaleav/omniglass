@@ -43,7 +43,7 @@ import { spans as timelineSpans } from "../lib/timeline";
 import { systemEvents, systemEventsKey, systemLogs, systemLogsKey, type SystemLogs } from "../lib/system_activity";
 import type { LogFilter } from "../lib/logs";
 import LogFilters from "../components/LogFilters";
-import { metricSeries, metricSeriesKey } from "../lib/series";
+import { metricBuckets, metricBucketsKey } from "../lib/series";
 import { CalcRuleLink } from "../components/RuleLink";
 import { memberModel, systemCrumbs, systemsAtPlace, type MemberContext } from "../lib/detail";
 import TimeseriesChart from "../components/TimeseriesChart";
@@ -75,6 +75,11 @@ import { CLOCK_TICK_MS, createClock } from "../lib/clock";
 // SERIES_POLL_MS is the Data table's sparkline cadence: a day's line moves
 // too little in the leaf's five seconds to be worth a request per metric.
 const SERIES_POLL_MS = 30_000;
+// The Data table reads a day at five-minute buckets (#1269): 288 of them, the
+// min/max band and the avg line, so a one-sample spike survives and the read
+// is the same size however busy the metric.
+const SERIES_HOURS = 24;
+const SERIES_RESOLUTION_S = 300;
 // HISTORY_TICK_MS is how often the history and the charts take a new now:
 // a thirty-day strip and a day's sparkline move too little in a second to
 // redraw on every tick.
@@ -188,8 +193,10 @@ export default function SystemZoom() {
   // Data table draws every sparkline at once (#795 review).
   const seriesQueries = useQueries(() => ({
     queries: kpiMetrics().map((m) => ({
-      queryKey: metricSeriesKey("systems", id(), m.metric_type_name, 24),
-      queryFn: () => metricSeries("systems", id(), m.metric_type_name, 24),
+      // The chart is the series whose latest value sits beside it: a bucket
+      // is one instance (#1485), so a sampled row names the instance it shows.
+      queryKey: metricBucketsKey("systems", id(), m.metric_type_name, SERIES_HOURS, SERIES_RESOLUTION_S, m.is_sampled ? m.instance : undefined),
+      queryFn: () => metricBuckets("systems", id(), m.metric_type_name, SERIES_HOURS, SERIES_RESOLUTION_S, m.is_sampled ? m.instance : undefined),
       enabled: tab() === "overview",
       // A day's sparkline does not visibly move in five seconds; the latest
       // value beside it rides the metrics read, which does.
@@ -616,7 +623,7 @@ export default function SystemZoom() {
                         >
                           <td>{entityLabel({ name: m.metric_type_name, label: m.label })}</td>
                           <td>
-                            <TimeseriesChart spark samples={metricSeriesData()[i()] ?? []} now={historyNow()} windowMs={24 * 3600_000} />
+                            <TimeseriesChart spark buckets={metricSeriesData()[i()]?.buckets ?? []} resolutionMs={SERIES_RESOLUTION_S * 1000} now={historyNow()} windowMs={SERIES_HOURS * 3600_000} />
                           </td>
                           <td class="text-right font-mono tabular-nums">{m.value === null || m.value === undefined ? "" : String(m.value)}</td>
                           <td class="text-right text-[10px] text-base-content/45">
@@ -628,7 +635,7 @@ export default function SystemZoom() {
                         <Show when={seriesPick() === m.metric_type_name}>
                           <tr>
                             <td colspan="4" class="bg-base-200/40">
-                              <TimeseriesChart samples={metricSeriesData()[i()] ?? []} now={historyNow()} windowMs={24 * 3600_000} />
+                              <TimeseriesChart buckets={metricSeriesData()[i()]?.buckets ?? []} resolutionMs={SERIES_RESOLUTION_S * 1000} now={historyNow()} windowMs={SERIES_HOURS * 3600_000} />
                             </td>
                           </tr>
                         </Show>

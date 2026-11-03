@@ -11,7 +11,7 @@ import { systemMetricsKey } from "../lib/system_metrics";
 import { systemAlarmsKey } from "../lib/alarms";
 import { systemMembersKey } from "../lib/members";
 import { systemEventsKey, systemLogsKey } from "../lib/system_activity";
-import { metricSeriesKey } from "../lib/series";
+import { metricBucketsKey } from "../lib/series";
 import { STANDARDS_KEY } from "../lib/standards";
 import { SYSTEM_TYPES_KEY } from "../lib/system_types";
 import { LOCATIONS_KEY } from "../lib/locations";
@@ -661,11 +661,14 @@ describe("the data tab (#794, stacked per the #795 review)", () => {
     { metric_type_name: "occupancy-count", label: "Occupancy Count", data_type: "int", value: 0, is_sampled: false, from_contract: true, required: false },
   ];
   const seedSeries = (qc: QueryClient) => {
-    qc.setQueryData([...metricSeriesKey("systems", uuidFor("szp-sys"), "room-temperature", 24)], [
-      { ts: "2026-08-20T10:00:00Z", value: 22.9, provenance: "observed" },
-      { ts: "2026-08-20T14:00:00Z", value: 23.5, provenance: "observed" },
-    ]);
-    qc.setQueryData([...metricSeriesKey("systems", uuidFor("szp-sys"), "occupancy-count", 24)], []);
+    qc.setQueryData([...metricBucketsKey("systems", uuidFor("szp-sys"), "room-temperature", 24, 300)], {
+      coveredFrom: null,
+      buckets: [
+        { ts: "2026-08-20T10:00:00Z", count: 3, min: 22.1, max: 23.4, avg: 22.9, last: 23.0 },
+        { ts: "2026-08-20T14:00:00Z", count: 2, min: 23.2, max: 23.8, avg: 23.5, last: 23.5 },
+      ],
+    });
+    qc.setQueryData([...metricBucketsKey("systems", uuidFor("szp-sys"), "occupancy-count", 24, 300)], { coveredFrom: null, buckets: [] });
   };
 
   it("stacks every declared metric as a table row: label, sparkline, the latest value; no picker to hunt through", async () => {

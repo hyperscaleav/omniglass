@@ -1216,8 +1216,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Read one metric series' raw samples
-         * @description The samples behind the effective read's latest value for one series, newest first, windowed (hours) and capped (limit, newest kept). Gated by component:read; an out-of-scope owner is a non-disclosing 404.
+         * Read one metric series' samples
+         * @description The samples behind the effective read's latest value for one series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with count, min, max, avg and last (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured samples (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured samples in the window, or a 422 listing them when there are several. Nothing is read beyond the series' effective retention until trends exist (#1276). Gated by component:read; an out-of-scope owner is a non-disclosing 404.
          */
         get: operations["list-component-metric-series"];
         put?: never;
@@ -1281,7 +1281,7 @@ export interface paths {
         };
         /**
          * Read one property series' change history
-         * @description The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). Gated by component:read; an out-of-scope owner is a non-disclosing 404.
+         * @description The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count and the value in force at its end (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured changes (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured changes in the window, or a 422 listing them when there are several. Gated by component:read; an out-of-scope owner is a non-disclosing 404.
          */
         get: operations["list-component-property-series"];
         put?: never;
@@ -4728,8 +4728,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Read one metric series' raw samples
-         * @description The samples behind the effective read's latest value for one series, newest first, windowed (hours) and capped (limit, newest kept). Gated by system:read; an out-of-scope owner is a non-disclosing 404.
+         * Read one metric series' samples
+         * @description The samples behind the effective read's latest value for one series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with count, min, max, avg and last (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured samples (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured samples in the window, or a 422 listing them when there are several. Nothing is read beyond the series' effective retention until trends exist (#1276). Gated by system:read; an out-of-scope owner is a non-disclosing 404.
          */
         get: operations["list-system-metric-series"];
         put?: never;
@@ -4793,7 +4793,7 @@ export interface paths {
         };
         /**
          * Read one property series' change history
-         * @description The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). Gated by system:read; an out-of-scope owner is a non-disclosing 404.
+         * @description The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count and the value in force at its end (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured changes (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured changes in the window, or a 422 listing them when there are several. Gated by system:read; an out-of-scope owner is a non-disclosing 404.
          */
         get: operations["list-system-property-series"];
         put?: never;
@@ -9163,6 +9163,29 @@ export interface components {
             name?: string;
             principal_id: string;
         };
+        MetricBucketBody: {
+            /** Format: double */
+            avg: number | null;
+            /**
+             * Format: int64
+             * @description Samples in the bucket
+             */
+            count: number;
+            /**
+             * Format: double
+             * @description The newest sample's value in the bucket
+             */
+            last: number | null;
+            /** Format: double */
+            max: number | null;
+            /** Format: double */
+            min: number | null;
+            /**
+             * Format: date-time
+             * @description The bucket's start
+             */
+            ts: string;
+        };
         MetricInstanceBody: {
             /** @description True when the instance names an endpoint the owner has; false for the owner-level series and an instance a push named */
             endpoint: boolean;
@@ -9197,11 +9220,25 @@ export interface components {
              * @example /api/v1/schemas/MetricSeriesOutputBody.json
              */
             readonly $schema?: string;
+            /** @description Every regular bucket of the window, oldest first */
+            buckets?: components["schemas"]["MetricBucketBody"][] | null;
+            /**
+             * Format: date-time
+             * @description The earliest instant the read could have data for: the start of the window or the series' effective retention, whichever is later. A bucket before it is empty because of retention, not because collection stopped
+             */
+            covered_from?: string;
+            /** @description The one instance the buckets aggregate, measured samples only (observed and calculated); present only on a bucketed read */
+            instance?: string;
             /** @description The series' metric_type name */
             metric: string;
             /** @description The owner's name */
             owner: string;
-            /** @description Newest first */
+            /**
+             * Format: int64
+             * @description The bucket width asked for; present only on a bucketed read
+             */
+            resolution_seconds?: number;
+            /** @description Newest first; empty when a resolution was asked for */
             samples: components["schemas"]["MetricSampleBody"][] | null;
         };
         MetricTypeBody: {
@@ -9870,6 +9907,20 @@ export interface components {
             /** @description The calc rule that writes this property, absent when none does (one enabled rule writes a key; a disabled writer is named when no rule is enabled) */
             written_by?: components["schemas"]["CalcWriterBody"];
         };
+        PropertyBucketBody: {
+            /**
+             * Format: int64
+             * @description Changes in the bucket
+             */
+            count: number;
+            /** @description The value in force at the bucket's end, from the newest change in it; null for a bucket with no change */
+            last: string | null;
+            /**
+             * Format: date-time
+             * @description The bucket's start
+             */
+            ts: string;
+        };
         PropertySampleBody: {
             /** @description The series discriminator, when set */
             instance?: string;
@@ -9890,11 +9941,25 @@ export interface components {
              * @example /api/v1/schemas/PropertySeriesOutputBody.json
              */
             readonly $schema?: string;
+            /** @description Every regular bucket of the window, oldest first */
+            buckets?: components["schemas"]["PropertyBucketBody"][] | null;
+            /**
+             * Format: date-time
+             * @description The earliest instant the read could have data for: the start of the window or the series' effective retention, whichever is later
+             */
+            covered_from?: string;
+            /** @description The one instance the buckets aggregate, measured changes only (observed and calculated); present only on a bucketed read */
+            instance?: string;
             /** @description The owner's name */
             owner: string;
             /** @description The series' property_type name */
             property: string;
-            /** @description Newest first: the change history behind the effective value */
+            /**
+             * Format: int64
+             * @description The bucket width asked for; present only on a bucketed read
+             */
+            resolution_seconds?: number;
+            /** @description Newest first: the change history behind the effective value; empty when a resolution was asked for */
             samples: components["schemas"]["PropertySampleBody"][] | null;
         };
         PushEvent: {
@@ -15152,8 +15217,12 @@ export interface operations {
             query?: {
                 /** @description The window in hours, counted back from now; 24 when unset */
                 hours?: number;
-                /** @description The row cap, newest kept; 500 when unset */
+                /** @description The row cap, newest kept; 500 when unset. Ignored when a resolution is set */
                 limit?: number;
+                /** @description The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused */
+                resolution?: number;
+                /** @description The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution */
+                instance?: string;
             };
             header?: never;
             path: {
@@ -15293,8 +15362,12 @@ export interface operations {
             query?: {
                 /** @description The window in hours, counted back from now; 24 when unset */
                 hours?: number;
-                /** @description The row cap, newest kept; 500 when unset */
+                /** @description The row cap, newest kept; 500 when unset. Ignored when a resolution is set */
                 limit?: number;
+                /** @description The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused */
+                resolution?: number;
+                /** @description The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution */
+                instance?: string;
             };
             header?: never;
             path: {
@@ -22802,8 +22875,12 @@ export interface operations {
             query?: {
                 /** @description The window in hours, counted back from now; 24 when unset */
                 hours?: number;
-                /** @description The row cap, newest kept; 500 when unset */
+                /** @description The row cap, newest kept; 500 when unset. Ignored when a resolution is set */
                 limit?: number;
+                /** @description The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused */
+                resolution?: number;
+                /** @description The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution */
+                instance?: string;
             };
             header?: never;
             path: {
@@ -22943,8 +23020,12 @@ export interface operations {
             query?: {
                 /** @description The window in hours, counted back from now; 24 when unset */
                 hours?: number;
-                /** @description The row cap, newest kept; 500 when unset */
+                /** @description The row cap, newest kept; 500 when unset. Ignored when a resolution is set */
                 limit?: number;
+                /** @description The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused */
+                resolution?: number;
+                /** @description The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution */
+                instance?: string;
             };
             header?: never;
             path: {

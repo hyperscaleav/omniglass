@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chartLayout, nearestPoint } from "./chart";
+import { bucketLayout, chartLayout, nearestPoint } from "./chart";
 
 // The timeseries chart's pure core (#794): samples to plot geometry, no DOM.
 // X is time against the window's right-edge-now axis; Y is a padded nice
@@ -73,5 +73,90 @@ describe("the x axis and the crosshair (#795 review)", () => {
     expect(nearestPoint(l, mid.x + 3)).toBe(mid);
     expect(nearestPoint(l, 0)).toBe(l.points[0]);
     expect(nearestPoint(chartLayout([], opts), 100)).toBeNull();
+  });
+});
+
+// A property series holds its value until the next change (#1269): a step at
+// the row's ts, never a ramp between two rows.
+describe("step mode", () => {
+  const opts = { width: 640, height: 160, padLeft: 40, padRight: 12, padY: 18, now, windowMs: 24 * 3600_000, mode: "step" as const };
+
+  it("changes value at the row's own time: a vertical edge at x, no diagonal", () => {
+    const l = chartLayout([at(20, 1), at(10, 3), at(2, 2)], opts);
+    const [a, b, c] = l.points;
+    // Every command after the first is a horizontal hold or a vertical step.
+    const cmds = l.linePath.split(" ").map((s) => ({ op: s[0], xy: s.slice(1).split(",").map(Number) }));
+    for (let i = 1; i < cmds.length; i++) {
+      const [px, py] = cmds[i - 1].xy;
+      const [x, y] = cmds[i].xy;
+      expect(x === px || y === py).toBe(true);
+    }
+    // The step to the second value is at the second row's x, from the first value's y.
+    expect(l.linePath).toContain(`L${b.x.toFixed(2)},${a.y.toFixed(2)} L${b.x.toFixed(2)},${b.y.toFixed(2)}`);
+    expect(l.linePath).toContain(`L${c.x.toFixed(2)},${b.y.toFixed(2)} L${c.x.toFixed(2)},${c.y.toFixed(2)}`);
+  });
+
+  it("holds the last value to now, so a value that has not changed still reaches the right edge", () => {
+    const l = chartLayout([at(20, 1), at(10, 3)], opts);
+    const end = l.linePath.split(" ").pop()!;
+    expect(end).toBe(`L${(opts.width - opts.padRight).toFixed(2)},${l.points[1].y.toFixed(2)}`);
+  });
+
+  it("leaves line mode as it was: a ramp between two rows", () => {
+    const l = chartLayout([at(20, 1), at(10, 3)], { ...opts, mode: "line" });
+    expect(l.linePath).toBe(`M${l.points[0].x.toFixed(2)},${l.points[0].y.toFixed(2)} L${l.points[1].x.toFixed(2)},${l.points[1].y.toFixed(2)}`);
+  });
+});
+
+// The bucketed read's chart (#1269): the min/max band and the avg line per
+// bucket, so a one-sample spike survives any zoom.
+describe("bucketLayout", () => {
+  const res = 3600_000;
+  const opts = { width: 640, height: 160, padLeft: 40, padRight: 12, padY: 18, now, windowMs: 24 * res, resolutionMs: res };
+  const bucket = (hoursAgo: number, min: number | null, max: number | null, avg: number | null = null, count = 1, last: number | null = avg) => ({
+    ts: new Date(now - hoursAgo * res).toISOString(),
+    count: min === null ? 0 : count,
+    min,
+    max,
+    avg: avg ?? (min === null || max === null ? null : (min + max) / 2),
+    last,
+  });
+
+  it("a one-sample spike reaches the top of the domain: the band covers the bucket's max", () => {
+    const l = bucketLayout([bucket(5, 5, 5), bucket(4, 5, 400, 5.2, 90, 5), bucket(3, 5, 5)], opts);
+    expect(l.yMax).toBeGreaterThan(400);
+    const spike = l.points[1];
+    // The band rect for that bucket spans from y(400) to y(5): far taller than the avg dot's own height.
+    const rects = l.bandPath.split("M").filter(Boolean);
+    expect(rects).toHaveLength(3);
+    const tops = rects.map((r) => Number(r.split(" ")[0].split(",")[1]));
+    expect(Math.min(...tops)).toBeLessThan(spike.y - 40);
+  });
+
+  it("an empty bucket draws no band and no point, and the avg line runs across it (the gap rule is #1475)", () => {
+    const l = bucketLayout([bucket(6, 4, 6), bucket(5, null, null), bucket(4, 4, 6)], opts);
+    expect(l.bandPath.split("M").filter(Boolean)).toHaveLength(2);
+    expect(l.linePath.split("M")).toHaveLength(2);
+    expect(l.linePath.split("L")).toHaveLength(2);
+    expect(l.points).toHaveLength(2);
+  });
+
+  it("the end label reads the newest bucket's last, not its average", () => {
+    const l = bucketLayout([bucket(1, 1, 9, 5, 4, 9)], opts);
+    expect(l.points[0].value).toBe(5);
+    expect(l.endValue).toBe(9);
+  });
+
+  it("an all-empty window draws nothing", () => {
+    const l = bucketLayout([bucket(2, null, null), bucket(1, null, null)], opts);
+    expect(l.points).toHaveLength(0);
+    expect(l.bandPath).toBe("");
+    expect(l.linePath).toBe("");
+  });
+
+  it("a flat bucket still draws a visible sliver of band", () => {
+    const l = bucketLayout([bucket(2, 7, 7), bucket(1, 7, 7)], opts);
+    const h = Number(l.bandPath.split("M")[1].match(/V([\d.]+)/)![1]) - Number(l.bandPath.split("M")[1].split(" ")[0].split(",")[1]);
+    expect(h).toBeGreaterThanOrEqual(1);
   });
 });

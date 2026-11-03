@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -236,5 +237,158 @@ func TestSeriesReadsOnTheWire(t *testing.T) {
 	}
 	if len(got.Samples) != 2 || got.Samples[0].Value != 6.1 {
 		t.Fatalf("series = %+v, want two samples newest first", got.Samples)
+	}
+}
+
+// The bucketed series read on the wire (#1269): a resolution turns the newest-N
+// tail into every regular bucket of the range, a spike survives as a bucket's
+// max, and the raw body is untouched when no resolution is asked for.
+func TestBucketedSeriesReadsOnTheWire(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	ownerTok := bootstrapOwnerTok(t, ctx, gw)
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	all := scope.Set{All: true}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bucket-probe"}, all, all, all, all); err != nil {
+		t.Fatalf("create component: %v", err)
+	}
+	hour := time.Now().UTC().Truncate(time.Hour)
+	if err := insertMetrics(ctx, gw, []storage.MetricSampleWrite{
+		{OwnerKind: "component", OwnerID: "bucket-probe", Key: "icmp-rtt-avg", Instance: "icmp", Value: 5, Source: "t", TS: hour.Add(-2*time.Hour + time.Minute)},
+		{OwnerKind: "component", OwnerID: "bucket-probe", Key: "icmp-rtt-avg", Instance: "icmp", Value: 480, Source: "t", TS: hour.Add(-2*time.Hour + 2*time.Minute)},
+		{OwnerKind: "component", OwnerID: "bucket-probe", Key: "icmp-rtt-avg", Instance: "icmp", Value: 6, Source: "t", TS: hour.Add(-2*time.Hour + 3*time.Minute)},
+	}); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	if err := insertProperties(ctx, gw, []storage.PropertySampleWrite{
+		{OwnerKind: "component", OwnerID: "bucket-probe", Key: "firmware-version", Value: "2.1.4", Source: "collection", TS: hour.Add(-2*time.Hour + time.Minute)},
+	}); err != nil {
+		t.Fatalf("insert property: %v", err)
+	}
+
+	var got struct {
+		Samples           []json.RawMessage `json:"samples"`
+		ResolutionSeconds int               `json:"resolution_seconds"`
+		CoveredFrom       time.Time         `json:"covered_from"`
+		Buckets           []struct {
+			TS    time.Time `json:"ts"`
+			Count int       `json:"count"`
+			Min   *float64  `json:"min"`
+			Max   *float64  `json:"max"`
+			Avg   *float64  `json:"avg"`
+			Last  *float64  `json:"last"`
+		} `json:"buckets"`
+	}
+	body := c.do(ownerTok, http.MethodGet, "/components/bucket-probe/metrics/icmp-rtt-avg/samples?hours=720&resolution=3600", nil, http.StatusOK)
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("read buckets: %v", err)
+	}
+	if len(got.Buckets) != 720 || got.ResolutionSeconds != 3600 || len(got.Samples) != 0 {
+		t.Fatalf("got %d buckets at %ds with %d raw samples, want 720 at 3600 and no raw samples", len(got.Buckets), got.ResolutionSeconds, len(got.Samples))
+	}
+	if got.CoveredFrom.IsZero() || got.CoveredFrom.After(time.Now().Add(-13*24*time.Hour)) {
+		t.Fatalf("covered_from = %s, want about 14 days back: the hot window, said on the wire", got.CoveredFrom)
+	}
+	spike := got.Buckets[719-2]
+	if spike.Count != 3 || spike.Max == nil || *spike.Max != 480 || spike.Min == nil || *spike.Min != 5 {
+		t.Fatalf("spike bucket = %+v, want 3 samples, min 5, max 480", spike)
+	}
+	if empty := got.Buckets[719-1]; empty.Count != 0 || empty.Max != nil || empty.Avg != nil || empty.Last != nil {
+		t.Fatalf("empty bucket = %+v, want count 0 and null aggregates", empty)
+	}
+	if !strings.Contains(string(body), `"max":null`) {
+		t.Fatalf("an empty bucket's aggregates must be present and null on the wire, got %.300s", body)
+	}
+
+	var prop struct {
+		Buckets []struct {
+			Count int     `json:"count"`
+			Last  *string `json:"last"`
+		} `json:"buckets"`
+	}
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/components/bucket-probe/properties/firmware-version/samples?hours=24&resolution=3600", nil, http.StatusOK), &prop); err != nil {
+		t.Fatalf("read property buckets: %v", err)
+	}
+	if len(prop.Buckets) != 24 || prop.Buckets[21].Count != 1 || prop.Buckets[21].Last == nil || *prop.Buckets[21].Last != "2.1.4" {
+		t.Fatalf("property buckets = %+v, want 24 with the change in the third from last", prop.Buckets)
+	}
+
+	// No resolution: the raw body, key for key as before, no bucket fields.
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/components/bucket-probe/metrics/icmp-rtt-avg/samples?hours=24", nil, http.StatusOK), &raw); err != nil {
+		t.Fatalf("read raw: %v", err)
+	}
+	for _, k := range []string{"buckets", "covered_from", "resolution_seconds"} {
+		if _, ok := raw[k]; ok {
+			t.Fatalf("raw body carries %q, want the unchanged raw shape", k)
+		}
+	}
+
+	// A resolution that would make more buckets than the cap is a 422, never a
+	// truncated grid; an out-of-scope owner stays the non-disclosing 404.
+	c.do(ownerTok, http.MethodGet, "/components/bucket-probe/metrics/icmp-rtt-avg/samples?hours=720&resolution=1", nil, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodGet, "/components/no-such/metrics/icmp-rtt-avg/samples?resolution=60", nil, http.StatusNotFound)
+
+	// A resolution past 30 days is the schema's 422, not a 500 from an
+	// overflowed duration (#1485).
+	c.do(ownerTok, http.MethodGet, "/components/bucket-probe/metrics/icmp-rtt-avg/samples?resolution=2592001", nil, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodGet, "/components/bucket-probe/properties/firmware-version/samples?resolution=9223372036", nil, http.StatusUnprocessableEntity)
+
+	// A second instance of the same metric on the same owner is another series
+	// (#1485): unnamed, the read is refused with both instances listed; named,
+	// the buckets hold that instance's samples alone.
+	if _, err := gw.CreateMetricType(ctx, "", storage.MetricTypeSpec{Name: "wire-level", DataType: "float"}); err != nil {
+		t.Fatalf("create metric type: %v", err)
+	}
+	if err := insertMetrics(ctx, gw, []storage.MetricSampleWrite{
+		{OwnerKind: "component", OwnerID: "bucket-probe", Key: "wire-level", Instance: "a", Value: 5, Source: "t", TS: hour.Add(-2*time.Hour + time.Minute)},
+		{OwnerKind: "component", OwnerID: "bucket-probe", Key: "wire-level", Instance: "a", Value: 480, Source: "t", TS: hour.Add(-2*time.Hour + 2*time.Minute)},
+		{OwnerKind: "component", OwnerID: "bucket-probe", Key: "wire-level", Instance: "a", Value: 6, Source: "t", TS: hour.Add(-2*time.Hour + 3*time.Minute)},
+		{OwnerKind: "component", OwnerID: "bucket-probe", Key: "wire-level", Instance: "b", Value: 900, Source: "t", TS: hour.Add(-2*time.Hour + 4*time.Minute)},
+	}); err != nil {
+		t.Fatalf("insert two instances: %v", err)
+	}
+	var problem struct {
+		Detail string `json:"detail"`
+		Errors []struct {
+			Location string `json:"location"`
+			Value    string `json:"value"`
+		} `json:"errors"`
+	}
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/components/bucket-probe/metrics/wire-level/samples?hours=24&resolution=3600", nil, http.StatusUnprocessableEntity), &problem); err != nil {
+		t.Fatalf("read the ambiguity problem: %v", err)
+	}
+	var listed []string
+	for _, e := range problem.Errors {
+		if e.Location == "query.instance" {
+			listed = append(listed, e.Value)
+		}
+	}
+	if strings.Join(listed, ",") != "a,b" {
+		t.Fatalf("ambiguity problem = %+v, want both instances listed at query.instance", problem)
+	}
+	var one struct {
+		Instance string `json:"instance"`
+		Buckets  []struct {
+			Count int      `json:"count"`
+			Max   *float64 `json:"max"`
+		} `json:"buckets"`
+	}
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/components/bucket-probe/metrics/wire-level/samples?hours=24&resolution=3600&instance=a", nil, http.StatusOK), &one); err != nil {
+		t.Fatalf("read one instance: %v", err)
+	}
+	if b := one.Buckets[23-2]; one.Instance != "a" || b.Count != 3 || b.Max == nil || *b.Max != 480 {
+		t.Fatalf("instance a read = instance %q bucket %+v, want a's 3 samples with max 480, not b's 900", one.Instance, b)
 	}
 }

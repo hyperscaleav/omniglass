@@ -312,8 +312,11 @@ open its panel. A dashed ring is a position nobody staffs, labelled with its rol
 Below the map, when the standard declares metrics, the **data** section stacks every one
 of them, the only place a metric's latest value is said: a sparkline of the last 24 hours beside the latest value, one row per series, so
 the system's numbers read together. Click a row for the full chart, newest at the right,
-the latest sample's value floating on its dot. Raw samples, capped; a series still on its
-contract default has nothing to chart yet, and says so.
+the newest bucket's last value floating on its dot. The day is drawn in five-minute buckets, so
+however busy the metric the whole day is there: the line is each bucket's average and the shaded band
+behind it runs from its lowest to its highest reading, so a one-sample spike shows at any zoom. Hover a
+point for the bucket's average, range and sample count. A series still on its contract default has
+nothing to chart yet, and says so.
 
 ::screenshot{#fleet-data}
 
