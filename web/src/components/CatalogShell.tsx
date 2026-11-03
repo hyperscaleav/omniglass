@@ -129,7 +129,11 @@ function EntryCount(props: { entry: CatalogEntry }) {
   const q = useQuery(() => ({ queryKey: [...props.entry.key!], queryFn: props.entry.list! }));
   return (
     <Show when={q.data}>
-      {(rows) => <span class="ml-auto font-data tnum text-xs text-base-content/45">{entryCount(props.entry, rows())}</span>}
+      {(rows) => (
+        <span data-testid="catalog-entry-count" class="ml-auto font-data tnum text-xs text-base-content/45">
+          {entryCount(props.entry, rows())}
+        </span>
+      )}
     </Show>
   );
 }

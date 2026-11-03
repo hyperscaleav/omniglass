@@ -15,7 +15,7 @@ import matter from 'gray-matter';
 import { mkdir, readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { assertFontsRendered, watchFontRequests } from './fontguard.mjs';
-import { describeMask, planMasks, shootBaseline } from './shotmasklib.mjs';
+import { describeMask, planMasks, planStandingMasks, shootBaseline } from './shotmasklib.mjs';
 
 const BASE = process.env.OG_E2E_BASE ?? 'http://localhost:8080';
 const TOKEN = process.env.OG_TOKEN ?? '';
@@ -136,7 +136,7 @@ for (const spec of specs) {
   // the tell) shows in the capture output, not just in the raster.
   let plan;
   try {
-    plan = await planMasks(page, spec.mask ?? []);
+    plan = [...(await planStandingMasks(page)), ...(await planMasks(page, spec.mask ?? []))];
   } catch (e) {
     // A mask that matches nothing hides nothing, and a value wider than its
     // declared box leaves its tail live: either way the region renders into the
