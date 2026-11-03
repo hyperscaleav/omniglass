@@ -79,6 +79,19 @@ interfaces:
         mutate:
           status.channels.{{ .Request.Body.index }}.gain: "{{ .Request.Body.gain }}"
 
+      # The program output (#1493): the bus that feeds the room, whose mute
+      # and level the DSP reports over SNMP. The per-channel strips above are
+      # a separate surface.
+      - match: "POST /api/output/mute"
+        template: api/polaris-dsp/output-ack.json.gotempl
+        doc: { summary: "Mute or unmute the program output", tags: [api, control] }
+        example: |
+          {"mute": true}
+        mutations:
+          - path: status.output.mute
+            value: "{{ .Request.Body.mute }}"
+            enum: ["true", "false"]
+
       # Reboot resets uptime and the volatile DSP telemetry to their
       # declared defaults. The SSH and Telnet `system reboot` verbs
       # alias *polaris_reboot_mutations to share the exact same list.
@@ -90,6 +103,8 @@ interfaces:
           - { path: status.device.boot_epoch, value: "{{ now }}" }
           - { path: status.dsp.cpu_load, value: "{{ .Defaults.status.dsp.cpu_load }}" }
           - { path: status.dsp.temperature, value: "{{ .Defaults.status.dsp.temperature }}" }
+          - { path: status.output.mute, value: "{{ .Defaults.status.output.mute }}" }
+          - { path: status.output.level_db, value: "{{ .Defaults.status.output.level_db }}" }
 
       # Factory reset extends to every volatile DSP status path with
       # a declared default. Channels are addressed individually so the
@@ -104,6 +119,8 @@ interfaces:
           - { path: status.dsp.active_channels, value: "{{ .Defaults.status.dsp.active_channels }}" }
           - { path: status.dsp.temperature, value: "{{ .Defaults.status.dsp.temperature }}" }
           - { path: status.dsp.fan_rpm, value: "{{ .Defaults.status.dsp.fan_rpm }}" }
+          - { path: status.output.mute, value: "{{ .Defaults.status.output.mute }}" }
+          - { path: status.output.level_db, value: "{{ .Defaults.status.output.level_db }}" }
 
   - name: ssh-console
     protocol: ssh
@@ -365,6 +382,8 @@ interfaces:
       status.dsp.active_channels:       "1.3.6.1.4.1.55540.2.2.0"
       status.dsp.temperature:           "1.3.6.1.4.1.55540.2.3.0"
       status.dsp.fan_rpm:               "1.3.6.1.4.1.55540.2.4.0"
+      status.output.mute:               "1.3.6.1.4.1.55540.2.5.0"   # the program output's mute
+      status.output.level_db:           "1.3.6.1.4.1.55540.2.6.0"   # and its level, in dBFS
       configuration.firmware.version:   "1.3.6.1.4.1.55540.5.1.0"
       configuration.device.serial:      "1.3.6.1.4.1.55540.5.2.0"
 
@@ -407,6 +426,16 @@ behaviors:
       - path: status.dsp.temperature
         value: "{{ sigfig 3 (clamp 38.0 58.0 (randStep 1.0 .State.status.dsp.temperature)) }}"
 
+  # Program audio rides speech: the output level moves every few seconds
+  # within the band a room is run at, a behavior a scenario can drive (a
+  # meeting starting, a silent room).
+  - name: output_level_drift
+    schedule:
+      interval: 15s
+    mutations:
+      - path: status.output.level_db
+        value: "{{ round 1 (clamp -40.0 -6.0 (randStep 3.0 .State.status.output.level_db)) }}"
+
 defaults:
   status:
     device:
@@ -418,6 +447,10 @@ defaults:
       active_channels: 8
       temperature: 42
       fan_rpm: 3800
+    # The program output: unmuted, at a level a room is run at.
+    output:
+      mute: false
+      level_db: -18
     # Sixteen discrete channels, indexed 0..15 so they address directly
     # from the API ({"index": 0, "mute": true} writes channels[0].mute).
     # Mutes and gains are the real source of truth; peak_db is a static
