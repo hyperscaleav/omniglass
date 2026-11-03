@@ -196,6 +196,18 @@ property_types:
       Whether an amplifier is running (normal) or has muted its outputs and
       latched protect on a fault (overheating, a shorted load, DC on an output),
       which holds until an operator resets it.
+  # A signal device's input and link (#895): what a switcher or an extender
+  # reports of the signal it carries.
+  - name: signal-state
+    data_type: string
+    validation: { enum: [present, absent] }
+    label: Signal State
+    description: Whether a signal device detects a signal on the input it carries (a switcher's routed input, an extender's input), as it reports it.
+  - name: link-state
+    data_type: string
+    validation: { enum: [up, down] }
+    label: Link State
+    description: Whether the link between a signal device and its far end (an extender's cable run to its transmitter) is up or down, as the device reports it.
   - name: playback-state
     data_type: string
     validation: { enum: [playing, paused, stopped] }

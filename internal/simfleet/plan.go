@@ -55,6 +55,8 @@ var AttachSecret = map[string]string{
 	"lyra-arc-snmp":         CommunitySecret,
 	"lyra-hx-snmp":          CommunitySecret,
 	"ferrite-pdu-snmp":      CommunitySecret,
+	"meridian-mx-snmp":      CommunitySecret,
+	"meridian-xl-snmp":      CommunitySecret,
 }
 
 // AddressCap is how many addresses the simulated block holds: 256 third
@@ -164,6 +166,8 @@ var Attach = map[string]func(addr string, shift func(int) int) map[string]string
 	"lyra-arc-snmp":     snmpAttach,
 	"lyra-hx-snmp":      snmpAttach,
 	"ferrite-pdu-snmp":  snmpAttach,
+	"meridian-mx-snmp":  snmpAttach,
+	"meridian-xl-snmp":  snmpAttach,
 	"newtron-nvp":       nvpAttach,
 	"newtron-core-nvp":  nvpAttach,
 	"newtron-slate-nvp": nvpAttach,

@@ -2,9 +2,7 @@
 # profile serves yet, each with the issue that adds it. The coverage test
 # holds every other such product to a profile, so a new seeded product
 # either gains one or is listed here.
-unsimulated:
-  meridian-mx-84: "#895: no Meridian profile yet"
-  meridian-xl-1: "#895: no Meridian profile yet"
+unsimulated: {}
 
 # Seeded products with no network interface: there is nothing on them to
 # collect from, so nothing simulates them, and each says how the fleet watches
