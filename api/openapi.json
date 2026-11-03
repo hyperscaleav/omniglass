@@ -8682,6 +8682,59 @@
         ],
         "type": "object"
       },
+      "MetricBucketBody": {
+        "additionalProperties": false,
+        "properties": {
+          "avg": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "count": {
+            "description": "Samples in the bucket",
+            "format": "int64",
+            "type": "integer"
+          },
+          "last": {
+            "description": "The newest sample's value in the bucket",
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "max": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "min": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "ts": {
+            "description": "The bucket's start",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ts",
+          "count",
+          "min",
+          "max",
+          "avg",
+          "last"
+        ],
+        "type": "object"
+      },
       "MetricInstanceBody": {
         "additionalProperties": false,
         "properties": {
@@ -8753,6 +8806,21 @@
             "readOnly": true,
             "type": "string"
           },
+          "buckets": {
+            "description": "Every regular bucket of the window, oldest first",
+            "items": {
+              "$ref": "#/components/schemas/MetricBucketBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "covered_from": {
+            "description": "The earliest instant the read could have data for: the start of the window or the series' effective retention, whichever is later. A bucket before it is empty because of retention, not because collection stopped",
+            "format": "date-time",
+            "type": "string"
+          },
           "metric": {
             "description": "The series' metric_type name",
             "type": "string"
@@ -8761,8 +8829,13 @@
             "description": "The owner's name",
             "type": "string"
           },
+          "resolution_seconds": {
+            "description": "The bucket width asked for; present only on a bucketed read",
+            "format": "int64",
+            "type": "integer"
+          },
           "samples": {
-            "description": "Newest first",
+            "description": "Newest first; empty when a resolution was asked for",
             "items": {
               "$ref": "#/components/schemas/MetricSampleBody"
             },
@@ -10316,6 +10389,34 @@
         ],
         "type": "object"
       },
+      "PropertyBucketBody": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "description": "Changes in the bucket",
+            "format": "int64",
+            "type": "integer"
+          },
+          "last": {
+            "description": "The value in force at the bucket's end, from the newest change in it; null for a bucket with no change",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ts": {
+            "description": "The bucket's start",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ts",
+          "count",
+          "last"
+        ],
+        "type": "object"
+      },
       "PropertySampleBody": {
         "additionalProperties": false,
         "properties": {
@@ -10358,6 +10459,21 @@
             "readOnly": true,
             "type": "string"
           },
+          "buckets": {
+            "description": "Every regular bucket of the window, oldest first",
+            "items": {
+              "$ref": "#/components/schemas/PropertyBucketBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "covered_from": {
+            "description": "The earliest instant the read could have data for: the start of the window or the series' effective retention, whichever is later",
+            "format": "date-time",
+            "type": "string"
+          },
           "owner": {
             "description": "The owner's name",
             "type": "string"
@@ -10366,8 +10482,13 @@
             "description": "The series' property_type name",
             "type": "string"
           },
+          "resolution_seconds": {
+            "description": "The bucket width asked for; present only on a bucketed read",
+            "format": "int64",
+            "type": "integer"
+          },
           "samples": {
-            "description": "Newest first: the change history behind the effective value",
+            "description": "Newest first: the change history behind the effective value; empty when a resolution was asked for",
             "items": {
               "$ref": "#/components/schemas/PropertySampleBody"
             },
@@ -20064,7 +20185,7 @@
     },
     "/components/{name}/metrics/{metric}/samples": {
       "get": {
-        "description": "The samples behind the effective read's latest value for one series, newest first, windowed (hours) and capped (limit, newest kept). Gated by component:read; an out-of-scope owner is a non-disclosing 404.",
+        "description": "The samples behind the effective read's latest value for one series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with count, min, max, avg and last (null when empty), and covered_from, the earliest instant retention leaves data for; nothing is read beyond the series' effective retention until trends exist (#1276). Gated by component:read; an out-of-scope owner is a non-disclosing 404.",
         "operationId": "list-component-metric-series",
         "parameters": [
           {
@@ -20101,14 +20222,26 @@
             }
           },
           {
-            "description": "The row cap, newest kept; 500 when unset",
+            "description": "The row cap, newest kept; 500 when unset. Ignored when a resolution is set",
             "explode": false,
             "in": "query",
             "name": "limit",
             "schema": {
-              "description": "The row cap, newest kept; 500 when unset",
+              "description": "The row cap, newest kept; 500 when unset. Ignored when a resolution is set",
               "format": "int64",
               "maximum": 2000,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The bucket width in seconds. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused",
+            "explode": false,
+            "in": "query",
+            "name": "resolution",
+            "schema": {
+              "description": "The bucket width in seconds. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused",
+              "format": "int64",
               "minimum": 1,
               "type": "integer"
             }
@@ -20136,7 +20269,7 @@
             "description": "Error"
           }
         },
-        "summary": "Read one metric series' raw samples",
+        "summary": "Read one metric series' samples",
         "x-omniglass-mcp": {},
         "x-omniglass-permission": "component:read"
       }
@@ -20291,7 +20424,7 @@
     },
     "/components/{name}/properties/{property}/samples": {
       "get": {
-        "description": "The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). Gated by component:read; an out-of-scope owner is a non-disclosing 404.",
+        "description": "The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count and the value in force at its end (null when empty), and covered_from, the earliest instant retention leaves data for. Gated by component:read; an out-of-scope owner is a non-disclosing 404.",
         "operationId": "list-component-property-series",
         "parameters": [
           {
@@ -20328,14 +20461,26 @@
             }
           },
           {
-            "description": "The row cap, newest kept; 500 when unset",
+            "description": "The row cap, newest kept; 500 when unset. Ignored when a resolution is set",
             "explode": false,
             "in": "query",
             "name": "limit",
             "schema": {
-              "description": "The row cap, newest kept; 500 when unset",
+              "description": "The row cap, newest kept; 500 when unset. Ignored when a resolution is set",
               "format": "int64",
               "maximum": 2000,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The bucket width in seconds. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused",
+            "explode": false,
+            "in": "query",
+            "name": "resolution",
+            "schema": {
+              "description": "The bucket width in seconds. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused",
+              "format": "int64",
               "minimum": 1,
               "type": "integer"
             }
@@ -30222,7 +30367,7 @@
     },
     "/systems/{name}/metrics/{metric}/samples": {
       "get": {
-        "description": "The samples behind the effective read's latest value for one series, newest first, windowed (hours) and capped (limit, newest kept). Gated by system:read; an out-of-scope owner is a non-disclosing 404.",
+        "description": "The samples behind the effective read's latest value for one series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with count, min, max, avg and last (null when empty), and covered_from, the earliest instant retention leaves data for; nothing is read beyond the series' effective retention until trends exist (#1276). Gated by system:read; an out-of-scope owner is a non-disclosing 404.",
         "operationId": "list-system-metric-series",
         "parameters": [
           {
@@ -30259,14 +30404,26 @@
             }
           },
           {
-            "description": "The row cap, newest kept; 500 when unset",
+            "description": "The row cap, newest kept; 500 when unset. Ignored when a resolution is set",
             "explode": false,
             "in": "query",
             "name": "limit",
             "schema": {
-              "description": "The row cap, newest kept; 500 when unset",
+              "description": "The row cap, newest kept; 500 when unset. Ignored when a resolution is set",
               "format": "int64",
               "maximum": 2000,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The bucket width in seconds. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused",
+            "explode": false,
+            "in": "query",
+            "name": "resolution",
+            "schema": {
+              "description": "The bucket width in seconds. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused",
+              "format": "int64",
               "minimum": 1,
               "type": "integer"
             }
@@ -30294,7 +30451,7 @@
             "description": "Error"
           }
         },
-        "summary": "Read one metric series' raw samples",
+        "summary": "Read one metric series' samples",
         "x-omniglass-mcp": {},
         "x-omniglass-permission": "system:read"
       }
@@ -30448,7 +30605,7 @@
     },
     "/systems/{name}/properties/{property}/samples": {
       "get": {
-        "description": "The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). Gated by system:read; an out-of-scope owner is a non-disclosing 404.",
+        "description": "The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count and the value in force at its end (null when empty), and covered_from, the earliest instant retention leaves data for. Gated by system:read; an out-of-scope owner is a non-disclosing 404.",
         "operationId": "list-system-property-series",
         "parameters": [
           {
@@ -30485,14 +30642,26 @@
             }
           },
           {
-            "description": "The row cap, newest kept; 500 when unset",
+            "description": "The row cap, newest kept; 500 when unset. Ignored when a resolution is set",
             "explode": false,
             "in": "query",
             "name": "limit",
             "schema": {
-              "description": "The row cap, newest kept; 500 when unset",
+              "description": "The row cap, newest kept; 500 when unset. Ignored when a resolution is set",
               "format": "int64",
               "maximum": 2000,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The bucket width in seconds. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused",
+            "explode": false,
+            "in": "query",
+            "name": "resolution",
+            "schema": {
+              "description": "The bucket width in seconds. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused",
+              "format": "int64",
               "minimum": 1,
               "type": "integer"
             }

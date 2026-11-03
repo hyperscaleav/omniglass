@@ -684,6 +684,12 @@ type Gateway interface {
 	// ListPropertySeries mirrors ListMetricSeries over the property lane:
 	// the change history behind the effective value (#794).
 	ListPropertySeries(ctx context.Context, ownerKind, ownerRef, key string, window time.Duration, limit int) ([]PropertySample, error)
+	// ListMetricBuckets and ListPropertyBuckets read one series as regular
+	// date_bin buckets over the last window, oldest first, every bucket of the
+	// range present (an empty one has count 0), bounded to the type's effective
+	// retention (#1269).
+	ListMetricBuckets(ctx context.Context, ownerKind, ownerRef, key string, window, resolution time.Duration) (MetricBuckets, error)
+	ListPropertyBuckets(ctx context.Context, ownerKind, ownerRef, key string, window, resolution time.Duration) (PropertyBuckets, error)
 
 	// The raw-log lane (ADR-0066): log lines are untyped arrival, not events, so
 	// neither insert has a registry gate. log_line is component-owned (#589);

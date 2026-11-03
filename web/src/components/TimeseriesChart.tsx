@@ -1,5 +1,5 @@
 import { For, Show, createMemo, createSignal } from "solid-js";
-import { chartLayout, nearestPoint, type ChartPoint, type ChartSample } from "../lib/chart";
+import { bucketLayout, chartLayout, nearestPoint, type ChartBucket, type ChartPoint, type ChartSample } from "../lib/chart";
 import { fmtTime } from "../lib/format";
 
 // The timeseries chart (#794): one series, drawn from chartLayout's pure
@@ -7,11 +7,25 @@ import { fmtTime } from "../lib/format";
 // line over a faint area fill, recessive grid, and the newest sample's value
 // floating centered above its dot, intersecting the line (#795 review).
 // `spark` renders the dense table form: the same geometry, no chrome.
-export default function TimeseriesChart(props: { samples: ChartSample[]; now: number; windowMs: number; unit?: string; spark?: boolean }) {
+//
+// Three ways to give it a series (#1269): raw `samples` drawn as a line, or as
+// steps in `mode="step"` (a property holds its value until it changes); or the
+// bucketed read's `buckets`, drawn as the min/max band under the avg line so a
+// one-sample spike survives any zoom.
+export default function TimeseriesChart(props: {
+  samples?: ChartSample[];
+  buckets?: ChartBucket[];
+  resolutionMs?: number;
+  mode?: "line" | "step";
+  now: number;
+  windowMs: number;
+  unit?: string;
+  spark?: boolean;
+}) {
   const W = () => (props.spark ? 160 : 640);
   const H = () => (props.spark ? 36 : 170);
-  const layout = createMemo(() =>
-    chartLayout(props.samples, {
+  const layout = createMemo(() => {
+    const frame = {
       width: W(),
       height: H(),
       padLeft: props.spark ? 3 : 44,
@@ -19,9 +33,15 @@ export default function TimeseriesChart(props: { samples: ChartSample[]; now: nu
       padY: props.spark ? 5 : 20,
       now: props.now,
       windowMs: props.windowMs,
-    }),
-  );
-  const last = () => layout().points[layout().points.length - 1];
+    };
+    if (props.buckets) return bucketLayout(props.buckets, { ...frame, resolutionMs: props.resolutionMs ?? 3600_000 });
+    return chartLayout(props.samples ?? [], { ...frame, mode: props.mode });
+  });
+  const last = () => (layout().points.length > 0 ? layout().endDot : undefined);
+  const tip = (p: ChartPoint) =>
+    p.min !== undefined && p.max !== undefined
+      ? `${fmtV(p.value)}${props.unit ?? ""} avg, ${fmtV(p.min)} to ${fmtV(p.max)} (${p.count} samples) · ${fmtTime(p.ts)}`
+      : `${fmtV(p.value)}${props.unit ?? ""} · ${fmtTime(p.ts)}`;
   const fmtV = (v: number) => (Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(1));
   const fmtClock = (ts: string) => new Date(ts).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
   // The crosshair: the sample nearest the pointer, an exact time and value
@@ -84,13 +104,18 @@ export default function TimeseriesChart(props: { samples: ChartSample[]; now: nu
             )}
           </For>
         </Show>
-        <path d={layout().areaPath} class="fill-primary/10" />
+        <Show when={layout().bandPath}>
+          <path data-testid="chart-band" d={layout().bandPath} class="fill-primary/25" />
+        </Show>
+        <Show when={layout().areaPath}>
+          <path d={layout().areaPath} class="fill-primary/10" />
+        </Show>
         <path d={layout().linePath} class="stroke-primary" stroke-width={props.spark ? "1.5" : "2"} fill="none" stroke-linejoin="round" />
         <Show when={!props.spark}>
           <For each={layout().points}>
             {(p) => (
               <circle cx={p.x} cy={p.y} r="5" class="fill-transparent hover:fill-primary/40">
-                <title>{`${fmtV(p.value)}${props.unit ?? ""} · ${fmtTime(p.ts)}`}</title>
+                <title>{tip(p)}</title>
               </circle>
             )}
           </For>
@@ -108,7 +133,7 @@ export default function TimeseriesChart(props: { samples: ChartSample[]; now: nu
                 font-size="10"
                 style={{ "font-variant-numeric": "tabular-nums" }}
               >
-                {`${fmtV(p().value)}${props.unit ?? ""} · ${fmtTime(p().ts)}`}
+                {tip(p())}
               </text>
             </g>
           )}
@@ -126,7 +151,7 @@ export default function TimeseriesChart(props: { samples: ChartSample[]; now: nu
                   text-anchor="middle"
                   style={{ "font-variant-numeric": "tabular-nums" }}
                 >
-                  {fmtV(p().value)}
+                  {fmtV(layout().endValue ?? 0)}
                   {props.unit ?? ""}
                 </text>
               </Show>

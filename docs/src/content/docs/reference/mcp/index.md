@@ -41,7 +41,7 @@ A tool that is not read-only and not destructive adds something (a create).
 | [`delete-identity-binding`](#delete-identity-binding) | Unbind an identity a conduit reports | `component:update` | destructive, idempotent |
 | [`list-component-logs`](#list-component-logs) | List a component's recent log lines | `component:read` | read-only, idempotent |
 | [`list-component-metrics`](#list-component-metrics) | List a component's effective metrics | `component:read` | read-only, idempotent |
-| [`list-component-metric-series`](#list-component-metric-series) | Read one metric series' raw samples | `component:read` | read-only, idempotent |
+| [`list-component-metric-series`](#list-component-metric-series) | Read one metric series' samples | `component:read` | read-only, idempotent |
 | [`list-component-properties`](#list-component-properties) | List a component's properties and where each stands | `component:read` | read-only, idempotent |
 | [`list-component-property-series`](#list-component-property-series) | Read one property series' change history | `component:read` | read-only, idempotent |
 | [`get-component-reachability`](#get-component-reachability) | Read a component's per-endpoint reachability | `component:read` | read-only, idempotent |
@@ -79,7 +79,7 @@ A tool that is not read-only and not destructive adds something (a create).
 | [`list-systems`](#list-systems) | List systems in scope | `system:read` | read-only, idempotent |
 | [`get-system`](#get-system) | Get a system | `system:read` | read-only, idempotent |
 | [`get-system-health`](#get-system-health) | Read a system's health | `system:read` | read-only, idempotent |
-| [`list-system-metric-series`](#list-system-metric-series) | Read one metric series' raw samples | `system:read` | read-only, idempotent |
+| [`list-system-metric-series`](#list-system-metric-series) | Read one metric series' samples | `system:read` | read-only, idempotent |
 | [`list-system-property-series`](#list-system-property-series) | Read one property series' change history | `system:read` | read-only, idempotent |
 | [`create-system-from-template`](#create-system-from-template) | Start a whole system from a template | `system:create` | adds |
 | [`list-tasks`](#list-tasks) | List tasks in scope | `task:read` | read-only, idempotent |
@@ -334,9 +334,9 @@ Every metric the component's product declares, resolved to the newest observed o
 
 ## `list-component-metric-series`
 
-Read one metric series' raw samples
+Read one metric series' samples
 
-The samples behind the effective read's latest value for one series, newest first, windowed (hours) and capped (limit, newest kept). Gated by component:read; an out-of-scope owner is a non-disclosing 404.
+The samples behind the effective read's latest value for one series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with count, min, max, avg and last (null when empty), and covered_from, the earliest instant retention leaves data for; nothing is read beyond the series' effective retention until trends exist (#1276). Gated by component:read; an out-of-scope owner is a non-disclosing 404.
 
 - Route: `GET /api/v1/components/{name}/metrics/{metric}/samples`
 - Gate: `component:read`
@@ -345,9 +345,10 @@ The samples behind the effective read's latest value for one series, newest firs
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `hours` | integer | no | The window in hours, counted back from now; 24 when unset |
-| `limit` | integer | no | The row cap, newest kept; 500 when unset |
+| `limit` | integer | no | The row cap, newest kept; 500 when unset. Ignored when a resolution is set |
 | `metric` | string | yes | The metric_type name of the series |
 | `name` | string | yes | The owner's name or uuid |
+| `resolution` | integer | no | The bucket width in seconds. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused |
 
 ## `list-component-properties`
 
@@ -367,7 +368,7 @@ Every property the component has: each its product declares, resolved to the com
 
 Read one property series' change history
 
-The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). Gated by component:read; an out-of-scope owner is a non-disclosing 404.
+The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count and the value in force at its end (null when empty), and covered_from, the earliest instant retention leaves data for. Gated by component:read; an out-of-scope owner is a non-disclosing 404.
 
 - Route: `GET /api/v1/components/{name}/properties/{property}/samples`
 - Gate: `component:read`
@@ -376,9 +377,10 @@ The change history behind the effective value for one property series, newest fi
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `hours` | integer | no | The window in hours, counted back from now; 24 when unset |
-| `limit` | integer | no | The row cap, newest kept; 500 when unset |
+| `limit` | integer | no | The row cap, newest kept; 500 when unset. Ignored when a resolution is set |
 | `name` | string | yes | The owner's name or uuid |
 | `property` | string | yes | The property_type name of the series |
+| `resolution` | integer | no | The bucket width in seconds. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused |
 
 ## `get-component-reachability`
 
@@ -899,9 +901,9 @@ The system's current verdict and why: every role it needs filled, whether it is 
 
 ## `list-system-metric-series`
 
-Read one metric series' raw samples
+Read one metric series' samples
 
-The samples behind the effective read's latest value for one series, newest first, windowed (hours) and capped (limit, newest kept). Gated by system:read; an out-of-scope owner is a non-disclosing 404.
+The samples behind the effective read's latest value for one series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with count, min, max, avg and last (null when empty), and covered_from, the earliest instant retention leaves data for; nothing is read beyond the series' effective retention until trends exist (#1276). Gated by system:read; an out-of-scope owner is a non-disclosing 404.
 
 - Route: `GET /api/v1/systems/{name}/metrics/{metric}/samples`
 - Gate: `system:read`
@@ -910,15 +912,16 @@ The samples behind the effective read's latest value for one series, newest firs
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `hours` | integer | no | The window in hours, counted back from now; 24 when unset |
-| `limit` | integer | no | The row cap, newest kept; 500 when unset |
+| `limit` | integer | no | The row cap, newest kept; 500 when unset. Ignored when a resolution is set |
 | `metric` | string | yes | The metric_type name of the series |
 | `name` | string | yes | The owner's name or uuid |
+| `resolution` | integer | no | The bucket width in seconds. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused |
 
 ## `list-system-property-series`
 
 Read one property series' change history
 
-The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). Gated by system:read; an out-of-scope owner is a non-disclosing 404.
+The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count and the value in force at its end (null when empty), and covered_from, the earliest instant retention leaves data for. Gated by system:read; an out-of-scope owner is a non-disclosing 404.
 
 - Route: `GET /api/v1/systems/{name}/properties/{property}/samples`
 - Gate: `system:read`
@@ -927,9 +930,10 @@ The change history behind the effective value for one property series, newest fi
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `hours` | integer | no | The window in hours, counted back from now; 24 when unset |
-| `limit` | integer | no | The row cap, newest kept; 500 when unset |
+| `limit` | integer | no | The row cap, newest kept; 500 when unset. Ignored when a resolution is set |
 | `name` | string | yes | The owner's name or uuid |
 | `property` | string | yes | The property_type name of the series |
+| `resolution` | integer | no | The bucket width in seconds. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused |
 
 ## `create-system-from-template`
 
