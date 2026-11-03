@@ -1,0 +1,9 @@
+{
+  "recordings_in_progress": {{ .State | get "status" | get "recordings" | get "in_progress" }},
+  "queue_depth": {{ .State | get "status" | get "recordings" | get "queue_depth" }},
+  "storage_used_percent": {{ .State | get "status" | get "storage" | get "used_percent" }},
+  "last_failure": {
+    "id": "{{ .State | get "status" | get "recordings" | get "last_failure" | get "id" }}",
+    "reason": "{{ .State | get "status" | get "recordings" | get "last_failure" | get "reason" }}"
+  }
+}
