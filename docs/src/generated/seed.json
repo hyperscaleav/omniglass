@@ -407,10 +407,28 @@
    "description": "The name of the item a media player is playing, as it reports it."
   },
   {
+   "name": "service-state",
+   "data_type": "string",
+   "label": "Service State",
+   "description": "A software service's own account of its health, as its health endpoint reports it."
+  },
+  {
+   "name": "software-version",
+   "data_type": "string",
+   "label": "Software Version",
+   "description": "The version of the software a service reports it is running."
+  },
+  {
    "name": "booking-state",
    "data_type": "string",
    "label": "Booking State",
    "description": "Whether a space is booked now (a meeting in progress) or free, as its scheduling service reports it."
+  },
+  {
+   "name": "program-state",
+   "data_type": "string",
+   "label": "Program State",
+   "description": "Whether a control processor is running its loaded program or has it stopped, as the processor reports it."
   },
   {
    "name": "serial-number",
@@ -627,6 +645,18 @@
    "description": "How full a component reports its local storage, as a fraction of its capacity (0 to 1)."
   },
   {
+   "name": "active-recording-count",
+   "data_type": "int",
+   "label": "Active Recording Count",
+   "description": "The recordings a component reports it has in progress now."
+  },
+  {
+   "name": "queue-depth",
+   "data_type": "int",
+   "label": "Queue Depth",
+   "description": "The items a component reports waiting in its work queue, not yet picked up."
+  },
+  {
    "name": "http-response-time",
    "data_type": "float",
    "unit": "ms",
@@ -711,6 +741,11 @@
    "name": "input-changed",
    "label": "Input Changed",
    "description": "A display or switcher moved to a different source input. Caught natively where the device reports it; a frequent, benign occurrence that teaches the event lane's volume without implying a fault."
+  },
+  {
+   "name": "recording-failed",
+   "label": "Recording Failed",
+   "description": "A recording service could not complete a recording. Caught natively where the service reports it; its payload names the recording and why it failed."
   },
   {
    "name": "collection-failed",
@@ -2798,6 +2833,23 @@
    "commands": 1
   },
   {
+   "id": "newtron-core-nvp",
+   "label": "Newtron Core NVP",
+   "version": "1.0.0",
+   "transport": "tcp",
+   "polls": 2,
+   "listeners": 3,
+   "commands": 1
+  },
+  {
+   "id": "newtron-slate-nvp",
+   "label": "Newtron Slate NVP",
+   "version": "1.0.0",
+   "transport": "tcp",
+   "polls": 1,
+   "listeners": 1
+  },
+  {
    "id": "newtron-nvp-telnet",
    "label": "Newtron NVP over Telnet",
    "version": "1.0.0",
@@ -2846,6 +2898,14 @@
    "version": "1.0.0",
    "transport": "http",
    "polls": 2
+  },
+  {
+   "id": "recording-service-api",
+   "label": "Recording Service API",
+   "version": "1.0.0",
+   "transport": "https",
+   "polls": 2,
+   "listeners": 1
   },
   {
    "id": "newtron-panel-web",
@@ -3081,7 +3141,7 @@
    "id": "newtron-slate-5",
    "label": "Newtron Slate 5",
    "vendor_id": "newtron",
-   "driver_id": "newtron-nvp",
+   "driver_id": "newtron-slate-nvp",
    "component_type": "scheduling-panel",
    "kind": "device"
   },
@@ -3089,7 +3149,7 @@
    "id": "newtron-core-3",
    "label": "Newtron Core CP-3",
    "vendor_id": "newtron",
-   "driver_id": "newtron-nvp",
+   "driver_id": "newtron-core-nvp",
    "component_type": "control-processor",
    "kind": "device"
   },
@@ -3136,6 +3196,14 @@
    "label": "Shinra UCC Platform (account)",
    "vendor_id": "shinra-cloud",
    "driver_id": "ucc-rooms",
+   "component_type": "generic-service",
+   "kind": "service"
+  },
+  {
+   "id": "recording-service",
+   "label": "Shinra Recording Service",
+   "vendor_id": "shinra-cloud",
+   "driver_id": "recording-service-api",
    "component_type": "generic-service",
    "kind": "service"
   },

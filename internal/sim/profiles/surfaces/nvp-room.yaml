@@ -1,0 +1,64 @@
+# The NVP room surface: what a Newtron touch panel answers on its line
+# protocol (TCP 51325, CRLF lines), defined once for every Newtron device that
+# answers it (#896). GET INPUT reports the video input; SET INPUT selects one
+# of the inputs the video-input property allows (the sim matches whole lines,
+# so each is listed); SUBSCRIBE INPUT pushes "EVT INPUT <input>" on change. The
+# including profile declares the state paths below in its defaults:
+# status.video.input, status.diagnostics.log and status.room.scene.
+subjects:
+  - match: "status.video.input"
+    path: "status.video.input"
+    publish_token: "INPUT"
+    push_format: "EVT INPUT {{ .Raw }}"
+  # The diagnostics log and the room scene (#1145): SUBSCRIBE LOG pushes
+  # each line the panel logs, SUBSCRIBE SCENE each scene it enters.
+  - match: "status.diagnostics.log"
+    path: "status.diagnostics.log"
+    publish_token: "LOG"
+    push_format: "LOG {{ .Raw }}"
+  - match: "status.room.scene"
+    path: "status.room.scene"
+    publish_token: "SCENE"
+    push_format: "EVT SCENE {{ .Raw }}"
+commands:
+  - match: "GET INPUT"
+    response: 'INPUT {{ .State | get "status" | get "video" | get "input" }}'
+  - match: "SET INPUT hdmi1"
+    response: "INPUT hdmi1"
+    mutations:
+      - { path: status.video.input, value: "hdmi1" }
+  - match: "SET INPUT hdmi2"
+    response: "INPUT hdmi2"
+    mutations:
+      - { path: status.video.input, value: "hdmi2" }
+  - match: "SET INPUT hdmi3"
+    response: "INPUT hdmi3"
+    mutations:
+      - { path: status.video.input, value: "hdmi3" }
+  - match: "SET INPUT dp1"
+    response: "INPUT dp1"
+    mutations:
+      - { path: status.video.input, value: "dp1" }
+  - match: "SET INPUT usbc"
+    response: "INPUT usbc"
+    mutations:
+      - { path: status.video.input, value: "usbc" }
+  - match: "SUBSCRIBE INPUT"
+    action: subscribe
+    subject: "status.video.input"
+    token: "INPUT"
+    response: "OK"
+  - match: "UNSUBSCRIBE INPUT"
+    action: unsubscribe
+    subject: "status.video.input"
+    response: "OK"
+  - match: "SUBSCRIBE LOG"
+    action: subscribe
+    subject: "status.diagnostics.log"
+    token: "LOG"
+    response: "OK"
+  - match: "SUBSCRIBE SCENE"
+    action: subscribe
+    subject: "status.room.scene"
+    token: "SCENE"
+    response: "OK"

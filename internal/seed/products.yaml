@@ -154,13 +154,13 @@ products:
   - id: newtron-slate-5
     label: Newtron Slate 5
     vendor_id: newtron
-    driver_id: newtron-nvp
+    driver_id: newtron-slate-nvp
     kind: device
     component_type: scheduling-panel
   - id: newtron-core-3
     label: Newtron Core CP-3
     vendor_id: newtron
-    driver_id: newtron-nvp
+    driver_id: newtron-core-nvp
     kind: device
     component_type: control-processor
   # Polaris: the audio rack.
@@ -206,6 +206,15 @@ products:
     label: Shinra UCC Platform (account)
     vendor_id: shinra-cloud
     driver_id: ucc-rooms
+    kind: service
+    component_type: generic-service
+  # The fleet's central recording service (the simulator's recording-service,
+  # #1363): a software service watched over its own https API, by a driver of
+  # its own.
+  - id: recording-service
+    label: Shinra Recording Service
+    vendor_id: shinra-cloud
+    driver_id: recording-service-api
     kind: service
     component_type: generic-service
   # The generic floor.
