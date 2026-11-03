@@ -264,6 +264,13 @@
           "type": "string",
           "description": "Logical surface name shared with sibling interfaces that route to the same response set."
         },
+        "include": {
+          "type": "array",
+          "description": "Names of shared surface fragments under surfaces/ whose subjects and commands this interface takes in, defined once and not restated (#896).",
+          "items": {
+            "type": "string"
+          }
+        },
         "routes": {
           "type": "array",
           "items": {

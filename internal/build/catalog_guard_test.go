@@ -43,6 +43,10 @@ func TestTestsDoNotBorrowTheSeedCatalog(t *testing.T) {
 		// Pins the shipped UCC drivers to the simulated platform's own
 		// answer, so naming the shipped product is what it tests (#1282).
 		"internal/seed/ucc_drivers_test.go": true,
+		// Drives the shipped recording service driver against its simulated
+		// service; a driver is named for its product, so the product id is
+		// in the name it loads (#1363).
+		"internal/node/run_recording_service_test.go": true,
 	}
 
 	raw, err := seed.FactsJSON()

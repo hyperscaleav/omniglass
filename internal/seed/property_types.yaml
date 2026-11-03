@@ -131,6 +131,29 @@ property_types:
     description: >-
       Whether a component is on, off, or in standby. A settable state: the set-power
       command tells the component which to enter, and its report settles it.
+  # A switched outlet's state on a power conditioner (#1368). One name per
+  # outlet until a driver can name an instance (#1252), when they become one
+  # outlet-state with the outlet as its instance.
+  - name: outlet-1-state
+    data_type: string
+    validation: { enum: ["on", "off"] }
+    label: Outlet 1 State
+    description: Whether the first outlet of a power conditioner is switched on or off, as the component reports it.
+  - name: outlet-2-state
+    data_type: string
+    validation: { enum: ["on", "off"] }
+    label: Outlet 2 State
+    description: Whether the second outlet of a power conditioner is switched on or off, as the component reports it.
+  - name: outlet-3-state
+    data_type: string
+    validation: { enum: ["on", "off"] }
+    label: Outlet 3 State
+    description: Whether the third outlet of a power conditioner is switched on or off, as the component reports it.
+  - name: outlet-4-state
+    data_type: string
+    validation: { enum: ["on", "off"] }
+    label: Outlet 4 State
+    description: Whether the fourth outlet of a power conditioner is switched on or off, as the component reports it.
   - name: mute
     data_type: string
     validation: { enum: ["true", "false"] }
@@ -143,6 +166,16 @@ property_types:
     validation: { enum: [active, idle] }
     label: Call State
     description: Whether a conferencing component is in a call (active) or not (idle).
+  - name: content-sharing-state
+    data_type: string
+    validation: { enum: [sharing, idle] }
+    label: Content Sharing State
+    description: Whether a conferencing component is sharing content (a presentation) from a source or not (idle).
+  - name: tracking-state
+    data_type: string
+    validation: { enum: [tracking, manual] }
+    label: Tracking State
+    description: Whether a camera is following a presenter on its own (tracking) or holds where it was pointed (manual).
   - name: occupancy-state
     data_type: string
     validation: { enum: [occupied, vacant] }
@@ -184,11 +217,25 @@ property_types:
     data_type: string
     label: Content Name
     description: The name of the item a media player is playing, as it reports it.
+  - name: service-state
+    data_type: string
+    validation: { enum: [ok, degraded, down] }
+    label: Service State
+    description: A software service's own account of its health, as its health endpoint reports it.
+  - name: software-version
+    data_type: string
+    label: Software Version
+    description: The version of the software a service reports it is running.
   - name: booking-state
     data_type: string
     validation: { enum: [booked, free] }
     label: Booking State
     description: Whether a space is booked now (a meeting in progress) or free, as its scheduling service reports it.
+  - name: program-state
+    data_type: string
+    validation: { enum: [running, stopped] }
+    label: Program State
+    description: Whether a control processor is running its loaded program or has it stopped, as the processor reports it.
   # Declared attribute properties: the starter set a field draws from.
   - name: serial-number
     data_type: string

@@ -1,0 +1,122 @@
+# yaml-language-server: $schema=schema.json
+# Shinra Recording Service, a software service that records the lab's rooms
+#
+# Shinra Cloud is the lab's fictional cloud vendor. The recording service is
+# the central service behind every room's recordings: it takes a stream in,
+# writes it to storage, and queues what is waiting to be written. It is not
+# a box in a room. What an operator watches it for is whether it is up and
+# healthy by its own account, how much it is carrying, whether its storage
+# is filling, and when a recording fails.
+#
+# Its one face is an HTTPS JSON API behind an api key header
+# (X-Recording-Key), the way a software service is watched: a health route
+# and a work route to poll, and a live feed that names a recording the
+# moment it fails.
+
+name: recording-service
+manufacturer: Shinra Cloud
+model: "Recording Service"
+device_type: cloud-service
+slug_prefix: recsvc
+
+doc:
+  summary: "Shinra recording service: health, work counters and a failure feed over https"
+  description: |
+    The fleet's central recording service. Reports its health and version,
+    the recordings it has in progress, the storage it uses and the queue
+    waiting to be written, over an HTTPS JSON API behind an api key header;
+    names each recording that fails on a live event feed.
+  tags: [cloud, recording, service]
+
+interfaces:
+  - name: http-api
+    protocol: http
+    port: 443
+    tls: true
+    doc: { summary: "Recording service JSON API", tags: [management, api, cloud] }
+    auth:
+      type: header
+      header: "X-Recording-Key"
+      api_key: "recording-lab-key"
+      enforce: true
+    # The live feed a recording's failure arrives on, behind the same key.
+    events:
+      path: /api/events
+      retry_ms: 2000
+      paths: [status.recordings.last_failure]
+      drop_path: /api/admin/streams/drop
+    api_surface: recording-service
+    routes:
+      - match: "GET /api/health"
+        template: api/recording-service/health.json.gotempl
+        doc: { summary: "Service status, version and uptime", tags: [api, status] }
+
+      - match: "GET /api/work"
+        template: api/recording-service/work.json.gotempl
+        doc: { summary: "Recordings in progress, storage used, queue depth and the last failure", tags: [api, data] }
+
+      # A recording fails: the failure is recorded and named on the live feed
+      # with the recording's id and why. The id and the reason are the
+      # caller's to choose, so a test or a demo names the recording it fails.
+      - match: "POST /api/recordings/fail"
+        template: api/recording-service/ack.json.gotempl
+        doc: { summary: "Fail a recording (records it and names it on the event feed)", tags: [api, control] }
+        example: |
+          {"id": "r-9001", "reason": "disk full"}
+        mutations:
+          # Each is guarded by the other's field, so a refused reason never
+          # leaves a failure's id written beside the one before it.
+          - path: 'status.recordings.last_failure.id{{ guard "^[A-Za-z0-9 ,.-]{1,64}$" .Request.Body.reason }}'
+            value: "{{ .Request.Body.id }}"
+            pattern: "^[A-Za-z0-9-]{1,32}$"
+          - path: 'status.recordings.last_failure.reason{{ guard "^[A-Za-z0-9-]{1,32}$" .Request.Body.id }}'
+            value: "{{ .Request.Body.reason }}"
+            pattern: "^[A-Za-z0-9 ,.-]{1,64}$"
+        events:
+          - name: recording-failed
+            data: '{"id":"{{ .Request.Body.id }}","reason":"{{ .Request.Body.reason }}"}'
+
+  - name: icmp
+    protocol: icmp
+    doc: { summary: "ICMP ping reachability", tags: [monitoring] }
+
+computed:
+  - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
+
+# The work moves: recordings start and finish, the queue rises and drains,
+# and storage fills slowly between bounds. A scenario timeline can fail a
+# recording or fill the disk later.
+behaviors:
+  - name: recordings_drift
+    schedule:
+      interval: 60s
+    mutations:
+      - path: status.recordings.in_progress
+        value: "{{ round 0 (clamp 0.0 12.0 (randStep 1.5 .State.status.recordings.in_progress)) }}"
+      - path: status.recordings.queue_depth
+        value: "{{ round 0 (clamp 0.0 40.0 (randStep 4.0 .State.status.recordings.queue_depth)) }}"
+
+  - name: storage_drift
+    schedule:
+      interval: 300s
+    mutations:
+      - path: status.storage.used_percent
+        value: "{{ round 1 (clamp 20.0 90.0 (randStep 0.5 .State.status.storage.used_percent)) }}"
+
+defaults:
+  status:
+    device:
+      boot_epoch: 0
+    service:
+      state: ok
+    recordings:
+      in_progress: 4
+      queue_depth: 3
+      last_failure:
+        id: ""
+        reason: ""
+    storage:
+      used_percent: 38.5
+  configuration:
+    software:
+      version: "2026.10.2"
