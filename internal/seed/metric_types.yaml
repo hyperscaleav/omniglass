@@ -121,6 +121,18 @@ metric_types:
     unit: rpm
     label: Fan Speed
     description: The speed a component reports of its cooling fan, in revolutions per minute.
+  # A powered component's electrical state, read off its own meter (#1368).
+  - name: voltage
+    data_type: float
+    unit: V
+    label: Voltage
+    description: The voltage a component reports at its input, in volts.
+  - name: current
+    data_type: float
+    unit: A
+    precision: 2
+    label: Current
+    description: The total current a component reports drawing, in amperes.
   # A PTZ camera's position and a codec's plugged-in peripherals (#897).
   - name: pan-angle
     data_type: float

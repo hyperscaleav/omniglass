@@ -131,6 +131,29 @@ property_types:
     description: >-
       Whether a component is on, off, or in standby. A settable state: the set-power
       command tells the component which to enter, and its report settles it.
+  # A switched outlet's state on a power conditioner (#1368). One name per
+  # outlet until a driver can name an instance (#1252), when they become one
+  # outlet-state with the outlet as its instance.
+  - name: outlet-1-state
+    data_type: string
+    validation: { enum: ["on", "off"] }
+    label: Outlet 1 State
+    description: Whether the first outlet of a power conditioner is switched on or off, as the component reports it.
+  - name: outlet-2-state
+    data_type: string
+    validation: { enum: ["on", "off"] }
+    label: Outlet 2 State
+    description: Whether the second outlet of a power conditioner is switched on or off, as the component reports it.
+  - name: outlet-3-state
+    data_type: string
+    validation: { enum: ["on", "off"] }
+    label: Outlet 3 State
+    description: Whether the third outlet of a power conditioner is switched on or off, as the component reports it.
+  - name: outlet-4-state
+    data_type: string
+    validation: { enum: ["on", "off"] }
+    label: Outlet 4 State
+    description: Whether the fourth outlet of a power conditioner is switched on or off, as the component reports it.
   - name: mute
     data_type: string
     validation: { enum: ["true", "false"] }

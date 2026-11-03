@@ -163,6 +163,13 @@ products:
     driver_id: newtron-core-nvp
     kind: device
     component_type: control-processor
+  # Ferrite: rack power.
+  - id: ferrite-pdu-4c
+    label: Ferrite PDU 4C
+    vendor_id: ferrite
+    driver_id: ferrite-pdu-snmp
+    kind: device
+    component_type: power-device
   # Polaris: the audio rack.
   - id: polaris-dsp-16
     label: Polaris DSP 16
