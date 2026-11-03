@@ -79,7 +79,7 @@ driver reads the first four. The channel table waits on a driver naming an insta
 the fan-out carrying a channel's load to the speaker it drives (#1367). Standby and the protect reset
 are the amplifier's HTTP API, its control face, and its temperature, fan and output levels drift as
 behaviors a scenario can drive. The Meridian switcher and extender (#895) land the same way: the
-`meridian-switcher-snmp` driver reads the routed input and the signal on it, `meridian-extender-snmp` the
+`meridian-mx-snmp` driver reads the routed input and the signal on it, `meridian-xl-snmp` the
 link and the signal on its input, and the switcher's HTTP route changes the input the next poll reads.
 
 The catalog names only fictional vendors (Kestrel, Polaris, Newtron, Boreal, Tessellate, Shinra Cloud), the same

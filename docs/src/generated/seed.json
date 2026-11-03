@@ -2707,15 +2707,15 @@
    "polls": 2
   },
   {
-   "id": "meridian-switcher-snmp",
-   "label": "Meridian Switcher SNMP",
+   "id": "meridian-mx-snmp",
+   "label": "Meridian MX SNMP",
    "version": "1.0.0",
    "transport": "snmp",
    "polls": 2
   },
   {
-   "id": "meridian-extender-snmp",
-   "label": "Meridian Extender SNMP",
+   "id": "meridian-xl-snmp",
+   "label": "Meridian XL SNMP",
    "version": "1.0.0",
    "transport": "snmp",
    "polls": 2
@@ -3021,7 +3021,7 @@
    "id": "meridian-mx-84",
    "label": "Meridian MX 84",
    "vendor_id": "meridian",
-   "driver_id": "meridian-switcher-snmp",
+   "driver_id": "meridian-mx-snmp",
    "component_type": "presentation-switcher",
    "kind": "device"
   },
@@ -3029,7 +3029,7 @@
    "id": "meridian-xl-1",
    "label": "Meridian XL-1",
    "vendor_id": "meridian",
-   "driver_id": "meridian-extender-snmp",
+   "driver_id": "meridian-xl-snmp",
    "component_type": "av-extender",
    "kind": "device"
   },

@@ -46,7 +46,10 @@ interfaces:
 
       # A route change lands the signal on the new input at once; the
       # signal_follow behavior keeps it current afterward, as a source is
-      # plugged or pulled.
+      # plugged or pulled. Each mutation carries its own enum: a refused
+      # input fails the route's enum, and the engine still applies the rest
+      # of the batch, so the signal's enum is what keeps an input the
+      # switcher does not have from landing a blank signal.
       - match: "POST /api/route"
         template: api/meridian-switcher/route-ack.json.gotempl
         doc: { summary: "Route an input to the output (hdmi1, hdmi2, hdmi3, dp1)", tags: [api, control] }
@@ -58,6 +61,7 @@ interfaces:
             enum: [hdmi1, hdmi2, hdmi3, dp1]
           - path: status.switcher.signal
             value: '{{ .State | get "status" | get "switcher" | get "inputs" | get .Request.Body.input | get "signal" }}'
+            enum: [present, absent]
 
       - match: "POST /api/admin/reboot"
         template: api/meridian-switcher/reboot-ack.json.gotempl

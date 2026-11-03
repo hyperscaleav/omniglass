@@ -22,7 +22,7 @@ func TestNodeMeridianReadsRouteLinkAndSignal(t *testing.T) {
 	}
 	var sw, ext string
 	s := newHTTPStack(t, "edge-meridian", nil, func(store *profile.Store) []string {
-		sw, ext = driverProfile(t, store, "meridian-switcher-snmp"), driverProfile(t, store, "meridian-extender-snmp")
+		sw, ext = driverProfile(t, store, "meridian-mx-snmp"), driverProfile(t, store, "meridian-xl-snmp")
 		return []string{sw, ext}
 	})
 	s.community("meridian-community", "public")
@@ -37,7 +37,7 @@ func TestNodeMeridianReadsRouteLinkAndSignal(t *testing.T) {
 		return s.attachHTTP(comp, driver, "edge-meridian", map[string]string{
 			"host": s.ips[prof], "port": fmt.Sprint(port), "community": "meridian-community"}).Name
 	}
-	swEP, extEP := attach("switcher-1", sw, "meridian-switcher-snmp"), attach("extender-1", ext, "meridian-extender-snmp")
+	swEP, extEP := attach("switcher-1", sw, "meridian-mx-snmp"), attach("extender-1", ext, "meridian-xl-snmp")
 	s.runNode("edge-meridian")
 
 	for _, m := range []struct{ comp, ep, prof, model string }{
@@ -47,6 +47,8 @@ func TestNodeMeridianReadsRouteLinkAndSignal(t *testing.T) {
 		s.waitFor(m.comp, m.ep, "serial-number", is(fmt.Sprint(s.devices[m.prof].ReadPath("configuration.device.serial"))), "the serial")
 		s.waitFor(m.comp, m.ep, "firmware-version", is(fmt.Sprint(s.devices[m.prof].ReadPath("configuration.firmware.version"))), "the firmware")
 		s.waitFor(m.comp, m.ep, "signal-state", is("present"), "a signal at rest")
+		// uptime reads 0 on a poll in the agent's first second, so landing is the check.
+		s.waitMetric(m.comp, m.ep, "uptime", func(v float64) bool { return v >= 0 }, "an uptime")
 	}
 	s.waitFor("switcher-1", swEP, "video-input", is("hdmi1"), "hdmi1 routed at rest")
 	s.waitFor("extender-1", extEP, "link-state", is("up"), "the link up at rest")

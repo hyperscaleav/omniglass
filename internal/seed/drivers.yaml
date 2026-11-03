@@ -91,8 +91,8 @@ drivers:
             - { name: audio-level, extract: { oid: "1.3.6.1.4.1.55530.1.2.0" } }
             # The receiver reports a percentage; the canon stores the ratio.
             - { name: battery-charge, extract: { oid: "1.3.6.1.4.1.55530.2.1.0" }, transform: { scale: 0.01 } }
-  - id: meridian-switcher-snmp
-    label: Meridian Switcher SNMP
+  - id: meridian-mx-snmp
+    label: Meridian MX SNMP
     version: "1.0.0"
     spec:
       version: 1
@@ -123,8 +123,8 @@ drivers:
             - { name: uptime, extract: { oid: "1.3.6.1.2.1.1.3.0" }, transform: { scale: 0.01 } }
             - { name: video-input, extract: { oid: "1.3.6.1.4.1.55550.1.1.0" } }
             - { name: signal-state, extract: { oid: "1.3.6.1.4.1.55550.1.2.0" } }
-  - id: meridian-extender-snmp
-    label: Meridian Extender SNMP
+  - id: meridian-xl-snmp
+    label: Meridian XL SNMP
     version: "1.0.0"
     spec:
       version: 1

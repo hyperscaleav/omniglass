@@ -153,7 +153,8 @@ func TestMeridianSwitcherServesRouteAndSignalOverSNMP(t *testing.T) {
 
 // TestMeridianSwitcherRouteOverHTTP: a route set over HTTP reads back over
 // SNMP at once, and the signal on the routed input follows the new route;
-// an input the switcher does not have is refused and changes nothing.
+// an input the switcher does not have is refused and changes nothing,
+// neither the routed input nor the signal on it.
 func TestMeridianSwitcherRouteOverHTTP(t *testing.T) {
 	d := startMeridian(t, "meridian-mx-84")
 	// Lose the signal on dp1 (a source unplugged), then route to it.
@@ -179,8 +180,15 @@ func TestMeridianSwitcherRouteOverHTTP(t *testing.T) {
 	if code, _ := meridianDo(t, d, http.MethodPost, "/api/route", `{"input": "vga"}`); code != http.StatusBadRequest {
 		t.Errorf("route vga: %d, want 400", code)
 	}
-	if v := meridianSNMP(t, d, meridianOIDRouted)[meridianOIDRouted]; v != "hdmi2" {
-		t.Errorf("routed input after a refused route = %q, want hdmi2", v)
+	// The refusal leaves both readings: the signal mutation, which follows the
+	// requested input, is guarded by its own enum, so a missing input does
+	// not land a blank signal beside the unchanged route.
+	got = meridianSNMP(t, d, meridianOIDRouted, meridianOIDRoutedSig)
+	if got[meridianOIDRouted] != "hdmi2" || got[meridianOIDRoutedSig] != "present" {
+		t.Errorf("after a refused route to vga: routed %q, signal %q, want hdmi2, present", got[meridianOIDRouted], got[meridianOIDRoutedSig])
+	}
+	if v := d.ReadPath("status.switcher.signal"); v != "present" {
+		t.Errorf("status.switcher.signal after a refused route = %v, want present", v)
 	}
 }
 
