@@ -339,4 +339,56 @@ func TestBucketedSeriesReadsOnTheWire(t *testing.T) {
 	// truncated grid; an out-of-scope owner stays the non-disclosing 404.
 	c.do(ownerTok, http.MethodGet, "/components/bucket-probe/metrics/icmp-rtt-avg/samples?hours=720&resolution=1", nil, http.StatusUnprocessableEntity)
 	c.do(ownerTok, http.MethodGet, "/components/no-such/metrics/icmp-rtt-avg/samples?resolution=60", nil, http.StatusNotFound)
+
+	// A resolution past 30 days is the schema's 422, not a 500 from an
+	// overflowed duration (#1485).
+	c.do(ownerTok, http.MethodGet, "/components/bucket-probe/metrics/icmp-rtt-avg/samples?resolution=2592001", nil, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodGet, "/components/bucket-probe/properties/firmware-version/samples?resolution=9223372036", nil, http.StatusUnprocessableEntity)
+
+	// A second instance of the same metric on the same owner is another series
+	// (#1485): unnamed, the read is refused with both instances listed; named,
+	// the buckets hold that instance's samples alone.
+	if _, err := gw.CreateMetricType(ctx, "", storage.MetricTypeSpec{Name: "wire-level", DataType: "float"}); err != nil {
+		t.Fatalf("create metric type: %v", err)
+	}
+	if err := insertMetrics(ctx, gw, []storage.MetricSampleWrite{
+		{OwnerKind: "component", OwnerID: "bucket-probe", Key: "wire-level", Instance: "a", Value: 5, Source: "t", TS: hour.Add(-2*time.Hour + time.Minute)},
+		{OwnerKind: "component", OwnerID: "bucket-probe", Key: "wire-level", Instance: "a", Value: 480, Source: "t", TS: hour.Add(-2*time.Hour + 2*time.Minute)},
+		{OwnerKind: "component", OwnerID: "bucket-probe", Key: "wire-level", Instance: "a", Value: 6, Source: "t", TS: hour.Add(-2*time.Hour + 3*time.Minute)},
+		{OwnerKind: "component", OwnerID: "bucket-probe", Key: "wire-level", Instance: "b", Value: 900, Source: "t", TS: hour.Add(-2*time.Hour + 4*time.Minute)},
+	}); err != nil {
+		t.Fatalf("insert two instances: %v", err)
+	}
+	var problem struct {
+		Detail string `json:"detail"`
+		Errors []struct {
+			Location string `json:"location"`
+			Value    string `json:"value"`
+		} `json:"errors"`
+	}
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/components/bucket-probe/metrics/wire-level/samples?hours=24&resolution=3600", nil, http.StatusUnprocessableEntity), &problem); err != nil {
+		t.Fatalf("read the ambiguity problem: %v", err)
+	}
+	var listed []string
+	for _, e := range problem.Errors {
+		if e.Location == "query.instance" {
+			listed = append(listed, e.Value)
+		}
+	}
+	if strings.Join(listed, ",") != "a,b" {
+		t.Fatalf("ambiguity problem = %+v, want both instances listed at query.instance", problem)
+	}
+	var one struct {
+		Instance string `json:"instance"`
+		Buckets  []struct {
+			Count int      `json:"count"`
+			Max   *float64 `json:"max"`
+		} `json:"buckets"`
+	}
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/components/bucket-probe/metrics/wire-level/samples?hours=24&resolution=3600&instance=a", nil, http.StatusOK), &one); err != nil {
+		t.Fatalf("read one instance: %v", err)
+	}
+	if b := one.Buckets[23-2]; one.Instance != "a" || b.Count != 3 || b.Max == nil || *b.Max != 480 {
+		t.Fatalf("instance a read = instance %q bucket %+v, want a's 3 samples with max 480, not b's 900", one.Instance, b)
+	}
 }

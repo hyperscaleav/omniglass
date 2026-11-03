@@ -23,6 +23,9 @@ func TestSeriesBucketing(t *testing.T) {
 		{name: "the cap itself is allowed", hours: 500, res: 360, wantBuckets: seriesMaxBuckets, wantWindow: 500 * time.Hour, wantInterval: 6 * time.Minute},
 		{name: "one bucket past the cap is refused", hours: 500, res: 359, wantRefusal: true},
 		{name: "a second over 30 days is refused", hours: 720, res: 1, wantRefusal: true},
+		{name: "a 30 day bucket is the widest", hours: 720, res: seriesMaxResolution, wantBuckets: 1, wantWindow: 720 * time.Hour, wantInterval: 720 * time.Hour},
+		{name: "past 30 days is refused, never an overflowed duration", hours: 24, res: seriesMaxResolution + 1, wantRefusal: true},
+		{name: "a resolution that would overflow a Duration is refused", hours: 24, res: 1 << 62, wantRefusal: true},
 	} {
 		window, interval, n, err := seriesBucketing(tc.hours, tc.res)
 		if tc.wantRefusal {

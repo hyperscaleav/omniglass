@@ -2121,10 +2121,11 @@ func generatedCommands() []*cobra.Command {
 						var qHours int
 						var qLimit int
 						var qResolution int
+						var qInstance string
 						cmd := &cobra.Command{
 							Use:     "list <name> <metric>",
 							Short:   "Read one metric series' samples",
-							Long:    "The samples behind the effective read's latest value for one series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with count, min, max, avg and last (null when empty), and covered_from, the earliest instant retention leaves data for; nothing is read beyond the series' effective retention until trends exist (#1276). Gated by component:read; an out-of-scope owner is a non-disclosing 404.",
+							Long:    "The samples behind the effective read's latest value for one series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with count, min, max, avg and last (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured samples (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured samples in the window, or a 422 listing them when there are several. Nothing is read beyond the series' effective retention until trends exist (#1276). Gated by component:read; an out-of-scope owner is a non-disclosing 404.",
 							Example: "  omniglass component metric sample list <name> <metric>",
 							Args:    pathArgs(2),
 							RunE: func(cmd *cobra.Command, args []string) error {
@@ -2139,6 +2140,9 @@ func generatedCommands() []*cobra.Command {
 								if cmd.Flags().Changed("resolution") {
 									q.Set("resolution", fmt.Sprintf("%v", qResolution))
 								}
+								if cmd.Flags().Changed("instance") {
+									q.Set("instance", fmt.Sprintf("%v", qInstance))
+								}
 								if enc := q.Encode(); enc != "" {
 									path += "?" + enc
 								}
@@ -2147,7 +2151,8 @@ func generatedCommands() []*cobra.Command {
 						}
 						cmd.Flags().IntVar(&qHours, "hours", 0, "The window in hours, counted back from now; 24 when unset")
 						cmd.Flags().IntVar(&qLimit, "limit", 0, "The row cap, newest kept; 500 when unset. Ignored when a resolution is set")
-						cmd.Flags().IntVar(&qResolution, "resolution", 0, "The bucket width in seconds. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused")
+						cmd.Flags().IntVar(&qResolution, "resolution", 0, "The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused")
+						cmd.Flags().StringVar(&qInstance, "instance", "", "The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution")
 						return cmd
 					}()
 					return cmd
@@ -2250,10 +2255,11 @@ func generatedCommands() []*cobra.Command {
 						var qHours int
 						var qLimit int
 						var qResolution int
+						var qInstance string
 						cmd := &cobra.Command{
 							Use:     "list <name> <property>",
 							Short:   "Read one property series' change history",
-							Long:    "The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count and the value in force at its end (null when empty), and covered_from, the earliest instant retention leaves data for. Gated by component:read; an out-of-scope owner is a non-disclosing 404.",
+							Long:    "The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count and the value in force at its end (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured changes (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured changes in the window, or a 422 listing them when there are several. Gated by component:read; an out-of-scope owner is a non-disclosing 404.",
 							Example: "  omniglass component property sample list <name> <property>",
 							Args:    pathArgs(2),
 							RunE: func(cmd *cobra.Command, args []string) error {
@@ -2268,6 +2274,9 @@ func generatedCommands() []*cobra.Command {
 								if cmd.Flags().Changed("resolution") {
 									q.Set("resolution", fmt.Sprintf("%v", qResolution))
 								}
+								if cmd.Flags().Changed("instance") {
+									q.Set("instance", fmt.Sprintf("%v", qInstance))
+								}
 								if enc := q.Encode(); enc != "" {
 									path += "?" + enc
 								}
@@ -2276,7 +2285,8 @@ func generatedCommands() []*cobra.Command {
 						}
 						cmd.Flags().IntVar(&qHours, "hours", 0, "The window in hours, counted back from now; 24 when unset")
 						cmd.Flags().IntVar(&qLimit, "limit", 0, "The row cap, newest kept; 500 when unset. Ignored when a resolution is set")
-						cmd.Flags().IntVar(&qResolution, "resolution", 0, "The bucket width in seconds. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused")
+						cmd.Flags().IntVar(&qResolution, "resolution", 0, "The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused")
+						cmd.Flags().StringVar(&qInstance, "instance", "", "The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution")
 						return cmd
 					}()
 					return cmd
@@ -8459,10 +8469,11 @@ func generatedCommands() []*cobra.Command {
 						var qHours int
 						var qLimit int
 						var qResolution int
+						var qInstance string
 						cmd := &cobra.Command{
 							Use:     "list <name> <metric>",
 							Short:   "Read one metric series' samples",
-							Long:    "The samples behind the effective read's latest value for one series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with count, min, max, avg and last (null when empty), and covered_from, the earliest instant retention leaves data for; nothing is read beyond the series' effective retention until trends exist (#1276). Gated by system:read; an out-of-scope owner is a non-disclosing 404.",
+							Long:    "The samples behind the effective read's latest value for one series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with count, min, max, avg and last (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured samples (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured samples in the window, or a 422 listing them when there are several. Nothing is read beyond the series' effective retention until trends exist (#1276). Gated by system:read; an out-of-scope owner is a non-disclosing 404.",
 							Example: "  omniglass system metric sample list <name> <metric>",
 							Args:    pathArgs(2),
 							RunE: func(cmd *cobra.Command, args []string) error {
@@ -8477,6 +8488,9 @@ func generatedCommands() []*cobra.Command {
 								if cmd.Flags().Changed("resolution") {
 									q.Set("resolution", fmt.Sprintf("%v", qResolution))
 								}
+								if cmd.Flags().Changed("instance") {
+									q.Set("instance", fmt.Sprintf("%v", qInstance))
+								}
 								if enc := q.Encode(); enc != "" {
 									path += "?" + enc
 								}
@@ -8485,7 +8499,8 @@ func generatedCommands() []*cobra.Command {
 						}
 						cmd.Flags().IntVar(&qHours, "hours", 0, "The window in hours, counted back from now; 24 when unset")
 						cmd.Flags().IntVar(&qLimit, "limit", 0, "The row cap, newest kept; 500 when unset. Ignored when a resolution is set")
-						cmd.Flags().IntVar(&qResolution, "resolution", 0, "The bucket width in seconds. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused")
+						cmd.Flags().IntVar(&qResolution, "resolution", 0, "The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused")
+						cmd.Flags().StringVar(&qInstance, "instance", "", "The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution")
 						return cmd
 					}()
 					return cmd
@@ -8588,10 +8603,11 @@ func generatedCommands() []*cobra.Command {
 						var qHours int
 						var qLimit int
 						var qResolution int
+						var qInstance string
 						cmd := &cobra.Command{
 							Use:     "list <name> <property>",
 							Short:   "Read one property series' change history",
-							Long:    "The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count and the value in force at its end (null when empty), and covered_from, the earliest instant retention leaves data for. Gated by system:read; an out-of-scope owner is a non-disclosing 404.",
+							Long:    "The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count and the value in force at its end (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured changes (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured changes in the window, or a 422 listing them when there are several. Gated by system:read; an out-of-scope owner is a non-disclosing 404.",
 							Example: "  omniglass system property sample list <name> <property>",
 							Args:    pathArgs(2),
 							RunE: func(cmd *cobra.Command, args []string) error {
@@ -8606,6 +8622,9 @@ func generatedCommands() []*cobra.Command {
 								if cmd.Flags().Changed("resolution") {
 									q.Set("resolution", fmt.Sprintf("%v", qResolution))
 								}
+								if cmd.Flags().Changed("instance") {
+									q.Set("instance", fmt.Sprintf("%v", qInstance))
+								}
 								if enc := q.Encode(); enc != "" {
 									path += "?" + enc
 								}
@@ -8614,7 +8633,8 @@ func generatedCommands() []*cobra.Command {
 						}
 						cmd.Flags().IntVar(&qHours, "hours", 0, "The window in hours, counted back from now; 24 when unset")
 						cmd.Flags().IntVar(&qLimit, "limit", 0, "The row cap, newest kept; 500 when unset. Ignored when a resolution is set")
-						cmd.Flags().IntVar(&qResolution, "resolution", 0, "The bucket width in seconds. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused")
+						cmd.Flags().IntVar(&qResolution, "resolution", 0, "The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused")
+						cmd.Flags().StringVar(&qInstance, "instance", "", "The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution")
 						return cmd
 					}()
 					return cmd

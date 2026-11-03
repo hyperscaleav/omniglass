@@ -8821,6 +8821,10 @@
             "format": "date-time",
             "type": "string"
           },
+          "instance": {
+            "description": "The one instance the buckets aggregate, measured samples only (observed and calculated); present only on a bucketed read",
+            "type": "string"
+          },
           "metric": {
             "description": "The series' metric_type name",
             "type": "string"
@@ -10472,6 +10476,10 @@
           "covered_from": {
             "description": "The earliest instant the read could have data for: the start of the window or the series' effective retention, whichever is later",
             "format": "date-time",
+            "type": "string"
+          },
+          "instance": {
+            "description": "The one instance the buckets aggregate, measured changes only (observed and calculated); present only on a bucketed read",
             "type": "string"
           },
           "owner": {
@@ -20185,7 +20193,7 @@
     },
     "/components/{name}/metrics/{metric}/samples": {
       "get": {
-        "description": "The samples behind the effective read's latest value for one series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with count, min, max, avg and last (null when empty), and covered_from, the earliest instant retention leaves data for; nothing is read beyond the series' effective retention until trends exist (#1276). Gated by component:read; an out-of-scope owner is a non-disclosing 404.",
+        "description": "The samples behind the effective read's latest value for one series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with count, min, max, avg and last (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured samples (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured samples in the window, or a 422 listing them when there are several. Nothing is read beyond the series' effective retention until trends exist (#1276). Gated by component:read; an out-of-scope owner is a non-disclosing 404.",
         "operationId": "list-component-metric-series",
         "parameters": [
           {
@@ -20235,15 +20243,26 @@
             }
           },
           {
-            "description": "The bucket width in seconds. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused",
+            "description": "The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused",
             "explode": false,
             "in": "query",
             "name": "resolution",
             "schema": {
-              "description": "The bucket width in seconds. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused",
+              "description": "The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused",
               "format": "int64",
+              "maximum": 2592000,
               "minimum": 1,
               "type": "integer"
+            }
+          },
+          {
+            "description": "The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution",
+            "explode": false,
+            "in": "query",
+            "name": "instance",
+            "schema": {
+              "description": "The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution",
+              "type": "string"
             }
           }
         ],
@@ -20424,7 +20443,7 @@
     },
     "/components/{name}/properties/{property}/samples": {
       "get": {
-        "description": "The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count and the value in force at its end (null when empty), and covered_from, the earliest instant retention leaves data for. Gated by component:read; an out-of-scope owner is a non-disclosing 404.",
+        "description": "The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count and the value in force at its end (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured changes (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured changes in the window, or a 422 listing them when there are several. Gated by component:read; an out-of-scope owner is a non-disclosing 404.",
         "operationId": "list-component-property-series",
         "parameters": [
           {
@@ -20474,15 +20493,26 @@
             }
           },
           {
-            "description": "The bucket width in seconds. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused",
+            "description": "The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused",
             "explode": false,
             "in": "query",
             "name": "resolution",
             "schema": {
-              "description": "The bucket width in seconds. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused",
+              "description": "The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused",
               "format": "int64",
+              "maximum": 2592000,
               "minimum": 1,
               "type": "integer"
+            }
+          },
+          {
+            "description": "The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution",
+            "explode": false,
+            "in": "query",
+            "name": "instance",
+            "schema": {
+              "description": "The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution",
+              "type": "string"
             }
           }
         ],
@@ -30367,7 +30397,7 @@
     },
     "/systems/{name}/metrics/{metric}/samples": {
       "get": {
-        "description": "The samples behind the effective read's latest value for one series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with count, min, max, avg and last (null when empty), and covered_from, the earliest instant retention leaves data for; nothing is read beyond the series' effective retention until trends exist (#1276). Gated by system:read; an out-of-scope owner is a non-disclosing 404.",
+        "description": "The samples behind the effective read's latest value for one series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with count, min, max, avg and last (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured samples (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured samples in the window, or a 422 listing them when there are several. Nothing is read beyond the series' effective retention until trends exist (#1276). Gated by system:read; an out-of-scope owner is a non-disclosing 404.",
         "operationId": "list-system-metric-series",
         "parameters": [
           {
@@ -30417,15 +30447,26 @@
             }
           },
           {
-            "description": "The bucket width in seconds. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused",
+            "description": "The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused",
             "explode": false,
             "in": "query",
             "name": "resolution",
             "schema": {
-              "description": "The bucket width in seconds. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused",
+              "description": "The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused",
               "format": "int64",
+              "maximum": 2592000,
               "minimum": 1,
               "type": "integer"
+            }
+          },
+          {
+            "description": "The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution",
+            "explode": false,
+            "in": "query",
+            "name": "instance",
+            "schema": {
+              "description": "The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution",
+              "type": "string"
             }
           }
         ],
@@ -30605,7 +30646,7 @@
     },
     "/systems/{name}/properties/{property}/samples": {
       "get": {
-        "description": "The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count and the value in force at its end (null when empty), and covered_from, the earliest instant retention leaves data for. Gated by system:read; an out-of-scope owner is a non-disclosing 404.",
+        "description": "The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count and the value in force at its end (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured changes (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured changes in the window, or a 422 listing them when there are several. Gated by system:read; an out-of-scope owner is a non-disclosing 404.",
         "operationId": "list-system-property-series",
         "parameters": [
           {
@@ -30655,15 +30696,26 @@
             }
           },
           {
-            "description": "The bucket width in seconds. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused",
+            "description": "The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused",
             "explode": false,
             "in": "query",
             "name": "resolution",
             "schema": {
-              "description": "The bucket width in seconds. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused",
+              "description": "The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused",
               "format": "int64",
+              "maximum": 2592000,
               "minimum": 1,
               "type": "integer"
+            }
+          },
+          {
+            "description": "The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution",
+            "explode": false,
+            "in": "query",
+            "name": "instance",
+            "schema": {
+              "description": "The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution",
+              "type": "string"
             }
           }
         ],

@@ -193,8 +193,10 @@ export default function SystemZoom() {
   // Data table draws every sparkline at once (#795 review).
   const seriesQueries = useQueries(() => ({
     queries: kpiMetrics().map((m) => ({
-      queryKey: metricBucketsKey("systems", id(), m.metric_type_name, SERIES_HOURS, SERIES_RESOLUTION_S),
-      queryFn: () => metricBuckets("systems", id(), m.metric_type_name, SERIES_HOURS, SERIES_RESOLUTION_S),
+      // The chart is the series whose latest value sits beside it: a bucket
+      // is one instance (#1485), so a sampled row names the instance it shows.
+      queryKey: metricBucketsKey("systems", id(), m.metric_type_name, SERIES_HOURS, SERIES_RESOLUTION_S, m.is_sampled ? m.instance : undefined),
+      queryFn: () => metricBuckets("systems", id(), m.metric_type_name, SERIES_HOURS, SERIES_RESOLUTION_S, m.is_sampled ? m.instance : undefined),
       enabled: tab() === "overview",
       // A day's sparkline does not visibly move in five seconds; the latest
       // value beside it rides the metrics read, which does.

@@ -969,11 +969,11 @@ func (UnimplementedGateway) ListPropertySeries(context.Context, string, string, 
 	return nil, nil
 }
 
-func (UnimplementedGateway) ListMetricBuckets(context.Context, string, string, string, time.Duration, time.Duration) (MetricBuckets, error) {
+func (UnimplementedGateway) ListMetricBuckets(context.Context, string, string, string, *string, time.Duration, time.Duration) (MetricBuckets, error) {
 	return MetricBuckets{}, nil
 }
 
-func (UnimplementedGateway) ListPropertyBuckets(context.Context, string, string, string, time.Duration, time.Duration) (PropertyBuckets, error) {
+func (UnimplementedGateway) ListPropertyBuckets(context.Context, string, string, string, *string, time.Duration, time.Duration) (PropertyBuckets, error) {
 	return PropertyBuckets{}, nil
 }
 

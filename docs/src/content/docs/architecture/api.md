@@ -937,7 +937,8 @@ read entirely when off contract; clearing a value the instance never set is a 40
 `.../properties/{property}/samples` answer a window of one series (`hours`, up to 720). Raw, they
 return the newest rows up to `limit`. Given a `resolution` in seconds they return every regular
 bucket of the window instead, oldest first, empty ones included, with the body's `covered_from`
-naming where retention ends ([a series chart is truthful at every zoom](/architecture/properties/#a-series-chart-is-truthful-at-every-zoom-1269)).
+naming where retention ends. A bucket is one `instance`'s measured samples: unset, the one instance
+measured in the window, or a 422 listing them when there are several ([a series chart is truthful at every zoom](/architecture/properties/#a-series-chart-is-truthful-at-every-zoom-1269)).
 
 The **metrics read** is its numeric twin, read-only since a sample is telemetry, not an override:
 `GET /{components,systems,locations}/{name}/metrics`, gated and scoped like the properties read. Each

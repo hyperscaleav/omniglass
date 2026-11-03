@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -25,6 +26,10 @@ const (
 	// seriesMaxBuckets bounds a bucketed answer's size: 30 days at 10 minutes
 	// fits; a finer grid over a wide range is refused, not cut.
 	seriesMaxBuckets = 5000
+	// seriesMaxResolution is the widest bucket a read takes, 30 days in
+	// seconds: the whole widest window in one bucket. Past it the request is a
+	// 422 from the schema, never an overflowed duration.
+	seriesMaxResolution = 30 * 24 * 60 * 60
 )
 
 type seriesInput struct {
@@ -32,7 +37,10 @@ type seriesInput struct {
 	Metric     string `path:"metric" doc:"The metric_type name of the series"`
 	Hours      int    `query:"hours" minimum:"1" maximum:"720" doc:"The window in hours, counted back from now; 24 when unset"`
 	Limit      int    `query:"limit" minimum:"1" maximum:"2000" doc:"The row cap, newest kept; 500 when unset. Ignored when a resolution is set"`
-	Resolution int    `query:"resolution" minimum:"1" doc:"The bucket width in seconds. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused"`
+	Resolution int    `query:"resolution" minimum:"1" maximum:"2592000" doc:"The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused"`
+	Instance   string `query:"instance" doc:"The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution"`
+
+	instanceSet bool
 }
 
 type propertySeriesInput struct {
@@ -40,7 +48,10 @@ type propertySeriesInput struct {
 	Property   string `path:"property" doc:"The property_type name of the series"`
 	Hours      int    `query:"hours" minimum:"1" maximum:"720" doc:"The window in hours, counted back from now; 24 when unset"`
 	Limit      int    `query:"limit" minimum:"1" maximum:"2000" doc:"The row cap, newest kept; 500 when unset. Ignored when a resolution is set"`
-	Resolution int    `query:"resolution" minimum:"1" doc:"The bucket width in seconds. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused"`
+	Resolution int    `query:"resolution" minimum:"1" maximum:"2592000" doc:"The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused"`
+	Instance   string `query:"instance" doc:"The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution"`
+
+	instanceSet bool
 }
 
 type metricSampleBody struct {
@@ -69,6 +80,7 @@ type metricSeriesOutput struct {
 		Samples []metricSampleBody `json:"samples" doc:"Newest first; empty when a resolution was asked for"`
 		// The bucketed answer (#1269), absent from a raw read.
 		ResolutionSeconds int                `json:"resolution_seconds,omitempty" required:"false" doc:"The bucket width asked for; present only on a bucketed read"`
+		Instance          *string            `json:"instance,omitempty" required:"false" doc:"The one instance the buckets aggregate, measured samples only (observed and calculated); present only on a bucketed read"`
 		CoveredFrom       *time.Time         `json:"covered_from,omitempty" required:"false" doc:"The earliest instant the read could have data for: the start of the window or the series' effective retention, whichever is later. A bucket before it is empty because of retention, not because collection stopped"`
 		Buckets           []metricBucketBody `json:"buckets,omitempty" required:"false" doc:"Every regular bucket of the window, oldest first"`
 	}
@@ -98,9 +110,46 @@ type propertySeriesOutput struct {
 		Samples  []propertySampleBody `json:"samples" doc:"Newest first: the change history behind the effective value; empty when a resolution was asked for"`
 		// The bucketed answer (#1269), absent from a raw read.
 		ResolutionSeconds int                  `json:"resolution_seconds,omitempty" required:"false" doc:"The bucket width asked for; present only on a bucketed read"`
+		Instance          *string              `json:"instance,omitempty" required:"false" doc:"The one instance the buckets aggregate, measured changes only (observed and calculated); present only on a bucketed read"`
 		CoveredFrom       *time.Time           `json:"covered_from,omitempty" required:"false" doc:"The earliest instant the read could have data for: the start of the window or the series' effective retention, whichever is later"`
 		Buckets           []propertyBucketBody `json:"buckets,omitempty" required:"false" doc:"Every regular bucket of the window, oldest first"`
 	}
+}
+
+// Resolve notes whether instance was sent at all, so an asked-for empty
+// instance (a series with no discriminator) is told apart from none asked for.
+func (in *seriesInput) Resolve(ctx huma.Context) []error {
+	in.instanceSet = ctx.URL().Query().Has("instance")
+	return nil
+}
+
+func (in *propertySeriesInput) Resolve(ctx huma.Context) []error {
+	in.instanceSet = ctx.URL().Query().Has("instance")
+	return nil
+}
+
+// askedInstance is the instance a bucketed read was asked for, nil when the
+// request named none.
+func askedInstance(set bool, instance string) *string {
+	if !set {
+		return nil
+	}
+	return &instance
+}
+
+// bucketReadErr maps a bucketed read's failure: an ambiguous instance is the
+// caller's to resolve, so it is a 422 listing every instance it can pick from,
+// one error detail each at query.instance.
+func bucketReadErr(err error, what string) error {
+	var amb *storage.AmbiguousInstanceError
+	if errors.As(err, &amb) {
+		details := make([]error, 0, len(amb.Instances))
+		for _, inst := range amb.Instances {
+			details = append(details, &huma.ErrorDetail{Message: "an instance with measured samples in the window", Location: "query.instance", Value: inst})
+		}
+		return huma.Error422UnprocessableEntity(fmt.Sprintf("%s has %d instances with measured samples in the window; name one with instance, the buckets of one series never blend another's", amb.Key, len(amb.Instances)), details...)
+	}
+	return huma.Error500InternalServerError(what)
 }
 
 func seriesWindow(hours int) time.Duration {
@@ -114,6 +163,9 @@ func seriesWindow(hours int) time.Duration {
 // and how many buckets they make, the window rounded up to a whole bucket. A
 // grid past seriesMaxBuckets is refused rather than cut.
 func seriesBucketing(hours, resolutionSeconds int) (window, resolution time.Duration, n int, err error) {
+	if resolutionSeconds < 1 || resolutionSeconds > seriesMaxResolution {
+		return 0, 0, 0, fmt.Errorf("a resolution of %d seconds is outside 1 to %d (30 days)", resolutionSeconds, seriesMaxResolution)
+	}
 	window = seriesWindow(hours)
 	resolution = time.Duration(resolutionSeconds) * time.Second
 	n = int((window + resolution - 1) / resolution)
@@ -163,7 +215,7 @@ func registerSeriesRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 			Method:      http.MethodGet,
 			Path:        "/" + oc.kind + "s/{name}/metrics/{metric}/samples",
 			Summary:     "Read one metric series' samples",
-			Description: "The samples behind the effective read's latest value for one series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with count, min, max, avg and last (null when empty), and covered_from, the earliest instant retention leaves data for; nothing is read beyond the series' effective retention until trends exist (#1276). Gated by " + oc.resource + ":read; an out-of-scope owner is a non-disclosing 404.",
+			Description: "The samples behind the effective read's latest value for one series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with count, min, max, avg and last (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured samples (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured samples in the window, or a 422 listing them when there are several. Nothing is read beyond the series' effective retention until trends exist (#1276). Gated by " + oc.resource + ":read; an out-of-scope owner is a non-disclosing 404.",
 		}, oc.resource, "read"), func(ctx context.Context, in *seriesInput) (*metricSeriesOutput, error) {
 			id, display, err := oc.resolve(ctx, in.Name)
 			if err != nil {
@@ -177,11 +229,12 @@ func registerSeriesRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 				if err != nil {
 					return nil, huma.Error422UnprocessableEntity(err.Error())
 				}
-				got, err := gw.ListMetricBuckets(ctx, oc.kind, id, in.Metric, window, res)
+				got, err := gw.ListMetricBuckets(ctx, oc.kind, id, in.Metric, askedInstance(in.instanceSet, in.Instance), window, res)
 				if err != nil {
-					return nil, huma.Error500InternalServerError("read metric series buckets")
+					return nil, bucketReadErr(err, "read metric series buckets")
 				}
 				out.Body.ResolutionSeconds = in.Resolution
+				out.Body.Instance = &got.Instance
 				out.Body.CoveredFrom = &got.CoveredFrom
 				out.Body.Samples = []metricSampleBody{}
 				out.Body.Buckets = make([]metricBucketBody, 0, n)
@@ -206,7 +259,7 @@ func registerSeriesRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 			Method:      http.MethodGet,
 			Path:        "/" + oc.kind + "s/{name}/properties/{property}/samples",
 			Summary:     "Read one property series' change history",
-			Description: "The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count and the value in force at its end (null when empty), and covered_from, the earliest instant retention leaves data for. Gated by " + oc.resource + ":read; an out-of-scope owner is a non-disclosing 404.",
+			Description: "The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count and the value in force at its end (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured changes (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured changes in the window, or a 422 listing them when there are several. Gated by " + oc.resource + ":read; an out-of-scope owner is a non-disclosing 404.",
 		}, oc.resource, "read"), func(ctx context.Context, in *propertySeriesInput) (*propertySeriesOutput, error) {
 			id, display, err := oc.resolve(ctx, in.Name)
 			if err != nil {
@@ -220,11 +273,12 @@ func registerSeriesRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 				if err != nil {
 					return nil, huma.Error422UnprocessableEntity(err.Error())
 				}
-				got, err := gw.ListPropertyBuckets(ctx, oc.kind, id, in.Property, window, res)
+				got, err := gw.ListPropertyBuckets(ctx, oc.kind, id, in.Property, askedInstance(in.instanceSet, in.Instance), window, res)
 				if err != nil {
-					return nil, huma.Error500InternalServerError("read property series buckets")
+					return nil, bucketReadErr(err, "read property series buckets")
 				}
 				out.Body.ResolutionSeconds = in.Resolution
+				out.Body.Instance = &got.Instance
 				out.Body.CoveredFrom = &got.CoveredFrom
 				out.Body.Samples = []propertySampleBody{}
 				out.Body.Buckets = make([]propertyBucketBody, 0, n)

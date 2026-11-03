@@ -687,9 +687,11 @@ type Gateway interface {
 	// ListMetricBuckets and ListPropertyBuckets read one series as regular
 	// date_bin buckets over the last window, oldest first, every bucket of the
 	// range present (an empty one has count 0), bounded to the type's effective
-	// retention (#1269).
-	ListMetricBuckets(ctx context.Context, ownerKind, ownerRef, key string, window, resolution time.Duration) (MetricBuckets, error)
-	ListPropertyBuckets(ctx context.Context, ownerKind, ownerRef, key string, window, resolution time.Duration) (PropertyBuckets, error)
+	// retention (#1269). A bucket aggregates one instance's measured rows
+	// (observed and calculated) only; instance nil picks the one instance with
+	// measured rows in the window, or answers *AmbiguousInstanceError (#1485).
+	ListMetricBuckets(ctx context.Context, ownerKind, ownerRef, key string, instance *string, window, resolution time.Duration) (MetricBuckets, error)
+	ListPropertyBuckets(ctx context.Context, ownerKind, ownerRef, key string, instance *string, window, resolution time.Duration) (PropertyBuckets, error)
 
 	// The raw-log lane (ADR-0066): log lines are untyped arrival, not events, so
 	// neither insert has a registry gate. log_line is component-owned (#589);

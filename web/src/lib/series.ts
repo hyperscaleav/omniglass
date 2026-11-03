@@ -33,15 +33,32 @@ export async function propertySeries(kind: "components" | "systems", owner: stri
 
 // A bucketed metric read: every bucket of the last `hours`, `resolutionSeconds`
 // wide, oldest first, and the instant before which retention left nothing to
-// read (a bucket earlier than it is empty because of retention).
+// read (a bucket earlier than it is empty because of retention). A bucket is one
+// instance's measured samples (#1485): `instance` names it, and left undefined
+// the server reads the one instance with measured samples in the window, or
+// answers 422 when there are several. The empty string is an instance (the
+// owner-level series) and is sent as one.
 export type MetricBuckets = { buckets: ChartBucket[]; coveredFrom: string | null };
 
-export const metricBucketsKey = (kind: "components" | "systems", owner: string, metric: string, hours: number, resolutionSeconds: number) =>
-  ["metric-buckets", kind, owner, metric, hours, resolutionSeconds] as const;
+export const metricBucketsKey = (
+  kind: "components" | "systems",
+  owner: string,
+  metric: string,
+  hours: number,
+  resolutionSeconds: number,
+  instance?: string,
+) => ["metric-buckets", kind, owner, metric, hours, resolutionSeconds, instance ?? null] as const;
 
-export async function metricBuckets(kind: "components" | "systems", owner: string, metric: string, hours: number, resolutionSeconds: number): Promise<MetricBuckets> {
+export async function metricBuckets(
+  kind: "components" | "systems",
+  owner: string,
+  metric: string,
+  hours: number,
+  resolutionSeconds: number,
+  instance?: string,
+): Promise<MetricBuckets> {
   const res = await api.GET(`/${kind}/{name}/metrics/{metric}/samples`, {
-    params: { path: { name: owner, metric }, query: { hours, resolution: resolutionSeconds } },
+    params: { path: { name: owner, metric }, query: { hours, resolution: resolutionSeconds, ...(instance === undefined ? {} : { instance }) } },
   });
   if (res.error) throw res.error;
   const body = res.data as { buckets?: ChartBucket[]; covered_from?: string } | undefined;
@@ -51,12 +68,25 @@ export async function metricBuckets(kind: "components" | "systems", owner: strin
 export type PropertyBucket = { ts: string; count: number; last: string | null };
 export type PropertyBuckets = { buckets: PropertyBucket[]; coveredFrom: string | null };
 
-export const propertyBucketsKey = (kind: "components" | "systems", owner: string, property: string, hours: number, resolutionSeconds: number) =>
-  ["property-buckets", kind, owner, property, hours, resolutionSeconds] as const;
+export const propertyBucketsKey = (
+  kind: "components" | "systems",
+  owner: string,
+  property: string,
+  hours: number,
+  resolutionSeconds: number,
+  instance?: string,
+) => ["property-buckets", kind, owner, property, hours, resolutionSeconds, instance ?? null] as const;
 
-export async function propertyBuckets(kind: "components" | "systems", owner: string, property: string, hours: number, resolutionSeconds: number): Promise<PropertyBuckets> {
+export async function propertyBuckets(
+  kind: "components" | "systems",
+  owner: string,
+  property: string,
+  hours: number,
+  resolutionSeconds: number,
+  instance?: string,
+): Promise<PropertyBuckets> {
   const res = await api.GET(`/${kind}/{name}/properties/{property}/samples`, {
-    params: { path: { name: owner, property }, query: { hours, resolution: resolutionSeconds } },
+    params: { path: { name: owner, property }, query: { hours, resolution: resolutionSeconds, ...(instance === undefined ? {} : { instance }) } },
   });
   if (res.error) throw res.error;
   const body = res.data as { buckets?: PropertyBucket[]; covered_from?: string } | undefined;

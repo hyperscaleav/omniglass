@@ -336,7 +336,7 @@ Every metric the component's product declares, resolved to the newest observed o
 
 Read one metric series' samples
 
-The samples behind the effective read's latest value for one series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with count, min, max, avg and last (null when empty), and covered_from, the earliest instant retention leaves data for; nothing is read beyond the series' effective retention until trends exist (#1276). Gated by component:read; an out-of-scope owner is a non-disclosing 404.
+The samples behind the effective read's latest value for one series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with count, min, max, avg and last (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured samples (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured samples in the window, or a 422 listing them when there are several. Nothing is read beyond the series' effective retention until trends exist (#1276). Gated by component:read; an out-of-scope owner is a non-disclosing 404.
 
 - Route: `GET /api/v1/components/{name}/metrics/{metric}/samples`
 - Gate: `component:read`
@@ -345,10 +345,11 @@ The samples behind the effective read's latest value for one series, newest firs
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `hours` | integer | no | The window in hours, counted back from now; 24 when unset |
+| `instance` | string | no | The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution |
 | `limit` | integer | no | The row cap, newest kept; 500 when unset. Ignored when a resolution is set |
 | `metric` | string | yes | The metric_type name of the series |
 | `name` | string | yes | The owner's name or uuid |
-| `resolution` | integer | no | The bucket width in seconds. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused |
+| `resolution` | integer | no | The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused |
 
 ## `list-component-properties`
 
@@ -368,7 +369,7 @@ Every property the component has: each its product declares, resolved to the com
 
 Read one property series' change history
 
-The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count and the value in force at its end (null when empty), and covered_from, the earliest instant retention leaves data for. Gated by component:read; an out-of-scope owner is a non-disclosing 404.
+The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count and the value in force at its end (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured changes (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured changes in the window, or a 422 listing them when there are several. Gated by component:read; an out-of-scope owner is a non-disclosing 404.
 
 - Route: `GET /api/v1/components/{name}/properties/{property}/samples`
 - Gate: `component:read`
@@ -377,10 +378,11 @@ The change history behind the effective value for one property series, newest fi
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `hours` | integer | no | The window in hours, counted back from now; 24 when unset |
+| `instance` | string | no | The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution |
 | `limit` | integer | no | The row cap, newest kept; 500 when unset. Ignored when a resolution is set |
 | `name` | string | yes | The owner's name or uuid |
 | `property` | string | yes | The property_type name of the series |
-| `resolution` | integer | no | The bucket width in seconds. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused |
+| `resolution` | integer | no | The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused |
 
 ## `get-component-reachability`
 
@@ -903,7 +905,7 @@ The system's current verdict and why: every role it needs filled, whether it is 
 
 Read one metric series' samples
 
-The samples behind the effective read's latest value for one series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with count, min, max, avg and last (null when empty), and covered_from, the earliest instant retention leaves data for; nothing is read beyond the series' effective retention until trends exist (#1276). Gated by system:read; an out-of-scope owner is a non-disclosing 404.
+The samples behind the effective read's latest value for one series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with count, min, max, avg and last (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured samples (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured samples in the window, or a 422 listing them when there are several. Nothing is read beyond the series' effective retention until trends exist (#1276). Gated by system:read; an out-of-scope owner is a non-disclosing 404.
 
 - Route: `GET /api/v1/systems/{name}/metrics/{metric}/samples`
 - Gate: `system:read`
@@ -912,16 +914,17 @@ The samples behind the effective read's latest value for one series, newest firs
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `hours` | integer | no | The window in hours, counted back from now; 24 when unset |
+| `instance` | string | no | The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution |
 | `limit` | integer | no | The row cap, newest kept; 500 when unset. Ignored when a resolution is set |
 | `metric` | string | yes | The metric_type name of the series |
 | `name` | string | yes | The owner's name or uuid |
-| `resolution` | integer | no | The bucket width in seconds. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused |
+| `resolution` | integer | no | The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused |
 
 ## `list-system-property-series`
 
 Read one property series' change history
 
-The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count and the value in force at its end (null when empty), and covered_from, the earliest instant retention leaves data for. Gated by system:read; an out-of-scope owner is a non-disclosing 404.
+The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count and the value in force at its end (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured changes (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured changes in the window, or a 422 listing them when there are several. Gated by system:read; an out-of-scope owner is a non-disclosing 404.
 
 - Route: `GET /api/v1/systems/{name}/properties/{property}/samples`
 - Gate: `system:read`
@@ -930,10 +933,11 @@ The change history behind the effective value for one property series, newest fi
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `hours` | integer | no | The window in hours, counted back from now; 24 when unset |
+| `instance` | string | no | The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution |
 | `limit` | integer | no | The row cap, newest kept; 500 when unset. Ignored when a resolution is set |
 | `name` | string | yes | The owner's name or uuid |
 | `property` | string | yes | The property_type name of the series |
-| `resolution` | integer | no | The bucket width in seconds. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused |
+| `resolution` | integer | no | The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused |
 
 ## `create-system-from-template`
 
