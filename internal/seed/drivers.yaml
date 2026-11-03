@@ -607,6 +607,53 @@ drivers:
           emits:
             - { name: playback-state, extract: { jsonpath: state } }
             - { name: content-name, extract: { jsonpath: content } }
+  - id: recording-service-api
+    label: Recording Service API
+    version: "1.0.0"
+    spec:
+      version: 1
+      # The Shinra recording service's JSON API over https on 443 (#1363),
+      # its key pinned on first use, every request carrying its api key in
+      # the X-Recording-Key header: its own account of its health and
+      # version from the health route, the work it carries from the work
+      # route, and a recording that fails as an event the moment the live
+      # feed names it.
+      transport: https
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "443" }
+        - { name: tls-mode, kind: string, default: pin }
+        - { name: key, kind: secret, secret_type: api-key, required: true }
+      session:
+        credential: key
+        scheme: api-key
+        api_key: { in: header, name: X-Recording-Key }
+        stream: { path: /api/events }
+      listeners:
+        - name: recording-failed
+          match: { event: recording-failed }
+          emits:
+            - name: recording-failed
+              message: { value: "Recording failed" }
+              attributes:
+                recording_id: { extract: { jsonpath: id } }
+                reason: { extract: { jsonpath: reason } }
+      polls:
+        - name: health
+          schedule: { every: 30s }
+          request: { path: /api/health }
+          emits:
+            - { name: service-state, extract: { jsonpath: status } }
+            - { name: software-version, extract: { jsonpath: version } }
+            - { name: uptime, extract: { jsonpath: uptime } }
+        - name: work
+          schedule: { every: 30s }
+          request: { path: /api/work }
+          emits:
+            - { name: active-recording-count, extract: { jsonpath: recordings_in_progress } }
+            - { name: queue-depth, extract: { jsonpath: queue_depth } }
+            # The service reports a percentage; the canon stores the ratio.
+            - { name: storage-utilization, extract: { jsonpath: storage_used_percent }, transform: { scale: 0.01 } }
   - id: newtron-panel-web
     label: Newtron Panel Web
     version: "1.0.0"

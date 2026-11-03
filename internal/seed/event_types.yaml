@@ -45,6 +45,11 @@ event_types:
       A display or switcher moved to a different source input. Caught natively
       where the device reports it; a frequent, benign occurrence that teaches
       the event lane's volume without implying a fault.
+  - name: recording-failed
+    label: Recording Failed
+    description: >-
+      A recording service could not complete a recording. Caught natively where
+      the service reports it; its payload names the recording and why it failed.
   - name: collection-failed
     label: Collection Failed
     description: >-

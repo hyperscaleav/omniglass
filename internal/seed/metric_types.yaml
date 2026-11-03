@@ -129,6 +129,16 @@ metric_types:
     precision: 3
     label: Storage Utilization
     description: How full a component reports its local storage, as a fraction of its capacity (0 to 1).
+  # A recording service's work (#1363): the recordings it is writing now and
+  # the queue waiting to be written.
+  - name: active-recording-count
+    data_type: int
+    label: Active Recording Count
+    description: The recordings a component reports it has in progress now.
+  - name: queue-depth
+    data_type: int
+    label: Queue Depth
+    description: The items a component reports waiting in its work queue, not yet picked up.
   - name: http-response-time
     data_type: float
     unit: ms
