@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { test, expect, type Page } from "@playwright/test";
 import matter from "gray-matter";
-import { normalizeMask, paintedBoxes, planMasks, shootBaseline, type MaskEntry } from "./shotmasklib.mjs";
+import { normalizeMask, paintedBoxes, planMasks, planStandingMasks, shootBaseline, type MaskEntry } from "./shotmasklib.mjs";
 
 // The mask-geometry contract behind the docs screenshot gate (#773, #1081).
 //
@@ -271,6 +271,70 @@ test.describe("docs screenshot masks", () => {
     await expect(shootBaseline(page, plan)).rejects.toThrow(`wider than its declared ${entry.width}px box`);
   });
 
+  // CatalogShell.tsx's subrail: each registry's entry is a label and, right-aligned
+  // at the end of the row, the live count of the registry's rows. The rail's width
+  // is fixed, so the count's RIGHT edge holds still and its left edge moves with
+  // its digits, which is what a declared box anchored at the top-left cannot
+  // hold (#1482). A release that seeds one more driver or type moves a digit on
+  // every page under the Catalog shell, and so did every shot of one.
+  const railRow = (label: string, count: string) => `
+<style>${baseStyle}
+  nav { width: 210px; }
+  a { display: flex; align-items: center; gap: 8px; padding: 6px 12px; color: inherit; text-decoration: none; }
+  .count { margin-left: auto; font-size: 12px; font-variant-numeric: tabular-nums; }
+</style>
+<nav>
+  <a><span style="flex: 1">Overview</span></a>
+  <a><span style="flex: 1">${label}</span><span data-testid="catalog-entry-count" class="count">${count}</span></a>
+</nav>`;
+
+  test("the rail's counts are masked on every shot that renders them, without a frontmatter entry", async ({ page }) => {
+    await page.setContent(railRow("Drivers", "9"));
+    const narrow = await valueBox(page, "[data-testid=catalog-entry-count]");
+    const [narrowBox] = paintedBoxes(await planStandingMasks(page));
+    await page.setContent(railRow("Drivers", "10"));
+    const wide = await valueBox(page, "[data-testid=catalog-entry-count]");
+    const [wideBox] = paintedBoxes(await planStandingMasks(page));
+
+    expect(wide.width).toBeGreaterThan(narrow.width);
+    expect(wide.x).toBeLessThan(narrow.x); // right-aligned: the left edge moves
+    expect(wideBox).toEqual(narrowBox);
+    // The box ends where the count does.
+    expect(Math.round(wideBox.x + wideBox.width)).toBe(Math.round(wide.x + wide.width));
+  });
+
+  test("a baseline under the standing masks survives a count gaining a digit", async ({ page }) => {
+    const shoot = async (count: string) => {
+      await page.setContent(railRow("Drivers", count));
+      return shootBaseline(page, await planStandingMasks(page));
+    };
+    expect((await shoot("9")).equals(await shoot("10"))).toBe(true);
+  });
+
+  test("the standing masks leave the label live, so a renamed entry still fails the gate", async ({ page }) => {
+    const shoot = async (label: string) => {
+      await page.setContent(railRow(label, "10"));
+      return shootBaseline(page, await planStandingMasks(page));
+    };
+    expect((await shoot("Drivers")).equals(await shoot("Driver kinds"))).toBe(false);
+  });
+
+  test("a page without the rail has no standing masks, and does not fail for it", async ({ page }) => {
+    await page.setContent(bladeRow("since Oct 24, 01:57 AM · 17s"));
+    expect(await planStandingMasks(page)).toEqual([]);
+  });
+
+  test("a right-anchored declared box ends where its value does", async ({ page }) => {
+    await page.setContent(railRow("Drivers", "10"));
+    const entry = { selector: "[data-testid=catalog-entry-count]", width: 40, align: "right" as const };
+    const value = await valueBox(page, entry.selector);
+    const [box] = paintedBoxes(await planMasks(page, [entry]));
+    expect(box.width).toBe(40);
+    expect(Math.round(box.x + box.width)).toBe(Math.round(value.x + value.width));
+    const tight = { ...entry, width: Math.floor(value.width) - 1 };
+    await expect(planMasks(page, [tight])).rejects.toThrow("wider than its declared");
+  });
+
   test("a mask that matches nothing fails the capture by name", async ({ page }) => {
     await page.setContent(bladeRow("since Oct 24, 01:57 AM · 17s"));
     await expect(planMasks(page, ["[data-testid=nowhere]"])).rejects.toThrow(
@@ -281,7 +345,12 @@ test.describe("docs screenshot masks", () => {
   test("a mask entry is a selector or a selector with a whole-pixel width, nothing else", () => {
     expect(normalizeMask("[data-testid=x]")).toEqual({ selector: "[data-testid=x]" });
     expect(normalizeMask({ selector: "[data-testid=x]", width: 180 })).toEqual({ selector: "[data-testid=x]", width: 180 });
-    for (const bad of [42, null, {}, { width: 10 }, { selector: "x" }, { selector: "x", width: 0 }, { selector: "x", width: 1.5 }, { selector: "x", width: 10, widht: 12 }]) {
+    expect(normalizeMask({ selector: "[data-testid=x]", width: 40, align: "right" })).toEqual({
+      selector: "[data-testid=x]",
+      width: 40,
+      align: "right",
+    });
+    for (const bad of [42, null, {}, { width: 10 }, { selector: "x" }, { selector: "x", width: 0 }, { selector: "x", width: 1.5 }, { selector: "x", width: 10, widht: 12 }, { selector: "x", width: 10, align: "middle" }, { selector: "x", align: "right" }]) {
       expect(() => normalizeMask(bad as never)).toThrow("invalid mask entry");
     }
   });
