@@ -119,12 +119,14 @@ type propertySeriesOutput struct {
 // Resolve notes whether instance was sent at all, so an asked-for empty
 // instance (a series with no discriminator) is told apart from none asked for.
 func (in *seriesInput) Resolve(ctx huma.Context) []error {
-	in.instanceSet = ctx.URL().Query().Has("instance")
+	u := ctx.URL()
+	in.instanceSet = u.Query().Has("instance")
 	return nil
 }
 
 func (in *propertySeriesInput) Resolve(ctx huma.Context) []error {
-	in.instanceSet = ctx.URL().Query().Has("instance")
+	u := ctx.URL()
+	in.instanceSet = u.Query().Has("instance")
 	return nil
 }
 
