@@ -8,6 +8,9 @@
 //   { selector: "<s>", width: N } a DECLARED box: painted at each resolved
 //                                 element's top-left, as tall as the element and N
 //                                 CSS pixels wide, whatever the element's own width.
+//   { selector: "<s>", width: N, align: "right" }
+//                                 the same box anchored at each element's RIGHT edge
+//                                 instead, for a right-aligned value (#1482).
 //
 // What a selector mask resolves to is the whole contract, because a mask is
 // painted at the size of what it resolves to. A selector on a value's own span
@@ -20,7 +23,9 @@
 // deterministic, its width is not, so the frontmatter fixes the width. That holds
 // only for a value whose LEFT edge stays put as its width changes (it starts its
 // own run of the line and ends it): a right-aligned or centered value moves its
-// left edge with its text, and a declared box over it moves too. A value wider
+// left edge with its text, and a top-left declared box over it moves too. A
+// right-aligned value holds its RIGHT edge instead, so it declares `align: right`
+// and the box is anchored there. A value wider
 // than its declared box would leave its tail live, so the capture refuses it by
 // name rather than writing a baseline that moves.
 
@@ -29,6 +34,19 @@
 // human still reads as a block placed over a value.
 export const MASK_COLOR = '#1a2336';
 
+// Masks every shot gets wherever the element renders, with no frontmatter entry.
+// They cover console chrome that shows a count of the catalog's rows: a value
+// that belongs to the seed, not to the page being photographed, so a release that
+// adds a driver or a type moves it on every page that wears the chrome, and
+// without this a PR that touched no UI failed the gate on each of them (#1482).
+// Declared per page, the same entry would be copied onto every shot under the
+// Catalog shell, and the next shot added there would forget it.
+//
+// The rail's counts are right-aligned at the end of a row of fixed width, so the
+// box is anchored at the right edge. 40px holds five digits of the rail's
+// 12px mono face (the widest, "10000", is 36px) and leaves the label live.
+export const STANDING_MASKS = [{ selector: '[data-testid="catalog-entry-count"]', width: 40, align: 'right' }];
+
 const DECLARED_BOX = 'data-og-mask-box';
 
 /** @param {unknown} entry */
@@ -36,13 +54,14 @@ export function normalizeMask(entry) {
   if (typeof entry === 'string' && entry.length > 0) return { selector: entry };
   if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
     const keys = Object.keys(entry).sort().join(',');
-    const { selector, width } = /** @type {{ selector?: unknown, width?: unknown }} */ (entry);
-    if (keys === 'selector,width' && typeof selector === 'string' && selector.length > 0 && Number.isInteger(width) && width > 0) {
-      return { selector, width };
-    }
+    const { selector, width, align } = /** @type {{ selector?: unknown, width?: unknown, align?: unknown }} */ (entry);
+    const declared = typeof selector === 'string' && selector.length > 0 && Number.isInteger(width) && width > 0;
+    if (declared && keys === 'selector,width') return { selector, width };
+    if (declared && keys === 'align,selector,width' && align === 'right') return { selector, width, align };
   }
   throw new Error(
-    `invalid mask entry ${JSON.stringify(entry)}: a selector string, or { selector, width } with a whole-pixel width`,
+    `invalid mask entry ${JSON.stringify(entry)}: a selector string, or { selector, width } with a whole-pixel width` +
+      ` (and optionally align: right)`,
   );
 }
 
@@ -80,14 +99,26 @@ export async function planMasks(page, entries) {
   return plan;
 }
 
+// The standing masks the settled page renders: only those whose element is on it,
+// since a page without the chrome has nothing to mask (unlike a frontmatter entry,
+// whose selector matching nothing is a mistake).
+export async function planStandingMasks(page) {
+  const present = [];
+  for (const entry of STANDING_MASKS) {
+    if ((await page.locator(entry.selector).count()) > 0) present.push(entry);
+  }
+  return planMasks(page, present);
+}
+
 // The boxes a baseline paints, in viewport CSS pixels: a selector mask's element
-// rects, or a declared box anchored at each element it matches.
+// rects, or a declared box anchored at each element it matches (at its left edge,
+// or its right when the mask is `align: right`).
 export function paintedBoxes(plan) {
   return plan.flatMap((m) =>
     m.rects.map((r) =>
       m.width === undefined
         ? { x: r.x, y: r.y, width: r.width, height: r.height }
-        : { x: r.x, y: r.y, width: m.width, height: r.height },
+        : { x: m.align === 'right' ? r.x + r.width - m.width : r.x, y: r.y, width: m.width, height: r.height },
     ),
   );
 }

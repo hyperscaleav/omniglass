@@ -218,8 +218,21 @@ text whose width can change paints a **box the text cannot move**, one of two wa
   headroom, and say the measurement in the frontmatter comment. A value wider than its box
   fails the capture by name rather than leaving its tail live.
 
+- **Anchor the box at the right edge** for a right-aligned value, `align: right`: its right edge
+  holds still and its left edge moves with its text, so the box is painted `width` CSS pixels
+  wide ending where the value ends.
+
 A mask over text of fixed width (a uuid in a monospace face) stays on the text, which is also
 the only correct answer when the enclosing cell holds something the shot exists to show.
+
+**Standing masks** cover console chrome that shows a count of the seed's rows, and need no
+frontmatter entry: the capture applies them to every shot wherever the element renders
+(`STANDING_MASKS` in `web/e2e/shotmasklib.mjs`). Today that is the Catalog subrail's per-registry
+counts (`data-testid="catalog-entry-count"`). A count is the seed's, not the page's, so a release
+that adds a driver or a type moves a digit on every page under the Catalog shell; without the
+standing mask each such PR failed the gate on a UI it never touched (#1482). Add a new count of
+catalog rows to chrome the same way, a `data-testid` and an entry in that list, rather than a mask
+on each shot.
 
 The fill is **deliberately visible** in the baseline: the console's own neutral surface, one
 step lighter than the card behind it, so a human reading a diff artifact sees a block placed
