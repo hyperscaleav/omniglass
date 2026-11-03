@@ -93,8 +93,12 @@ type Interface struct {
 	// Events is an http face's server-sent events stream (#1038).
 	Events Events `yaml:"events"`
 	// WebSocket is a websocket face's protocol (#1034).
-	WebSocket     WebSocket         `yaml:"websocket"`
-	APISurface    string            `yaml:"api_surface"`
+	WebSocket  WebSocket `yaml:"websocket"`
+	APISurface string    `yaml:"api_surface"`
+	// Include names the surfaces (surfaces/<name>.yaml) this face serves in
+	// front of its own subjects and commands: what two devices answer alike
+	// is defined once. See Surface.
+	Include       []string          `yaml:"include"`
 	Routes        []Route           `yaml:"routes"`
 	Commands      []Command         `yaml:"commands"`
 	OIDMap        map[string]string `yaml:"oid_map"`
@@ -640,7 +644,11 @@ func LoadStoreFS(fsys fs.FS) (*Store, error) {
 		Devices: make(map[string]*DeviceProfile),
 		Systems: make(map[string]*SystemProfile),
 	}
-	if err := s.loadDevices(fsys, "devices"); err != nil {
+	surfaces, err := loadSurfaces(fsys, "surfaces")
+	if err != nil {
+		return nil, fmt.Errorf("loading surfaces: %w", err)
+	}
+	if err := s.loadDevices(fsys, "devices", surfaces); err != nil {
 		return nil, fmt.Errorf("loading device profiles: %w", err)
 	}
 	if err := s.loadSystems(fsys, "systems"); err != nil {
@@ -661,7 +669,7 @@ func isFSNotExist(err error) bool {
 	return strings.Contains(err.Error(), "file does not exist")
 }
 
-func (s *Store) loadDevices(fsys fs.FS, dir string) error {
+func (s *Store) loadDevices(fsys fs.FS, dir string, surfaces map[string]Surface) error {
 	entries, err := fs.ReadDir(fsys, dir)
 	if err != nil {
 		if os.IsNotExist(err) || isFSNotExist(err) {
@@ -690,6 +698,9 @@ func (s *Store) loadDevices(fsys fs.FS, dir string) error {
 		}
 		if _, exists := s.Devices[p.Name]; exists {
 			return fmt.Errorf("duplicate device profile name: %s", p.Name)
+		}
+		if err := expandIncludes(&p, surfaces); err != nil {
+			return fmt.Errorf("%s: %w", full, err)
 		}
 		if err := validateInterfaces(&p); err != nil {
 			return fmt.Errorf("%s: %w", full, err)

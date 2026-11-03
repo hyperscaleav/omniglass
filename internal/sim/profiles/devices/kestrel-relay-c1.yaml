@@ -1,0 +1,134 @@
+# yaml-language-server: $schema=schema.json
+# Kestrel Relay C1, Conferencing Codec
+#
+# The Relay C1 is Kestrel's rack codec: the box a room's cameras,
+# microphones and touch panel plug into, with no camera or speakers of its
+# own (the VRoom is the all-in-one bar). What an operator watches it for is
+# whether it is in a call, whether the room is sharing content, and whether
+# its peripherals are still plugged in.
+#
+# One face: the same HTTP JSON API over https behind basic auth the VRoom
+# speaks (admin / kestrel), with the routes a codec has. No SNMP, no
+# command line.
+
+name: kestrel-relay-c1
+manufacturer: Kestrel
+model: "Relay C1"
+device_type: video-codec
+slug_prefix: codec
+
+doc:
+  summary: "Kestrel Relay C1 conferencing codec"
+  description: |
+    Rack-mount conferencing codec. Reports and controls its call, the
+    content the room shares and the peripherals attached to it over an
+    HTTP JSON API behind basic auth.
+
+interfaces:
+  - name: http-api
+    protocol: http
+    port: 443
+    tls: true
+    doc: { summary: "Kestrel Relay JSON API", tags: [management, api] }
+    auth:
+      type: basic
+      default_user: admin
+      default_password: kestrel
+      realm: "Kestrel Relay C1"
+      enforce: true
+    api_surface: kestrel-relay
+    routes:
+      - match: "GET /api/system"
+        template: api/kestrel-relay/system.json.gotempl
+        doc: { summary: "System unit info (model, serial, firmware, uptime)", tags: [api, info] }
+
+      - match: "GET /api/call"
+        template: api/kestrel-relay/call.json.gotempl
+        doc: { summary: "Current call state", tags: [api, call] }
+
+      - match: "GET /api/content"
+        template: api/kestrel-relay/content.json.gotempl
+        doc: { summary: "Content sharing state and its source", tags: [api, content] }
+
+      - match: "GET /api/peripherals"
+        template: api/kestrel-relay/peripherals.json.gotempl
+        doc: { summary: "Peripherals connected to the codec", tags: [api, peripherals] }
+
+      - match: "POST /api/call/dial"
+        template: api/kestrel-relay/ack.json.gotempl
+        doc: { summary: "Place a call", tags: [api, control] }
+        example: |
+          {"participants": 3}
+        mutations:
+          - { path: status.call.active, value: true }
+          - { path: status.call.participants, value: "{{ or .Request.Body.participants 2 }}" }
+
+      - match: "POST /api/call/disconnect"
+        template: api/kestrel-relay/ack.json.gotempl
+        doc: { summary: "Disconnect the active call", tags: [api, control] }
+        example: "{}"
+        mutate:
+          status.call.active: false
+          status.call.participants: 0
+
+      - match: "POST /api/content/share"
+        template: api/kestrel-relay/ack.json.gotempl
+        doc: { summary: "Start sharing content from a source", tags: [api, control] }
+        example: |
+          {"source": "hdmi1"}
+        mutations:
+          - { path: status.content.sharing, value: true }
+          - { path: status.content.source, value: "{{ .Request.Body.source }}", enum: [hdmi1, hdmi2, usbc, wireless] }
+
+      - match: "POST /api/content/stop"
+        template: api/kestrel-relay/ack.json.gotempl
+        doc: { summary: "Stop sharing content", tags: [api, control] }
+        example: "{}"
+        mutate:
+          status.content.sharing: false
+          status.content.source: ""
+
+      - match: "POST /api/admin/reboot"
+        template: api/kestrel-relay/reboot-ack.json.gotempl
+        doc: { summary: "Reboot codec (clears the call and any shared content, and uptime)", tags: [api, admin] }
+        example: "{}"
+        mutations:
+          - { path: status.device.boot_epoch, value: "{{ now }}" }
+          - { path: status.call.active, value: false }
+          - { path: status.call.participants, value: 0 }
+          - { path: status.content.sharing, value: false }
+          - { path: status.content.source, value: "" }
+
+  - name: icmp
+    protocol: icmp
+    doc: { summary: "ICMP ping reachability", tags: [monitoring] }
+
+computed:
+  - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
+
+defaults:
+  status:
+    device:
+      boot_epoch: 0
+    call:
+      active: false
+      participants: 0
+    content:
+      sharing: false
+      source: ""
+    peripherals:
+      # The room's camera, microphone and touch panel.
+      connected: 3
+    network:
+      ipv4:
+        address: ""
+        mac: ""
+  configuration:
+    device:
+      serial: ""
+      model: "Relay C1"
+      manufacturer: "Kestrel"
+    firmware:
+      version: "2.7.3"
+    network:
+      hostname: ""

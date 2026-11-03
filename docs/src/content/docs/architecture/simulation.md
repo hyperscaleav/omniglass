@@ -58,7 +58,12 @@ A device profile is named for the product it simulates, and may list other produ
 same kind of device (the same component type), each with its own identity (a model name) over the
 profile's defaults: the Boreal Edge displays in every size share one profile. A different kind of
 device never stands in, even on the same driver: a touch panel's surface is a subset of a control
-processor's, so each has its own. Every
+processor's, so each has its own. What two such profiles share is defined once, as a **surface
+fragment** (`surfaces/*.yaml`: subjects and commands) that a protocol surface takes in with `include:`;
+the loader expands it ahead of the surface's own and refuses an unknown fragment or one the
+surface restates. The Newtron touch panel and control processor both include `nvp-room`, the room
+and source control, and the processor adds its program, control ports and connected panels; the
+scheduling panel shares none of it and answers its room's booking. Every
 seeded product on the network is served by a profile or listed, with its issue, in the catalog's
 `coverage.yaml`, and a test holds the two catalogs to that. Products with no network interface (a
 passive speaker, an analog microphone) have nothing to collect from and are not simulated:

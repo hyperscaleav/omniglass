@@ -31,6 +31,9 @@ const (
 	// CastKeySecret is the simulated Boreal Cast media player's api key
 	// (#893), sent in the header its API demands.
 	CastKeySecret = "sim-cast-key"
+	// RecordingKeySecret is the simulated recording service's api key
+	// (#1363), sent in the header its API demands.
+	RecordingKeySecret = "sim-recording-key"
 )
 
 // AttachSecret is the platform secret each driver's simulated attach
@@ -41,12 +44,17 @@ var AttachSecret = map[string]string{
 	"boreal-beam-snmp": CommunitySecret,
 	"polaris-amp-snmp": CommunitySecret,
 	"kestrel-api":      KestrelLoginSecret,
-	"http-json":        CensusKeySecret,
-	"ucc-rooms":        UCCTokenSecret,
-	"boreal-cast-api":  CastKeySecret,
-	"lyra-arc-snmp":    CommunitySecret,
-	"lyra-hx-snmp":     CommunitySecret,
-	"ferrite-pdu-snmp": CommunitySecret,
+	// The Relay codec and the Gaze camera answer behind the same login the
+	// VRoom does (#897).
+	"kestrel-relay-api":     KestrelLoginSecret,
+	"kestrel-gaze-api":      KestrelLoginSecret,
+	"http-json":             CensusKeySecret,
+	"ucc-rooms":             UCCTokenSecret,
+	"boreal-cast-api":       CastKeySecret,
+	"recording-service-api": RecordingKeySecret,
+	"lyra-arc-snmp":         CommunitySecret,
+	"lyra-hx-snmp":          CommunitySecret,
+	"ferrite-pdu-snmp":      CommunitySecret,
 }
 
 // AddressCap is how many addresses the simulated block holds: 256 third
@@ -150,20 +158,22 @@ func Plan(comps []Component, used map[string]bool, cat Catalog) ([]Device, error
 // then its products get a probe (the dev seed's test fails for a spec'd
 // driver with simulated products that is missing).
 var Attach = map[string]func(addr string, shift func(int) int) map[string]string{
-	"snmp-generic":     snmpAttach,
-	"boreal-beam-snmp": snmpAttach,
-	"polaris-amp-snmp": snmpAttach,
-	"lyra-arc-snmp":    snmpAttach,
-	"lyra-hx-snmp":     snmpAttach,
-	"ferrite-pdu-snmp": snmpAttach,
-	"newtron-nvp": func(addr string, _ func(int) int) map[string]string {
-		return map[string]string{"host": addr} // 51325, the spec's default, needs no privilege
-	},
+	"snmp-generic":      snmpAttach,
+	"boreal-beam-snmp":  snmpAttach,
+	"polaris-amp-snmp":  snmpAttach,
+	"lyra-arc-snmp":     snmpAttach,
+	"lyra-hx-snmp":      snmpAttach,
+	"ferrite-pdu-snmp":  snmpAttach,
+	"newtron-nvp":       nvpAttach,
+	"newtron-core-nvp":  nvpAttach,
+	"newtron-slate-nvp": nvpAttach,
 	// The Kestrel bar's https API on 443, its key pinned on first use (the
 	// spec's default mode), and the Tessellate sensor's http API on 80.
-	"kestrel-api": func(addr string, shift func(int) int) map[string]string {
-		return map[string]string{"host": addr, "port": strconv.Itoa(shift(443)), "login": KestrelLoginSecret}
-	},
+	"kestrel-api": kestrelAttach,
+	// The Relay C1 codec and the Gaze P2 camera speak the same https API
+	// on 443 behind the same login (#897).
+	"kestrel-relay-api": kestrelAttach,
+	"kestrel-gaze-api":  kestrelAttach,
 	"http-json": func(addr string, shift func(int) int) map[string]string {
 		return map[string]string{"host": addr, "port": strconv.Itoa(shift(80)), "key": CensusKeySecret}
 	},
@@ -171,11 +181,29 @@ var Attach = map[string]func(addr string, shift func(int) int) map[string]string
 	"boreal-cast-api": func(addr string, shift func(int) int) map[string]string {
 		return map[string]string{"host": addr, "port": strconv.Itoa(shift(80)), "key": CastKeySecret}
 	},
+	// The recording service's https API on 443 (#1363), its key pinned on
+	// first use, its key in the header the service demands.
+	"recording-service-api": func(addr string, shift func(int) int) map[string]string {
+		return map[string]string{"host": addr, "port": strconv.Itoa(shift(443)), "key": RecordingKeySecret}
+	},
 	// The UCC platform's https API on 443 (#1282), its key pinned on first
 	// use, its token in the header the platform demands.
 	"ucc-rooms": func(addr string, shift func(int) int) map[string]string {
 		return map[string]string{"host": addr, "port": strconv.Itoa(shift(443)), "token": UCCTokenSecret}
 	},
+}
+
+// kestrelAttach is a Kestrel https driver's inputs: the device's API on 443
+// (shifted where the simulator lifts it), its key pinned on first use, and
+// the simulated login.
+func kestrelAttach(addr string, shift func(int) int) map[string]string {
+	return map[string]string{"host": addr, "port": strconv.Itoa(shift(443)), "login": KestrelLoginSecret}
+}
+
+// nvpAttach is a Newtron NVP driver's inputs: the device's line protocol on
+// 51325, the spec's default, which needs no privilege and no secret.
+func nvpAttach(addr string, _ func(int) int) map[string]string {
+	return map[string]string{"host": addr}
 }
 
 // snmpAttach is an snmp driver's inputs: the device's agent on 161 (shifted

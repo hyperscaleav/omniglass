@@ -133,6 +133,33 @@ metric_types:
     precision: 2
     label: Current
     description: The total current a component reports drawing, in amperes.
+  # A PTZ camera's position and a codec's plugged-in peripherals (#897).
+  - name: pan-angle
+    data_type: float
+    unit: deg
+    precision: 1
+    label: Pan Angle
+    description: How far a camera reports it is panned from its centre, in degrees (negative to the left, positive to the right).
+  - name: tilt-angle
+    data_type: float
+    unit: deg
+    precision: 1
+    label: Tilt Angle
+    description: How far a camera reports it is tilted from level, in degrees (negative down, positive up).
+  - name: zoom-level
+    data_type: float
+    unit: x
+    precision: 1
+    label: Zoom Level
+    description: The magnification a camera reports, as a multiple of its widest view (1 is the widest).
+  - name: camera-preset
+    data_type: int
+    label: Camera Preset
+    description: The number of the stored position a camera reports it is on; 0 when it is on none (it was pointed by hand or is tracking).
+  - name: peripheral-count
+    data_type: int
+    label: Peripheral Count
+    description: How many peripherals (cameras, microphones, touch panels) a component reports attached to it.
   # A media player's local storage filling as content syncs down (#893).
   # Dimensionless, so stored as a ratio (0..1) and shown as a percentage.
   - name: storage-utilization
@@ -141,6 +168,16 @@ metric_types:
     precision: 3
     label: Storage Utilization
     description: How full a component reports its local storage, as a fraction of its capacity (0 to 1).
+  # A recording service's work (#1363): the recordings it is writing now and
+  # the queue waiting to be written.
+  - name: active-recording-count
+    data_type: int
+    label: Active Recording Count
+    description: The recordings a component reports it has in progress now.
+  - name: queue-depth
+    data_type: int
+    label: Queue Depth
+    description: The items a component reports waiting in its work queue, not yet picked up.
   - name: http-response-time
     data_type: float
     unit: ms

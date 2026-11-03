@@ -14,8 +14,9 @@ type MethodGap struct {
 // exercised nor listed here, and on a listed one the lab exercises now; the
 // lab's own check skips them.
 var MethodGaps = map[string]MethodGap{
-	"websocket":     {Issue: "#1414"},                // a plain-ws face and a driver
-	"push-listener": {Issue: "#1148", Unbuilt: true}, // the shared push listener
-	"syslog":        {Issue: "#1149", Unbuilt: true},
-	"snmp-trap":     {Issue: "#1150", Unbuilt: true},
+	"websocket":         {Issue: "#1414"},                // a plain-ws face and a driver
+	"kestrel-relay-api": {Issue: "#1446"},                // no Relay C1 is placed in the dev fleet yet
+	"push-listener":     {Issue: "#1148", Unbuilt: true}, // the shared push listener
+	"syslog":            {Issue: "#1149", Unbuilt: true},
+	"snmp-trap":         {Issue: "#1150", Unbuilt: true},
 }

@@ -665,7 +665,7 @@ components:
   # counts it twice. No location: it is a service, not a box in a room.
   - key: recording-service
     label: Fleet Recording Service
-    product: generic-service
+    product: recording-service
 
 
   # Volume devices (mass for the canvas).

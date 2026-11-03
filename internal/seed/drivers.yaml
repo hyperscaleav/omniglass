@@ -304,6 +304,86 @@ drivers:
         - command_type: set-power
           request: { method: POST, path: /api/system/standby, body: { power: "${value}" } }
           settle: { from: response, extract: { jsonpath: power } }
+  - id: kestrel-relay-api
+    label: Kestrel Relay API
+    version: "1.0.0"
+    spec:
+      version: 1
+      # The Kestrel Relay C1 codec's JSON API, over https on 443 like the
+      # VRoom's (#897): its self-signed key pinned on first use, every request
+      # carrying basic auth. Its call, the content the room shares and the
+      # peripherals attached to it are polls; the bar's live feed is the
+      # VRoom's alone.
+      transport: https
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "443" }
+        - { name: tls-mode, kind: string, default: pin }
+        - { name: login, kind: secret, secret_type: basic-auth, required: true }
+      session:
+        credential: login
+        scheme: basic
+      polls:
+        - name: system
+          schedule: { every: 5m }
+          request: { path: /api/system }
+          emits:
+            - { name: model-number, extract: { jsonpath: model } }
+            - { name: serial-number, extract: { jsonpath: serial } }
+            - { name: firmware-version, extract: { jsonpath: firmware } }
+            - { name: uptime, extract: { jsonpath: uptime } }
+        - name: call
+          schedule: { every: 30s }
+          request: { path: /api/call }
+          emits:
+            - { name: call-state, extract: { jsonpath: active }, transform: { map: { "true": active, "false": idle } } }
+            - { name: participant-count, extract: { jsonpath: participants } }
+        - name: content
+          schedule: { every: 30s }
+          request: { path: /api/content }
+          emits:
+            - { name: content-sharing-state, extract: { jsonpath: sharing }, transform: { map: { "true": sharing, "false": idle } } }
+        - name: peripherals
+          schedule: { every: 5m }
+          request: { path: /api/peripherals }
+          emits:
+            - { name: peripheral-count, extract: { jsonpath: connected } }
+  - id: kestrel-gaze-api
+    label: Kestrel Gaze API
+    version: "1.0.0"
+    spec:
+      version: 1
+      # The Kestrel Gaze P2 PTZ camera's JSON API, over https on 443 like the
+      # VRoom's (#897): its self-signed key pinned on first use, every request
+      # carrying basic auth. Where it points (pan, tilt, zoom), the preset it
+      # sits on and whether it tracks the presenter.
+      transport: https
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "443" }
+        - { name: tls-mode, kind: string, default: pin }
+        - { name: login, kind: secret, secret_type: basic-auth, required: true }
+      session:
+        credential: login
+        scheme: basic
+      polls:
+        - name: system
+          schedule: { every: 5m }
+          request: { path: /api/system }
+          emits:
+            - { name: model-number, extract: { jsonpath: model } }
+            - { name: serial-number, extract: { jsonpath: serial } }
+            - { name: firmware-version, extract: { jsonpath: firmware } }
+            - { name: uptime, extract: { jsonpath: uptime } }
+        - name: camera
+          schedule: { every: 30s }
+          request: { path: /api/camera }
+          emits:
+            - { name: pan-angle, extract: { jsonpath: pan } }
+            - { name: tilt-angle, extract: { jsonpath: tilt } }
+            - { name: zoom-level, extract: { jsonpath: magnification } }
+            - { name: camera-preset, extract: { jsonpath: preset } }
+            - { name: tracking-state, extract: { jsonpath: tracking } }
   - id: kestrel-ws
     label: Kestrel Control Socket
     version: "1.0.0"
@@ -390,7 +470,8 @@ drivers:
         - { name: host, kind: string, required: true }
         - { name: port, kind: number, default: "51325" }
       polls:
-        - name: status
+        - &nvp_input_poll
+          name: status
           schedule: { every: 30s }
           # The reply shape picks GET INPUT's answer out of the EVT pushes
           # sharing the held session (#817); the panel refuses with a -ERR
@@ -413,7 +494,8 @@ drivers:
       # SCENE pushes) lands whole as a log line, raw arrival.
       unmatched: log
       listeners:
-        - name: events
+        - &nvp_events_listener
+          name: events
           arm: ["SUBSCRIBE INPUT", "SUBSCRIBE SCENE"]
           match: { prefix: "EVT INPUT " }
           emits:
@@ -422,7 +504,8 @@ drivers:
               message: { value: "Video input changed" }
               attributes:
                 input: { extract: { regex: "^EVT INPUT (\\S+)$" } }
-        - name: logs
+        - &nvp_logs_listener
+          name: logs
           arm: ["SUBSCRIBE LOG"]
           match: { prefix: "LOG " }
           emits:
@@ -433,9 +516,64 @@ drivers:
       commands:
         # The panel answers SET INPUT with the input it now shows, so the
         # reply settles the command (ADR-0141).
-        - command_type: set-input
+        - &nvp_set_input_command
+          command_type: set-input
           request: { line: "SET INPUT ${value}", reply: { prefix: "INPUT ", error: { prefix: "-ERR" } } }
           settle: { from: response, extract: { regex: "^INPUT (\\S+)$" } }
+  - id: newtron-core-nvp
+    label: Newtron Core NVP
+    version: "1.0.0"
+    spec:
+      version: 1
+      transport: tcp
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "51325" }
+      # The full processor speaks the panel's room surface and its own (#896):
+      # the panel's input poll, listeners and set-input command are reused
+      # whole, and the processor adds its program state, polled and pushed.
+      polls:
+        - *nvp_input_poll
+        - name: program
+          schedule: { every: 30s }
+          request: { line: "GET PROGRAM", reply: { prefix: "PROGRAM ", error: { prefix: "-ERR" } } }
+          emits:
+            - { name: program-state, extract: { regex: "^PROGRAM (\\S+)$" } }
+      unmatched: log
+      listeners:
+        - *nvp_events_listener
+        - *nvp_logs_listener
+        - name: program-events
+          arm: ["SUBSCRIBE PROGRAM"]
+          match: { prefix: "EVT PROGRAM " }
+          emits:
+            - { name: program-state, extract: { regex: "^EVT PROGRAM (\\S+)$" } }
+      commands:
+        - *nvp_set_input_command
+  - id: newtron-slate-nvp
+    label: Newtron Slate NVP
+    version: "1.0.0"
+    spec:
+      version: 1
+      transport: tcp
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "51325" }
+      # A room scheduling panel has no inputs to switch: it reports whether
+      # its room is booked, polled and pushed (#896).
+      polls:
+        - name: booking
+          schedule: { every: 30s }
+          request: { line: "GET BOOKING", reply: { prefix: "BOOKING ", error: { prefix: "-ERR" } } }
+          emits:
+            - { name: booking-state, extract: { regex: "^BOOKING (\\S+)$" } }
+      unmatched: log
+      listeners:
+        - name: booking-events
+          arm: ["SUBSCRIBE BOOKING"]
+          match: { prefix: "EVT BOOKING " }
+          emits:
+            - { name: booking-state, extract: { regex: "^EVT BOOKING (\\S+)$" } }
   - id: newtron-nvp-telnet
     label: Newtron NVP over Telnet
     version: "1.0.0"
@@ -651,6 +789,53 @@ drivers:
           emits:
             - { name: playback-state, extract: { jsonpath: state } }
             - { name: content-name, extract: { jsonpath: content } }
+  - id: recording-service-api
+    label: Recording Service API
+    version: "1.0.0"
+    spec:
+      version: 1
+      # The Shinra recording service's JSON API over https on 443 (#1363),
+      # its key pinned on first use, every request carrying its api key in
+      # the X-Recording-Key header: its own account of its health and
+      # version from the health route, the work it carries from the work
+      # route, and a recording that fails as an event the moment the live
+      # feed names it.
+      transport: https
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "443" }
+        - { name: tls-mode, kind: string, default: pin }
+        - { name: key, kind: secret, secret_type: api-key, required: true }
+      session:
+        credential: key
+        scheme: api-key
+        api_key: { in: header, name: X-Recording-Key }
+        stream: { path: /api/events }
+      listeners:
+        - name: recording-failed
+          match: { event: recording-failed }
+          emits:
+            - name: recording-failed
+              message: { value: "Recording failed" }
+              attributes:
+                recording_id: { extract: { jsonpath: id } }
+                reason: { extract: { jsonpath: reason } }
+      polls:
+        - name: health
+          schedule: { every: 30s }
+          request: { path: /api/health }
+          emits:
+            - { name: service-state, extract: { jsonpath: status } }
+            - { name: software-version, extract: { jsonpath: version } }
+            - { name: uptime, extract: { jsonpath: uptime } }
+        - name: work
+          schedule: { every: 30s }
+          request: { path: /api/work }
+          emits:
+            - { name: active-recording-count, extract: { jsonpath: recordings_in_progress } }
+            - { name: queue-depth, extract: { jsonpath: queue_depth } }
+            # The service reports a percentage; the canon stores the ratio.
+            - { name: storage-utilization, extract: { jsonpath: storage_used_percent }, transform: { scale: 0.01 } }
   - id: newtron-panel-web
     label: Newtron Panel Web
     version: "1.0.0"
