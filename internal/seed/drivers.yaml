@@ -91,6 +91,69 @@ drivers:
             - { name: audio-level, extract: { oid: "1.3.6.1.4.1.55530.1.2.0" } }
             # The receiver reports a percentage; the canon stores the ratio.
             - { name: battery-charge, extract: { oid: "1.3.6.1.4.1.55530.2.1.0" }, transform: { scale: 0.01 } }
+  - id: meridian-mx-snmp
+    label: Meridian MX SNMP
+    version: "1.0.0"
+    spec:
+      version: 1
+      # The Meridian presentation switcher over v2c (#895), from the switcher's
+      # branch of the Meridian enterprise arc (1.3.6.1.4.1.55550.1): the routed
+      # input and the signal on it. Identity sits at .5, sysDescr and sysUpTime
+      # are MIB-II's. The route is set over the switcher's HTTP API, a control
+      # face this driver does not speak. snmp-generic reads only the MIB-II
+      # scalars, so it cannot reach either signal.
+      transport: snmp
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "161" }
+        - { name: community, kind: secret, secret_type: snmp-community, required: true }
+      polls:
+        - name: identity
+          schedule: { every: 5m }
+          request: { get: ["1.3.6.1.2.1.1.1.0", "1.3.6.1.4.1.55550.5.2.0", "1.3.6.1.4.1.55550.5.1.0"] }
+          emits:
+            - { name: model-number, extract: { oid: "1.3.6.1.2.1.1.1.0" } }
+            - { name: serial-number, extract: { oid: "1.3.6.1.4.1.55550.5.2.0" } }
+            - { name: firmware-version, extract: { oid: "1.3.6.1.4.1.55550.5.1.0" } }
+        - name: status
+          schedule: { every: 30s }
+          request:
+            get: ["1.3.6.1.2.1.1.3.0", "1.3.6.1.4.1.55550.1.1.0", "1.3.6.1.4.1.55550.1.2.0"]
+          emits:
+            - { name: uptime, extract: { oid: "1.3.6.1.2.1.1.3.0" }, transform: { scale: 0.01 } }
+            - { name: video-input, extract: { oid: "1.3.6.1.4.1.55550.1.1.0" } }
+            - { name: signal-state, extract: { oid: "1.3.6.1.4.1.55550.1.2.0" } }
+  - id: meridian-xl-snmp
+    label: Meridian XL SNMP
+    version: "1.0.0"
+    spec:
+      version: 1
+      # The Meridian AV extender over v2c (#895), from the extender's branch of
+      # the Meridian enterprise arc (1.3.6.1.4.1.55550.2): the link to its
+      # transmitter and the signal on its input. Identity sits at .5, sysDescr
+      # and sysUpTime are MIB-II's. An extender has no route, so it has a
+      # driver of its own beside the switcher's.
+      transport: snmp
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "161" }
+        - { name: community, kind: secret, secret_type: snmp-community, required: true }
+      polls:
+        - name: identity
+          schedule: { every: 5m }
+          request: { get: ["1.3.6.1.2.1.1.1.0", "1.3.6.1.4.1.55550.5.2.0", "1.3.6.1.4.1.55550.5.1.0"] }
+          emits:
+            - { name: model-number, extract: { oid: "1.3.6.1.2.1.1.1.0" } }
+            - { name: serial-number, extract: { oid: "1.3.6.1.4.1.55550.5.2.0" } }
+            - { name: firmware-version, extract: { oid: "1.3.6.1.4.1.55550.5.1.0" } }
+        - name: status
+          schedule: { every: 30s }
+          request:
+            get: ["1.3.6.1.2.1.1.3.0", "1.3.6.1.4.1.55550.2.1.0", "1.3.6.1.4.1.55550.2.2.0"]
+          emits:
+            - { name: uptime, extract: { oid: "1.3.6.1.2.1.1.3.0" }, transform: { scale: 0.01 } }
+            - { name: link-state, extract: { oid: "1.3.6.1.4.1.55550.2.1.0" } }
+            - { name: signal-state, extract: { oid: "1.3.6.1.4.1.55550.2.2.0" } }
   - id: boreal-beam-snmp
     label: Boreal Beam SNMP
     version: "1.0.0"
@@ -160,6 +223,50 @@ drivers:
             - { name: protect-state, extract: { oid: "1.3.6.1.4.1.55540.3.2.0" } }
             - { name: temperature, extract: { oid: "1.3.6.1.4.1.55540.3.3.0" } }
             - { name: fan-speed, extract: { oid: "1.3.6.1.4.1.55540.3.4.0" } }
+  - id: ferrite-pdu-snmp
+    label: Ferrite PDU SNMP
+    version: "1.0.0"
+    spec:
+      version: 1
+      # The Ferrite PDU 4C over v2c (#1368), from the PDU's branch of the Ferrite
+      # enterprise arc (1.3.6.1.4.1.55560): the mains voltage and total current
+      # at .1, and an outlet table at .2.1.<column>.<outlet> (column 2 the state,
+      # 3 the current). Identity sits at .5, sysDescr and sysUpTime are MIB-II's.
+      # Read only: switching an outlet is a command, not this driver's.
+      transport: snmp
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "161" }
+        - { name: community, kind: secret, secret_type: snmp-community, required: true }
+      polls:
+        - name: identity
+          schedule: { every: 5m }
+          request: { get: ["1.3.6.1.2.1.1.1.0", "1.3.6.1.4.1.55560.5.2.0", "1.3.6.1.4.1.55560.5.1.0"] }
+          emits:
+            - { name: model-number, extract: { oid: "1.3.6.1.2.1.1.1.0" } }
+            - { name: serial-number, extract: { oid: "1.3.6.1.4.1.55560.5.2.0" } }
+            - { name: firmware-version, extract: { oid: "1.3.6.1.4.1.55560.5.1.0" } }
+        - name: status
+          schedule: { every: 30s }
+          request:
+            get:
+              - "1.3.6.1.2.1.1.3.0"
+              - "1.3.6.1.4.1.55560.1.1.0"
+              - "1.3.6.1.4.1.55560.1.2.0"
+              - "1.3.6.1.4.1.55560.2.1.2.1"
+              - "1.3.6.1.4.1.55560.2.1.2.2"
+              - "1.3.6.1.4.1.55560.2.1.2.3"
+              - "1.3.6.1.4.1.55560.2.1.2.4"
+          emits:
+            - { name: uptime, extract: { oid: "1.3.6.1.2.1.1.3.0" }, transform: { scale: 0.01 } }
+            # The agent reports millivolts and milliamps; the canon is volts and amperes.
+            - { name: voltage, extract: { oid: "1.3.6.1.4.1.55560.1.1.0" }, transform: { scale: 0.001 } }
+            - { name: current, extract: { oid: "1.3.6.1.4.1.55560.1.2.0" }, transform: { scale: 0.001 } }
+            # One property per outlet: a driver cannot name an instance yet (#1252).
+            - { name: outlet-1-state, extract: { oid: "1.3.6.1.4.1.55560.2.1.2.1" } }
+            - { name: outlet-2-state, extract: { oid: "1.3.6.1.4.1.55560.2.1.2.2" } }
+            - { name: outlet-3-state, extract: { oid: "1.3.6.1.4.1.55560.2.1.2.3" } }
+            - { name: outlet-4-state, extract: { oid: "1.3.6.1.4.1.55560.2.1.2.4" } }
   - id: kestrel-api
     label: Kestrel Device API
     version: "1.0.0"
@@ -260,6 +367,86 @@ drivers:
         - command_type: set-power
           request: { method: POST, path: /api/system/standby, body: { power: "${value}" } }
           settle: { from: response, extract: { jsonpath: power } }
+  - id: kestrel-relay-api
+    label: Kestrel Relay API
+    version: "1.0.0"
+    spec:
+      version: 1
+      # The Kestrel Relay C1 codec's JSON API, over https on 443 like the
+      # VRoom's (#897): its self-signed key pinned on first use, every request
+      # carrying basic auth. Its call, the content the room shares and the
+      # peripherals attached to it are polls; the bar's live feed is the
+      # VRoom's alone.
+      transport: https
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "443" }
+        - { name: tls-mode, kind: string, default: pin }
+        - { name: login, kind: secret, secret_type: basic-auth, required: true }
+      session:
+        credential: login
+        scheme: basic
+      polls:
+        - name: system
+          schedule: { every: 5m }
+          request: { path: /api/system }
+          emits:
+            - { name: model-number, extract: { jsonpath: model } }
+            - { name: serial-number, extract: { jsonpath: serial } }
+            - { name: firmware-version, extract: { jsonpath: firmware } }
+            - { name: uptime, extract: { jsonpath: uptime } }
+        - name: call
+          schedule: { every: 30s }
+          request: { path: /api/call }
+          emits:
+            - { name: call-state, extract: { jsonpath: active }, transform: { map: { "true": active, "false": idle } } }
+            - { name: participant-count, extract: { jsonpath: participants } }
+        - name: content
+          schedule: { every: 30s }
+          request: { path: /api/content }
+          emits:
+            - { name: content-sharing-state, extract: { jsonpath: sharing }, transform: { map: { "true": sharing, "false": idle } } }
+        - name: peripherals
+          schedule: { every: 5m }
+          request: { path: /api/peripherals }
+          emits:
+            - { name: peripheral-count, extract: { jsonpath: connected } }
+  - id: kestrel-gaze-api
+    label: Kestrel Gaze API
+    version: "1.0.0"
+    spec:
+      version: 1
+      # The Kestrel Gaze P2 PTZ camera's JSON API, over https on 443 like the
+      # VRoom's (#897): its self-signed key pinned on first use, every request
+      # carrying basic auth. Where it points (pan, tilt, zoom), the preset it
+      # sits on and whether it tracks the presenter.
+      transport: https
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "443" }
+        - { name: tls-mode, kind: string, default: pin }
+        - { name: login, kind: secret, secret_type: basic-auth, required: true }
+      session:
+        credential: login
+        scheme: basic
+      polls:
+        - name: system
+          schedule: { every: 5m }
+          request: { path: /api/system }
+          emits:
+            - { name: model-number, extract: { jsonpath: model } }
+            - { name: serial-number, extract: { jsonpath: serial } }
+            - { name: firmware-version, extract: { jsonpath: firmware } }
+            - { name: uptime, extract: { jsonpath: uptime } }
+        - name: camera
+          schedule: { every: 30s }
+          request: { path: /api/camera }
+          emits:
+            - { name: pan-angle, extract: { jsonpath: pan } }
+            - { name: tilt-angle, extract: { jsonpath: tilt } }
+            - { name: zoom-level, extract: { jsonpath: magnification } }
+            - { name: camera-preset, extract: { jsonpath: preset } }
+            - { name: tracking-state, extract: { jsonpath: tracking } }
   - id: kestrel-ws
     label: Kestrel Control Socket
     version: "1.0.0"

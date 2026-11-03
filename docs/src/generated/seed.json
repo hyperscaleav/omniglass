@@ -353,6 +353,30 @@
    "description": "Whether a component is on, off, or in standby. A settable state: the set-power command tells the component which to enter, and its report settles it."
   },
   {
+   "name": "outlet-1-state",
+   "data_type": "string",
+   "label": "Outlet 1 State",
+   "description": "Whether the first outlet of a power conditioner is switched on or off, as the component reports it."
+  },
+  {
+   "name": "outlet-2-state",
+   "data_type": "string",
+   "label": "Outlet 2 State",
+   "description": "Whether the second outlet of a power conditioner is switched on or off, as the component reports it."
+  },
+  {
+   "name": "outlet-3-state",
+   "data_type": "string",
+   "label": "Outlet 3 State",
+   "description": "Whether the third outlet of a power conditioner is switched on or off, as the component reports it."
+  },
+  {
+   "name": "outlet-4-state",
+   "data_type": "string",
+   "label": "Outlet 4 State",
+   "description": "Whether the fourth outlet of a power conditioner is switched on or off, as the component reports it."
+  },
+  {
    "name": "mute",
    "data_type": "string",
    "label": "Mute",
@@ -363,6 +387,18 @@
    "data_type": "string",
    "label": "Call State",
    "description": "Whether a conferencing component is in a call (active) or not (idle)."
+  },
+  {
+   "name": "content-sharing-state",
+   "data_type": "string",
+   "label": "Content Sharing State",
+   "description": "Whether a conferencing component is sharing content (a presentation) from a source or not (idle)."
+  },
+  {
+   "name": "tracking-state",
+   "data_type": "string",
+   "label": "Tracking State",
+   "description": "Whether a camera is following a presenter on its own (tracking) or holds where it was pointed (manual)."
   },
   {
    "name": "occupancy-state",
@@ -381,6 +417,18 @@
    "data_type": "string",
    "label": "Protect State",
    "description": "Whether an amplifier is running (normal) or has muted its outputs and latched protect on a fault (overheating, a shorted load, DC on an output), which holds until an operator resets it."
+  },
+  {
+   "name": "signal-state",
+   "data_type": "string",
+   "label": "Signal State",
+   "description": "Whether a signal device detects a signal on the input it carries (a switcher's routed input, an extender's input), as it reports it."
+  },
+  {
+   "name": "link-state",
+   "data_type": "string",
+   "label": "Link State",
+   "description": "Whether the link between a signal device and its far end (an extender's cable run to its transmitter) is up or down, as the device reports it."
   },
   {
    "name": "playback-state",
@@ -587,6 +635,57 @@
    "unit": "rpm",
    "label": "Fan Speed",
    "description": "The speed a component reports of its cooling fan, in revolutions per minute."
+  },
+  {
+   "name": "voltage",
+   "data_type": "float",
+   "unit": "V",
+   "label": "Voltage",
+   "description": "The voltage a component reports at its input, in volts."
+  },
+  {
+   "name": "current",
+   "data_type": "float",
+   "unit": "A",
+   "precision": 2,
+   "label": "Current",
+   "description": "The total current a component reports drawing, in amperes."
+  },
+  {
+   "name": "pan-angle",
+   "data_type": "float",
+   "unit": "deg",
+   "precision": 1,
+   "label": "Pan Angle",
+   "description": "How far a camera reports it is panned from its centre, in degrees (negative to the left, positive to the right)."
+  },
+  {
+   "name": "tilt-angle",
+   "data_type": "float",
+   "unit": "deg",
+   "precision": 1,
+   "label": "Tilt Angle",
+   "description": "How far a camera reports it is tilted from level, in degrees (negative down, positive up)."
+  },
+  {
+   "name": "zoom-level",
+   "data_type": "float",
+   "unit": "x",
+   "precision": 1,
+   "label": "Zoom Level",
+   "description": "The magnification a camera reports, as a multiple of its widest view (1 is the widest)."
+  },
+  {
+   "name": "camera-preset",
+   "data_type": "int",
+   "label": "Camera Preset",
+   "description": "The number of the stored position a camera reports it is on; 0 when it is on none (it was pointed by hand or is tracking)."
+  },
+  {
+   "name": "peripheral-count",
+   "data_type": "int",
+   "label": "Peripheral Count",
+   "description": "How many peripherals (cameras, microphones, touch panels) a component reports attached to it."
   },
   {
    "name": "storage-utilization",
@@ -2665,6 +2764,12 @@
    "website": "https://boreal.example"
   },
   {
+   "id": "ferrite",
+   "label": "Ferrite",
+   "kind": "manufacturer",
+   "website": "https://ferrite.example"
+  },
+  {
    "id": "kestrel",
    "label": "Kestrel",
    "kind": "manufacturer",
@@ -2730,6 +2835,20 @@
    "polls": 2
   },
   {
+   "id": "meridian-mx-snmp",
+   "label": "Meridian MX SNMP",
+   "version": "1.0.0",
+   "transport": "snmp",
+   "polls": 2
+  },
+  {
+   "id": "meridian-xl-snmp",
+   "label": "Meridian XL SNMP",
+   "version": "1.0.0",
+   "transport": "snmp",
+   "polls": 2
+  },
+  {
    "id": "boreal-beam-snmp",
    "label": "Boreal Beam SNMP",
    "version": "1.0.0",
@@ -2744,6 +2863,13 @@
    "polls": 2
   },
   {
+   "id": "ferrite-pdu-snmp",
+   "label": "Ferrite PDU SNMP",
+   "version": "1.0.0",
+   "transport": "snmp",
+   "polls": 2
+  },
+  {
    "id": "kestrel-api",
    "label": "Kestrel Device API",
    "version": "1.0.0",
@@ -2751,6 +2877,20 @@
    "polls": 3,
    "listeners": 7,
    "commands": 3
+  },
+  {
+   "id": "kestrel-relay-api",
+   "label": "Kestrel Relay API",
+   "version": "1.0.0",
+   "transport": "https",
+   "polls": 4
+  },
+  {
+   "id": "kestrel-gaze-api",
+   "label": "Kestrel Gaze API",
+   "version": "1.0.0",
+   "transport": "https",
+   "polls": 2
   },
   {
    "id": "kestrel-ws",
@@ -3016,7 +3156,7 @@
    "id": "kestrel-relay-c1",
    "label": "Kestrel Relay C1",
    "vendor_id": "kestrel",
-   "driver_id": "kestrel-api",
+   "driver_id": "kestrel-relay-api",
    "component_type": "codec",
    "kind": "device"
   },
@@ -3024,7 +3164,7 @@
    "id": "kestrel-gaze-p2",
    "label": "Kestrel Gaze P2",
    "vendor_id": "kestrel",
-   "driver_id": "kestrel-api",
+   "driver_id": "kestrel-gaze-api",
    "component_type": "ptz-camera",
    "kind": "device"
   },
@@ -3055,7 +3195,7 @@
    "id": "meridian-mx-84",
    "label": "Meridian MX 84",
    "vendor_id": "meridian",
-   "driver_id": "snmp-generic",
+   "driver_id": "meridian-mx-snmp",
    "component_type": "presentation-switcher",
    "kind": "device"
   },
@@ -3063,7 +3203,7 @@
    "id": "meridian-xl-1",
    "label": "Meridian XL-1",
    "vendor_id": "meridian",
-   "driver_id": "snmp-generic",
+   "driver_id": "meridian-xl-snmp",
    "component_type": "av-extender",
    "kind": "device"
   },
@@ -3089,6 +3229,14 @@
    "vendor_id": "newtron",
    "driver_id": "newtron-core-nvp",
    "component_type": "control-processor",
+   "kind": "device"
+  },
+  {
+   "id": "ferrite-pdu-4c",
+   "label": "Ferrite PDU 4C",
+   "vendor_id": "ferrite",
+   "driver_id": "ferrite-pdu-snmp",
+   "component_type": "power-device",
    "kind": "device"
   },
   {

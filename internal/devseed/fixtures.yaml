@@ -27,8 +27,9 @@
 # `label` is the LABEL, and setting one takes the pen from the platform
 # (#682), so it is set only where an operator override is the point:
 #
-#   - the power conditioner, which carries no product, so the component rule can
-#     only render "Generic Device 1" and says nothing about what the thing is;
+#   - the power conditioner, whose product classifies it a power device, so the
+#     component rule would render "Power Device 1"; the operator's own words say
+#     what the box is in this room;
 #   - the locations listed under LABELS below, each of which says something its
 #     name cannot.
 #
@@ -552,14 +553,14 @@ components:
   - key: div-amp
     product: polaris-amp-4100
     location: boardroom-a
-  # No product on purpose: it classifies as generic-device, a type no role's
-  # accepted_types names, so no role can want it. It is in the room and
+  # The room's rack power conditioner (#1368), a networked Ferrite PDU the
+  # simulator answers over SNMP. It classifies as a power-device, a type no
+  # role's accepted_types names, so no role can want it. It is in the room and
   # accounted for, and nothing more, which is exactly the case membership
   # exists to carry. It is also the one component that keeps a typed label:
-  # with no product there is no classification for the rule to read, so the
-  # rendered label would be "Generic Device 1", and the operator's own words
-  # are the only thing that says what the box is.
+  # the operator calls it the power conditioner, not "Power Device 1".
   - key: power
+    product: ferrite-pdu-4c
     label: Power Conditioner
     location: boardroom-a
   - key: auditorium-display

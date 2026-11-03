@@ -6,13 +6,17 @@
 # The catalog is FICTIONAL by design: the demo fleet is not sponsored, so the
 # brands come from the omniglass-lab universe (Boreal displays, Kestrel video,
 # Newtron control, Polaris audio processing, Tessellate sensing, Shinra Cloud
-# services) plus two in-universe specialists (Lyra microphones, Meridian
-# signal distribution). Websites are reserved example domains.
+# services) plus three in-universe specialists (Lyra microphones, Meridian
+# signal distribution, Ferrite rack power). Websites are reserved example domains.
 vendors:
   - id: boreal
     label: Boreal
     kind: manufacturer
     website: https://boreal.example
+  - id: ferrite
+    label: Ferrite
+    kind: manufacturer
+    website: https://ferrite.example
   - id: kestrel
     label: Kestrel
     kind: manufacturer

@@ -131,6 +131,29 @@ property_types:
     description: >-
       Whether a component is on, off, or in standby. A settable state: the set-power
       command tells the component which to enter, and its report settles it.
+  # A switched outlet's state on a power conditioner (#1368). One name per
+  # outlet until a driver can name an instance (#1252), when they become one
+  # outlet-state with the outlet as its instance.
+  - name: outlet-1-state
+    data_type: string
+    validation: { enum: ["on", "off"] }
+    label: Outlet 1 State
+    description: Whether the first outlet of a power conditioner is switched on or off, as the component reports it.
+  - name: outlet-2-state
+    data_type: string
+    validation: { enum: ["on", "off"] }
+    label: Outlet 2 State
+    description: Whether the second outlet of a power conditioner is switched on or off, as the component reports it.
+  - name: outlet-3-state
+    data_type: string
+    validation: { enum: ["on", "off"] }
+    label: Outlet 3 State
+    description: Whether the third outlet of a power conditioner is switched on or off, as the component reports it.
+  - name: outlet-4-state
+    data_type: string
+    validation: { enum: ["on", "off"] }
+    label: Outlet 4 State
+    description: Whether the fourth outlet of a power conditioner is switched on or off, as the component reports it.
   - name: mute
     data_type: string
     validation: { enum: ["true", "false"] }
@@ -143,6 +166,16 @@ property_types:
     validation: { enum: [active, idle] }
     label: Call State
     description: Whether a conferencing component is in a call (active) or not (idle).
+  - name: content-sharing-state
+    data_type: string
+    validation: { enum: [sharing, idle] }
+    label: Content Sharing State
+    description: Whether a conferencing component is sharing content (a presentation) from a source or not (idle).
+  - name: tracking-state
+    data_type: string
+    validation: { enum: [tracking, manual] }
+    label: Tracking State
+    description: Whether a camera is following a presenter on its own (tracking) or holds where it was pointed (manual).
   - name: occupancy-state
     data_type: string
     validation: { enum: [occupied, vacant] }
@@ -163,6 +196,18 @@ property_types:
       Whether an amplifier is running (normal) or has muted its outputs and
       latched protect on a fault (overheating, a shorted load, DC on an output),
       which holds until an operator resets it.
+  # A signal device's input and link (#895): what a switcher or an extender
+  # reports of the signal it carries.
+  - name: signal-state
+    data_type: string
+    validation: { enum: [present, absent] }
+    label: Signal State
+    description: Whether a signal device detects a signal on the input it carries (a switcher's routed input, an extender's input), as it reports it.
+  - name: link-state
+    data_type: string
+    validation: { enum: [up, down] }
+    label: Link State
+    description: Whether the link between a signal device and its far end (an extender's cable run to its transmitter) is up or down, as the device reports it.
   - name: playback-state
     data_type: string
     validation: { enum: [playing, paused, stopped] }

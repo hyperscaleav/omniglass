@@ -104,13 +104,13 @@ products:
   - id: kestrel-relay-c1
     label: Kestrel Relay C1
     vendor_id: kestrel
-    driver_id: kestrel-api
+    driver_id: kestrel-relay-api
     kind: device
     component_type: codec
   - id: kestrel-gaze-p2
     label: Kestrel Gaze P2
     vendor_id: kestrel
-    driver_id: kestrel-api
+    driver_id: kestrel-gaze-api
     kind: device
     component_type: ptz-camera
   # Lyra: microphones, by form factor.
@@ -135,13 +135,13 @@ products:
   - id: meridian-mx-84
     label: Meridian MX 84
     vendor_id: meridian
-    driver_id: snmp-generic
+    driver_id: meridian-mx-snmp
     kind: device
     component_type: presentation-switcher
   - id: meridian-xl-1
     label: Meridian XL-1
     vendor_id: meridian
-    driver_id: snmp-generic
+    driver_id: meridian-xl-snmp
     kind: device
     component_type: av-extender
   # Newtron: control.
@@ -163,6 +163,13 @@ products:
     driver_id: newtron-core-nvp
     kind: device
     component_type: control-processor
+  # Ferrite: rack power.
+  - id: ferrite-pdu-4c
+    label: Ferrite PDU 4C
+    vendor_id: ferrite
+    driver_id: ferrite-pdu-snmp
+    kind: device
+    component_type: power-device
   # Polaris: the audio rack.
   - id: polaris-dsp-16
     label: Polaris DSP 16

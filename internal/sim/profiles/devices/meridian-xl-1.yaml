@@ -1,0 +1,103 @@
+# yaml-language-server: $schema=schema.json
+# Meridian XL-1, AV Extender
+#
+# Meridian is the lab's fictional signal-distribution vendor. The XL-1 is an
+# AV extender, the transmitter and receiver pair that carries one video
+# input over a cable run to a display across the room. The receiver is what
+# is on the network, reporting the link to its transmitter and whether the
+# transmitter hands it a signal. Both answer the first question an operator
+# asks of a dark display: is it the source, or is it the cable.
+#
+# Its monitoring face is SNMP on the same Meridian enterprise arc as the
+# MX 84 (1.3.6.1.4.1.55550), the extender's branch at .2: the link state and
+# the signal on its input. Its control face is a small HTTP JSON API behind
+# the Meridian header key: status and reboot. An extender has no route, and
+# its API does not take one.
+
+name: meridian-xl-1
+manufacturer: Meridian
+model: "XL-1"
+device_type: av-extender
+slug_prefix: extender
+
+doc:
+  summary: "Meridian XL-1, AV extender"
+  description: |
+    Receiver of an HDBaseT-style AV extender pair. Monitored over SNMP on
+    the Meridian enterprise arc (the link state and the signal on its
+    input); status and reboot over an HTTP JSON API behind the Meridian
+    header key.
+
+interfaces:
+  - name: http-api
+    protocol: http
+    port: 80
+    doc: { summary: "Meridian JSON control API", tags: [management, api] }
+    auth:
+      type: header
+      header: "X-Meridian-Key"
+      api_key: "meridian-lab-key"
+      enforce: true
+    api_surface: meridian-extender
+    routes:
+      - match: "GET /api/status"
+        template: api/meridian-extender/status.json.gotempl
+        doc: { summary: "Extender identity, link and signal", tags: [api, status] }
+
+      # A reboot retrains the link: the cable is renegotiated and the link
+      # comes back up, which a pulled cable (a scenario sets link to down)
+      # would not.
+      - match: "POST /api/admin/reboot"
+        template: api/meridian-extender/reboot-ack.json.gotempl
+        doc: { summary: "Reboot extender (clears uptime, retrains the link)", tags: [api, admin] }
+        example: "{}"
+        mutations:
+          - { path: status.device.boot_epoch, value: "{{ now }}" }
+          - { path: status.extender.link, value: "{{ .Defaults.status.extender.link }}" }
+
+  - name: snmp
+    protocol: snmp
+    port: 161
+    doc: { summary: "SNMP monitoring", tags: [monitoring] }
+    api_surface: meridian-extender
+    auth:
+      community: "public"
+      refused_community: "revoked"
+    # The Meridian arc, 1.3.6.1.4.1.55550: the switcher's branch at .1 (not
+    # served here), the extender at .2 (the link state at .2.1.0, the signal
+    # on its input at .2.2.0), identity at .5.
+    oid_map:
+      configuration.device.model:     "1.3.6.1.2.1.1.1.0"   # sysDescr
+      status.device.uptime:           "1.3.6.1.2.1.1.3.0"
+      status.extender.link:           "1.3.6.1.4.1.55550.2.1.0"
+      status.extender.signal:         "1.3.6.1.4.1.55550.2.2.0"
+      configuration.firmware.version: "1.3.6.1.4.1.55550.5.1.0"
+      configuration.device.serial:    "1.3.6.1.4.1.55550.5.2.0"
+
+  - name: icmp
+    protocol: icmp
+    doc: { summary: "ICMP ping reachability", tags: [monitoring] }
+
+computed:
+  - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
+
+defaults:
+  status:
+    device:
+      boot_epoch: 0
+    extender:
+      link: up
+      signal: present
+    network:
+      ipv4:
+        address: ""
+        mac: ""
+  configuration:
+    device:
+      serial: ""
+      model: "XL-1"
+      manufacturer: "Meridian"
+    firmware:
+      version: "3.2.0"
+    network:
+      hostname: ""

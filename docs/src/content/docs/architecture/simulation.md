@@ -71,7 +71,8 @@ passive speaker, an analog microphone) have nothing to collect from and are not 
 channel's load, a DSP input's level), and a test refuses a passive product that has a driver. A service
 can be on the network with no driver, so the converse does not hold. A second test holds the lab's own
 fleet to the same accounting: every component the dev seed places (its simulator-only ones included) is
-simulated, listed with its issue, passive, or one of the fleet's few productless components (#1359).
+simulated, listed with its issue, or passive; a component with no product is refused, since nothing
+could simulate it (#1359, #1368).
 The lab then reaches "every seeded component is collected" one profile at a time, and the list of what
 is left is always current.
 
@@ -83,9 +84,18 @@ temperature and fan, and a channel table of output level, clip and load; the `po
 driver reads the first four. The channel table waits on a driver naming an instance (#1252) and on
 the fan-out carrying a channel's load to the speaker it drives (#1367). Standby and the protect reset
 are the amplifier's HTTP API, its control face, and its temperature, fan and output levels drift as
-behaviors a scenario can drive.
+behaviors a scenario can drive. The Meridian switcher and extender (#895) land the same way: the
+`meridian-mx-snmp` driver reads the routed input and the signal on it, `meridian-xl-snmp` the
+link and the signal on its input, and the switcher's HTTP route changes the input the next poll reads.
 
-The catalog names only fictional vendors (Kestrel, Polaris, Newtron, Boreal, Tessellate, Shinra Cloud), the same
+The Ferrite PDU 4C (#1368) is the read-only counterpart: the rack power conditioner answers, under the
+Ferrite enterprise arc, the mains voltage in millivolts, the total current in milliamps, and an outlet
+table of name, state and current for its four outlets, and the `ferrite-pdu-snmp` driver reads the
+voltage, the current and each outlet's state. It has no control face: a read-only JSON document carries the
+same state, and nothing switches an outlet. Its outlets drift as behaviors, an outlet that is off draws
+nothing, and the total is always what the outlets draw.
+
+The catalog names only fictional vendors (Kestrel, Polaris, Newtron, Boreal, Tessellate, Shinra Cloud, Ferrite), the same
 rule the boot seed follows, and a test holds it to that.
 
 ## Fleets

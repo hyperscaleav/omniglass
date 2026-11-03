@@ -1,0 +1,138 @@
+# yaml-language-server: $schema=schema.json
+# Kestrel Gaze P2, PTZ Camera
+#
+# The Gaze P2 is Kestrel's pan-tilt camera with a motorised lens for rooms too big for a
+# bar's fixed lens: an auditorium's or lecture hall's presenter camera. It
+# either follows the presenter on its own (tracking) or sits where an
+# operator put it, by hand or on a stored preset. What an operator watches
+# it for is where it points and whether it is still tracking.
+#
+# One face: the same HTTP JSON API over https behind basic auth the VRoom
+# speaks (admin / kestrel), with the routes a camera has. No SNMP, no
+# command line.
+
+name: kestrel-gaze-p2
+manufacturer: Kestrel
+model: "Gaze P2"
+device_type: ptz-camera
+slug_prefix: camera
+
+doc:
+  summary: "Kestrel Gaze P2 PTZ camera"
+  description: |
+    Pan-tilt camera with a motorised lens, presenter tracking and three stored
+    presets. Reports and controls its position over an HTTP JSON API
+    behind basic auth.
+
+interfaces:
+  - name: http-api
+    protocol: http
+    port: 443
+    tls: true
+    doc: { summary: "Kestrel Gaze JSON API", tags: [management, api] }
+    auth:
+      type: basic
+      default_user: admin
+      default_password: kestrel
+      realm: "Kestrel Gaze P2"
+      enforce: true
+    api_surface: kestrel-gaze
+    routes:
+      - match: "GET /api/system"
+        template: api/kestrel-gaze/system.json.gotempl
+        doc: { summary: "System unit info (model, serial, firmware, uptime)", tags: [api, info] }
+
+      - match: "GET /api/camera"
+        template: api/kestrel-gaze/camera.json.gotempl
+        doc: { summary: "Pan, tilt, lens magnification, preset and tracking", tags: [api, camera] }
+
+      # A preset recall moves the camera to the stored position and takes it
+      # off tracking, as a real camera leaves auto-framing when told where to
+      # point. Preset 1 is the lectern, 2 the audience, 3 the screen.
+      - match: "POST /api/camera/preset"
+        template: api/kestrel-gaze/ack.json.gotempl
+        doc: { summary: "Recall a stored preset", tags: [api, control] }
+        example: |
+          {"preset": 2}
+        mutations:
+          - { path: status.camera.preset, value: "{{ .Request.Body.preset }}", enum: ["1", "2", "3"] }
+          - { path: status.camera.pan, value: '{{ $p := printf "%v" .Request.Body.preset }}{{ if eq $p "1" }}-30{{ else if eq $p "2" }}30{{ else }}0{{ end }}' }
+          - { path: status.camera.tilt, value: '{{ $p := printf "%v" .Request.Body.preset }}{{ if eq $p "1" }}-5{{ else if eq $p "2" }}5{{ else }}10{{ end }}' }
+          - { path: status.camera.magnification, value: '{{ $p := printf "%v" .Request.Body.preset }}{{ if eq $p "1" }}1{{ else if eq $p "2" }}2.5{{ else }}4{{ end }}' }
+          - { path: status.camera.tracking, value: manual }
+
+      - match: "POST /api/camera/position"
+        template: api/kestrel-gaze/ack.json.gotempl
+        doc: { summary: "Point the camera by hand", tags: [api, control] }
+        example: |
+          {"pan": -12.5, "tilt": 4, "magnification": 1.5}
+        mutations:
+          - { path: status.camera.pan, value: "{{ .Request.Body.pan }}" }
+          - { path: status.camera.tilt, value: "{{ .Request.Body.tilt }}" }
+          - { path: status.camera.magnification, value: "{{ .Request.Body.magnification }}" }
+          - { path: status.camera.preset, value: 0 }
+          - { path: status.camera.tracking, value: manual }
+
+      - match: "POST /api/camera/tracking"
+        template: api/kestrel-gaze/ack.json.gotempl
+        doc: { summary: "Turn presenter tracking on or off", tags: [api, control] }
+        example: |
+          {"tracking": "tracking"}
+        mutations:
+          - { path: status.camera.tracking, value: "{{ .Request.Body.tracking }}", enum: [tracking, manual] }
+
+      - match: "POST /api/admin/reboot"
+        template: api/kestrel-gaze/reboot-ack.json.gotempl
+        doc: { summary: "Reboot camera (clears uptime, returns to its home position)", tags: [api, admin] }
+        example: "{}"
+        mutations:
+          - { path: status.device.boot_epoch, value: "{{ now }}" }
+          - { path: status.camera.pan, value: "{{ .Defaults.status.camera.pan }}" }
+          - { path: status.camera.tilt, value: "{{ .Defaults.status.camera.tilt }}" }
+          - { path: status.camera.magnification, value: "{{ .Defaults.status.camera.magnification }}" }
+          - { path: status.camera.preset, value: "{{ .Defaults.status.camera.preset }}" }
+          - { path: status.camera.tracking, value: "{{ .Defaults.status.camera.tracking }}" }
+
+  - name: icmp
+    protocol: icmp
+    doc: { summary: "ICMP ping reachability", tags: [monitoring] }
+
+computed:
+  - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
+
+# While tracking, the camera follows the presenter: pan and tilt wander a
+# few degrees a tick within the range the lens covers. Set to manual it
+# holds where it is.
+behaviors:
+  - name: tracking_drift
+    schedule:
+      interval: 20s
+    mutations:
+      - path: status.camera.pan
+        value: '{{ if eq (printf "%v" .State.status.camera.tracking) "tracking" }}{{ round 1 (clamp -60.0 60.0 (randStep 3.0 .State.status.camera.pan)) }}{{ else }}{{ .State.status.camera.pan }}{{ end }}'
+      - path: status.camera.tilt
+        value: '{{ if eq (printf "%v" .State.status.camera.tracking) "tracking" }}{{ round 1 (clamp -20.0 20.0 (randStep 1.0 .State.status.camera.tilt)) }}{{ else }}{{ .State.status.camera.tilt }}{{ end }}'
+
+defaults:
+  status:
+    device:
+      boot_epoch: 0
+    camera:
+      pan: 0
+      tilt: 0
+      magnification: 1
+      preset: 0
+      tracking: tracking
+    network:
+      ipv4:
+        address: ""
+        mac: ""
+  configuration:
+    device:
+      serial: ""
+      model: "Gaze P2"
+      manufacturer: "Kestrel"
+    firmware:
+      version: "1.4.2"
+    network:
+      hostname: ""

@@ -1,0 +1,139 @@
+# yaml-language-server: $schema=schema.json
+# Ferrite PDU 4C, Networked Rack Power Conditioner
+#
+# Ferrite is the lab's fictional rack power vendor. The PDU 4C is a
+# one-rack-unit power conditioner with four switched outlets, each metered:
+# the box a room's AV rack plugs into, which an operator watches for the
+# mains it is fed, what the rack draws, and which outlets are on.
+#
+# Its monitoring face is SNMP on the Ferrite enterprise arc
+# (1.3.6.1.4.1.55560): the mains voltage and the total current at .1, an
+# outlet table at .2.1.<column>.<outlet> (column 1 the name, 2 the state,
+# 3 the current), and identity at .5. Agents report whole numbers, so the
+# voltage is in millivolts and the currents in milliamps.
+#
+# It also answers a read-only JSON document, the same state in the shape
+# a networked PDU publishes it (an agent block, a global measure, an
+# array of outputs). Outlet control is not modeled: neither face can
+# switch an outlet.
+
+name: ferrite-pdu-4c
+manufacturer: Ferrite
+model: "PDU 4C"
+device_type: power-device
+slug_prefix: power
+
+doc:
+  summary: "Ferrite PDU 4C, networked rack power conditioner"
+  description: |
+    Four-outlet rack power conditioner. Monitored over SNMP (mains voltage,
+    total current, and per-outlet name, state and current) and a read-only
+    JSON document; outlets are not switchable.
+
+interfaces:
+  - name: http-api
+    protocol: http
+    port: 80
+    doc: { summary: "Ferrite read-only JSON status", tags: [management, api] }
+    auth:
+      type: basic
+      default_user: ferrite
+      default_password: ferrite
+      realm: "Ferrite PDU"
+      enforce: true
+    api_surface: ferrite-pdu
+    routes:
+      - match: "GET /pdu.json"
+        template: api/ferrite-pdu/status.json.gotempl
+        doc: { summary: "Agent, mains measure and outputs", tags: [api, status] }
+
+  - name: snmp
+    protocol: snmp
+    port: 161
+    doc: { summary: "SNMP monitoring", tags: [monitoring] }
+    api_surface: ferrite-pdu
+    auth:
+      community: "public"
+      refused_community: "revoked"
+    oid_map:
+      configuration.device.model:        "1.3.6.1.2.1.1.1.0"   # sysDescr
+      status.device.uptime:              "1.3.6.1.2.1.1.3.0"
+      status.mains.voltage_mv:           "1.3.6.1.4.1.55560.1.1.0"
+      status.load.total_current_ma:      "1.3.6.1.4.1.55560.1.2.0"
+      status.outlets.0.name:             "1.3.6.1.4.1.55560.2.1.1.1"
+      status.outlets.1.name:             "1.3.6.1.4.1.55560.2.1.1.2"
+      status.outlets.2.name:             "1.3.6.1.4.1.55560.2.1.1.3"
+      status.outlets.3.name:             "1.3.6.1.4.1.55560.2.1.1.4"
+      status.outlets.0.state:            "1.3.6.1.4.1.55560.2.1.2.1"
+      status.outlets.1.state:            "1.3.6.1.4.1.55560.2.1.2.2"
+      status.outlets.2.state:            "1.3.6.1.4.1.55560.2.1.2.3"
+      status.outlets.3.state:            "1.3.6.1.4.1.55560.2.1.2.4"
+      status.outlets.0.current_ma:       "1.3.6.1.4.1.55560.2.1.3.1"
+      status.outlets.1.current_ma:       "1.3.6.1.4.1.55560.2.1.3.2"
+      status.outlets.2.current_ma:       "1.3.6.1.4.1.55560.2.1.3.3"
+      status.outlets.3.current_ma:       "1.3.6.1.4.1.55560.2.1.3.4"
+      configuration.firmware.version:    "1.3.6.1.4.1.55560.5.1.0"
+      configuration.device.serial:       "1.3.6.1.4.1.55560.5.2.0"
+
+  - name: icmp
+    protocol: icmp
+    doc: { summary: "ICMP ping reachability", tags: [monitoring] }
+
+computed:
+  - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
+
+# The mains wobbles around its nominal 230 V, and what the rack draws moves
+# with its load. An outlet that is off draws nothing; the total is what the
+# outlets draw. Each is a behavior a scenario timeline can drive or override.
+behaviors:
+  - name: mains_drift
+    schedule:
+      interval: 30s
+    mutations:
+      - path: status.mains.voltage_mv
+        value: "{{ round 0 (clamp 226000.0 234000.0 (randStep 600.0 .State.status.mains.voltage_mv)) }}"
+
+  - name: load_drift
+    schedule:
+      interval: 30s
+    mutations:
+      - path: status.outlets.0.current_ma
+        value: '{{ $o := index .State.status.outlets 0 }}{{ if eq (get "state" $o) "on" }}{{ round 0 (clamp 100.0 1200.0 (randStep 40.0 (get "current_ma" $o))) }}{{ else }}0{{ end }}'
+      - path: status.outlets.1.current_ma
+        value: '{{ $o := index .State.status.outlets 1 }}{{ if eq (get "state" $o) "on" }}{{ round 0 (clamp 100.0 1200.0 (randStep 40.0 (get "current_ma" $o))) }}{{ else }}0{{ end }}'
+      - path: status.outlets.2.current_ma
+        value: '{{ $o := index .State.status.outlets 2 }}{{ if eq (get "state" $o) "on" }}{{ round 0 (clamp 100.0 1200.0 (randStep 40.0 (get "current_ma" $o))) }}{{ else }}0{{ end }}'
+      - path: status.outlets.3.current_ma
+        value: '{{ $o := index .State.status.outlets 3 }}{{ if eq (get "state" $o) "on" }}{{ round 0 (clamp 100.0 1200.0 (randStep 40.0 (get "current_ma" $o))) }}{{ else }}0{{ end }}'
+      - path: status.load.total_current_ma
+        value: '{{ $t := 0 }}{{ range .State.status.outlets }}{{ $t = add $t (get "current_ma" .) }}{{ end }}{{ $t }}'
+
+defaults:
+  status:
+    device:
+      boot_epoch: 0
+    mains:
+      voltage_mv: 230100
+    # Four outlets, indexed 0..3 in state and numbered by id 1..4 as the
+    # front panel and the SNMP outlet table number them. The spare is off, so the rack reads
+    # a mix. The total is what the three on draw (310 + 180 + 650).
+    load:
+      total_current_ma: 1140
+    outlets:
+      - { id: 1, name: "Video switcher", state: "on", current_ma: 310 }
+      - { id: 2, name: "Audio DSP", state: "on", current_ma: 180 }
+      - { id: 3, name: "Amplifier", state: "on", current_ma: 650 }
+      - { id: 4, name: "Spare", state: "off", current_ma: 0 }
+    network:
+      ipv4:
+        address: ""
+        mac: ""
+  configuration:
+    device:
+      serial: ""
+      model: "PDU 4C"
+      manufacturer: "Ferrite"
+    firmware:
+      version: "3.1.0"
+    network:
+      hostname: ""
