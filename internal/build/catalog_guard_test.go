@@ -50,7 +50,7 @@ func TestTestsDoNotBorrowTheSeedCatalog(t *testing.T) {
 		// States the class-signal floor for the shipped Newtron touch panel
 		// on the running lab, so naming the product is what it tests, until
 		// #1371 holds the floor for every class (#1494).
-		"internal/lab/methods_integration_test.go": true,
+		"internal/lab/panel_floor_integration_test.go": true,
 	}
 
 	raw, err := seed.FactsJSON()
