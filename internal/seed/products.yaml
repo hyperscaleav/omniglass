@@ -33,8 +33,6 @@ products:
       - name: firmware-version
       - name: model-number
         default: '"Edge 55"'
-      - name: power-state
-      - name: video-input
   - id: boreal-edge-65
     label: Boreal Edge 65
     vendor_id: boreal
@@ -46,8 +44,6 @@ products:
       - name: firmware-version
       - name: model-number
         default: '"Edge 65"'
-      - name: power-state
-      - name: video-input
   - id: boreal-edge-75
     label: Boreal Edge 75
     vendor_id: boreal
@@ -59,8 +55,6 @@ products:
       - name: firmware-version
       - name: model-number
         default: '"Edge 75"'
-      - name: power-state
-      - name: video-input
   - id: boreal-edge-86
     label: Boreal Edge 86
     vendor_id: boreal
@@ -72,8 +66,6 @@ products:
       - name: firmware-version
       - name: model-number
         default: '"Edge 86"'
-      - name: power-state
-      - name: video-input
   - id: boreal-edge-98
     label: Boreal Edge 98
     vendor_id: boreal
@@ -85,8 +77,6 @@ products:
       - name: firmware-version
       - name: model-number
         default: '"Edge 98"'
-      - name: power-state
-      - name: video-input
   - id: boreal-beam-340
     label: Boreal Beam 340
     vendor_id: boreal

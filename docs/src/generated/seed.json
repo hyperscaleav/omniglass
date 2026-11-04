@@ -3040,12 +3040,6 @@
     {
      "name": "model-number",
      "default": "\"Edge 55\""
-    },
-    {
-     "name": "power-state"
-    },
-    {
-     "name": "video-input"
     }
    ]
   },
@@ -3066,12 +3060,6 @@
     {
      "name": "model-number",
      "default": "\"Edge 65\""
-    },
-    {
-     "name": "power-state"
-    },
-    {
-     "name": "video-input"
     }
    ]
   },
@@ -3092,12 +3080,6 @@
     {
      "name": "model-number",
      "default": "\"Edge 75\""
-    },
-    {
-     "name": "power-state"
-    },
-    {
-     "name": "video-input"
     }
    ]
   },
@@ -3118,12 +3100,6 @@
     {
      "name": "model-number",
      "default": "\"Edge 86\""
-    },
-    {
-     "name": "power-state"
-    },
-    {
-     "name": "video-input"
     }
    ]
   },
@@ -3144,12 +3120,6 @@
     {
      "name": "model-number",
      "default": "\"Edge 98\""
-    },
-    {
-     "name": "power-state"
-    },
-    {
-     "name": "video-input"
     }
    ]
   },

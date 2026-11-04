@@ -15,9 +15,9 @@ sits behind HTTP Digest and a login secret the lab does not attach, and the Bore
 telemetry on SNMP (the Beam projector's driver is the precedent). Firmware is left out because the
 profile does not serve it over SNMP.
 
-No signal was missing from the canon, so the simulator gained none. The five Edge products now declare
-`power-state` and `video-input` in their property contract, which is where the display class states
-what a display reports. One simulator fix rode along: the input route accepted any string, including
+No signal was missing from the canon, so the simulator gained none. `power-state` and `video-input` are
+declared by the seed catalog (`property_types.yaml`) and by the driver's `emits`, which the seed validates
+against it; they are live readings, so the products' property contract does not list them. One simulator fix rode along: the input route accepted any string, including
 a source the display has no port for, and now rejects it with the same enum the profile lists. A POST
 to the power or input route changes what the driver reads on its next poll. The lab test states the
 floor, power state and input collected on every placed display, until #1371 holds it.

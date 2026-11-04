@@ -469,8 +469,8 @@ func TestRunIdempotent(t *testing.T) {
 		select count(*) from product_property where product_id = (select id from product where name = 'boreal-edge-55')`).Scan(&contractLines); err != nil {
 		t.Fatalf("count contract lines: %v", err)
 	}
-	if contractLines != 6 {
-		t.Errorf("edge-55 contract lines = %d, want 6 (5 boot-seed + mac-address)", contractLines)
+	if contractLines != 4 {
+		t.Errorf("edge-55 contract lines = %d, want 4 (3 boot-seed + mac-address)", contractLines)
 	}
 	if err := conn.QueryRow(ctx, `
 		select count(*) from component where location_id = (select id from location where name = 'huddle')`).Scan(&huddleComps); err != nil {
