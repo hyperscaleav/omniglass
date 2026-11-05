@@ -138,6 +138,32 @@ Breaking a component yourself works too, from its page or the CLI
 ./bin/omniglass component impairment set <component>                # plug it back in
 ```
 
+## Checking that the lab is whole
+
+The lab is also how the platform proves its own outcome: after the warm-up, every component carries
+what the platform can know about it, and every system carries a value of its own. `make test-lab`
+holds the lab to that, tier by tier, and a gap fails naming the owner and the tier:
+
+| Tier | Holds for | What must be there |
+| --- | --- | --- |
+| **built-in** | every component, endpoint by endpoint | the data the node and the platform write about an endpoint whatever its device: reachability and its rung, a response time once the device answers, a poll duration, a held session's state and the push count of its listeners (`node-probe`), and a webhook's post count (`platform`) |
+| **collected** | every component | at least one value from the device's own API that is a class signal (a power state, a mute, a scene), beyond its identity (model, serial, firmware) and `uptime` |
+| **system** | every system | at least one value of its own, collected or calculated |
+
+The built-in set is not written down anywhere to drift: the transport registry declares what an
+endpoint of each transport writes, the driver's polls, listeners and session decide the rest, and
+`probekeys` and the writer classes rule who may write each key. A component whose profile or endpoint
+is removed fails the collected or the built-in tier by name; a component that reports only built-in
+data, or only identity and `uptime`, fails the collected tier. A device that is down, as a planted
+fault is, still owes its reachability rung but no response time.
+
+What the lab does not carry yet is listed per tier in the dev fleet's gap ledger, each entry with the
+issue that closes it. The ledger is empty when the fleet is whole, and an entry fails the test as
+stale the moment every owner it covers carries the tier, so a closed issue cannot leave a line behind.
+`make test` does not run any of this: the warm-up needs Docker and minutes, so the check runs in
+`make test-lab`, which CI may run on lab-touching changes only. The check is a function of a base URL and a client, so
+the scale lab runs the same judgment against a lab of any size.
+
 ## Stopping it, and your data
 
 Press **Ctrl-C** in the lab's terminal (or send it SIGTERM). The lab stops and removes every
