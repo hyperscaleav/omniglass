@@ -21,6 +21,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/hyperscaleav/omniglass/internal/devseed"
+	"github.com/hyperscaleav/omniglass/internal/labcheck"
 )
 
 func TestIntegrationLabOnARealDaemon(t *testing.T) {
@@ -204,6 +207,28 @@ func TestIntegrationLabOnARealDaemon(t *testing.T) {
 			}
 			if time.Now().After(deadline) {
 				t.Fatalf("after the warm-up, below the display floor: %v (%v)", missing, err)
+			}
+			time.Sleep(10 * time.Second)
+		}
+	})
+
+	// The lab-level proof of #1266's outcome (#1371): after the warm-up, every
+	// component carries its full built-in data and a collected class signal,
+	// and every system a value of its own, bar the gaps devseed.TierGaps
+	// lists. The same check (internal/labcheck) is what the scale lab runs.
+	t.Run("every component and system carries its data, tier by tier", func(t *testing.T) {
+		deadline := time.Now().Add(4 * time.Minute)
+		for {
+			findings, err := labcheck.Check(ctx, client, lab.BaseURL, devseed.TierGaps, cfg(os.Getpid()).PlantedFaults)
+			if err == nil && len(findings) == 0 {
+				return
+			}
+			if time.Now().After(deadline) {
+				var lines []string
+				for _, f := range findings {
+					lines = append(lines, f.String())
+				}
+				t.Fatalf("after the warm-up, the lab falls short (%v):\n%s", err, strings.Join(lines, "\n"))
 			}
 			time.Sleep(10 * time.Second)
 		}

@@ -358,6 +358,9 @@ no device API to read, and the push lane on its collected tier alone, since a pu
 The lab proves it live: `make test-lab` waits out the warm-up and requires each method up with a
 value its driver emits landed from it, and a system holding the booking service's push.
 
+Beyond the methods, `make test-lab` holds every component to its built-in and collected tiers and every system
+to a value of its own, bar the gaps `devseed.TierGaps` lists ([the lab guide](/guides/lab/#checking-that-the-lab-is-whole)).
+
 The [lab](/guides/lab/) runs the dev fleet with the node `edge-hq` serving it in process, so the
 whole loop is one command: the node polls the simulated components, the samples land on the seeded
 components (the worked reachability check's boardroom DSP among them, re-aimed at a simulated DSP so a
