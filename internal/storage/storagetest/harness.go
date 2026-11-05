@@ -366,9 +366,13 @@ func reclaimTemplate() error {
 // NewDSN returns the DSN of a fresh, migrated, isolated Postgres database.
 // Skipped under -short. The database is a copy of the per-binary template, so
 // it arrives with the full schema and the full schema_migrations history
-// without replaying a single migration. It is discarded when the shared
-// container is reaped on process exit. Use this when the test needs the raw DSN
-// (e.g. to launch the server binary against it).
+// without replaying a single migration. It is dropped when the test finishes
+// (t.Cleanup), so the disk a binary uses is bounded by the tests running at
+// once rather than every test it ever ran (#1314). The drop is WITH (FORCE), so
+// a connection the test left open, such as a server binary it launched against
+// the raw DSN, does not keep the database alive. A failed drop is logged, not
+// failed: it leaks disk, it does not make a result wrong. Use this when the test
+// needs the raw DSN (e.g. to launch the server binary against it).
 //
 // It refuses outright if the calling package's tests are not running under
 // [Main], because the container it would start would then never be reclaimed.
@@ -405,7 +409,28 @@ func NewDSN(t testing.TB) string {
 	if err != nil {
 		t.Fatalf("create database %s from template %s: %v", dbName, templateName, err)
 	}
+	// Registered here, before NewDSN returns, so every cleanup the caller adds
+	// afterwards runs BEFORE this one (last in, first out). NewDB and
+	// NewCountingDB rely on that: they register gw.Close after this returns, so
+	// the pool closes before the database is dropped.
+	t.Cleanup(func() { dropTestDB(t, dbName) })
 	return withDBName(adminDSN, dbName)
+}
+
+// dropTestDB removes one database NewDSN minted. FORCE (Postgres 13+; the
+// harness pins postgres:18) terminates backends still attached to it. Any error
+// is reported through t.Logf and never fails the test.
+func dropTestDB(t testing.TB, name string) {
+	ctx := context.Background()
+	admin, err := pgx.Connect(ctx, adminDSN)
+	if err != nil {
+		t.Logf("storagetest: drop %s: admin connect: %v", name, err)
+		return
+	}
+	defer func() { _ = admin.Close(ctx) }()
+	if _, err := admin.Exec(ctx, "DROP DATABASE IF EXISTS "+pgx.Identifier{name}.Sanitize()+" WITH (FORCE)"); err != nil {
+		t.Logf("storagetest: drop %s: %v", name, err)
+	}
 }
 
 // NewDB returns a Gateway backed by a fresh, migrated, isolated database.
