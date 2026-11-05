@@ -245,7 +245,7 @@ test-netadmin:
 	docker run -d --rm --name $$pg --network $$net -e POSTGRES_PASSWORD=netadmin postgres:18 >/dev/null; \
 	n=0; until docker exec $$pg pg_isready -h 127.0.0.1 -U postgres >/dev/null 2>&1; do \
 		n=$$((n+1)); [ $$n -lt 60 ] || { echo "postgres did not come up"; exit 1; }; sleep 1; done; \
-	docker run --rm --name $$go --network $$net --cap-add NET_ADMIN --sysctl net.ipv4.ping_group_range="0 2147483647" \
+	docker run --rm --name $$go --network $$net --cap-add NET_ADMIN --sysctl net.ipv4.ping_group_range="0 65535" \
 		-v "$(CURDIR):/w" -w /w -v omniglass-netadmin-gomod:/go/pkg/mod -v omniglass-netadmin-gocache:/root/.cache/go-build \
 		-e GOFLAGS=-buildvcs=false -e OMNIGLASS_NETADMIN=1 -e OMNIGLASS_TEST_ADMIN_DSN="postgres://postgres:netadmin@$$pg:5432/postgres?sslmode=disable" \
 		$(NETADMIN_IMG) go test -tags netadmin -p 1 -count=1 -run '$(NETADMIN_RUN)' $(NETADMIN_PKGS) & wait $$!

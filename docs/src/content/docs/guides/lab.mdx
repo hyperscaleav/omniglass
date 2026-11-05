@@ -289,7 +289,7 @@ those leans on Linux networking that a bare binary on a workstation does not get
 Every container runs on a Linux kernel: natively on Linux, and inside Docker Desktop's VM on macOS
 and on Windows (WSL2). So all of the above holds the same way on all three. Each container gets a
 namespace of its own; Docker lets any user bind ports below 1024 inside one; the ping sysctl is set
-per container; and `NET_ADMIN` goes to the node's container alone, where it reaches only that
+per container, to a range that fits the groups rootless Docker maps, so the lab runs there too; and `NET_ADMIN` goes to the node's container alone, where it reaches only that
 container. A native lab without Docker would need an admin prompt per address and a second
 impairment backend on macOS, a privileged pinger and a third backend on Windows, its own namespace
 plumbing on Linux, and an embedded Postgres everywhere, and would still behave differently on two of

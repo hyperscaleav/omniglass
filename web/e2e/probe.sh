@@ -96,7 +96,7 @@ node)
   labels=()
   for kv in $OG_STACK_LABELS; do labels+=(--label "$kv"); done
   docker run -d --rm "${labels[@]}" --network "$OG_STACK_NET" \
-    --sysctl net.ipv4.ping_group_range="0 2147483647" \
+    --sysctl net.ipv4.ping_group_range="0 65535" \
     -e OMNIGLASS_SERVER="$OG_STACK_SRV_URL" -e OMNIGLASS_NODE_NAME="$name" -e OMNIGLASS_NODE_TOKEN="$enroll" \
     "$OG_STACK_IMAGE" node run --heartbeat 2s
   exit
