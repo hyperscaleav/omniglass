@@ -91,8 +91,9 @@ checkpoint pays full-page images):
 
 A day block at 10 s merges 35 times slower than an hour block and writes 5.5 times the WAL, for
 7% fewer bytes. The span rule already keeps 10 s on hour blocks. At 1 h, a month block is 8%
-smaller than a week block and merges nearly 6 times slower. TimescaleDB's late insert is the cheapest
-of all, because it lands in an uncompressed region of the chunk rather than rebuilding a segment.
+smaller than a week block and merges nearly 6 times slower. TimescaleDB's late insert is the
+cheapest here because it lands in an uncompressed region of the chunk rather than rebuilding a
+segment; the recompression that later folds it in is not counted.
 
 Reads barely move with the span. Every block holds the 30 d hourly bucketed read of one series
 under 1.5 ms at every cadence (raw takes 62.54 ms at 10 s and 8.54 ms at 60 s), and the 24 h
