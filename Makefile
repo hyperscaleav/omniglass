@@ -3,7 +3,7 @@
 # #1193). Production deploy is BYO Postgres; tests use ephemeral testcontainer
 # Postgres.
 
-.PHONY: all lab test-lab footprint lab-footprint build build-web web image gen gen-proto gen-web adr-renumber migration migration-check test test-web test-short test-e2e bench clean-testcontainers tidy dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify docs-walkthroughs bench-sim test-netadmin walkthroughs test-walkthroughs demo test-demos probe
+.PHONY: all lab test-lab footprint lab-footprint compress-bench build build-web web image gen gen-proto gen-web adr-renumber migration migration-check test test-web test-short test-e2e bench clean-testcontainers tidy dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify docs-walkthroughs bench-sim test-netadmin walkthroughs test-walkthroughs demo test-demos probe
 
 # The bare `make` (#1196) needs only Docker. From one Dockerfile and one tree
 # it builds the image omniglass:dev and exports this machine's own binary to
@@ -219,6 +219,20 @@ footprint:
 # flags (LAB_FOOTPRINT_ARGS="-cadence default -windows 7 -json out.json").
 lab-footprint: all
 	go run ./cmd/labfootprint $(LAB_FOOTPRINT_ARGS)
+
+# The compression shootout (#1516): the same seeded series, with duplicate
+# instants, compressed under every candidate hour-block format, pg_deltax and
+# TimescaleDB, on throwaway Postgres 18 containers at each product cadence;
+# bytes per sample, compression time and read latency as the median of N
+# runs, every candidate held to an exact round trip; then the fit probes ask
+# both extensions the retention, late-row, detach, dump and replication
+# questions on a real server. It builds the two test-only extension images
+# from their official releases first. Diagnostic, never a gate (ADR-0094).
+# COMPRESS_BENCH_ARGS passes flags (COMPRESS_BENCH_ARGS="-runs 5 -json out.json").
+compress-bench:
+	docker build -q -t omniglass-compressbench-deltax:dev internal/compressbench/images/deltax
+	docker build -q -t omniglass-compressbench-timescaledb:dev internal/compressbench/images/timescaledb
+	go run ./cmd/compressbench $(COMPRESS_BENCH_ARGS)
 
 # The tests that need NET_ADMIN (impairments rewrite the firewall and tc of the
 # network they run in) run in a container of their own, never on the host:
