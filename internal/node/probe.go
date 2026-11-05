@@ -349,7 +349,7 @@ func appendVerdict(dps []collection.Sample, taskID string, verdicts map[string]s
 // the protocol answer, and a second dial would be refused by gear that admits
 // one telnet client, reading not responsive beside an up session.
 func collectProbe(ctx context.Context, runner *collection.Runner, task collection.TaskSpec, sessions *sessionManager) ([]collection.Sample, error) {
-	if task.Transport == "telnet" && sessions.isUp(task.EndpointID) {
+	if transport.ProbeYieldsToSession(task.Transport) && sessions.isUp(task.EndpointID) {
 		now := time.Now().UTC()
 		return []collection.Sample{
 			{Name: collection.SignalTCPOpen, Value: 1, TS: now, Labels: map[string]string{collection.ReasonLabel: string(collection.Responded)}},
