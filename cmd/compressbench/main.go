@@ -1,8 +1,8 @@
-// Command compressbench is `make compress-bench` (#1516): it compresses the
-// same seeded series under every candidate metric format, on throwaway
-// Postgres 18 containers, at each product cadence, prints the bytes per
-// sample, compression time and read latencies as markdown, optionally writes
-// them as JSON, and with -probes runs the fit probes for pg_deltax and
+// Command compressbench is `make compress-bench` (#1516, #1518): it
+// compresses the same seeded series under every candidate metric format, on
+// throwaway Postgres 18 containers, at each product cadence, prints the bytes
+// per sample, compression time, read latencies, late-merge cost and span rule
+// as markdown, optionally writes them as JSON, and with -probes runs the fit probes for pg_deltax and
 // TimescaleDB. It is a diagnostic (ADR-0094): it exits non-zero only when a
 // candidate does not give back exactly what it was given, or a probe cannot
 // run.
@@ -32,8 +32,8 @@ func main() {
 
 func run() error {
 	var (
-		cadences = flag.String("cadences", "2s,30s,60s,24h", "the cadences to measure")
-		series   = flag.String("series", "2s=6,30s=30,60s=60,24h=3000", "series count at each cadence")
+		cadences = flag.String("cadences", "10s,30s,60s,5m,1h,24h", "the cadences to measure")
+		series   = flag.String("series", "10s=10,30s=30,60s=60,5m=300,1h=3000,24h=3000", "series count at each cadence")
 		days     = flag.Int("days", 30, "days of samples in each dataset")
 		runs     = flag.Int("runs", 3, "runs each cell is the median of")
 		reps     = flag.Int("reps", 5, "timed reads within a run, after one warmup")
@@ -93,6 +93,8 @@ func run() error {
 		}
 		fmt.Printf("## Formats\n\n%d runs a cell, %d timed reads a run; each figure is the median, its range in parentheses.\n\n%s\n",
 			*runs, *reps, out.Report.Table())
+		fmt.Printf("## Span rule\n\nThe smallest span whose block rows mostly cross the compression threshold; raw where no block is smaller than the narrow row.\n\n%s",
+			out.Report.RuleTable())
 	}
 	if *probes {
 		ps, err := compressbench.RunProbes(ctx, servers, os.Stderr)

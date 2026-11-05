@@ -123,6 +123,17 @@ type Measure struct {
 	// Cagg is the continuous aggregate's own measure, when the candidate has one:
 	// its bytes, its refresh as Compress, and its bucketed read.
 	Cagg *Measure
+	// Blocks marks a block candidate, whose SummaryBytes (bytes of the summary
+	// columns) and CompressedRows (share of rows whose samples Postgres
+	// compressed) were measured.
+	Blocks         bool
+	SummaryBytes   int64
+	CompressedRows float64
+	// Merged marks a run that landed one late sample: Merge is how long it
+	// took and MergeWAL the WAL bytes it wrote, from a checkpoint.
+	Merged   bool
+	Merge    time.Duration
+	MergeWAL int64
 }
 
 // Read is the window and bucketing every candidate's reads are held to.
@@ -215,11 +226,109 @@ func (s *Server) RunOnce(ctx context.Context, tpl string, run int, cand Candidat
 		}
 		m.Cagg = &cm
 	}
+	if cand.SummaryBytes != "" {
+		m.Blocks = true
+		if err := conn.QueryRow(ctx, cand.SummaryBytes).Scan(&m.SummaryBytes); err != nil {
+			return Measure{}, fmt.Errorf("%s summary bytes: %w", cand.Name, err)
+		}
+		if err := conn.QueryRow(ctx, cand.CompressedRows).Scan(&m.CompressedRows); err != nil {
+			return Measure{}, fmt.Errorf("%s compressed rows: %w", cand.Name, err)
+		}
+	}
+	if cand.Merge != "" {
+		late := Late(samples, rd.Series)
+		if m.Merge, m.MergeWAL, err = merge(ctx, conn, cand.Merge, late); err != nil {
+			return Measure{}, fmt.Errorf("%s late merge: %w", cand.Name, err)
+		}
+		m.Merged = true
+		if verify {
+			if err := verifyMerged(ctx, conn, cand, WithLate(samples, late)); err != nil {
+				return Measure{}, fmt.Errorf("%s at %s after a late merge: %w", cand.Name, spec.Cadence, err)
+			}
+		}
+	}
 	if log != nil {
 		fmt.Fprintf(log, "  %-12s %-6s run %d: %d B, %.2f B/sample, compress %s\n",
 			cand.Name, CadenceLabel(spec.Cadence), run, m.Bytes, float64(m.Bytes)/float64(m.Samples), m.Compress.Round(time.Millisecond))
 	}
 	return m, nil
+}
+
+// merge lands late with cand's Merge and is its time and the WAL bytes it
+// wrote. A checkpoint first makes every page it touches write a full-page
+// image, so the WAL is the worst case a closed span costs, run after run.
+func merge(ctx context.Context, conn *pgx.Conn, sql string, late Sample) (time.Duration, int64, error) {
+	if _, err := conn.Exec(ctx, "checkpoint"); err != nil {
+		return 0, 0, err
+	}
+	var before, after string
+	if err := conn.QueryRow(ctx, "select pg_current_wal_lsn()::text").Scan(&before); err != nil {
+		return 0, 0, err
+	}
+	t0 := time.Now()
+	tag, err := conn.Exec(ctx, sql, late.SeriesID, late.TS, late.Value)
+	d := time.Since(t0)
+	if err != nil {
+		return 0, 0, err
+	}
+	if tag.RowsAffected() != 1 {
+		return 0, 0, fmt.Errorf("%d rows written, want 1", tag.RowsAffected())
+	}
+	if err := conn.QueryRow(ctx, "select pg_current_wal_lsn()::text").Scan(&after); err != nil {
+		return 0, 0, err
+	}
+	var wal int64
+	err = conn.QueryRow(ctx, "select pg_wal_lsn_diff($1::pg_lsn, $2::pg_lsn)::int8", after, before).Scan(&wal)
+	return d, wal, err
+}
+
+// verifyMerged holds the candidate, after a late merge, to samples with the
+// late one in: its invariants, the full round trip and every hour's summary.
+func verifyMerged(ctx context.Context, conn *pgx.Conn, cand Candidate, samples []Sample) error {
+	if err := check(ctx, conn, cand); err != nil {
+		return err
+	}
+	if err := roundTrip(ctx, conn, cand.ReadAll, samples); err != nil {
+		return err
+	}
+	return hourly(ctx, conn, cand, samples)
+}
+
+func check(ctx context.Context, conn *pgx.Conn, cand Candidate) error {
+	if cand.Check == "" {
+		return nil
+	}
+	var bad int64
+	if err := conn.QueryRow(ctx, cand.Check).Scan(&bad); err != nil {
+		return err
+	}
+	if bad != 0 {
+		return fmt.Errorf("%d rows break the format's invariants", bad)
+	}
+	return nil
+}
+
+// hourly holds every stored hourly summary to the one samples recompute.
+func hourly(ctx context.Context, conn *pgx.Conn, cand Candidate, samples []Sample) error {
+	if cand.HourlyAll == "" {
+		return nil
+	}
+	rows, err := conn.Query(ctx, cand.HourlyAll)
+	if err != nil {
+		return err
+	}
+	got, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (Summary, error) {
+		var s Summary
+		err := r.Scan(&s.SeriesID, &s.Hour, &s.Count, &s.Min, &s.Max, &s.Sum, &s.First, &s.Last)
+		return s, err
+	})
+	if err != nil {
+		return err
+	}
+	if err := SameSummaries(HourlySummaries(samples), got); err != nil {
+		return fmt.Errorf("hourly summaries: %w", err)
+	}
+	return nil
 }
 
 func measureCagg(ctx context.Context, conn *pgx.Conn, cand Candidate, samples []Sample, rd Read, before int64, verify bool) (Measure, error) {
@@ -279,14 +388,11 @@ func size(ctx context.Context, conn *pgx.Conn) (int64, error) {
 }
 
 func verifyCandidate(ctx context.Context, conn *pgx.Conn, cand Candidate, samples []Sample, rd Read) error {
-	if cand.Check != "" {
-		var bad int64
-		if err := conn.QueryRow(ctx, cand.Check).Scan(&bad); err != nil {
-			return err
-		}
-		if bad != 0 {
-			return fmt.Errorf("%d rows break the format's invariants", bad)
-		}
+	if err := check(ctx, conn, cand); err != nil {
+		return err
+	}
+	if err := hourly(ctx, conn, cand, samples); err != nil {
+		return err
 	}
 	raw, err := readRaw(ctx, conn, cand.ReadRaw, rd)
 	if err != nil {

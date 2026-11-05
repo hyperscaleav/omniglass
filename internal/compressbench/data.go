@@ -236,3 +236,82 @@ func SameBuckets(want, got []Bucket) error {
 	}
 	return nil
 }
+
+// Summary is one series' samples in one UTC hour: what a block carries for
+// each hour it spans, so an hourly read never opens the sample arrays.
+type Summary struct {
+	SeriesID int64
+	Hour     time.Time
+	Count    int64
+	Min      float64
+	Max      float64
+	Sum      float64
+	First    float64
+	Last     float64
+}
+
+// HourlySummaries is the reference summary of every hour that has a sample,
+// by series then hour. samples is in series, timestamp and landing order, so
+// the first and last of an hour are its first and last in that order.
+func HourlySummaries(samples []Sample) []Summary {
+	var out []Summary
+	for _, s := range samples {
+		h := s.TS.UTC().Truncate(time.Hour)
+		if n := len(out); n > 0 && out[n-1].SeriesID == s.SeriesID && out[n-1].Hour.Equal(h) {
+			x := &out[n-1]
+			x.Count++
+			x.Min = math.Min(x.Min, s.Value)
+			x.Max = math.Max(x.Max, s.Value)
+			x.Sum += s.Value
+			x.Last = s.Value
+			continue
+		}
+		out = append(out, Summary{s.SeriesID, h, 1, s.Value, s.Value, s.Value, s.Value, s.Value})
+	}
+	return out
+}
+
+// SameSummaries is nil when got matches want: every hour, its count, minimum,
+// maximum, first and last exactly, its sum to a relative 1e-12.
+func SameSummaries(want, got []Summary) error {
+	if len(got) != len(want) {
+		return fmt.Errorf("got %d hourly summaries, want %d", len(got), len(want))
+	}
+	for i, w := range want {
+		g := got[i]
+		if g.SeriesID != w.SeriesID || !g.Hour.Equal(w.Hour) || g.Count != w.Count || g.Min != w.Min || g.Max != w.Max ||
+			g.First != w.First || g.Last != w.Last || math.Abs(g.Sum-w.Sum) > 1e-12*math.Max(1, math.Abs(w.Sum)) {
+			return fmt.Errorf("hourly summary %d: got %+v, want %+v", i, g, w)
+		}
+	}
+	return nil
+}
+
+// lateValue is the late sample's value: one no series kind generates.
+const lateValue = 4242.4242
+
+// Late is the late sample a merge lands for series: a second report at the
+// instant of the series' middle sample, so the block it lands in is closed
+// and already holds a sample at that instant, which the late one follows.
+func Late(samples []Sample, series int64) Sample {
+	var at []int
+	for i, s := range samples {
+		if s.SeriesID == series {
+			at = append(at, i)
+		}
+	}
+	return Sample{series, samples[at[len(at)/2]].TS, lateValue}
+}
+
+// WithLate is samples with late landed after every sample at its series and
+// instant: the order a round trip must give back after the merge.
+func WithLate(samples []Sample, late Sample) []Sample {
+	i := sort.Search(len(samples), func(i int) bool {
+		s := samples[i]
+		return s.SeriesID > late.SeriesID || s.SeriesID == late.SeriesID && s.TS.After(late.TS)
+	})
+	out := make([]Sample, 0, len(samples)+1)
+	out = append(out, samples[:i]...)
+	out = append(out, late)
+	return append(out, samples[i:]...)
+}

@@ -41,6 +41,16 @@ type Candidate struct {
 	ReadBuckets string
 	ReadAll     string
 	Check       string
+	// HourlyAll, when set, returns every non-empty hour's stored summary as
+	// (series_id, hour, count, min, max, sum, first, last) by series then hour.
+	HourlyAll string
+	// SummaryBytes, when set, is the stored bytes of the summary columns;
+	// CompressedRows the share of rows whose sample array Postgres compressed.
+	SummaryBytes   string
+	CompressedRows string
+	// Merge lands one late sample, binding $1 series, $2 ts and $3 value: for a
+	// block, an in-place read-merge-rewrite of the one closed block it falls in.
+	Merge string
 	// Cagg, when set, is a continuous aggregate built after the candidate is
 	// measured, reported as a row of its own.
 	Cagg *Cagg
@@ -64,8 +74,9 @@ create table staging.sample (seq bigint not null, series_id bigint not null, ts 
 const landRaw = `insert into metric (series_id, ts, value) select series_id, ts, value from staging.sample order by seq`
 
 const (
-	rawRead = `select ts, value from metric where series_id = $1 and ts >= $2 and ts < $3 order by ts, id`
-	rawAll  = `select series_id, ts, value from metric order by series_id, ts, id`
+	lateInsert = `insert into metric (series_id, ts, value) values ($1, $2, $3)`
+	rawRead    = `select ts, value from metric where series_id = $1 and ts >= $2 and ts < $3 order by ts, id`
+	rawAll     = `select series_id, ts, value from metric order by series_id, ts, id`
 )
 
 // narrowBuckets is the bucketed read on a narrow table, binning with bin, an
@@ -111,88 +122,162 @@ func Raw(spec Spec) Candidate {
 		Setup:   productMetric(spec),
 		Load:    []string{landRaw},
 		ReadRaw: rawRead, ReadBuckets: narrowBuckets(`date_bin($4::interval, ts, ` + blockOrigin + `)`), ReadAll: rawAll,
+		Merge: lateInsert,
 	}
 }
 
-// Block is a homegrown format: one row a series a block of width, values in
-// a float8[] and their timestamps either as a timestamptz[] or as int4
-// millisecond offsets from the block's start, with the block's summary beside
-// them. Tuned sets toast_tuple_target=128 and lz4 on the arrays.
+// Block is a homegrown format: one row a series a UTC span (an hour, day, week
+// or month), values in a float8[] and their timestamps either as a
+// timestamptz[] or as millisecond offsets from the block's start, with the
+// block's summary beside them. A block longer than an hour also carries a
+// summary of each hour it spans, as arrays of one element an hour (h_n, h_min,
+// h_max, h_sum, h_first, h_last; an empty hour counts 0 and its other
+// elements are null), so an hourly read never opens the sample arrays.
 type Block struct {
-	Width   time.Duration
+	Span    string
 	Offsets bool
-	Tuned   bool
 }
 
-// Name is F0 to F3, with "/day" for day blocks.
+// Name is F0 (timestamps) or F2 (offsets), with "/<span>" past an hour.
 func (b Block) Name() string {
-	n := 0
+	name := "F0"
 	if b.Offsets {
-		n += 2
+		name = "F2"
 	}
-	if b.Tuned {
-		n++
-	}
-	name := fmt.Sprintf("F%d", n)
-	if b.Width == 24*time.Hour {
-		name += "/day"
+	if b.Span != "hour" {
+		name += "/" + b.Span
 	}
 	return name
 }
 
-// blockOrigin is the origin every block and bucket is binned from.
+func (b Block) hourly() bool { return b.Span != "hour" }
+
+// tsType is the timestamps' column type. An int4 holds 24.8 days of
+// milliseconds, so a month block's offsets are int8.
+func (b Block) tsType() string {
+	switch {
+	case !b.Offsets:
+		return "timestamptz[]"
+	case b.Span == "month":
+		return "int8[]"
+	}
+	return "int4[]"
+}
+
+// startOf is the start of the block an instant falls in. Every connection
+// runs in UTC, so a day, week and month are UTC ones.
+func (b Block) startOf(ts string) string { return "date_trunc('" + b.Span + "', " + ts + ")" }
+
+func (b Block) end(start string) string { return start + " + interval '1 " + b.Span + "'" }
+
+// blockOrigin is the origin every bucket is binned from.
 const blockOrigin = `timestamptz '2026-09-01 00:00:00+00'`
+
+var hourCols = []string{"h_n", "h_min", "h_max", "h_sum", "h_first", "h_last"}
+
+func (b Block) columns() []string {
+	cols := []string{"series_id", "start", "count", "min", "max", "sum", "first", "last", "vals", "ts"}
+	if b.hourly() {
+		cols = append(cols, hourCols...)
+	}
+	return cols
+}
+
+// build is the select that makes the block rows of src, a relation of
+// (series_id, ts, value, seq) where seq is landing order. Compression builds
+// from the staging rows; a late-row merge rebuilds one block from its own
+// samples and the late one.
+func (b Block) build(src string) string {
+	tsAgg := "array_agg(ts order by ts, seq)"
+	if b.Offsets {
+		tsAgg = "array_agg((extract(epoch from ts - start) * 1000)::" + strings.TrimSuffix(b.tsType(), "[]") + " order by ts, seq)"
+	}
+	q := `with s as (select series_id, ts, value, seq, ` + b.startOf("ts") + ` as start from ` + src + `),
+blk as (select series_id, start, count(*)::int4 as count, min(value) as min, max(value) as max, sum(value) as sum,
+	(array_agg(value order by ts, seq))[1] as first, (array_agg(value order by ts desc, seq desc))[1] as last,
+	array_agg(value order by ts, seq) as vals, ` + tsAgg + ` as ts
+from s group by 1, 2)`
+	if !b.hourly() {
+		return q + `
+select * from blk`
+	}
+	return q + `,
+h as (select series_id, start, date_trunc('hour', ts) as hr, count(*)::int4 as n, min(value) as mn, max(value) as mx, sum(value) as sm,
+	(array_agg(value order by ts, seq))[1] as fv, (array_agg(value order by ts desc, seq desc))[1] as lv
+from s group by 1, 2, 3),
+hs as (select k.series_id, k.start, array_agg(coalesce(h.n, 0) order by g.hr) as h_n, array_agg(h.mn order by g.hr) as h_min,
+	array_agg(h.mx order by g.hr) as h_max, array_agg(h.sm order by g.hr) as h_sum,
+	array_agg(h.fv order by g.hr) as h_first, array_agg(h.lv order by g.hr) as h_last
+from blk k cross join lateral generate_series(k.start, ` + b.end("k.start") + ` - interval '1 hour', interval '1 hour') as g(hr)
+	left join h on h.series_id = k.series_id and h.start = k.start and h.hr = g.hr
+group by k.series_id, k.start)
+select blk.series_id, blk.start, blk.count, blk.min, blk.max, blk.sum, blk.first, blk.last, blk.vals, blk.ts,
+	hs.h_n, hs.h_min, hs.h_max, hs.h_sum, hs.h_first, hs.h_last
+from blk join hs on hs.series_id = blk.series_id and hs.start = blk.start`
+}
 
 // Candidate is b as a benchmark candidate.
 func (b Block) Candidate() Candidate {
-	width := fmt.Sprintf("interval '%d seconds'", int(b.Width.Seconds()))
-	tsType, tsAgg, tsRead := "timestamptz[]", "array_agg(ts order by ts, seq)", "u.t"
+	tsRead := "u.t"
 	if b.Offsets {
-		tsType = "int4[]"
-		tsAgg = "array_agg((extract(epoch from ts - date_bin(" + width + ", ts, " + blockOrigin + ")) * 1000)::int4 order by ts, seq)"
 		tsRead = "b.start + u.t * interval '1 millisecond'"
 	}
-	with := ""
-	if b.Tuned {
-		with = " with (toast_tuple_target = 128)"
+	defs := []string{"series_id bigint not null", "start timestamptz not null", "count int4 not null",
+		"min float8 not null", "max float8 not null", "sum float8 not null", "first float8 not null", "last float8 not null",
+		"vals float8[] not null", "ts " + b.tsType() + " not null"}
+	summary := []string{"count", "min", "max", "sum", "first", "last"}
+	check := `select count(*) from block where count <> cardinality(vals) or count <> cardinality(ts)
+	or first <> vals[1] or last <> vals[cardinality(vals)]`
+	hourlyAll := `select series_id, start, count::int8, min, max, sum, first, last from block order by series_id, start`
+	buckets := `select date_bin($4::interval, start, ` + blockOrigin + `) as bk, sum(count)::int8, min(min), max(max), sum(sum) / sum(count)
+from block where series_id = $1 and start >= $2 and start < $3 group by bk order by bk`
+	if b.hourly() {
+		defs = append(defs, "h_n int4[] not null", "h_min float8[] not null", "h_max float8[] not null",
+			"h_sum float8[] not null", "h_first float8[] not null", "h_last float8[] not null")
+		summary = append(summary, hourCols...)
+		check += `
+	or cardinality(h_n) * 3600 <> extract(epoch from ` + b.end("start") + ` - start)
+	or count <> (select sum(x) from unnest(h_n) x)`
+		hours := `from block b, unnest(b.h_n, b.h_min, b.h_max, b.h_sum, b.h_first, b.h_last) with ordinality as h(n, mn, mx, sm, fv, lv, o)`
+		hourlyAll = `select b.series_id, b.start + (h.o - 1) * interval '1 hour' as hr, h.n::int8, h.mn, h.mx, h.sm, h.fv, h.lv
+` + hours + `
+where h.n > 0 order by 1, 2`
+		// A bucket is its hours' summaries: the arrays of samples stay shut.
+		buckets = `select date_bin($4::interval, hr, ` + blockOrigin + `) as bk, sum(n)::int8, min(mn), max(mx), sum(sm) / sum(n)
+from (select b.start + (h.o - 1) * interval '1 hour' as hr, h.n, h.mn, h.mx, h.sm
+	` + hours + `
+	where b.series_id = $1 and b.start >= ` + b.startOf("$2::timestamptz") + ` and b.start < $3) x
+where n > 0 and hr >= $2 and hr < $3 group by bk order by bk`
 	}
-	setup := []string{fmt.Sprintf(`create table block (
-	series_id bigint not null,
-	start timestamptz not null,
-	count int4 not null,
-	min float8 not null,
-	max float8 not null,
-	sum float8 not null,
-	first float8 not null,
-	last float8 not null,
-	vals float8[] not null,
-	ts %s not null,
-	primary key (series_id, start)
-)%s`, tsType, with)}
-	if b.Tuned {
-		setup = append(setup,
-			`alter table block alter column vals set compression lz4`,
-			`alter table block alter column ts set compression lz4`)
+	sizes := make([]string, len(summary))
+	for i, c := range summary {
+		sizes[i] = "pg_column_size(" + c + ")"
+	}
+	cols := b.columns()
+	sets := make([]string, 0, len(cols)-2)
+	for _, c := range cols[2:] {
+		sets = append(sets, c+" = excluded."+c)
 	}
 	unnest := `from block b, unnest(b.ts, b.vals) with ordinality as u(t, v, o)`
+	one := `b.series_id = $1 and b.start = ` + b.startOf("$2::timestamptz")
 	return Candidate{
 		Name: b.Name(), Image: ImagePlain,
-		Setup: setup,
-		Compress: []string{`insert into block
-select series_id, date_bin(` + width + `, ts, ` + blockOrigin + `), count(*), min(value), max(value), sum(value),
-	(array_agg(value order by ts, seq))[1], (array_agg(value order by ts desc, seq desc))[1],
-	array_agg(value order by ts, seq), ` + tsAgg + `
-from staging.sample group by 1, 2`},
+		Setup:    []string{"create table block (\n\t" + strings.Join(defs, ",\n\t") + ",\n\tprimary key (series_id, start)\n)"},
+		Compress: []string{"insert into block (" + strings.Join(cols, ", ") + ")\n" + b.build("staging.sample")},
 		ReadRaw: `select ts, v from (select ` + tsRead + ` as ts, u.v, b.start, u.o ` + unnest + `
-	where b.series_id = $1 and b.start >= date_bin(` + width + `, $2, ` + blockOrigin + `) and b.start < $3) r
+	where b.series_id = $1 and b.start >= ` + b.startOf("$2::timestamptz") + ` and b.start < $3) r
 where ts >= $2 and ts < $3 order by start, o`,
-		// The bucket width is a multiple of the block width, so a bucket is its
-		// blocks' summaries: no array is opened.
-		ReadBuckets: `select date_bin($4::interval, start, ` + blockOrigin + `) as bk, sum(count)::int8, min(min), max(max), sum(sum) / sum(count)
-from block where series_id = $1 and start >= $2 and start < $3 group by bk order by bk`,
-		ReadAll: `select b.series_id, ` + tsRead + `, u.v ` + unnest + ` order by b.series_id, b.start, u.o`,
-		Check: `select count(*) from block where count <> cardinality(vals) or count <> cardinality(ts)
-	or first <> vals[1] or last <> vals[cardinality(vals)]`,
+		ReadBuckets:    buckets,
+		ReadAll:        `select b.series_id, ` + tsRead + `, u.v ` + unnest + ` order by b.series_id, b.start, u.o`,
+		Check:          check,
+		HourlyAll:      hourlyAll,
+		SummaryBytes:   `select coalesce(sum(` + strings.Join(sizes, " + ") + `), 0)::int8 from block`,
+		CompressedRows: `select coalesce(avg((pg_column_compression(vals) is not null)::int), 0)::float8 from block`,
+		// The late sample sorts after every sample already in its block.
+		Merge: "insert into block (" + strings.Join(cols, ", ") + ")\n" + b.build(`(select b.series_id, `+tsRead+` as ts, u.v as value, u.o as seq `+unnest+`
+	where `+one+`
+	union all select $1::int8, $2::timestamptz, $3::float8, 9223372036854775807) src`) + `
+on conflict (series_id, start) do update set ` + strings.Join(sets, ", "),
 	}
 }
 
@@ -240,6 +325,7 @@ func TimescaleDB(spec Spec, chunk time.Duration, suffix string) Candidate {
 			`alter table metric set (timescaledb.enable_columnstore, timescaledb.segmentby = 'series_id', timescaledb.orderby = 'ts, id')`},
 		Load:     []string{landRaw},
 		Compress: []string{`select count(compress_chunk(c)) from show_chunks('metric') c`},
+		Merge:    lateInsert,
 		ReadRaw:  rawRead, ReadBuckets: narrowBuckets(`time_bucket($4::interval, ts)`), ReadAll: rawAll,
 		Cagg: &Cagg{
 			Name: "F5" + suffix + " cagg",
@@ -254,27 +340,23 @@ from metric_hourly where series_id = $1 and bucket >= $2 and bucket < $3 group b
 	}
 }
 
-// Candidates is every candidate at spec's cadence: F0 to F3 as hour blocks,
-// F4 on day partitions and F5 on day chunks, against raw. A sparse cadence
-// (a day or longer) adds day blocks and month partitions and chunks, so the
-// per-row overheads the formats carry sit side by side.
+// Candidates is every candidate at spec's cadence (#1518): F0 and F2 hour and
+// day blocks and F5 on day chunks, against raw. At 1 h, where a day block holds
+// only 24 samples, week and month blocks and month chunks join them.
 func Candidates(spec Spec) []Candidate {
-	day := 24 * time.Hour
-	widths := []time.Duration{time.Hour}
-	if spec.Cadence >= day {
-		widths = append(widths, day)
+	spans := []string{"hour", "day"}
+	if spec.Cadence == time.Hour {
+		spans = append(spans, "week", "month")
 	}
 	out := []Candidate{Raw(spec)}
-	for _, w := range widths {
+	for _, span := range spans {
 		for _, offsets := range []bool{false, true} {
-			for _, tuned := range []bool{false, true} {
-				out = append(out, Block{Width: w, Offsets: offsets, Tuned: tuned}.Candidate())
-			}
+			out = append(out, Block{Span: span, Offsets: offsets}.Candidate())
 		}
 	}
-	out = append(out, Deltax(spec, day, ""), TimescaleDB(spec, day, ""))
-	if spec.Cadence >= day {
-		out = append(out, Deltax(spec, 31*day, "/month"), TimescaleDB(spec, 31*day, "/month"))
+	out = append(out, TimescaleDB(spec, 24*time.Hour, ""))
+	if spec.Cadence == time.Hour {
+		out = append(out, TimescaleDB(spec, 31*24*time.Hour, "/month"))
 	}
 	return out
 }

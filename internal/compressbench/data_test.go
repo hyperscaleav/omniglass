@@ -178,3 +178,63 @@ func TestSameBuckets(t *testing.T) {
 		t.Fatal("a shifted bucket start compared equal")
 	}
 }
+
+// TestHourlySummaries holds the reference per-hour summary to its samples:
+// first and last in landing order within an instant, and an empty hour absent.
+func TestHourlySummaries(t *testing.T) {
+	h0, h2 := Epoch, Epoch.Add(2*time.Hour)
+	samples := []Sample{
+		{1, h0.Add(time.Minute), 3}, {1, h0.Add(time.Minute), 5}, {1, h0.Add(59 * time.Minute), 1},
+		{1, h2, 7},
+		{2, h0, -2},
+	}
+	got := HourlySummaries(samples)
+	want := []Summary{
+		{SeriesID: 1, Hour: h0, Count: 3, Min: 1, Max: 5, Sum: 9, First: 3, Last: 1},
+		{SeriesID: 1, Hour: h2, Count: 1, Min: 7, Max: 7, Sum: 7, First: 7, Last: 7},
+		{SeriesID: 2, Hour: h0, Count: 1, Min: -2, Max: -2, Sum: -2, First: -2, Last: -2},
+	}
+	if err := SameSummaries(want, got); err != nil {
+		t.Fatal(err)
+	}
+	bad := append([]Summary(nil), want...)
+	bad[0].Last = 5
+	if SameSummaries(bad, got) == nil {
+		t.Fatal("a wrong last value passed")
+	}
+	if SameSummaries(want[:2], got) == nil {
+		t.Fatal("a missing hour passed")
+	}
+}
+
+// TestLate is the late sample a merge lands: a second report at an instant
+// the series already has, mid-span, so the block it lands in is closed and the
+// sample must sort after the one already there.
+func TestLate(t *testing.T) {
+	spec := testSpec()
+	samples := Generate(spec)
+	late := Late(samples, 3)
+	if late.SeriesID != 3 {
+		t.Fatalf("late sample is series %d", late.SeriesID)
+	}
+	var at []int
+	for i, s := range samples {
+		if s.SeriesID == 3 && s.TS.Equal(late.TS) {
+			at = append(at, i)
+		}
+	}
+	if len(at) == 0 {
+		t.Fatalf("late sample at %s matches no sample", late.TS)
+	}
+	merged := WithLate(samples, late)
+	if len(merged) != len(samples)+1 {
+		t.Fatalf("merged %d samples, want %d", len(merged), len(samples)+1)
+	}
+	last := at[len(at)-1]
+	if merged[last+1] != late {
+		t.Fatalf("sample %d is %+v, want the late sample after its instant's last", last+1, merged[last+1])
+	}
+	if merged[last] != samples[last] || merged[last+2] != samples[last+1] {
+		t.Fatal("the samples around the late one moved")
+	}
+}
