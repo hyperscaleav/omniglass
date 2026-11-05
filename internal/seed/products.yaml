@@ -227,6 +227,9 @@ products:
   # The generic floor.
   - id: generic-device
     label: Generic Device
+    # The generic SNMP driver is the unclassified device's driver: it reads
+    # the identity and uptime every SNMP agent answers (#1372).
+    driver_id: snmp-generic
     kind: device
     component_type: generic-device
   - id: generic-app

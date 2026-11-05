@@ -563,6 +563,13 @@ components:
     product: ferrite-pdu-4c
     label: Power Conditioner
     location: boardroom-a
+  # The lab's generic-SNMP device (#1372): an unclassified box on the generic
+  # device product, so snmp-generic keeps a simulated device now that every
+  # classified product reads through its own driver. It sits in the auditorium
+  # as a member outside the standard's slots (members, below), not in a role.
+  - key: auditorium-unclassified
+    product: generic-device
+    location: auditorium
   - key: auditorium-display
     product: boreal-edge-98
     location: auditorium
@@ -1412,6 +1419,10 @@ members:
   # accounted for, filling no role.
   - system: auditorium-av
     component: auditorium-mic
+  # An unclassified device in the hall: a member, outside the auditorium
+  # standard's slots, so the generic SNMP driver has a simulated device.
+  - system: auditorium-av
+    component: auditorium-unclassified
 
 # Staffing, which creates the membership as a side effect. Both boardroom halves
 # are fully staffed (#785: a deployed room fills every role; the one-mic-short
