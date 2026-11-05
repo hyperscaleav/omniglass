@@ -100,21 +100,6 @@ func methodsExercised(ctx context.Context, c *http.Client, base string, planted 
 			} `json:"verdict"`
 		} `json:"endpoints"`
 	}
-	type metrics struct {
-		Metrics []struct {
-			Name      string `json:"metric_type_name"`
-			Instance  string `json:"instance"`
-			Instances []struct {
-				Instance string `json:"instance"`
-			} `json:"instances"`
-		} `json:"metrics"`
-	}
-	type samples struct {
-		Samples []struct {
-			Instance string `json:"instance"`
-			Source   string `json:"source"`
-		} `json:"samples"`
-	}
 	reaches := map[string]reach{}
 	up := func(compID, epID, transport string) (bool, error) {
 		r, ok := reaches[compID]
@@ -135,60 +120,6 @@ func methodsExercised(ctx context.Context, c *http.Client, base string, planted 
 		}
 		return false, nil
 	}
-	// landed reports a value the endpoint's driver emits, landed from it: a
-	// metric or property sample on its component under its endpoint, or a
-	// property sample on an owner its component (a conduit) binds, whose
-	// source names the endpoint.
-	landed := func(compID, comp, ep string, keys []string) (bool, error) {
-		var m metrics
-		if err := get("/components/"+compID+"/metrics", &m); err != nil {
-			return false, err
-		}
-		want := map[string]bool{}
-		for _, k := range keys {
-			want[k] = true
-		}
-		for _, x := range m.Metrics {
-			if !want[x.Name] {
-				continue
-			}
-			if x.Instance == ep {
-				return true, nil
-			}
-			for _, i := range x.Instances {
-				if i.Instance == ep {
-					return true, nil
-				}
-			}
-		}
-		owners := []string{"/components/" + compID}
-		var b struct {
-			Bindings []struct {
-				OwnerKind string `json:"owner_kind"`
-				OwnerID   string `json:"owner_id"`
-			} `json:"bindings"`
-		}
-		if err := get("/components/"+compID+"/identity-bindings", &b); err == nil {
-			for _, x := range b.Bindings {
-				owners = append(owners, "/"+x.OwnerKind+"s/"+x.OwnerID)
-			}
-		}
-		for _, owner := range owners {
-			for _, k := range keys {
-				var s samples
-				if err := get(owner+"/properties/"+url.PathEscape(k)+"/samples", &s); err != nil {
-					continue // a metric key, or nothing of it here
-				}
-				for _, x := range s.Samples {
-					if (owner == owners[0] && x.Instance == ep) || x.Source == comp+"/"+ep {
-						return true, nil
-					}
-				}
-			}
-		}
-		return false, nil
-	}
-
 	exercised := map[string]bool{}
 	for _, e := range eps.Endpoints {
 		if e.ComponentID == "" || isPlanted[e.Label] {
@@ -205,7 +136,7 @@ func methodsExercised(ctx context.Context, c *http.Client, base string, planted 
 			continue
 		}
 		if e.Driver != "" {
-			got, err := landed(e.ComponentID, e.Component, e.Name, emits[e.Driver])
+			got, err := landed(get, e.ComponentID, e.Component, e.Name, emits[e.Driver])
 			if err != nil {
 				return nil, err
 			}
@@ -267,4 +198,74 @@ func systemPushed(ctx context.Context, get func(string, any) error) (bool, error
 		}
 	}
 	return false, nil
+}
+
+// landed reports a value the endpoint's driver emits, landed from it: a
+// metric or property sample on its component under its endpoint, or a
+// property sample on an owner its component (a conduit) binds, whose
+// source names the endpoint.
+func landed(get func(string, any) error, compID, comp, ep string, keys []string) (bool, error) {
+	var m metricsRead
+	if err := get("/components/"+compID+"/metrics", &m); err != nil {
+		return false, err
+	}
+	want := map[string]bool{}
+	for _, k := range keys {
+		want[k] = true
+	}
+	for _, x := range m.Metrics {
+		if !want[x.Name] {
+			continue
+		}
+		if x.Instance == ep {
+			return true, nil
+		}
+		for _, i := range x.Instances {
+			if i.Instance == ep {
+				return true, nil
+			}
+		}
+	}
+	owners := []string{"/components/" + compID}
+	var b struct {
+		Bindings []struct {
+			OwnerKind string `json:"owner_kind"`
+			OwnerID   string `json:"owner_id"`
+		} `json:"bindings"`
+	}
+	if err := get("/components/"+compID+"/identity-bindings", &b); err == nil {
+		for _, x := range b.Bindings {
+			owners = append(owners, "/"+x.OwnerKind+"s/"+x.OwnerID)
+		}
+	}
+	for _, owner := range owners {
+		for _, k := range keys {
+			var s samplesRead
+			if err := get(owner+"/properties/"+url.PathEscape(k)+"/samples", &s); err != nil {
+				continue // a metric key, or nothing of it here
+			}
+			for _, x := range s.Samples {
+				if (owner == owners[0] && x.Instance == ep) || x.Source == comp+"/"+ep {
+					return true, nil
+				}
+			}
+		}
+	}
+	return false, nil
+}
+
+type metricsRead struct {
+	Metrics []struct {
+		Name      string `json:"metric_type_name"`
+		Instance  string `json:"instance"`
+		Instances []struct {
+			Instance string `json:"instance"`
+		} `json:"instances"`
+	} `json:"metrics"`
+}
+type samplesRead struct {
+	Samples []struct {
+		Instance string `json:"instance"`
+		Source   string `json:"source"`
+	} `json:"samples"`
 }

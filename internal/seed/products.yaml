@@ -174,7 +174,7 @@ products:
   - id: polaris-dsp-16
     label: Polaris DSP 16
     vendor_id: polaris
-    driver_id: snmp-generic
+    driver_id: polaris-dsp-snmp
     kind: device
     component_type: dsp
   - id: polaris-amp-4100
