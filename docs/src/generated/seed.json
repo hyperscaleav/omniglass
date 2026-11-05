@@ -2869,6 +2869,13 @@
    "polls": 2
   },
   {
+   "id": "polaris-dsp-snmp",
+   "label": "Polaris DSP SNMP",
+   "version": "1.0.0",
+   "transport": "snmp",
+   "polls": 2
+  },
+  {
    "id": "ferrite-pdu-snmp",
    "label": "Ferrite PDU SNMP",
    "version": "1.0.0",
@@ -3249,7 +3256,7 @@
    "id": "polaris-dsp-16",
    "label": "Polaris DSP 16",
    "vendor_id": "polaris",
-   "driver_id": "snmp-generic",
+   "driver_id": "polaris-dsp-snmp",
    "component_type": "dsp",
    "kind": "device"
   },

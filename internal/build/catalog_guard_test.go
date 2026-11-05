@@ -51,6 +51,9 @@ func TestTestsDoNotBorrowTheSeedCatalog(t *testing.T) {
 		// on the running lab, so naming the product is what it tests, until
 		// #1371 holds the floor for every class (#1494).
 		"internal/lab/panel_floor_integration_test.go": true,
+		// States the class-signal floor for the lab's seeded DSP, so naming
+		// the shipped product is what it tests (#1493).
+		"internal/lab/dsp_floor_integration_test.go": true,
 	}
 
 	raw, err := seed.FactsJSON()

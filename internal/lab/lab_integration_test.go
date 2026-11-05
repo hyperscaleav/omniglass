@@ -158,6 +158,23 @@ func TestIntegrationLabOnARealDaemon(t *testing.T) {
 		}
 	})
 
+	// The floor for the lab's DSPs (#1493, until #1371 holds it for every
+	// component): each placed Polaris DSP 16 carries a collected program mute
+	// and level beyond identity and uptime.
+	t.Run("every Polaris DSP 16 carries its mute and level", func(t *testing.T) {
+		deadline := time.Now().Add(4 * time.Minute)
+		for {
+			missing, err := dspFloor(ctx, client, lab.BaseURL)
+			if err == nil && len(missing) == 0 {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("after the warm-up, the DSPs lack: %v (%v)", missing, err)
+			}
+			time.Sleep(10 * time.Second)
+		}
+	})
+
 	// The class-signal floor for the Newtron touch panels (#1494, #1266): every
 	// placed panel carries a collected value of its class beyond video-input,
 	// identity and uptime, until #1371 holds the floor for every class.

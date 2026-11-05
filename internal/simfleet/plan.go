@@ -43,6 +43,7 @@ var AttachSecret = map[string]string{
 	"snmp-generic":     CommunitySecret,
 	"boreal-beam-snmp": CommunitySecret,
 	"polaris-amp-snmp": CommunitySecret,
+	"polaris-dsp-snmp": CommunitySecret,
 	"kestrel-api":      KestrelLoginSecret,
 	// The Relay codec and the Gaze camera answer behind the same login the
 	// VRoom does (#897).
@@ -163,6 +164,7 @@ var Attach = map[string]func(addr string, shift func(int) int) map[string]string
 	"snmp-generic":      snmpAttach,
 	"boreal-beam-snmp":  snmpAttach,
 	"polaris-amp-snmp":  snmpAttach,
+	"polaris-dsp-snmp":  snmpAttach,
 	"lyra-arc-snmp":     snmpAttach,
 	"lyra-hx-snmp":      snmpAttach,
 	"ferrite-pdu-snmp":  snmpAttach,
