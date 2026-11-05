@@ -135,6 +135,14 @@ on close), and never set Priority or the iteration: those are the architect's al
   session cookie; `gh image check-token` verifies it), or commit under `.github/screenshots/` and
   embed by immutable commit SHA. No UI surface, write "n/a".
 
+## Pre-deployment stance
+
+Omniglass has no external deployment, no installed base, and no operator data outside dev, CI and the lab. Until the first external deployment:
+
+- When the correct fix is destructive (renaming seeded keys or fixtures, reshaping schema, removing or renaming an API field, deleting a compatibility shim), make it. Do not add back-compat paths, deprecation periods, or data-migration machinery for data that does not exist.
+- Migration mechanics are unchanged: never edit an applied migration; express schema changes as new migrations.
+- Remove this section in the PR that prepares the first external deployment.
+
 ## Migrations and seeding
 
 Schema is managed with **dbmate**: pure-DDL migrations under `db/migrations/`, embedded into
