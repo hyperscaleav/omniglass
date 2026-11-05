@@ -260,7 +260,7 @@ and it lands, and a batch that misses again is redelivered, never dropped (#420)
 
 `property` is not partitioned: its rows are transitions, sparse by construction.
 
-**Hourly trends outlive the samples.** Beside the hot tier is the trend tier, `metric_trend`: one row
+**Hourly trends beside the samples.** Beside the hot tier is the trend tier, `metric_trend`: one row
 per observed series per UTC hour holding the hour's count, minimum, maximum, sum, first and last
 value, so a chart beyond the hot window still draws every hour, a one-sample spike surviving as its
 hour's maximum ([ADR-1276](/architecture/decisions/#adr-1276-hourly-trends-close-an-hour-a-day-after-it-ends-and-hold-back-the-prune)).
@@ -268,17 +268,29 @@ The retention pass writes them by **compaction**: it closes each hour that ended
 late-data horizon, past the node spool's replay), up to 48 hours a pass, oldest first. Calculated
 series are not compacted (they are sparse already), and properties have no trends.
 
-- **The mark.** `metric_trend_mark` holds how far hours are closed. The compaction moves it first and
-  then waits for the sample writes already in flight, so every sample lands either before the fold or
-  as a late one.
-- **A late sample recomputes its hour.** A sample landing in a closed hour (a spool replayed past the
-  horizon) marks its series' hour in `metric_trend_dirty` in its own insert, and the next compaction
-  folds that hour again from its samples. An on-time sample marks nothing. A late sample already past
+- **Two marks.** `metric_trend_mark` holds how far the compaction has announced it will close hours
+  (`announced_through`) and how far it has folded them (`compacted_through`). A pass moves the
+  announced mark first, then folds each hour in a transaction of its own that moves the compacted
+  mark past it, so a pass cancelled or failed anywhere leaves no hour skipped: the next pass folds
+  from the compacted mark. The first pass starts at the oldest month the hot tier holds or the longest
+  window back from now, whichever is later, so an upgrade does not fold years of hours.
+- **A lock for the writes in flight.** Every metric insert reads the announced mark through
+  `metric_trend_announced()`, which first takes the `metric_trend:announce` advisory lock shared until
+  the insert commits. After announcing, the compaction takes the lock exclusive and lets it go at
+  once: that waits for every insert that may have read the old mark, and every insert after it reads
+  the new one, so each sample lands either before the fold or as a late one. Only metric inserts take
+  the lock, so a long transaction of any other kind, or in another database, never stalls the
+  compaction or the prune behind it; an insert holding the lock past 5 seconds fails the pass, which
+  the next pass retries.
+- **A late sample recomputes its hour.** A sample landing in an announced hour (a spool replayed past
+  the horizon) marks its series' hour in `metric_trend_dirty` in its own insert, and a compaction
+  folds that hour again from its samples once the hour is folded. An on-time sample marks nothing. A late sample already past
   its type's window does not reach the trend.
-- **The prune waits for the trend.** The metric prune and the month drop never pass the mark, so no
-  hour leaves the hot tier before its trend exists.
+- **The prune waits for the trend.** The metric prune and the month drop never pass the compacted
+  mark, so no hour leaves the hot tier before its trend exists.
 
-Trends are kept for `retention.trend_days` (730 by default) and pruned a chunk at a time. A trend row
+Trends are kept for `retention.trend_days` (730 by default) and pruned a chunk at a time, a window of
+their own: nothing forces it to exceed `retention.metric_days`, so a trend can go before its samples. A trend row
 costs about 145 bytes with its key, about 3.5 KB per series per day. Reading trends beyond the hot
 window is the bucketed series read (#1269).
 

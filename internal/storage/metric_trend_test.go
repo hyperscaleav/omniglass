@@ -3,11 +3,14 @@ package storage_test
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
+	"github.com/jackc/pgx/v5"
 )
 
 // The trend tier (#1276, ADR-1276): hourly trends written by compaction once an
@@ -187,9 +190,48 @@ func TestTheHotTierIsNeverPrunedPastTheMark(t *testing.T) {
 	}
 }
 
-// TestCompactionWaitsForTheWritesInFlight: a sample write that began before
-// the compaction announced its hours, and so dirtied nothing, is waited for
-// and folded into the hour it lands in.
+// beginTrendWriter opens a transaction that has done what a metric insert
+// does first (#1276): taken the trend lock shared and read the announced
+// mark, through metric_trend_announced(). It has written nothing, so it holds
+// no transaction id yet.
+func (f *pruneFixture) beginTrendWriter() pgx.Tx {
+	f.t.Helper()
+	writer := connectDSN(f.t, f.dsn)
+	tx, err := writer.Begin(f.ctx)
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	f.t.Cleanup(func() { _ = tx.Rollback(context.Background()) })
+	if _, err := tx.Exec(f.ctx, `select metric_trend_announced()`); err != nil {
+		f.t.Fatal(err)
+	}
+	return tx
+}
+
+// writeSample lands one observed sample of prune-rtt on prune-c1 at ts in tx.
+func (f *pruneFixture) writeSample(tx pgx.Tx, ts time.Time, v float64) {
+	f.t.Helper()
+	if _, err := tx.Exec(f.ctx, storagetest.WideMetricInsert(`ts, owner_kind, component_id, metric_type_id, value`,
+		`values ($1, 'component', (select id from component where name = 'prune-c1'), (select id from metric_type where name = 'prune-rtt'), $2)`),
+		ts, v); err != nil {
+		f.t.Fatal(err)
+	}
+}
+
+// marks reads the compaction's announced and compacted marks.
+func (f *pruneFixture) marks() (announced, compacted time.Time) {
+	f.t.Helper()
+	announced, compacted, ok, err := f.gw.MetricTrendMarks(f.ctx)
+	if err != nil || !ok {
+		f.t.Fatalf("read the trend marks: ok %v, %v", ok, err)
+	}
+	return announced, compacted
+}
+
+// TestCompactionWaitsForTheWritesInFlight: a metric insert that read the
+// announced mark before the compaction moved it, and so dirtied nothing, is
+// waited for and folded into the hour it lands in, even while it has written
+// nothing yet (no transaction id to wait on).
 func TestCompactionWaitsForTheWritesInFlight(t *testing.T) {
 	f := newTrendRig(t)
 	now := time.Now().UTC()
@@ -198,16 +240,7 @@ func TestCompactionWaitsForTheWritesInFlight(t *testing.T) {
 	if err := f.gw.SetMetricTrendMark(f.ctx, hour); err != nil {
 		t.Fatal(err)
 	}
-	writer := connectDSN(t, f.dsn)
-	tx, err := writer.Begin(f.ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := tx.Exec(f.ctx, storagetest.WideMetricInsert(`ts, owner_kind, component_id, metric_type_id, value`,
-		`values ($1, 'component', (select id from component where name = 'prune-c1'), (select id from metric_type where name = 'prune-rtt'), 2)`),
-		hour.Add(time.Minute)); err != nil {
-		t.Fatal(err)
-	}
+	tx := f.beginTrendWriter()
 	done := make(chan storage.TrendCompaction, 1)
 	go func() {
 		c, err := f.gw.CompactMetricTrends(context.Background(), 1, 14)
@@ -218,9 +251,10 @@ func TestCompactionWaitsForTheWritesInFlight(t *testing.T) {
 	}()
 	select {
 	case c := <-done:
-		t.Fatalf("the compaction did not wait for the write in flight: %+v", c)
+		t.Fatalf("the compaction did not wait for the insert in flight: %+v", c)
 	case <-time.After(500 * time.Millisecond):
 	}
+	f.writeSample(tx, hour.Add(time.Minute), 2)
 	if err := tx.Commit(f.ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -228,6 +262,210 @@ func TestCompactionWaitsForTheWritesInFlight(t *testing.T) {
 	if got := f.trendOf(hour); got != "2 1 2 3 1 2" {
 		t.Errorf("the hour's trend %q, want both samples", got)
 	}
+}
+
+// TestACompactionCancelledMidDrainSkipsNoHour: a pass cancelled while it waits
+// for an insert in flight has announced its hours but folded none, so the
+// compacted mark stays, no sample of the hours is pruned, and the next pass
+// folds them, the insert's sample included.
+func TestACompactionCancelledMidDrainSkipsNoHour(t *testing.T) {
+	f := newTrendRig(t)
+	now := time.Now().UTC()
+	hour := now.Add(-3 * 24 * time.Hour).Truncate(time.Hour)
+	f.plant(hour, "observed", 1)
+	if err := f.gw.SetMetricTrendMark(f.ctx, hour); err != nil {
+		t.Fatal(err)
+	}
+	tx := f.beginTrendWriter()
+	f.writeSample(tx, hour.Add(time.Minute), 2)
+	ctx, cancel := context.WithTimeout(f.ctx, 500*time.Millisecond)
+	defer cancel()
+	if c, err := f.gw.CompactMetricTrends(ctx, 1, 14); err == nil {
+		t.Fatalf("a pass cancelled mid-drain returned %+v and no error", c)
+	}
+	announced, compacted := f.marks()
+	if !announced.Equal(hour.Add(time.Hour)) || !compacted.Equal(hour) {
+		t.Errorf("after the cancel the marks are announced %v and compacted %v, want %v and %v (announced, not folded)",
+			announced, compacted, hour.Add(time.Hour), hour)
+	}
+	if n := f.prune("metric", now, 100); n != 0 {
+		t.Errorf("the prune deleted %d samples of the unfolded hour, want 0", n)
+	}
+	if err := tx.Commit(f.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if c := f.compact(1); c.Hours != 1 {
+		t.Fatalf("the next pass closed %d hours, want the one left open", c.Hours)
+	}
+	if got := f.trendOf(hour); got != "2 1 2 3 1 2" {
+		t.Errorf("the hour's trend %q, want both samples", got)
+	}
+}
+
+// TestACompactionCancelledMidFoldSkipsNoHour: a pass cancelled while it folds
+// keeps every hour it folded, and the compacted mark stops at the first hour
+// it did not, so the prune removes only the folded hours' samples and the
+// next pass folds the rest.
+func TestACompactionCancelledMidFoldSkipsNoHour(t *testing.T) {
+	f := newTrendRig(t)
+	now := time.Now().UTC()
+	start := now.Add(-4 * 24 * time.Hour).Truncate(time.Hour)
+	for i := range 5 {
+		f.plant(start.Add(time.Duration(i)*time.Hour+time.Minute), "observed", float64(i+1))
+	}
+	if err := f.gw.SetMetricTrendMark(f.ctx, start); err != nil {
+		t.Fatal(err)
+	}
+	// The third hour's fold waits on another transaction's uncommitted trend
+	// row for the same (series, hour), which is where the pass is cancelled.
+	blocker, err := connectDSN(t, f.dsn).Begin(f.ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = blocker.Rollback(context.Background()) }()
+	stuck := start.Add(2 * time.Hour)
+	if _, err := blocker.Exec(f.ctx, `insert into metric_trend (series_id, hour, count, min, max, sum, first, last)
+		select id, $1, 1, 0, 0, 0, 0, 0 from metric_series where provenance = 'observed'`, stuck); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(f.ctx)
+	defer cancel()
+	type result struct {
+		c   storage.TrendCompaction
+		err error
+	}
+	done := make(chan result, 1)
+	go func() {
+		c, err := f.gw.CompactMetricTrends(ctx, 5, 14)
+		done <- result{c, err}
+	}()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		if _, compacted := f.marks(); compacted.Equal(stuck) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the pass never folded the two hours before the stuck one")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	time.Sleep(200 * time.Millisecond)
+	cancel()
+	r := <-done
+	if r.err == nil || r.c.Hours != 2 {
+		t.Fatalf("a pass cancelled mid-fold returned %+v, %v; want 2 hours closed and an error", r.c, r.err)
+	}
+	announced, compacted := f.marks()
+	if !compacted.Equal(stuck) || !announced.Equal(start.Add(5*time.Hour)) {
+		t.Errorf("after the cancel the marks are announced %v and compacted %v, want %v and %v", announced, compacted, start.Add(5*time.Hour), stuck)
+	}
+	if got := f.trendOf(start.Add(time.Hour)); got != "1 2 2 2 2 2" {
+		t.Errorf("a folded hour's trend %q, want it kept", got)
+	}
+	if n := f.prune("metric", now, 100); n != 2 {
+		t.Errorf("the prune deleted %d samples, want the 2 of the folded hours", n)
+	}
+	if err := blocker.Rollback(f.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if c := f.compact(3); c.Hours != 3 || !c.Through.Equal(start.Add(5*time.Hour)) {
+		t.Errorf("the next pass %+v, want the 3 hours left open closed", c)
+	}
+	for i := 2; i < 5; i++ {
+		v := strconv.Itoa(i + 1)
+		if got, want := f.trendOf(start.Add(time.Duration(i)*time.Hour)), "1 "+strings.Repeat(v+" ", 4)+v; got != want {
+			t.Errorf("hour %d's trend %q, want %q", i, got, want)
+		}
+	}
+}
+
+// TestAnIdleTransactionElsewhereDoesNotStallCompaction: a transaction left
+// idle with a transaction id, in another database or in this one on another
+// table, holds no trend lock, so the compaction and the metric prune it
+// unlocks go on without it.
+func TestAnIdleTransactionElsewhereDoesNotStallCompaction(t *testing.T) {
+	f := newTrendRig(t)
+	now := time.Now().UTC()
+	hour := now.Add(-3 * 24 * time.Hour).Truncate(time.Hour)
+	f.plant(hour, "observed", 1)
+	if err := f.gw.SetMetricTrendMark(f.ctx, hour); err != nil {
+		t.Fatal(err)
+	}
+	other := "og_trend_elsewhere_" + strconv.FormatInt(time.Now().UnixNano(), 36)
+	mustExec(t, f.conn, `create database `+other)
+	t.Cleanup(func() { _, _ = f.conn.Exec(context.Background(), `drop database if exists `+other+` with (force)`) })
+	cfg, err := pgx.ParseConfig(f.dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Database = other
+	elsewhere, err := pgx.ConnectConfig(f.ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = elsewhere.Close(context.Background()) })
+	here := connectDSN(t, f.dsn)
+	for _, conn := range []*pgx.Conn{elsewhere, here} {
+		tx, err := conn.Begin(f.ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = tx.Rollback(context.Background()) })
+		if _, err := tx.Exec(f.ctx, `select pg_current_xact_id()`); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ctx, cancel := context.WithTimeout(f.ctx, 3*time.Second)
+	defer cancel()
+	c, err := f.gw.CompactMetricTrends(ctx, 1, 14)
+	if err != nil || c.Hours != 1 {
+		t.Fatalf("with idle transactions elsewhere the compaction returned %+v, %v; want the hour closed", c, err)
+	}
+	if n, err := f.gw.PruneSamples(ctx, "metric", now, 100); err != nil || n != 1 {
+		t.Errorf("the prune deleted %d (%v), want the folded hour's sample", n, err)
+	}
+}
+
+// TestTheFirstMarkIsSeededAtTheLongestWindow: the first pass on an install
+// holding samples years old starts at the longest window back from now (a
+// type's own, when it is longer than the lane's), not at the oldest month, so
+// an upgrade does not fold years of hours the prune is about to remove; on a
+// hot tier younger than the window it starts at the oldest month.
+func TestTheFirstMarkIsSeededAtTheLongestWindow(t *testing.T) {
+	t.Run("old samples", func(t *testing.T) {
+		f := newTrendRig(t)
+		f.plant(time.Now().UTC().Add(-2*365*24*time.Hour), "observed", 1)
+		mustExec(t, f.conn, `update metric_type set retention_days = 30 where name = 'prune-rtt'`)
+		want := time.Now().UTC().Add(-30 * 24 * time.Hour).Truncate(time.Hour)
+		f.compact(1)
+		announced, compacted := f.marks()
+		seed := compacted.Add(-time.Hour)
+		if !seed.Equal(want) && !seed.Equal(want.Add(time.Hour)) {
+			t.Errorf("the first pass started at %v, want %v (30 days back, the type's window)", seed, want)
+		}
+		if !announced.Equal(compacted) {
+			t.Errorf("announced %v, compacted %v; want the one hour announced and folded", announced, compacted)
+		}
+	})
+	t.Run("a young hot tier", func(t *testing.T) {
+		f := newTrendRig(t)
+		parts, err := f.gw.MetricPartitions(f.ctx)
+		if err != nil || len(parts) == 0 {
+			t.Fatalf("partitions %v (%v)", parts, err)
+		}
+		oldest := parts[0].From
+		f.compact(1)
+		_, compacted := f.marks()
+		seed := compacted.Add(-time.Hour)
+		window := time.Now().UTC().Add(-14 * 24 * time.Hour).Truncate(time.Hour)
+		if oldest.After(window) {
+			if !seed.Equal(oldest) {
+				t.Errorf("the first pass started at %v, want the oldest month %v", seed, oldest)
+			}
+		} else if !seed.Equal(window) && !seed.Equal(window.Add(time.Hour)) {
+			t.Errorf("the first pass started at %v, want %v (the lane's 14 days)", seed, window)
+		}
+	})
 }
 
 // TestTrendFootprint reports what a series' hourly trends cost a day, after

@@ -241,8 +241,8 @@
     },
     {
       "table": "metric_trend_mark",
-      "shape": "fixed key, declared by the platform",
-      "reason": "how far the trend compaction has closed hours (#1276): one row, keyed by a constant true",
+      "shape": "id only",
+      "reason": "how far the trend compaction has announced and folded hours (#1276): one row, keyed by a constant true; nothing addresses it by name",
       "labelled": false
     },
     {

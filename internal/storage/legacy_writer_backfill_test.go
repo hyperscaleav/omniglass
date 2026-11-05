@@ -49,7 +49,9 @@ func legacyBackfillSQL(t *testing.T) (up, down string) {
 // namespace and its search path, #318). Those are re-applied: each migration
 // newer than the lane that is not part of it, run as its own up section. A
 // migration is idempotent by house rule, so the forward migrate after the
-// backfill runs it again harmlessly.
+// backfill runs it again harmlessly. A migration that builds on the narrow lane
+// itself (the hourly trend, #1276, references metric_series) cannot stand
+// beside the wide table and is left to that forward migrate.
 func belowNarrowMetric(t *testing.T, dsn string) {
 	t.Helper()
 	if err := migrate.RollbackBelow(dsn, metricNarrowVersion); err != nil {
@@ -74,6 +76,9 @@ func belowNarrowMetric(t *testing.T, dsn string) {
 			t.Fatal(err)
 		}
 		up, _, _ := strings.Cut(string(raw), "-- migrate:down")
+		if strings.Contains(up, "public.metric_series") {
+			continue
+		}
 		if _, err := conn.Exec(context.Background(), strings.TrimPrefix(up, "-- migrate:up")); err != nil {
 			t.Fatalf("re-apply %s beside the wide metric lane: %v", e.Name(), err)
 		}

@@ -7,12 +7,14 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // The trend tier (#1276, ADR-1276): one metric_trend row per observed metric
 // series per hour (count, min, max, sum, first, last), written by compaction
-// once the hour is past the late-data horizon, and kept for the trend window
-// after the hour's samples leave the hot tier. Calculated series are sparse
+// once the hour is past the late-data horizon, and kept for a window of its
+// own (retention.trend_days), which nothing forces to exceed the samples'.
+// Calculated series are sparse
 // already and are not compacted; properties have no trends (time in state is
 // derived on read).
 
@@ -24,10 +26,16 @@ const MetricTrendHorizon = 24 * time.Hour
 // trendEpoch anchors the hour buckets on UTC hours.
 const trendEpoch = `timestamptz '2000-01-01 00:00:00+00'`
 
-// trendWriteDrainTimeout bounds how long a compaction waits, after announcing
-// the hours it is about to close, for the sample writes already in flight to
-// finish.
-const trendWriteDrainTimeout = 30 * time.Second
+// trendLockKey names the advisory lock between the metric insert and the
+// compaction's drain. metric_trend_announced() (the trend migration) takes it
+// shared, by the same name, before it reads the announced mark.
+const trendLockKey = "metric_trend:announce"
+
+// trendDrainTimeout bounds how long a compaction waits, after announcing the
+// hours it is about to close, for the metric inserts already holding the
+// trend lock to commit. While it waits, a new insert queues behind it, so the
+// bound is also the longest the ingest can stall on a compaction.
+const trendDrainTimeout = 5 * time.Second
 
 // trendDirtyChunk is how many dirty (series, hour) marks one statement
 // recomputes.
@@ -59,23 +67,33 @@ type TrendCompaction struct {
 	Behind bool
 }
 
-// metricTrendMark reads the compaction's mark, ok false before its first pass.
-func metricTrendMark(ctx context.Context, q querier) (time.Time, bool, error) {
-	var through time.Time
-	err := q.QueryRow(ctx, `select compacted_through from metric_trend_mark`).Scan(&through)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return time.Time{}, false, nil
-	}
-	if err != nil {
-		return time.Time{}, false, fmt.Errorf("storage: read the trend mark: %w", err)
-	}
-	return through, true, nil
+// trendMarks is the compaction's two marks: how far it has announced it will
+// close hours (a sample dated before announced dirties its hour), and how far
+// it has folded them (every hour before compacted has its trend).
+type trendMarks struct {
+	announced, compacted time.Time
 }
 
-func setMetricTrendMark(ctx context.Context, q txQuerier, through time.Time) error {
-	if _, err := q.Exec(ctx, `insert into metric_trend_mark (id, compacted_through) values (true, $1)
-		on conflict (id) do update set compacted_through = excluded.compacted_through`, through); err != nil {
-		return fmt.Errorf("storage: set the trend mark: %w", err)
+// metricTrendMarks reads the compaction's marks, ok false before its first
+// pass.
+func metricTrendMarks(ctx context.Context, q querier) (trendMarks, bool, error) {
+	var m trendMarks
+	err := q.QueryRow(ctx, `select announced_through, compacted_through from metric_trend_mark`).Scan(&m.announced, &m.compacted)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return m, false, nil
+	}
+	if err != nil {
+		return m, false, fmt.Errorf("storage: read the trend marks: %w", err)
+	}
+	return m, true, nil
+}
+
+// setMetricTrendMarks stands both marks at through.
+func setMetricTrendMarks(ctx context.Context, q txQuerier, through time.Time) error {
+	if _, err := q.Exec(ctx, `insert into metric_trend_mark (id, announced_through, compacted_through) values (true, $1, $1)
+		on conflict (id) do update set announced_through = excluded.announced_through,
+			compacted_through = excluded.compacted_through`, through); err != nil {
+		return fmt.Errorf("storage: set the trend marks: %w", err)
 	}
 	return nil
 }
@@ -87,12 +105,15 @@ func setMetricTrendMark(ctx context.Context, q txQuerier, through time.Time) err
 // its type's window is not recomputed (what remains would be only part of
 // the hour), and the late sample it held goes with the next prune.
 //
-// Closing is announced first: the mark moves past the hours about to close and
-// commits, so every sample write that starts after it dirties the hour it
-// lands in; then the compaction waits for the writes already in flight (each
-// read the old mark and dirtied nothing) to finish, so its fold sees them. A
-// write that outlasts trendWriteDrainTimeout puts the mark back and fails the
-// pass, which the next pass retries.
+// Closing is announced first: the announced mark moves past the hours about
+// to close and commits, so every metric insert that reads it after dirties the
+// hour it lands in. The drain then waits for the inserts that may have read
+// the old mark (each holds the trend lock) to commit, so the fold sees them.
+// Each hour then folds in a transaction of its own that moves the compacted
+// mark past it, so a pass that stops anywhere (a cancel, a failed fold, a
+// crash) leaves every hour before the compacted mark folded and every hour
+// after it open, for the next pass to fold; the prunes stop at the compacted
+// mark.
 func (p *PG) CompactMetricTrends(ctx context.Context, maxHours, laneDays int) (TrendCompaction, error) {
 	var out TrendCompaction
 	if maxHours <= 0 {
@@ -103,88 +124,124 @@ func (p *PG) CompactMetricTrends(ctx context.Context, maxHours, laneDays int) (T
 		return out, err
 	}
 	target := now.Add(-MetricTrendHorizon).UTC().Truncate(time.Hour)
-	from, ok, err := metricTrendMark(ctx, p.pool)
+	marks, ok, err := metricTrendMarks(ctx, p.pool)
 	if err != nil {
 		return out, err
 	}
 	if !ok {
-		// The first pass starts at the oldest month the hot tier holds.
-		parts, err := metricPartitions(ctx, p.pool)
-		if err != nil {
+		if marks, err = p.seedTrendMarks(ctx, now, target, laneDays); err != nil {
 			return out, err
 		}
-		from = target
-		if len(parts) > 0 && parts[0].From.Before(target) {
-			from = parts[0].From
-		}
 	}
+	from := marks.compacted
 	out.Through = from
 	if from.Before(target) {
 		through := from.Add(time.Duration(maxHours) * time.Hour)
 		if through.After(target) {
 			through = target
 		}
-		if err := p.announceTrendHours(ctx, through, from, ok); err != nil {
+		if _, err := p.pool.Exec(ctx, `update metric_trend_mark set announced_through = greatest(announced_through, $1)`, through); err != nil {
+			return out, fmt.Errorf("storage: announce the trend hours to %s: %w", through.Format(time.RFC3339), err)
+		}
+		if err := p.drainTrendWrites(ctx); err != nil {
 			return out, err
 		}
 		for h := from; h.Before(through); h = h.Add(time.Hour) {
-			if _, err := p.pool.Exec(ctx, `insert into metric_trend (series_id, hour, count, min, max, sum, first, last)
-				select `+trendAggregates("$1::timestamptz")+`
-				from metric m join metric_series s on s.id = m.series_id and s.provenance = 'observed'
-				where m.ts >= $1 and m.ts < $2
-				group by m.series_id `+trendUpsert, h, h.Add(time.Hour)); err != nil {
-				return out, fmt.Errorf("storage: compact the hour from %s: %w", h.Format(time.RFC3339), err)
+			if err := p.foldTrendHour(ctx, h); err != nil {
+				return out, err
 			}
 			out.Hours++
+			out.Through = h.Add(time.Hour)
 		}
-		out.Through = through
 		out.Behind = through.Before(target)
-	} else if !ok {
-		if err := setMetricTrendMark(ctx, p.pool, from); err != nil {
-			return out, err
-		}
 	}
 	n, err := p.recomputeDirtyTrends(ctx, laneDays)
 	out.Recomputed = n
 	return out, err
 }
 
-// announceTrendHours moves the mark to through and waits out the sample
-// writes in flight when it committed; on a timeout it puts the mark back to
-// from (or removes it, when there was none).
-func (p *PG) announceTrendHours(ctx context.Context, through, from time.Time, hadMark bool) error {
-	if err := setMetricTrendMark(ctx, p.pool, through); err != nil {
-		return err
+// seedTrendMarks stands both marks where the first pass starts: the oldest
+// month the hot tier holds, or the longest window (the metric lane's, or a
+// type's own) back from now when that is later, so an install upgraded with
+// years of samples kept does not fold hours every prune is about to remove.
+// Never past target. A second server seeding at once keeps the first's.
+func (p *PG) seedTrendMarks(ctx context.Context, now, target time.Time, laneDays int) (trendMarks, error) {
+	var days int
+	if err := p.pool.QueryRow(ctx, `select greatest($1::int, coalesce(max(retention_days), 0)) from metric_type`, laneDays).Scan(&days); err != nil {
+		return trendMarks{}, fmt.Errorf("storage: seed the trend marks: %w", err)
 	}
-	var snapshot string
-	if err := p.pool.QueryRow(ctx, `select pg_current_snapshot()::text`).Scan(&snapshot); err != nil {
-		return fmt.Errorf("storage: compact metric trends: %w", err)
+	parts, err := metricPartitions(ctx, p.pool)
+	if err != nil {
+		return trendMarks{}, err
 	}
-	deadline := time.Now().Add(trendWriteDrainTimeout)
-	for {
-		var drained bool
-		if err := p.pool.QueryRow(ctx, `select not exists (select 1 from pg_snapshot_xip($1::pg_snapshot) x
-			where pg_xact_status(x) = 'in progress')`, snapshot).Scan(&drained); err != nil {
-			return fmt.Errorf("storage: compact metric trends: %w", err)
-		}
-		if drained {
-			return nil
-		}
-		if time.Now().After(deadline) {
-			restore := context.Background()
-			if hadMark {
-				_ = setMetricTrendMark(restore, p.pool, from)
-			} else {
-				_, _ = p.pool.Exec(restore, `delete from metric_trend_mark`)
-			}
-			return fmt.Errorf("storage: compact metric trends: a sample write in flight outlasted %s; the hours stay open", trendWriteDrainTimeout)
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(50 * time.Millisecond):
-		}
+	from := now.Add(-time.Duration(days) * 24 * time.Hour).UTC().Truncate(time.Hour)
+	if len(parts) > 0 && parts[0].From.After(from) {
+		from = parts[0].From
 	}
+	if from.After(target) {
+		from = target
+	}
+	if _, err := p.pool.Exec(ctx, `insert into metric_trend_mark (id, announced_through, compacted_through)
+		values (true, $1, $1) on conflict (id) do nothing`, from); err != nil {
+		return trendMarks{}, fmt.Errorf("storage: seed the trend marks: %w", err)
+	}
+	marks, _, err := metricTrendMarks(ctx, p.pool)
+	return marks, err
+}
+
+// drainTrendWrites waits until no metric insert that read the announced mark
+// before it last moved is still open: it takes the trend lock exclusive, which
+// waits for every insert holding it shared, and lets it go at once. An insert
+// that takes the lock after reads the moved mark. Only the inserts wait: a
+// transaction of any other kind, or in another database, holds no trend lock.
+// An insert that outlasts trendDrainTimeout fails the pass with the hours
+// still open, for the next pass to retry; the announced mark stays where it
+// moved, which only dirties a few hours the fold would have seen.
+func (p *PG) drainTrendWrites(ctx context.Context) error {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("storage: drain the metric inserts: %w", err)
+	}
+	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
+	if _, err := tx.Exec(ctx, fmt.Sprintf(`set local lock_timeout = %d`, trendDrainTimeout.Milliseconds())); err != nil {
+		return fmt.Errorf("storage: drain the metric inserts: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(hashtextextended($1, 0))`, trendLockKey); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "55P03" {
+			return fmt.Errorf("storage: compact metric trends: a metric insert in flight outlasted %s; the hours stay open", trendDrainTimeout)
+		}
+		return fmt.Errorf("storage: drain the metric inserts: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("storage: drain the metric inserts: %w", err)
+	}
+	return nil
+}
+
+// foldTrendHour folds the hour from h into one trend row per observed series
+// and moves the compacted mark past it, in one transaction: the mark never
+// passes an hour whose trend did not commit.
+func (p *PG) foldTrendHour(ctx context.Context, h time.Time) error {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("storage: compact the hour from %s: %w", h.Format(time.RFC3339), err)
+	}
+	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
+	if _, err := tx.Exec(ctx, `insert into metric_trend (series_id, hour, count, min, max, sum, first, last)
+		select `+trendAggregates("$1::timestamptz")+`
+		from metric m join metric_series s on s.id = m.series_id and s.provenance = 'observed'
+		where m.ts >= $1 and m.ts < $2
+		group by m.series_id `+trendUpsert, h, h.Add(time.Hour)); err != nil {
+		return fmt.Errorf("storage: compact the hour from %s: %w", h.Format(time.RFC3339), err)
+	}
+	if _, err := tx.Exec(ctx, `update metric_trend_mark set compacted_through = greatest(compacted_through, $1)`, h.Add(time.Hour)); err != nil {
+		return fmt.Errorf("storage: compact the hour from %s: %w", h.Format(time.RFC3339), err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("storage: compact the hour from %s: %w", h.Format(time.RFC3339), err)
+	}
+	return nil
 }
 
 // recomputeDirtyTrends folds again every closed (series, hour) a late sample
@@ -238,19 +295,20 @@ func (p *PG) PruneMetricTrends(ctx context.Context, before time.Time, limit int)
 	return tag.RowsAffected(), nil
 }
 
-// metricPruneHorizon caps a metric prune's cutoff at the trend mark, so no
-// sample of an hour the compaction has not closed is ever removed: a pass
-// that compacted nothing yet prunes nothing.
+// metricPruneHorizon caps a metric prune's cutoff at the compacted mark, so
+// no sample of an hour the compaction has not folded is ever removed (an
+// announced hour is not yet folded): a pass that compacted nothing yet prunes
+// nothing.
 func metricPruneHorizon(ctx context.Context, q querier, before time.Time) (time.Time, error) {
-	through, ok, err := metricTrendMark(ctx, q)
+	marks, ok, err := metricTrendMarks(ctx, q)
 	if err != nil {
 		return time.Time{}, err
 	}
 	if !ok {
 		return time.Time{}, nil
 	}
-	if through.Before(before) {
-		return through, nil
+	if marks.compacted.Before(before) {
+		return marks.compacted, nil
 	}
 	return before, nil
 }

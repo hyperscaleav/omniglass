@@ -54,9 +54,20 @@ func ExportMetricNewestSQL() string { return metricNewestSQL("$1::bigint") }
 // when no metric partition covers a row (#420).
 func ExportIsPartitionRoutingMiss(err error) bool { return isPartitionRoutingMiss(err) }
 
-// SetMetricTrendMark sets how far the trend compaction has closed hours
-// (#1276), so a test of the metric prune, which never passes the mark, can
-// stand the mark where it wants it.
+// SetMetricTrendMark stands both of the trend compaction's marks (#1276) at
+// through, so a test of the metric prune, which never passes the compacted
+// mark, can stand it where it wants it.
 func (p *PG) SetMetricTrendMark(ctx context.Context, through time.Time) error {
-	return setMetricTrendMark(ctx, p.pool, through)
+	return setMetricTrendMarks(ctx, p.pool, through)
 }
+
+// MetricTrendMarks reads the trend compaction's announced and compacted marks
+// (#1276), ok false before its first pass.
+func (p *PG) MetricTrendMarks(ctx context.Context) (announced, compacted time.Time, ok bool, err error) {
+	m, ok, err := metricTrendMarks(ctx, p.pool)
+	return m.announced, m.compacted, ok, err
+}
+
+// TrendLockKey is the advisory lock the metric insert holds shared and the
+// compaction's drain takes exclusive (#1276).
+const TrendLockKey = trendLockKey

@@ -79,7 +79,8 @@ on **Admin > Settings**, each from 1 to 36,500 days:
 - `property_days`, 90 by default: how long a property transition (a change such as a power state
   going from on to off) is kept.
 - `trend_days`, 730 by default: how long the hourly trends of each metric (count, minimum, maximum,
-  sum, first and last value of every hour) are kept after the hour's samples are gone.
+  sum, first and last value of every hour) are kept, counted from the hour, like `metric_days`. It is
+  a window of its own: set it below `metric_days` and an hour's trend goes before its samples do.
 - Log lines, from your components and from your nodes, by severity:
   - `log_debug_days`, 3 by default;
   - `log_info_days`, 14 by default, which also covers notice and a line with no severity;

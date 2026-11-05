@@ -5255,6 +5255,11 @@
       "pk": true
      },
      {
+      "name": "announced_through",
+      "type": "timestamp with time zone",
+      "nullable": false
+     },
+     {
       "name": "compacted_through",
       "type": "timestamp with time zone",
       "nullable": false
@@ -5264,6 +5269,10 @@
      {
       "name": "metric_trend_mark_one_row",
       "expr": "CHECK (id)"
+     },
+     {
+      "name": "metric_trend_mark_order",
+      "expr": "CHECK ((compacted_through \u003c= announced_through))"
      }
     ]
    },

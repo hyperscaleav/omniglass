@@ -227,10 +227,13 @@ func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs
 	// sample's rule lineage, $12 the collecting node (null for none), $13 a
 	// fanned sample's conduit (source_conduit_id, #1282; null for none).
 	//
-	// An observed sample dated in an hour the trend compaction has already
-	// closed (#1276: a late sample, a spool replayed past the horizon) marks
-	// its series' hour dirty in the same statement, so the next compaction
-	// recomputes the hour; an on-time sample marks nothing.
+	// An observed sample dated in an hour the trend compaction has announced
+	// (#1276: a late sample, a spool replayed past the horizon) marks its
+	// series' hour dirty in the same statement, so a compaction recomputes the
+	// hour once it is folded; an on-time sample marks nothing. The announced
+	// mark is read by metric_trend_announced(), which first takes the trend
+	// lock shared until the transaction ends: the compaction's drain
+	// (drainTrendWrites) waits for every insert holding it.
 	//
 	// Each sample's series is found by its key, or started in the same statement
 	// when the batch is its first sample. A series another transaction started
@@ -278,7 +281,7 @@ func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs
 	insert into metric_trend_dirty (series_id, hour)
 	select distinct l.series_id, date_bin('1 hour', l.ts, timestamptz '2000-01-01 00:00:00+00')
 	from landed l
-	where $8::text = 'observed' and l.ts < (select m.compacted_through from metric_trend_mark m)
+	where $8::text = 'observed' and l.ts < (select metric_trend_announced())
 	on conflict do nothing`
 	// insert lands the samples at idx in one statement, in their order, so the
 	// rows take ids in the order the batch carried them (metricInsertSQL: each
