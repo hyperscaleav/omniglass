@@ -3,10 +3,14 @@ package storagetest
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/db"
+	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -241,4 +245,142 @@ func probeCount(t *testing.T, ctx context.Context, conn *pgx.Conn, name string) 
 		t.Fatalf("count probe rows: %v", err)
 	}
 	return n
+}
+
+// dbNameOf is the database a DSN from NewDSN points at.
+func dbNameOf(t *testing.T, dsn string) string {
+	t.Helper()
+	u, err := url.Parse(dsn)
+	if err != nil {
+		t.Fatalf("parse dsn: %v", err)
+	}
+	return strings.TrimPrefix(u.Path, "/")
+}
+
+func databaseExists(t *testing.T, ctx context.Context, admin *pgx.Conn, name string) bool {
+	t.Helper()
+	var exists bool
+	if err := admin.QueryRow(ctx,
+		`select exists (select 1 from pg_database where datname = $1)`, name).Scan(&exists); err != nil {
+		t.Fatalf("look up database %s: %v", name, err)
+	}
+	return exists
+}
+
+// TestNewDSNDropsItsDatabaseAtCleanup pins the disk bound (#1314). Each
+// provisioned database is a ~15 MB template copy, and before the drop they all
+// lived until the container died, so a binary's footprint grew with every test
+// ever run and filled the CI runner at about the 905th. The database must be
+// gone once the test that asked for it has finished.
+func TestNewDSNDropsItsDatabaseAtCleanup(t *testing.T) {
+	ctx := context.Background()
+	var name string
+	t.Run("provision", func(t *testing.T) {
+		name = dbNameOf(t, NewDSN(t))
+		admin := connect(t, ctx, adminDSN)
+		if !databaseExists(t, ctx, admin, name) {
+			t.Fatalf("database %s is missing while its test is still running", name)
+		}
+	})
+	if name == "" {
+		t.Fatal("the subtest did not provision a database (skipped?)")
+	}
+	admin := connect(t, ctx, adminDSN)
+	if databaseExists(t, ctx, admin, name) {
+		t.Errorf("database %s survived the end of the test that provisioned it", name)
+	}
+}
+
+// TestNewDSNDropsDespiteAnOpenConnection is the WITH (FORCE) path. A test can
+// hand the raw DSN to something that outlives it, such as a server binary it
+// launched, and a plain DROP DATABASE would fail on that session and leak the
+// copy. The connection here is deliberately never closed before cleanup.
+func TestNewDSNDropsDespiteAnOpenConnection(t *testing.T) {
+	ctx := context.Background()
+	var name string
+	var leftOpen *pgx.Conn
+	t.Run("provision", func(t *testing.T) {
+		dsn := NewDSN(t)
+		name = dbNameOf(t, dsn)
+		conn, err := pgx.Connect(ctx, dsn)
+		if err != nil {
+			t.Fatalf("connect: %v", err)
+		}
+		leftOpen = conn
+		var n int
+		if err := conn.QueryRow(ctx, `select count(*) from schema_migrations`).Scan(&n); err != nil {
+			t.Fatalf("query through the open connection: %v", err)
+		}
+	})
+	t.Cleanup(func() { _ = leftOpen.Close(ctx) })
+	if name == "" {
+		t.Fatal("the subtest did not provision a database (skipped?)")
+	}
+	admin := connect(t, ctx, adminDSN)
+	if databaseExists(t, ctx, admin, name) {
+		t.Errorf("database %s survived cleanup while a connection to it was open", name)
+	}
+	if err := leftOpen.Ping(ctx); err == nil {
+		t.Error("the straggler connection still answers after its database was dropped")
+	}
+}
+
+// logRecorder captures what the harness reports through Logf, which is where a
+// failed drop is surfaced without failing the test.
+type logRecorder struct {
+	testing.TB
+	mu    sync.Mutex
+	lines []string
+}
+
+func (r *logRecorder) Logf(format string, args ...any) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.lines = append(r.lines, fmt.Sprintf(format, args...))
+}
+
+// TestNewDBClosesItsPoolBeforeTheDrop covers both constructors that pair a pool
+// with NewDSN. Cleanups run last in, first out, so the pool each registers after
+// NewDSN returns closes before the drop runs. The drop reports a failure only
+// through Logf, so an empty log plus a vanished database is the observable form
+// of that ordering holding. The database name is read from the counter right
+// after construction, which is exact because these tests are not parallel.
+func TestNewDBClosesItsPoolBeforeTheDrop(t *testing.T) {
+	ctx := context.Background()
+	constructors := []struct {
+		name string
+		mk   func(testing.TB) storage.Gateway
+	}{
+		{"NewDB", NewDB},
+		{"NewCountingDB", func(tb testing.TB) storage.Gateway {
+			gw, _ := NewCountingDB(tb)
+			return gw
+		}},
+	}
+	for _, c := range constructors {
+		t.Run(c.name, func(t *testing.T) {
+			var dbName string
+			var rec *logRecorder
+			t.Run("provision", func(t *testing.T) {
+				rec = &logRecorder{TB: t}
+				gw := c.mk(rec)
+				dbName = testDBNameFor(procTag, dbCounter.Load())
+				if err := gw.Ping(ctx); err != nil {
+					t.Fatalf("ping: %v", err)
+				}
+			})
+			if dbName == "" {
+				t.Fatal("the subtest did not provision a database (skipped?)")
+			}
+			rec.mu.Lock()
+			defer rec.mu.Unlock()
+			if len(rec.lines) != 0 {
+				t.Errorf("the harness logged during cleanup: %q", rec.lines)
+			}
+			admin := connect(t, ctx, adminDSN)
+			if databaseExists(t, ctx, admin, dbName) {
+				t.Errorf("database %s survived cleanup", dbName)
+			}
+		})
+	}
 }
