@@ -52,8 +52,11 @@ const (
 	pgDataDir   = "/var/lib/postgresql"
 	consolePort = 8080
 	busPort     = 4222
-	// The unprivileged pinger needs the whole group range admitted.
-	pingGroupRange = "0 2147483647"
+	// The unprivileged pinger needs the node's groups admitted: root, and
+	// distroless nonroot (65532). The range stays inside the groups a standard
+	// rootless Docker maps (0 to 65536), since the kernel refuses a range
+	// naming an unmapped group and the node would never start (#1506).
+	pingGroupRange = "0 65535"
 )
 
 // Label keys. The compose keys make `docker compose ls`, `ps` and `logs`,

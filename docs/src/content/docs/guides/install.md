@@ -95,7 +95,9 @@ Either way the simulator runs unprivileged, and each privilege it is given buys 
   with `--port-offset 10000` and aim the endpoints at the lifted ports
   (`omniglass seed-dev --sim-port-offset 10000` seeds the dev fleet that way).
 - **Ping.** The node's pinger is unprivileged: the kernel must let its group send ICMP echo through
-  `net.ipv4.ping_group_range` (with Docker, `--sysctl net.ipv4.ping_group_range="0 2147483647"`).
+  `net.ipv4.ping_group_range` (with Docker, `--sysctl net.ipv4.ping_group_range="0 65535"`). Keep the
+  range inside the groups the container's user namespace maps: rootless Docker maps 65537 of them, and
+  a wider range is refused, so the container never starts.
 - **Impairments and truthful ping** need `--impairments` and `NET_ADMIN`
   (`docker run --cap-add NET_ADMIN`), because they rewrite the firewall and traffic shaping of the
   network namespace the simulator runs in. Grant it only in a namespace of the simulator's own (a

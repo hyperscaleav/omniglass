@@ -54,7 +54,7 @@ jobs:
       # not cascade to the tag-triggered goreleaser workflow, so the binaries
       # are built inline here. Gated on an actual new release (dry-runs skip
       # it). Shares .goreleaser.yaml with goreleaser.yml.
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         if: steps.semantic.outputs.new_release_published == 'true'
         with:
           go-version-file: go.mod

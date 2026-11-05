@@ -6,7 +6,7 @@ title: Read a vital two endpoints collect
 description: Open the Boardroom DSP, read which endpoint its TCP connect time comes from and of how many, and open the row for each endpoint's latest value.
 steps:
   - goto: /components/dsp
-    caption: The Boardroom DSP. Two endpoints collect it, http and tcp, and both measure its TCP connect time.
+    caption: The Boardroom DSP. Its http and tcp endpoints both measure its TCP connect time.
   - wait: { selector: '[data-testid=vital-tcp-connect-time]' }
     caption: Its Vitals row shows the newest sample and says which endpoint it came from, and of how many.
     hold: 1500
