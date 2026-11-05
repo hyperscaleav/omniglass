@@ -105,8 +105,12 @@ func (p *PG) sampleWrite(ctx context.Context, what string, write func(pgx.Tx) er
 	}
 }
 
+// sampleWriteOnce runs the write in a READ COMMITTED transaction
+// (trendTxOptions): the metric insert reads the trend's announced mark after
+// taking the trend lock, and must see the mark a compaction moved before the
+// lock was granted.
 func (p *PG) sampleWriteOnce(ctx context.Context, what string, write func(pgx.Tx) error) error {
-	tx, err := p.pool.Begin(ctx)
+	tx, err := p.pool.BeginTx(ctx, trendTxOptions)
 	if err != nil {
 		return fmt.Errorf("storage: begin %s: %w", what, err)
 	}
@@ -227,6 +231,14 @@ func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs
 	// sample's rule lineage, $12 the collecting node (null for none), $13 a
 	// fanned sample's conduit (source_conduit_id, #1282; null for none).
 	//
+	// An observed sample dated in an hour the trend compaction has announced
+	// (#1276: a late sample, a spool replayed past the horizon) marks its
+	// series' hour dirty in the same statement, so a compaction recomputes the
+	// hour once it is folded; an on-time sample marks nothing. The announced
+	// mark is read by metric_trend_announced(), which first takes the trend
+	// lock shared until the transaction ends: the compaction's drain
+	// (drainTrendWrites) waits for every insert holding it.
+	//
 	// Each sample's series is found by its key, or started in the same statement
 	// when the batch is its first sample. A series another transaction started
 	// and has not committed is not seen: the insert of the series then waits on
@@ -262,12 +274,19 @@ func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs
 		on conflict do nothing
 		returning id, owner_id, metric_type_id, instance, source
 	),
-	series as (select * from known union all select * from fresh)
-	insert into metric (series_id, ts, value, source_rule, source_rule_version, source_rule_id)
-	select s.id, u.ts, u.value, $9::text, $10::bigint, $11::uuid
-	from u left join series s on s.owner_id = u.owner and s.metric_type_id = u.type_id
-		and s.instance = u.instance and s.source = u.source
-	order by u.ord`
+	series as (select * from known union all select * from fresh),
+	landed as (
+		insert into metric (series_id, ts, value, source_rule, source_rule_version, source_rule_id)
+		select s.id, u.ts, u.value, $9::text, $10::bigint, $11::uuid
+		from u left join series s on s.owner_id = u.owner and s.metric_type_id = u.type_id
+			and s.instance = u.instance and s.source = u.source
+		order by u.ord
+		returning series_id, ts)
+	insert into metric_trend_dirty (series_id, hour)
+	select distinct l.series_id, date_bin('1 hour', l.ts, timestamptz '2000-01-01 00:00:00+00')
+	from landed l
+	where $8::text = 'observed' and l.ts < (select metric_trend_announced())
+	on conflict do nothing`
 	// insert lands the samples at idx in one statement, in their order, so the
 	// rows take ids in the order the batch carried them (metricInsertSQL: each
 	// sample's series is found, or started, in the same statement). An unknown

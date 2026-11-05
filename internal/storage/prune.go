@@ -186,6 +186,15 @@ func pruneMetricSampleSQL(part string, typed bool) string {
 // DropMetricPartitions; this keeps the window exact inside the months that
 // remain.
 func (p *PG) pruneMetricSamples(ctx context.Context, typeID string, days int, before time.Time, limit int) (int64, error) {
+	// No sample of an hour the trend compaction has not closed is removed
+	// (#1276), so the trend tier never misses an hour retention reached first.
+	before, err := metricPruneHorizon(ctx, p.pool, before)
+	if err != nil {
+		return 0, err
+	}
+	if before.IsZero() {
+		return 0, nil
+	}
 	parts, err := metricPartitions(ctx, p.pool)
 	if err != nil {
 		return 0, err

@@ -380,6 +380,20 @@ telemetry: {
     node_id: uuid {constraint: foreign_key}
     system_id: uuid {constraint: foreign_key}
   }
+  metric_trend: {
+    shape: sql_table
+    hour: timestamp with time zone {constraint: primary_key}
+    series_id: bigint {constraint: primary_key}
+  }
+  metric_trend_dirty: {
+    shape: sql_table
+    hour: timestamp with time zone {constraint: primary_key}
+    series_id: bigint {constraint: primary_key}
+  }
+  metric_trend_mark: {
+    shape: sql_table
+    id: boolean {constraint: primary_key}
+  }
   metric_type: {
     shape: sql_table
     id: uuid {constraint: primary_key}
@@ -701,6 +715,7 @@ telemetry.metric_series.location_id -> fleet.location.id
 telemetry.metric_series.metric_type_id -> telemetry.metric_type.id
 telemetry.metric_series.node_id -> collection.node.principal_id
 telemetry.metric_series.system_id -> fleet.system.id
+telemetry.metric_trend.series_id -> telemetry.metric_series.id
 telemetry.notification.alarm_id -> telemetry.alarm.id
 telemetry.notification.component_id -> fleet.component.id
 telemetry.notification.notification_type_id -> telemetry.notification_type.id
