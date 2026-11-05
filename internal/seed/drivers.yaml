@@ -575,6 +575,12 @@ drivers:
           request: { line: "GET INPUT", reply: { prefix: "INPUT ", error: { prefix: "-ERR" } } }
           emits:
             - { name: video-input, extract: { regex: "^INPUT (\\S+)$" } }
+        - &nvp_scene_poll
+          name: room
+          schedule: { every: 30s }
+          request: { line: "GET SCENE", reply: { prefix: "SCENE ", error: { prefix: "-ERR" } } }
+          emits:
+            - { name: scene-state, extract: { regex: "^SCENE (\\S+)$" } }
       # The NVP conversation is line-oriented over a held TCP session: the
       # subscribes arm on establish (and re-arm on every recover), and the
       # device pushes lines the listeners claim by prefix. The standing
@@ -587,7 +593,8 @@ drivers:
       # video-input property and an input-changed event carrying the new
       # input; a diagnostics line is a log line, its severity read off the
       # line; and anything no listener claims (the scene changes SUBSCRIBE
-      # SCENE pushes) lands whole as a log line, raw arrival.
+      # SCENE pushes) lands whole as a log line, raw arrival. The room's
+      # scene is also the scene-state property, read on a poll (#1494).
       unmatched: log
       listeners:
         - &nvp_events_listener
@@ -630,6 +637,7 @@ drivers:
       # whole, and the processor adds its program state, polled and pushed.
       polls:
         - *nvp_input_poll
+        - *nvp_scene_poll
         - name: program
           schedule: { every: 30s }
           request: { line: "GET PROGRAM", reply: { prefix: "PROGRAM ", error: { prefix: "-ERR" } } }

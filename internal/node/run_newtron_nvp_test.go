@@ -45,6 +45,7 @@ func TestNodeNewtronProcessorAndSchedulerReadTheirClassState(t *testing.T) {
 
 	s.waitFor("processor-1", coreEP, "program-state", is("running"), "a running program at rest")
 	s.waitFor("processor-1", coreEP, "video-input", is("hdmi1"), "the input, which a processor answers as the panel does")
+	s.waitFor("processor-1", coreEP, "scene-state", is("idle"), "the room's scene, which a processor answers as the panel does (#1494)")
 	s.waitFor("scheduler-1", slateEP, "booking-state", is("free"), "a free room at rest")
 	if v := s.latest("scheduler-1", slateEP, "video-input"); v != "" {
 		t.Errorf("the scheduling panel landed a video input (%q)", v)
@@ -52,7 +53,7 @@ func TestNodeNewtronProcessorAndSchedulerReadTheirClassState(t *testing.T) {
 
 	// The device's own change reaches the series.
 	lx := collection.NewLineExchanger()
-	for _, c := range []struct{ prof, line string }{{core, "SET PROGRAM stopped"}, {slate, "BOOK"}} {
+	for _, c := range []struct{ prof, line string }{{core, "SET PROGRAM stopped"}, {core, "SET SCENE presentation"}, {slate, "BOOK"}} {
 		addr := fmt.Sprintf("%s:%d", s.ips[c.prof], nvpPort(c.prof))
 		if _, err := lx.Exchange(context.Background(), addr, c.line, 2*time.Second); err != nil {
 			t.Fatalf("%s: %v", c.line, err)
@@ -60,5 +61,6 @@ func TestNodeNewtronProcessorAndSchedulerReadTheirClassState(t *testing.T) {
 	}
 	s.runNode("edge-nvp") // a restarted node polls at once, rather than at the interval
 	s.waitFor("processor-1", coreEP, "program-state", is("stopped"), "the stopped program")
+	s.waitFor("processor-1", coreEP, "scene-state", is("presentation"), "the scene the room entered")
 	s.waitFor("scheduler-1", slateEP, "booking-state", is("booked"), "the booked room")
 }

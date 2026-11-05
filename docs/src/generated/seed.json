@@ -467,6 +467,12 @@
    "description": "Whether a control processor is running its loaded program or has it stopped, as the processor reports it."
   },
   {
+   "name": "scene-state",
+   "data_type": "string",
+   "label": "Scene State",
+   "description": "The current scene a room is in, as reported by a control panel or processor (idle, presentation, or video conference mode)."
+  },
+  {
    "name": "serial-number",
    "data_type": "string",
    "label": "Serial number",
@@ -2913,7 +2919,7 @@
    "label": "Newtron NVP",
    "version": "1.0.0",
    "transport": "tcp",
-   "polls": 1,
+   "polls": 2,
    "listeners": 2,
    "commands": 1
   },
@@ -2922,7 +2928,7 @@
    "label": "Newtron Core NVP",
    "version": "1.0.0",
    "transport": "tcp",
-   "polls": 2,
+   "polls": 3,
    "listeners": 3,
    "commands": 1
   },

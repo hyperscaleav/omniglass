@@ -236,6 +236,11 @@ property_types:
     validation: { enum: [running, stopped] }
     label: Program State
     description: Whether a control processor is running its loaded program or has it stopped, as the processor reports it.
+  - name: scene-state
+    data_type: string
+    validation: { enum: [idle, presentation, vc] }
+    label: Scene State
+    description: The current scene a room is in, as reported by a control panel or processor (idle, presentation, or video conference mode).
   # Declared attribute properties: the starter set a field draws from.
   - name: serial-number
     data_type: string

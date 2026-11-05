@@ -46,6 +46,16 @@ func TestPanelSpeaksTheNVPLineProtocol(t *testing.T) {
 			t.Fatalf("after SET INPUT %s, GET INPUT = %q", in, got)
 		}
 	}
+	// The room's scene (#1494): read at rest, set, read again.
+	if got := ask("GET SCENE"); got != "SCENE idle" {
+		t.Fatalf("GET SCENE = %q, want the room at rest", got)
+	}
+	if got := ask("SET SCENE vc"); got != "SCENE vc" {
+		t.Fatalf("SET SCENE vc = %q", got)
+	}
+	if got := ask("GET SCENE"); got != "SCENE vc" {
+		t.Fatalf("after SET SCENE vc, GET SCENE = %q", got)
+	}
 }
 
 // A subscribed session hears the input change as the driver's listener
