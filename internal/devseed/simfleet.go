@@ -108,7 +108,7 @@ func seedSimFleet(ctx context.Context, gw storage.Gateway, actorID string, portO
 			demo = append(demo, e)
 		}
 	}
-	if err := simulateReachabilityDemo(ctx, gw, actorID, demo, used, portOffset); err != nil {
+	if err := simulateReachabilityDemo(ctx, gw, actorID, demo, drivers[reachProduct], used, portOffset); err != nil {
 		return err
 	}
 	var unwired []simfleet.Component
@@ -153,9 +153,12 @@ func endpointTarget(params []byte) string {
 // which reads as down the moment a lab's node collects it; with the
 // simulated fleet it becomes the simulated DSP it was modeled on (HTTP 80
 // and the line protocol on 1710), at a free simulated address, so a live
-// node finds it up. Its seeded history stays, as history. Without the
-// simulated fleet (the docs screenshots) this never runs.
-func simulateReachabilityDemo(ctx context.Context, gw storage.Gateway, actorID string, demo []storage.Endpoint, used map[string]bool, portOffset int) error {
+// node finds it up. It also gains its product's driver attach at that
+// address, so it reports what every other simulated DSP does (#1507). Its
+// seeded history stays, as history. Without the simulated fleet (the docs
+// screenshots) this never runs; on a later run the demo no longer targets
+// the fixed address, so nothing is re-aimed or attached twice.
+func simulateReachabilityDemo(ctx context.Context, gw storage.Gateway, actorID string, demo []storage.Endpoint, driver string, used map[string]bool, portOffset int) error {
 	if len(demo) == 0 {
 		return nil // already simulated on an earlier run, or no demo
 	}
@@ -186,6 +189,15 @@ func simulateReachabilityDemo(ctx context.Context, gw storage.Gateway, actorID s
 		if _, err := gw.UpdateEndpoint(ctx, actorID, e.ID, storage.EndpointPatch{Params: params}, all, all); err != nil {
 			return fmt.Errorf("devseed: re-aim reachability demo endpoint %s: %w", e.Name, err)
 		}
+	}
+	inputs, ok := simfleet.Attach[driver]
+	if !ok {
+		return fmt.Errorf("devseed: the reachability demo's product %s has no simulated attach for driver %q", reachProduct, driver)
+	}
+	comp, node := *demo[0].ComponentID, reachNode
+	spec := storage.EndpointSpec{Component: &comp, Node: &node, Driver: &driver, Inputs: inputs(addr, shift), SecretRead: all, CanAdmin: true}
+	if _, err := gw.CreateEndpoint(ctx, actorID, spec, all); err != nil {
+		return fmt.Errorf("devseed: attach %s to the reachability demo: %w", driver, err)
 	}
 	return nil
 }
