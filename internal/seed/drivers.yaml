@@ -223,6 +223,39 @@ drivers:
             - { name: protect-state, extract: { oid: "1.3.6.1.4.1.55540.3.2.0" } }
             - { name: temperature, extract: { oid: "1.3.6.1.4.1.55540.3.3.0" } }
             - { name: fan-speed, extract: { oid: "1.3.6.1.4.1.55540.3.4.0" } }
+  - id: polaris-dsp-snmp
+    label: Polaris DSP SNMP
+    version: "1.0.0"
+    spec:
+      version: 1
+      # The Polaris DSP 16's program output over v2c (#1493), from the DSP's
+      # branch of the Polaris enterprise arc (1.3.6.1.4.1.55540.2): the mute
+      # and the level, in dBFS, of the bus that feeds the room. Identity sits
+      # where every Polaris agent keeps it (.5), sysDescr and sysUpTime are
+      # MIB-II's. Muting the output is the DSP's HTTP API, a control face this
+      # driver does not speak; the per-channel strips are a fuller class set
+      # (#1360) and wait on a driver that can name an instance (#1252).
+      transport: snmp
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "161" }
+        - { name: community, kind: secret, secret_type: snmp-community, required: true }
+      polls:
+        - name: identity
+          schedule: { every: 5m }
+          request: { get: ["1.3.6.1.2.1.1.1.0", "1.3.6.1.4.1.55540.5.2.0", "1.3.6.1.4.1.55540.5.1.0"] }
+          emits:
+            - { name: model-number, extract: { oid: "1.3.6.1.2.1.1.1.0" } }
+            - { name: serial-number, extract: { oid: "1.3.6.1.4.1.55540.5.2.0" } }
+            - { name: firmware-version, extract: { oid: "1.3.6.1.4.1.55540.5.1.0" } }
+        - name: status
+          schedule: { every: 30s }
+          request:
+            get: ["1.3.6.1.2.1.1.3.0", "1.3.6.1.4.1.55540.2.5.0", "1.3.6.1.4.1.55540.2.6.0"]
+          emits:
+            - { name: uptime, extract: { oid: "1.3.6.1.2.1.1.3.0" }, transform: { scale: 0.01 } }
+            - { name: mute, extract: { oid: "1.3.6.1.4.1.55540.2.5.0" } }
+            - { name: audio-level, extract: { oid: "1.3.6.1.4.1.55540.2.6.0" } }
   - id: ferrite-pdu-snmp
     label: Ferrite PDU SNMP
     version: "1.0.0"
@@ -542,6 +575,12 @@ drivers:
           request: { line: "GET INPUT", reply: { prefix: "INPUT ", error: { prefix: "-ERR" } } }
           emits:
             - { name: video-input, extract: { regex: "^INPUT (\\S+)$" } }
+        - &nvp_scene_poll
+          name: room
+          schedule: { every: 30s }
+          request: { line: "GET SCENE", reply: { prefix: "SCENE ", error: { prefix: "-ERR" } } }
+          emits:
+            - { name: scene-state, extract: { regex: "^SCENE (\\S+)$" } }
       # The NVP conversation is line-oriented over a held TCP session: the
       # subscribes arm on establish (and re-arm on every recover), and the
       # device pushes lines the listeners claim by prefix. The standing
@@ -554,7 +593,8 @@ drivers:
       # video-input property and an input-changed event carrying the new
       # input; a diagnostics line is a log line, its severity read off the
       # line; and anything no listener claims (the scene changes SUBSCRIBE
-      # SCENE pushes) lands whole as a log line, raw arrival.
+      # SCENE pushes) lands whole as a log line, raw arrival. The room's
+      # scene is also the scene-state property, read on a poll (#1494).
       unmatched: log
       listeners:
         - &nvp_events_listener
@@ -597,6 +637,7 @@ drivers:
       # whole, and the processor adds its program state, polled and pushed.
       polls:
         - *nvp_input_poll
+        - *nvp_scene_poll
         - name: program
           schedule: { every: 30s }
           request: { line: "GET PROGRAM", reply: { prefix: "PROGRAM ", error: { prefix: "-ERR" } } }

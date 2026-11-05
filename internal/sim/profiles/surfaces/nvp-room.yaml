@@ -1,6 +1,6 @@
 # The NVP room surface: what a Newtron touch panel answers on its line
 # protocol (TCP 51325, CRLF lines), defined once for every Newtron device that
-# answers it (#896). GET INPUT reports the video input; SET INPUT selects one
+# answers it (#896). GET INPUT reports the video input, GET SCENE the room's scene; SET INPUT selects one
 # of the inputs the video-input property allows (the sim matches whole lines,
 # so each is listed); SUBSCRIBE INPUT pushes "EVT INPUT <input>" on change. The
 # including profile declares the state paths below in its defaults:
@@ -57,6 +57,20 @@ commands:
     subject: "status.diagnostics.log"
     token: "LOG"
     response: "OK"
+  - match: "GET SCENE"
+    response: 'SCENE {{ .State | get "status" | get "room" | get "scene" }}'
+  - match: "SET SCENE idle"
+    response: "SCENE idle"
+    mutations:
+      - { path: status.room.scene, value: "idle" }
+  - match: "SET SCENE presentation"
+    response: "SCENE presentation"
+    mutations:
+      - { path: status.room.scene, value: "presentation" }
+  - match: "SET SCENE vc"
+    response: "SCENE vc"
+    mutations:
+      - { path: status.room.scene, value: "vc" }
   - match: "SUBSCRIBE SCENE"
     action: subscribe
     subject: "status.room.scene"

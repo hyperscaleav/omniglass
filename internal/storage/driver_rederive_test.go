@@ -138,7 +138,7 @@ func TestSeededSpecChangeReachesAttachedEndpoints(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	old := strings.NewReplacer(`,"reply":{"error":{"prefix":"-ERR"},"prefix":"INPUT "}`, "").Replace(compactJSON(t, d.Spec))
+	old := strings.NewReplacer(`,"reply":{"error":{"prefix":"-ERR"},"prefix":"INPUT "}`, "", `,"reply":{"error":{"prefix":"-ERR"},"prefix":"SCENE "}`, "").Replace(compactJSON(t, d.Spec))
 	if old == compactJSON(t, d.Spec) {
 		t.Fatalf("the seeded spec carries no reply shape to roll back: %s", d.Spec)
 	}
@@ -172,16 +172,18 @@ func TestSeededSpecChangeReachesAttachedEndpoints(t *testing.T) {
 			listens++
 		}
 	}
-	// One standing listen task per listener the shipped spec declares, so
-	// the count follows the spec rather than a number written here.
+	// One poll task per poll and one standing listen task per listener the
+	// shipped spec declares, so the counts follow the spec rather than a
+	// number written here.
 	var shipped struct {
+		Polls     []json.RawMessage `json:"polls"`
 		Listeners []json.RawMessage `json:"listeners"`
 	}
 	if err := json.Unmarshal(d.Spec, &shipped); err != nil {
 		t.Fatal(err)
 	}
-	if polls != 1 || listens != len(shipped.Listeners) {
-		t.Fatalf("worklist holds %d driver polls and %d listens, want 1 and %d (the superseded retired)", polls, listens, len(shipped.Listeners))
+	if polls != len(shipped.Polls) || listens != len(shipped.Listeners) {
+		t.Fatalf("worklist holds %d driver polls and %d listens, want %d and %d (the superseded retired)", polls, listens, len(shipped.Polls), len(shipped.Listeners))
 	}
 }
 
