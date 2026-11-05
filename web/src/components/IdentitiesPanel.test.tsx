@@ -114,6 +114,8 @@ describe("IdentitiesPanel", () => {
   });
 
   it("lists an unbound identity with its count, last heard and the keys it carried", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
     const q = mount();
     const row = within(unboundList(q)).getByTestId("unbound-ucc-room-id-zr-annex-1");
     expect(within(row).getByText("zr-annex-1")).toBeTruthy();
