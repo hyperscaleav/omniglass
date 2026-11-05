@@ -192,6 +192,23 @@ func TestIntegrationLabOnARealDaemon(t *testing.T) {
 		}
 	})
 
+	// The component-level floor for the displays (#1372), stated here until
+	// the live check of #1371 holds it: every placed Boreal Edge display
+	// carries its power and its input from its driver.
+	t.Run("every placed display carries its power and input", func(t *testing.T) {
+		deadline := time.Now().Add(4 * time.Minute)
+		for {
+			missing, err := displayFloor(ctx, client, lab.BaseURL)
+			if err == nil && len(missing) == 0 {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("after the warm-up, below the display floor: %v (%v)", missing, err)
+			}
+			time.Sleep(10 * time.Second)
+		}
+	})
+
 	// An impairment set through the API takes a simulated component's
 	// reachability down in the lab; an empty one brings it back.
 	t.Run("an unplugged component goes down and comes back", func(t *testing.T) {

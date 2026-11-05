@@ -1687,7 +1687,29 @@ func TestSeededFleetIsSimulated(t *testing.T) {
 	if len(unwired) > 0 {
 		t.Fatalf("simulated components with no endpoint on edge-hq: %v", unwired)
 	}
-	for driver, n := range map[string]int{"snmp-generic": 0, "newtron-nvp": 0} {
+	// Every placed Boreal Edge display reads its power and input through its
+	// own driver, not through snmp-generic's identity and uptime (#1372).
+	var bare []string
+	displays, err := conn.Query(ctx, `
+		select c.id from component c join product p on p.id = c.product_id
+		where p.name like 'boreal-edge-%' and not exists (
+			select 1 from endpoint e join driver d on d.id = e.driver_id
+			where e.component = c.id and d.name = 'boreal-edge-snmp' and e.params->>'target' like '127.60.%')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for displays.Next() {
+		var id string
+		if err := displays.Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		bare = append(bare, id)
+	}
+	displays.Close()
+	if len(bare) > 0 {
+		t.Errorf("Boreal Edge displays with no boreal-edge-snmp attach in the simulated fleet: %v", bare)
+	}
+	for driver, n := range map[string]int{"snmp-generic": 0, "boreal-edge-snmp": 0, "newtron-nvp": 0} {
 		if err := conn.QueryRow(ctx, `select count(*) from endpoint e join driver d on d.id = e.driver_id where d.name = $1 and e.params->>'target' like '127.60.%'`, driver).Scan(&n); err != nil {
 			t.Fatal(err)
 		}

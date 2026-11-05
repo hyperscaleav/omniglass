@@ -22,7 +22,7 @@ products:
   - id: boreal-edge-55
     label: Boreal Edge 55
     vendor_id: boreal
-    driver_id: snmp-generic
+    driver_id: boreal-edge-snmp
     kind: device
     component_type: display
     # The declared-property contract: which properties this product declares and
@@ -36,7 +36,7 @@ products:
   - id: boreal-edge-65
     label: Boreal Edge 65
     vendor_id: boreal
-    driver_id: snmp-generic
+    driver_id: boreal-edge-snmp
     kind: device
     component_type: display
     properties:
@@ -47,7 +47,7 @@ products:
   - id: boreal-edge-75
     label: Boreal Edge 75
     vendor_id: boreal
-    driver_id: snmp-generic
+    driver_id: boreal-edge-snmp
     kind: device
     component_type: display
     properties:
@@ -58,7 +58,7 @@ products:
   - id: boreal-edge-86
     label: Boreal Edge 86
     vendor_id: boreal
-    driver_id: snmp-generic
+    driver_id: boreal-edge-snmp
     kind: device
     component_type: display
     properties:
@@ -69,7 +69,7 @@ products:
   - id: boreal-edge-98
     label: Boreal Edge 98
     vendor_id: boreal
-    driver_id: snmp-generic
+    driver_id: boreal-edge-snmp
     kind: device
     component_type: display
     properties:
@@ -227,6 +227,9 @@ products:
   # The generic floor.
   - id: generic-device
     label: Generic Device
+    # The generic SNMP driver is the unclassified device's driver: it reads
+    # the identity and uptime every SNMP agent answers (#1372).
+    driver_id: snmp-generic
     kind: device
     component_type: generic-device
   - id: generic-app

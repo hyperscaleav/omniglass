@@ -326,7 +326,9 @@ func TestSimulationFleetAPI(t *testing.T) {
 		t.Fatalf("site-a lists %d devices after the add, want 2", len(withNew.Devices))
 	}
 	c.do(viewer, http.MethodPost, "/nodes/site-a/simulation/components", map[string]any{"name": "panel-10", "product": panel}, http.StatusForbidden)
-	out := c.do(ownerTok, http.MethodPost, "/nodes/site-a/simulation/components", map[string]any{"name": "panel-10", "product": "generic-device"}, http.StatusUnprocessableEntity)
+	// A product no profile simulates (a minted one) is refused, naming why.
+	unsimulated := storagetest.MintProduct(t, ctx, gw, "")
+	out := c.do(ownerTok, http.MethodPost, "/nodes/site-a/simulation/components", map[string]any{"name": "panel-10", "product": unsimulated.Name}, http.StatusUnprocessableEntity)
 	if !strings.Contains(string(out), "simulat") {
 		t.Fatalf("an unsimulated product was refused with %s, want it to say why", out)
 	}

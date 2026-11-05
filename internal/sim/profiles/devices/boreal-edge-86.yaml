@@ -79,8 +79,10 @@ interfaces:
         doc: { summary: "Switch display input source", tags: [api, control] }
         example: |
           {"input": "hdmi1"}
-        mutate:
-          status.display.input: "{{ .Request.Body.input }}"
+        mutations:
+          - path: status.display.input
+            value: "{{ .Request.Body.input }}"
+            enum: [hdmi1, hdmi2, hdmi3, dp1, usbc]
 
       - match: "POST /api/display/brightness"
         template: api/boreal-edge/brightness-ack.json.gotempl

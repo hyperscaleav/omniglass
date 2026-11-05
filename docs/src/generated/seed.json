@@ -2862,6 +2862,13 @@
    "polls": 2
   },
   {
+   "id": "boreal-edge-snmp",
+   "label": "Boreal Edge SNMP",
+   "version": "1.0.0",
+   "transport": "snmp",
+   "polls": 2
+  },
+  {
    "id": "polaris-amp-snmp",
    "label": "Polaris Amp SNMP",
    "version": "1.0.0",
@@ -3033,7 +3040,7 @@
    "id": "boreal-edge-55",
    "label": "Boreal Edge 55",
    "vendor_id": "boreal",
-   "driver_id": "snmp-generic",
+   "driver_id": "boreal-edge-snmp",
    "component_type": "display",
    "kind": "device",
    "properties": [
@@ -3053,7 +3060,7 @@
    "id": "boreal-edge-65",
    "label": "Boreal Edge 65",
    "vendor_id": "boreal",
-   "driver_id": "snmp-generic",
+   "driver_id": "boreal-edge-snmp",
    "component_type": "display",
    "kind": "device",
    "properties": [
@@ -3073,7 +3080,7 @@
    "id": "boreal-edge-75",
    "label": "Boreal Edge 75",
    "vendor_id": "boreal",
-   "driver_id": "snmp-generic",
+   "driver_id": "boreal-edge-snmp",
    "component_type": "display",
    "kind": "device",
    "properties": [
@@ -3093,7 +3100,7 @@
    "id": "boreal-edge-86",
    "label": "Boreal Edge 86",
    "vendor_id": "boreal",
-   "driver_id": "snmp-generic",
+   "driver_id": "boreal-edge-snmp",
    "component_type": "display",
    "kind": "device",
    "properties": [
@@ -3113,7 +3120,7 @@
    "id": "boreal-edge-98",
    "label": "Boreal Edge 98",
    "vendor_id": "boreal",
-   "driver_id": "snmp-generic",
+   "driver_id": "boreal-edge-snmp",
    "component_type": "display",
    "kind": "device",
    "properties": [
@@ -3309,6 +3316,7 @@
   {
    "id": "generic-device",
    "label": "Generic Device",
+   "driver_id": "snmp-generic",
    "component_type": "generic-device",
    "kind": "device"
   },
