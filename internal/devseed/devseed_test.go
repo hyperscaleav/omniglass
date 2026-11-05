@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"github.com/hyperscaleav/omniglass/internal/secret"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -582,8 +583,10 @@ func TestRunIdempotent(t *testing.T) {
 			t.Errorf("interface %s node = %v, want edge-hq", it.Name, it.Node)
 		}
 	}
+	// The reach checks only: with the simulated fleet the dsp also carries
+	// its product's driver attach (#1507), held to once by its own test.
 	var ifaceCount int
-	if err := conn.QueryRow(ctx, `select count(*) from endpoint where component = (select id from component where name = 'dsp')`).Scan(&ifaceCount); err != nil {
+	if err := conn.QueryRow(ctx, `select count(*) from endpoint where driver_id is null and component = (select id from component where name = 'dsp')`).Scan(&ifaceCount); err != nil {
 		t.Fatalf("count reachability interfaces: %v", err)
 	}
 	if ifaceCount != 2 {
@@ -1778,7 +1781,7 @@ func TestReachabilityDemoIsSimulatedWithTheFleet(t *testing.T) {
 		return product, got
 	}
 
-	ctx, conn, _ := seededFleet(t)
+	ctx, conn, gw := seededFleet(t)
 	product, got := targets(ctx, conn)
 	if product != "polaris-dsp-16" {
 		t.Errorf("demo DSP product = %q, want the simulated polaris-dsp-16", product)
@@ -1786,6 +1789,39 @@ func TestReachabilityDemoIsSimulatedWithTheFleet(t *testing.T) {
 	host, _, _ := strings.Cut(got["http"], ":")
 	if !strings.HasPrefix(host, "127.60.") || got["http"] != host+":80" || got["tcp"] != host+":1710" {
 		t.Errorf("demo DSP endpoints = %v, want one simulated address, HTTP on 80 and 1710 as declared", got)
+	}
+	// It is a Polaris DSP 16 in full, so it reports its mute and level the
+	// way every other one does: its product's driver is attached at the same
+	// simulated address, once, however often the seed runs (#1507).
+	attaches := func() []string {
+		t.Helper()
+		var out []string
+		rows, err := conn.Query(ctx, `
+			select d.name, e.params->>'target'
+			from endpoint e join driver d on d.id = e.driver_id join component c on c.id = e.component
+			where c.name = 'dsp' and c.label = 'Boardroom DSP'`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var driver, target string
+			if err := rows.Scan(&driver, &target); err != nil {
+				t.Fatal(err)
+			}
+			out = append(out, driver+" "+target)
+		}
+		return out
+	}
+	want := []string{"polaris-dsp-snmp " + host + ":161"}
+	if got := attaches(); !slices.Equal(got, want) {
+		t.Errorf("demo DSP driver attaches = %v, want %v", got, want)
+	}
+	if err := devseed.Run(ctx, gw, ""); err != nil {
+		t.Fatalf("second run: %v", err)
+	}
+	if got := attaches(); !slices.Equal(got, want) {
+		t.Errorf("after a second run the demo DSP driver attaches = %v, want %v", got, want)
 	}
 
 	// Without the simulated fleet the demo keeps its fixed address.

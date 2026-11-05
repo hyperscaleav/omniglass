@@ -361,7 +361,7 @@ value its driver emits landed from it, and a system holding the booking service'
 The [lab](/guides/lab/) runs the dev fleet with the node `edge-hq` serving it in process, so the
 whole loop is one command: the node polls the simulated components, the samples land on the seeded
 components (the worked reachability check's boardroom DSP among them, re-aimed at a simulated DSP so a
-live node finds it up), and a command issued to a panel (`omniglass component command issue <panel>
+live node finds it up, and given that DSP's driver so it reports its mute and level like any other), and a command issued to a panel (`omniglass component command issue <panel>
 --command-type set-input --value hdmi3`) changes the simulated component. The lab is where the
 simulator gets every privilege it can use: the real ports, the ping sysctl, and `NET_ADMIN` for
 impairments and truthful ping, all confined to the node's own container.
