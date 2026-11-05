@@ -281,11 +281,20 @@ series are not compacted (they are sparse already), and properties have no trend
   the new one, so each sample lands either before the fold or as a late one. Only metric inserts take
   the lock, so a long transaction of any other kind, or in another database, never stalls the
   compaction or the prune behind it; an insert holding the lock past 5 seconds fails the pass, which
-  the next pass retries.
+  the next pass retries. The sample write and the compaction's transactions run at READ COMMITTED
+  whatever the server's `default_transaction_isolation`: each reads, after the lock is granted, what
+  committed before it.
+- **The ingest can wait on the compaction.** While the compaction waits for the lock exclusive, a new
+  metric insert queues behind it, so a batch can stall up to 5 seconds per attempt when an insert ahead
+  of it holds the lock that long, and for the length of one recompute chunk (below). Most passes take
+  the lock for milliseconds, and a pass with no hour to close and no hour dirtied takes it not at all.
 - **A late sample recomputes its hour.** A sample landing in an announced hour (a spool replayed past
   the horizon) marks its series' hour in `metric_trend_dirty` in its own insert, and a compaction
   folds that hour again from its samples once the hour is folded. An on-time sample marks nothing. A late sample already past
-  its type's window does not reach the trend.
+  its type's window does not reach the trend. The recompute takes the trend lock exclusive too, up to
+  500 dirtied hours a transaction, before it reads the samples: a second late batch into an hour
+  already marked finds the mark there and locks no row, so the lock alone keeps the recompute from
+  clearing the mark and folding the hour without that batch.
 - **The prune waits for the trend.** The metric prune and the month drop never pass the compacted
   mark, so no hour leaves the hot tier before its trend exists.
 

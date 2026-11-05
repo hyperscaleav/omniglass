@@ -105,8 +105,12 @@ func (p *PG) sampleWrite(ctx context.Context, what string, write func(pgx.Tx) er
 	}
 }
 
+// sampleWriteOnce runs the write in a READ COMMITTED transaction
+// (trendTxOptions): the metric insert reads the trend's announced mark after
+// taking the trend lock, and must see the mark a compaction moved before the
+// lock was granted.
 func (p *PG) sampleWriteOnce(ctx context.Context, what string, write func(pgx.Tx) error) error {
-	tx, err := p.pool.Begin(ctx)
+	tx, err := p.pool.BeginTx(ctx, trendTxOptions)
 	if err != nil {
 		return fmt.Errorf("storage: begin %s: %w", what, err)
 	}

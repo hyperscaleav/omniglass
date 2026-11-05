@@ -3,6 +3,8 @@ package storage
 import (
 	"context"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // ExportPruneSamplesSQL is one lane's prune statements by owner arc, for the
@@ -71,3 +73,10 @@ func (p *PG) MetricTrendMarks(ctx context.Context) (announced, compacted time.Ti
 // TrendLockKey is the advisory lock the metric insert holds shared and the
 // compaction's drain takes exclusive (#1276).
 const TrendLockKey = trendLockKey
+
+// WriteMetricSamplesIn runs the ingest's metric write (writeMetricSamples, the
+// production insert) in tx and leaves it open, so a test can hold a batch
+// uncommitted against a trend compaction (#1276).
+func (p *PG) WriteMetricSamplesIn(ctx context.Context, tx pgx.Tx, w KeyWriter, evs []MetricSampleWrite) error {
+	return p.writeMetricSamples(ctx, tx, w, evs)
+}

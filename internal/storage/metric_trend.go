@@ -198,22 +198,40 @@ func (p *PG) seedTrendMarks(ctx context.Context, now, target time.Time, laneDays
 // still open, for the next pass to retry; the announced mark stays where it
 // moved, which only dirties a few hours the fold would have seen.
 func (p *PG) drainTrendWrites(ctx context.Context) error {
-	tx, err := p.pool.Begin(ctx)
+	tx, err := p.pool.BeginTx(ctx, trendTxOptions)
 	if err != nil {
 		return fmt.Errorf("storage: drain the metric inserts: %w", err)
 	}
 	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
+	if err := lockTrendWrites(ctx, tx, "the hours stay open"); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("storage: drain the metric inserts: %w", err)
+	}
+	return nil
+}
+
+// trendTxOptions pins the compaction's and the ingest's transactions to READ
+// COMMITTED, whatever default_transaction_isolation the operator's Postgres
+// sets: each relies on a statement that follows the trend lock seeing what
+// committed before the lock was granted, which a REPEATABLE READ snapshot,
+// taken at the transaction's first statement, would not.
+var trendTxOptions = pgx.TxOptions{IsoLevel: pgx.ReadCommitted}
+
+// lockTrendWrites takes the trend lock exclusive in tx, waiting for every
+// metric insert holding it shared to end, and holds it until tx ends; a new
+// insert waits behind it. An insert that outlasts trendDrainTimeout fails it,
+// the error saying what stays undone.
+func lockTrendWrites(ctx context.Context, tx pgx.Tx, undone string) error {
 	if _, err := tx.Exec(ctx, fmt.Sprintf(`set local lock_timeout = %d`, trendDrainTimeout.Milliseconds())); err != nil {
 		return fmt.Errorf("storage: drain the metric inserts: %w", err)
 	}
 	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(hashtextextended($1, 0))`, trendLockKey); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "55P03" {
-			return fmt.Errorf("storage: compact metric trends: a metric insert in flight outlasted %s; the hours stay open", trendDrainTimeout)
+			return fmt.Errorf("storage: compact metric trends: a metric insert in flight outlasted %s; %s", trendDrainTimeout, undone)
 		}
-		return fmt.Errorf("storage: drain the metric inserts: %w", err)
-	}
-	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("storage: drain the metric inserts: %w", err)
 	}
 	return nil
@@ -223,7 +241,7 @@ func (p *PG) drainTrendWrites(ctx context.Context) error {
 // and moves the compacted mark past it, in one transaction: the mark never
 // passes an hour whose trend did not commit.
 func (p *PG) foldTrendHour(ctx context.Context, h time.Time) error {
-	tx, err := p.pool.Begin(ctx)
+	tx, err := p.pool.BeginTx(ctx, trendTxOptions)
 	if err != nil {
 		return fmt.Errorf("storage: compact the hour from %s: %w", h.Format(time.RFC3339), err)
 	}
@@ -245,31 +263,11 @@ func (p *PG) foldTrendHour(ctx context.Context, h time.Time) error {
 }
 
 // recomputeDirtyTrends folds again every closed (series, hour) a late sample
-// dirtied, a chunk a statement, clearing each mark it takes, and returns how
+// dirtied, a chunk a transaction, clearing each mark it takes, and returns how
 // many it recomputed.
 func (p *PG) recomputeDirtyTrends(ctx context.Context, laneDays int) (int64, error) {
 	var total int64
 	for {
-		tag, err := p.pool.Exec(ctx, `with d as (
-				delete from metric_trend_dirty x using (
-					select series_id, hour from metric_trend_dirty
-					where hour < (select compacted_through from metric_trend_mark)
-					order by hour limit $1 for update skip locked) y
-				where x.series_id = y.series_id and x.hour = y.hour
-				returning x.series_id, x.hour),
-			intact as (
-				select d.series_id, d.hour from d
-				join metric_series s on s.id = d.series_id
-				join metric_type t on t.id = s.metric_type_id
-				where d.hour >= now() - make_interval(days => coalesce(t.retention_days, $2::int)))
-			insert into metric_trend (series_id, hour, count, min, max, sum, first, last)
-			select `+trendAggregates("f.hour")+`
-			from intact f join metric m on m.series_id = f.series_id and m.ts >= f.hour and m.ts < f.hour + interval '1 hour'
-			group by m.series_id, f.hour `+trendUpsert, trendDirtyChunk, laneDays)
-		if err != nil {
-			return total, fmt.Errorf("storage: recompute dirtied trend hours: %w", err)
-		}
-		total += tag.RowsAffected()
 		var left bool
 		if err := p.pool.QueryRow(ctx, `select exists (select 1 from metric_trend_dirty
 			where hour < (select compacted_through from metric_trend_mark))`).Scan(&left); err != nil {
@@ -278,7 +276,53 @@ func (p *PG) recomputeDirtyTrends(ctx context.Context, laneDays int) (int64, err
 		if !left {
 			return total, nil
 		}
+		n, err := p.recomputeDirtyChunk(ctx, laneDays)
+		total += n
+		if err != nil {
+			return total, err
+		}
 	}
+}
+
+// recomputeDirtyChunk recomputes up to trendDirtyChunk dirtied hours in one
+// transaction that holds the trend lock exclusive from before its statement:
+// a late insert into a dirtied hour finds the mark already there and takes no
+// row lock on it, so only the trend lock orders the two. An insert that holds
+// it commits before the statement's snapshot, which folds its samples; an
+// insert that waits for it lands after the mark is cleared, and marks the
+// hour again.
+func (p *PG) recomputeDirtyChunk(ctx context.Context, laneDays int) (int64, error) {
+	tx, err := p.pool.BeginTx(ctx, trendTxOptions)
+	if err != nil {
+		return 0, fmt.Errorf("storage: recompute dirtied trend hours: %w", err)
+	}
+	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
+	if err := lockTrendWrites(ctx, tx, "the dirtied hours stay marked"); err != nil {
+		return 0, err
+	}
+	tag, err := tx.Exec(ctx, `with d as (
+			delete from metric_trend_dirty x using (
+				select series_id, hour from metric_trend_dirty
+				where hour < (select compacted_through from metric_trend_mark)
+				order by hour limit $1 for update skip locked) y
+			where x.series_id = y.series_id and x.hour = y.hour
+			returning x.series_id, x.hour),
+		intact as (
+			select d.series_id, d.hour from d
+			join metric_series s on s.id = d.series_id
+			join metric_type t on t.id = s.metric_type_id
+			where d.hour >= now() - make_interval(days => coalesce(t.retention_days, $2::int)))
+		insert into metric_trend (series_id, hour, count, min, max, sum, first, last)
+		select `+trendAggregates("f.hour")+`
+		from intact f join metric m on m.series_id = f.series_id and m.ts >= f.hour and m.ts < f.hour + interval '1 hour'
+		group by m.series_id, f.hour `+trendUpsert, trendDirtyChunk, laneDays)
+	if err != nil {
+		return 0, fmt.Errorf("storage: recompute dirtied trend hours: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return 0, fmt.Errorf("storage: recompute dirtied trend hours: %w", err)
+	}
+	return tag.RowsAffected(), nil
 }
 
 // PruneMetricTrends deletes up to limit trend rows of hours before before (the

@@ -155,6 +155,121 @@ func TestALateSampleRecomputesItsHour(t *testing.T) {
 	}
 }
 
+// TestARecomputeWaitsForALateInsertIntoADirtyHour: a late batch landing in an
+// hour an earlier batch already dirtied finds the mark there and takes no
+// lock on it, so a recompute running while the batch is uncommitted waits for
+// it on the trend lock rather than clearing the mark and folding the hour
+// without it. Driven through the ingest's own insert.
+func TestARecomputeWaitsForALateInsertIntoADirtyHour(t *testing.T) {
+	f := newTrendRig(t)
+	now := time.Now().UTC()
+	hour := now.Add(-2 * 24 * time.Hour).Truncate(time.Hour)
+	f.plant(hour.Add(time.Minute), "observed", 5)
+	f.compact(10000)
+	late := func(ts time.Time, v float64) []storage.MetricSampleWrite {
+		return []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: "prune-c1", Key: "prune-rtt", Value: v, TS: ts}}
+	}
+	if err := f.gw.InsertMetricSamples(f.ctx, storage.PushWriter(), late(hour.Add(10*time.Minute), 20)); err != nil {
+		t.Fatal(err)
+	}
+	tx, err := connectDSN(t, f.dsn).BeginTx(f.ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	if err := f.gw.WriteMetricSamplesIn(f.ctx, tx, storage.PushWriter(), late(hour.Add(40*time.Minute), 70)); err != nil {
+		t.Fatal(err)
+	}
+	type result struct {
+		c   storage.TrendCompaction
+		err error
+	}
+	done := make(chan result, 1)
+	go func() {
+		c, err := f.gw.CompactMetricTrends(context.Background(), 10000, 14)
+		done <- result{c, err}
+	}()
+	select {
+	case r := <-done:
+		t.Fatalf("the recompute did not wait for the late batch in flight: %+v, %v", r.c, r.err)
+	case <-time.After(500 * time.Millisecond):
+	}
+	if err := tx.Commit(f.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if r := <-done; r.err != nil || r.c.Recomputed != 1 {
+		t.Fatalf("the recompute returned %+v, %v; want the dirtied hour recomputed", r.c, r.err)
+	}
+	var count, max float64
+	if err := f.conn.QueryRow(f.ctx, `select sum(count), max(max) from metric_trend where hour = $1`, hour).Scan(&count, &max); err != nil ||
+		count != 3 || max != 70 {
+		t.Errorf("the hour's trends sum %v samples, max %v (%v); want 3 and the late batch's 70", count, max, err)
+	}
+	var dirty int
+	if err := f.conn.QueryRow(f.ctx, `select count(*) from metric_trend_dirty`).Scan(&dirty); err != nil || dirty != 0 {
+		t.Errorf("%d dirty marks left (%v), want none", dirty, err)
+	}
+}
+
+// TestALateSampleDirtiesItsHourUnderRepeatableRead: the ingest's write reads
+// the announced mark fresh after the trend lock is granted, even on a
+// Postgres whose default isolation is REPEATABLE READ, whose snapshot would
+// predate a mark a compaction moved while the write waited for the lock.
+func TestALateSampleDirtiesItsHourUnderRepeatableRead(t *testing.T) {
+	f := newTrendRig(t)
+	hour := time.Now().UTC().Add(-3 * 24 * time.Hour).Truncate(time.Hour)
+	if err := f.gw.SetMetricTrendMark(f.ctx, hour); err != nil {
+		t.Fatal(err)
+	}
+	mustExec(t, f.conn, `do $$ begin execute format('alter database %I set default_transaction_isolation = %L',
+		current_database(), 'repeatable read'); end $$`)
+	gw, err := storage.NewPG(f.ctx, f.dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(gw.Close)
+	// The compaction's drain, mid-wait: it holds the trend lock, and announces
+	// the hour while the write waits for it.
+	drain, err := connectDSN(t, f.dsn).Begin(f.ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = drain.Rollback(context.Background()) }()
+	if _, err := drain.Exec(f.ctx, `select pg_advisory_xact_lock(hashtextextended($1, 0))`, storage.TrendLockKey); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		done <- gw.InsertMetricSamples(context.Background(), storage.PushWriter(), []storage.MetricSampleWrite{
+			{OwnerKind: "component", OwnerID: "prune-c1", Key: "prune-rtt", Value: 7, TS: hour.Add(time.Minute)}})
+	}()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		var waiting bool
+		if err := f.conn.QueryRow(f.ctx, `select exists (select 1 from pg_locks where locktype = 'advisory' and not granted)`).Scan(&waiting); err != nil {
+			t.Fatal(err)
+		}
+		if waiting {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the write never waited for the trend lock")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	mustExec(t, f.conn, `update metric_trend_mark set announced_through = $1`, hour.Add(time.Hour))
+	if err := drain.Commit(f.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	var dirty int
+	if err := f.conn.QueryRow(f.ctx, `select count(*) from metric_trend_dirty where hour = $1`, hour).Scan(&dirty); err != nil || dirty != 1 {
+		t.Errorf("%d dirty marks for the announced hour (%v), want the late sample's", dirty, err)
+	}
+}
+
 // TestTheHotTierIsNeverPrunedPastTheMark: the metric prune and the month drop
 // stop at the hours the compaction has closed, so no hour reaches retention
 // before its trend exists; before any compaction they remove nothing. The

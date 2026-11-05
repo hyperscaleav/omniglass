@@ -15,6 +15,7 @@ a transaction that moves a second, folded mark past it, so a pass cancelled anyw
 long transaction elsewhere, or in another database, holds no such lock and stalls nothing. The first
 pass starts at the longest window back, so an upgrade does not fold years of hours. A sample that arrives after its hour closed (a
 spool replayed late) marks the hour in the same insert that lands it, and the next pass recomputes the
-hour; batches still cost 18 statements. The metric prune and the month drop never pass the
+hour, holding the same lock so a second late batch into the hour is never folded out; batches still
+cost 18 statements, at READ COMMITTED whatever the server's default. The metric prune and the month drop never pass the
 folded mark. A day of trends costs about 3.5 KB per series. Reading them is the bucketed series
 read, #1269.

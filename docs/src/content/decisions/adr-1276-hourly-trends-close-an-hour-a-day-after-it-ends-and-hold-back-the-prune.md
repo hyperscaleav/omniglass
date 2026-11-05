@@ -37,7 +37,13 @@ refs: [1276, 1265, 1275, 311, 1269]
      when an observed sample's `ts` is before the announced mark, so statements per batch stay 18. A
      compaction recomputes each dirtied hour once the compacted mark is past it, each dirtied hour whole from its samples, which makes a recompute
      idempotent; an hour whose samples are already past its type's window is not recomputed (only part
-     of it would remain).
+     of it would remain). The recompute holds the trend lock exclusive from before it reads the
+     samples, up to 500 dirtied hours a transaction: a second late batch into an hour already marked
+     hits the mark `on conflict do nothing` and locks no row, so only the lock orders it against the
+     recompute that clears the mark (a versioned mark the insert bumps was the alternative, and costs
+     a row lock and a write per late batch). The sample write, the fold and the recompute run at READ
+     COMMITTED whatever the server's `default_transaction_isolation`, since each must read, after
+     the lock is granted, what committed before it.
   5. **The prune waits for the trend.** The metric lane's chunked prune and month drop cap their cutoff
      at the compacted mark, and prune nothing before the first compaction, so no hour leaves the hot tier
      without its trend. The trends are pruned to `retention.trend_days` like any lane, a window of their
