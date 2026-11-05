@@ -4,6 +4,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/node"
 	"github.com/hyperscaleav/omniglass/internal/simnode"
 
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -90,9 +91,19 @@ func TestPlanPrivilegeSitsOnTheNodeOnly(t *testing.T) {
 		}
 	}
 	n := s.Node
-	if !slices.Equal(n.CapAdd, []string{"NET_ADMIN"}) || n.User != "0:0" ||
-		n.Sysctls["net.ipv4.ping_group_range"] != "0 2147483647" {
-		t.Fatalf("node caps %v user %q sysctls %v", n.CapAdd, n.User, n.Sysctls)
+	if !slices.Equal(n.CapAdd, []string{"NET_ADMIN"}) || n.User != "0:0" {
+		t.Fatalf("node caps %v user %q", n.CapAdd, n.User)
+	}
+	// The range admits root (the node's user) and distroless nonroot (65532),
+	// and stays inside the 65537 groups a standard rootless Docker maps
+	// (/etc/subgid's 65536 plus the user's own): a group outside the mapping
+	// makes the kernel refuse the write and the node never starts (#1506).
+	var low, high int
+	if _, err := fmt.Sscanf(n.Sysctls["net.ipv4.ping_group_range"], "%d %d", &low, &high); err != nil {
+		t.Fatalf("node sysctls %v: %v", n.Sysctls, err)
+	}
+	if low != 0 || high < 65532 || high > 65536 {
+		t.Fatalf("ping_group_range %d %d, want 0 through at least 65532 and at most 65536", low, high)
 	}
 	if !slices.Contains(n.Cmd, "--simulate") || !slices.Contains(n.Cmd, "--impairments") {
 		t.Fatalf("node cmd %v, want node run --simulate --impairments", n.Cmd)

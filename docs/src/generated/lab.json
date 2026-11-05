@@ -43,7 +43,7 @@
         "NET_ADMIN"
       ],
       "sysctls": [
-        "net.ipv4.ping_group_range=0 2147483647"
+        "net.ipv4.ping_group_range=0 65535"
       ],
       "publish": "",
       "runs_once": false,
