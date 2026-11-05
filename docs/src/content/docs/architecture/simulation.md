@@ -88,6 +88,14 @@ behaviors a scenario can drive. The Meridian switcher and extender (#895) land t
 `meridian-mx-snmp` driver reads the routed input and the signal on it, `meridian-xl-snmp` the
 link and the signal on its input, and the switcher's HTTP route changes the input the next poll reads.
 
+The Polaris DSP 16 (#1493) lands its floor the same way, on the audio processor's program output: the
+bus that feeds the room. Its SNMP agent answers the output's mute and level on the DSP's own branch of
+the Polaris arc, the `polaris-dsp-snmp` driver reads them as `mute` and `audio-level`, and the DSP's
+HTTP API has a mute route for the bus, so the value the next poll reads follows the toggle.
+The level drifts as a behavior inside a band. Per-channel gain, mute and peak are served by the HTTP
+face but not collected: they wait on a driver naming an instance (#1252) and the full DSP class set
+(#1360).
+
 The Ferrite PDU 4C (#1368) is the read-only counterpart: the rack power conditioner answers, under the
 Ferrite enterprise arc, the mains voltage in millivolts, the total current in milliamps, and an outlet
 table of name, state and current for its four outlets, and the `ferrite-pdu-snmp` driver reads the
