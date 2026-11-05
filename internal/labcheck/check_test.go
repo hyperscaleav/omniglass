@@ -20,7 +20,7 @@ import (
 // the full built-in data an answered endpoint carries.
 func presentOf(tr string, shape transport.DriverShape, answered bool) map[string]bool {
 	out := map[string]bool{}
-	for _, k := range transport.ExpectedBuiltIn(tr, shape, answered) {
+	for _, k := range transport.ExpectedBuiltIn(tr, shape, answered, false) {
 		out[k] = true
 	}
 	return out
@@ -180,5 +180,48 @@ func TestFindingsAreOrderedSoARunReadsTheSameTwice(t *testing.T) {
 	fs := labcheck.Evaluate(s, nil)
 	if len(fs) != 3 || !strings.Contains(fs[0].String(), "A") || !strings.Contains(fs[2].String(), "Z") {
 		t.Fatalf("findings out of order:\n%s", render(fs))
+	}
+}
+
+func TestAPlantedEndpointOwesNoBuiltInKeyButStillMustExist(t *testing.T) {
+	s := healthy()
+	ep := &s.Components[0].Endpoints[0]
+	ep.Present = map[string]bool{}
+	if fs := labcheck.Evaluate(s, nil); len(fs) != 1 {
+		t.Fatalf("an endpoint landing nothing: findings = %s, want one", render(fs))
+	}
+	ep.Planted = true
+	if fs := labcheck.Evaluate(s, nil); len(fs) != 0 {
+		t.Fatalf("a planted fault is broken on purpose and owes nothing:\n%s", render(fs))
+	}
+	s.Components[0].Endpoints = nil
+	if fs := labcheck.Evaluate(s, nil); len(fs) != 1 || fs[0].Tier != devseed.TierBuiltIn {
+		t.Fatalf("removing the endpoint still fails built-in: %s", render(fs))
+	}
+}
+
+func TestAFindingNamesWhichComponentWhenNamesRepeatAcrossRooms(t *testing.T) {
+	s := healthy()
+	s.Components[0].Location = "huddle"
+	s.Components[0].Values = nil
+	fs := labcheck.Evaluate(s, nil)
+	if len(fs) != 1 || !strings.Contains(fs[0].Owner, "test-panel-1") || !strings.Contains(fs[0].Owner, "huddle") {
+		t.Fatalf("findings = %s, want the owner to carry the product and location", render(fs))
+	}
+}
+
+func TestATelnetEndpointWithItsSessionUpOwesNoProbeTiming(t *testing.T) {
+	s := healthy()
+	shape := transport.DriverShape{Polls: true, Session: true}
+	ep := labcheck.Endpoint{Name: "telnet", Transport: "telnet", Answered: true, Shape: shape, Present: presentOf("telnet", shape, true)}
+	delete(ep.Present, probekeys.TCPConnectTime)
+	delete(ep.Present, probekeys.TelnetResponseTime)
+	s.Components[0].Endpoints = []labcheck.Endpoint{ep}
+	if fs := labcheck.Evaluate(s, nil); len(fs) != 1 || !strings.Contains(fs[0].Detail, probekeys.TelnetResponseTime) {
+		t.Fatalf("without the session up the timings are owed: %s", render(fs))
+	}
+	s.Components[0].Endpoints[0].SessionUp = true
+	if fs := labcheck.Evaluate(s, nil); len(fs) != 0 {
+		t.Fatalf("the probe yields to an up telnet session, so no timing is owed:\n%s", render(fs))
 	}
 }

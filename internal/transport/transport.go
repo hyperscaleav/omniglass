@@ -56,6 +56,11 @@ type Transport struct {
 	// from BuiltIn, Answered and the driver's shape (ExpectedBuiltIn), so no
 	// list of keys is kept beside the registry.
 	Answered []string `json:"-"`
+	// YieldsToSession marks a transport whose probe stands down while the
+	// endpoint's held session reads up (#1033): gear that admits one client
+	// would refuse a second dial, so the up session is the proof, and the
+	// timings the probe would have taken do not land.
+	YieldsToSession bool `json:"-"`
 }
 
 // registry is the one authoritative list, in the order surfaces render it:
@@ -72,7 +77,7 @@ var registry = []Transport{
 	{Name: "tcp", Description: "Raw TCP: the connect / port-open check, and the line protocol, which holds a session over it (polls, commands, and listeners share one connection).", Held: true, Built: true, Line: true, Rung: "connect", BuiltIn: []string{probekeys.TCPOpen, probekeys.EndpointReachable}, Answered: []string{probekeys.TCPConnectTime}},
 	{Name: "tls", Description: "TLS: the line protocol over a TLS connection, held exactly as it is over tcp; the probe runs the handshake (responds) and reports the certificate's expiry, verified against the node's roots, pinned to the public key on first use, or (by the operator's explicit choice) not verified.", Held: true, Built: true, Line: true, Rung: "handshake", TLS: true, BuiltIn: []string{probekeys.TCPOpen, probekeys.EndpointResponsive, probekeys.EndpointReachable}, Answered: []string{probekeys.TCPConnectTime, probekeys.TLSHandshakeTime}},
 	{Name: "udp", Description: "UDP: the line protocol as datagrams, one line each, stateless: the probe sends the driver's named request and an answer is the rung (an open udp port cannot be detected), a refused port reads refused, and a lost datagram is retried; each endpoint binds its own local port (its driver's listen-port input, else one the node picks), which its requests, replies and pushes share.", Held: false, Built: true, Rung: "request", BuiltIn: []string{probekeys.EndpointResponsive, probekeys.EndpointReachable}, Answered: []string{probekeys.UDPResponseTime}},
-	{Name: "telnet", Description: "Telnet: the line protocol over TCP with option negotiation (every option refused), its login the session's auth step; the probe connects and waits for the first negotiation or banner bytes (responds).", Held: true, Built: true, Line: true, Rung: "connect", BuiltIn: []string{probekeys.TCPOpen, probekeys.EndpointResponsive, probekeys.EndpointReachable}, Answered: []string{probekeys.TCPConnectTime, probekeys.TelnetResponseTime}},
+	{Name: "telnet", Description: "Telnet: the line protocol over TCP with option negotiation (every option refused), its login the session's auth step; the probe connects and waits for the first negotiation or banner bytes (responds).", Held: true, Built: true, Line: true, Rung: "connect", BuiltIn: []string{probekeys.TCPOpen, probekeys.EndpointResponsive, probekeys.EndpointReachable}, Answered: []string{probekeys.TCPConnectTime, probekeys.TelnetResponseTime}, YieldsToSession: true},
 	{Name: "ssh", Description: "SSH: the probe runs a real key exchange (responds) and tries the endpoint credential when one is set (auth); the line protocol holds a shell or exec channel over it, its userauth the session's auth step and its host key pinned on first use.", Held: true, Built: true, Line: true, Rung: "handshake", BuiltIn: []string{probekeys.TCPOpen, probekeys.EndpointResponsive, probekeys.EndpointReachable}, Answered: []string{probekeys.TCPConnectTime, probekeys.SSHHandshakeTime}},
 	{Name: "http", Description: "HTTP: a driver's polls and commands send real requests (method, path, query, headers, body) and read JSON, XML, HTML or text answers, authenticated by the endpoint's declared scheme (basic, bearer, an API key, digest) or a login whose session the node keeps; a declared server-sent events stream is held as a session, its events landing through the listeners; the probe draws a real response off the API without a credential (responds), any status counting as an answer.", Held: true, Built: true, Rung: "connect", BuiltIn: []string{probekeys.TCPOpen, probekeys.EndpointResponsive, probekeys.EndpointReachable}, Answered: []string{probekeys.TCPConnectTime, probekeys.HTTPResponseTime}},
 	{Name: "https", Description: "HTTPS: http over a TLS connection, its own entry so a component can serve a plain web port beside a TLS one, a server-sent events stream held over it as over http; the probe runs the handshake (responds), reports the certificate's expiry, then draws a response, the certificate verified against the node's roots, pinned to the public key on first use, or (by the operator's explicit choice) not verified.", Held: true, Built: true, Rung: "handshake", TLS: true, BuiltIn: []string{probekeys.TCPOpen, probekeys.EndpointResponsive, probekeys.EndpointReachable}, Answered: []string{probekeys.TCPConnectTime, probekeys.TLSHandshakeTime, probekeys.HTTPResponseTime}},
@@ -105,6 +110,14 @@ func All() []Transport {
 func UsesTLS(name string) bool {
 	t, ok := byName[name]
 	return ok && t.TLS
+}
+
+// ProbeYieldsToSession reports a transport whose reachability probe does not
+// dial while the endpoint's held session is up (telnet, #1033): false for an
+// unknown name.
+func ProbeYieldsToSession(name string) bool {
+	t, ok := byName[name]
+	return ok && t.YieldsToSession
 }
 
 // IsPush reports a push transport (#1024): false for an unknown name.
@@ -159,15 +172,19 @@ func DriverBuiltIn(name string, shape DriverShape) []string {
 // ExpectedBuiltIn is every built-in key an endpoint of this transport and
 // driver shape carries: the transport's BuiltIn, and, once the endpoint
 // answers, its Answered set and the driver's telemetry; a down endpoint polls
-// nothing, so it owes no poll duration. An unknown transport expects none.
-func ExpectedBuiltIn(name string, shape DriverShape, answered bool) []string {
+// nothing, so it owes no poll duration. While the held session of a transport
+// whose probe yields to it is up (sessionUp), the probe took no timing, so the
+// Answered set is not owed. An unknown transport expects none.
+func ExpectedBuiltIn(name string, shape DriverShape, answered, sessionUp bool) []string {
 	t, ok := byName[name]
 	if !ok {
 		return nil
 	}
 	out := slices.Clone(t.BuiltIn)
 	if answered {
-		out = append(out, t.Answered...)
+		if !(t.YieldsToSession && sessionUp) {
+			out = append(out, t.Answered...)
+		}
 		out = append(out, DriverBuiltIn(name, shape)...)
 	}
 	return out

@@ -103,17 +103,41 @@ func TestWhatADriverShapeAddsToTheBuiltInSet(t *testing.T) {
 }
 
 func TestExpectedBuiltInIsTheTransportSetPlusTheDriverShape(t *testing.T) {
-	got := transport.ExpectedBuiltIn("ssh", transport.DriverShape{Polls: true}, true)
+	got := transport.ExpectedBuiltIn("ssh", transport.DriverShape{Polls: true}, true, false)
 	for _, k := range []string{probekeys.TCPOpen, probekeys.EndpointReachable, probekeys.SSHHandshakeTime, probekeys.PollDuration, probekeys.SessionState} {
 		if !slices.Contains(got, k) {
 			t.Errorf("answered ssh poller lacks %s: %v", k, got)
 		}
 	}
-	got = transport.ExpectedBuiltIn("ssh", transport.DriverShape{Polls: true}, false)
+	got = transport.ExpectedBuiltIn("ssh", transport.DriverShape{Polls: true}, false, false)
 	if slices.Contains(got, probekeys.SSHHandshakeTime) {
 		t.Errorf("an unanswered ssh endpoint expects a handshake time: %v", got)
 	}
-	if slices.Contains(transport.ExpectedBuiltIn("nope", transport.DriverShape{}, true), "") {
+	if slices.Contains(transport.ExpectedBuiltIn("nope", transport.DriverShape{}, true, false), "") {
 		t.Error("an unknown transport expects an empty key")
+	}
+}
+
+func TestAHeldSessionThatTheProbeYieldsToOwesNoProbeTiming(t *testing.T) {
+	shape := transport.DriverShape{Polls: true, Session: true}
+	if !transport.ProbeYieldsToSession("telnet") || transport.ProbeYieldsToSession("ssh") || transport.ProbeYieldsToSession("nope") {
+		t.Fatal("telnet alone stands down for its up session (#1033)")
+	}
+	up := transport.ExpectedBuiltIn("telnet", shape, true, true)
+	for _, k := range []string{probekeys.TCPConnectTime, probekeys.TelnetResponseTime} {
+		if slices.Contains(up, k) {
+			t.Errorf("a telnet endpoint with its session up expects %s, which the probe did not take: %v", k, up)
+		}
+	}
+	for _, k := range []string{probekeys.TCPOpen, probekeys.EndpointResponsive, probekeys.PollDuration, probekeys.SessionState} {
+		if !slices.Contains(up, k) {
+			t.Errorf("a telnet endpoint with its session up lacks %s: %v", k, up)
+		}
+	}
+	if down := transport.ExpectedBuiltIn("telnet", shape, true, false); !slices.Contains(down, probekeys.TelnetResponseTime) {
+		t.Errorf("an answered telnet endpoint without a session up owes its response time: %v", down)
+	}
+	if ssh := transport.ExpectedBuiltIn("ssh", shape, true, true); !slices.Contains(ssh, probekeys.SSHHandshakeTime) {
+		t.Errorf("ssh's probe does not yield to its session: %v", ssh)
 	}
 }

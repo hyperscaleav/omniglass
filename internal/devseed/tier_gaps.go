@@ -30,10 +30,15 @@ type TierGap struct {
 // an entry does not outlive the issue that closes it. The list is empty when
 // #1266 is done.
 var TierGaps = map[Tier]map[string]TierGap{
-	TierBuiltIn: {},
+	TierBuiltIn: {
+		"lyra-gn-12":     {Issue: "#1367"}, // passive gear has no endpoint of its own for a node to probe
+		"polaris-sky-c6": {Issue: "#1367"},
+	},
 	TierCollected: {
 		"lyra-gn-12":     {Issue: "#1367"}, // passive gear: lands its feeder's per-channel telemetry through the fan-out
 		"polaris-sky-c6": {Issue: "#1367"},
+		"generic-device": {Issue: "#1514"}, // the unclassified device: identity and uptime only
+		"ucc-platform":   {Issue: "#1515"}, // the conduit: its room values fan out to the systems
 	},
 	TierSystem: {
 		AllSystems: {Issue: "#1361"}, // a system rolls up its members' telemetry

@@ -219,7 +219,7 @@ func TestIntegrationLabOnARealDaemon(t *testing.T) {
 	t.Run("every component and system carries its data, tier by tier", func(t *testing.T) {
 		deadline := time.Now().Add(4 * time.Minute)
 		for {
-			findings, err := labcheck.Check(ctx, client, lab.BaseURL, devseed.TierGaps)
+			findings, err := labcheck.Check(ctx, client, lab.BaseURL, devseed.TierGaps, cfg(os.Getpid()).PlantedFaults)
 			if err == nil && len(findings) == 0 {
 				return
 			}

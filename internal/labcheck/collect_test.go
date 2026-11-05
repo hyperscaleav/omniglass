@@ -110,7 +110,7 @@ func (l *fakeLab) serve(t *testing.T) string {
 
 func check(t *testing.T, l *fakeLab, gaps labcheck.Gaps) []labcheck.Finding {
 	t.Helper()
-	fs, err := labcheck.Check(context.Background(), http.DefaultClient, l.serve(t), gaps)
+	fs, err := labcheck.Check(context.Background(), http.DefaultClient, l.serve(t), gaps, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +188,7 @@ func TestCheckHonoursTheGapsItIsGiven(t *testing.T) {
 func TestCheckReturnsAnErrorWhenTheAPIFails(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Error(w, "boom", 500) }))
 	defer srv.Close()
-	if _, err := labcheck.Check(context.Background(), http.DefaultClient, srv.URL, nil); err == nil {
+	if _, err := labcheck.Check(context.Background(), http.DefaultClient, srv.URL, nil, nil); err == nil {
 		t.Fatal("Check on a failing API returned no error")
 	}
 }

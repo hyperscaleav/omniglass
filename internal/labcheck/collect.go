@@ -18,10 +18,11 @@ const listQuery = "?limit=1000"
 
 // Check reads the lab at base with c and judges it against gaps: the live
 // check, a function of a base URL and a client so any harness can call it.
-// The returned findings are empty once the lab is whole; an error is a failed
-// read, not a failed check.
-func Check(ctx context.Context, c *http.Client, base string, gaps Gaps) ([]Finding, error) {
-	snap, err := Collect(ctx, c, base)
+// planted are the labels of the endpoints the lab's seed breaks on purpose
+// (devseed.PlantedFaults), which owe no built-in key. The returned findings are
+// empty once the lab is whole; an error is a failed read, not a failed check.
+func Check(ctx context.Context, c *http.Client, base string, gaps Gaps, planted []string) ([]Finding, error) {
+	snap, err := Collect(ctx, c, base, planted)
 	if err != nil {
 		return nil, err
 	}
@@ -164,8 +165,9 @@ func (r reader) shapeOf(name string, cache map[string]transport.DriverShape) (tr
 
 // Collect reads the lab at base into a Snapshot: each component's endpoints
 // (answered or not, and the built-in keys landed under each), each owner's
-// values with their writer class, and each driver's shape.
-func Collect(ctx context.Context, c *http.Client, base string) (Snapshot, error) {
+// values with their writer class, and each driver's shape; an endpoint whose
+// label is among planted is marked as broken on purpose.
+func Collect(ctx context.Context, c *http.Client, base string, planted []string) (Snapshot, error) {
 	r := reader{ctx: ctx, c: c, base: base}
 	k, err := r.catalog()
 	if err != nil {
@@ -173,9 +175,10 @@ func Collect(ctx context.Context, c *http.Client, base string) (Snapshot, error)
 	}
 	var comps struct {
 		Components []struct {
-			ID      string `json:"id"`
-			Name    string `json:"name"`
-			Product string `json:"product"`
+			ID       string `json:"id"`
+			Name     string `json:"name"`
+			Product  string `json:"product"`
+			Location string `json:"location"`
 		} `json:"components"`
 	}
 	if err := r.get("/components"+listQuery, &comps); err != nil {
@@ -185,6 +188,7 @@ func Collect(ctx context.Context, c *http.Client, base string) (Snapshot, error)
 		Endpoints []struct {
 			ID          string `json:"id"`
 			Name        string `json:"name"`
+			Label       string `json:"label"`
 			Transport   string `json:"transport"`
 			ComponentID string `json:"component_id"`
 			Driver      string `json:"driver"`
@@ -196,7 +200,7 @@ func Collect(ctx context.Context, c *http.Client, base string) (Snapshot, error)
 	shapes := map[string]transport.DriverShape{}
 	var snap Snapshot
 	for _, comp := range comps.Components {
-		cc := Component{Name: comp.Name, Product: comp.Product}
+		cc := Component{Name: comp.Name, Product: comp.Product, Location: comp.Location}
 		var reach struct {
 			Endpoints []struct {
 				ID       string  `json:"id"`
@@ -204,6 +208,9 @@ func Collect(ctx context.Context, c *http.Client, base string) (Snapshot, error)
 				Verdict  *struct {
 					Value string `json:"value"`
 				} `json:"verdict"`
+				Session *struct {
+					State string `json:"state"`
+				} `json:"session"`
 			} `json:"endpoints"`
 		}
 		var mine []int
@@ -246,7 +253,8 @@ func Collect(ctx context.Context, c *http.Client, base string) (Snapshot, error)
 			if err != nil {
 				return Snapshot{}, err
 			}
-			ep := Endpoint{Name: e.Name, Transport: e.Transport, Shape: shape, Present: map[string]bool{}}
+			ep := Endpoint{Name: e.Name, Transport: e.Transport, Shape: shape, Present: map[string]bool{},
+				Planted: e.Label != "" && slices.Contains(planted, e.Label)}
 			for _, v := range reach.Endpoints {
 				if v.ID != e.ID {
 					continue
@@ -256,8 +264,9 @@ func Collect(ctx context.Context, c *http.Client, base string) (Snapshot, error)
 				} else {
 					ep.Answered = v.Verdict != nil && v.Verdict.Value == "up"
 				}
+				ep.SessionUp = v.Session != nil && v.Session.State == "up"
 			}
-			for _, key := range transport.ExpectedBuiltIn(e.Transport, shape, ep.Answered) {
+			for _, key := range transport.ExpectedBuiltIn(e.Transport, shape, ep.Answered, ep.SessionUp) {
 				if !k.property[key] {
 					ep.Present[key] = metricInstances[key][e.Name]
 					continue

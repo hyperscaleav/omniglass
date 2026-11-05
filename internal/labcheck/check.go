@@ -38,8 +38,15 @@ type Endpoint struct {
 	Name      string
 	Transport string
 	Answered  bool
+	// SessionUp is whether the endpoint's held session reads up: a transport
+	// whose probe yields to it takes no timing meanwhile.
+	SessionUp bool
 	Shape     transport.DriverShape
 	Present   map[string]bool
+	// Planted is an endpoint the seed breaks on purpose for a learner to find
+	// (a rotated password, a changed host key). Its ladder stops where the
+	// fault does, so it owes no built-in key.
+	Planted bool
 }
 
 // Component is one component and everything the check reads of it: its
@@ -47,6 +54,7 @@ type Endpoint struct {
 type Component struct {
 	Name      string
 	Product   string
+	Location  string
 	Endpoints []Endpoint
 	Values    []Value
 }
@@ -106,10 +114,25 @@ func ownValue(vs []Value) bool {
 	})
 }
 
+// owner names a component for a finding. A component's name is unique within
+// its room, not across the fleet, so the product and location say which one.
+func (c Component) owner() string {
+	switch {
+	case c.Product != "" && c.Location != "":
+		return fmt.Sprintf("component %s (%s, at %s)", c.Name, c.Product, c.Location)
+	case c.Product != "":
+		return fmt.Sprintf("component %s (%s)", c.Name, c.Product)
+	}
+	return "component " + c.Name
+}
+
 // builtInGaps are the keys an endpoint owes and has not landed.
 func builtInGaps(e Endpoint) []string {
+	if e.Planted {
+		return nil
+	}
 	var out []string
-	for _, k := range transport.ExpectedBuiltIn(e.Transport, e.Shape, e.Answered) {
+	for _, k := range transport.ExpectedBuiltIn(e.Transport, e.Shape, e.Answered, e.SessionUp) {
 		if !e.Present[k] {
 			out = append(out, k)
 		}
@@ -141,7 +164,7 @@ func Evaluate(s Snapshot, gaps Gaps) []Finding {
 	}
 
 	for _, c := range s.Components {
-		owner := "component " + c.Name
+		owner := c.owner()
 		cover(devseed.TierBuiltIn, c.Product)
 		cover(devseed.TierCollected, c.Product)
 		if len(c.Endpoints) == 0 {

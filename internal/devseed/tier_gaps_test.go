@@ -35,7 +35,7 @@ func TestComponentTierGapsNameAProductTheFleetPlaces(t *testing.T) {
 		t.Fatal(err)
 	}
 	placed := map[string]bool{}
-	for _, c := range doc.Components {
+	for _, c := range append(append([]devseed.Component(nil), doc.Components...), doc.SimComponents...) {
 		placed[c.Product] = true
 	}
 	for _, tier := range []devseed.Tier{devseed.TierBuiltIn, devseed.TierCollected} {

@@ -154,8 +154,13 @@ The built-in set is not written down anywhere to drift: the transport registry d
 endpoint of each transport writes, the driver's polls, listeners and session decide the rest, and
 `probekeys` and the writer classes rule who may write each key. A component whose profile or endpoint
 is removed fails the collected or the built-in tier by name; a component that reports only built-in
-data, or only identity and `uptime`, fails the collected tier. A device that is down, as a planted
-fault is, still owes its reachability rung but no response time.
+data, or only identity and `uptime`, fails the collected tier. A device that is down still owes its
+reachability rung but no response time, and a telnet endpoint whose held session is up owes none
+either: the probe stands down for the session, so a second dial cannot be refused by gear that admits
+one client. The endpoints the seed breaks on purpose (a rotated password, a changed host key) are read
+from the seed and owe no built-in key, since their ladder stops where the fault does; they must still
+exist. A finding names the component with its product and location, because a component's name is
+unique only within its room.
 
 What the lab does not carry yet is listed per tier in the dev fleet's gap ledger, each entry with the
 issue that closes it. The ledger is empty when the fleet is whole, and an entry fails the test as
