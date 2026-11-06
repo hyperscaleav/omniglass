@@ -135,10 +135,10 @@ func plantWideMetrics(t *testing.T, conn *pgx.Conn) {
 // TestNarrowMetricKeepsEveryRow: every wide row arrives in the narrow lane
 // unchanged (each sample and declared row read beside its series reproduces
 // the wide row exactly, id included), observed and calculated rows land in
-// the partitioned table and the intended row in the declared tier, each
-// month a row was in has its partition, and a new sample's id carries on
-// past the wide table's. Rolled back, the wide table holds the same rows
-// again, and migrated forward a second time it arrives again.
+// the partitioned table and the intended row in the declared tier, each day
+// a sample is in has its partition (a day's since #1527), and a new sample's
+// id carries on past the wide table's. Rolled back, the wide table holds the
+// same rows again, and migrated forward a second time it arrives again.
 func TestNarrowMetricKeepsEveryRow(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
 	if err := migrate.RollbackBelow(dsn, metricNarrowVersion); err != nil {
@@ -176,7 +176,7 @@ func TestNarrowMetricKeepsEveryRow(t *testing.T) {
 		t.Errorf("%d series, want 9", series)
 	}
 	parts := partitionsOf(t, conn, "metric")
-	for _, m := range []string{"metric_p202608", "metric_p202609", "metric_p202610", "metric_p202611"} {
+	for _, m := range []string{"metric_p20260820", "metric_p20260901", "metric_p20260902", "metric_p20261003", "metric_p20261004"} {
 		if !slices.Contains(parts, m) {
 			t.Errorf("partitions %v, want %s among them", parts, m)
 		}

@@ -92,7 +92,7 @@ func TestPruneSamplesHonorsATypesOverride(t *testing.T) {
 	now := time.Now().UTC()
 	row := func(typ string, age time.Duration) {
 		t.Helper()
-		if err := f.gw.MakeMetricMonths(f.ctx, now.Add(-age)); err != nil {
+		if err := f.gw.MakeMetricDays(f.ctx, now.Add(-age)); err != nil {
 			t.Fatal(err)
 		}
 		mustExec(t, f.conn, storagetest.WideMetricInsert(`ts, owner_kind, component_id, metric_type_id, instance, provenance, value`,

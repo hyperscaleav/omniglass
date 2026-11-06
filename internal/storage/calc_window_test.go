@@ -202,6 +202,11 @@ func TestASteadyMetricOutputStaysWithinRetention(t *testing.T) {
 	if got := r.calculated("avg-temp"); len(got) != 1 {
 		t.Fatalf("avg-temp rows %v, want one: an unchanged result inside half a day writes nothing", got)
 	}
+	// Thirteen hours back may be yesterday, a day the install has no
+	// partition for yet.
+	if err := r.gw.MakeMetricDays(r.ctx, now.Add(-14*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := r.conn.Exec(r.ctx, `update metric set ts = ts - interval '13 hours'
 		where series_id in (select id from metric_series where provenance = 'calculated')`); err != nil {
 		t.Fatal(err)

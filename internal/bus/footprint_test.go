@@ -81,7 +81,7 @@ const (
 )
 
 // wantMetricIndexes is every index on the metric table, by definition, as
-// the partitioned parent declares it for every month (#1275). An added,
+// the partitioned parent declares it for every day (#1275, #1527). An added,
 // dropped or re-keyed index changes this list.
 var wantMetricIndexes = []string{
 	"CREATE INDEX metric_id_brin ON ONLY public.metric USING brin (id)",

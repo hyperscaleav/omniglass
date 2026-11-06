@@ -870,10 +870,12 @@ type Gateway interface {
 	// retention (ADR-1275).
 	PruneSamples(ctx context.Context, lane string, before time.Time, limit int) (int64, error)
 	// EnsureMetricPartitions keeps the metric table partitioned through the
-	// month two ahead of the current one, returning what it created (#420).
+	// day three ahead of the current one, returning what it created, and
+	// refuses unless the partitions cover all of it (#420, #1527).
 	EnsureMetricPartitions(ctx context.Context) ([]string, error)
-	// DropMetricPartitions drops each month of metric wholly past before and
-	// past every type's own window, returning what it dropped (#420).
+	// DropMetricPartitions drops each day of metric wholly past before, past
+	// the trend compacted mark, and holding no sample a type's own longer
+	// window still reaches, returning what it dropped (#420, #1527).
 	DropMetricPartitions(ctx context.Context, before time.Time) ([]string, error)
 	// CompactMetricTrends closes up to maxHours hours of observed metric
 	// samples into hourly trends and recomputes the closed hours a late
@@ -881,7 +883,7 @@ type Gateway interface {
 	CompactMetricTrends(ctx context.Context, maxHours, laneDays int) (TrendCompaction, error)
 	// PruneMetricTrends deletes up to limit trend rows of hours before before.
 	PruneMetricTrends(ctx context.Context, before time.Time, limit int) (int64, error)
-	// MetricPartitions lists the metric table's monthly partitions.
+	// MetricPartitions lists the metric table's daily partitions.
 	MetricPartitions(ctx context.Context) ([]MetricPartition, error)
 	// PruneSamplesOfType is PruneSamples for one type with a window of its
 	// own, which the lane's prune skips (#417).

@@ -58,7 +58,7 @@ func (f *pruneFixture) row(lane, owner string, ts time.Time, provenance string, 
 		col, name = "system_id", "prune-s1"
 	}
 	if lane == "metric" {
-		if err := f.gw.MakeMetricMonths(f.ctx, ts); err != nil {
+		if err := f.gw.MakeMetricDays(f.ctx, ts); err != nil {
 			f.t.Fatal(err)
 		}
 		mustExec(f.t, f.conn, storagetest.WideMetricInsert(`ts, owner_kind, `+col+`, metric_type_id, instance, provenance, value`,
@@ -314,12 +314,12 @@ func TestPruneSamplesSparesWhatAReaderCallsLatest(t *testing.T) {
 	}
 }
 
-// TestPruneMetricSamplesReadOneMonthAtATime holds the metric prune's access
+// TestPruneMetricSamplesReadOneDayAtATime holds the metric prune's access
 // path (#1275): the lane's prune reads the one partition it is given and
-// deletes the rows it chose by TID, never a probe into another month; a typed
+// deletes the rows it chose by TID, never a probe into another day; a typed
 // prune walks its type's series through metric_series_type_idx and searches
 // each series' old rows through the partition's series index.
-func TestPruneMetricSamplesReadOneMonthAtATime(t *testing.T) {
+func TestPruneMetricSamplesReadOneDayAtATime(t *testing.T) {
 	f := newPruneFixture(t)
 	parts, err := f.gw.MetricPartitions(f.ctx)
 	if err != nil || len(parts) == 0 {
@@ -333,7 +333,7 @@ func TestPruneMetricSamplesReadOneMonthAtATime(t *testing.T) {
 	}
 	for _, s := range plan {
 		if strings.HasPrefix(s.Relation, "metric_p") && s.Relation != part {
-			t.Errorf("the lane prune of %s reads another month, %s:\n\t%s", part, s.Relation, plan)
+			t.Errorf("the lane prune of %s reads another day, %s:\n\t%s", part, s.Relation, plan)
 		}
 	}
 	tid := false

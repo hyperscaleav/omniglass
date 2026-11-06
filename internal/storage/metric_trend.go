@@ -161,7 +161,7 @@ func (p *PG) CompactMetricTrends(ctx context.Context, maxHours, laneDays int) (T
 }
 
 // seedTrendMarks stands both marks where the first pass starts: the oldest
-// month the hot tier holds, or the longest window (the metric lane's, or a
+// day the hot tier holds, or the longest window (the metric lane's, or a
 // type's own) back from now when that is later, so an install upgraded with
 // years of samples kept does not fold hours every prune is about to remove.
 // Never past target. A second server seeding at once keeps the first's.
