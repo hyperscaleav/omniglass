@@ -38,6 +38,14 @@ type MetricSample struct {
 	Source     string
 }
 
+// MetricTime is a metric sample's ts as it is stored: whole milliseconds
+// (#1526). Node clocks are NTP-synced, accurate to a few milliseconds, so the
+// digits below are noise; a raw row and the compacted block that later holds it
+// (int4 millisecond offsets, #1265) then agree exactly. It truncates rather
+// than refuses, so a spool replayed from an older node lands. The metric lane
+// only: the property, event and log lanes keep the ts they were sent.
+func MetricTime(ts time.Time) time.Time { return ts.Truncate(time.Millisecond) }
+
 // ErrUnknownOwnerKind guards the owner-arc column mapping.
 var ErrUnknownOwnerKind = errors.New("storage: unknown sample owner_kind")
 
@@ -210,6 +218,7 @@ func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs
 		if stamps[i], err = clock.cap(ctx, ev.Key, ts); err != nil {
 			return err
 		}
+		stamps[i] = MetricTime(stamps[i])
 	}
 	// A series the batch carries once lands with every other such series in
 	// one statement (#1274). A series it carries more than once keeps the

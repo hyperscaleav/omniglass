@@ -140,3 +140,24 @@ The recurring trigger config and the clock singleton's pending-fire working set;
 | `schedule` | id, rrule/cron, **tz (IANA)**, target, enabled | config: a recurring trigger |
 | `timer` | id, **fire_at (timestamptz)**, kind (schedule-tick / for-sustain / runbook-wait / watchdog), ref, payload | the clock singleton's pending-fire **working-set** (the durable PG working set, mutable, scanned for due rows and the fire realized on its lane: a record-lane fire born in PG and CDC-fanned to JetStream, a watchdog's staleness onto the data lane), not a history log; fires are logged on the entity they produce |
 ::::
+
+::::note[Built: a metric's timestamp is whole milliseconds (#1526)]
+A metric sample's `ts` carries no digits
+below the millisecond, on `metric` and on `metric_declared`, from the node to the stored row:
+
+- **The node** truncates every metric sample's `ts` to the millisecond where a batch leaves it (the
+  spool), so no probe or driver has to remember to.
+- **The ingest** truncates again before the row lands. It truncates rather than refuses, so a spool
+  replayed from an older node lands instead of failing its batch.
+- **Existing rows** were truncated in place by a migration, and a row written with no `ts` takes the
+  database's `now()` on its millisecond.
+
+The reason is the clock, not the storage. A node's clock is NTP-synced, accurate to a few
+milliseconds, so microsecond digits in a `ts` are noise. And a raw row and the compacted block that
+later holds it (int4 millisecond offsets, #1265) then agree exactly, with no rounding rule between
+them.
+
+Truncation can put two samples of one series in the same instant. That is allowed (there is no unique
+key on `(series_id, ts)`, ADR-0061): they land in the order they arrived, and ids tell them apart.
+The property, event and log lanes keep their timestamps unchanged, and rule evaluation is unchanged.
+::::
