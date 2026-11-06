@@ -46,6 +46,15 @@ func TestANodeLogOverridePrunesNodeLogsAndOnlyThem(t *testing.T) {
 		t.Fatalf("component: %v", err)
 	}
 	now := time.Now().UTC()
+	// This test is about node_log, not trend compaction: stand the trend marks
+	// at the compaction's target, so no pass has an hour to fold and none
+	// reports Behind. Left to seed itself, a fresh database starts at its
+	// oldest partition (the 1st of the month), and the test's passes at 48
+	// hours each fall behind from about the 5th on.
+	if _, err := conn.Exec(ctx, `insert into metric_trend_mark (id, announced_through, compacted_through)
+		values (true, $1, $1)`, now.Add(-storage.MetricTrendHorizon).Truncate(time.Hour)); err != nil {
+		t.Fatalf("stand the trend marks at the target: %v", err)
+	}
 	line := func(table, severity string, age time.Duration, msg string) {
 		t.Helper()
 		ts := now.Add(-age)
