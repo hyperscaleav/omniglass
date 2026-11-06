@@ -8,10 +8,10 @@
 Type "# The fleet's recording service, collected by its own driver"
 Enter
 Wait
-Type `rec=recording-service`
+Hide
+Type `rec=$(omniglass component list | jq -r '.components[] | select(.product == "recording-service") | .id')`
 Enter
 Wait
-Hide
 Type `demo_until 120 'omniglass component property list "$rec" | jq -e "[.properties[] | select(.property_type_name == \"service-state\" and .reconciliation.is != null)] | length == 1"'`
 Enter
 Wait@130s
