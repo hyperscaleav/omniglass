@@ -113,7 +113,3 @@ func TestBucketOfPrefersTheParent(t *testing.T) {
 		t.Errorf("bucketOf(nothing) = %q, want %q", got, want)
 	}
 }
-
-func TestThrowawayFailureProvesTheTestRollup(t *testing.T) {
-	t.Fatal("THROWAWAY: fails on purpose to prove the test rollup goes red")
-}
