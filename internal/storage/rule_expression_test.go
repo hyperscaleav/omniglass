@@ -33,6 +33,7 @@ func exprCriteria(src string) rules.Criteria { return rules.Criteria{Expr: src} 
 // expression writes nothing, and a bad expression is refused naming its
 // criteria, line and column.
 func TestRuleCriteriaAreExpressions(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 	gw, all := f.gw, scope.Set{All: true}
@@ -115,6 +116,8 @@ func TestRuleCriteriaAreExpressions(t *testing.T) {
 // once a rule's version has been loaded: the programs are held per (rule,
 // version), not compiled per sample or per batch.
 func TestRuleCompilesOncePerVersion(t *testing.T) {
+	// Serial: rules.CompileCount is process-wide, so a parallel test compiling
+	// a judge would move the count this one asserts on.
 	f := newHealthFixture(t)
 	ctx := context.Background()
 	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "hot", SampleKey: "room-temperature",
@@ -145,6 +148,7 @@ func TestRuleCompilesOncePerVersion(t *testing.T) {
 // TestRuleRunErrorHoldsAndLogsOnce proves a run over its budget holds the
 // rule for that sample, logs once, and the sample still lands.
 func TestRuleRunErrorHoldsAndLogsOnce(t *testing.T) {
+	// Serial: it swaps the process-wide slog default to capture the log line.
 	f := newHealthFixture(t)
 	ctx := context.Background()
 	var mu sync.Mutex
@@ -196,6 +200,7 @@ func (l *lockedWriter) Write(p []byte) (int, error) {
 // and a metric rule, through the real ingest), and running it again (down
 // and up) or re-running the boot seed changes nothing.
 func TestCriteriaBackfill(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -390,6 +395,8 @@ func ptrBool(b bool) *bool { return &b }
 // (field, line, column, message), the rule holds, and the failed compile is
 // cached per rule version like a success, not retried per sample.
 func TestCriteriaThatCannotCompileAreVisible(t *testing.T) {
+	// Serial: rules.CompileCount is process-wide, so a parallel test compiling
+	// a judge would move the count this one asserts on.
 	f := newHealthFixture(t)
 	ctx := context.Background()
 	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "was-text", SampleKey: "endpoint-reachable",

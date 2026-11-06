@@ -24,6 +24,7 @@ func strptr(s string) *string { return &s }
 // but outside action scope is forbidden, occupancy refuses a delete, and every
 // write leaves an audit row.
 func TestLocationScopeCRUD(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)

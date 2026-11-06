@@ -14,6 +14,7 @@ import (
 // value anyone asked for, so its row carries no reconciliation, and a declared
 // value still wins.
 func TestCalcPropertyOutputIsEffective(t *testing.T) {
+	t.Parallel()
 	r := newEvalRig(t)
 	rule, err := r.create(storage.CalcRuleSpec{Name: "busy", OwnerKind: rules.OwnerComponent,
 		Inputs: []rules.CalcInput{{Alias: "call", Key: "in-call"}}, Reduce: rules.CalcReduce{Expr: "any(call)"}, OutputKey: "busy-flag"})

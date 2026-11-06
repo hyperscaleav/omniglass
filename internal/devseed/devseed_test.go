@@ -31,6 +31,7 @@ var officialRoles = map[string]bool{
 // every user carries a password, and every grant references a real role. It
 // needs no database, so it runs under -short.
 func TestFixturesShape(t *testing.T) {
+	t.Parallel()
 	doc, err := devseed.Fixtures()
 	if err != nil {
 		t.Fatalf("parse fixtures: %v", err)
@@ -155,6 +156,7 @@ func checkDocShape(t *testing.T, doc devseed.Doc) {
 // place. Names are legally placement-scoped in the model, but this fixture
 // keeps them fleet-unique so the lookup cannot be fooled.
 func TestFixtureLocationNamesAreUniqueFleetWide(t *testing.T) {
+	t.Parallel()
 	doc := fixturesDoc(t)
 	seen := map[string]string{}
 	for _, l := range doc.Locations {
@@ -185,6 +187,7 @@ func TestFixtureLocationNamesAreUniqueFleetWide(t *testing.T) {
 // shipped fleet, and this test now asserts the absence rather than papering over
 // it by inventing a positional type to keep the demo alive.
 func TestFixturesLetThePlatformNameTheFleet(t *testing.T) {
+	t.Parallel()
 	doc, err := devseed.Fixtures()
 	if err != nil {
 		t.Fatalf("parse fixtures: %v", err)
@@ -221,6 +224,7 @@ func TestFixturesLetThePlatformNameTheFleet(t *testing.T) {
 // row that could render its own is a deliberate edit here rather than a quiet
 // one that nothing notices.
 func TestFixturesKeepLabelsOnlyWhereTheOverrideIsThePoint(t *testing.T) {
+	t.Parallel()
 	doc, err := devseed.Fixtures()
 	if err != nil {
 		t.Fatalf("parse fixtures: %v", err)
@@ -296,6 +300,7 @@ func TestFixturesKeepLabelsOnlyWhereTheOverrideIsThePoint(t *testing.T) {
 // fleet, and the reason the install-wide `platform` tier exists (it is the only
 // rung that reaches all of them) is invisible in the console.
 func TestFixturesFleetIsAForest(t *testing.T) {
+	t.Parallel()
 	doc, err := devseed.Fixtures()
 	if err != nil {
 		t.Fatalf("parse fixtures: %v", err)
@@ -339,6 +344,7 @@ func TestFixturesFleetIsAForest(t *testing.T) {
 // location types, sample types) must exist first, so the boot seed runs ahead of
 // it, exactly as bootstrap does. Skipped under -short by the testcontainer harness.
 func TestRunIdempotent(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 
@@ -718,6 +724,7 @@ const (
 // fixture that quietly went back to letting the platform name a floor fails on
 // the pen.
 func TestSeededNamesComeFromTheGenerator(t *testing.T) {
+	t.Parallel()
 	ctx, conn, _ := seededFleet(t)
 
 	for _, tc := range []struct {
@@ -826,6 +833,7 @@ func TestSeededNamesComeFromTheGenerator(t *testing.T) {
 // carries was minted from that. A stem edited in the boot seed moves this
 // assertion with it, where a hand-written list of names would drift.
 func TestASeededComponentNameAgreesWithItsProductsStem(t *testing.T) {
+	t.Parallel()
 	ctx, conn, _ := seededFleet(t)
 
 	rows, err := conn.Query(ctx, `
@@ -888,6 +896,7 @@ func TestASeededComponentNameAgreesWithItsProductsStem(t *testing.T) {
 // asserted to still own it, since that is the other half of what the fleet
 // teaches.
 func TestSeededLabelsRenderFromTheirRules(t *testing.T) {
+	t.Parallel()
 	ctx, conn, _ := seededFleet(t)
 
 	for _, tc := range []struct {
@@ -993,6 +1002,7 @@ func TestSeededLabelsRenderFromTheirRules(t *testing.T) {
 // (dsp-1, amp-1, physically racked in A) counting in both halves (#802): the
 // shared-component case, standing where the impossible shared bar used to.
 func TestSeededStaffingLandsOnTheRightDevices(t *testing.T) {
+	t.Parallel()
 	ctx, conn, _ := seededFleet(t)
 
 	for _, tc := range []struct {
@@ -1080,6 +1090,7 @@ func TestSeededStaffingLandsOnTheRightDevices(t *testing.T) {
 // the two AGREE because they are one fact rather than two. This test is the
 // statement of that, and it fails if a floor ever goes back to being minted.
 func TestAFloorIsNamedForItsDesignation(t *testing.T) {
+	t.Parallel()
 	ctx, conn, _ := seededFleet(t)
 
 	rows, err := conn.Query(ctx, `
@@ -1137,6 +1148,7 @@ func TestAFloorIsNamedForItsDesignation(t *testing.T) {
 // top falls back to the install-wide `platform` value, which is the case a
 // synthetic root location would have hidden.
 func TestSeededFleetTeachesPlatformReach(t *testing.T) {
+	t.Parallel()
 	ctx, conn, gw := seededFleet(t)
 
 	doc, err := devseed.Fixtures()
@@ -1176,26 +1188,21 @@ func TestSeededFleetTeachesPlatformReach(t *testing.T) {
 	}
 }
 
-// seededFleet brings up a database with the boot seed and one devseed Run, and
-// hands back the raw connection and the gateway. One Run rather than two: the
-// idempotency property has its own test, and every other case here is about what
-// the fleet IS.
+// seededFleet hands back a database holding the boot seed and one devseed Run,
+// with the raw connection and the gateway. It is a clone of a fleet seeded once
+// per test binary, not a fleet seeded afresh: the idempotency property has its
+// own test, and every other case here is about what the fleet IS. A test that
+// writes to it writes to its own copy.
 func seededFleet(t *testing.T) (context.Context, *pgx.Conn, storage.Gateway) {
 	t.Helper()
-	dsn := storagetest.NewDSN(t)
+	dsn := devseed.FleetSeededDSN(t)
 	ctx := context.Background()
 
-	gw, err := storage.NewPG(ctx, dsn, storage.WithSecretProvider(secret.NewStaticProvider(bytes.Repeat([]byte{0x7}, 32))))
+	gw, err := storage.NewPG(ctx, dsn, devseed.SecretProvider())
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	t.Cleanup(gw.Close)
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("boot seed: %v", err)
-	}
-	if err := devseed.Run(ctx, gw, ""); err != nil {
-		t.Fatalf("devseed run: %v", err)
-	}
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
 		t.Fatalf("connect: %v", err)
@@ -1265,6 +1272,7 @@ func assertGrant(t *testing.T, conn *pgx.Conn, ctx context.Context, username, ro
 // reason about it, so the whole guard runs with no Postgres and cannot rot into a
 // slow test nobody runs.
 func TestFixturesMakeAnFleetWorthLookingAt(t *testing.T) {
+	t.Parallel()
 	doc, err := devseed.Fixtures()
 	if err != nil {
 		t.Fatalf("parse fixtures: %v", err)
@@ -1416,22 +1424,11 @@ func TestFixturesMakeAnFleetWorthLookingAt(t *testing.T) {
 // an outage at a glance, and a dev fleet where every room reads healthy
 // demonstrates nothing and hides a broken rollup behind a green screen.
 func TestSeededFleetShowsEveryVerdict(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
-	ctx := context.Background()
-	dsn := storagetest.NewDSN(t)
-	gw, err := storage.NewPG(ctx, dsn, storage.WithSecretProvider(secret.NewStaticProvider(bytes.Repeat([]byte{0x7}, 32))))
-	if err != nil {
-		t.Fatalf("open gateway: %v", err)
-	}
-	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("boot seed: %v", err)
-	}
-	if err := devseed.Run(ctx, gw, ""); err != nil {
-		t.Fatalf("devseed: %v", err)
-	}
+	ctx, conn2, gw := seededFleet(t)
 
 	all := scope.Set{All: true}
 	verdictOf := func(system string) string {
@@ -1449,11 +1446,6 @@ func TestSeededFleetShowsEveryVerdict(t *testing.T) {
 	// fleet-wide. A system is resolved to its uuid through the room that
 	// holds it instead, and a room may hold more than one (the lab's two
 	// pods), so the verdict is asserted over every system in the room.
-	conn2, err := pgx.Connect(ctx, dsn)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	defer conn2.Close(ctx)
 	systemsIn := func(room string) []string {
 		t.Helper()
 		rows, err := conn2.Query(ctx,
@@ -1536,6 +1528,7 @@ func fixtureComponentNames(doc devseed.Doc) []string {
 // incomplete: every system in the fixture is staffed to its standard's
 // quorum, with exactly one named provisioning exception.
 func TestFixtureFleetReadsDeployed(t *testing.T) {
+	t.Parallel()
 	doc := fixturesDoc(t)
 	teaching := map[string]string{
 		"briefing-av": "the ONE provisioning system: deployed except its scheduling panel",
@@ -1599,6 +1592,7 @@ func TestFixtureFleetReadsDeployed(t *testing.T) {
 // unsampled. Pinned here because the system zoom's tiles render exactly this
 // read and nothing else.
 func TestSeededStandardsDeclareTheRoomKPIs(t *testing.T) {
+	t.Parallel()
 	ctx, conn, gw := seededFleet(t)
 	all := scope.Set{All: true}
 
@@ -1652,6 +1646,7 @@ func TestSeededStandardsDeclareTheRoomKPIs(t *testing.T) {
 // and line-protocol products through their drivers, and a second run adds
 // nothing.
 func TestSeededFleetIsSimulated(t *testing.T) {
+	t.Parallel()
 	ctx, conn, gw := seededFleet(t)
 	count := func() int {
 		var n int
@@ -1760,6 +1755,7 @@ func TestSeededFleetIsSimulated(t *testing.T) {
 // address (HTTP and the line protocol at their real ports); without
 // it (the docs screenshots), the demo is untouched.
 func TestReachabilityDemoIsSimulatedWithTheFleet(t *testing.T) {
+	t.Parallel()
 	targets := func(ctx context.Context, conn *pgx.Conn) (product string, got map[string]string) {
 		t.Helper()
 		got = map[string]string{}
@@ -1825,15 +1821,12 @@ func TestReachabilityDemoIsSimulatedWithTheFleet(t *testing.T) {
 	}
 
 	// Without the simulated fleet the demo keeps its fixed address.
-	dsn := storagetest.NewDSN(t)
-	gw, err := storage.NewPG(ctx, dsn, storage.WithSecretProvider(secret.NewStaticProvider(bytes.Repeat([]byte{0x7}, 32))))
+	dsn := devseed.BootSeededDSN(t)
+	gw, err := storage.NewPG(ctx, dsn, devseed.SecretProvider())
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatal(err)
-	}
 	if err := devseed.RunWith(ctx, gw, "", devseed.Options{SimFleet: false}); err != nil {
 		t.Fatal(err)
 	}
@@ -1853,16 +1846,14 @@ func TestReachabilityDemoIsSimulatedWithTheFleet(t *testing.T) {
 // probe below 1024 is served as declared. A lift is opt-in, for a simulator
 // run unprivileged on a host (seed-dev --sim-port-offset).
 func TestSimulatedFleetAtRealPorts(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
-	dsn := storagetest.NewDSN(t)
-	gw, err := storage.NewPG(ctx, dsn, storage.WithSecretProvider(secret.NewStaticProvider(bytes.Repeat([]byte{0x7}, 32))))
+	dsn := devseed.BootSeededDSN(t)
+	gw, err := storage.NewPG(ctx, dsn, devseed.SecretProvider())
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatal(err)
-	}
 	if err := devseed.RunWith(ctx, gw, "", devseed.Options{SimFleet: true, SimPortOffset: 0}); err != nil {
 		t.Fatal(err)
 	}
@@ -1902,6 +1893,7 @@ func TestSimulatedFleetAtRealPorts(t *testing.T) {
 // pointing the endpoint's login at it is the fix the walkthrough teaches. A
 // second run adds nothing.
 func TestSeededFleetHoldsARejectedSession(t *testing.T) {
+	t.Parallel()
 	ctx, conn, gw := seededFleet(t)
 	type ep struct{ host, port, login, node string }
 	telnet := func() (ep, int) {
@@ -1980,6 +1972,7 @@ func TestSeededFleetHoldsARejectedSession(t *testing.T) {
 // no session pill. Pointing the community at the fleet's own secret lifts it.
 // A second run adds nothing.
 func TestSeededFleetHoldsAProbeGate(t *testing.T) {
+	t.Parallel()
 	ctx, conn, gw := seededFleet(t)
 	type ep struct{ id, host, port, community, node string }
 	snmpEndpoints := func() []ep {
@@ -2077,6 +2070,7 @@ func TestSeededFleetHoldsAProbeGate(t *testing.T) {
 // second run neither adds an endpoint nor moves the pin an operator may have
 // trusted since.
 func TestSeededFleetHoldsAHostKeyRejection(t *testing.T) {
+	t.Parallel()
 	ctx, conn, gw := seededFleet(t)
 	type ep struct{ id, name, host, port, login, node string }
 	sshEndpoints := func() []ep {
@@ -2148,6 +2142,7 @@ func TestSeededFleetHoldsAHostKeyRejection(t *testing.T) {
 // simulated address at the driver's port, pinning the panel's key on first
 // use, on the dev node. A second run adds nothing.
 func TestSeededFleetHoldsATLSEndpoint(t *testing.T) {
+	t.Parallel()
 	ctx, conn, gw := seededFleet(t)
 	type ep struct{ host, port, mode, target, node string }
 	tlsEndpoints := func() ([]ep, error) {
@@ -2202,6 +2197,7 @@ func TestSeededFleetHoldsATLSEndpoint(t *testing.T) {
 // (the node binds its own and the panel pushes to the source of the
 // subscribe), on the dev node. A second run adds nothing.
 func TestSeededFleetHoldsAUDPEndpoint(t *testing.T) {
+	t.Parallel()
 	ctx, conn, gw := seededFleet(t)
 	type ep struct{ host, port, listen, target, node string }
 	udpEndpoints := func() ([]ep, error) {

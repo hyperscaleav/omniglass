@@ -16,6 +16,7 @@ import (
 // an interface placed on the node, once, with its product and the host its
 // interfaces target, and nothing placed on another node or on none.
 func TestNodeSimDevices(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

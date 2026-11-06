@@ -26,6 +26,7 @@ func criteria(op string, v any) rules.Criteria {
 // version; and rules read like a registry, written only with an
 // all-scope grant.
 func TestEventRules(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -128,6 +129,7 @@ func ptrString(s string) *string { return &s }
 // disable it), it just matches nothing; a patch that changes nothing bumps
 // nothing; and the sustains and clear fields refuse what they cannot mean.
 func TestEventRuleEdgeCases(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -223,6 +225,7 @@ func TestEventRuleEdgeCases(t *testing.T) {
 // The boot seed's official rules are read-only, a re-seed changes nothing,
 // and an official rule never takes over an operator's rule of its name.
 func TestOfficialEventRules(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

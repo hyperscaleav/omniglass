@@ -19,6 +19,7 @@ import (
 // naming the offending property. Before this slice all six sites accepted such
 // a schema with only a well-formed-JSON check.
 func TestCatalogSchemaBareRequiredRefused(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)

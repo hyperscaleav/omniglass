@@ -73,6 +73,7 @@ func openRuleAlarms(t *testing.T, f *healthFixture, rule string) int {
 // lock so the sweep stalls mid-raise, lands the "up" while it is stalled,
 // then lets both go.
 func TestRuleSweepSerializesWithIngest(t *testing.T) {
+	t.Parallel()
 	r := newStreakRig(t, "race", 10*time.Second)
 	ctx := context.Background()
 	now := time.Now().UTC()
@@ -121,6 +122,7 @@ func TestRuleSweepSerializesWithIngest(t *testing.T) {
 // node's clock: a node running a minute behind does not get its fire
 // sustain waived on the next sweep.
 func TestRuleSustainTimedByServerReceipt(t *testing.T) {
+	t.Parallel()
 	r := newStreakRig(t, "skew", 15*time.Second)
 	r.observe(t, "tcp", "down", time.Now().UTC().Add(-time.Minute))
 	r.sweep(t, time.Now())
@@ -138,6 +140,7 @@ func TestRuleSustainTimedByServerReceipt(t *testing.T) {
 // restarts it, primed from the newest sample, so it still fires once the new
 // sustain has held.
 func TestRuleStreakSurvivesCosmeticEdit(t *testing.T) {
+	t.Parallel()
 	r := newStreakRig(t, "edit", 10*time.Second)
 	ctx, all := context.Background(), scope.Set{All: true}
 	now := time.Now().UTC()
@@ -171,6 +174,7 @@ func TestRuleStreakSurvivesCosmeticEdit(t *testing.T) {
 // the newest sample, so a transition-only input that will send nothing more
 // still fires once the sustain has held.
 func TestRuleCreatedWhileConditionHolds(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx, all := context.Background(), scope.Set{All: true}
 	now := time.Now().UTC()
@@ -212,6 +216,7 @@ func TestRuleCreatedWhileConditionHolds(t *testing.T) {
 // before acting, so a streak the newest sample no longer supports (here a
 // recovery written around the evaluator) is dropped, not fired.
 func TestRuleSweepRejudgesNewestSample(t *testing.T) {
+	t.Parallel()
 	r := newStreakRig(t, "rejudge", 10*time.Second)
 	ctx := context.Background()
 	now := time.Now().UTC()
@@ -240,6 +245,7 @@ func TestRuleSweepRejudgesNewestSample(t *testing.T) {
 // only its wording keeps the streak, and one that changes its sustain
 // restarts it.
 func TestOfficialRuleSeedPrimes(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 	if err := insertProperties(ctx, f.gw, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "bar-1",
@@ -278,6 +284,7 @@ func TestOfficialRuleSeedPrimes(t *testing.T) {
 // the ingest stalls after it has loaded the rule and before it raises,
 // disables the rule meanwhile, then lets both go.
 func TestRuleDisableSerializesWithIngest(t *testing.T) {
+	t.Parallel()
 	r := newStreakRig(t, "gone", 0)
 	ctx, all := context.Background(), scope.Set{All: true}
 	var seriesKey string

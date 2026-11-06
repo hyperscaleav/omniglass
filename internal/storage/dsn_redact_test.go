@@ -15,6 +15,7 @@ import (
 // but the Gateway is the database's other front door and holds the same line
 // (#979's review). It fails before any connection, so no database is needed.
 func TestAMalformedDSNNeverEchoesItsPasswordFromTheGateway(t *testing.T) {
+	t.Parallel()
 	_, err := storage.NewPG(context.Background(), "postgres://og:s3c/ret@127.0.0.1:1/og")
 	if err == nil {
 		t.Fatal("an unparseable DSN opened a gateway")
@@ -32,6 +33,7 @@ func TestAMalformedDSNNeverEchoesItsPasswordFromTheGateway(t *testing.T) {
 // had pgx quote the whole DSN, password and all (#979's review). The error
 // keeps pgx's reason and drops the DSN.
 func TestADSNQueryPasswordNeverReachesTheGatewaysError(t *testing.T) {
+	t.Parallel()
 	_, err := storage.NewPG(context.Background(),
 		"postgres://postgres@127.0.0.1:1/postgres?password=QSECRETpw&sslmode=disable&connect_timeout=-1")
 	if err == nil {

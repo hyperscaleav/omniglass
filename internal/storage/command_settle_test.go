@@ -110,6 +110,7 @@ const valueReply = `{"from": "response", "extract": {"regex": "^INPUT (\\S+)$"}}
 // and the reply is recorded as an observation of the target, on the
 // endpoint it came through.
 func TestCommandSettlesFromItsResponse(t *testing.T) {
+	t.Parallel()
 	r := newSettleRig(t, valueReply)
 	id := r.issueAndDispatch(t, "hdmi3")
 	if err := r.gw.RecordCommandExecution(r.ctx, "edge", id, "", "INPUT hdmi3"); err != nil {
@@ -127,6 +128,7 @@ func TestCommandSettlesFromItsResponse(t *testing.T) {
 // A reply carrying another value, no value, or an execution error fails the
 // command at once.
 func TestCommandFailsOnAContraryResponse(t *testing.T) {
+	t.Parallel()
 	r := newSettleRig(t, valueReply)
 	for _, tc := range []struct{ reply, execErr string }{
 		{"INPUT hdmi1", ""},
@@ -146,6 +148,7 @@ func TestCommandFailsOnAContraryResponse(t *testing.T) {
 // A binding whose reply only confirms settles on a matching reply and fails
 // on any other.
 func TestCommandSettlesFromAConfirmation(t *testing.T) {
+	t.Parallel()
 	r := newSettleRig(t, `{"from": "response", "success": {"regex": "^OK$"}}`)
 	ok := r.issueAndDispatch(t, "hdmi2")
 	if err := r.gw.RecordCommandExecution(r.ctx, "edge", ok, "", "OK"); err != nil {
@@ -167,6 +170,7 @@ func TestCommandSettlesFromAConfirmation(t *testing.T) {
 // next observation of the target on the dispatched endpoint settles it,
 // though the command was issued with no instance of its own.
 func TestCommandSettlesOnTheNextObservation(t *testing.T) {
+	t.Parallel()
 	r := newSettleRig(t, "")
 	id := r.issueAndDispatch(t, "hdmi3")
 	if err := r.gw.RecordCommandExecution(r.ctx, "edge", id, "", "OK"); err != nil {
@@ -188,6 +192,7 @@ func TestCommandSettlesOnTheNextObservation(t *testing.T) {
 // A command nothing settles is swept to timed-out once its window passes,
 // without anyone issuing another.
 func TestSweepTimesOutAnUnsettledCommand(t *testing.T) {
+	t.Parallel()
 	r := newSettleRig(t, "")
 	if _, err := r.conn.Exec(r.ctx, `update command_type set settle_window_seconds = 1 where name = 'set-input'`); err != nil {
 		t.Fatal(err)
@@ -221,6 +226,7 @@ func (r *settleRig) observedRows(t *testing.T) int {
 // A reply's value is held to the target property's validation like any
 // telemetry: a value outside it fails the command and records nothing.
 func TestAReplyOutsideThePropertysValuesRecordsNothing(t *testing.T) {
+	t.Parallel()
 	r := newSettleRig(t, valueReply)
 	id := r.issueAndDispatch(t, "hdmi3")
 	if err := r.gw.RecordCommandExecution(r.ctx, "edge", id, "", "INPUT <img/src=x>"); err != nil {
@@ -237,6 +243,7 @@ func TestAReplyOutsideThePropertysValuesRecordsNothing(t *testing.T) {
 // A reply repeating the current value settles its command without adding a
 // row: the observed series records transitions.
 func TestARepeatedReplyValueIsOneTransition(t *testing.T) {
+	t.Parallel()
 	r := newSettleRig(t, valueReply)
 	for i := 0; i < 2; i++ {
 		id := r.issueAndDispatch(t, "hdmi3")
@@ -255,6 +262,7 @@ func TestARepeatedReplyValueIsOneTransition(t *testing.T) {
 // A reply that cannot be stored (a NUL byte) fails the command, and the
 // execution is still recorded, so the command is not redelivered.
 func TestAnUnstorableReplyStillRecordsTheExecution(t *testing.T) {
+	t.Parallel()
 	r := newSettleRig(t, valueReply)
 	id := r.issueAndDispatch(t, "hdmi3")
 	if err := r.gw.RecordCommandExecution(r.ctx, "edge", id, "", "INPUT hd\x00mi3"); err != nil {
@@ -272,6 +280,7 @@ func TestAnUnstorableReplyStillRecordsTheExecution(t *testing.T) {
 // Inside the window, an observation that does not match, or one taken
 // before the intent, leaves the command pending.
 func TestNonEvidenceLeavesACommandPending(t *testing.T) {
+	t.Parallel()
 	r := newSettleRig(t, "")
 	id := r.issueAndDispatch(t, "hdmi3")
 	var issuedAt time.Time
@@ -324,6 +333,7 @@ func (r *settleRig) observeOn(t *testing.T, instance, value string) {
 // instance agreeing does not settle it, and its carrier agreeing does, the
 // computed verdict agreeing with the recorded one.
 func TestAQueuedCommandIsJudgedOnTheEndpointQueuedToCarryIt(t *testing.T) {
+	t.Parallel()
 	r := newSettleRig(t, "")
 	id := r.issueQueued(t, "hdmi3")
 	r.observeOn(t, "aux", "hdmi3")
@@ -349,6 +359,7 @@ func TestAQueuedCommandIsJudgedOnTheEndpointQueuedToCarryIt(t *testing.T) {
 // observed another value or nothing at all (ADR-0456, the commands page's
 // "timed-out covers a command no node picked up").
 func TestAQueuedCommandNoNodeTookTimesOut(t *testing.T) {
+	t.Parallel()
 	r := newSettleRig(t, "")
 	if _, err := r.conn.Exec(r.ctx, `update command_type set settle_window_seconds = 1 where name = 'set-input'`); err != nil {
 		t.Fatal(err)
@@ -423,6 +434,7 @@ func (r *settleRig) outcome(t *testing.T, id int64) (status, settledBy, observed
 // observed instance of its target (ADR-0456): an instance reporting another
 // value leaves it pending, and the first instance that agrees settles it.
 func TestAnOwnerLevelCommandSettlesWhenAnyInstanceAgrees(t *testing.T) {
+	t.Parallel()
 	r := newSettleRig(t, "")
 	r.ownerLevelDisplay(t)
 	id := r.issueOwnerLevel(t, "hdmi3")
@@ -447,6 +459,7 @@ func TestAnOwnerLevelCommandSettlesWhenAnyInstanceAgrees(t *testing.T) {
 // instance and agreed on none failed, decided by the observation; with
 // nothing observed on any instance it timed out.
 func TestAnOwnerLevelCommandFailsWhenNoInstanceAgrees(t *testing.T) {
+	t.Parallel()
 	r := newSettleRig(t, "")
 	r.ownerLevelDisplay(t)
 	unanswered := r.issueOwnerLevel(t, "hdmi2")
@@ -473,6 +486,7 @@ func TestAnOwnerLevelCommandFailsWhenNoInstanceAgrees(t *testing.T) {
 // owner-level judgment leaves it out rather than settling a command on what
 // a removed connection once saw (ADR-0456).
 func TestARetiredObserverDoesNotSettleAnOwnerLevelCommand(t *testing.T) {
+	t.Parallel()
 	r := newSettleRig(t, "")
 	r.ownerLevelDisplay(t)
 	all := scope.Set{All: true}
@@ -503,6 +517,7 @@ func TestARetiredObserverDoesNotSettleAnOwnerLevelCommand(t *testing.T) {
 // alone (#900, kept by ADR-0456): another instance agreeing does not settle
 // it, and with nothing on its own endpoint it times out.
 func TestADispatchedCommandIsJudgedOnItsEndpointAlone(t *testing.T) {
+	t.Parallel()
 	r := newSettleRig(t, "")
 	if _, err := r.conn.Exec(r.ctx, `update command_type set settle_window_seconds = 1 where name = 'set-input'`); err != nil {
 		t.Fatal(err)

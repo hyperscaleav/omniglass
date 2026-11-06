@@ -95,6 +95,7 @@ func (r *systemRig) systemRule(name string, sel storage.CalcRuleSelector, reduce
 // a member's sample marks the systems it staffs; a member leaving its role
 // drops out on the next tick; a system outside the selector gets nothing.
 func TestCalcSystemRule(t *testing.T) {
+	t.Parallel()
 	r := newSystemRig(t)
 	r.assign("sys-1", "left", "m1")
 	r.assign("sys-1", "right", "m2")
@@ -161,6 +162,7 @@ func TestCalcSystemRule(t *testing.T) {
 // holding a value the input is missing and nothing is written. An expression
 // reads its members as records, one per member.
 func TestCalcSystemMembersMissing(t *testing.T) {
+	t.Parallel()
 	r := newSystemRig(t)
 	r.assign("sys-2", "left", "m1")
 	r.assign("sys-2", "right", "m2")
@@ -183,6 +185,7 @@ func TestCalcSystemMembersMissing(t *testing.T) {
 // component rule takes no system selector and a system rule no component
 // one. Creating a rule marks every system it selects.
 func TestCalcSystemSelector(t *testing.T) {
+	t.Parallel()
 	r := newSystemRig(t)
 	for name, sel := range map[string]storage.CalcRuleSelector{
 		"unknown system":   {Systems: []string{"nowhere"}},
@@ -220,6 +223,7 @@ func TestCalcSystemSelector(t *testing.T) {
 // (#997, #1018): a batch no rule reads pays for nothing more, and a system
 // rule adds no scan to it.
 func TestCalcProbeUsesTheInputIndexes(t *testing.T) {
+	t.Parallel()
 	r := newEvalRig(t)
 	if _, err := r.conn.Exec(r.ctx, "set enable_seqscan = off"); err != nil {
 		t.Fatal(err)
@@ -250,6 +254,7 @@ func TestCalcProbeUsesTheInputIndexes(t *testing.T) {
 // once it resumes, computes nothing there: no state and no output remain
 // (review finding 1: the retype deadlocked against the held serve).
 func TestCalcRetypeWhileServing(t *testing.T) {
+	t.Parallel()
 	r := newSystemRig(t)
 	r.assign("sys-1", "left", "m1")
 	r.temp("m1", "", 20)
@@ -300,6 +305,7 @@ func TestCalcRetypeWhileServing(t *testing.T) {
 // A system whose last member leaves keeps its last calculated value (no
 // tombstone sample), and its state says since when it has had no members.
 func TestCalcSystemNoMembers(t *testing.T) {
+	t.Parallel()
 	r := newSystemRig(t)
 	r.assign("sys-1", "left", "m1")
 	r.temp("m1", "", 20)

@@ -17,6 +17,7 @@ import (
 // scope; a self root sees exactly its own row; and the admin-sensitive drop
 // composes with scope instead of replacing it.
 func TestListSecretsScopeInjection(t *testing.T) {
+	t.Parallel()
 	gw, _ := secretGateway(t)
 	ctx := context.Background()
 	all := scope.Set{All: true}

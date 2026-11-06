@@ -78,6 +78,7 @@ func ageProbe(t *testing.T, pool *pgxpool.Pool, id string) time.Time {
 // inserts ON CONFLICT DO NOTHING, so neither aborts the other, and each id
 // ends with exactly one row.
 func TestLiveStampConcurrentFirstSight(t *testing.T) {
+	t.Parallel()
 	pool, ids := liveStampPool(t, 3)
 	ctx := context.Background()
 	var wg sync.WaitGroup
@@ -111,6 +112,7 @@ func TestLiveStampConcurrentFirstSight(t *testing.T) {
 // with no owner row is skipped, not a foreign-key failure, and an empty batch
 // writes nothing.
 func TestLiveStampBound(t *testing.T) {
+	t.Parallel()
 	pool, ids := liveStampPool(t, 2)
 	ctx := context.Background()
 	if err := probeLive.stamp(ctx, pool, nil, liveStampEvery); err != nil {
@@ -159,6 +161,7 @@ func TestLiveStampBound(t *testing.T) {
 // row past the bound, the stamp skips it and returns at once, stamping the
 // rest of its batch.
 func TestLiveStampNeverWaits(t *testing.T) {
+	t.Parallel()
 	pool, ids := liveStampPool(t, 2)
 	ctx := context.Background()
 	if err := probeLive.stamp(ctx, pool, ids, liveStampEvery); err != nil {
@@ -191,6 +194,7 @@ func TestLiveStampNeverWaits(t *testing.T) {
 // caller reading now() in the same transaction saw (the rule evaluator's
 // e.now), not the statement's wall time.
 func TestLiveStampTransactionClock(t *testing.T) {
+	t.Parallel()
 	pool, ids := liveStampPool(t, 1)
 	ctx := context.Background()
 	tx, err := pool.Begin(ctx)

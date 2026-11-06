@@ -14,6 +14,7 @@ import (
 // returns which rows are in scope, using the same subtree/exclude-root logic the
 // enforcement uses. Skipped under -short.
 func TestInScopeIDs(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)

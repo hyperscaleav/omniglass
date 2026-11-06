@@ -12,6 +12,7 @@ import (
 // word) becomes high (the outage floor of the ranked levels), info and
 // warning keep their names, the CHECK is gone and the reference stands.
 func TestSeverityLevelBackfill(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

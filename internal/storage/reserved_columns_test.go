@@ -18,6 +18,7 @@ import (
 // once in that set; #588 delivered its design by folding it into property's one
 // jsonb value column, so it no longer appears here.
 func TestReservedLineageColumnsDropped(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

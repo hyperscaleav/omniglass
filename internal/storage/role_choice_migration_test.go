@@ -28,6 +28,7 @@ import (
 // describes, then migrates forward over it and confirms the repair fixes
 // it.
 func TestChoiceAlternatePositionDeferrableRepairsOldSchema(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	if err := migrate.RollbackBelow(dsn, "20260807160000"); err != nil {
 		t.Fatalf("rollback below the deferrable repair: %v", err)

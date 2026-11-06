@@ -60,6 +60,7 @@ func (f *pruneFixture) compact(maxHours int) storage.TrendCompaction {
 // inside the horizon stays open, a calculated series has no trends, and a
 // second pass closes nothing twice.
 func TestCompactionClosesTheHoursPastTheHorizon(t *testing.T) {
+	t.Parallel()
 	f := newTrendRig(t)
 	now := time.Now().UTC()
 	old := now.Add(-3 * 24 * time.Hour).Truncate(time.Hour)
@@ -94,6 +95,7 @@ func TestCompactionClosesTheHoursPastTheHorizon(t *testing.T) {
 // TestCompactionCatchesUpInBoundedPasses: a backlog closes maxHours a pass,
 // oldest first, saying it is behind until it reaches the horizon.
 func TestCompactionCatchesUpInBoundedPasses(t *testing.T) {
+	t.Parallel()
 	f := newTrendRig(t)
 	now := time.Now().UTC()
 	start := now.Add(-4 * 24 * time.Hour).Truncate(time.Hour)
@@ -118,6 +120,7 @@ func TestCompactionCatchesUpInBoundedPasses(t *testing.T) {
 // the next compaction folds the hour again, the late sample included, and
 // clears the mark. An on-time sample dirties nothing.
 func TestALateSampleRecomputesItsHour(t *testing.T) {
+	t.Parallel()
 	f := newTrendRig(t)
 	now := time.Now().UTC()
 	hour := now.Add(-2 * 24 * time.Hour).Truncate(time.Hour)
@@ -161,6 +164,7 @@ func TestALateSampleRecomputesItsHour(t *testing.T) {
 // it on the trend lock rather than clearing the mark and folding the hour
 // without it. Driven through the ingest's own insert.
 func TestARecomputeWaitsForALateInsertIntoADirtyHour(t *testing.T) {
+	t.Parallel()
 	f := newTrendRig(t)
 	now := time.Now().UTC()
 	hour := now.Add(-2 * 24 * time.Hour).Truncate(time.Hour)
@@ -216,6 +220,7 @@ func TestARecomputeWaitsForALateInsertIntoADirtyHour(t *testing.T) {
 // Postgres whose default isolation is REPEATABLE READ, whose snapshot would
 // predate a mark a compaction moved while the write waited for the lock.
 func TestALateSampleDirtiesItsHourUnderRepeatableRead(t *testing.T) {
+	t.Parallel()
 	f := newTrendRig(t)
 	hour := time.Now().UTC().Add(-3 * 24 * time.Hour).Truncate(time.Hour)
 	if err := f.gw.SetMetricTrendMark(f.ctx, hour); err != nil {
@@ -275,6 +280,7 @@ func TestALateSampleDirtiesItsHourUnderRepeatableRead(t *testing.T) {
 // before its trend exists; before any compaction they remove nothing. The
 // trends outlive the day their samples were dropped with.
 func TestTheHotTierIsNeverPrunedPastTheMark(t *testing.T) {
+	t.Parallel()
 	f := newTrendRig(t)
 	now := time.Now().UTC()
 	old := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC).AddDate(0, 0, -40).Add(2 * time.Hour)
@@ -348,6 +354,7 @@ func (f *pruneFixture) marks() (announced, compacted time.Time) {
 // waited for and folded into the hour it lands in, even while it has written
 // nothing yet (no transaction id to wait on).
 func TestCompactionWaitsForTheWritesInFlight(t *testing.T) {
+	t.Parallel()
 	f := newTrendRig(t)
 	now := time.Now().UTC()
 	hour := now.Add(-3 * 24 * time.Hour).Truncate(time.Hour)
@@ -384,6 +391,7 @@ func TestCompactionWaitsForTheWritesInFlight(t *testing.T) {
 // compacted mark stays, no sample of the hours is pruned, and the next pass
 // folds them, the insert's sample included.
 func TestACompactionCancelledMidDrainSkipsNoHour(t *testing.T) {
+	t.Parallel()
 	f := newTrendRig(t)
 	now := time.Now().UTC()
 	hour := now.Add(-3 * 24 * time.Hour).Truncate(time.Hour)
@@ -422,6 +430,7 @@ func TestACompactionCancelledMidDrainSkipsNoHour(t *testing.T) {
 // it did not, so the prune removes only the folded hours' samples and the
 // next pass folds the rest.
 func TestACompactionCancelledMidFoldSkipsNoHour(t *testing.T) {
+	t.Parallel()
 	f := newTrendRig(t)
 	now := time.Now().UTC()
 	start := now.Add(-4 * 24 * time.Hour).Truncate(time.Hour)
@@ -499,6 +508,7 @@ func TestACompactionCancelledMidFoldSkipsNoHour(t *testing.T) {
 // table, holds no trend lock, so the compaction and the metric prune it
 // unlocks go on without it.
 func TestAnIdleTransactionElsewhereDoesNotStallCompaction(t *testing.T) {
+	t.Parallel()
 	f := newTrendRig(t)
 	now := time.Now().UTC()
 	hour := now.Add(-3 * 24 * time.Hour).Truncate(time.Hour)
@@ -547,6 +557,7 @@ func TestAnIdleTransactionElsewhereDoesNotStallCompaction(t *testing.T) {
 // an upgrade does not fold years of hours the prune is about to remove; on a
 // hot tier younger than the window it starts at the oldest day.
 func TestTheFirstMarkIsSeededAtTheLongestWindow(t *testing.T) {
+	t.Parallel()
 	t.Run("old samples", func(t *testing.T) {
 		f := newTrendRig(t)
 		f.plant(time.Now().UTC().Add(-2*365*24*time.Hour), "observed", 1)
@@ -592,6 +603,7 @@ func TestTheFirstMarkIsSeededAtTheLongestWindow(t *testing.T) {
 // VACUUM, and holds it under a bound: a day is 24 rows of eight values beside
 // their key.
 func TestTrendFootprint(t *testing.T) {
+	t.Parallel()
 	f := newTrendRig(t)
 	const series = 200
 	day := time.Now().UTC().Add(-3 * 24 * time.Hour).Truncate(24 * time.Hour)

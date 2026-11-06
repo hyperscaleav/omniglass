@@ -24,6 +24,7 @@ import (
 // re-derived there (ids moving only where the derived spec does). Re-attach
 // is not the path.
 func TestADriverEndpointEditsItsConnectionInputsInPlace(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -150,6 +151,7 @@ func TestADriverEndpointEditsItsConnectionInputsInPlace(t *testing.T) {
 // driver update dropped it) never blocks an edit, and an optional input
 // cleared with an empty value falls back to its default.
 func TestAnInPlaceEditSurvivesADriverDroppingAnInput(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

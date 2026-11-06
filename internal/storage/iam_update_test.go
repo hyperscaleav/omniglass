@@ -16,6 +16,7 @@ import (
 // (the password still authenticates under the new username, not the old); a clash is
 // refused; and a non-all scope is refused. Skipped under -short.
 func TestUpdatePrincipalHuman(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)

@@ -58,6 +58,7 @@ var labelUnsetExempt = map[string]string{
 // that is whitespace only, which is the hardest case: it is neither absent nor
 // obviously empty, and it renders as a blank row on every surface.
 func TestEveryWritePathStoresNullForAnUnsetLabel(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	dsn := storagetest.NewDSN(t)
 	// A provider, because one of the write paths swept here seals its fields
@@ -310,6 +311,7 @@ func TestEveryWritePathStoresNullForAnUnsetLabel(t *testing.T) {
 // A `coalesce($n, label)` cannot tell those apart, which is why every one of
 // these statements carries a set flag beside the value.
 func TestClearingALabelStoresNullRatherThanEmpty(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	dsn := storagetest.NewDSN(t)
 	// A provider, because one of the write paths swept here seals its fields

@@ -142,6 +142,7 @@ func twoSameNamedSystems(t *testing.T, gw storage.Gateway) (sysA, sysB *storage.
 // into one answer, a worse failure this task's fix (binding the resolved id
 // instead of a name) also closes.
 func TestDuplicateNamesDoNotBreakIngestPath(t *testing.T) {
+	t.Parallel()
 	gw, conn := newDuplicateNameFixture(t)
 	ctx := context.Background()
 	all := scope.Set{All: true}
@@ -292,6 +293,7 @@ func anyEffectiveMetricSampled(mets []storage.EffectiveMetric, name string) bool
 // not-found-falls-through-to-the-CHECK-constraint behavior must stay intact
 // for an owner that genuinely does not exist.
 func TestSystemOwnedRoleDeclarationSurvivesDuplicateNames(t *testing.T) {
+	t.Parallel()
 	gw, _ := newDuplicateNameFixture(t)
 	ctx := context.Background()
 	sysA, sysB := twoSameNamedSystems(t, gw)
@@ -363,6 +365,7 @@ func TestSystemOwnedRoleDeclarationSurvivesDuplicateNames(t *testing.T) {
 // interface create. Addressing each duplicate by its uuid (never by the shared
 // bare name) must work cleanly and land on the right row.
 func TestDuplicateNamesDoNotBreakGatewayReads(t *testing.T) {
+	t.Parallel()
 	gw, conn := newDuplicateNameFixture(t)
 	ctx := context.Background()
 	all := scope.Set{All: true}
@@ -470,6 +473,7 @@ func TestDuplicateNamesDoNotBreakGatewayReads(t *testing.T) {
 // name rather than silently picking one row and hiding the other: the read-side
 // half of the same fix.
 func TestBareNameAmbiguousRefuses(t *testing.T) {
+	t.Parallel()
 	gw, _ := newDuplicateNameFixture(t)
 	ctx := context.Background()
 	all := scope.Set{All: true}
@@ -506,6 +510,7 @@ func TestBareNameAmbiguousRefuses(t *testing.T) {
 // single-system answer; addressing it by the now-ambiguous bare name must
 // refuse cleanly rather than silently pick or union.
 func TestResolveTagsSurvivesDuplicateSystemNames(t *testing.T) {
+	t.Parallel()
 	gw, _ := newDuplicateNameFixture(t)
 	ctx := context.Background()
 	all := scope.Set{All: true}
@@ -601,6 +606,7 @@ func TestResolveTagsSurvivesDuplicateSystemNames(t *testing.T) {
 // recording a health edge onto it. Only the recorded transitions would catch
 // that.
 func TestStandardOwnedRoleDeclarationSurvivesDuplicateSystemNames(t *testing.T) {
+	t.Parallel()
 	gw, _ := newDuplicateNameFixture(t)
 	ctx := context.Background()
 	all := scope.Set{All: true}

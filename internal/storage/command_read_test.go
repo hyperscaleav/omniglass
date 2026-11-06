@@ -155,6 +155,7 @@ func (r *statusRig) lifecycleEvent(t *testing.T, rec *storage.CommandRecord) (st
 // evidence and a reason naming it, each transition stamped, the issuer and
 // the endpoint, node and driver named, and command-settled on the timeline.
 func TestCommandReadCarriesItsArc(t *testing.T) {
+	t.Parallel()
 	r := newStatusRig(t, valueReply)
 	id := r.issue(t, "hdmi3")
 
@@ -212,6 +213,7 @@ func TestCommandReadCarriesItsArc(t *testing.T) {
 // A failure says why: a reply carrying another value names both, an
 // unconfirmed reply says so, and an execution error carries its story.
 func TestCommandReadNamesTheFailure(t *testing.T) {
+	t.Parallel()
 	r := newStatusRig(t, valueReply)
 	for _, tc := range []struct {
 		reply, execErr string
@@ -247,6 +249,7 @@ func TestCommandReadNamesTheFailure(t *testing.T) {
 // A command nobody answers times out once its window passes, and the reason
 // says where it stopped: delivered with no report, or never taken at all.
 func TestNeverAnsweredCommandTimesOutWithAReason(t *testing.T) {
+	t.Parallel()
 	r := newStatusRig(t, valueReply)
 	if _, err := r.conn.Exec(r.ctx, `update command_type set settle_window_seconds = 1 where name = 'set-input'`); err != nil {
 		t.Fatal(err)
@@ -284,6 +287,7 @@ func TestNeverAnsweredCommandTimesOutWithAReason(t *testing.T) {
 // awaiting observation once the reply lands (the reply decides nothing), and
 // settled by the sample that matched, which it carries with its time.
 func TestObservationSettledCommandShowsItsSample(t *testing.T) {
+	t.Parallel()
 	r := newStatusRig(t, "")
 	id := r.issue(t, "hdmi3")
 	if rec := r.read(t, id); rec.SettleMode != storage.SettleModeObservation || rec.Phase != storage.PhaseQueued {
@@ -321,6 +325,7 @@ func TestObservationSettledCommandShowsItsSample(t *testing.T) {
 // the endpoint's secret fields in every form, and of anything labeled a
 // credential, before they are written.
 func TestReplyIsStoredMaskedOfCredentials(t *testing.T) {
+	t.Parallel()
 	r := newStatusRig(t, `{"from": "response", "success": {"regex": "OK"}}`)
 	id := r.issue(t, "hdmi3")
 	r.dispatch(t, id)
@@ -360,6 +365,7 @@ func TestReplyIsStoredMaskedOfCredentials(t *testing.T) {
 // the error and any reason built from them are withheld rather than stored
 // half-masked. The execution still lands and the command is still judged.
 func TestReplyIsWithheldWhenTheEndpointsSecretsCannotBeRead(t *testing.T) {
+	t.Parallel()
 	r := newStatusRig(t, `{"from": "response", "success": {"regex": "OK"}}`)
 	other, err := storage.NewPG(r.ctx, r.dsn, storage.WithSecretProvider(secret.NewStaticProvider(bytes.Repeat([]byte{0x9}, 32))))
 	if err != nil {
@@ -394,6 +400,7 @@ func TestReplyIsWithheldWhenTheEndpointsSecretsCannotBeRead(t *testing.T) {
 // touches the endpoint's secrets, and a report it may make is masked by the
 // endpoint the confining stamp names, never by a guess read before it.
 func TestARefusedReportStoresNothing(t *testing.T) {
+	t.Parallel()
 	r := newStatusRig(t, valueReply)
 	id := r.issue(t, "hdmi3")
 	r.dispatch(t, id)
@@ -413,6 +420,7 @@ func TestARefusedReportStoresNothing(t *testing.T) {
 // read applies the labeled-pair pass to every row, a no-op on one already
 // masked.
 func TestALegacyExecErrorReadsMasked(t *testing.T) {
+	t.Parallel()
 	r := newStatusRig(t, valueReply)
 	id := r.issue(t, "hdmi3")
 	if _, err := r.conn.Exec(r.ctx, `update command set executed_at = now(), exec_error = 'login refused: password=hunter2' where id = $1`, id); err != nil {
@@ -426,6 +434,7 @@ func TestALegacyExecErrorReadsMasked(t *testing.T) {
 // A reply too long to be evidence is cut, and one that is not text is stored
 // readable, so the execution is never lost to its reply.
 func TestStoredReplyIsCappedAndReadable(t *testing.T) {
+	t.Parallel()
 	r := newStatusRig(t, `{"from": "response", "success": {"regex": "OK"}}`)
 	id := r.issue(t, "hdmi3")
 	r.dispatch(t, id)
@@ -441,6 +450,7 @@ func TestStoredReplyIsCappedAndReadable(t *testing.T) {
 // The list is a component's history, newest first, filtered by status and
 // time, and never another component's.
 func TestListComponentCommandsFilters(t *testing.T) {
+	t.Parallel()
 	r := newStatusRig(t, valueReply)
 	settled := r.issue(t, "hdmi3")
 	r.dispatch(t, settled)
@@ -506,6 +516,7 @@ func TestListComponentCommandsFilters(t *testing.T) {
 // issue, with nothing told to settle; a command no driver binds sits
 // awaiting observation, since no node will ever take it.
 func TestFireAndForgetAndUndeliverableReads(t *testing.T) {
+	t.Parallel()
 	r := newStatusRig(t, valueReply)
 	ff, err := r.gw.IssueCommand(r.ctx, r.actor, "component", r.compID, "reboot", "", nil, nil)
 	if err != nil {

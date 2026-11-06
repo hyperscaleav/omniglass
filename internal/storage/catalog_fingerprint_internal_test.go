@@ -14,6 +14,7 @@ import (
 // here until the table joins registryTables, rather than leaving the cache
 // blind to a change that alters the registry.
 func TestCatalogFingerprintCoversTheRegistryReads(t *testing.T) {
+	t.Parallel()
 	tableRef := regexp.MustCompile(`(?i)\b(?:from|join)\s+([a-z_][a-z0-9_]*)`)
 	for _, q := range registryListSQL {
 		refs := tableRef.FindAllStringSubmatch(q, -1)

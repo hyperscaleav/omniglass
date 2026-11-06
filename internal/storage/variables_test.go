@@ -32,6 +32,7 @@ func variableGateway(t *testing.T) storage.Gateway {
 // TestVariableCreateRoundTrip covers the jsonb value surviving create -> store ->
 // list for each scalar shape, typed by value_type.
 func TestVariableCreateRoundTrip(t *testing.T) {
+	t.Parallel()
 	gw := variableGateway(t)
 	ctx := context.Background()
 
@@ -65,6 +66,7 @@ func TestVariableCreateRoundTrip(t *testing.T) {
 // TestVariableValueValidation covers the create gate: an unknown value_type and a
 // value that does not match its declared type are both refused before any write.
 func TestVariableValueValidation(t *testing.T) {
+	t.Parallel()
 	gw := variableGateway(t)
 	ctx := context.Background()
 
@@ -83,6 +85,7 @@ func TestVariableValueValidation(t *testing.T) {
 // TestVariableOwnerScope covers the owner-arc scope gate on create and the
 // all-scope-only list.
 func TestVariableOwnerScope(t *testing.T) {
+	t.Parallel()
 	gw := variableGateway(t)
 	ctx := context.Background()
 	// campus is the official type allowed at root; the type is incidental
@@ -127,6 +130,7 @@ func TestVariableOwnerScope(t *testing.T) {
 
 // TestVariableUpdate replaces a value, validating it against the fixed value_type.
 func TestVariableUpdate(t *testing.T) {
+	t.Parallel()
 	gw := variableGateway(t)
 	ctx := context.Background()
 
@@ -148,6 +152,7 @@ func TestVariableUpdate(t *testing.T) {
 // resolves to the most-specific owner (highest band, then deepest), with the
 // shadowed candidates returned too.
 func TestVariableCascadeResolve(t *testing.T) {
+	t.Parallel()
 	gw := variableGateway(t)
 	ctx := context.Background()
 
@@ -208,6 +213,7 @@ func TestVariableCascadeResolve(t *testing.T) {
 // addressable by its new name (platform, formerly global) and still requires an
 // all-scope create grant.
 func TestVariableAtPlatformTier(t *testing.T) {
+	t.Parallel()
 	gw := variableGateway(t)
 	ctx := context.Background()
 

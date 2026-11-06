@@ -15,6 +15,7 @@ import (
 // the two would make a forked child silently re-adopt an official value the
 // operator cleared, or make a column added after the fork resolve to nothing.
 func TestShadowOverlayDistinguishesAbsentFromNull(t *testing.T) {
+	t.Parallel()
 	official := ComponentType{
 		Name: "mic", Label: "Microphone",
 		Stem: strPtr("mic"), Icon: strPtr("mic"), Abbrev: strPtr("mic"),
@@ -104,6 +105,7 @@ func TestShadowOverlayDistinguishesAbsentFromNull(t *testing.T) {
 // TestShadowOverlayRefusesAGarbledImage keeps a corrupt image from silently
 // resolving to the official row: the read fails loudly instead.
 func TestShadowOverlayRefusesAGarbledImage(t *testing.T) {
+	t.Parallel()
 	if _, err := applyComponentTypeImage(ComponentType{Name: "mic"}, []byte(`{"stem":`)); err == nil {
 		t.Fatal("applyComponentTypeImage accepted a truncated image, want an error")
 	}
@@ -113,6 +115,7 @@ func TestShadowOverlayRefusesAGarbledImage(t *testing.T) {
 // every mutable column, not only the edited one, so a later release's change
 // to an unedited column does not reach a forked row.
 func TestComponentTypeShadowImageIsWholeRow(t *testing.T) {
+	t.Parallel()
 	image, err := componentTypeShadowImage(ComponentType{
 		Label: "Microphone", Stem: strPtr("mic"), Icon: nil, Abbrev: strPtr("mic"),
 		DefaultTags: []string{"audio"},

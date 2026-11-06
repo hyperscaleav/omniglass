@@ -17,6 +17,7 @@ import (
 // the row, and a purge preserves the audit trail (the actor's name survives via the
 // denormalized snapshot once the principal id is nulled). Skipped under -short.
 func TestPrincipalLifecycle(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)

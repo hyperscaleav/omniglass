@@ -23,6 +23,7 @@ import (
 // range, a spike surviving as the bucket's max, an empty bucket named by its
 // count, and the instant before which retention left nothing to read.
 func TestListMetricBuckets(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -120,6 +121,7 @@ func TestListMetricBuckets(t *testing.T) {
 
 // The property mirror: count and the value held at the bucket's end.
 func TestListPropertyBuckets(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -168,6 +170,7 @@ func TestListPropertyBuckets(t *testing.T) {
 // names no instance where two have measured rows is refused with both listed,
 // and a declared row (a command's want) never moves min, max, avg or last.
 func TestMetricBucketsAggregateOneMeasuredInstance(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -245,6 +248,7 @@ func TestMetricBucketsAggregateOneMeasuredInstance(t *testing.T) {
 // measured instance reads that one, and an intended series on another instance
 // does not make the read ambiguous, since it is not measured.
 func TestMetricBucketsDefaultToTheOneMeasuredInstance(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -281,6 +285,7 @@ func TestMetricBucketsDefaultToTheOneMeasuredInstance(t *testing.T) {
 // the unnamed read is refused listing them, and a declared value never becomes
 // a bucket's last.
 func TestPropertyBucketsAggregateOneMeasuredInstance(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -326,6 +331,7 @@ func TestPropertyBucketsAggregateOneMeasuredInstance(t *testing.T) {
 // the read issues are explained as the gateway issued them, captured off the
 // pool tracer: the instance probe and the aggregate.
 func TestMetricBucketsBoundTheSampleScan(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

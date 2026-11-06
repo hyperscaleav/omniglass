@@ -21,6 +21,8 @@ func (r *systemRig) occupancy(comp string, v float64) {
 // owner whose value the rule would change; the rows it returns lead with
 // the owners that hold a value or would write one, then by name.
 func TestCalcPreviewOrdersValuedFirst(t *testing.T) {
+	// Serial: it lowers a package-level preview cap (a Set*Cap hook), which
+	// every parallel test would otherwise see.
 	r := newSystemRig(t)
 	for _, c := range []string{"m1", "m2", "m3", "m4"} {
 		r.occupancy(c, 2)
@@ -51,6 +53,7 @@ func TestCalcPreviewOrdersValuedFirst(t *testing.T) {
 // says how many there are, and the pending depth counts every readable
 // owner, listed or not.
 func TestCalcRuleStateOrderAndLimit(t *testing.T) {
+	t.Parallel()
 	r := newSystemRig(t)
 	if _, err := r.create(storage.CalcRuleSpec{Name: "ratio", OwnerKind: rules.OwnerComponent,
 		Inputs: []rules.CalcInput{{Alias: "t", Key: "occupancy-count"}, {Alias: "u", Key: "room-temperature"}},

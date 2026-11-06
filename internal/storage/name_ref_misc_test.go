@@ -19,6 +19,7 @@ import (
 // invisible to a caller without the admin tier, refusing exactly as an absent
 // one does; and the uuid keeps working.
 func TestFileAnswersToItsFilename(t *testing.T) {
+	t.Parallel()
 	ctx, gw, _ := newFileGW(t)
 	mk := func(name string, sensitive bool) string {
 		t.Helper()
@@ -125,6 +126,7 @@ func mustService(t *testing.T, ctx context.Context, dsn, name string) string {
 // first, so a scoped caller is refused the same way for a name that exists and
 // one that does not.
 func TestPrincipalGroupAnswersToItsName(t *testing.T) {
+	t.Parallel()
 	ctx, gw, _, g, aliceID, svcID := groupNameFixture(t)
 
 	for _, ref := range []string{"night-shift", g.ID} {
@@ -192,6 +194,7 @@ func TestPrincipalGroupAnswersToItsName(t *testing.T) {
 // human's username, or a service account's name; a word that is both a username
 // and a service name names no one principal and is refused.
 func TestPrincipalRefAcceptsAServiceName(t *testing.T) {
+	t.Parallel()
 	ctx, gw, dsn, _, aliceID, svcID := groupNameFixture(t)
 	for ref, want := range map[string]string{"alice": aliceID, "ci-bot": svcID, svcID: svcID} {
 		got, err := gw.ResolvePrincipalRef(ctx, ref)
@@ -213,6 +216,7 @@ func TestPrincipalRefAcceptsAServiceName(t *testing.T) {
 // TestGrantScopeAcceptsAName pins the grant's scope root: a location, system or
 // component by name or dotted address as well as by uuid, stored as the uuid.
 func TestGrantScopeAcceptsAName(t *testing.T) {
+	t.Parallel()
 	ctx, gw, _, g, aliceID, _ := groupNameFixture(t)
 	mustLoc(t, gw, "campus", "campus", nil)
 	mustLoc(t, gw, "room", "room", strptr("campus"))

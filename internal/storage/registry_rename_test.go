@@ -21,6 +21,7 @@ import (
 // be corrected: a product's name was permanent, and every referencing row would
 // have had to be rewritten to change it.
 func TestRegistryHandleRenameKeepsReferences(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

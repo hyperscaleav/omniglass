@@ -14,6 +14,7 @@ import (
 // future migration that recreates an existing index under a new name turns
 // this red.
 func TestNoDuplicateIndexes(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

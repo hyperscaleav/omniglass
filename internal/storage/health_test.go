@@ -160,6 +160,7 @@ func sameSeq(got, want []string) bool {
 // assertion is the transition-only property, which is what makes the history a
 // record of edges rather than of writes.
 func TestHealthTransitionsThroughTheChain(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 
@@ -260,6 +261,7 @@ func TestHealthTransitionsThroughTheChain(t *testing.T) {
 // down, and WHICH alarm took it down. A verdict an operator cannot act on is not
 // worth recording.
 func TestHealthReportNamesTheCause(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 
@@ -324,6 +326,7 @@ func TestHealthReportNamesTheCause(t *testing.T) {
 // and one whose impact is none never escalates it at all. Both are recomputed at
 // the declaration write, so changing impact alone moves recorded health.
 func TestHealthImpactAndQuorum(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 
@@ -381,6 +384,7 @@ func TestHealthImpactAndQuorum(t *testing.T) {
 // assignment row is already gone by then, so a recompute that walked the
 // component's assignments would silently miss the system it just left.
 func TestHealthMovesOnUnassign(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 
@@ -425,6 +429,7 @@ func TestHealthMovesOnUnassign(t *testing.T) {
 // set versus the history, and the request faults that must not read as server
 // errors.
 func TestAlarmListingAndRefusals(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 
@@ -503,6 +508,7 @@ func mustAgree(t *testing.T, rep *storage.HealthReport) {
 // nobody is assigned, so it is broken before anyone touches it. Reading it must
 // say so, and must not say healthy beside the impaired role it is printing.
 func TestHealthReportOfAFreshSystem(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 
@@ -565,6 +571,7 @@ func TestHealthReportOfAFreshSystem(t *testing.T) {
 // addresses its owner by name, and a name is renameable, so the reference moves
 // with the entity.
 func TestHealthSurvivesARename(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 
@@ -593,6 +600,7 @@ func TestHealthSurvivesARename(t *testing.T) {
 // replaces the whole inherited role set, so the verdict can flip with no alarm and
 // no assignment involved.
 func TestHealthMovesOnStandardChange(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 
@@ -657,6 +665,7 @@ func TestHealthMovesOnStandardChange(t *testing.T) {
 // recorded. The typed-slot guard is enforced at the NEXT AssignRole, not
 // continuously against an existing assignment.
 func TestHealthIgnoresProductChange(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 
@@ -703,6 +712,7 @@ func TestHealthIgnoresProductChange(t *testing.T) {
 // location it arrived at is reachable from its row; the one it LEFT is not, and
 // that one has just improved, which is an edge as real as any failure.
 func TestHealthMovesOnRelocation(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 
@@ -775,6 +785,7 @@ func TestHealthMovesOnRelocation(t *testing.T) {
 // move: a common ancestor would read the same verdict either way and prove
 // nothing.
 func TestHealthMovesOnLocationMove(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 
@@ -878,6 +889,7 @@ func reportedVerdicts(systems []storage.HealthSystem) []health.Verdict {
 // read: a system or location outside the caller's scope is a non-disclosing
 // not-found, never a forbidden that confirms it exists.
 func TestHealthReadScope(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 
@@ -899,6 +911,7 @@ func TestHealthReadScope(t *testing.T) {
 // concept is retired) takes the component down, the role loses its only
 // occupant, and the system's verdict moves to the role's declared impact.
 func TestAlarmImpairsComponentImpairsSlot(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 
@@ -944,6 +957,7 @@ func TestAlarmImpairsComponentImpairsSlot(t *testing.T) {
 // warning alarm) still occupies the slot it fills, so the role stays
 // satisfied and the system's verdict does not move.
 func TestDegradedOccupantStillSatisfies(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 
@@ -987,6 +1001,7 @@ func TestDegradedOccupantStillSatisfies(t *testing.T) {
 // the other still occupies the slot, so the role, and the system above it,
 // hold healthy.
 func TestAlarmOnSpareDoesNotShort(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 
@@ -1039,6 +1054,7 @@ func TestAlarmOnSpareDoesNotShort(t *testing.T) {
 // short moves to 1. Both are correct under their own definition, which is
 // exactly what makes the divergence a feature and not a bug to reconcile.
 func TestShortAndUnderstaffedDivergeOnCriticalAlarm(t *testing.T) {
+	t.Parallel()
 	t.Run("a warning alarm does not diverge them", func(t *testing.T) {
 		f := newHealthFixture(t)
 		ctx := context.Background()
@@ -1110,6 +1126,7 @@ func TestShortAndUnderstaffedDivergeOnCriticalAlarm(t *testing.T) {
 // with no capability concept at all: the field retired with the rest of the
 // family (#626), so a raise names only severity, message, and a dedup key.
 func TestRaiseAlarmWithoutCapabilities(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 

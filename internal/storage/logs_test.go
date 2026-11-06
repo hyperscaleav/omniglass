@@ -18,6 +18,7 @@ import (
 // severity/facility (the retention/routing axes) and the freeform attributes and
 // labels preserved. A line whose owner does not exist violates the component FK.
 func TestInsertLogLines(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -88,6 +89,7 @@ func TestInsertLogLines(t *testing.T) {
 // empty severity/facility coalesced to "". A node's line never surfaces on a
 // component's log read: the tables are disjoint by construction.
 func TestInsertNodeLogs(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -153,6 +155,7 @@ func TestInsertNodeLogs(t *testing.T) {
 // The system-scoped log read (#793): the members' raw lines merged newest
 // first, each naming the component that wrote it. Mirrors ListSystemEvents.
 func TestListSystemLogs(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -202,6 +205,7 @@ func TestListSystemLogs(t *testing.T) {
 // its receipt, and the reads filter by a severity threshold and a source,
 // listing the window's sources whatever the filter.
 func TestEveryLogLineWriteSharesTheTableTheCapsAndTheFilters(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -283,6 +287,7 @@ func TestEveryLogLineWriteSharesTheTableTheCapsAndTheFilters(t *testing.T) {
 // past (a component whose clock reset) still reads in the last 24 hours,
 // since the reads window and order on its arrival.
 func TestALogLineWithANulOrAnOldClockStillLands(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

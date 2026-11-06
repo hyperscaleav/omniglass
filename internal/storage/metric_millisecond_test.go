@@ -25,6 +25,7 @@ import (
 // microsecond ts is stored on its millisecond, its batch lands whole, and the
 // property, event and log lanes of the same batch keep the ts they were sent.
 func TestIngestTruncatesAMetricSampleToTheMillisecond(t *testing.T) {
+	t.Parallel()
 	f := newLandFixture(t)
 	ctx := context.Background()
 	ts := time.Now().UTC().Add(-time.Minute).Truncate(time.Second).Add(123456 * time.Microsecond)
@@ -55,6 +56,7 @@ func TestIngestTruncatesAMetricSampleToTheMillisecond(t *testing.T) {
 // truncate to one millisecond are both stored (no unique key on (series, ts),
 // ADR-0061), the later-sent one with the higher id.
 func TestSamplesOfOneMillisecondBothLandInOrder(t *testing.T) {
+	t.Parallel()
 	f := newLandFixture(t)
 	ctx := context.Background()
 	base := time.Now().UTC().Add(-time.Minute).Truncate(time.Second)
@@ -94,6 +96,7 @@ func TestSamplesOfOneMillisecondBothLandInOrder(t *testing.T) {
 // untouched, and a row written without a ts takes the database's now on a
 // millisecond.
 func TestMetricTimestampMigrationTruncatesExistingRows(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -224,6 +227,7 @@ func millisecondScenario(t *testing.T, noisy bool) []string {
 // on it. They wrote the same rows, and the scenario fired at all (so the
 // comparison is not of two empty runs).
 func TestRulesJudgeAMillisecondScenarioAsBefore(t *testing.T) {
+	t.Parallel()
 	aligned := millisecondScenario(t, false)
 	noisy := millisecondScenario(t, true)
 	if !slices.Equal(aligned, noisy) {
@@ -243,6 +247,7 @@ func TestRulesJudgeAMillisecondScenarioAsBefore(t *testing.T) {
 // the same write path as an observed sample (writeMetricSamples), so the row
 // it leaves is on a whole millisecond, and so is the observed row it read.
 func TestACalculatedSampleLandsOnTheMillisecond(t *testing.T) {
+	t.Parallel()
 	r := newEvalRig(t)
 	if _, err := r.create(storage.CalcRuleSpec{Name: "temp-mean", OwnerKind: rules.OwnerComponent,
 		Inputs: []rules.CalcInput{{Alias: "t", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Expr: "avg(t)"}, OutputKey: "avg-temp"}); err != nil {
@@ -276,6 +281,7 @@ func TestACalculatedSampleLandsOnTheMillisecond(t *testing.T) {
 // it, and the default is whole milliseconds. Issued several times because a
 // database clock can land on a whole millisecond by chance.
 func TestADeclaredValueLandsOnTheMillisecond(t *testing.T) {
+	t.Parallel()
 	f := newWriterFixture(t)
 	if _, err := f.gw.CreateMetricType(f.ctx, "", storage.MetricTypeSpec{Name: "declared-level", DataType: "float"}); err != nil {
 		t.Fatalf("create metric type: %v", err)

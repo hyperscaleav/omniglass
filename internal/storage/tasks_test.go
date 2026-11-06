@@ -17,6 +17,7 @@ import (
 // shared interface (no component) resolves to ok=false (an orphan the consumer
 // drops), never an error.
 func TestResolveTaskOwner(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

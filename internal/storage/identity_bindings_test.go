@@ -88,6 +88,7 @@ func sysOwner(name string) storage.IdentityBindingOwner {
 // A put round-trips through the list, naming both ends; a re-put to the same
 // owner is a no-op that writes no second audit row.
 func TestIdentityBindingPutListsAndAuditsOnce(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newBindingFixture(t, ctx)
 
@@ -130,6 +131,7 @@ func TestIdentityBindingPutListsAndAuditsOnce(t *testing.T) {
 // One identity on one conduit has at most one owner: a put naming another
 // owner moves the binding rather than adding a second.
 func TestIdentityBindingHasOneOwnerAndMoves(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newBindingFixture(t, ctx)
 	if _, err := f.gw.PutIdentityBinding(ctx, "", "ucc-cloud", "ucc-room-id", "R-100", sysOwner("room-a"), f.allScopes()); err != nil {
@@ -157,6 +159,7 @@ func TestIdentityBindingHasOneOwnerAndMoves(t *testing.T) {
 // The table itself holds one owner per row: the exclusive arc's CHECK refuses
 // a row naming both or neither.
 func TestIdentityBindingArcIsExclusive(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newBindingFixture(t, ctx)
 	conn, err := pgx.Connect(ctx, f.dsn)
@@ -188,6 +191,7 @@ func TestIdentityBindingArcIsExclusive(t *testing.T) {
 // Owner kinds other than component and system are refused before anything
 // resolves, and the match key must be a registered property type.
 func TestIdentityBindingRefusesPlacesNodesAndUnknownKeys(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newBindingFixture(t, ctx)
 	for _, kind := range []string{"location", "node", "platform"} {
@@ -209,6 +213,7 @@ func TestIdentityBindingRefusesPlacesNodesAndUnknownKeys(t *testing.T) {
 // in its tier's read then update. Out of read is not found, readable but not
 // writable is forbidden; an owner refusal says it is the owner's.
 func TestIdentityBindingScopesBothEnds(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newBindingFixture(t, ctx)
 	conduit, roomA := f.ids["ucc-cloud"], f.ids["room-a"]
@@ -253,6 +258,7 @@ func TestIdentityBindingScopesBothEnds(t *testing.T) {
 // Moving a binding costs update on the owner it leaves as well as the one it
 // joins; deleting one costs update on its owner.
 func TestIdentityBindingMoveAndDeleteNeedTheCurrentOwner(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newBindingFixture(t, ctx)
 	conduit, roomA, roomB := f.ids["ucc-cloud"], f.ids["room-a"], f.ids["room-b"]
@@ -288,6 +294,7 @@ func TestIdentityBindingMoveAndDeleteNeedTheCurrentOwner(t *testing.T) {
 
 // Deleting either end deletes the binding.
 func TestIdentityBindingGoesWithEitherEnd(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newBindingFixture(t, ctx)
 	for _, v := range []string{"R-1", "R-2"} {
@@ -315,6 +322,7 @@ func TestIdentityBindingGoesWithEitherEnd(t *testing.T) {
 // The list names an owner only inside the caller's read on its tier, and
 // counts the rest.
 func TestIdentityBindingListNamesOnlyReadableOwners(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newBindingFixture(t, ctx)
 	puts := []struct {
@@ -346,6 +354,7 @@ func TestIdentityBindingListNamesOnlyReadableOwners(t *testing.T) {
 // A fanned value never lands on its own conduit (an unidentified sample
 // already does), so a binding whose owner is the conduit is refused.
 func TestIdentityBindingRefusesTheConduitAsOwner(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newBindingFixture(t, ctx)
 	for _, ref := range []string{"ucc-cloud", f.ids["ucc-cloud"]} {
@@ -363,6 +372,7 @@ func TestIdentityBindingRefusesTheConduitAsOwner(t *testing.T) {
 // refused with an error that counts the bindings holding it, not a raw
 // foreign-key failure.
 func TestIdentityBindingKeyCannotBeDeletedWhileBound(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newBindingFixture(t, ctx)
 	if _, err := f.gw.CreatePropertyType(ctx, "", storage.PropertyTypeSpec{Name: "amp-channel", DataType: "string", Label: "Amp channel"}); err != nil {
@@ -392,6 +402,7 @@ func TestIdentityBindingKeyCannotBeDeletedWhileBound(t *testing.T) {
 // delete is serialized rather than updating a row the delete removed. Held
 // from another connection, the lock must keep the delete waiting.
 func TestIdentityBindingDeleteTakesTheIdentityLock(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newBindingFixture(t, ctx)
 	if _, err := f.gw.PutIdentityBinding(ctx, "", "ucc-cloud", "ucc-room-id", "R-1", sysOwner("room-a"), f.allScopes()); err != nil {

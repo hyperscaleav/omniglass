@@ -113,6 +113,7 @@ func metricReads(t *testing.T, gw *storage.PG) map[string]string {
 // and a new sample's id carries on past the old table's. Rolled back, the
 // month layout holds the same rows again, and forward again the days do.
 func TestMetricDayPartitionsKeepEveryRow(t *testing.T) {
+	t.Parallel()
 	gw, conn, dsn := standMonthLayout(t)
 	ctx := context.Background()
 	want := snapshotRows(t, conn, `select * from metric`, true)
@@ -214,6 +215,7 @@ func TestMetricDayPartitionsKeepEveryRow(t *testing.T) {
 // makes dropping the month table safe. The refused swap leaves the month
 // layout and its rows as they were.
 func TestMetricDayPartitionsRefuseALostRow(t *testing.T) {
+	t.Parallel()
 	_, conn, _ := standMonthLayout(t)
 	ctx := context.Background()
 	want := snapshotRows(t, conn, `select * from metric`, true)
@@ -275,6 +277,7 @@ func metricColumns(t *testing.T, conn *pgx.Conn) []string {
 // whole milliseconds) survives the swap, and the swap back; its indexes come
 // back under their own names.
 func TestMetricDayPartitionsCarryTheColumnsAsTheyStand(t *testing.T) {
+	t.Parallel()
 	_, conn, dsn := standMonthLayout(t)
 	mustExec(t, conn, `alter table metric alter column ts set default date_trunc('milliseconds', now())`)
 	mustExec(t, conn, `alter table metric alter column source_rule type varchar(200)`)

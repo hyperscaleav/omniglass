@@ -52,6 +52,7 @@ func newCommandFixture(t *testing.T, conn *pgx.Conn) commandFixture {
 // records its status (default issued, a fixed terminal domain) and the moment
 // it settled, with the two coupled (settled_at is null exactly while issued).
 func TestCommandStatusMigration(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	conn := connectMigrated(t)
 	f := newCommandFixture(t, conn)
@@ -92,6 +93,7 @@ func TestCommandStatusMigration(t *testing.T) {
 // TestCommandTypeTargetArcMigration asserts the two-armed target: command_type
 // may target a property or a metric, never both.
 func TestCommandTypeTargetArcMigration(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	conn := connectMigrated(t)
 	f := newCommandFixture(t, conn)
@@ -116,6 +118,7 @@ func TestCommandTypeTargetArcMigration(t *testing.T) {
 // (command_id), while the caused event stays a stamped-but-optional column.
 // Every other provenance still refuses command lineage.
 func TestIntendedLineageNamesCommand(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	conn := connectMigrated(t)
 	f := newCommandFixture(t, conn)
@@ -174,6 +177,7 @@ func TestIntendedLineageNamesCommand(t *testing.T) {
 // previous schema, write an intended row the old way (event lineage only),
 // and migrate forward over it.
 func TestIntendedLineageBackfill(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	// Below the command-status migration itself, wherever it now sits in the
 	// stack: this test writes rows in the shape that migration retired.
@@ -214,6 +218,7 @@ func TestIntendedLineageBackfill(t *testing.T) {
 // on an intended row whose command cannot be recovered from its event, instead
 // of guessing or leaving a row the new CHECK would refuse.
 func TestIntendedLineageBackfillRefusesOrphan(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	// Below the command-status migration itself, wherever it now sits in the
 	// stack: this test writes rows in the shape that migration retired.

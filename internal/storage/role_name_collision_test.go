@@ -20,6 +20,7 @@ import (
 // system already declares itself (an operator withdrew the shipped one and
 // declared their own on one room, and the next boot reseeds) is not installed.
 func TestSeedDefersToASystemsOwnRoleOfTheName(t *testing.T) {
+	t.Parallel()
 	r := newSeedRig(t)
 	all := scope.Set{All: true}
 	std := "seed-std"
@@ -50,6 +51,7 @@ func TestSeedDefersToASystemsOwnRoleOfTheName(t *testing.T) {
 // write naming it, with both owners named, rather than bound to whichever row
 // the resolver read first.
 func TestStaffingRefusesACollisionWrittenBeforeTheRule(t *testing.T) {
+	t.Parallel()
 	r := newSeedRig(t)
 	all := scope.Set{All: true}
 	std := "seed-std"

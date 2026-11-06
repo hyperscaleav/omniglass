@@ -65,6 +65,7 @@ func ackFixture(t *testing.T) (storage.Gateway, string, string, *storage.Alarm) 
 // slice: the acknowledgement records a person, and the alarm stays exactly as
 // raised as it was.
 func TestAcknowledgeRecordsWhoAndWhenWithoutTouchingRaisedState(t *testing.T) {
+	t.Parallel()
 	gw, dsn, comp, raised := ackFixture(t)
 	ctx := context.Background()
 	actor := ackActor(t, dsn, "jordan-ops")
@@ -103,6 +104,7 @@ func TestAcknowledgeRecordsWhoAndWhenWithoutTouchingRaisedState(t *testing.T) {
 // outage after somebody has looked at it, because acknowledging is not fixing,
 // and a transition written here would stamp a recovery that never happened.
 func TestAcknowledgingRecordsNoHealthTransition(t *testing.T) {
+	t.Parallel()
 	gw, dsn, comp, raised := ackFixture(t)
 	ctx := context.Background()
 	all := scope.Set{All: true}
@@ -136,6 +138,7 @@ func TestAcknowledgingRecordsNoHealthTransition(t *testing.T) {
 // the row rather than an error, and writes no second audit row, exactly as a
 // re-raise of an open condition returns the existing incident (ADR-0075).
 func TestAcknowledgingTwiceIsIdempotent(t *testing.T) {
+	t.Parallel()
 	gw, dsn, comp, raised := ackFixture(t)
 	ctx := context.Background()
 	first := ackActor(t, dsn, "jordan-ops")
@@ -166,6 +169,7 @@ func TestAcknowledgingTwiceIsIdempotent(t *testing.T) {
 // acknowledged (the record of who looked outlives the fix, exactly as the row
 // itself does).
 func TestClearingAndAcknowledgingAreOrthogonal(t *testing.T) {
+	t.Parallel()
 	gw, dsn, comp, raised := ackFixture(t)
 	ctx := context.Background()
 	actor := ackActor(t, dsn, "jordan-ops")
@@ -214,6 +218,7 @@ func TestClearingAndAcknowledgingAreOrthogonal(t *testing.T) {
 // TestAcknowledgeWritesItsAuditRow pins ship-slice gate 10 for this write: a
 // committed privileged change carries its audit row, in the same transaction.
 func TestAcknowledgeWritesItsAuditRow(t *testing.T) {
+	t.Parallel()
 	gw, dsn, comp, raised := ackFixture(t)
 	ctx := context.Background()
 	actor := ackActor(t, dsn, "jordan-ops")
@@ -245,6 +250,7 @@ func TestAcknowledgeWritesItsAuditRow(t *testing.T) {
 // a malformed address off the 500 path: each is a miss, and the alarm is not
 // silently acknowledged elsewhere.
 func TestAcknowledgeMissesAreNamed(t *testing.T) {
+	t.Parallel()
 	gw, dsn, comp, raised := ackFixture(t)
 	ctx := context.Background()
 	actor := ackActor(t, dsn, "jordan-ops")
@@ -280,6 +286,7 @@ func TestAcknowledgeMissesAreNamed(t *testing.T) {
 // has looked at, and the gateway can say it in one query rather than making
 // every caller filter.
 func TestListAlarmsExpressesRaisedAndUnacknowledged(t *testing.T) {
+	t.Parallel()
 	gw, dsn, comp, raised := ackFixture(t)
 	ctx := context.Background()
 	actor := ackActor(t, dsn, "jordan-ops")
@@ -390,6 +397,7 @@ func auditRows(t *testing.T, dsn, verb, resourceID string) int {
 // where the acknowledge leg is an UPDATE ... RETURNING), so a projection that
 // worked in the other three could still be wrong here and nothing would notice.
 func TestTheHealthReportNamesWhoAcknowledged(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 

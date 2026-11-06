@@ -51,6 +51,7 @@ func waitForWaiters(t *testing.T, ctx context.Context, tx pgx.Tx, n int, done fu
 // hold the system's row while it waits for the label lock, or the two wait on
 // each other. The cascade is held open on a raw connection.
 func TestStaffingNeverDeadlocksALabelCascade(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newHealthFixture(t)
 	if err := f.gw.UnassignRole(ctx, "", "hq-huddle", "table-mic", "bar-1", f.all, f.all, f.all, f.all); err != nil {
@@ -88,6 +89,7 @@ func TestStaffingNeverDeadlocksALabelCascade(t *testing.T) {
 // same name must not fill its empty set: only a role the seed itself wrote is
 // the seed's to repair.
 func TestSeedRepairLeavesAnOperatorDeclaredRoleAlone(t *testing.T) {
+	t.Parallel()
 	r := newSeedRig(t)
 	if _, err := r.gw.SetSystemRole(r.ctx, "", "standard", "seed-std", storage.SystemRoleSpec{Name: "op-role", Label: "Operator role", Quorum: 1}); err != nil {
 		t.Fatalf("the operator declares: %v", err)
@@ -110,6 +112,7 @@ func TestSeedRepairLeavesAnOperatorDeclaredRoleAlone(t *testing.T) {
 // withdrawal must serialize on the role-name lock every other declaration
 // write takes, so it waits for the change instead of deadlocking with it.
 func TestRoleWithdrawalWaitsForAStandardChange(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newHealthFixture(t)
 	capacity := 3
@@ -167,6 +170,7 @@ func TestRoleWithdrawalWaitsForAStandardChange(t *testing.T) {
 // make the delete a refusal or fail itself; both landing is the defect. The
 // delete is held between its count and its delete by a raw lock on the row.
 func TestDeletingAStandardCannotSkipTheCarry(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newHealthFixture(t)
 	f.declareRole(t, ctx, "huddle-next", storage.SystemRoleSpec{
@@ -218,6 +222,7 @@ func TestDeletingAStandardCannotSkipTheCarry(t *testing.T) {
 // not-found whether the name is a component outside the caller's read scope or
 // nothing at all, so none of the three routes is an oracle for what exists.
 func TestUnbindingDisclosesNoUnreadableComponent(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newHealthFixture(t)
 	f.mustBar(t, ctx, "caller-rack")
@@ -261,6 +266,7 @@ func TestUnbindingDisclosesNoUnreadableComponent(t *testing.T) {
 // behind the role-name lock every role declaration and standard change in the
 // install serializes on. The lock is held on a raw connection.
 func TestAnUnchangedStandardTakesNoFleetWideLock(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newHealthFixture(t)
 	held, err := f.conn.Begin(ctx)
@@ -286,6 +292,7 @@ func TestAnUnchangedStandardTakesNoFleetWideLock(t *testing.T) {
 // assignments with it, unaudited. The delete is held between the two by a raw
 // share lock on the row.
 func TestDeletingAStandardCannotNullANewSystem(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newHealthFixture(t)
 	f.declareRole(t, ctx, "huddle-next", storage.SystemRoleSpec{Name: "table-mic", Label: "Table microphone", Quorum: 1, Impact: "degraded"})
@@ -318,6 +325,7 @@ func TestDeletingAStandardCannotNullANewSystem(t *testing.T) {
 // standard change: it records no move of its own, and the change it raced has
 // already carried and recomputed.
 func TestASaveThatRacesAStandardChangeCarriesNothing(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newHealthFixture(t)
 	f.declareRole(t, ctx, "huddle-next", storage.SystemRoleSpec{

@@ -20,6 +20,7 @@ import (
 // number the generator picked is written down beside the name it was formatted
 // into, and it is the number the name shows.
 func TestGeneratedNameRecordsItsOrdinal(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -61,6 +62,7 @@ func TestGeneratedNameRecordsItsOrdinal(t *testing.T) {
 // how that is written down. Nothing is inferred from the digits: the name here
 // is deliberately shaped exactly like one the generator would mint.
 func TestOperatorTypedNameHasNoOrdinal(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -88,6 +90,7 @@ func TestOperatorTypedNameHasNoOrdinal(t *testing.T) {
 // platform recorded would see an empty set, pick 1, and mint a name this row
 // already holds: a 23505 that aborts the whole create transaction.
 func TestOperatorTypedNameHoldsItsSlot(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -116,6 +119,7 @@ func TestOperatorTypedNameHoldsItsSlot(t *testing.T) {
 // hands the name to the operator and the platform gives up the number with it,
 // and :resetName takes both back.
 func TestRenameClearsTheOrdinalAndResetReMints(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -163,6 +167,7 @@ func TestRenameClearsTheOrdinalAndResetReMints(t *testing.T) {
 // recomputes on a placement change re-records the number in the same write,
 // rather than leaving the old bucket's ordinal behind beside the new name.
 func TestMoveReRecordsTheOrdinal(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -198,6 +203,7 @@ func TestMoveReRecordsTheOrdinal(t *testing.T) {
 // recompute trigger: a product reclassify moves a platform-owned name to the
 // new type's stem, and the number moves with it.
 func TestReclassifyReRecordsTheOrdinal(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -236,6 +242,7 @@ func TestReclassifyReRecordsTheOrdinal(t *testing.T) {
 // guarantee surviving the mechanism change. The minted product classifies
 // under component_type "display" (stem "display", abbrev "fp").
 func TestBareRenderReadsTheStoredOrdinal(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -279,6 +286,7 @@ func TestBareRenderReadsTheStoredOrdinal(t *testing.T) {
 // storage layer, against a real database, through the same advisory lock and
 // the same placement scoping every other generation goes through.
 func TestStemlessAllocationWorks(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	pg, err := storage.NewPG(ctx, storagetest.NewDSN(t))
 	if err != nil {
@@ -361,6 +369,7 @@ func TestStemlessAllocationWorks(t *testing.T) {
 // three acts above. Widening it to cover them is a separate question, since it
 // would mean renumbering live rows, which ADR-0101 deliberately does not do.
 func TestStoredOrdinalsRecomputeToThemselves(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	pg, err := storage.NewPG(ctx, storagetest.NewDSN(t))
 	if err != nil {

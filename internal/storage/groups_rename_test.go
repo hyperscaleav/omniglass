@@ -23,6 +23,7 @@ import (
 // the other half: renaming is a second way to set a name, and a validator on create
 // alone is a validator a rename walks around.
 func TestGroupRenameObeysTheNameRule(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
 	if err != nil {

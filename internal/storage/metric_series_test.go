@@ -27,6 +27,7 @@ func dayStart(t time.Time) time.Time {
 // TestMetricPartitionsRollAhead: the roll keeps today and the next three
 // days, creates nothing it already has, and a dropped day ahead comes back.
 func TestMetricPartitionsRollAhead(t *testing.T) {
+	t.Parallel()
 	f := newPruneFixture(t)
 	today := dayStart(time.Now())
 	var want []string
@@ -59,6 +60,7 @@ func TestMetricPartitionsRollAhead(t *testing.T) {
 // nothing) leaves the second half routing nowhere; the roll reports the
 // first uncovered instant rather than answering as if the days were whole.
 func TestTheRollRefusesAnUncoveredDay(t *testing.T) {
+	t.Parallel()
 	f := newPruneFixture(t)
 	ahead := dayStart(time.Now()).AddDate(0, 0, 2)
 	half := ahead.Add(12 * time.Hour)
@@ -72,6 +74,7 @@ func TestTheRollRefusesAnUncoveredDay(t *testing.T) {
 // TestMetricCoverageGap: the coverage check walks the partitions in order
 // and answers the first instant of [from, to) none of them covers.
 func TestMetricCoverageGap(t *testing.T) {
+	t.Parallel()
 	d := func(day int) time.Time { return time.Date(2026, 11, day, 0, 0, 0, 0, time.UTC) }
 	part := func(from, to time.Time) storage.MetricPartition {
 		return storage.MetricPartition{Name: dayName(from), From: from, To: to}
@@ -103,6 +106,7 @@ func TestMetricCoverageGap(t *testing.T) {
 // with its days made, and lands whole; the miss itself is never classified as
 // a refusal, so a batch that misses again is redelivered, not dropped.
 func TestAMissingDayDropsNoBatch(t *testing.T) {
+	t.Parallel()
 	f := newPruneFixture(t)
 	next := dayStart(time.Now()).AddDate(0, 0, 1)
 	mustExec(t, f.conn, `drop table `+dayName(next))
@@ -135,6 +139,7 @@ func TestAMissingDayDropsNoBatch(t *testing.T) {
 // too (the chunked delete works inside it); a day after the trend
 // compaction's mark is never dropped (#1276); today is never dropped.
 func TestDropMetricPartitionsHonorsEveryWindow(t *testing.T) {
+	t.Parallel()
 	f := newPruneFixture(t)
 	today := dayStart(time.Now())
 	short, long := today.AddDate(0, 0, -30).Add(time.Hour), today.AddDate(0, 0, -29).Add(time.Hour)
@@ -186,6 +191,7 @@ func TestDropMetricPartitionsHonorsEveryWindow(t *testing.T) {
 // first that holds one: an ordered Append, never a Merge Append or a Sort
 // across every day (the "LIMIT 1 with no bound" shape the review warned of).
 func TestMetricNewestReadsTheNewestDayFirst(t *testing.T) {
+	t.Parallel()
 	f := newPruneFixture(t)
 	mustExec(t, f.conn, "set enable_seqscan = off")
 	rows, err := f.conn.Query(f.ctx, "explain (costs off) "+storage.ExportMetricNewestSQL(), int64(1))
@@ -221,6 +227,7 @@ func TestMetricNewestReadsTheNewestDayFirst(t *testing.T) {
 // collected by another node is a series of its own; every read of the key
 // merges them, reading the newest of either.
 func TestACollectingNodeStartsItsOwnSeries(t *testing.T) {
+	t.Parallel()
 	f := newWriterFixture(t)
 	comp, err := f.gw.GetComponent(f.ctx, "disp-1", scope.Set{All: true})
 	if err != nil {
@@ -252,6 +259,7 @@ func TestACollectingNodeStartsItsOwnSeries(t *testing.T) {
 // in the delete's transaction and leaves its samples, which no read can reach
 // (every read joins the series), for retention to remove.
 func TestADeletedOwnersSamplesReadAsNothing(t *testing.T) {
+	t.Parallel()
 	f := newPruneFixture(t)
 	now := time.Now().UTC()
 	f.row("metric", "component", now.Add(-48*time.Hour), "observed", 1)
@@ -278,6 +286,7 @@ func TestADeletedOwnersSamplesReadAsNothing(t *testing.T) {
 // a translated lc_messages words differently; a CHECK on the table names its
 // constraint and stays a refusal.
 func TestARoutingMissIsReadFromItsFieldsNotItsText(t *testing.T) {
+	t.Parallel()
 	miss := &pgconn.PgError{Code: "23514", TableName: "metric", Message: "keine Partition der Relation gefunden"}
 	if !storage.ExportIsPartitionRoutingMiss(miss) || storage.IsRefusedWrite(miss) {
 		t.Fatal("a translated routing miss was read as a refusal")
@@ -293,6 +302,7 @@ func TestARoutingMissIsReadFromItsFieldsNotItsText(t *testing.T) {
 // day routing nothing; a batch carrying a sample in it finishes the detach,
 // makes the day afresh and lands, rather than missing on every delivery.
 func TestAHalfDetachedDayStillLands(t *testing.T) {
+	t.Parallel()
 	f := newPruneFixture(t)
 	old := dayStart(time.Now()).AddDate(0, 0, -40)
 	if err := f.gw.MakeMetricDays(f.ctx, old); err != nil {

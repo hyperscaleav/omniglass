@@ -40,6 +40,7 @@ func derivePinned(t *testing.T, spec string) []derivedTask {
 }
 
 func TestAFunctionWithoutIdentityKeepsItsTaskHash(t *testing.T) {
+	t.Parallel()
 	task := derivePinned(t, pinnedSpec)[0]
 	if string(task.spec) != pinnedTaskSpec || task.id != pinnedTaskID {
 		t.Fatalf("derived\n %s %s\nwant\n %s %s", task.id, task.spec, pinnedTaskID, pinnedTaskSpec)
@@ -47,6 +48,7 @@ func TestAFunctionWithoutIdentityKeepsItsTaskHash(t *testing.T) {
 }
 
 func TestAnIdentifiedFunctionBakesItsIdentityAndRecords(t *testing.T) {
+	t.Parallel()
 	spec := strings.Replace(pinnedSpec, `"emits":`, `"records":"rooms","identity":{"key":"ucc-room-id","extract":{"jsonpath":"id"}},"emits":`, 1)
 	task := derivePinned(t, spec)[0]
 	fn, err := driver.ParseBaked(task.spec)

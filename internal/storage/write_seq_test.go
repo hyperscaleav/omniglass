@@ -24,6 +24,7 @@ import (
 // row's uuidv7 id and ts to sort first under any clock-derived key, and asserts
 // the trail still lists newest write first. Skipped under -short.
 func TestAuditOrderSurvivesClockStep(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
@@ -91,6 +92,7 @@ func TestAuditOrderSurvivesClockStep(t *testing.T) {
 // created_at an hour forward (the step), and asserts the directory still lists
 // them in creation order. Skipped under -short.
 func TestPrincipalOrderSurvivesClockStep(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)

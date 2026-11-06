@@ -25,6 +25,7 @@ import (
 // explicit errors.Is(err, ErrComponentNotFound)-then-substitute pattern
 // (components.go's create-time ParentName resolve, via resolveScopedRef).
 func TestCreateComponentDottedMissingParentMatchesBareNameForm(t *testing.T) {
+	t.Parallel()
 	gw, _ := newDuplicateNameFixture(t)
 	ctx := context.Background()
 	all := scope.Set{All: true}
@@ -49,6 +50,7 @@ func TestCreateComponentDottedMissingParentMatchesBareNameForm(t *testing.T) {
 // twin: a different call site (resolveScopedRef inside MoveComponent) but
 // the same explicit-fold pattern.
 func TestUpdateComponentDottedMissingParentMatchesBareNameForm(t *testing.T) {
+	t.Parallel()
 	gw, _ := newDuplicateNameFixture(t)
 	ctx := context.Background()
 	all := scope.Set{All: true}
@@ -77,6 +79,7 @@ func TestUpdateComponentDottedMissingParentMatchesBareNameForm(t *testing.T) {
 // (a child that does not exist), not just a kind mismatch, matching the
 // review's own POST /components{"location":"boi.nope"} scenario exactly.
 func TestCreateComponentDottedMissingLocationMatchesBareNameForm(t *testing.T) {
+	t.Parallel()
 	gw, _ := newDuplicateNameFixture(t)
 	ctx := context.Background()
 	all := scope.Set{All: true}
@@ -104,6 +107,7 @@ func TestCreateComponentDottedMissingLocationMatchesBareNameForm(t *testing.T) {
 // TestCreateComponentDottedMissingSystemMatchesBareNameForm is the system
 // bind's twin of the location case above, same withoutCandidates pattern.
 func TestCreateComponentDottedMissingSystemMatchesBareNameForm(t *testing.T) {
+	t.Parallel()
 	gw, _ := newDuplicateNameFixture(t)
 	ctx := context.Background()
 	all := scope.Set{All: true}
@@ -127,6 +131,7 @@ func TestCreateComponentDottedMissingSystemMatchesBareNameForm(t *testing.T) {
 // TestCreateSystemDottedMissingParentMatchesBareNameForm covers systems.go's
 // own explicit-fold pattern (ErrParentSystemNotFound).
 func TestCreateSystemDottedMissingParentMatchesBareNameForm(t *testing.T) {
+	t.Parallel()
 	gw, _ := newDuplicateNameFixture(t)
 	ctx := context.Background()
 	all := scope.Set{All: true}
@@ -150,6 +155,7 @@ func TestCreateSystemDottedMissingParentMatchesBareNameForm(t *testing.T) {
 // TestCreateLocationDottedMissingParentMatchesBareNameForm covers
 // locations.go's explicit-fold pattern (ErrParentNotFound).
 func TestCreateLocationDottedMissingParentMatchesBareNameForm(t *testing.T) {
+	t.Parallel()
 	gw, _ := newDuplicateNameFixture(t)
 	ctx := context.Background()
 	all := scope.Set{All: true}
@@ -174,6 +180,7 @@ func TestCreateLocationDottedMissingParentMatchesBareNameForm(t *testing.T) {
 // nodeLocationID, another explicit-fold call site, using a genuine
 // structural miss under a real root ("boi.nope") like the location test.
 func TestCreateNodeDottedMissingLocationMatchesBareNameForm(t *testing.T) {
+	t.Parallel()
 	gw, _ := newDuplicateNameFixture(t)
 	ctx := context.Background()
 	all := scope.Set{All: true}
@@ -202,6 +209,7 @@ func TestCreateNodeDottedMissingLocationMatchesBareNameForm(t *testing.T) {
 // resolveVariableOwner's withoutCandidates-routed pattern, cited in the
 // review as its own reachable shape (variables.go:381).
 func TestCreateVariableDottedMissingOwnerMatchesBareNameForm(t *testing.T) {
+	t.Parallel()
 	gw, _ := newDuplicateNameFixture(t)
 	ctx := context.Background()
 	all := scope.Set{All: true}
@@ -236,6 +244,7 @@ func TestCreateVariableDottedMissingOwnerMatchesBareNameForm(t *testing.T) {
 // roleOwnerArg's own errors.Is(err, ErrSystemNotFound) check could not see
 // through the unwrapped sentinel.
 func TestRoleOwnerArgPassesThroughAnUnresolvableDottedSystemName(t *testing.T) {
+	t.Parallel()
 	gw, _ := newDuplicateNameFixture(t)
 	ctx := context.Background()
 	spec := storage.SystemRoleSpec{Name: "seat", Label: "Seat", Quorum: 1}

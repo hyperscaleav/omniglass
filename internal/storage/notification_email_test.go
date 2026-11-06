@@ -92,6 +92,7 @@ func (f *peopleFixture) failures(t *testing.T, alarmID string) map[string]string
 }
 
 func TestAnEmailTargetSendsToItsAddressesAndAPersonToTheirDirectoryEmail(t *testing.T) {
+	t.Parallel()
 	f := newPeopleFixture(t)
 	f.relay(t)
 	if _, err := f.gw.CreateNotificationTarget(f.ctx, "", storage.NotificationTargetSpec{Name: "ops-mailbox", Kind: storage.TargetEmail,
@@ -126,6 +127,7 @@ func TestAnEmailTargetSendsToItsAddressesAndAPersonToTheirDirectoryEmail(t *test
 }
 
 func TestAPersonsEmailIsJudgedAgainAtSend(t *testing.T) {
+	t.Parallel()
 	f := newPeopleFixture(t)
 	f.relay(t)
 	f.human(t, "carol", storage.GrantSpec{Role: "viewer", ScopeKind: "all"})
@@ -192,6 +194,7 @@ func TestAPersonsEmailIsJudgedAgainAtSend(t *testing.T) {
 }
 
 func TestNoRelayFailsTheEmailWithTheReason(t *testing.T) {
+	t.Parallel()
 	f := newPeopleFixture(t)
 	f.emailRule(t)
 	a, err := f.gw.RaiseAlarm(f.ctx, "", "display-2", storage.AlarmSpec{Severity: "high", Message: "no audio"})
@@ -226,6 +229,7 @@ func sortedCopy(in []string) []string {
 // secret cannot repoint the relay at it in two steps (unbind and move, then
 // let the file's binding show through).
 func TestTheRelaysSecretIsJudgedOnTheResultingSettings(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t),
 		storage.WithSecretProvider(secret.NewStaticProvider(bytes.Repeat([]byte{0x9}, 32))),
@@ -265,6 +269,7 @@ func TestTheRelaysSecretIsJudgedOnTheResultingSettings(t *testing.T) {
 // A paused personal rule's queued email does not send, and a relay's
 // refusal, which can quote the person's address, is withheld with the name.
 func TestAPausedSubscriptionsEmailDoesNotSend(t *testing.T) {
+	t.Parallel()
 	f := newPeopleFixture(t)
 	f.relay(t)
 	alice := f.ids["alice"]

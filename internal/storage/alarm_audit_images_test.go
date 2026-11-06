@@ -17,6 +17,7 @@ import (
 // carries a before and an after image of the field it moved, and names the
 // condition (component and dedup key) it was about.
 func TestEveryAlarmAuditRowCarriesItsBeforeAndAfter(t *testing.T) {
+	t.Parallel()
 	gw, dsn, comp, raised := ackFixture(t)
 	ctx := context.Background()
 	actor := ackActor(t, dsn, "jordan-ops")
@@ -93,6 +94,7 @@ func TestEveryAlarmAuditRowCarriesItsBeforeAndAfter(t *testing.T) {
 // A rule's clear (clearAlarmByDedupTx) carries the same before and after as a
 // hand clear, and names its condition.
 func TestARulesClearAuditsItsBeforeAndAfter(t *testing.T) {
+	t.Parallel()
 	r := newEdgeRig(t)
 	r.rule(storage.EventRuleSpec{Name: "audited", Severity: "high", ClearEventType: "condition-ended"})
 	r.observe("tcp", "down")

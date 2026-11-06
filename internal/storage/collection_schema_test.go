@@ -14,6 +14,7 @@ import (
 // exist and the metric owner-arc CHECK rejects a row whose owner_kind
 // does not match its id columns. Skipped under -short (needs a container).
 func TestCollectionSchema(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

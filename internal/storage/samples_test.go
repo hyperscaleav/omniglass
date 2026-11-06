@@ -15,6 +15,7 @@ import (
 // sample is written and read back, and that the owner-arc CHECK rejects a
 // sample whose owner component does not exist (FK) as a write error.
 func TestInsertMetricSamples(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

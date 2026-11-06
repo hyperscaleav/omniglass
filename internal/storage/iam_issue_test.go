@@ -17,6 +17,7 @@ import (
 // unknown username is reported (not an error). This backs `omniglass token` and
 // the dev login when the owner already exists.
 func TestIssueBearerCredential(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -63,6 +64,7 @@ func TestIssueBearerCredential(t *testing.T) {
 // #157): a session past its expires_at is treated as absent, while a future expiry
 // (and a nil expiry, tested above) still resolves.
 func TestBearerExpiry(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {

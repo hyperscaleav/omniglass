@@ -10,6 +10,7 @@ import (
 )
 
 func TestSettingOverrideRoundTrip(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw := storagetest.NewDB(t) // ephemeral Postgres on a random port, migrations applied
 
@@ -56,6 +57,7 @@ func TestSettingOverrideRoundTrip(t *testing.T) {
 // 'default' (reflected off the Settings struct) and 'file' (read from disk at boot)
 // are rejected along with anything else.
 func TestSettingOverrideScopeIsConstrained(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw := storagetest.NewDB(t)
 
@@ -79,6 +81,7 @@ func TestSettingOverrideScopeIsConstrained(t *testing.T) {
 }
 
 func TestSettingOverrideDeleteAll(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw := storagetest.NewDB(t)
 

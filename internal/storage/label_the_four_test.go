@@ -70,6 +70,7 @@ func assertLabelOrder(t *testing.T, got []string) {
 // four: the list is ordered the way it is READ, by the label, with the rows that
 // have none at the end rather than floated to the top.
 func TestAnUnlabelledTagSortsLast(t *testing.T) {
+	t.Parallel()
 	gw := tagGateway(t)
 	ctx := context.Background()
 
@@ -107,6 +108,7 @@ func TestAnUnlabelledTagSortsLast(t *testing.T) {
 // update that says nothing about the label leaves it exactly as it was, which is
 // what makes the two independent rather than merely adjacent.
 func TestATagsLabelAndItsNameDoNotDisturbEachOther(t *testing.T) {
+	t.Parallel()
 	gw := tagGateway(t)
 	ctx := context.Background()
 
@@ -167,6 +169,7 @@ func TestATagsLabelAndItsNameDoNotDisturbEachOther(t *testing.T) {
 // re-casing, if any, is the console's single renderer (entityLabel), and it
 // cannot fall back to something the gateway has already substituted.
 func TestAnUnlabelledTagReadsBackVerbatim(t *testing.T) {
+	t.Parallel()
 	gw := tagGateway(t)
 	ctx := context.Background()
 
@@ -193,6 +196,7 @@ func TestAnUnlabelledTagReadsBackVerbatim(t *testing.T) {
 // ordering, same reason, and pinned separately because ListVariables is a
 // different statement that could drift on its own.
 func TestAnUnlabelledVariableSortsLast(t *testing.T) {
+	t.Parallel()
 	gw := variableGateway(t)
 	ctx := context.Background()
 
@@ -226,6 +230,7 @@ func TestAnUnlabelledVariableSortsLast(t *testing.T) {
 // contaminate each other: relabelling must not rewrite the value, and setting a
 // value must not clear the label.
 func TestAVariablesLabelIsIndependentOfItsValue(t *testing.T) {
+	t.Parallel()
 	gw := variableGateway(t)
 	ctx := context.Background()
 
@@ -270,6 +275,7 @@ func TestAVariablesLabelIsIndependentOfItsValue(t *testing.T) {
 // one of the four whose list statement is built twice (an all-scope arm and a
 // scope-predicate arm) and could therefore order two different ways.
 func TestAnUnlabelledSecretSortsLast(t *testing.T) {
+	t.Parallel()
 	gw, _ := secretGateway(t)
 	ctx := context.Background()
 
@@ -308,6 +314,7 @@ func TestAnUnlabelledSecretSortsLast(t *testing.T) {
 // and the copy return the decrypted FIELD MAP and nothing else, no id, no name,
 // no type, so there is no identity in them for a label to be missing from.
 func TestASecretsLabelReachesEveryProjectionThatCarriesItsName(t *testing.T) {
+	t.Parallel()
 	gw, _ := secretGateway(t)
 	ctx := context.Background()
 
@@ -445,6 +452,7 @@ func TestASecretsLabelReachesEveryProjectionThatCarriesItsName(t *testing.T) {
 // labelled by a following call is unlabelled at the moment it is made, which is
 // when the operator knows what they made it for.
 func TestAnInterfacesLabelIsItsOnlyOperatorTypedString(t *testing.T) {
+	t.Parallel()
 	gw := tagGateway(t)
 	ctx := context.Background()
 
@@ -522,6 +530,7 @@ func TestAnInterfacesLabelIsItsOnlyOperatorTypedString(t *testing.T) {
 // ListEndpoints are ordered, the all-scope one and the component-subtree one,
 // so both are driven here.
 func TestAnUnlabelledInterfaceSortsLast(t *testing.T) {
+	t.Parallel()
 	gw := tagGateway(t)
 	ctx := context.Background()
 

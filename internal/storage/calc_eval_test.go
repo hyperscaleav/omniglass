@@ -85,6 +85,7 @@ func (r *evalRig) calculated(key string) []string {
 // rule and its version; unchanged inputs write no row; a missing input writes
 // nothing and is recorded in the rule's state.
 func TestCalcDerivesComponentSamples(t *testing.T) {
+	t.Parallel()
 	r := newEvalRig(t)
 	if _, err := r.create(storage.CalcRuleSpec{Name: "temp-mean", OwnerKind: rules.OwnerComponent,
 		Inputs: []rules.CalcInput{{Alias: "t", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Expr: "avg(t)"}, OutputKey: "avg-temp"}); err != nil {
@@ -172,6 +173,7 @@ func TestCalcDerivesComponentSamples(t *testing.T) {
 // A property output is transition-only, and an event rule judges a derived
 // sample on the output key in the tick's write.
 func TestCalcPropertyOutputAndEventRule(t *testing.T) {
+	t.Parallel()
 	r := newEvalRig(t)
 	if _, err := r.create(storage.CalcRuleSpec{Name: "busy", OwnerKind: rules.OwnerComponent,
 		Inputs: []rules.CalcInput{{Alias: "call", Key: "in-call"}, {Alias: "n", Key: "occupancy-count"}},
@@ -211,6 +213,7 @@ func TestCalcPropertyOutputAndEventRule(t *testing.T) {
 // the only self-mark possible is a rule reading another rule's output that
 // it does not write; the test drives a chain and asserts no mark survives.
 func TestCalcChainAndNoSelfMark(t *testing.T) {
+	t.Parallel()
 	r := newEvalRig(t)
 	if _, err := r.create(storage.CalcRuleSpec{Name: "first", OwnerKind: rules.OwnerComponent,
 		Inputs: []rules.CalcInput{{Alias: "t", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Expr: "max(t) + 1"}, OutputKey: "avg-temp"}); err != nil {
@@ -277,6 +280,7 @@ func TestCalcChainAndNoSelfMark(t *testing.T) {
 // Two replicas draining one backlog at once compute every mark exactly
 // once, and a restart mid-backlog loses nothing: the marks are rows.
 func TestCalcDrainReplicasAndRestart(t *testing.T) {
+	t.Parallel()
 	r := newEvalRig(t)
 	if _, err := r.create(storage.CalcRuleSpec{Name: "temp-mean", OwnerKind: rules.OwnerComponent,
 		Inputs: []rules.CalcInput{{Alias: "t", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Expr: "avg(t)"}, OutputKey: "avg-temp"}); err != nil {
@@ -363,6 +367,7 @@ func TestCalcDrainReplicasAndRestart(t *testing.T) {
 // an input, and a cleared declaration (a declared 'null' tombstone) neither
 // fails the rule nor defers its mark.
 func TestCalcIgnoresDeclaredInputs(t *testing.T) {
+	t.Parallel()
 	r := newEvalRig(t)
 	if _, err := r.create(storage.CalcRuleSpec{Name: "call-copy", OwnerKind: rules.OwnerComponent,
 		Inputs: []rules.CalcInput{{Alias: "call", Key: "in-call"}}, Reduce: rules.CalcReduce{Expr: "any(call)"}, OutputKey: "busy-flag"}); err != nil {
@@ -409,6 +414,7 @@ func TestCalcIgnoresDeclaredInputs(t *testing.T) {
 // back in, the rule is marked over the values it already holds and computes
 // without waiting for a new sample.
 func TestCalcComponentRetype(t *testing.T) {
+	t.Parallel()
 	r := newEvalRig(t)
 	display, generic := storagetest.MintProduct(t, r.ctx, r.gw, "display").Name, "generic-device"
 	if _, err := r.gw.UpdateComponent(r.ctx, "", r.comp, storage.ComponentPatch{ProductName: &display}, r.all, r.all); err != nil {
@@ -467,6 +473,7 @@ func TestCalcComponentRetype(t *testing.T) {
 // rule's mark there does not wait on the serve, and the serve, rechecking
 // selection after the retype commits, computes nothing and leaves no state.
 func TestCalcComponentRetypeWhileServing(t *testing.T) {
+	t.Parallel()
 	r := newEvalRig(t)
 	display, generic := storagetest.MintProduct(t, r.ctx, r.gw, "display").Name, "generic-device"
 	if _, err := r.gw.UpdateComponent(r.ctx, "", r.comp, storage.ComponentPatch{ProductName: &display}, r.all, r.all); err != nil {

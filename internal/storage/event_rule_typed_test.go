@@ -18,6 +18,7 @@ import (
 // clear one, each refused when it does not exist, and an update can set,
 // change or drop them.
 func TestEventRuleTypedAndOptionalAlarm(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 	gw, all := f.gw, scope.Set{All: true}
@@ -98,6 +99,7 @@ func TestEventRuleTypedAndOptionalAlarm(t *testing.T) {
 // official condition-started and condition-ended event types and gives the
 // official reachability rule that pair.
 func TestOfficialRuleCarriesTheGenericPair(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 	for _, name := range []string{"condition-started", "condition-ended"} {
@@ -120,6 +122,7 @@ func TestOfficialRuleCarriesTheGenericPair(t *testing.T) {
 // ingest, the sweep that ends a sustain, the reconcile pass), and moves no
 // verdict.
 func TestInformationalRuleRaisesNoAlarm(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "note-down", SampleKey: "endpoint-reachable",
@@ -160,6 +163,7 @@ func TestInformationalRuleRaisesNoAlarm(t *testing.T) {
 // a material change: it changes what the rule writes, not when, so a pending
 // streak keeps running.
 func TestEventTypeEditKeepsStreaks(t *testing.T) {
+	t.Parallel()
 	r := newStreakRig(t, "typed-streak", time.Minute)
 	ctx := context.Background()
 	r.observe(t, "tcp", "down", time.Now().UTC())
@@ -184,6 +188,7 @@ func TestEventTypeEditKeepsStreaks(t *testing.T) {
 // the two types when the boot seed has not yet run, and that a fresh database
 // gets neither type from a migration (the boot seed owns them).
 func TestEventRuleTypeBackfill(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -237,6 +242,7 @@ func TestEventRuleTypeBackfill(t *testing.T) {
 // informational rule into one that pages: the restored NOT NULL needs a
 // severity, so the rule takes the least severe level, and is disabled with it.
 func TestEventRuleTypeBackfillDown(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

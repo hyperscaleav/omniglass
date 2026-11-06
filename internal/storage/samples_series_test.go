@@ -14,6 +14,7 @@ import (
 // The first timeseries reads (#794): the samples BEHIND the effective reads'
 // latest value, raw and capped, newest first. One shape for both owner arcs.
 func TestListMetricSeries(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -60,6 +61,7 @@ func TestListMetricSeries(t *testing.T) {
 
 // The property mirror: the change history behind the effective value.
 func TestListPropertySeries(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

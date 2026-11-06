@@ -4,30 +4,26 @@ import (
 	"context"
 	"testing"
 
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 	"github.com/hyperscaleav/omniglass/internal/sim/profiles"
 	"github.com/hyperscaleav/omniglass/internal/simfleet"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
 // A driver that has a spec and simulated products is one the seed attaches,
 // not probes: when a stub driver gains its spec, this fails until simfleet.Attach
 // learns its inputs.
 func TestSpecdDriversWithSimulatedProductsAreAttached(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("needs Postgres")
 	}
 	ctx := context.Background()
-	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	gw, err := storage.NewPG(ctx, BootSeededDSN(t))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatal(err)
-	}
 	store, err := profile.LoadStoreFS(profiles.FS)
 	if err != nil {
 		t.Fatal(err)

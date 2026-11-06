@@ -63,6 +63,7 @@ func stNode(r chainRow) storage.SystemType {
 }
 
 func TestComponentTypeChainFactsClimbToTheNearestAncestorThatSetsOne(t *testing.T) {
+	t.Parallel()
 	root, mid, leaf := uuid.New(), uuid.New(), uuid.New()
 	got := storage.ComponentTypeChainFacts([]storage.ComponentType{
 		ctNode(chainRow{id: root, name: "root", icon: "layers"}),
@@ -85,6 +86,7 @@ func TestComponentTypeChainFactsClimbToTheNearestAncestorThatSetsOne(t *testing.
 // server that invented one here would make an absence indistinguishable from a
 // type that really is drawn as a box.
 func TestComponentTypeChainFactsLeaveAnUnsetChainEmpty(t *testing.T) {
+	t.Parallel()
 	root, leaf := uuid.New(), uuid.New()
 	got := storage.ComponentTypeChainFacts([]storage.ComponentType{
 		ctNode(chainRow{id: root, name: "root"}),
@@ -104,6 +106,7 @@ func TestComponentTypeChainFactsLeaveAnUnsetChainEmpty(t *testing.T) {
 // whole registry, unfiltered), which is exactly why it is pinned: the day
 // somebody filters the list, this is the behaviour they inherit.
 func TestComponentTypeChainFactsStopAtAnAbsentParent(t *testing.T) {
+	t.Parallel()
 	orphan := uuid.New()
 	got := storage.ComponentTypeChainFacts([]storage.ComponentType{ctNode(chainRow{id: orphan, parent: uuid.New(), name: "orphan"})})
 	if got[orphan].Icon.Shown != "" {
@@ -118,6 +121,7 @@ func TestComponentTypeChainFactsStopAtAnAbsentParent(t *testing.T) {
 // walk is depth-bounded rather than visited-set-bounded for the same reason the
 // query walk is: the bound is the thing under test, so a cycle must terminate.
 func TestComponentTypeChainFactsTerminateOnACycle(t *testing.T) {
+	t.Parallel()
 	a, b := uuid.New(), uuid.New()
 	done := make(chan map[uuid.UUID]storage.TypeChainFacts, 1)
 	go func() {
@@ -137,6 +141,7 @@ func TestComponentTypeChainFactsTerminateOnACycle(t *testing.T) {
 }
 
 func TestSystemTypeChainFactsClimbTheSameWay(t *testing.T) {
+	t.Parallel()
 	root, mid, leaf := uuid.New(), uuid.New(), uuid.New()
 	got := storage.SystemTypeChainFacts([]storage.SystemType{
 		stNode(chainRow{id: root, name: "root", icon: "layers"}),
@@ -154,6 +159,7 @@ func TestSystemTypeChainFactsClimbTheSameWay(t *testing.T) {
 // A console that took Shown for a placeholder would print the value the operator
 // had just deleted back at them as the thing they were about to inherit.
 func TestChainFactsSeparateWhatARowShowsFromWhatItWouldInherit(t *testing.T) {
+	t.Parallel()
 	root, mid := uuid.New(), uuid.New()
 	got := storage.ComponentTypeChainFacts([]storage.ComponentType{
 		ctNode(chainRow{id: root, name: "mic", stem: "mic"}),
@@ -184,6 +190,7 @@ func TestChainFactsSeparateWhatARowShowsFromWhatItWouldInherit(t *testing.T) {
 // the case here, and it is the reason each fact carries its own source rather
 // than the row carrying one.
 func TestChainFactsNameTheAncestorEachFactActuallyCameFrom(t *testing.T) {
+	t.Parallel()
 	root, mid, leaf := uuid.New(), uuid.New(), uuid.New()
 	got := storage.ComponentTypeChainFacts([]storage.ComponentType{
 		ctNode(chainRow{id: root, name: "mic", stem: "mic", abbrev: "mic", icon: "mic"}),
@@ -209,6 +216,7 @@ func TestChainFactsNameTheAncestorEachFactActuallyCameFrom(t *testing.T) {
 // wire. A row stating "" stops the walk: it shows nothing on purpose, and its
 // descendants inherit that nothing rather than climbing past it.
 func TestChainFactsTreatAStatedEmptyStringAsAValue(t *testing.T) {
+	t.Parallel()
 	root, mid := uuid.New(), uuid.New()
 	stated := ""
 	rootRow := ctNode(chainRow{id: root, name: "mic", icon: "mic"})

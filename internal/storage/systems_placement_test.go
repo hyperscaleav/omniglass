@@ -17,6 +17,7 @@ import (
 // all-scoped grant that now guards it), and an unknown parent. The tree starts
 // sys-a > sys-mid > sys-leaf.
 func TestSystemReparent(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -70,6 +71,7 @@ func TestSystemReparent(t *testing.T) {
 // parent outside the caller's action scope is forbidden even when the moved system is
 // itself in scope, and a reparent onto an in-scope parent succeeds.
 func TestSystemReparentScope(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -98,6 +100,7 @@ func TestSystemReparentScope(t *testing.T) {
 // clear-to-root move even though the system itself sits inside its own move
 // scope, and remains free to reparent within its own subtree.
 func TestSystemScopedPrincipalCannotLiftToRoot(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -125,6 +128,7 @@ func TestSystemScopedPrincipalCannotLiftToRoot(t *testing.T) {
 // writes its own DISTINCT audit verb, "move", not the generic "update" a
 // PATCH writes.
 func TestMoveSystemAudited(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)

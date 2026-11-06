@@ -28,6 +28,7 @@ import (
 // TestAComponentCreateBindsOnlyAPlacementItCanRead covers both of a component's
 // placement references, since both are label inputs and both were unscoped.
 func TestAComponentCreateBindsOnlyAPlacementItCanRead(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	if _, err := gw.SetLabelRule(ctx, "", "component", "{{.LocationLabel}} {{.SystemTypeLabel}} {{.TypeName}}"); err != nil {
 		t.Fatalf("set the component rule: %v", err)
@@ -103,6 +104,7 @@ func TestAComponentCreateBindsOnlyAPlacementItCanRead(t *testing.T) {
 // floor a real principal carries resolves to exactly it. Answering
 // ErrSystemNotFound there tells a caller that a row it can GET does not exist.
 func TestTheSystemBindSaysWhichAuthorityIsMissing(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	room := makeRoomWithLabel(t, gw, ctx, "room-bind", "Bind")
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{
@@ -146,6 +148,7 @@ func TestTheSystemBindSaysWhichAuthorityIsMissing(t *testing.T) {
 // TestASystemCreateBindsOnlyALocationItCanRead is the system tier of the same
 // guard: a system's map carries one placement fact, its location's label.
 func TestASystemCreateBindsOnlyALocationItCanRead(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	if _, err := gw.SetLabelRule(ctx, "", "system", "{{.LocationLabel}} {{.TypeName}}"); err != nil {
 		t.Fatalf("set the system rule: %v", err)
@@ -183,6 +186,7 @@ func TestASystemCreateBindsOnlyALocationItCanRead(t *testing.T) {
 // on both tiers. A relocate restamps the label from the DESTINATION, so an
 // unguarded move discloses a room's label exactly as an unguarded create does.
 func TestAMoveBindsOnlyADestinationItCanRead(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	if _, err := gw.SetLabelRule(ctx, "", "component", "{{.LocationLabel}} {{.TypeName}}"); err != nil {
 		t.Fatalf("set the component rule: %v", err)
@@ -243,6 +247,7 @@ func TestAMoveBindsOnlyADestinationItCanRead(t *testing.T) {
 // question by the same caller, must give the same answer. Before this they did
 // not, and the create was the lenient one.
 func TestTheDraftAndTheCreateRefuseTheSamePlacement(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	mine := makeRoomWithLabel(t, gw, ctx, "room-mine", "Mine")
 	theirs := makeRoomWithLabel(t, gw, ctx, "room-theirs", "Theirs")
@@ -290,6 +295,7 @@ func TestTheDraftAndTheCreateRefuseTheSamePlacement(t *testing.T) {
 // draft's system in the READ set alone served that caller a preview, assembled
 // from the system's own type label, for a create the platform then refused.
 func TestTheDraftResolvesTheSystemInTheScopeTheBindRequires(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	// A rule that reads the system's type label, so the answer actually carries
 	// the fact the refusal withholds.

@@ -90,6 +90,7 @@ func buildAddressFixture(t *testing.T, gw storage.Gateway) addressFixture {
 // to a literal `where name = $1`) fails this, because "boi.17c.415a" is
 // never a location's actual name column value.
 func TestResolvePathLocationPlane(t *testing.T) {
+	t.Parallel()
 	gw, _ := newDuplicateNameFixture(t)
 	fx := buildAddressFixture(t, gw)
 	all := scope.Set{All: true}
@@ -106,6 +107,7 @@ func TestResolvePathLocationPlane(t *testing.T) {
 // TestResolvePathComponentLocationBucket is the task brief's own full
 // component path.
 func TestResolvePathComponentLocationBucket(t *testing.T) {
+	t.Parallel()
 	gw, _ := newDuplicateNameFixture(t)
 	fx := buildAddressFixture(t, gw)
 	all := scope.Set{All: true}
@@ -123,6 +125,7 @@ func TestResolvePathComponentLocationBucket(t *testing.T) {
 // second $comp-plane hop, via component_parent_name_key rather than
 // component_location_name_key.
 func TestResolvePathSubComponent(t *testing.T) {
+	t.Parallel()
 	gw, _ := newDuplicateNameFixture(t)
 	fx := buildAddressFixture(t, gw)
 	all := scope.Set{All: true}
@@ -138,6 +141,7 @@ func TestResolvePathSubComponent(t *testing.T) {
 
 // TestResolvePathSystemPlane covers the $sys accessor.
 func TestResolvePathSystemPlane(t *testing.T) {
+	t.Parallel()
 	gw, _ := newDuplicateNameFixture(t)
 	fx := buildAddressFixture(t, gw)
 	all := scope.Set{All: true}
@@ -156,6 +160,7 @@ func TestResolvePathSystemPlane(t *testing.T) {
 // silent wrong answer, when the caller has every scope in the world to see
 // the row if it existed.
 func TestResolvePathStructuralMissIsErrPathNotFound(t *testing.T) {
+	t.Parallel()
 	gw, _ := newDuplicateNameFixture(t)
 	buildAddressFixture(t, gw)
 	all := scope.Set{All: true}
@@ -173,6 +178,7 @@ func TestResolvePathStructuralMissIsErrPathNotFound(t *testing.T) {
 // under a different table's cfg (which the shared column list would let
 // scan corrupt, if the mismatch were not caught first).
 func TestResolvePathKindMismatchIsErrPathNotFound(t *testing.T) {
+	t.Parallel()
 	gw, _ := newDuplicateNameFixture(t)
 	buildAddressFixture(t, gw)
 	all := scope.Set{All: true}
@@ -191,6 +197,7 @@ func TestResolvePathKindMismatchIsErrPathNotFound(t *testing.T) {
 // (which would leak that the address resolved to a real, merely
 // out-of-scope, row) and never a 500.
 func TestResolvePathOutOfScopeIsNonDisclosing(t *testing.T) {
+	t.Parallel()
 	gw, _ := newDuplicateNameFixture(t)
 	fx := buildAddressFixture(t, gw)
 	ctx := context.Background()
@@ -234,6 +241,7 @@ func TestResolvePathOutOfScopeIsNonDisclosing(t *testing.T) {
 // location-rooted scope could never positively admit either of these and
 // would prove nothing about the ancestor walk.
 func TestResolvePathUnderNonAllScope(t *testing.T) {
+	t.Parallel()
 	gw, _ := newDuplicateNameFixture(t)
 	fx := buildAddressFixture(t, gw)
 	ctx := context.Background()
@@ -275,6 +283,7 @@ func TestResolvePathUnderNonAllScope(t *testing.T) {
 // rooms the way the bare-name assertion right above them proves they need to
 // be distinguished.
 func TestResolvePathDisambiguatesWhatABareNameCannot(t *testing.T) {
+	t.Parallel()
 	gw, _ := newDuplicateNameFixture(t)
 	ctx := context.Background()
 	all := scope.Set{All: true}

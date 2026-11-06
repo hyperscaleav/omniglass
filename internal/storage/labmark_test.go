@@ -16,6 +16,7 @@ import (
 // The decision a server makes at boot about the database it was handed, by
 // whether it runs as a lab and what the database holds.
 func TestCheckLabMark(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name                     string
 		labMode, marked, holding bool
@@ -40,6 +41,7 @@ func TestCheckLabMark(t *testing.T) {
 
 // Each refusal says why and what to do, in words an operator can act on.
 func TestLabMarkRefusalsSayWhatToDo(t *testing.T) {
+	t.Parallel()
 	for _, err := range []error{storage.ErrLabDatabase, storage.ErrNotLabDatabase} {
 		msg := err.Error()
 		for _, want := range []string{"lab", "database"} {
@@ -54,6 +56,7 @@ func TestLabMarkRefusalsSayWhatToDo(t *testing.T) {
 // lab marks it; marking again keeps the first mark; and an owner makes it hold
 // data.
 func TestLabMarkRoundTrip(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
 	if err != nil {
@@ -103,6 +106,7 @@ func TestLabMarkRoundTrip(t *testing.T) {
 // predates the mark (no lab_mark table), the state reads unmarked, and an
 // owner still reads as data.
 func TestLabStateReadsASchemaWithoutTheMark(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	dsn := storagetest.NewDSN(t)
 	gw, err := storage.NewPG(ctx, dsn)

@@ -177,6 +177,7 @@ func allIDs(t *testing.T, pool *pgxpool.Pool, tbl scopeTable) []string {
 // plane. PathOf stays the reference implementation precisely so this
 // assertion has an oracle to compare against.
 func TestPathsOfMatchesPathOfRowForRow(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -266,6 +267,7 @@ func countAttach[T any](t *testing.T, pool *pgxpool.Pool, attach func(context.Co
 // LOCATIONS, and a page confined to one room would leave a per-root loop
 // looking exactly as flat as a batch.
 func TestAttachPathsCostIsFlatInPageSize(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

@@ -60,6 +60,7 @@ func newMemberFixture(t *testing.T, ctx context.Context) *memberFixture {
 
 // The shared device is the case the old single pointer could not express at all.
 func TestMembershipIsManyValued(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newMemberFixture(t, ctx)
 
@@ -92,6 +93,7 @@ func TestMembershipIsManyValued(t *testing.T) {
 // another. Reading sharing off the primary flag would call that one exclusive,
 // which is how the console first got it wrong.
 func TestMemberCarriesHowManySystemsItServes(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newMemberFixture(t, ctx)
 
@@ -129,6 +131,7 @@ func TestMemberCarriesHowManySystemsItServes(t *testing.T) {
 // bare name under different placements, and a console addressing by name
 // would either guess or refuse. The uuid is what it navigates by.
 func TestMemberCarriesBothEndsUUIDs(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newMemberFixture(t, ctx)
 	if err := f.gw.AddMember(ctx, "", "room-a", "dsp", f.all, f.all, f.all, f.all); err != nil {
@@ -160,6 +163,7 @@ func TestMemberCarriesBothEndsUUIDs(t *testing.T) {
 
 // Adding the same membership twice is the same membership, not a second one.
 func TestAddMemberIsIdempotent(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newMemberFixture(t, ctx)
 
@@ -181,6 +185,7 @@ func TestAddMemberIsIdempotent(t *testing.T) {
 // single-system case, which is almost every component, must never surface the
 // concept at all.
 func TestFirstMembershipIsPrimary(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newMemberFixture(t, ctx)
 
@@ -210,6 +215,7 @@ func TestFirstMembershipIsPrimary(t *testing.T) {
 
 // Exactly one answer to "which is the default", moved rather than duplicated.
 func TestSetPrimaryMemberMovesTheDefault(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newMemberFixture(t, ctx)
 
@@ -235,6 +241,7 @@ func TestSetPrimaryMemberMovesTheDefault(t *testing.T) {
 
 // Staffing a role IS membership: an operator should never have to say it twice.
 func TestAssignRoleCreatesTheMembership(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newMemberFixture(t, ctx)
 
@@ -259,6 +266,7 @@ func TestAssignRoleCreatesTheMembership(t *testing.T) {
 // leave the system staffed by a non-member, so it is refused until the role is
 // given up, the same shape as every other occupied-delete in the gateway.
 func TestRemoveMemberRefusedWhileStaffingARole(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newMemberFixture(t, ctx)
 
@@ -290,6 +298,7 @@ func TestRemoveMemberRefusedWhileStaffingARole(t *testing.T) {
 // job, belongs to system_role_assignment, and duplicating it here would add a step to
 // every component removal while protecting nothing new.
 func TestMembershipCascadesFromBothEnds(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newMemberFixture(t, ctx)
 
@@ -343,6 +352,7 @@ func TestMembershipCascadesFromBothEnds(t *testing.T) {
 // unbind, a re-default) requires the update set alone, because the system's own
 // member list already names it.
 func TestMembershipIsScoped(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newMemberFixture(t, ctx)
 
@@ -379,6 +389,7 @@ func TestMembershipIsScoped(t *testing.T) {
 // here rather than the whole fleet. A member nothing was ever recorded for
 // reads healthy.
 func TestListMembersCarriesEachMembersOwnVerdict(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newMemberFixture(t, ctx)
 	for _, c := range []string{"dsp", "mic-a"} {
@@ -406,6 +417,7 @@ func TestListMembersCarriesEachMembersOwnVerdict(t *testing.T) {
 // is wrong now, whatever its age, and what cleared inside the window; never a
 // component that is not a member; capped at the limit, newest first.
 func TestListSystemAlarmsIsTheMembersAlarmsWindowed(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newMemberFixture(t, ctx)
 	for _, c := range []string{"dsp", "mic-a"} {

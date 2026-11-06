@@ -17,6 +17,7 @@ import (
 // shape the component path already has. An instance with no classifier (a one-off
 // system) resolves only what it sets directly.
 func TestEffectivePropertiesByOwnerKind(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

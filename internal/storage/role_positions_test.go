@@ -64,6 +64,7 @@ func positionsOf(t *testing.T, roles []storage.EffectiveRole, name string) []int
 // underlying assignments and a divergence between them would be a silent
 // display bug on one and a verdict bug on the other.
 func TestAssignedToIsPositionOrdered(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -117,6 +118,7 @@ func TestAssignedToIsPositionOrdered(t *testing.T) {
 // other's slot (the reason the uniqueness constraint has to be deferrable,
 // not a plain unique index: see the floor migration).
 func TestSwapIsAtomic(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -172,6 +174,7 @@ func TestSwapIsAtomic(t *testing.T) {
 // Reachable through runTogether the same way health_invariant_test.go's
 // concurrent-write proofs are.
 func TestConcurrentAssignsGetDistinctPositions(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -222,6 +225,7 @@ func TestConcurrentAssignsGetDistinctPositions(t *testing.T) {
 // slot for the occupants that did not move) until the next assignment fills
 // it, rather than growing without bound.
 func TestUnassignLeavesGapThenRefills(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -290,6 +294,7 @@ func TestUnassignLeavesGapThenRefills(t *testing.T) {
 // occupant at position 2, AssignedTo is [one three] but their real positions
 // are [1 3], not [1 2].
 func TestEffectiveRolesReportsRealPositionsAcrossAGap(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -359,6 +364,7 @@ func intSeq(got, want []int) bool {
 // message naming the role and the cap, not "that position is already
 // taken". An existing occupant of a full role stays idempotent.
 func TestAssignRefusesAtCapacity(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -429,6 +435,7 @@ func TestAssignRefusesAtCapacity(t *testing.T) {
 // vacated gap and push the role to three occupants against a declared
 // capacity of two.
 func TestLoweringCapacityThenAssigningIsRefused(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

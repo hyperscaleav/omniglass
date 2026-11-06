@@ -95,6 +95,7 @@ func (f *healthFixture) assertTransitionOnly(t *testing.T, ctx context.Context) 
 // moment it exists, healthy once both roles are staffed), so the record must hold
 // exactly two rows. The live run held three, the middle one a duplicate degraded.
 func TestHealthRecordsOneRowPerChange(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 
@@ -159,6 +160,7 @@ func TestHealthRecordsOneRowPerChange(t *testing.T) {
 // invariant a future change to the fold has to survive, and it catches
 // nothing about alternates unless a fixture here actually has one.
 func TestUnbuiltAlternateDoesNotImpair(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 
@@ -240,6 +242,7 @@ func TestUnbuiltAlternateDoesNotImpair(t *testing.T) {
 // by declaration order or by name instead of by position would also be
 // caught here, not just a bug that drops the ordering guarantee entirely.
 func TestAlternateTieBreaksByPosition(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 
@@ -313,6 +316,7 @@ func TestAlternateTieBreaksByPosition(t *testing.T) {
 // against each other here: after every write the recorded verdict and the one the
 // report computes from the live roles must be the same string.
 func TestHealthRecordsEveryRealChange(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 
@@ -456,6 +460,7 @@ func runTogether(t *testing.T, writes ...func() error) {
 // writes together. The locations above the rooms make the same point harder,
 // since every one of these writes rolls up through the same three of them.
 func TestHealthConcurrentWritesRecordOneEdge(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 	std := f.pairStandard(t, ctx, "pair-standard")
@@ -509,6 +514,7 @@ func TestHealthConcurrentWritesRecordOneEdge(t *testing.T) {
 // changes the verdict finds the record already holding it and writes nothing: a
 // real transition, silently missing, exactly as observed.
 func TestHealthConcurrentOppositeWritesLeaveNoStaleRecord(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 	std := f.pairStandard(t, ctx, "race-standard")
@@ -566,6 +572,7 @@ func TestHealthConcurrentOppositeWritesLeaveNoStaleRecord(t *testing.T) {
 // recomputes a fifth kind of thing, or an existing one taught to recompute two,
 // belongs in the list below and inherits the assertion for free.
 func TestHealthInvariantAcrossEveryTrigger(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 
@@ -680,6 +687,7 @@ func TestHealthInvariantAcrossEveryTrigger(t *testing.T) {
 // caused it: an operator reading the location's history has to see the recovery,
 // not a verdict frozen at the moment its worst system was deleted.
 func TestHealthRecordsDeleteRipple(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 

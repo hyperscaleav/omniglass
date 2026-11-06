@@ -35,6 +35,7 @@ func (f writerFixture) componentID(t *testing.T, name string) string {
 // batch landing on another component under the same endpoint name, or from a
 // writer bound to no component or no endpoint, is refused whole.
 func TestNodeWriterBindsItsComponentAndEndpoint(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -102,6 +103,7 @@ func TestNodeWriterBindsItsComponentAndEndpoint(t *testing.T) {
 // an event rule (declared now, or stored before the refusal) are refused, and
 // the command's own issue still lands it.
 func TestCommandLifecycleIsTheCommandsAlone(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -171,6 +173,7 @@ func TestCommandLifecycleIsTheCommandsAlone(t *testing.T) {
 // platform's verdict. A contract stored before the refusal keeps its line but
 // lends the key no default.
 func TestContractsRefuseAReservedKey(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -372,6 +375,7 @@ func (f writerFixture) plantPin(t *testing.T, property, instance, key string) {
 // so the next connection trusts on first use (or the key the node already
 // learned); a :retry pin is delivered over a planted one, before or after it.
 func TestPlantedPinIsNeverDelivered(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -447,6 +451,7 @@ func TestPlantedPinIsNeverDelivered(t *testing.T) {
 // strips it and keeps the rest, a re-derivation from the stored spec bakes
 // none, and the boot audit flags the spec and the task.
 func TestStoredSpecsAndTasksCarryNoReservedEmit(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -565,6 +570,7 @@ func TestStoredSpecsAndTasksCarryNoReservedEmit(t *testing.T) {
 // condition it holds, writing no event, so it can be deleted; and the boot
 // audit names it, with a command type stored targeting a reserved key.
 func TestARuleWhoseEventBecameReservedCanStillLetGo(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

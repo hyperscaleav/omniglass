@@ -15,6 +15,7 @@ import (
 // shorter than the sustain opens nothing; a recovery shorter than the clear
 // sustain holds the incident open; and the streak survives a restart.
 func TestRuleSustains(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 	gw, all := f.gw, scope.Set{All: true}

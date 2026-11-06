@@ -16,6 +16,7 @@ import (
 // snake_case. A key added to one and not the other is a template and a
 // predicate seeing two different alarms.
 func TestTheActionSiteBindsEveryAlarmFact(t *testing.T) {
+	t.Parallel()
 	var bindings []string
 	for _, b := range rules.ActionEnv().Bindings() {
 		bindings = append(bindings, b.Name)
@@ -36,6 +37,7 @@ func TestTheActionSiteBindsEveryAlarmFact(t *testing.T) {
 // The docs render the fact map from the generated file: it is the
 // declaration, rendered, or make gen was not run.
 func TestNotificationFactsMatchCommitted(t *testing.T) {
+	t.Parallel()
 	fresh, err := storage.NotificationFactsJSON()
 	if err != nil {
 		t.Fatal(err)

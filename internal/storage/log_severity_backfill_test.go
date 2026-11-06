@@ -31,6 +31,7 @@ func severityBackfillUp(t *testing.T) string {
 // writer maps today (#417): a word one accepts and the other does not would leave
 // a stray severity a retention window by severity never meets.
 func TestLogSeverityBackfillMatchesTheGoTable(t *testing.T) {
+	t.Parallel()
 	pairs := regexp.MustCompile(`\('([^']*)',\s*'([^']*)'\)`).FindAllStringSubmatch(severityBackfillUp(t), -1)
 	got := map[string]string{}
 	for _, p := range pairs {
@@ -53,6 +54,7 @@ func TestLogSeverityBackfillMatchesTheGoTable(t *testing.T) {
 // severity_raw attribute with no severity (as logline.Normalize does on a new
 // line), and a blank severity becomes none. A second run changes nothing.
 func TestLogSeverityBackfillCanonicalizesBothTables(t *testing.T) {
+	t.Parallel()
 	f := newPruneFixture(t)
 	all := scope.Set{All: true}
 	if _, err := f.gw.CreateNode(f.ctx, "", storage.NodeSpec{Name: "sev-node"}, all, all); err != nil {
@@ -120,6 +122,7 @@ func TestLogSeverityBackfillCanonicalizesBothTables(t *testing.T) {
 // the backfill is the last time node_log needs one: a known word becomes its
 // level, an unknown one is kept as severity_raw with no severity.
 func TestANodeLogLandsWithACanonicalSeverity(t *testing.T) {
+	t.Parallel()
 	f := newPruneFixture(t)
 	all := scope.Set{All: true}
 	if _, err := f.gw.CreateNode(f.ctx, "", storage.NodeSpec{Name: "sev-node"}, all, all); err != nil {

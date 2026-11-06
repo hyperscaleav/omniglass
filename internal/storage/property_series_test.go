@@ -19,6 +19,7 @@ import (
 // value already current appends nothing, mirroring the transition-only guard on
 // the observed lane, so an idempotent save does not pollute the edit history.
 func TestDeclaredValuesAppendToSeries(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -115,6 +116,7 @@ func TestDeclaredValuesAppendToSeries(t *testing.T) {
 // the series admits declared rows (the #460 narrowing is reversed) with the
 // no-lineage arm.
 func TestPropertyValueStoreRetired(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

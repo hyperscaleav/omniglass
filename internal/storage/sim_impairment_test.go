@@ -21,6 +21,7 @@ import (
 // carried on the device list, refused when the network could not apply it,
 // and cleared back to a healthy device.
 func TestSimImpairment(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -102,6 +103,7 @@ func TestSimImpairment(t *testing.T) {
 // Two holders of the sim address lock run one after the other, never at
 // once: the second waits for the first to finish.
 func TestSimAddressLockSerializes(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

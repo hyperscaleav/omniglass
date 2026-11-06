@@ -12,6 +12,7 @@ import (
 // nothing by it; a rule that does not allow it refuses the opt-out; opting
 // back in, or the admin taking the permission back, restores the page.
 func TestAMemberOptsOutOfARuleTheAdminAllows(t *testing.T) {
+	t.Parallel()
 	f := newPeopleFixture(t)
 	f.groupRule(t)
 	alice := f.ids["alice"]

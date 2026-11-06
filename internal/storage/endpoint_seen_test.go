@@ -17,6 +17,7 @@ import (
 // inserts, a stamp within the bound is left alone, and two batches seeing a
 // new endpoint at once both succeed (neither aborts the other's ingest).
 func TestStampEndpointsSeen(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

@@ -28,6 +28,7 @@ import (
 // a conflict, an illegal or uuid-shaped one is refused, and each rename writes
 // one audit row keyed on the uuid, in the same transaction.
 func TestRegistryRenameThroughTheGateway(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -165,6 +166,7 @@ func TestRegistryRenameThroughTheGateway(t *testing.T) {
 // same transaction, so placement keeps working under the new name; a rename to
 // the reserved "root" sentinel is refused.
 func TestLocationTypeRenameRewritesPlacementRules(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -232,6 +234,7 @@ func TestLocationTypeRenameRewritesPlacementRules(t *testing.T) {
 // other: it renames, a reboot brings nothing back under the shipped name, and
 // it deletes and stays deleted.
 func TestAStandardTheOldSeedPlantedIsTheOperators(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -291,6 +294,7 @@ func TestAStandardTheOldSeedPlantedIsTheOperators(t *testing.T) {
 // endpoint is bumped so the node picks the set up, and a later label edit moves
 // nothing.
 func TestADriverRenameRederivesItsTasks(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

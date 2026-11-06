@@ -13,6 +13,7 @@ import (
 )
 
 func TestLocationTypeCRUD(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
 	if err != nil {
@@ -102,6 +103,7 @@ func TestLocationTypeCRUD(t *testing.T) {
 // call site, and `lt.ID` is exactly the shape it wants. Only a round trip can
 // tell that the expression was never filled in.
 func TestCreateLocationTypeReturnsAndAuditsItsID(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
 	if err != nil {

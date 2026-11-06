@@ -17,6 +17,7 @@ import (
 // gives a kind an accessor the declaration does not carry, which is how all three
 // previous changes to this map were made.
 func TestTheBuiltMapIsExactlyTheDeclaredKeys(t *testing.T) {
+	t.Parallel()
 	built := map[string][]string{
 		"component": keysOfData(componentLabelData(&Component{Name: "display-1"}, componentLabelInputs{}, componentPlacement{})),
 		"system":    keysOfData(systemLabelData(&System{Name: "boardroom"}, systemLabelInputs{}, systemPlacement{})),
@@ -58,6 +59,7 @@ func keysOfData(d map[string]string) []string {
 // published page. One of these keys (Ordinal) reports something subtler than its
 // name suggests, which is the reason the render is a table rather than a list.
 func TestEveryDeclaredKeyCarriesASummary(t *testing.T) {
+	t.Parallel()
 	raw, err := LabelDataFactsJSON()
 	if err != nil {
 		t.Fatalf("LabelDataFactsJSON: %v", err)
@@ -86,6 +88,7 @@ func TestEveryDeclaredKeyCarriesASummary(t *testing.T) {
 // must equal a fresh in-process render, or a key was added without make gen and
 // the published data map is a release behind the engine.
 func TestLabelDataFactsMatchesCommitted(t *testing.T) {
+	t.Parallel()
 	fresh, err := LabelDataFactsJSON()
 	if err != nil {
 		t.Fatalf("LabelDataFactsJSON: %v", err)

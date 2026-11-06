@@ -29,6 +29,7 @@ import (
 // carrying its own stem, icon and abbrev is patched with the sentinel on all
 // three and every one of them resolves to the root's again.
 func TestClearingAnInheritedComponentFactResumesTheWalk(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw := storagetest.NewDB(t)
 	if err := seed.Run(ctx, gw); err != nil {
@@ -78,6 +79,7 @@ func TestClearingAnInheritedComponentFactResumesTheWalk(t *testing.T) {
 // written over the wrong parameter: an omitted field is still unchanged, so
 // clearing the icon must not disturb the stem beside it.
 func TestClearingOneComponentFactLeavesTheOthersAlone(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw := storagetest.NewDB(t)
 	if err := seed.Run(ctx, gw); err != nil {
@@ -119,6 +121,7 @@ func TestClearingOneComponentFactLeavesTheOthersAlone(t *testing.T) {
 // same broken state and gets the same refusal, at the same tier, rather than a
 // row the name generator later fails on.
 func TestClearingARootComponentTypesStemIsRefused(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw := storagetest.NewDB(t)
 	if err := seed.Run(ctx, gw); err != nil {
@@ -159,6 +162,7 @@ func TestClearingARootComponentTypesStemIsRefused(t *testing.T) {
 // on one stores a shadow that declares nothing, and :restore brings the shipped
 // value back.
 func TestClearingAnInheritedFactOnAShippedTypeForks(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw := storagetest.NewDB(t)
 	if err := seed.Run(ctx, gw); err != nil {
@@ -194,6 +198,7 @@ func TestClearingAnInheritedFactOnAShippedTypeForks(t *testing.T) {
 // component acceptance. The registry differs (a shipped row here is read-only
 // rather than forkable), the sentinel does not.
 func TestClearingAnInheritedSystemFactResumesTheWalk(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw := storagetest.NewDB(t)
 	if err := seed.Run(ctx, gw); err != nil {
@@ -239,6 +244,7 @@ func TestClearingAnInheritedSystemFactResumesTheWalk(t *testing.T) {
 // TestClearingARootSystemTypesStemIsRefused is ErrRootComponentTypeNeedsStem's
 // system twin on the clear path.
 func TestClearingARootSystemTypesStemIsRefused(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw := storagetest.NewDB(t)
 	if err := seed.Run(ctx, gw); err != nil {

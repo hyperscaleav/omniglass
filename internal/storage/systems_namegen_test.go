@@ -40,6 +40,7 @@ func newSystemNamegenDB(t *testing.T) (*storage.PG, context.Context, string) {
 // the same walk a label's facts use), and the ordinal is per placement bucket,
 // so an identical room elsewhere starts again at the bare name.
 func TestSystemCreateGeneratesFromTypeStem(t *testing.T) {
+	t.Parallel()
 	gw, ctx, room := newSystemNamegenDB(t)
 
 	first, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), LocationName: &room}, all, all)
@@ -104,6 +105,7 @@ func TestSystemCreateGeneratesFromTypeStem(t *testing.T) {
 // own literal values: with a stem of "br", the only one is "br" and the second
 // is "br-2". "br-1" is a name this rule never produces.
 func TestSystemSuppressedFirstOrdinal(t *testing.T) {
+	t.Parallel()
 	gw, ctx, room := newSystemNamegenDB(t)
 	if _, err := gw.CreateSystemType(ctx, "", storage.SystemType{
 		Name: "br-type", Label: "Br", Stem: strp("br"),
@@ -133,6 +135,7 @@ func TestSystemSuppressedFirstOrdinal(t *testing.T) {
 // The hand-typed row holds the NAME and owns no ordinal at all, which is
 // exactly the row an ordinal-reading allocator cannot see (ADR-0097).
 func TestSystemGeneratorYieldsToAHandTypedName(t *testing.T) {
+	t.Parallel()
 	gw, ctx, room := newSystemNamegenDB(t)
 	if _, err := gw.CreateSystemType(ctx, "", storage.SystemType{
 		Name: "br-type", Label: "Br", Stem: strp("br"),
@@ -162,6 +165,7 @@ func TestSystemGeneratorYieldsToAHandTypedName(t *testing.T) {
 // "br" while "br-2" survives lets the next create take "br" again, and "br-1"
 // never exists at any point.
 func TestSystemDeleteFreesTheBareName(t *testing.T) {
+	t.Parallel()
 	gw, ctx, room := newSystemNamegenDB(t)
 	if _, err := gw.CreateSystemType(ctx, "", storage.SystemType{
 		Name: "br-type", Label: "Br", Stem: strp("br"),
@@ -203,6 +207,7 @@ func TestSystemDeleteFreesTheBareName(t *testing.T) {
 // operator's name alone) and nulls the ordinal with it, and :resetName is the
 // only way back.
 func TestSystemRenameFreezesAndResetReturnsThePen(t *testing.T) {
+	t.Parallel()
 	gw, ctx, room := newSystemNamegenDB(t)
 
 	s, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), LocationName: &room}, all, all)
@@ -249,6 +254,7 @@ func TestSystemRenameFreezesAndResetReturnsThePen(t *testing.T) {
 // placement: moved into a room that already holds a boardroom, the bare name is
 // taken, so the row becomes boardroom-2 and records the 2.
 func TestSystemMoveReMintsTheOrdinal(t *testing.T) {
+	t.Parallel()
 	gw, ctx, room := newSystemNamegenDB(t)
 	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "namegen-room-d", LocationType: "campus"}, all); err != nil {
 		t.Fatalf("create the destination: %v", err)
@@ -289,6 +295,7 @@ func TestSystemMoveReMintsTheOrdinal(t *testing.T) {
 // the reclassify case uses: a rename has freed "boardroom" in this bucket, so a
 // spurious re-mint does not recompute to the same answer.
 func TestSystemMoveWithoutABucketChangeKeepsTheName(t *testing.T) {
+	t.Parallel()
 	gw, ctx, room := newSystemNamegenDB(t)
 
 	first, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), LocationName: &room}, all, all)
@@ -373,6 +380,7 @@ func TestSystemMoveWithoutABucketChangeKeepsTheName(t *testing.T) {
 // still-platform-owned name from the NEW type's stem, the system-tier twin of a
 // component's product reclassify.
 func TestSystemReclassifyReMintsTheStem(t *testing.T) {
+	t.Parallel()
 	gw, ctx, room := newSystemNamegenDB(t)
 
 	s, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), LocationName: &room}, all, all)
@@ -415,6 +423,7 @@ func TestSystemReclassifyReMintsTheStem(t *testing.T) {
 // to the same answer, it MOVES the name to "boardroom" under system:update,
 // with no rename requested and possibly no system:rename grant held.
 func TestSystemUpdateWithoutAClassificationChangeKeepsTheName(t *testing.T) {
+	t.Parallel()
 	gw, ctx, room := newSystemNamegenDB(t)
 
 	first, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), LocationName: &room}, all, all)
@@ -474,6 +483,7 @@ func TestSystemUpdateWithoutAClassificationChangeKeepsTheName(t *testing.T) {
 // for the presence-shaped guard, one step narrower, and it is the shape
 // productStemMoved already spells on the component tier.
 func TestSystemReclassifyWithinOneStemKeepsTheName(t *testing.T) {
+	t.Parallel()
 	gw, ctx, room := newSystemNamegenDB(t)
 
 	// One ancestor carries the stem; neither child carries its own, so both
@@ -542,6 +552,7 @@ func TestSystemReclassifyWithinOneStemKeepsTheName(t *testing.T) {
 // system_type, and un-classifying a system whose name the platform owns (which
 // would leave a platform-owned name with no source).
 func TestSystemWithNoTypeCannotGenerate(t *testing.T) {
+	t.Parallel()
 	gw, ctx, room := newSystemNamegenDB(t)
 
 	_, err := gw.CreateSystem(ctx, "", storage.SystemSpec{LocationName: &room}, all, all)
@@ -578,6 +589,7 @@ func TestSystemWithNoTypeCannotGenerate(t *testing.T) {
 // lands in all three of a system's placement buckets at once (under a parent,
 // at a location, unplaced) and each is a distinct row.
 func TestSystemGeneratedNamesAreUniquePerBucket(t *testing.T) {
+	t.Parallel()
 	gw, ctx, room := newSystemNamegenDB(t)
 
 	orphan, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board")}, all, all)
@@ -631,6 +643,7 @@ func TestSystemGeneratedNamesAreUniquePerBucket(t *testing.T) {
 // entitled to differ. The invariant is that nothing DRIFTS, not that ordinals
 // are immutable.
 func TestStoredSystemOrdinalsRecomputeToThemselves(t *testing.T) {
+	t.Parallel()
 	gw, ctx, room := newSystemNamegenDB(t)
 	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "invariant-room-b", LocationType: "campus"}, all); err != nil {
 		t.Fatalf("create the second room: %v", err)

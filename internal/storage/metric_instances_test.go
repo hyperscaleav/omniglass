@@ -20,6 +20,7 @@ import (
 // the list exactly as it is out of reconciliation, and a calculated sample is
 // the owner-level instance.
 func TestEffectiveMetricsNameTheShownInstance(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

@@ -14,6 +14,7 @@ import (
 // and two hot-path indexes were missed and restored later. This pins them so a
 // future column recreation cannot drop one again without turning the suite red.
 func TestChurnDroppedConstraintsRestored(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

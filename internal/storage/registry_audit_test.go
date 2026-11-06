@@ -15,6 +15,7 @@ import (
 // field diff lines up key for key. Exercised on a driver (its own delete
 // path) and a location_type (the shared deleteTypeRow path).
 func TestRegistryAuditImages(t *testing.T) {
+	t.Parallel()
 	gw, _ := secretGateway(t)
 	ctx := context.Background()
 

@@ -19,6 +19,7 @@ import (
 // token or its hash. A web-login session is the auth lane's (login, logout) and
 // writes no credential row. Skipped under -short.
 func TestTokenMintAndRevokeAreAudited(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
