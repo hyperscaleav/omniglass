@@ -1,10 +1,14 @@
 name: test
 
 # The CI test gate. `make test` is the local gate (validate-locally doctrine);
-# this is the backstop on every PR and on main, and it runs that same target so
-# the two cannot drift (#214): the SPA typecheck and vitest suite, every Go tier,
-# then the NET_ADMIN tier. The integration and e2e tiers use testcontainers-go,
-# which needs a Docker daemon; ubuntu-latest ships one.
+# this is the backstop on every PR and on main. It runs the same make targets,
+# one job per part of `make test`, so the two cannot drift (#214) and the wall
+# time is the slowest part, not the sum (#1536): the SPA typecheck and vitest
+# suite, the Go tiers as three shards (internal/storage, internal/devseed, and
+# every other package, the last derived by the Makefile so a new package joins
+# it on its own), then the NET_ADMIN tier. The required check is the `test` job
+# at the bottom, which rolls them up. The integration and e2e tiers use
+# testcontainers-go, which needs a Docker daemon; ubuntu-latest ships one.
 
 on:
   pull_request:
@@ -19,7 +23,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
+  # Each Go shard runs its make target, which runs go test -json under
+  # cmd/gotestreport: the log reads as a plain go test run, and ends with the
+  # shard's 20 slowest tests and every package's wall time. TEST_PARALLEL is the
+  # runner's core count, which is what a bare `go test ./...` ran with.
+  test-go-storage:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -27,6 +35,32 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           # Track the toolchain pinned in go.mod so CI never drifts from local.
+          go-version-file: go.mod
+          cache: true
+
+      - name: Test (make test-go-storage)
+        run: make test-go-storage TEST_PARALLEL="$(nproc)"
+
+  test-go-devseed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Test (make test-go-devseed)
+        run: make test-go-devseed TEST_PARALLEL="$(nproc)"
+
+  test-go-rest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
           go-version-file: go.mod
           cache: true
 
@@ -38,26 +72,58 @@ jobs:
       # The collection tier's icmp probe opens an unprivileged SOCK_DGRAM ICMP
       # socket, which its real-capability test exercises. Runners disallow that by
       # default (net.ipv4.ping_group_range excludes the runner gid), so widen the
-      # range to let the gate actually run on CI rather than skip it.
+      # range to let the gate actually run on CI rather than skip it. Only this
+      # shard has such a test; the NET_ADMIN tier sets the sysctl in its own
+      # container.
       - name: Allow unprivileged ICMP (for the icmp capability gate)
         run: sudo sysctl -w net.ipv4.ping_group_range="0 2147483647"
 
-      # test-web (inside make test) installs the SPA's dependencies and runs its
-      # typecheck and vitest suite, so the job needs node.
+      - name: Test (make test-go-rest)
+        run: make test-go-rest TEST_PARALLEL="$(nproc)"
+
+  # The SPA's typecheck and vitest suite. Needs node and nothing else.
+  test-web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
           cache: npm
           cache-dependency-path: web/package-lock.json
 
-      # The local gate itself: test-web, go test over every package, then the
-      # NET_ADMIN tier (impairments rewrite the firewall and tc of the network
-      # they run in), which make runs in a container with its own network
-      # namespace, never on the runner's own network. TEST_PARALLEL defaults to
-      # 1 for small workstations; a runner has the memory for one package per
-      # core, which is what a bare `go test ./...` ran here before.
-      - name: Test (make test)
-        run: make test TEST_PARALLEL="$(nproc)"
+      - name: Test (make test-web)
+        run: make test-web
+
+  # The NET_ADMIN tier (impairments rewrite the firewall and tc of the network
+  # they run in), which make runs in a container with its own network namespace,
+  # never on the runner's own network. Needs Docker and nothing else: the Go
+  # toolchain is the container's.
+  test-netadmin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Test (make test-netadmin)
+        run: make test-netadmin
+
+  # The required check. The ruleset requires a check named `test`; this job is
+  # that name, and it passes only when every part above succeeded. always() so it
+  # reports (and fails) when a shard failed, was cancelled or was skipped,
+  # instead of being skipped itself, which a required check would read as
+  # pending forever. A new shard must be added to needs.
+  test:
+    if: always()
+    needs: [test-go-storage, test-go-devseed, test-go-rest, test-web, test-netadmin]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every shard succeeded
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          echo "$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          echo "$NEEDS" | jq -e 'all(.[]; .result == "success")' > /dev/null
 
   # The browser e2e tier (#761): the console driven as an operator would, against
   # the real binary, on a throwaway lab (web/e2e/run.sh on web/e2e/lib/lab.sh,
