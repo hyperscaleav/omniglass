@@ -2,6 +2,8 @@ package storage_test
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -9,6 +11,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/migrate"
 	"github.com/hyperscaleav/omniglass/internal/rules"
+	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
@@ -229,5 +232,68 @@ func TestRulesJudgeAMillisecondScenarioAsBefore(t *testing.T) {
 	}
 	if !fired {
 		t.Errorf("the scenario's event rule never fired: %v", aligned)
+	}
+}
+
+// TestACalculatedSampleLandsOnTheMillisecond: a calc rule stamps its output
+// with the evaluation clock, which has microseconds. The output goes through
+// the same write path as an observed sample (writeMetricSamples), so the row
+// it leaves is on a whole millisecond, and so is the observed row it read.
+func TestACalculatedSampleLandsOnTheMillisecond(t *testing.T) {
+	r := newEvalRig(t)
+	if _, err := r.create(storage.CalcRuleSpec{Name: "temp-mean", OwnerKind: rules.OwnerComponent,
+		Inputs: []rules.CalcInput{{Alias: "t", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Expr: "avg(t)"}, OutputKey: "avg-temp"}); err != nil {
+		t.Fatal(err)
+	}
+	// Three evaluations, so a clock that happened to land on a whole
+	// millisecond cannot pass the test by luck.
+	for v := 1.0; v <= 3; v++ {
+		if err := r.gw.InsertMetricSamples(r.ctx, storage.PushWriter(), []storage.MetricSampleWrite{{OwnerKind: "component",
+			OwnerID: r.comp, Key: "room-temperature", Value: v, Source: "test", TS: time.Now().UTC().Add(137 * time.Microsecond)}}); err != nil {
+			t.Fatal(err)
+		}
+		r.drain()
+	}
+	if got := r.calculated("avg-temp"); len(got) != 3 {
+		t.Fatalf("calculated rows %v, want the rule to have written three", got)
+	}
+	var calculated, subMillisecond int
+	if err := r.conn.QueryRow(r.ctx, `select count(*) filter (where provenance = 'calculated'),
+			count(*) filter (where date_trunc('milliseconds', ts) <> ts)
+		from `+storagetest.MetricRows+` metric`).Scan(&calculated, &subMillisecond); err != nil {
+		t.Fatal(err)
+	}
+	if calculated == 0 || subMillisecond != 0 {
+		t.Errorf("%d calculated rows, %d metric rows with a sub-millisecond ts; want calculated rows and none", calculated, subMillisecond)
+	}
+}
+
+// TestADeclaredValueLandsOnTheMillisecond: IssueCommand supplies no ts for the
+// intended value it declares (metric_declared), so the column default stamps
+// it, and the default is whole milliseconds. Issued several times because a
+// database clock can land on a whole millisecond by chance.
+func TestADeclaredValueLandsOnTheMillisecond(t *testing.T) {
+	f := newWriterFixture(t)
+	if _, err := f.gw.CreateMetricType(f.ctx, "", storage.MetricTypeSpec{Name: "declared-level", DataType: "float"}); err != nil {
+		t.Fatalf("create metric type: %v", err)
+	}
+	if _, err := f.gw.CreateCommandType(f.ctx, "", storage.CommandTypeSpec{Name: "set-declared-level", TargetMetricType: "declared-level"}); err != nil {
+		t.Fatalf("create command type: %v", err)
+	}
+	comp, err := f.gw.GetComponent(f.ctx, "disp-1", scope.Set{All: true})
+	if err != nil {
+		t.Fatalf("get component: %v", err)
+	}
+	for v := 1; v <= 5; v++ {
+		if _, err := f.gw.IssueCommand(f.ctx, f.actor, "component", comp.ID, "set-declared-level", "", json.RawMessage(fmt.Sprint(v)), nil); err != nil {
+			t.Fatalf("issue command: %v", err)
+		}
+	}
+	var declared, subMillisecond int
+	if err := f.conn.QueryRow(f.ctx, `select count(*), count(*) filter (where date_trunc('milliseconds', ts) <> ts) from metric_declared`).Scan(&declared, &subMillisecond); err != nil {
+		t.Fatal(err)
+	}
+	if declared != 5 || subMillisecond != 0 {
+		t.Errorf("%d declared rows, %d with a sub-millisecond ts; want the five commands' rows and none", declared, subMillisecond)
 	}
 }
