@@ -40,17 +40,23 @@ func ExportPruneMetricSampleSQL(part string, typed bool) string {
 	return pruneMetricSampleSQL(part, typed)
 }
 
-// MakeMetricMonths makes the metric partition of each instant's month, as the
-// ingest does for a sample whose month has none, so a test that plants rows
+// MakeMetricDays makes the metric partition of each instant's day, as the
+// ingest does for a sample whose day has none, so a test that plants rows
 // in the past through SQL has somewhere to land them.
-func (p *PG) MakeMetricMonths(ctx context.Context, at ...time.Time) error {
-	_, err := p.ensureMetricMonths(ctx, at)
+func (p *PG) MakeMetricDays(ctx context.Context, at ...time.Time) error {
+	_, err := p.ensureMetricDays(ctx, at)
 	return err
 }
 
 // ExportMetricNewestSQL is one metric series' newest-sample read ($1 the
 // series id), for the test that plans it (#1275).
 func ExportMetricNewestSQL() string { return metricNewestSQL("$1::bigint") }
+
+// ExportMetricCoverageGap is the check the roll refuses an uncovered day by
+// (#1527).
+func ExportMetricCoverageGap(parts []MetricPartition, from, to time.Time) (time.Time, bool) {
+	return metricCoverageGap(parts, from, to)
+}
 
 // ExportIsPartitionRoutingMiss is the classifier the ingest retries a write by
 // when no metric partition covers a row (#420).

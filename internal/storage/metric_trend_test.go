@@ -270,14 +270,14 @@ func TestALateSampleDirtiesItsHourUnderRepeatableRead(t *testing.T) {
 	}
 }
 
-// TestTheHotTierIsNeverPrunedPastTheMark: the metric prune and the month drop
+// TestTheHotTierIsNeverPrunedPastTheMark: the metric prune and the day drop
 // stop at the hours the compaction has closed, so no hour reaches retention
 // before its trend exists; before any compaction they remove nothing. The
-// trends outlive the month their samples were dropped with.
+// trends outlive the day their samples were dropped with.
 func TestTheHotTierIsNeverPrunedPastTheMark(t *testing.T) {
 	f := newTrendRig(t)
 	now := time.Now().UTC()
-	old := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, -3, 0).Add(2 * time.Hour)
+	old := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC).AddDate(0, 0, -40).Add(2 * time.Hour)
 	f.plant(old, "observed", 9)
 	if n := f.prune("metric", now, 100); n != 0 {
 		t.Fatalf("before any compaction the prune deleted %d, want 0", n)
@@ -298,10 +298,10 @@ func TestTheHotTierIsNeverPrunedPastTheMark(t *testing.T) {
 	}
 	dropped, err := f.gw.DropMetricPartitions(f.ctx, now.AddDate(0, 0, -14))
 	if err != nil || len(dropped) == 0 {
-		t.Fatalf("dropped %v (%v), want the old month", dropped, err)
+		t.Fatalf("dropped %v (%v), want the old day", dropped, err)
 	}
 	if got := f.trendOf(mark); got != "1 9 9 9 9 9" {
-		t.Errorf("after the month's drop the trend reads %q, want it kept", got)
+		t.Errorf("after the day's drop the trend reads %q, want it kept", got)
 	}
 }
 
@@ -543,9 +543,9 @@ func TestAnIdleTransactionElsewhereDoesNotStallCompaction(t *testing.T) {
 
 // TestTheFirstMarkIsSeededAtTheLongestWindow: the first pass on an install
 // holding samples years old starts at the longest window back from now (a
-// type's own, when it is longer than the lane's), not at the oldest month, so
+// type's own, when it is longer than the lane's), not at the oldest day, so
 // an upgrade does not fold years of hours the prune is about to remove; on a
-// hot tier younger than the window it starts at the oldest month.
+// hot tier younger than the window it starts at the oldest day.
 func TestTheFirstMarkIsSeededAtTheLongestWindow(t *testing.T) {
 	t.Run("old samples", func(t *testing.T) {
 		f := newTrendRig(t)
@@ -564,6 +564,11 @@ func TestTheFirstMarkIsSeededAtTheLongestWindow(t *testing.T) {
 	})
 	t.Run("a young hot tier", func(t *testing.T) {
 		f := newTrendRig(t)
+		// A fresh install's oldest day is today, later than the compaction's
+		// first target; a hot tier five days deep starts at its oldest day.
+		if err := f.gw.MakeMetricDays(f.ctx, time.Now().UTC().AddDate(0, 0, -5)); err != nil {
+			t.Fatal(err)
+		}
 		parts, err := f.gw.MetricPartitions(f.ctx)
 		if err != nil || len(parts) == 0 {
 			t.Fatalf("partitions %v (%v)", parts, err)
@@ -575,7 +580,7 @@ func TestTheFirstMarkIsSeededAtTheLongestWindow(t *testing.T) {
 		window := time.Now().UTC().Add(-14 * 24 * time.Hour).Truncate(time.Hour)
 		if oldest.After(window) {
 			if !seed.Equal(oldest) {
-				t.Errorf("the first pass started at %v, want the oldest month %v", seed, oldest)
+				t.Errorf("the first pass started at %v, want the oldest day %v", seed, oldest)
 			}
 		} else if !seed.Equal(window) && !seed.Equal(window.Add(time.Hour)) {
 			t.Errorf("the first pass started at %v, want %v (the lane's 14 days)", seed, window)
@@ -590,7 +595,7 @@ func TestTrendFootprint(t *testing.T) {
 	f := newTrendRig(t)
 	const series = 200
 	day := time.Now().UTC().Add(-3 * 24 * time.Hour).Truncate(24 * time.Hour)
-	if err := f.gw.MakeMetricMonths(f.ctx, day); err != nil {
+	if err := f.gw.MakeMetricDays(f.ctx, day); err != nil {
 		t.Fatal(err)
 	}
 	mustExec(t, f.conn, storagetest.WideMetricInsert(`ts, owner_kind, component_id, metric_type_id, instance, value`,

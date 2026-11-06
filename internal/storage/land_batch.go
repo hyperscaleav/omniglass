@@ -96,12 +96,12 @@ func (f *FannedRows) keyed() []keyedWrite {
 // takes. A deadlock abort retries the whole batch (sampleWrite).
 func (p *PG) LandBatch(ctx context.Context, b IngestBatch) (bool, error) {
 	landed, err := p.landBatch(ctx, b)
-	// A metric sample whose month has no partition (the roll is late, or a
-	// node's clock is far out): make the months the batch needs and land it
+	// A metric sample whose day has no partition (the roll is late, or a
+	// node's clock is far out): make the days the batch needs and land it
 	// again, once (#420). A batch that misses again is the ingest's to
 	// redeliver.
 	if isPartitionRoutingMiss(err) {
-		if perr := p.landMetricMonths(ctx, b.Metrics); perr != nil {
+		if perr := p.landMetricDays(ctx, b.Metrics); perr != nil {
 			return false, errors.Join(err, perr)
 		}
 		landed, err = p.landBatch(ctx, b)

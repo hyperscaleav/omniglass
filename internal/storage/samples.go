@@ -81,7 +81,7 @@ func (p *PG) InsertMetricSamples(ctx context.Context, w KeyWriter, evs []MetricS
 	}
 	err := write()
 	if isPartitionRoutingMiss(err) {
-		if perr := p.landMetricMonths(ctx, evs); perr != nil {
+		if perr := p.landMetricDays(ctx, evs); perr != nil {
 			return perr
 		}
 		err = write()
@@ -467,8 +467,8 @@ func metricSeriesKey(ev MetricSampleWrite, arc string) string {
 
 // metricNewestSQL is one metric series' newest hot-tier sample (ts, id, value
 // and the lineage columns), series an SQL expression (a lateral's column): an
-// index probe of metric_series_ts_idx in each month, newest month first,
-// stopping at the first month that holds one (TestMetricNewestReadsTheNewestMonthFirst).
+// index probe of metric_series_ts_idx in each day, newest day first, stopping
+// at the first day that holds one (TestMetricNewestReadsTheNewestDayFirst).
 func metricNewestSQL(series string) string {
 	return `select m.ts, m.id, m.value, m.source_rule, m.source_rule_version, m.source_rule_id
 		from metric m where m.series_id = ` + series + `

@@ -46,7 +46,7 @@ func (b *backlogStore) EnsureMetricPartitions(context.Context) ([]string, error)
 	if b.ensureErr != nil {
 		return nil, b.ensureErr
 	}
-	return []string{"metric_p209901"}, nil
+	return []string{"metric_p20990101"}, nil
 }
 
 func (b *backlogStore) DropMetricPartitions(_ context.Context, before time.Time) ([]string, error) {
@@ -54,7 +54,7 @@ func (b *backlogStore) DropMetricPartitions(_ context.Context, before time.Time)
 	if b.dropErr != nil {
 		return nil, b.dropErr
 	}
-	return []string{"metric_p200001"}, nil
+	return []string{"metric_p20000101"}, nil
 }
 
 type pruneCall struct {
@@ -287,11 +287,11 @@ func TestARetentionPassPrunesATypeByItsOwnWindow(t *testing.T) {
 	}
 }
 
-// Each pass rolls the metric table's months (#420) before it prunes: the
-// partitions ahead made, and the months wholly past the metric window
+// Each pass rolls the metric table's days (#420, #1527) before it prunes: the
+// partitions ahead made, and the days wholly past the metric window
 // dropped, the cutoff the metric lane's own. A roll that fails is reported,
 // and every lane is still pruned.
-func TestRetentionPassRollsTheMetricMonths(t *testing.T) {
+func TestRetentionPassRollsTheMetricDays(t *testing.T) {
 	now := time.Date(2026, 10, 29, 12, 0, 0, 0, time.UTC)
 	store := &backlogStore{windows: defaultWindows(), backlog: map[string]int64{}}
 	rep, err := retentionPass(context.Background(), store, now, 10, 5, 0)

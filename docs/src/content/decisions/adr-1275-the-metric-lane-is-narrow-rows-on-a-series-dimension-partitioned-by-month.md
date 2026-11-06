@@ -1,7 +1,7 @@
 ---
 title: "The metric lane is narrow rows on a series dimension, partitioned by month"
 date: 2026-10-29
-status: Accepted
+status: "Accepted; amended (#1527): metric is partitioned by UTC day, not by month"
 summary: "A metric sample is (id, series_id, ts, value) in metric, range partitioned by month from birth and rolled by the server; what it samples is a metric_series row (type, owner arc, instance, provenance, source, collecting node); a command's intended rows live in metric_declared, never pruned. The metric floor becomes the latest row within retention (amending ADR-0080); property keeps its floor and is not partitioned. A partition-routing miss is retried, never refused."
 refs: [1275, 420, 1265, 1080, 1274, 417, 1417]
 ---
@@ -55,6 +55,11 @@ refs: [1275, 420, 1265, 1080, 1274, 417, 1417]
      for longer than the window (every input transition-only and unchanged) reads as no reading.
   7. **Property is not partitioned** (#1265 open decision 2): its rows are transitions, sparse by
      construction, and its floor is unchanged. Recorded here for the architect's veto.
+  **Amended by [ADR-1527](#adr-1527-the-metric-lane-is-partitioned-by-utc-day) (#1527):** points 2,
+  5 and 6 now read by the UTC day: `metric` is partitioned by day, the server keeps today and the
+  next three days and refuses to start ingest until they are covered, and a day is dropped once it
+  is past the lane's window and the trend's compacted mark and holds no sample of a type kept
+  longer.
 - **Context:** the epic's measurements put a wide metric row at 126 bytes of heap and 91 of index
   (rebuilt), most of it the series repeated on every observation; #1265's design review ruled out
   every ingest-side filter, so the row itself had to shrink. Measured by `make footprint` on the same

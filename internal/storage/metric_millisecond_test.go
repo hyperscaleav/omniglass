@@ -120,9 +120,12 @@ func TestMetricTimestampMigrationTruncatesExistingRows(t *testing.T) {
 	// Two microsecond instants one millisecond apart, a pair that will share a
 	// millisecond, the next month's first instant plus microseconds (a
 	// truncation never leaves its partition), and a row already on its
-	// millisecond. The partitions are the current month's and the next two.
-	day := monthStart(time.Now()).Add(48 * time.Hour)
-	next := monthStart(time.Now()).AddDate(0, 1, 0)
+	// millisecond. Below the truncation the day partitions (#1527) are rolled
+	// back too, so the partitions are the current month's and the next two.
+	now := time.Now().UTC()
+	month := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	day := month.Add(48 * time.Hour)
+	next := month.AddDate(0, 1, 0)
 	mustExec(t, conn, `insert into metric (series_id, ts, value) values
 		($1, $2::timestamptz + interval '123456 microseconds', 1), ($1, $2::timestamptz + interval '123999 microseconds', 2),
 		($1, $2::timestamptz + interval '124001 microseconds', 3), ($1, $3::timestamptz + interval '500 microseconds', 4),
