@@ -11,11 +11,13 @@ refs: [1527, 1275, 1276, 420]
   1. **A day, not a month.** `metric` is range partitioned by UTC calendar day on `ts`, each
      partition named `metric_pYYYYMMDD`. Its three indexes, the series dimension and
      `metric_declared` (a plain table) are unchanged.
-  2. **One create-copy-swap.** One migration renames the month-partitioned table (with its indexes
-     and identity sequence) aside, creates the day-partitioned parent with the same indexes, a
-     partition for every day it held a sample in and today through three days ahead, copies every
-     row keeping its id, moves the identity past the old table's, refuses unless the counts agree,
-     and drops the month table. Its down is the same swap back to months.
+  2. **One create-copy-swap.** One migration renames the month-partitioned table (with its identity
+     sequence) aside, creates the day-partitioned parent `LIKE` it (so the columns, their types,
+     defaults and identity are metric's as they stand when the swap runs, not restated from
+     #1275), a partition for every day it held a sample in and today through three days ahead,
+     copies every row keeping its id, moves the identity past the old table's, refuses unless the
+     counts agree, drops the month table, and makes its indexes again on the new parent from their
+     own definitions and names. Its down is the same swap back to months.
   3. **The roll.** The server keeps today and the next three days partitioned, at boot and on every
      retention pass. After creating any missing day it reads the partitions back and refuses unless
      they cover every instant from the start of today through the end of the third day ahead, naming

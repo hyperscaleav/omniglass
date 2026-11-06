@@ -213,11 +213,11 @@ func TestMetricDayPartitionsRefuseALostRow(t *testing.T) {
 		t.Fatal(err)
 	}
 	up, _, _ := strings.Cut(string(raw), "-- migrate:down")
-	copySQL := `source_rule_id FROM public.metric_month;`
+	copySQL := `SELECT * FROM public.metric_month;`
 	if strings.Count(up, copySQL) != 1 {
 		t.Fatalf("the up migration's copy (%q) is not where the test expects it", copySQL)
 	}
-	lossy := strings.Replace(up, copySQL, `source_rule_id FROM public.metric_month OFFSET 1;`, 1)
+	lossy := strings.Replace(up, copySQL, `SELECT * FROM public.metric_month OFFSET 1;`, 1)
 	if _, err := conn.Exec(ctx, strings.TrimPrefix(lossy, "-- migrate:up")); err == nil || !strings.Contains(err.Error(), "metric day partitions") {
 		t.Fatalf("a copy that loses a sample: err = %v, want the count refusal", err)
 	}
@@ -228,5 +228,62 @@ func TestMetricDayPartitionsRefuseALostRow(t *testing.T) {
 		if !monthPartition.MatchString(p) {
 			t.Errorf("after the refusal, partition %s is not a month's", p)
 		}
+	}
+}
+
+// metricColumns is metric's columns as the catalog has them, in order (name,
+// type, nullability, default and identity), then its indexes' definitions.
+func metricColumns(t *testing.T, conn *pgx.Conn) []string {
+	t.Helper()
+	rows, err := conn.Query(context.Background(), `select concat_ws(' ', a.attname, format_type(a.atttypid, a.atttypmod),
+			case when a.attnotnull then 'not null' end, 'default ' || pg_get_expr(d.adbin, d.adrelid),
+			nullif(a.attidentity, ''))
+		from pg_attribute a left join pg_attrdef d on d.adrelid = a.attrelid and d.adnum = a.attnum
+		where a.attrelid = 'public.metric'::regclass and a.attnum > 0 and not a.attisdropped
+		order by a.attnum`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cols, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err = conn.Query(context.Background(), `select indexdef from pg_indexes
+		where schemaname = 'public' and tablename = 'metric' order by indexname`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	idx, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		t.Fatal(err)
+	}
+	return append(cols, idx...)
+}
+
+// TestMetricDayPartitionsCarryTheColumnsAsTheyStand: the swap copies metric
+// as it stands when the swap runs, not as #1275 defined it, so a migration
+// ordered before it that changes a column (#1532 truncates ts's default to
+// whole milliseconds) survives the swap, and the swap back; its indexes come
+// back under their own names.
+func TestMetricDayPartitionsCarryTheColumnsAsTheyStand(t *testing.T) {
+	_, conn, dsn := standMonthLayout(t)
+	mustExec(t, conn, `alter table metric alter column ts set default date_trunc('milliseconds', now())`)
+	mustExec(t, conn, `alter table metric alter column source_rule type varchar(200)`)
+	want := metricColumns(t, conn)
+	if !slices.Contains(want, "source_rule character varying(200)") {
+		t.Fatalf("below the swap, columns %v, want the changed source_rule", want)
+	}
+
+	if err := migrate.Run(dsn); err != nil {
+		t.Fatalf("migrate forward: %v", err)
+	}
+	if got := metricColumns(t, conn); !slices.Equal(got, want) {
+		t.Errorf("across the swap the columns differ:\n got  %v\n want %v", got, want)
+	}
+	if err := migrate.RollbackBelow(dsn, metricDayVersion); err != nil {
+		t.Fatalf("roll back the day partitions: %v", err)
+	}
+	if got := metricColumns(t, conn); !slices.Equal(got, want) {
+		t.Errorf("rolled back, the columns differ:\n got  %v\n want %v", got, want)
 	}
 }
