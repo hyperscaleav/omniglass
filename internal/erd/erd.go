@@ -302,7 +302,7 @@ func queryTables(ctx context.Context, db querier) ([]string, error) {
 		  AND table_type = 'BASE TABLE'
 		  AND table_name <> 'schema_migrations'
 		  -- A partition is its parent's storage, not a table of the model
-		  -- (metric's monthly partitions, #1275): the parent stands for it.
+		  -- (metric's daily partitions, #1275, #1527): the parent stands for it.
 		  AND NOT EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
 		                  WHERE n.nspname = 'public' AND c.relname = table_name AND c.relispartition)
 		ORDER BY table_name`)

@@ -13,30 +13,33 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-// The narrow metric lane's partitions (#1275, #420, ADR-1275): a month per
-// partition, two ahead of the current one, a missing month made on demand
-// rather than a batch dropped, and a month past every window dropped whole.
+// The narrow metric lane's partitions (#1275, #420, #1527, ADR-1527): a UTC
+// day per partition, three ahead of today, a missing day made on demand
+// rather than a batch dropped, and a day past every window dropped whole.
 
-func monthName(t time.Time) string { return "metric_p" + t.UTC().Format("200601") }
+func dayName(t time.Time) string { return "metric_p" + t.UTC().Format("20060102") }
 
-func monthStart(t time.Time) time.Time {
+func dayStart(t time.Time) time.Time {
 	u := t.UTC()
-	return time.Date(u.Year(), u.Month(), 1, 0, 0, 0, 0, time.UTC)
+	return time.Date(u.Year(), u.Month(), u.Day(), 0, 0, 0, 0, time.UTC)
 }
 
-// TestMetricPartitionsRollAhead: the roll keeps this month and the next two,
-// creates nothing it already has, and a dropped month ahead comes back.
+// TestMetricPartitionsRollAhead: the roll keeps today and the next three
+// days, creates nothing it already has, and a dropped day ahead comes back.
 func TestMetricPartitionsRollAhead(t *testing.T) {
 	f := newPruneFixture(t)
-	now := time.Now().UTC()
-	want := []string{monthName(now), monthName(monthStart(now).AddDate(0, 1, 0)), monthName(monthStart(now).AddDate(0, 2, 0))}
+	today := dayStart(time.Now())
+	var want []string
+	for i := 0; i <= 3; i++ {
+		want = append(want, dayName(today.AddDate(0, 0, i)))
+	}
 	if created, err := f.gw.EnsureMetricPartitions(f.ctx); err != nil || len(created) != 0 {
 		t.Fatalf("a roll over a fresh install created %v (%v), want nothing: the migration made them", created, err)
 	}
-	mustExec(t, f.conn, `drop table `+want[2])
+	mustExec(t, f.conn, `drop table `+want[3])
 	created, err := f.gw.EnsureMetricPartitions(f.ctx)
-	if err != nil || len(created) != 1 || created[0] != want[2] {
-		t.Fatalf("the roll created %v (%v), want %s back", created, err, want[2])
+	if err != nil || len(created) != 1 || created[0] != want[3] {
+		t.Fatalf("the roll created %v (%v), want %s back", created, err, want[3])
 	}
 	parts := partitionsOf(t, f.conn, "metric")
 	for _, w := range want {
@@ -46,76 +49,143 @@ func TestMetricPartitionsRollAhead(t *testing.T) {
 	}
 	// A partition made by the roll carries the parent's indexes.
 	var idx int
-	if err := f.conn.QueryRow(f.ctx, `select count(*) from pg_indexes where tablename = $1`, want[2]).Scan(&idx); err != nil || idx != 3 {
-		t.Errorf("%s has %d indexes (%v), want the parent's 3", want[2], idx, err)
+	if err := f.conn.QueryRow(f.ctx, `select count(*) from pg_indexes where tablename = $1`, want[3]).Scan(&idx); err != nil || idx != 3 {
+		t.Errorf("%s has %d indexes (%v), want the parent's 3", want[3], idx, err)
 	}
 }
 
-// TestAMissingMonthDropsNoBatch: a batch carrying a sample whose month has no
-// partition (the roll was late at the month boundary) lands whole, its month
-// made on the way; the miss itself is never classified as a refusal, so a
-// batch that misses again is redelivered, not dropped.
-func TestAMissingMonthDropsNoBatch(t *testing.T) {
+// TestTheRollRefusesAnUncoveredDay: a partition that covers only the first
+// half of a day ahead (so the roll, seeing the day's start covered, makes
+// nothing) leaves the second half routing nowhere; the roll reports the
+// first uncovered instant rather than answering as if the days were whole.
+func TestTheRollRefusesAnUncoveredDay(t *testing.T) {
 	f := newPruneFixture(t)
-	next := monthStart(time.Now()).AddDate(0, 1, 0)
-	mustExec(t, f.conn, `drop table `+monthName(next))
-	landed, err := f.gw.LandBatch(f.ctx, storage.IngestBatch{BatchID: "missed-month", Writer: storage.PushWriter(),
+	ahead := dayStart(time.Now()).AddDate(0, 0, 2)
+	half := ahead.Add(12 * time.Hour)
+	mustExec(t, f.conn, `drop table `+dayName(ahead))
+	mustExec(t, f.conn, `create table metric_half partition of metric for values from ('`+ahead.Format(time.RFC3339)+`') to ('`+half.Format(time.RFC3339)+`')`)
+	if _, err := f.gw.EnsureMetricPartitions(f.ctx); err == nil || !strings.Contains(err.Error(), half.Format(time.RFC3339)) {
+		t.Fatalf("a roll over a half-covered day: err %v, want a refusal naming %s", err, half.Format(time.RFC3339))
+	}
+}
+
+// TestMetricCoverageGap: the coverage check walks the partitions in order
+// and answers the first instant of [from, to) none of them covers.
+func TestMetricCoverageGap(t *testing.T) {
+	d := func(day int) time.Time { return time.Date(2026, 11, day, 0, 0, 0, 0, time.UTC) }
+	part := func(from, to time.Time) storage.MetricPartition {
+		return storage.MetricPartition{Name: dayName(from), From: from, To: to}
+	}
+	for _, tc := range []struct {
+		name  string
+		parts []storage.MetricPartition
+		gap   time.Time
+		ok    bool
+	}{
+		{"every day", []storage.MetricPartition{part(d(5), d(6)), part(d(6), d(7)), part(d(7), d(8)), part(d(8), d(9)), part(d(9), d(10))}, time.Time{}, false},
+		{"older days before the window", []storage.MetricPartition{part(d(1), d(2)), part(d(6), d(7)), part(d(7), d(8)), part(d(8), d(9)), part(d(9), d(10))}, time.Time{}, false},
+		{"none", nil, d(6), true},
+		{"today missing", []storage.MetricPartition{part(d(7), d(8)), part(d(8), d(9)), part(d(9), d(10))}, d(6), true},
+		{"a day missing ahead", []storage.MetricPartition{part(d(6), d(7)), part(d(7), d(8)), part(d(9), d(10))}, d(8), true},
+		{"the last day missing", []storage.MetricPartition{part(d(6), d(7)), part(d(7), d(8)), part(d(8), d(9))}, d(9), true},
+		{"half a day", []storage.MetricPartition{part(d(6), d(7)), part(d(7), d(7).Add(12*time.Hour)), part(d(8), d(9)), part(d(9), d(10))}, d(7).Add(12 * time.Hour), true},
+		{"a month covers it", []storage.MetricPartition{part(d(1), time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC))}, time.Time{}, false},
+	} {
+		gap, ok := storage.ExportMetricCoverageGap(tc.parts, d(6), d(10))
+		if ok != tc.ok || !gap.Equal(tc.gap) {
+			t.Errorf("%s: gap %v (%v), want %v (%v)", tc.name, gap, ok, tc.gap, tc.ok)
+		}
+	}
+}
+
+// TestAMissingDayDropsNoBatch: a batch straddling midnight whose second day
+// has no partition (the roll was late at the day boundary) misses, is retried
+// with its days made, and lands whole; the miss itself is never classified as
+// a refusal, so a batch that misses again is redelivered, not dropped.
+func TestAMissingDayDropsNoBatch(t *testing.T) {
+	f := newPruneFixture(t)
+	next := dayStart(time.Now()).AddDate(0, 0, 1)
+	mustExec(t, f.conn, `drop table `+dayName(next))
+	landed, err := f.gw.LandBatch(f.ctx, storage.IngestBatch{BatchID: "missed-day", Writer: storage.PushWriter(),
 		Metrics: []storage.MetricSampleWrite{
-			{OwnerKind: "component", OwnerID: "prune-c1", Key: "prune-rtt", Value: 7, TS: next.Add(time.Minute)},
-			{OwnerKind: "component", OwnerID: "prune-c1", Key: "prune-rtt", Value: 8, TS: time.Now().UTC()},
+			{OwnerKind: "component", OwnerID: "prune-c1", Key: "prune-rtt", Value: 7, TS: next.Add(-time.Minute)},
+			{OwnerKind: "component", OwnerID: "prune-c1", Key: "prune-rtt", Value: 8, TS: next.Add(time.Minute)},
 		}})
 	if err != nil || !landed {
-		t.Fatalf("the batch over a missing month: landed %v, err %v; want it landed", landed, err)
+		t.Fatalf("the batch over a missing day: landed %v, err %v; want it landed", landed, err)
 	}
 	var n int
 	if err := f.conn.QueryRow(f.ctx, `select count(*) from `+storagetest.MetricRows+` m where m.source = '' and m.value in (7, 8)`).Scan(&n); err != nil || n != 2 {
 		t.Fatalf("%d of the batch's samples stored (%v), want both", n, err)
 	}
-	mustExec(t, f.conn, `drop table `+monthName(next.AddDate(0, 1, 0)))
-	_, err = f.conn.Exec(f.ctx, `insert into metric (series_id, ts, value) values (1, $1, 1)`, next.AddDate(0, 1, 0))
+	if parts := partitionsOf(t, f.conn, "metric"); !strings.Contains(strings.Join(parts, ","), dayName(next)) {
+		t.Fatalf("partitions %v, want %s made on the retry", parts, dayName(next))
+	}
+	far := next.AddDate(0, 0, 9)
+	_, err = f.conn.Exec(f.ctx, `insert into metric (series_id, ts, value) values (1, $1, 1)`, far)
 	if err == nil || !storage.ExportIsPartitionRoutingMiss(err) || storage.IsRefusedWrite(err) {
 		t.Fatalf("a routing miss: err %v, routing miss %v, refused %v; want a miss the ingest retries", err,
 			storage.ExportIsPartitionRoutingMiss(err), storage.IsRefusedWrite(err))
 	}
 }
 
-// TestDropMetricPartitionsHonorsEveryWindow: a month wholly past the metric
-// window is dropped whole, its rows with it; a month a type's own longer
-// window still reaches is kept until that window passes too; the current
-// month is never dropped.
+// TestDropMetricPartitionsHonorsEveryWindow: a day wholly past the metric
+// window is dropped whole, its rows with it; a day holding a sample of a type
+// whose own longer window still reaches it is kept until that window passes
+// too (the chunked delete works inside it); a day after the trend
+// compaction's mark is never dropped (#1276); today is never dropped.
 func TestDropMetricPartitionsHonorsEveryWindow(t *testing.T) {
 	f := newPruneFixture(t)
-	now := time.Now().UTC()
-	old := monthStart(now).AddDate(0, -3, 0).Add(24 * time.Hour)
-	f.row("metric", "component", old, "observed", 1)
+	today := dayStart(time.Now())
+	short, long := today.AddDate(0, 0, -30).Add(time.Hour), today.AddDate(0, 0, -29).Add(time.Hour)
+	f.row("metric", "component", short, "observed", 1)
+	f.row("metric", "component", long, "observed", 2)
 	mustExec(t, f.conn, `insert into metric_type (name, data_type) values ('rt-year', 'float')`)
+	mustExec(t, f.conn, storagetest.WideMetricInsert(`ts, owner_kind, component_id, metric_type_id, instance, provenance, value`,
+		`values ($1, 'component', (select id from component where name = 'prune-c1'), (select id from metric_type where name = 'rt-year'), '', 'observed', 3)`),
+		long.Add(time.Minute))
 	days := 365
 	if _, err := f.gw.SetMetricTypeRetention(f.ctx, "", "rt-year", &days); err != nil {
 		t.Fatal(err)
 	}
-	if dropped, err := f.gw.DropMetricPartitions(f.ctx, now.AddDate(0, 0, -14)); err != nil || len(dropped) != 0 {
-		t.Fatalf("with a type kept a year, dropped %v (%v), want nothing", dropped, err)
+	// The compacted mark stands between the two days: the later is not yet
+	// compacted, whatever the windows say.
+	if err := f.gw.SetMetricTrendMark(f.ctx, dayStart(long)); err != nil {
+		t.Fatal(err)
+	}
+	dropped, err := f.gw.DropMetricPartitions(f.ctx, today.AddDate(0, 0, -14))
+	if err != nil || strings.Join(dropped, ",") != dayName(short) {
+		t.Fatalf("with the mark at %s, dropped %v (%v), want only %s", dayStart(long), dropped, err, dayName(short))
+	}
+	if err := f.gw.SetMetricTrendMark(f.ctx, time.Now().Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if dropped, err := f.gw.DropMetricPartitions(f.ctx, today.AddDate(0, 0, -14)); err != nil || len(dropped) != 0 {
+		t.Fatalf("with a type kept a year holding a sample in %s, dropped %v (%v), want nothing", dayName(long), dropped, err)
+	}
+	if v := f.values("metric", "component"); strings.Join(v, ",") != "observed:2,observed:3" {
+		t.Fatalf("rows %v, want the held day's two", v)
 	}
 	if _, err := f.gw.SetMetricTypeRetention(f.ctx, "", "rt-year", nil); err != nil {
 		t.Fatal(err)
 	}
-	dropped, err := f.gw.DropMetricPartitions(f.ctx, now.AddDate(0, 0, -14))
-	if err != nil || !strings.Contains(strings.Join(dropped, ","), monthName(old)) {
-		t.Fatalf("dropped %v (%v), want %s", dropped, err, monthName(old))
+	dropped, err = f.gw.DropMetricPartitions(f.ctx, today.AddDate(0, 0, -14))
+	if err != nil || strings.Join(dropped, ",") != dayName(long) {
+		t.Fatalf("with the override cleared, dropped %v (%v), want %s", dropped, err, dayName(long))
 	}
-	if strings.Contains(strings.Join(dropped, ","), monthName(now)) {
-		t.Fatalf("dropped the current month: %v", dropped)
+	if strings.Contains(strings.Join(partitionsOf(t, f.conn, "metric"), ","), dayName(long)) {
+		t.Fatalf("%s still attached after its drop", dayName(long))
 	}
 	if v := f.values("metric", "component"); len(v) != 0 {
-		t.Fatalf("rows of a dropped month still read: %v", v)
+		t.Fatalf("rows of a dropped day still read: %v", v)
 	}
 }
 
-// TestMetricNewestReadsTheNewestMonthFirst: a series' newest sample is an
-// index probe of each month's series index, newest month first, stopping at
-// the first that holds one: an ordered Append, never a Merge Append or a Sort
-// across every month (the "LIMIT 1 with no bound" shape the review warned of).
-func TestMetricNewestReadsTheNewestMonthFirst(t *testing.T) {
+// TestMetricNewestReadsTheNewestDayFirst: a series' newest sample is an
+// index probe of each day's series index, newest day first, stopping at the
+// first that holds one: an ordered Append, never a Merge Append or a Sort
+// across every day (the "LIMIT 1 with no bound" shape the review warned of).
+func TestMetricNewestReadsTheNewestDayFirst(t *testing.T) {
 	f := newPruneFixture(t)
 	mustExec(t, f.conn, "set enable_seqscan = off")
 	rows, err := f.conn.Query(f.ctx, "explain (costs off) "+storage.ExportMetricNewestSQL(), int64(1))
@@ -135,11 +205,11 @@ func TestMetricNewestReadsTheNewestMonthFirst(t *testing.T) {
 	if strings.Contains(text, "Merge Append") || strings.Contains(text, "Sort") || !strings.Contains(text, "Append") {
 		t.Fatalf("the newest read is not an ordered Append:\n%s", text)
 	}
-	newest := monthName(monthStart(time.Now()).AddDate(0, 2, 0))
+	newest := dayName(dayStart(time.Now()).AddDate(0, 0, 3))
 	for _, line := range plan {
 		if strings.Contains(line, "Index Scan") {
 			if !strings.Contains(line, newest) {
-				t.Fatalf("the first month probed is not the newest (%s):\n%s", newest, text)
+				t.Fatalf("the first day probed is not the newest (%s):\n%s", newest, text)
 			}
 			break
 		}
@@ -218,14 +288,14 @@ func TestARoutingMissIsReadFromItsFieldsNotItsText(t *testing.T) {
 	}
 }
 
-// TestAHalfDetachedMonthStillLands: a retention pass's concurrent detach that
+// TestAHalfDetachedDayStillLands: a retention pass's concurrent detach that
 // stopped halfway (a reader held the table past its lock timeout) leaves the
-// month routing nothing; a batch carrying a sample in it finishes the detach,
-// makes the month afresh and lands, rather than missing on every delivery.
-func TestAHalfDetachedMonthStillLands(t *testing.T) {
+// day routing nothing; a batch carrying a sample in it finishes the detach,
+// makes the day afresh and lands, rather than missing on every delivery.
+func TestAHalfDetachedDayStillLands(t *testing.T) {
 	f := newPruneFixture(t)
-	old := monthStart(time.Now()).AddDate(0, -4, 0)
-	if err := f.gw.MakeMetricMonths(f.ctx, old); err != nil {
+	old := dayStart(time.Now()).AddDate(0, 0, -40)
+	if err := f.gw.MakeMetricDays(f.ctx, old); err != nil {
 		t.Fatal(err)
 	}
 	reader := connectDSN(t, f.dsn)
@@ -237,7 +307,7 @@ func TestAHalfDetachedMonthStillLands(t *testing.T) {
 		t.Fatal(err)
 	}
 	mustExec(t, f.conn, `set lock_timeout = '300ms'`)
-	if _, err := f.conn.Exec(f.ctx, `alter table metric detach partition `+monthName(old)+` concurrently`); err == nil {
+	if _, err := f.conn.Exec(f.ctx, `alter table metric detach partition `+dayName(old)+` concurrently`); err == nil {
 		t.Fatal("the detach finished under a held reader; the test needs it halfway")
 	}
 	mustExec(t, f.conn, `reset lock_timeout`)
@@ -249,7 +319,7 @@ func TestAHalfDetachedMonthStillLands(t *testing.T) {
 	landed, err := f.gw.LandBatch(f.ctx, storage.IngestBatch{BatchID: "half-detached", Writer: storage.PushWriter(),
 		Metrics: []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: "prune-c1", Key: "prune-rtt", Value: 5, TS: old.Add(time.Hour)}}})
 	if err != nil || !landed {
-		t.Fatalf("a batch into a half-detached month: landed %v, err %v", landed, err)
+		t.Fatalf("a batch into a half-detached day: landed %v, err %v", landed, err)
 	}
 	if v := f.values("metric", "component"); len(v) != 1 {
 		t.Fatalf("rows %v, want the one sample landed", v)

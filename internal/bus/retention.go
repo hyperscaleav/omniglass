@@ -109,7 +109,7 @@ type retentionReport struct {
 	Deleted map[string]int64
 	Behind  []string
 	// Created and Dropped are the metric partitions the pass's roll made
-	// and the months it dropped whole (#420).
+	// and the days it dropped whole (#420, #1527).
 	Created, Dropped []string
 	// Trends is what the pass's trend compaction did (#1276).
 	Trends storage.TrendCompaction
@@ -142,9 +142,10 @@ func retentionPass(ctx context.Context, store retentionStore, now time.Time, chu
 		return rep, err
 	}
 	var errs []error
-	// The metric table's roll (#420): the next months' partitions made, then
-	// each month wholly past the metric window (and every type's own) dropped,
-	// before the lanes' chunked prune keeps the window exact inside the rest.
+	// The metric table's roll (#420, #1527): the next days' partitions made,
+	// then each day wholly past the metric window (and past every longer
+	// window of a type it holds a sample of) dropped, before the lanes'
+	// chunked prune keeps the window exact inside the rest.
 	pctx, pdone := bounded()
 	created, err := store.EnsureMetricPartitions(pctx)
 	rep.Created = created

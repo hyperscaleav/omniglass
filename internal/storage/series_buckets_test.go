@@ -321,7 +321,7 @@ func TestPropertyBucketsAggregateOneMeasuredInstance(t *testing.T) {
 // The bucketed read's time bound reaches the sample scan (#1485): the range's
 // lower bound and the coverage floor sit in the WHERE on metric itself, as bind
 // parameters and now() rather than a CTE's column, so the planner prunes the
-// monthly partitions outside the range and searches each remaining one with a
+// daily partitions outside the range and searches each remaining one with a
 // time condition instead of reading a series' whole history. Both statements
 // the read issues are explained as the gateway issued them, captured off the
 // pool tracer: the instance probe and the aggregate.
@@ -359,10 +359,10 @@ func TestMetricBucketsBoundTheSampleScan(t *testing.T) {
 	if _, err := gw.ListMetricBuckets(ctx, "component", "bucket-3", "icmp-rtt-avg", nil, 24*time.Hour, time.Hour); err != nil {
 		t.Fatalf("list buckets: %v", err)
 	}
-	// The migration keeps two months ahead of now; a 24 hour range ending in
-	// the current bucket can never reach the second of them.
+	// The migration keeps three days ahead of today; a 24 hour range ending
+	// in the current bucket can never reach the third of them.
 	now := time.Now().UTC()
-	ahead := fmt.Sprintf("metric_p%s", time.Date(now.Year(), now.Month()+2, 1, 0, 0, 0, 0, time.UTC).Format("200601"))
+	ahead := fmt.Sprintf("metric_p%s", time.Date(now.Year(), now.Month(), now.Day()+3, 0, 0, 0, 0, time.UTC).Format("20060102"))
 	for _, marker := range []string{"select s.instance from metric_series s", "join metric m on m.series_id = s.id"} {
 		t.Run(marker, func(t *testing.T) {
 			call := oneCall(t, counter, marker)
@@ -377,7 +377,7 @@ func TestMetricBucketsBoundTheSampleScan(t *testing.T) {
 				}
 				parts++
 				if s.Relation == ahead {
-					t.Errorf("the bucketed read scans %s, a month past its range: the time bound is not pruning partitions\n\t%s", s.Relation, plan)
+					t.Errorf("the bucketed read scans %s, a day past its range: the time bound is not pruning partitions\n\t%s", s.Relation, plan)
 				}
 				if s.Index == "" || s.Disabled || !strings.Contains(s.Cond, "ts") {
 					t.Errorf("the bucketed read scans %s without a time condition on an index: %s\n\t%s", s.Relation, s, plan)

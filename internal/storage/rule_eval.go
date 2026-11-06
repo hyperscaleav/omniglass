@@ -1370,7 +1370,7 @@ func ruleCandidates(ctx context.Context, q querier, lane rules.Lane, from, to in
 				where r.enabled and r.sample_lane = $1)`, table, typeTable)
 	if lane == rules.LaneMetric {
 		// The samples past the mark, found through the id block range index
-		// in each month, and the component series they belong to.
+		// in each day, and the component series they belong to.
 		touched = `select distinct s.owner_id as component_id, s.metric_type_id as type_id, s.instance
 			from metric m join metric_series s on s.id = m.series_id
 			where m.id > $2 and m.id <= $3 and s.owner_kind = 'component'

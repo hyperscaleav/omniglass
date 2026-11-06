@@ -215,10 +215,11 @@ func (s *Server) subscribe() error {
 	s.startRuleReconcile()
 	s.startCalcTick()
 
-	// The metric table holds a partition for this month and the next two
-	// before anything is ingested (#420): a sample whose month has none would
-	// be retried until one exists, so the boot makes sure, and refuses to
-	// start ingest when it cannot.
+	// The metric table holds a partition for today and the next three days
+	// before anything is ingested (#420, #1527): a sample whose day has none
+	// would be retried until one exists, so the boot makes sure, and refuses
+	// to start ingest when it cannot, or when the partitions it reads back
+	// leave any instant of those days uncovered.
 	pctx, pdone := context.WithTimeout(context.Background(), partitionBootTimeout)
 	created, err := s.store.EnsureMetricPartitions(pctx)
 	pdone()

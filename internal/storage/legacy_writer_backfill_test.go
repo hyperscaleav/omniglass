@@ -44,6 +44,10 @@ func legacyBackfillSQL(t *testing.T) (up, down string) {
 // narrow metric lane.
 const metricTrendFile = "20261029171258_metric_trend.sql"
 
+// metricDayMigration is the day partitions' swap (#1527), which rebuilds the
+// narrow metric lane's sample table.
+const metricDayMigration = "20261106050925_metric_day_partitions.sql"
+
 // belowNarrowMetric stands a fixture's database just below the narrow metric
 // lane (#1275): the backfill is frozen at the wide metric table it ran
 // against, so it runs there, as it did on every install.
@@ -54,8 +58,10 @@ const metricTrendFile = "20261029171258_metric_trend.sql"
 // newer than the lane that is not part of it, run as its own up section. A
 // migration is idempotent by house rule, so the forward migrate after the
 // backfill runs it again harmlessly. A migration that builds on the narrow lane
-// itself (the hourly trend, #1276, references metric_series) cannot stand
-// beside the wide table and is left to that forward migrate: metricTrendFile.
+// itself (the hourly trend, #1276, references metric_series; the day
+// partitions, #1527, rebuild its sample table) cannot stand beside the wide
+// table and is left to that forward migrate: metricTrendFile and
+// metricDayMigration.
 func belowNarrowMetric(t *testing.T, dsn string) {
 	t.Helper()
 	if err := migrate.RollbackBelow(dsn, metricNarrowVersion); err != nil {
@@ -80,7 +86,7 @@ func belowNarrowMetric(t *testing.T, dsn string) {
 			t.Fatal(err)
 		}
 		up, _, _ := strings.Cut(string(raw), "-- migrate:down")
-		if e.Name() == metricTrendFile {
+		if e.Name() == metricTrendFile || e.Name() == metricDayMigration {
 			continue
 		}
 		if _, err := conn.Exec(context.Background(), strings.TrimPrefix(up, "-- migrate:up")); err != nil {

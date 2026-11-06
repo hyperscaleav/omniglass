@@ -238,7 +238,7 @@ It holds five things and reports the rest:
   stores transitions only, so a steady window writes no property rows.
 - **Metric rows per full heap page**, exact, after `VACUUM`. Density rather than a page count,
   so a fleet that grows by a few endpoints moves nothing unless a row does. The metric table is
-  partitioned by month ([storage](/architecture/storage/#the-narrow-metric-lane)), so its bytes are
+  partitioned by day ([storage](/architecture/storage/#the-narrow-metric-lane)), so its bytes are
   summed over its partitions.
 - **The metric table's index definitions**, exact, so an added, dropped or re-keyed index
   fails by name.

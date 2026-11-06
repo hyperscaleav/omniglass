@@ -75,8 +75,8 @@ type Store interface {
 	RetentionWindows(ctx context.Context) (settings.RetentionSettings, error)
 	PruneSamples(ctx context.Context, lane string, before time.Time, limit int) (int64, error)
 	// EnsureMetricPartitions and DropMetricPartitions are the metric table's
-	// monthly roll (#420): two months ahead at boot and on every retention
-	// pass, and each month past every window dropped whole.
+	// daily roll (#420, #1527): three days ahead at boot and on every
+	// retention pass, and each day past every window dropped whole.
 	EnsureMetricPartitions(ctx context.Context) ([]string, error)
 	DropMetricPartitions(ctx context.Context, before time.Time) ([]string, error)
 	// CompactMetricTrends and PruneMetricTrends are the trend tier's (#1276):
