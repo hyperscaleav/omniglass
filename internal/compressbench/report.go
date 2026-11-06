@@ -30,6 +30,11 @@ type Cell struct {
 	// sample in a closed span.
 	MergeMs  labfootprint.Stat `json:"late_merge_ms"`
 	MergeWAL labfootprint.Stat `json:"late_merge_wal_bytes"`
+	// SpanDays is the series-days stored at each span, and DaySpans each
+	// one, for a candidate that reports them (DaySpans only for a dataset
+	// whose cadence changes).
+	SpanDays map[string]int `json:"span_days,omitempty"`
+	DaySpans []DaySpan      `json:"day_spans,omitempty"`
 	// Error is why the candidate did not give back what it was given, or did
 	// not run; empty when every read and the round trip were exact.
 	Error string `json:"error,omitempty"`
@@ -42,8 +47,10 @@ func Summarize(candidate string, cadence time.Duration, ms []Measure, compressed
 	var raw, bk, merge []time.Duration
 	var share, rows, wal []float64
 	for _, m := range ms {
-		if m.Blocks {
+		if m.Summarized {
 			share = append(share, float64(m.SummaryBytes)/float64(m.Bytes))
+		}
+		if m.Blocks {
 			rows = append(rows, m.CompressedRows)
 		}
 		if m.Merged {
@@ -193,6 +200,9 @@ func pct(s labfootprint.Stat) string {
 	return fmt.Sprintf("%.1f%% (%.1f%% to %.1f%%)", s.Median*100, s.Min*100, s.Max*100)
 }
 
+// Exact is a cell's error as the tables write it: yes, or why not.
+func Exact(err string) string { return exact(err) }
+
 func exact(err string) string {
 	if err == "" {
 		return "yes"
@@ -223,7 +233,7 @@ const compressAt = 0.5
 func SpanRule(r Report, family string) []SpanChoice {
 	var out []SpanChoice
 	for _, spec := range r.Specs {
-		cad := CadenceLabel(spec.Cadence)
+		cad := spec.Label()
 		raw, ok := r.cell("raw", cad)
 		if !ok || raw.BytesPerSample.N == 0 {
 			continue

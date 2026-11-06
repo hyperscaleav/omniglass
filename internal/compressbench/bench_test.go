@@ -52,3 +52,54 @@ func TestBenchBlockFormatsRoundTrip(t *testing.T) {
 		t.Errorf("span rule %+v, want a choice a cadence", got)
 	}
 }
+
+// TestBenchPlainBlocks holds the summary-free block to its span rule against a
+// real Postgres 18: a week of changing cadence with a week minimum that sends
+// the sparse series raw, then 1 h and 24 h week blocks with metric_trend
+// beside them, each held to the exact round trip and every series-day's span.
+func TestBenchPlainBlocks(t *testing.T) {
+	if testing.Short() {
+		t.Skip("starts a Postgres container")
+	}
+	ctx := context.Background()
+	servers := &Servers{}
+	t.Cleanup(func() { servers.Stop(context.WithoutCancel(ctx)) })
+	mixed, err := Bench(ctx, servers, Options{Specs: []Spec{MixedSpec(7)}, Runs: 1, Reps: 1, BucketWidth: time.Hour,
+		Candidates: func(Spec) []Candidate { return []Candidate{Plain{WeekMin: 10}.Candidate(MixedSpec(7))} }})
+	if err != nil {
+		t.Fatalf("mixed: %v", err)
+	}
+	spans := map[string]int{}
+	for _, c := range mixed.Cells {
+		for _, d := range c.DaySpans {
+			spans[d.Span]++
+		}
+	}
+	if spans["raw"] == 0 || spans["week"] == 0 || spans["day"] == 0 {
+		t.Errorf("mixed spans %v, want raw, week and day days", spans)
+	}
+	slow := []Spec{
+		{Cadence: time.Hour, Series: 3, Span: 21 * 24 * time.Hour, Seed: 7, Start: monday},
+		{Cadence: 24 * time.Hour, Series: 10, Span: 40 * 24 * time.Hour, Seed: 7},
+	}
+	r, err := Bench(ctx, servers, Options{Specs: slow, Runs: 1, Reps: 1, BucketWidth: time.Hour, Candidates: PlainCandidates})
+	if err != nil {
+		t.Fatalf("bench: %v", err)
+	}
+	r.Cells = append(r.Cells, mixed.Cells...)
+	cells := map[string]Cell{}
+	for _, c := range r.Cells {
+		if c.Error != "" {
+			t.Errorf("%s at %s: %s", c.Candidate, c.Cadence, c.Error)
+		}
+		cells[c.Cadence+" "+c.Candidate] = c
+	}
+	for _, k := range []string{"1h raw", "1h F2/week", "1h F2p", "1h F2p trend", "24h F2p", "24h F2p trend", "mixed F2p"} {
+		if _, ok := cells[k]; !ok {
+			t.Errorf("no cell %q", k)
+		}
+	}
+	if c := cells["24h F2p"]; c.SpanDays["week"] == 0 || c.SummaryShare.N != 0 || c.CompressedRows.N != 1 {
+		t.Errorf("24h F2p spans %v, summary share %+v, rows compressed %+v", c.SpanDays, c.SummaryShare, c.CompressedRows)
+	}
+}

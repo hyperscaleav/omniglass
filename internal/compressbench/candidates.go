@@ -48,6 +48,11 @@ type Candidate struct {
 	// CompressedRows the share of rows whose sample array Postgres compressed.
 	SummaryBytes   string
 	CompressedRows string
+	// DaySpans, when set, returns how each series-day is stored as
+	// (series_id, day, span, count) by series then day; WantDaySpans is the
+	// rule it is held to.
+	DaySpans     string
+	WantDaySpans func([]Sample) []DaySpan
 	// Merge lands one late sample, binding $1 series, $2 ts and $3 value: for a
 	// block, an in-place read-merge-rewrite of the one closed block it falls in.
 	Merge string
@@ -63,6 +68,8 @@ type Cagg struct {
 	Setup       []string
 	Refresh     []string
 	ReadBuckets string
+	// HourlyAll, when set, returns every stored hour as Candidate's does.
+	HourlyAll string
 }
 
 // The staging table every candidate is built from: the samples in landing

@@ -45,7 +45,7 @@ func TestCadenceLabel(t *testing.T) {
 func TestTable(t *testing.T) {
 	ms := []Measure{{Samples: 1000, Bytes: 10400, Compress: time.Millisecond, ReadRaw: time.Millisecond, ReadBuckets: time.Millisecond}}
 	bm := []Measure{{Samples: 1000, Bytes: 10400, Compress: time.Millisecond, ReadRaw: time.Millisecond, ReadBuckets: time.Millisecond,
-		Blocks: true, SummaryBytes: 2600, CompressedRows: 0.5, Merged: true, Merge: 2 * time.Millisecond, MergeWAL: 8192}}
+		Blocks: true, Summarized: true, SummaryBytes: 2600, CompressedRows: 0.5, Merged: true, Merge: 2 * time.Millisecond, MergeWAL: 8192}}
 	r := Report{Cells: []Cell{
 		Summarize("raw", 2*time.Second, ms, false),
 		Summarize("F0", 2*time.Second, bm, true),

@@ -314,10 +314,17 @@ what happens to retention, a late row, `DETACH`, `pg_dump` and a streaming stand
 images are test-only, built from official, unmodified releases with their licenses
 (`internal/compressbench/images`). Like the lab footprint it gates nothing.
 
+`-plain` measures the summary-free block instead: each series-day takes the span its count
+earns (hour, day, or a share of an ISO-week block), beside the summary-carrying blocks and an
+hourly trend table. It sweeps week blocks from 1 to 168 samples a week against raw rows for the
+week minimum, then holds a week of series that change cadence mid-week to the span rule, sample
+for sample.
+
 ```bash
 make compress-bench                                                     # formats, span rule and fit probes
 make compress-bench COMPRESS_BENCH_ARGS="-probes=false"                 # formats and span rule, about a quarter hour
 make compress-bench COMPRESS_BENCH_ARGS="-cadences 1h -days 30 -probes=false"
+make compress-bench COMPRESS_BENCH_ARGS="-bench=false -probes=false -plain"   # summary-free blocks, about ten minutes
 ```
 
 ### Benchmarks are diagnostic, never a gate

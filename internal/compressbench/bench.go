@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 )
 
 // Options is one benchmark: the datasets, how many runs each cell is the
@@ -18,6 +19,10 @@ type Options struct {
 	// prefixes ("F4", "raw").
 	Only []string
 	Log  io.Writer
+	// Candidates, when set, is the candidate set in place of Candidates.
+	Candidates func(Spec) []Candidate
+	// BucketWidth, when set, is the bucketed read's width at every spec.
+	BucketWidth time.Duration
 }
 
 func (o Options) keep(name string) bool {
@@ -69,14 +74,21 @@ func Bench(ctx context.Context, servers *Servers, o Options) (Report, error) {
 	for _, spec := range o.Specs {
 		samples := Generate(spec)
 		rd := ReadFor(spec, o.Reps)
+		if o.BucketWidth > 0 {
+			rd.BucketWidth = o.BucketWidth
+		}
+		set := Candidates
+		if o.Candidates != nil {
+			set = o.Candidates
+		}
 		var cands []Candidate
-		for _, c := range Candidates(spec) {
+		for _, c := range set(spec) {
 			if o.keep(c.Name) {
 				cands = append(cands, c)
 			}
 		}
 		if o.Log != nil {
-			fmt.Fprintf(o.Log, "%s: %d series, %d samples\n", CadenceLabel(spec.Cadence), spec.Series, len(samples))
+			fmt.Fprintf(o.Log, "%s: %d series, %d samples\n", spec.Label(), spec.Series, len(samples))
 		}
 		tpls := map[string]string{}
 		for _, c := range cands {
@@ -89,7 +101,7 @@ func Bench(ctx context.Context, servers *Servers, o Options) (Report, error) {
 			}
 			tpl, err := sv.Template(ctx, spec, samples)
 			if err != nil {
-				return r, fmt.Errorf("stage %s on %s: %w", CadenceLabel(spec.Cadence), c.Image.Key, err)
+				return r, fmt.Errorf("stage %s on %s: %w", spec.Label(), c.Image.Key, err)
 			}
 			tpls[c.Image.Key] = tpl
 		}
@@ -111,7 +123,7 @@ func Bench(ctx context.Context, servers *Servers, o Options) (Report, error) {
 					errs[i] = err.Error()
 					failed = append(failed, err)
 					if o.Log != nil {
-						fmt.Fprintf(o.Log, "  %s at %s: %v\n", c.Name, CadenceLabel(spec.Cadence), err)
+						fmt.Fprintf(o.Log, "  %s at %s: %v\n", c.Name, spec.Label(), err)
 					}
 					continue
 				}
@@ -120,7 +132,17 @@ func Bench(ctx context.Context, servers *Servers, o Options) (Report, error) {
 		}
 		for i, c := range cands {
 			cell := Summarize(c.Name, spec.Cadence, runs[i], len(c.Compress) > 0)
+			cell.Cadence = spec.Label()
 			cell.Error = errs[i]
+			if len(runs[i]) > 0 && runs[i][0].DaySpans != nil {
+				cell.SpanDays = map[string]int{}
+				for _, d := range runs[i][0].DaySpans {
+					cell.SpanDays[d.Span]++
+				}
+				if len(spec.Phases) > 0 {
+					cell.DaySpans = runs[i][0].DaySpans
+				}
+			}
 			if cell.Samples == 0 {
 				cell.Samples = len(samples)
 			}
@@ -133,6 +155,7 @@ func Bench(ctx context.Context, servers *Servers, o Options) (Report, error) {
 					}
 				}
 				cc := Summarize(c.Cagg.Name, spec.Cadence, cm, true)
+				cc.Cadence = spec.Label()
 				cc.Samples = len(samples)
 				cc.Error = errs[i]
 				r.Cells = append(r.Cells, cc)

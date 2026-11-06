@@ -72,7 +72,7 @@ func (s *Server) admin(ctx context.Context, sql string) error {
 // Template is spec's samples staged once in a template database on a server,
 // which every candidate run copies from.
 func (s *Server) Template(ctx context.Context, spec Spec, samples []Sample) (string, error) {
-	name := "tpl_" + sqlIdent(spec.Cadence.String())
+	name := "tpl_" + sqlIdent(spec.Label())
 	if err := s.admin(ctx, "drop database if exists "+name+" with (force)"); err != nil {
 		return "", err
 	}
@@ -127,8 +127,11 @@ type Measure struct {
 	// columns) and CompressedRows (share of rows whose samples Postgres
 	// compressed) were measured.
 	Blocks         bool
+	Summarized     bool
 	SummaryBytes   int64
 	CompressedRows float64
+	// DaySpans is how each series-day was stored, when the candidate says.
+	DaySpans []DaySpan
 	// Merged marks a run that landed one late sample: Merge is how long it
 	// took and MergeWAL the WAL bytes it wrote, from a checkpoint.
 	Merged   bool
@@ -167,7 +170,7 @@ func ReadFor(spec Spec, reps int) Read {
 // RunOnce builds cand in a fresh copy of tpl, measures it, and, when verify,
 // holds every read and the full round trip to samples.
 func (s *Server) RunOnce(ctx context.Context, tpl string, run int, cand Candidate, spec Spec, samples []Sample, rd Read, verify bool, log io.Writer) (Measure, error) {
-	db := sqlIdent(fmt.Sprintf("run_%s_%s_%d", cand.Name, spec.Cadence, run))
+	db := sqlIdent(fmt.Sprintf("run_%s_%s_%d", cand.Name, spec.Label(), run))
 	if err := s.admin(ctx, "drop database if exists "+db+" with (force)"); err != nil {
 		return Measure{}, err
 	}
@@ -210,7 +213,7 @@ func (s *Server) RunOnce(ctx context.Context, tpl string, run int, cand Candidat
 	m.Bytes = after - base
 	if verify {
 		if err := verifyCandidate(ctx, conn, cand, samples, rd); err != nil {
-			return Measure{}, fmt.Errorf("%s at %s: %w", cand.Name, spec.Cadence, err)
+			return Measure{}, fmt.Errorf("%s at %s: %w", cand.Name, spec.Label(), err)
 		}
 	}
 	if m.ReadRaw, err = timeRead(ctx, conn, cand.ReadRaw, rd, false); err != nil {
@@ -227,12 +230,25 @@ func (s *Server) RunOnce(ctx context.Context, tpl string, run int, cand Candidat
 		m.Cagg = &cm
 	}
 	if cand.SummaryBytes != "" {
-		m.Blocks = true
+		m.Summarized = true
 		if err := conn.QueryRow(ctx, cand.SummaryBytes).Scan(&m.SummaryBytes); err != nil {
 			return Measure{}, fmt.Errorf("%s summary bytes: %w", cand.Name, err)
 		}
+	}
+	if cand.CompressedRows != "" {
+		m.Blocks = true
 		if err := conn.QueryRow(ctx, cand.CompressedRows).Scan(&m.CompressedRows); err != nil {
 			return Measure{}, fmt.Errorf("%s compressed rows: %w", cand.Name, err)
+		}
+	}
+	if cand.DaySpans != "" {
+		if m.DaySpans, err = daySpans(ctx, conn, cand.DaySpans); err != nil {
+			return Measure{}, fmt.Errorf("%s day spans: %w", cand.Name, err)
+		}
+		if verify && cand.WantDaySpans != nil {
+			if err := sameDaySpans(cand.WantDaySpans(samples), m.DaySpans); err != nil {
+				return Measure{}, fmt.Errorf("%s at %s: %w", cand.Name, spec.Label(), err)
+			}
 		}
 	}
 	if cand.Merge != "" {
@@ -243,13 +259,13 @@ func (s *Server) RunOnce(ctx context.Context, tpl string, run int, cand Candidat
 		m.Merged = true
 		if verify {
 			if err := verifyMerged(ctx, conn, cand, WithLate(samples, late)); err != nil {
-				return Measure{}, fmt.Errorf("%s at %s after a late merge: %w", cand.Name, spec.Cadence, err)
+				return Measure{}, fmt.Errorf("%s at %s after a late merge: %w", cand.Name, spec.Label(), err)
 			}
 		}
 	}
 	if log != nil {
 		fmt.Fprintf(log, "  %-12s %-6s run %d: %d B, %.2f B/sample, compress %s\n",
-			cand.Name, CadenceLabel(spec.Cadence), run, m.Bytes, float64(m.Bytes)/float64(m.Samples), m.Compress.Round(time.Millisecond))
+			cand.Name, spec.Label(), run, m.Bytes, float64(m.Bytes)/float64(m.Samples), m.Compress.Round(time.Millisecond))
 	}
 	return m, nil
 }
@@ -349,6 +365,9 @@ func measureCagg(ctx context.Context, conn *pgx.Conn, cand Candidate, samples []
 	}
 	m.Bytes = after - before
 	if verify {
+		if err := hourly(ctx, conn, Candidate{HourlyAll: cand.Cagg.HourlyAll}, samples); err != nil {
+			return Measure{}, err
+		}
 		got, err := readBuckets(ctx, conn, cand.Cagg.ReadBuckets, rd)
 		if err != nil {
 			return Measure{}, err
@@ -493,4 +512,32 @@ func timeRead(ctx context.Context, conn *pgx.Conn, sql string, rd Read, buckets 
 		ds = append(ds, time.Since(t0))
 	}
 	return time.Duration(labfootprint.LatencyStat(ds).Median * float64(time.Millisecond)), nil
+}
+
+func daySpans(ctx context.Context, conn *pgx.Conn, sql string) ([]DaySpan, error) {
+	rows, err := conn.Query(ctx, sql)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (DaySpan, error) {
+		var d DaySpan
+		var n int64
+		err := r.Scan(&d.SeriesID, &d.Day, &d.Span, &n)
+		d.Day, d.Count = d.Day.UTC(), int(n)
+		return d, err
+	})
+}
+
+// sameDaySpans holds the stored spans to the rule's: every series-day once, at
+// the span the rule gives it, with all its samples.
+func sameDaySpans(want, got []DaySpan) error {
+	if len(got) != len(want) {
+		return fmt.Errorf("%d series-days stored, want %d", len(got), len(want))
+	}
+	for i, w := range want {
+		if g := got[i]; g.SeriesID != w.SeriesID || !g.Day.Equal(w.Day) || g.Span != w.Span || g.Count != w.Count {
+			return fmt.Errorf("series-day %d: got %+v, want %+v", i, g, w)
+		}
+	}
+	return nil
 }
