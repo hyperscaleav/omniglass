@@ -44,6 +44,10 @@ func legacyBackfillSQL(t *testing.T) (up, down string) {
 // narrow metric lane.
 const metricTrendFile = "20261029171258_metric_trend.sql"
 
+// metricMillisFile is the metric timestamp migration (#1526), which sets the
+// default of metric_declared, a narrow-lane table.
+const metricMillisFile = "20261106050800_metric_ts_milliseconds.sql"
+
 // belowNarrowMetric stands a fixture's database just below the narrow metric
 // lane (#1275): the backfill is frozen at the wide metric table it ran
 // against, so it runs there, as it did on every install.
@@ -55,7 +59,8 @@ const metricTrendFile = "20261029171258_metric_trend.sql"
 // migration is idempotent by house rule, so the forward migrate after the
 // backfill runs it again harmlessly. A migration that builds on the narrow lane
 // itself (the hourly trend, #1276, references metric_series) cannot stand
-// beside the wide table and is left to that forward migrate: metricTrendFile.
+// beside the wide table and is left to that forward migrate: metricTrendFile, and
+// likewise metricMillisFile.
 func belowNarrowMetric(t *testing.T, dsn string) {
 	t.Helper()
 	if err := migrate.RollbackBelow(dsn, metricNarrowVersion); err != nil {
@@ -80,7 +85,7 @@ func belowNarrowMetric(t *testing.T, dsn string) {
 			t.Fatal(err)
 		}
 		up, _, _ := strings.Cut(string(raw), "-- migrate:down")
-		if e.Name() == metricTrendFile {
+		if e.Name() == metricTrendFile || e.Name() == metricMillisFile {
 			continue
 		}
 		if _, err := conn.Exec(context.Background(), strings.TrimPrefix(up, "-- migrate:up")); err != nil {

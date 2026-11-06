@@ -384,6 +384,8 @@ The [physical layout, partitioning, and the lineage CHECK](/architecture/storage
 
 `log_line` and `node_log` are not sample tables: no registered name, no provenance, no lineage CHECK ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)); `severity` / `facility` are their retention and routing axes.
 
+A metric's `ts` is whole milliseconds, on `metric` and `metric_declared` (a property's keeps the instant it was sent): NTP-synced node clocks are accurate to a few milliseconds, so the digits below are noise, and a raw row then agrees exactly with the compacted block that later holds it. The node and the ingest both truncate; the [time page](/architecture/time/) has the rule.
+
 Common sample columns (both lanes): `ts`, the **owner arc** (`owner_kind` plus `component_id` / `system_id` / `location_id` / `node_id`), the type FK, `instance, provenance, source`, and the lineage columns `source_rule, source_rule_version, event_id, command_id`; only the value column differs (float8 / jsonb). A union view over the lanes is deliberately not built: the retired `datapoint` name stays free, and any union a caller wants is a query.
 
 The catalogs typing these tables:

@@ -46,7 +46,7 @@ func TestEffectiveMetricsNameTheShownInstance(t *testing.T) {
 		('http', 'http', $1::uuid, (select principal_id from node where name = 'edge'), '{"target":"10.0.0.1:80"}'::jsonb),
 		('tcp', 'tcp', $1::uuid, (select principal_id from node where name = 'edge'), '{"target":"10.0.0.1:1710"}'::jsonb)`, comp.ID)
 
-	base := time.Now().UTC().Truncate(time.Microsecond).Add(-10 * time.Minute)
+	base := time.Now().UTC().Truncate(time.Millisecond).Add(-10 * time.Minute)
 	observe := func(ep string, v float64, at time.Duration) {
 		t.Helper()
 		if err := gw.InsertMetricSamples(ctx, storage.NodeWriter(comp.ID, ep), []storage.MetricSampleWrite{{
