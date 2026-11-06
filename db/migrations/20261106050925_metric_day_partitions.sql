@@ -34,6 +34,9 @@ BEGIN
   ALTER SEQUENCE IF EXISTS public.metric_id_seq RENAME TO metric_month_id_seq;
 
   CREATE TABLE public.metric (LIKE public.metric_month INCLUDING ALL EXCLUDING INDEXES) PARTITION BY RANGE (ts);
+  -- The ts default is #1526's whole millisecond, stated rather than left to
+  -- what LIKE carries over.
+  ALTER TABLE public.metric ALTER COLUMN ts SET DEFAULT date_trunc('milliseconds', now());
 
   FOR d IN
     SELECT DISTINCT (ts AT TIME ZONE 'UTC')::date FROM public.metric_month
@@ -87,6 +90,9 @@ BEGIN
   ALTER SEQUENCE IF EXISTS public.metric_id_seq RENAME TO metric_day_id_seq;
 
   CREATE TABLE public.metric (LIKE public.metric_day INCLUDING ALL EXCLUDING INDEXES) PARTITION BY RANGE (ts);
+  -- The ts default is #1526's whole millisecond, stated rather than left to
+  -- what LIKE carries over.
+  ALTER TABLE public.metric ALTER COLUMN ts SET DEFAULT date_trunc('milliseconds', now());
 
   FOR m IN
     SELECT DISTINCT date_trunc('month', ts AT TIME ZONE 'UTC')::date FROM public.metric_day

@@ -175,6 +175,7 @@ var sampleMigrations = map[string]string{
 	"20261024120100_legacy_writer_backfill.sql":              "holds legacy rows to the ruling (ADR-1100): stamps the source of a declared pin its audited :retry wrote, moves rows the ruling refuses into retired_sample, and its down restores them as they were; no key or value changes",
 	"20261025130100_command_outcome_backfill.sql":            "holds the newly reserved command outcome events to their class (ADR-1155): moves those no command's outcome wrote into retired_sample, and its down restores them as they were; no key or value changes",
 	"20261029132028_metric_series_backfill.sql":              "copies every wide metric row into the narrow lane (ADR-1275), each keeping its id, type, owner, instance, provenance, source, value and lineage, and its down copies them back; no key, value or writer changes",
+	"20261106050800_metric_ts_milliseconds.sql":              "truncates the ts of existing metric and metric_declared rows to the millisecond (#1526), in place and by the same rule the ingest now applies; no key, value, provenance or writer changes",
 	"20261106050925_metric_day_partitions.sql":               "moves every metric sample from the month-partitioned table to the day-partitioned one (ADR-1527), each keeping its id, series, ts, value and lineage, and its down moves them back; no key, value or writer changes",
 }
 

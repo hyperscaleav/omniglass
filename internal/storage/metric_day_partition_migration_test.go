@@ -163,6 +163,15 @@ func TestMetricDayPartitionsKeepEveryRow(t *testing.T) {
 	if len(parts) != len(days) {
 		t.Errorf("%d partitions, want the %d days", len(parts), len(days))
 	}
+	var tsDefault string
+	if err := conn.QueryRow(ctx, `select pg_get_expr(d.adbin, d.adrelid) from pg_attrdef d
+		join pg_attribute a on a.attrelid = d.adrelid and a.attnum = d.adnum
+		where d.adrelid = 'public.metric'::regclass and a.attname = 'ts'`).Scan(&tsDefault); err != nil {
+		t.Fatalf("metric.ts default: %v", err)
+	}
+	if want := "date_trunc('milliseconds'::text, now())"; tsDefault != want {
+		t.Errorf("metric.ts default %q, want #1526's %q", tsDefault, want)
+	}
 	var idx int
 	if err := conn.QueryRow(ctx, `select count(*) from pg_indexes where tablename = 'metric'`).Scan(&idx); err != nil || idx != 3 {
 		t.Errorf("metric has %d indexes (%v), want the 3 it had", idx, err)
