@@ -75,6 +75,7 @@ func (f *tlsFixture) task(t *testing.T, endpointID string) storage.WorklistTask 
 func key(c string) string { return "SHA256:" + strings.Repeat(c, 43) }
 
 func TestTLSPinRidesTheWorklistAndRetryAcceptsAChangedKey(t *testing.T) {
+	t.Parallel()
 	f := newTLSFixture(t)
 	ep, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Transport: "tls", Component: &f.component, Node: &f.node,
 		Params: []byte(`{"target":"10.0.0.9:51326","tls-mode":"pin"}`)}, f.all)
@@ -159,6 +160,7 @@ func TestTLSPinRidesTheWorklistAndRetryAcceptsAChangedKey(t *testing.T) {
 
 // Only a tls endpoint pins a certificate key.
 func TestRetryRefusesACertificateOffATLSEndpoint(t *testing.T) {
+	t.Parallel()
 	f := newTLSFixture(t)
 	ep, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Transport: "ssh", Component: &f.component, Node: &f.node,
 		Params: []byte(`{"target":"10.0.0.9:22"}`)}, f.all)
@@ -179,6 +181,7 @@ func TestRetryRefusesACertificateOffATLSEndpoint(t *testing.T) {
 // which moves the fingerprint (so a gate lifts); an unknown mode is refused
 // naming the input; a label edit moves nothing.
 func TestTLSModeIsADriverInputThatEditsInPlace(t *testing.T) {
+	t.Parallel()
 	f := newTLSFixture(t)
 	drv := "newtron-nvp-tls"
 	ep, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Driver: &drv, Component: &f.component, Node: &f.node,
@@ -233,6 +236,7 @@ func TestTLSModeIsADriverInputThatEditsInPlace(t *testing.T) {
 // as given, so a value the node cannot read is refused where it is written,
 // naming the field, at create and at an edit; a good one is taken.
 func TestABareTLSEndpointsModeIsCheckedAtWrite(t *testing.T) {
+	t.Parallel()
 	f := newTLSFixture(t)
 	if _, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Transport: "tls", Component: &f.component, Node: &f.node,
 		Params: []byte(`{"target":"10.0.0.9:51326","tls-mode":"pinned"}`)}, f.all); !errors.Is(err, storage.ErrEndpointParamsInvalid) || !strings.Contains(err.Error(), "tls-mode") {

@@ -27,6 +27,7 @@ import (
 // pre-filled move form sends the current placement back, the move API requires
 // at least one field, so re-stating the current location is the ordinary path.
 func TestAMoveThatRestatesItsPlacementKeepsTheName(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	room := makeRoom(t, gw, ctx, "restated-room")
 
@@ -69,6 +70,7 @@ func TestAMoveThatRestatesItsPlacementKeepsTheName(t *testing.T) {
 // the two placement POINTERS gets wrong: a parent wins over a location, so a
 // parented component that relocates has changed a pointer and not the bucket.
 func TestARelocateInsideOneParentBucketKeepsTheName(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	roomA := makeRoom(t, gw, ctx, "parented-room-a")
 	roomB := makeRoom(t, gw, ctx, "parented-room-b")
@@ -109,6 +111,7 @@ func TestARelocateInsideOneParentBucketKeepsTheName(t *testing.T) {
 // move that really does change the bucket keeps re-minting, in both the
 // location-to-location and the clear-to-unplaced directions.
 func TestAMoveBetweenBucketsStillReMints(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	roomA := makeRoom(t, gw, ctx, "moving-room-a")
 	roomB := makeRoom(t, gw, ctx, "moving-room-b")
@@ -158,6 +161,7 @@ func TestAMoveBetweenBucketsStillReMints(t *testing.T) {
 // changing, so a save that re-states the product a component already has
 // re-mints its name.
 func TestAReclassifyToTheSameProductKeepsTheName(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	room := makeRoom(t, gw, ctx, "reclassify-room")
 
@@ -197,6 +201,7 @@ func TestAReclassifyToTheSameProductKeepsTheName(t *testing.T) {
 // component_type mint from the same stem. Swapping between them is a real
 // reclassify that changes no input to the mint.
 func TestAReclassifyWithinOneStemKeepsTheName(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	for _, name := range []string{"stem-twin-a", "stem-twin-b"} {
 		if _, err := gw.CreateProduct(ctx, "", storage.Product{
@@ -241,6 +246,7 @@ func TestAReclassifyWithinOneStemKeepsTheName(t *testing.T) {
 // reclassify: a product swap that lands on a different stem still moves the
 // name, and the label (which reads the type and the ordinal) moves with it.
 func TestARealReclassifyStillReMintsAndTheLabelFollows(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	room := makeRoom(t, gw, ctx, "real-reclassify-room")
 

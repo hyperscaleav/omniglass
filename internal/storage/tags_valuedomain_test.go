@@ -11,6 +11,7 @@ import (
 // TestTagAllowedValuesEnforced covers the enum value domain: a key with a
 // non-empty allowed set admits only members; a free-text key admits anything.
 func TestTagAllowedValuesEnforced(t *testing.T) {
+	t.Parallel()
 	gw := tagGateway(t)
 	ctx := context.Background()
 	seedTree(t, gw)
@@ -62,6 +63,7 @@ func TestTagAllowedValuesEnforced(t *testing.T) {
 // TestDistinctTagValues covers the free-key value autocomplete source: the
 // distinct values bound for a key, ordered, and the unknown-key not-found.
 func TestDistinctTagValues(t *testing.T) {
+	t.Parallel()
 	gw := tagGateway(t)
 	ctx := context.Background()
 	comp := seedTree(t, gw)

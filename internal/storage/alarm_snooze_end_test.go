@@ -41,6 +41,7 @@ func raisedRows(ns []storage.Notification) int {
 // the sweep ends the expired snooze, the timeline reads snooze-end then the
 // new raised rows, and the alarm no longer reads snoozed.
 func TestTheDeadlineAnnouncesAStillRaisedConditionAgain(t *testing.T) {
+	t.Parallel()
 	f := newNotifyFixture(t)
 	a, err := f.gw.RaiseAlarm(f.ctx, "", "display-1", storage.AlarmSpec{Severity: "high", Message: "no video", DedupKey: "video"})
 	if err != nil {
@@ -82,6 +83,7 @@ func TestTheDeadlineAnnouncesAStillRaisedConditionAgain(t *testing.T) {
 // TestAConditionThatClearedDuringTheSnoozeGetsNoAnnouncement: the end tells
 // people about a condition still raised, and nothing about one that is not.
 func TestAConditionThatClearedDuringTheSnoozeGetsNoAnnouncement(t *testing.T) {
+	t.Parallel()
 	f := newNotifyFixture(t)
 	a, err := f.gw.RaiseAlarm(f.ctx, "", "display-1", storage.AlarmSpec{Severity: "high", Message: "no video", DedupKey: "video"})
 	if err != nil {
@@ -116,6 +118,7 @@ func TestAConditionThatClearedDuringTheSnoozeGetsNoAnnouncement(t *testing.T) {
 // path, audited as unsnooze naming the operator; unsnoozing a condition that
 // is not snoozed announces nothing.
 func TestUnsnoozingEarlyAnnouncesLikeTheDeadline(t *testing.T) {
+	t.Parallel()
 	f := newPeopleFixture(t)
 	f.groupRule(t)
 	a, err := f.gw.RaiseAlarm(f.ctx, "", "display-2", storage.AlarmSpec{Severity: "high", Message: "no video", DedupKey: "video"})
@@ -159,6 +162,7 @@ func TestUnsnoozingEarlyAnnouncesLikeTheDeadline(t *testing.T) {
 // TestARuleDisabledDuringTheSnoozeStaysQuiet: the end judges the rules as
 // they stand, so a rule paused while the condition was snoozed tells nobody.
 func TestARuleDisabledDuringTheSnoozeStaysQuiet(t *testing.T) {
+	t.Parallel()
 	f := newNotifyFixture(t)
 	a, err := f.gw.RaiseAlarm(f.ctx, "", "display-1", storage.AlarmSpec{Severity: "high", Message: "no video", DedupKey: "video"})
 	if err != nil {
@@ -180,6 +184,7 @@ func TestARuleDisabledDuringTheSnoozeStaysQuiet(t *testing.T) {
 // TestTwoReplicasAnnounceOneExpiredSnoozeOnce: two gateways on one database
 // sweep at once, and the snooze is ended and announced exactly once.
 func TestTwoReplicasAnnounceOneExpiredSnoozeOnce(t *testing.T) {
+	t.Parallel()
 	f := newNotifyFixture(t)
 	var ids []string
 	for _, key := range []string{"a", "b", "c"} {
@@ -231,6 +236,7 @@ func TestTwoReplicasAnnounceOneExpiredSnoozeOnce(t *testing.T) {
 // deadline passed before the sweep reached it, then unsnoozed or snoozed
 // again by hand, is still ended and announced exactly once.
 func TestAVerbNeverSwallowsTheAnnouncementADeadlineOwes(t *testing.T) {
+	t.Parallel()
 	for _, verb := range []string{"unsnooze", "snooze"} {
 		t.Run(verb, func(t *testing.T) {
 			f := newNotifyFixture(t)
@@ -261,6 +267,7 @@ func TestAVerbNeverSwallowsTheAnnouncementADeadlineOwes(t *testing.T) {
 // lock is held (a transition of it in flight) is skipped for the pass, and
 // the other expired snoozes still end in the same call.
 func TestAHeldConditionDoesNotHoldUpTheSweep(t *testing.T) {
+	t.Parallel()
 	f := newNotifyFixture(t)
 	held, err := f.gw.RaiseAlarm(f.ctx, "", "display-1", storage.AlarmSpec{Severity: "high", Message: "held", DedupKey: "a-held"})
 	if err != nil {

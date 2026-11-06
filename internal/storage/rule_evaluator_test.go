@@ -18,6 +18,7 @@ import (
 // evaluates nothing, and a selector confines a rule to its components and
 // component types.
 func TestRuleEvaluator(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 	gw, all := f.gw, scope.Set{All: true}
@@ -150,6 +151,7 @@ func TestRuleEvaluator(t *testing.T) {
 // late or redelivered down after an up opens nothing, in another batch or
 // the same one.
 func TestRuleEvaluatorJudgesOnlyTheNewestSample(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 	gw, all := f.gw, scope.Set{All: true}
@@ -182,6 +184,7 @@ func TestRuleEvaluatorJudgesOnlyTheNewestSample(t *testing.T) {
 // whose message matches the rule's name, and a rule disabled, deleted or
 // narrowed clears the open alarms it no longer watches.
 func TestRuleAlarmsBelongToTheirRule(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 	gw, all := f.gw, scope.Set{All: true}
@@ -249,6 +252,7 @@ func TestRuleAlarmsBelongToTheirRule(t *testing.T) {
 // A rule's live state is what it holds open and what it is waiting on: the
 // alarms it raised that are still open, and its pending streaks.
 func TestEventRuleState(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 	gw, all := f.gw, scope.Set{All: true}

@@ -10,6 +10,7 @@ import (
 // does: a bound predicate names now() and binds seconds, and the unbounded case
 // names nothing at all rather than a date far enough back to look harmless.
 func TestTsSinceComputesTheBoundaryInTheDatabase(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name     string
 		window   time.Duration

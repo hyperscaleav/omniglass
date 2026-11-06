@@ -114,6 +114,7 @@ func recipients(ns []storage.Notification) []string {
 }
 
 func TestAGroupTargetQueuesOneRowPerMemberWhoCanReadTheAlarm(t *testing.T) {
+	t.Parallel()
 	f := newPeopleFixture(t)
 	f.groupRule(t)
 	// A service account in the group is skipped at expansion: recipients are
@@ -164,6 +165,7 @@ func TestAGroupTargetQueuesOneRowPerMemberWhoCanReadTheAlarm(t *testing.T) {
 }
 
 func TestGroupMembershipIsReadAtTheTransition(t *testing.T) {
+	t.Parallel()
 	f := newPeopleFixture(t)
 	f.groupRule(t)
 	f.human(t, "carol", storage.GrantSpec{Role: "viewer", ScopeKind: "all"})
@@ -195,6 +197,7 @@ func TestGroupMembershipIsReadAtTheTransition(t *testing.T) {
 }
 
 func TestAPersonReachedTwiceByOneRuleIsToldOnce(t *testing.T) {
+	t.Parallel()
 	f := newPeopleFixture(t)
 	f.groupRule(t)
 	if _, err := f.gw.CreateNotificationTarget(f.ctx, "", storage.NotificationTargetSpec{Name: "alice-direct", Kind: storage.TargetPrincipal,
@@ -216,6 +219,7 @@ func TestAPersonReachedTwiceByOneRuleIsToldOnce(t *testing.T) {
 // The recipient filter is set-based: the statements a transition costs do
 // not grow with the group's size.
 func TestTheRecipientFilterCostDoesNotGrowWithTheGroup(t *testing.T) {
+	t.Parallel()
 	cost := func(members int) int {
 		gw, counter := storagetest.NewCountingDB(t)
 		ctx := context.Background()
@@ -261,6 +265,7 @@ func TestTheRecipientFilterCostDoesNotGrowWithTheGroup(t *testing.T) {
 }
 
 func TestTheInboxIsTheCallersAloneAndScopedAtRead(t *testing.T) {
+	t.Parallel()
 	f := newPeopleFixture(t)
 	f.groupRule(t)
 	a, err := f.gw.RaiseAlarm(f.ctx, "", "display-2", storage.AlarmSpec{Severity: "high", Message: "no audio"})
@@ -313,6 +318,7 @@ func TestTheInboxIsTheCallersAloneAndScopedAtRead(t *testing.T) {
 }
 
 func TestARecipientsNameIsTheirsAndTheAdminsAlone(t *testing.T) {
+	t.Parallel()
 	f := newPeopleFixture(t)
 	f.groupRule(t)
 	a, err := f.gw.RaiseAlarm(f.ctx, "", "display-2", storage.AlarmSpec{Severity: "high", Message: "no audio"})
@@ -368,6 +374,7 @@ func TestARecipientsNameIsTheirsAndTheAdminsAlone(t *testing.T) {
 }
 
 func TestABoundGroupOrPersonCannotBeDeletedFromUnderATarget(t *testing.T) {
+	t.Parallel()
 	f := newPeopleFixture(t)
 	f.groupRule(t)
 	if _, err := f.gw.CreateNotificationTarget(f.ctx, "", storage.NotificationTargetSpec{Name: "bob-direct", Kind: storage.TargetPrincipal,
@@ -389,6 +396,7 @@ func TestABoundGroupOrPersonCannotBeDeletedFromUnderATarget(t *testing.T) {
 }
 
 func TestAPersonTargetIsValidatedWhenWritten(t *testing.T) {
+	t.Parallel()
 	f := newPeopleFixture(t)
 	if _, err := f.gw.ExportServicePrincipal(f.ctx, "ingest-bot", ""); err != nil {
 		t.Fatal(err)
@@ -435,6 +443,7 @@ func TestAPersonTargetIsValidatedWhenWritten(t *testing.T) {
 // savepoint: when it fails (here, the role index cannot be read), the
 // transition still commits, and no row about any person is written.
 func TestARecipientFilterThatFailsNeverFailsTheTransition(t *testing.T) {
+	t.Parallel()
 	f := newPeopleFixture(t)
 	f.groupRule(t)
 	conn, err := pgx.Connect(f.ctx, f.dsn)
@@ -464,6 +473,7 @@ func TestARecipientFilterThatFailsNeverFailsTheTransition(t *testing.T) {
 // A webhook row has no recipient to withhold: its failure reason reads to
 // everyone who reads the alarm.
 func TestAWebhookRowsReasonIsNotWithheld(t *testing.T) {
+	t.Parallel()
 	f := newPeopleFixture(t)
 	if _, err := f.gw.CreateNotificationTarget(f.ctx, "", storage.NotificationTargetSpec{Name: "ops-chat", Kind: storage.ChannelWebhook,
 		URL: "https://hooks.example.com/x"}, f.all, storage.SecretUse{}, storage.PeopleUse{}); err != nil {

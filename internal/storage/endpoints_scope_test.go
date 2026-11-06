@@ -20,6 +20,7 @@ import (
 // so on one component each transport is unique. Deleting an interface cascades its
 // derived task away.
 func TestInterfaceScopeCRUD(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
@@ -139,6 +140,7 @@ func TestInterfaceScopeCRUD(t *testing.T) {
 // own a tcp endpoint, but a second endpoint of the same transport on ONE
 // component is refused (a 409 via ErrEndpointExists).
 func TestInterfaceProtocolNamed(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)

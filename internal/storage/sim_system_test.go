@@ -17,6 +17,7 @@ import (
 // on the node, each assigned its role, in one transaction; a slot that
 // cannot be assigned, or a scope that refuses the system, leaves nothing.
 func TestCreateSimSystem(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

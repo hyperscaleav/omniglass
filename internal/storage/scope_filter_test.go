@@ -15,6 +15,7 @@ import (
 // a malformed root (a name, not a uuid, as a mis-created grant would store) yields
 // an empty list rather than erroring the whole query. Skipped under -short.
 func TestScopedListByRoot(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)

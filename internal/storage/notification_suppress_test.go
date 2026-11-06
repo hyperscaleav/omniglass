@@ -20,6 +20,7 @@ import (
 // seam over every kind of row: a group's inbox people, a webhook, an email
 // target and a personal rule, on a re-raise and on a clear.
 func TestASnoozedConditionsRowsAreWrittenSuppressedOnEveryChannel(t *testing.T) {
+	t.Parallel()
 	f := newPeopleFixture(t)
 	f.groupRule(t)
 	if _, err := f.gw.CreateNotificationTarget(f.ctx, "", storage.NotificationTargetSpec{Name: "ops-chat", Kind: storage.ChannelWebhook,
@@ -130,6 +131,7 @@ func TestASnoozedConditionsRowsAreWrittenSuppressedOnEveryChannel(t *testing.T) 
 // waits: a row queued before the snooze, in backoff when it starts, is marked
 // suppressed when its turn comes, and never sent.
 func TestTheTickSuppressesARowWaitingOutItsRetry(t *testing.T) {
+	t.Parallel()
 	f := newNotifyFixture(t)
 	a, err := f.gw.RaiseAlarm(f.ctx, "", "display-1", storage.AlarmSpec{Severity: "high", Message: "no video", DedupKey: "video"})
 	if err != nil {
@@ -171,6 +173,7 @@ func TestTheTickSuppressesARowWaitingOutItsRetry(t *testing.T) {
 // no tick could catch. The snooze waits for the transition instead, so its
 // 200 comes after the row the transition judged.
 func TestASnoozeWaitsForATransitionAlreadyJudged(t *testing.T) {
+	t.Parallel()
 	f := newPeopleFixture(t)
 	f.groupRule(t)
 	first, err := f.gw.RaiseAlarm(f.ctx, "", "display-2", storage.AlarmSpec{Severity: "high", Message: "no video", DedupKey: "video"})

@@ -17,6 +17,7 @@ import (
 // product classifies under component_type "display" (stem "display"): the stem
 // walk reads the TYPE tree, so the product is only the doorway in (#804).
 func TestCreateGeneratesFromTypeStem(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -80,6 +81,7 @@ func TestCreateGeneratesFromTypeStem(t *testing.T) {
 // no stem of its own (interactive-display, a child of display in the seed
 // taxonomy) inherits the parent's stem, exactly as ResolveTypeFacts walks.
 func TestSubtypeInheritsStem(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -107,6 +109,7 @@ func TestSubtypeInheritsStem(t *testing.T) {
 // disturbed again, even by an act (a product reclassify) that would
 // otherwise recompute a still-platform-owned name.
 func TestRenameFreezes(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -150,6 +153,7 @@ func TestRenameFreezes(t *testing.T) {
 // reverse round trip (generate, rename to freeze, reset to hand the pen back
 // again) lands on a fresh ordinal in the same bucket, not the frozen name.
 func TestResetReturnsPen(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -200,6 +204,7 @@ func TestResetReturnsPen(t *testing.T) {
 // within the SAME placement, while leaving an operator-typed name alone
 // (covered by TestRenameFreezes) and never touching label.
 func TestReclassifyRecomputes(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -253,6 +258,7 @@ func TestReclassifyRecomputes(t *testing.T) {
 // seeded official one: official rows are read-only (ErrTypeOfficial), so
 // this is the only way to reach UpdateComponentType's stem branch at all.
 func TestComponentTypeStemEditDoesNotRecomputeExistingNames(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -304,6 +310,7 @@ func TestComponentTypeStemEditDoesNotRecomputeExistingNames(t *testing.T) {
 // stem+scope rather than trusting the unique index to sort it out after the
 // fact via a 23505 retry.
 func TestConcurrentCreateSerialisesOrdinals(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {

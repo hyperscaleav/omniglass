@@ -11,6 +11,7 @@ import (
 // TestIsRefusedWrite: the ingest drops a batch at once only for a write no
 // retry changes, and redelivers anything else.
 func TestIsRefusedWrite(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name string
 		err  error

@@ -12,6 +12,7 @@ import (
 // its settle window and target-property pointer) and the command invocation table
 // (over the owner arc) exist with the expected columns and constraints.
 func TestCommandPillarMigration(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	conn := connectMigrated(t)
 

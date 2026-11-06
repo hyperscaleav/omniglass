@@ -15,6 +15,7 @@ import (
 // inputs are refused, the last owner grant cannot be stripped, but a swap (grant a
 // second owner, then revoke the first) is allowed. Skipped under -short.
 func TestGrantsAndOwnerInvariant(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)

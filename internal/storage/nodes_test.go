@@ -24,6 +24,7 @@ func hashHex(s string) string {
 // create, mint (set token), authenticate, claim, heartbeat, and NodeWorklist.
 // Skipped under -short.
 func TestNodeGateway(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -185,6 +186,7 @@ func TestNodeGateway(t *testing.T) {
 // own CHECK, which forbade exactly these characters and no others; this is the
 // test that keeps the guarantee the CHECK used to state. Skipped under -short.
 func TestNodeNameSubjectSafety(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -239,6 +241,7 @@ func TestNodeNameSubjectSafety(t *testing.T) {
 // *storage.ErrAddressNotAccepted, naming the kind, never a fall-through
 // ErrNodeNotFound that looks identical to an ordinary unknown node.
 func TestGetNodeRefusesADottedAddress(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -268,6 +271,7 @@ func TestGetNodeRefusesADottedAddress(t *testing.T) {
 // clear, an unknown location rejected, name immutability, and the location FK's
 // ON DELETE SET NULL. See .claude/superpowers/specs/2026-07-19-node-identity-and-edit-design.md.
 func TestNodeIdentityAndEdit(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -376,6 +380,7 @@ func TestNodeIdentityAndEdit(t *testing.T) {
 // bindings, while a component's own telemetry (owner arc = component, node_id
 // null) survives. Plus the all-scope gate and the unknown-node not-found.
 func TestDeleteNode(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

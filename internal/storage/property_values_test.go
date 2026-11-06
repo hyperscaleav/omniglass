@@ -27,6 +27,7 @@ func byName(props []storage.EffectiveProperty) map[string]storage.EffectivePrope
 // override when set), plus ad-hoc properties set directly on the component that the
 // contract does not declare. A productless component has only the ad-hoc set.
 func TestEffectiveProperties(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

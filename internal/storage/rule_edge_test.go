@@ -146,6 +146,7 @@ func edgeStr(p *string) string {
 // and the sample's key and value. A condition held across many samples, and
 // a redelivered sample, write nothing more.
 func TestRuleEdgeEventsCarryTheAlarm(t *testing.T) {
+	t.Parallel()
 	r := newEdgeRig(t)
 	r.rule(storage.EventRuleSpec{Name: "edge", Severity: "high", Message: "bar unreachable", ClearEventType: "condition-ended"})
 	id := r.ruleID()
@@ -189,6 +190,7 @@ func TestRuleEdgeEventsCarryTheAlarm(t *testing.T) {
 // alarm; a rule with no clear type resolves its alarm with no clear event,
 // and its condition still ends.
 func TestRuleEdgeInformationalAndNoClearType(t *testing.T) {
+	t.Parallel()
 	r := newEdgeRig(t)
 	r.rule(storage.EventRuleSpec{Name: "note", ClearEventType: "condition-ended"})
 	r.observe("tcp", "down")
@@ -221,6 +223,7 @@ func TestRuleEdgeInformationalAndNoClearType(t *testing.T) {
 // the reconcile pass sees an informational condition in force as settled,
 // leaving no streak behind.
 func TestRuleEdgeSweepPrimeReconcile(t *testing.T) {
+	t.Parallel()
 	r := newEdgeRig(t)
 	r.observe("tcp", "down") // before the rule exists: priming finds it
 	r.rule(storage.EventRuleSpec{Name: "slow", FireSustain: 10 * time.Second, ClearEventType: "condition-ended"})
@@ -264,6 +267,7 @@ func TestRuleEdgeSweepPrimeReconcile(t *testing.T) {
 // ended event, and the alarm's open and resolve are recorded in its audit
 // rows, naming the editor.
 func TestRuleEdgeSeverityToggle(t *testing.T) {
+	t.Parallel()
 	r := newEdgeRig(t)
 	editor := r.editor()
 	r.rule(storage.EventRuleSpec{Name: "toggle", ClearEventType: "condition-ended"})
@@ -301,6 +305,7 @@ func TestRuleEdgeSeverityToggle(t *testing.T) {
 // the edited rule no longer holds ends (with its clear event) before the
 // severity reaches it, so no alarm is raised and resolved in one write.
 func TestRuleEdgeMaterialEditPrimesBeforeSeverity(t *testing.T) {
+	t.Parallel()
 	r := newEdgeRig(t)
 	r.rule(storage.EventRuleSpec{Name: "reword", ClearEventType: "condition-ended"})
 	r.observe("tcp", "down")
@@ -319,6 +324,7 @@ func TestRuleEdgeMaterialEditPrimesBeforeSeverity(t *testing.T) {
 // nothing is written, the condition row and its events untouched; it
 // reopens only on the next new edge, after the condition ends and returns.
 func TestRuleEdgeHandClearHolds(t *testing.T) {
+	t.Parallel()
 	r := newEdgeRig(t)
 	r.rule(storage.EventRuleSpec{Name: "polled", Severity: "high", ClearEventType: "condition-ended"})
 	r.observe("tcp", "down")
@@ -347,6 +353,7 @@ func TestRuleEdgeHandClearHolds(t *testing.T) {
 // nor writes an event, and a recovery resolves it, with no clear event,
 // since no condition row ended.
 func TestRuleEdgeOrphanAlarmIsInForce(t *testing.T) {
+	t.Parallel()
 	r := newEdgeRig(t)
 	r.rule(storage.EventRuleSpec{Name: "orphan", Severity: "high", ClearEventType: "condition-ended"})
 	mustExec(t, r.f.conn, `insert into alarm (component_id, severity, message, dedup_key, raised_by_rule_id)
@@ -382,6 +389,7 @@ func TestRuleEdgeOrphanAlarmIsInForce(t *testing.T) {
 // Disabling, narrowing or deleting a rule ends its conditions and writes
 // their clear events, carrying the alarms they resolve.
 func TestRuleEdgeSettlePathsEndConditions(t *testing.T) {
+	t.Parallel()
 	r := newEdgeRig(t)
 	r.rule(storage.EventRuleSpec{Name: "settle", Severity: "high", ClearEventType: "condition-ended"})
 	end := func(what string, act func(), wantEvents int) {
@@ -427,6 +435,7 @@ func TestRuleEdgeSettlePathsEndConditions(t *testing.T) {
 // alarm open at upgrade its condition row, so the next recovery resolves it
 // with a clear event; a cleared or hand-raised alarm gets none.
 func TestRuleConditionBackfill(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -468,6 +477,7 @@ func TestRuleConditionBackfill(t *testing.T) {
 // scope like its alarms and streaks: an informational rule holding a
 // condition reads one in force and no open alarm.
 func TestRuleConditionsInForceRead(t *testing.T) {
+	t.Parallel()
 	r := newEdgeRig(t)
 	r.rule(storage.EventRuleSpec{Name: "watching"})
 	r.observe("tcp", "down")

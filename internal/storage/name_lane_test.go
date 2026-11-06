@@ -15,6 +15,7 @@ import (
 // (a collision). A reserved key (the node's or the platform's own) is never
 // shadowed, and a namespace other than local and og never answers a bare name.
 func TestResolveNameLane(t *testing.T) {
+	t.Parallel()
 	op := func(lane string) storage.NameHolder { return storage.NameHolder{Lane: lane, Namespace: "local"} }
 	off := func(lane string) storage.NameHolder { return storage.NameHolder{Lane: lane, Namespace: "og"} }
 	pub := func(lane string) storage.NameHolder { return storage.NameHolder{Lane: lane, Namespace: "acme"} }
@@ -51,6 +52,7 @@ func TestResolveNameLane(t *testing.T) {
 // A qualified name resolves in its own namespace only, whatever the others
 // hold: how the seed resolves a shipped row's references inside og.
 func TestResolveNameIn(t *testing.T) {
+	t.Parallel()
 	hs := []storage.NameHolder{{Lane: "metric", Namespace: "og"}, {Lane: "property", Namespace: "local"}}
 	if got, ok := storage.ResolveNameIn("og", hs); !ok || got.Lane != "metric" {
 		t.Errorf("og: %+v %v, want the og metric", got, ok)
@@ -69,6 +71,7 @@ func TestResolveNameIn(t *testing.T) {
 // platform's row while ingest writes the operator's. An operator's row of the
 // name first, then the release that ships it, in each direction.
 func TestEveryNameResolverAgreesWithTheShadow(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -120,6 +123,7 @@ func TestEveryNameResolverAgreesWithTheShadow(t *testing.T) {
 // and og hold reaches neither, so its holders lose the role instead of gaining
 // the operator's; a role in another namespace is never reached by a bare name.
 func TestRolesInEffectFailClosedOnAnAmbiguousName(t *testing.T) {
+	t.Parallel()
 	got := storage.RolesInEffect([]storage.Role{
 		{Name: "admin", Namespace: "og"},
 		{Name: "admin", Namespace: "local"},

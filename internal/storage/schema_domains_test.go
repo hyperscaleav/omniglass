@@ -16,6 +16,7 @@ import (
 // a declared row with no lineage, while metric still refuses declared until a
 // slice folds declared numeric values into it.
 func TestSampleProvenanceDomains(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	conn, err := pgx.Connect(ctx, dsn)
@@ -64,6 +65,7 @@ func TestSampleProvenanceDomains(t *testing.T) {
 // rename migration cannot be misled by a constraint whose name says id on the
 // name column.
 func TestRoleConstraintNamesCorrected(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	conn, err := pgx.Connect(ctx, dsn)
@@ -100,6 +102,7 @@ func TestRoleConstraintNamesCorrected(t *testing.T) {
 // resolver honors. The grant SUBJECT (group_id, a group holding a grant)
 // stays.
 func TestGrantGroupScopeKindRefusedBySchema(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	conn, err := pgx.Connect(ctx, dsn)

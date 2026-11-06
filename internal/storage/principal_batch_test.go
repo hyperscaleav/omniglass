@@ -185,6 +185,7 @@ func strptr2(s string) *string { return &s }
 // must fill a page exactly as loadPrincipal fills each of its rows, field for
 // field and grant for grant, in order.
 func TestBatchPrincipalLoadMatchesSingle(t *testing.T) {
+	t.Parallel()
 	pool := principalBatchPool(t)
 	ctx := context.Background()
 	pg := &PG{pool: pool}
@@ -214,6 +215,7 @@ func TestBatchPrincipalLoadMatchesSingle(t *testing.T) {
 // raises as an error, and a batch that answered it with a nil profile would turn
 // a loud 500 into a directory row missing its username.
 func TestBatchPrincipalLoadRejectsAProfilelessPrincipal(t *testing.T) {
+	t.Parallel()
 	pool := principalBatchPool(t)
 	ctx := context.Background()
 	pg := &PG{pool: pool}

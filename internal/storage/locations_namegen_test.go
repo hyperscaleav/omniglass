@@ -18,6 +18,7 @@ import (
 // already frozen when #687 gives its type a name rule, so a generator arriving
 // later can never re-mint a name someone typed before it existed.
 func TestLocationPenIsOperatorOwnedAndFrozenByRename(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -47,6 +48,7 @@ func TestLocationPenIsOperatorOwnedAndFrozenByRename(t *testing.T) {
 // from until #687's per-type name rule, and this is the test that flips when it
 // lands.
 func TestResetLocationNameRefuses(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -113,6 +115,7 @@ func mustPositionalType(t *testing.T, gw storage.Gateway) {
 // place types carry no rule, so a nameless create is refused rather than guessed
 // at. A campus is called what the fleet calls it.
 func TestLocationTypeWithNoNameRuleGeneratesNothing(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -151,6 +154,7 @@ func TestLocationTypeWithNoNameRuleGeneratesNothing(t *testing.T) {
 // "the platform cannot generate a name for it", which is the diagnosis with the
 // remedy left off.
 func TestTheNoNameRuleRefusalNamesTheEscape(t *testing.T) {
+	t.Parallel()
 	for _, part := range []string{":rename", "reclassif"} {
 		if !strings.Contains(storage.ErrLocationTypeNoNameRule.Error(), part) {
 			t.Errorf("ErrLocationTypeNoNameRule = %q, want it to mention %q: an operator reclassifying a platform-named location has to be told to claim the name first",
@@ -164,6 +168,7 @@ func TestTheNoNameRuleRefusalNamesTheEscape(t *testing.T) {
 // ordinal, the bare-ordinal name that produces is legal, and the bucket is the
 // PARENT rather than the fleet, so two buildings each have their own deck 1.
 func TestPositionalLocationTypeAllocatesWithinItsParent(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -228,6 +233,7 @@ func TestPositionalLocationTypeAllocatesWithinItsParent(t *testing.T) {
 // it: the shared space at root is shown to be the same shared space under a
 // parent.
 func TestPositionalTypeAtRootAllocatesAcrossTheFleet(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -294,6 +300,7 @@ func TestPositionalTypeAtRootAllocatesAcrossTheFleet(t *testing.T) {
 // closed: the verb that could only ever refuse now returns the pen for a type
 // that can generate, and still refuses for one that cannot.
 func TestResetLocationNameMintsOnceTheTypeCarriesARule(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -339,6 +346,7 @@ func TestResetLocationNameMintsOnceTheTypeCarriesARule(t *testing.T) {
 // location re-mints when it moves, and records the new number with the new name
 // rather than carrying the old bucket's over.
 func TestLocationMoveReMintsInTheDestinationBucket(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -390,6 +398,7 @@ func TestLocationMoveReMintsInTheDestinationBucket(t *testing.T) {
 // label edit, and with a lower ordinal freed by an earlier rename that
 // re-mint MOVES the name under location:update.
 func TestLocationUpdateWithoutAClassificationChangeKeepsTheName(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -486,6 +495,7 @@ func TestLocationUpdateWithoutAClassificationChangeKeepsTheName(t *testing.T) {
 // integrations outside this system store. There is no name-side recompute verb,
 // and this test is the statement of that.
 func TestEditingANameRuleRenamesNothing(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -543,6 +553,7 @@ func TestEditingANameRuleRenamesNothing(t *testing.T) {
 // caught where it is written. Both write paths refuse, and nothing is stored, so
 // a later create never meets it.
 func TestNameRuleIsRefusedAtEditTime(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -592,6 +603,7 @@ func TestNameRuleIsRefusedAtEditTime(t *testing.T) {
 // two slices and ADR-0103 reversed it, so this is the assertion that fails if a
 // rule is ever put back into the seed without the argument being made again.
 func TestNameRuleRoundTripsThroughTheRegistry(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -646,6 +658,7 @@ func TestNameRuleRoundTripsThroughTheRegistry(t *testing.T) {
 // would leave this test green on the old, wrong reason, and the raw read is what
 // tells the two apart.
 func TestAForkedNameRuleSurvivesTheAuthoritativeSeed(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
@@ -744,6 +757,7 @@ func TestAForkedNameRuleSurvivesTheAuthoritativeSeed(t *testing.T) {
 // lowest free ordinal, so a delete genuinely frees a number and a recompute
 // after one is entitled to differ. What this asserts is that nothing DRIFTS.
 func TestStoredLocationOrdinalsRecomputeToThemselves(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	pg, err := storage.NewPG(ctx, storagetest.NewDSN(t))
 	if err != nil {

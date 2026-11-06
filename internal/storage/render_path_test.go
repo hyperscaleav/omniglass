@@ -27,6 +27,7 @@ import (
 // empty Root instead of [boi 17c 415a].
 
 func TestPathOfComponentPlacedAtALocation(t *testing.T) {
+	t.Parallel()
 	gw, _ := newDuplicateNameFixture(t)
 	fx := buildAddressFixture(t, gw)
 	ctx := context.Background()
@@ -62,6 +63,7 @@ func TestPathOfComponentPlacedAtALocation(t *testing.T) {
 // root, parent_id null) and read THAT row's location_id, exactly mirroring
 // resolvePlaneRoot's own forward-direction bind.
 func TestPathOfNestedComponentCrossesIntoTheLocationTree(t *testing.T) {
+	t.Parallel()
 	gw, _ := newDuplicateNameFixture(t)
 	fx := buildAddressFixture(t, gw)
 	ctx := context.Background()
@@ -96,6 +98,7 @@ func TestPathOfNestedComponentCrossesIntoTheLocationTree(t *testing.T) {
 // TestPathOfSystemPlacedAtALocation covers the $sys accessor plane, the
 // second of the two non-location tables PathOf's plane-root branch serves.
 func TestPathOfSystemPlacedAtALocation(t *testing.T) {
+	t.Parallel()
 	gw, _ := newDuplicateNameFixture(t)
 	fx := buildAddressFixture(t, gw)
 	ctx := context.Background()
@@ -124,6 +127,7 @@ func TestPathOfSystemPlacedAtALocation(t *testing.T) {
 // locationTable (path.go's tbl == locationTable branch), never reached by
 // the two tests above.
 func TestPathOfLocationHasNoAccessor(t *testing.T) {
+	t.Parallel()
 	gw, _ := newDuplicateNameFixture(t)
 	fx := buildAddressFixture(t, gw)
 	ctx := context.Background()
@@ -168,6 +172,7 @@ func TestPathOfLocationHasNoAccessor(t *testing.T) {
 // row, so a difference here can only be the attach's own full flag, not
 // fixture drift.
 func TestListComponentsSkipsAbbrevGetCompactsFully(t *testing.T) {
+	t.Parallel()
 	gw, _ := newDuplicateNameFixture(t)
 	fx := buildAddressFixture(t, gw)
 	ctx := context.Background()

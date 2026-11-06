@@ -31,6 +31,7 @@ var pennedTables = []string{"component", "location", "system"}
 // except this, and a rename that reached the code but missed a table would fail
 // at runtime on one query rather than at build time.
 func TestTheLabelColumnIsCalledLabel(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

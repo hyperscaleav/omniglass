@@ -56,6 +56,7 @@ const loginLineSpec = `{
 }`
 
 func TestWorklistCarriesTheSessionBlockAndRetryMovesTheRevision(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -203,6 +204,7 @@ func TestWorklistCarriesTheSessionBlockAndRetryMovesTheRevision(t *testing.T) {
 // healthy session once, and lift a gate held under the first fingerprint).
 // The operator's declared pin does.
 func TestATrustedOnFirstUseKeyLeavesTheFingerprint(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -259,6 +261,7 @@ func TestATrustedOnFirstUseKeyLeavesTheFingerprint(t *testing.T) {
 // set, and the actor. With no key refusal held, a host key is a pin declared
 // ahead of time, as before.
 func TestTrustingAKeyChecksTheOfferedKeyAndAuditsBoth(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

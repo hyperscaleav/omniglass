@@ -18,6 +18,7 @@ import (
 // revoking the session or letting it expire all kill authentication, and ending an
 // inactive session is a clean not-found. Skipped under -short.
 func TestImpersonationSession(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)

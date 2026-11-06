@@ -7,6 +7,7 @@ import (
 )
 
 func TestTheEntityNameRule(t *testing.T) {
+	t.Parallel()
 	valid := []string{"a", "av-rack-3", "boardroom-a", "meeting-room", "x0", strings.Repeat("a", 100)}
 	for _, n := range valid {
 		if err := ValidateName("component", n); err != nil {

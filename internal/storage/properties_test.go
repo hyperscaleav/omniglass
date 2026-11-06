@@ -12,6 +12,7 @@ import (
 )
 
 func TestPropertyCRUD(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -111,6 +112,7 @@ func TestPropertyCRUD(t *testing.T) {
 // a winner, so every sample carrying it disappears silently. Refusing at create is
 // the only moment an operator can be told, while they still have the name in hand.
 func TestRegistryNamesAreUniqueAcrossBothRegistries(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

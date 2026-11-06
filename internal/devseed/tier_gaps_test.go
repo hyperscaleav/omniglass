@@ -16,6 +16,7 @@ import (
 var issueRef = regexp.MustCompile(`^#[0-9]+$`)
 
 func TestTierGapsNameAKnownTierAndAnIssue(t *testing.T) {
+	t.Parallel()
 	tiers := map[devseed.Tier]bool{devseed.TierBuiltIn: true, devseed.TierCollected: true, devseed.TierSystem: true}
 	for tier, owners := range devseed.TierGaps {
 		if !tiers[tier] {
@@ -30,6 +31,7 @@ func TestTierGapsNameAKnownTierAndAnIssue(t *testing.T) {
 }
 
 func TestComponentTierGapsNameAProductTheFleetPlaces(t *testing.T) {
+	t.Parallel()
 	doc, err := devseed.Fixtures()
 	if err != nil {
 		t.Fatal(err)
@@ -48,6 +50,7 @@ func TestComponentTierGapsNameAProductTheFleetPlaces(t *testing.T) {
 }
 
 func TestSystemGapsAreKeyedByTheAllSystemsEntry(t *testing.T) {
+	t.Parallel()
 	for owner := range devseed.TierGaps[devseed.TierSystem] {
 		if owner != devseed.AllSystems {
 			t.Errorf("system gap keyed %q: systems carry no stable key yet, so the gap covers them all under %q", owner, devseed.AllSystems)
@@ -56,6 +59,7 @@ func TestSystemGapsAreKeyedByTheAllSystemsEntry(t *testing.T) {
 }
 
 func TestTierGapsHoldOnlyTheOpenIssues(t *testing.T) {
+	t.Parallel()
 	// #1372, #1493 and #1494 closed their gaps; a leftover entry for them is
 	// the stale one the check would fail on, caught here before a lab run.
 	closed := map[string]bool{"#1372": true, "#1493": true, "#1494": true}

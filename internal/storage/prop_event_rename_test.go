@@ -20,6 +20,7 @@ import (
 // moved back onto the name, this is what would notice, either because the rename
 // starts failing on a foreign key or because the rows quietly stop resolving.
 func TestPropertiesAndEventsSurviveARename(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

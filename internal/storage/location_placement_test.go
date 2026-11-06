@@ -23,6 +23,7 @@ import (
 // (campus={root}, building={root,campus}, floor={building,campus},
 // room={floor,building,campus}).
 func TestLocationPlacementEnforcement(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -94,6 +95,7 @@ func TestLocationPlacementEnforcement(t *testing.T) {
 // contain "root" is refused a root placement (no parent) on create, and the
 // PlacementError names the rejected child type with no parent type.
 func TestLocationRootPlacementRejected(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -133,6 +135,7 @@ func TestLocationRootPlacementRejected(t *testing.T) {
 // registry, keeping the move path's placement enforcement testable
 // independent of the seed's exact values (see that test's doc comment).
 func TestLocationReparentEnforcement(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {

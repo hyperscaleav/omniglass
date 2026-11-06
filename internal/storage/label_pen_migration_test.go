@@ -24,6 +24,7 @@ import (
 // upgraded fleet the whole feature would apply to rows created after the
 // upgrade and to nothing else.
 func TestLabelPenBackfill(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	if err := migrate.RollbackBelow(dsn, "20260810110000"); err != nil {
 		t.Fatalf("roll back below the label pen backfill: %v", err)

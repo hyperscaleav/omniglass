@@ -17,6 +17,7 @@ import (
 // would sit beneath an auth gate while each test that brings its own literal
 // stayed green.
 func TestSimSecretsHoldWhatTheFacesDemand(t *testing.T) {
+	t.Parallel()
 	raw, err := seed.FactsJSON()
 	if err != nil {
 		t.Fatal(err)

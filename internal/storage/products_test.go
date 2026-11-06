@@ -11,6 +11,7 @@ import (
 )
 
 func TestProductCRUD(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
 	if err != nil {
@@ -149,6 +150,7 @@ func TestProductCRUD(t *testing.T) {
 // component_type is ErrProductRefNotFound, and update both reclassifies and
 // refuses to resolve an empty string (component_type has no clear state).
 func TestProductComponentTypeAndIcon(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
 	if err != nil {

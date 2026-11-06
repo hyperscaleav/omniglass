@@ -26,6 +26,7 @@ func newPGBlobStore(t *testing.T) blob.Store {
 }
 
 func TestPGBlobStoreRoundTripAndDedup(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	s := newPGBlobStore(t)
 	payload := []byte("a full SNMP walk captured at the edge")
@@ -58,6 +59,7 @@ func TestPGBlobStoreRoundTripAndDedup(t *testing.T) {
 }
 
 func TestPGBlobStoreGetUnknownIsNotFound(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	s := newPGBlobStore(t)
 
@@ -68,6 +70,7 @@ func TestPGBlobStoreGetUnknownIsNotFound(t *testing.T) {
 }
 
 func TestPGBlobStoreExists(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	s := newPGBlobStore(t)
 	key, _ := s.Put(ctx, []byte("runbook.pdf bytes"))

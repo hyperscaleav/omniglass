@@ -17,6 +17,7 @@ import (
 // moves on any insert, update or delete in any table the registry is built
 // from, so a cached registry can never outlive the catalog it was read from.
 func TestCatalogFingerprintMovesWithEveryRegistryTable(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -92,6 +93,7 @@ func TestCatalogFingerprintMovesWithEveryRegistryTable(t *testing.T) {
 // catalog fingerprint covers. Unlike the text scan in the internal test, a
 // plan sees comma joins, quoted names, views and functions over tables.
 func TestCatalogFingerprintCoversThePlannedRelations(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

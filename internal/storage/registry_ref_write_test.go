@@ -15,6 +15,7 @@ import (
 // registry reference (the registryRefCol pattern). Before the fix the uuid
 // form silently resolved to NULL and the insert failed.
 func TestTypeReferencesAcceptEitherForm(t *testing.T) {
+	t.Parallel()
 	gw, _ := secretGateway(t)
 	ctx := context.Background()
 	all := scope.Set{All: true}

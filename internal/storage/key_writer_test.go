@@ -87,6 +87,7 @@ func refused(err error) bool { return errors.Is(err, storage.ErrKeyWriterRefused
 // health are refused at create and at retarget, naming the key, and a command
 // type stored before the refusal existed opens nothing when issued.
 func TestCommandTypeRefusesANodeProbeTarget(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -140,6 +141,7 @@ func TestCommandTypeRefusesANodeProbeTarget(t *testing.T) {
 // every node-probe key (the host key pin included: it lands only through the
 // endpoint's audited :retry) and health, naming the key, and writes nothing.
 func TestDeclaredWriteRefusesAReservedKey(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -181,6 +183,7 @@ func TestDeclaredWriteRefusesAReservedKey(t *testing.T) {
 // node's own observation, as a write before the gateway's refusal could leave
 // one) never reads as the node's.
 func TestNodeProbeReadsServeOnlyObserved(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -242,6 +245,7 @@ func TestNodeProbeReadsServeOnlyObserved(t *testing.T) {
 // case here fails. Each path's admitted writer is driven too, so a refusal is
 // never the vacuous kind.
 func TestWriterMismatchRefused(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -456,6 +460,7 @@ const uuidZero = "00000000-0000-0000-0000-000000000000"
 // seeded and reads its reserved class; a calc rule's output reads calc; and an
 // operator cannot create a type under a reserved name on any lane.
 func TestEveryCatalogKeyHasOneWriterClass(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -544,6 +549,7 @@ func TestEveryCatalogKeyHasOneWriterClass(t *testing.T) {
 // node's collection-failed and a calc rule taking a reserved key as its
 // output; the same declarations naming a collected key are admitted.
 func TestDeclarationsRefuseAKeyTheirWriterDoesNot(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -595,6 +601,7 @@ func TestDeclarationsRefuseAKeyTheirWriterDoesNot(t *testing.T) {
 // TestCalcOutputAndCommandTargetExclude: a key is a calc rule's or a
 // command's, never both, whichever is declared first (ADR-0161).
 func TestCalcOutputAndCommandTargetExclude(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -628,6 +635,7 @@ func TestCalcOutputAndCommandTargetExclude(t *testing.T) {
 // so a node cannot keep its account of an endpoint current past its tenure
 // (ADR-0161). A collected key keeps the time its producer sent.
 func TestNodeProbeSampleCannotOutliveItsTime(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -689,6 +697,7 @@ func TestNodeProbeSampleCannotOutliveItsTime(t *testing.T) {
 // declared one, written before the writer check refused it) never reads as a
 // system's verdict; the reads serve the rollup's calculated rows alone.
 func TestHealthReadsServeOnlyTheRollup(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -738,6 +747,7 @@ func TestHealthReadsServeOnlyTheRollup(t *testing.T) {
 // writes no event, and the sample it judged still lands: an ingest is never
 // refused for a rule's sake.
 func TestLegacyRuleFiringAReservedEventLetsTheSampleLand(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

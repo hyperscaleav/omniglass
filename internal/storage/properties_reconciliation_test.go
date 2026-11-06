@@ -23,6 +23,7 @@ import (
 // key whose only observer is a retired endpoint is not a property the owner
 // has; and a place's rows carry the block with nothing observed (ADR-0422).
 func TestPropertiesCarryEveryKeyAndItsReconciliation(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -184,6 +185,7 @@ func reconOf(t *testing.T, gw *storage.PG, kind, owner, key string) storage.Prop
 // command (which is never pruned) or of property: a system's or a location's
 // properties read probes them once per read and once per declared key.
 func TestPropertiesReadReachesAnIndexOnEveryArc(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

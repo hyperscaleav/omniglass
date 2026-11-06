@@ -32,6 +32,7 @@ import (
 // tracer rather than copied into this file, since a copy is exactly what stops
 // failing when the original changes.
 func TestHealthReadsReachTheSystemOwnerIndex(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

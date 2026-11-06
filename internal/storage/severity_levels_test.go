@@ -18,6 +18,7 @@ import (
 // names a level that exists; and a component's verdict reads the level's
 // rank, so high and above is an outage and anything lower degrades.
 func TestSeverityLevels(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 	gw := f.gw
@@ -126,6 +127,7 @@ func TestSeverityLevels(t *testing.T) {
 // Re-ranking a level an open alarm uses moves its component's recorded
 // health with it: across the outage floor and back.
 func TestSeverityReRankMovesHealth(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 	if _, err := f.gw.CreateSeverityLevel(ctx, "", storage.SeverityLevel{Name: "major", Color: "orange", Rank: 35}, all); err != nil {
@@ -153,6 +155,7 @@ func TestSeverityReRankMovesHealth(t *testing.T) {
 // operator level holds is refused with a message naming it, not silently
 // overwritten and not a raw constraint error.
 func TestSeverityOfficialUpsertLeavesAnOperatorLevelAlone(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 	if _, err := f.gw.CreateSeverityLevel(ctx, "", storage.SeverityLevel{Name: "p1", Color: "red", Rank: 45}, all); err != nil {

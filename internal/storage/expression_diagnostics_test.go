@@ -17,6 +17,7 @@ import (
 // stored row that newly trips one reads it as its fault, with its code,
 // without being rewritten.
 func TestStoredRuleDiagnostics(t *testing.T) {
+	t.Parallel()
 	r := newCalcRig(t)
 	// A warning: an input the reduce never names.
 	spec := storage.CalcRuleSpec{Name: "busy", OwnerKind: rules.OwnerComponent,

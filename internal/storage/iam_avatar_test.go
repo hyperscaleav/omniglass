@@ -35,6 +35,7 @@ func newAvatarGW(t *testing.T) (context.Context, storage.Gateway, string) {
 }
 
 func TestLoadPrincipal_NoAvatarByDefault(t *testing.T) {
+	t.Parallel()
 	ctx, gw, pid := newAvatarGW(t)
 	pr, err := gw.GetPrincipal(ctx, pid, scopeAll())
 	if err != nil {
@@ -49,6 +50,7 @@ func TestLoadPrincipal_NoAvatarByDefault(t *testing.T) {
 }
 
 func TestSetGetClearOwnAvatar(t *testing.T) {
+	t.Parallel()
 	ctx, gw, pid := newAvatarGW(t)
 	if err := gw.SetOwnAvatar(ctx, pid, "AAAA"); err != nil {
 		t.Fatalf("set own: %v", err)
@@ -70,6 +72,7 @@ func TestSetGetClearOwnAvatar(t *testing.T) {
 }
 
 func TestSetPrincipalAvatar_RequiresAllScope(t *testing.T) {
+	t.Parallel()
 	ctx, gw, pid := newAvatarGW(t)
 	if err := gw.SetPrincipalAvatar(ctx, pid, pid, "AAAA", scope.Set{}); err != storage.ErrPrincipalForbidden {
 		t.Errorf("err = %v, want ErrPrincipalForbidden", err)

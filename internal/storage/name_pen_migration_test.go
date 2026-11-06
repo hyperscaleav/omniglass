@@ -22,6 +22,7 @@ import (
 //
 // The REAL migration file runs, not a copy of its SQL, so the two cannot drift.
 func TestNamePenSpreadsWithoutClaimingExistingRows(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	dsn := storagetest.NewDSN(t)
 	if err := migrate.RollbackBelow(dsn, "20260810120000"); err != nil {

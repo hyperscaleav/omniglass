@@ -11,6 +11,7 @@ import (
 // the window the verdict is pending regardless of the observed value; past the
 // window a match is settled and anything else (mismatch or absent) is failed.
 func TestSettle(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, 7, 24, 12, 0, 0, 0, time.UTC)
 	cv := func(v string, ts time.Time) *storage.CurrentValue {
 		return &storage.CurrentValue{Value: []byte(v), TS: ts}

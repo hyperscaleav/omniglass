@@ -30,6 +30,7 @@ func (fakeErrQuerier) Query(context.Context, string, ...any) (pgx.Rows, error) {
 // querier's Query is never reached), which is what proves the guard is the
 // very first thing resolveRef does, not a check racing a real lookup.
 func TestResolveRefPanicsOnTierMismatch(t *testing.T) {
+	t.Parallel()
 	defer func() {
 		r := recover()
 		if r == nil {
@@ -52,6 +53,7 @@ func TestResolveRefPanicsOnTierMismatch(t *testing.T) {
 // error return (not a crash) is what lets this drive resolveRef PAST the
 // guard to prove it did not fire, without a real database.
 func TestResolveRefAllScopeNeverMismatches(t *testing.T) {
+	t.Parallel()
 	defer func() {
 		if r := recover(); r != nil {
 			t.Fatalf("resolveRef with an All scope panicked: %v", r)

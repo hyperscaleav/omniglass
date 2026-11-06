@@ -18,6 +18,7 @@ func instanceValues(pairs ...string) []CurrentValue {
 // instance disagrees with want, showing the newest disagreeing one, else the
 // newest agreeing one.
 func TestWorstCaseValue(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name         string
 		want         string
@@ -55,6 +56,7 @@ func TestWorstCaseValue(t *testing.T) {
 // agreeingValue is settlement's reduction (ADR-0456): the newest instance
 // agreeing with the intent, else the newest observed, else nothing.
 func TestAgreeingValue(t *testing.T) {
+	t.Parallel()
 	intended := &CurrentValue{Value: json.RawMessage(`"hdmi3"`), Provenance: "intended"}
 	for _, tc := range []struct {
 		name     string

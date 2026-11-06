@@ -30,6 +30,7 @@ func metricsByName(ms []storage.EffectiveMetric) map[string]storage.EffectiveMet
 // contract does not declare. The resolver is owner-generic: a system resolves
 // against its standard's contract and a location against its location type's.
 func TestEffectiveMetrics(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

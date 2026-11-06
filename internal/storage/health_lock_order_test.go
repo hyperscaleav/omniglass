@@ -108,6 +108,7 @@ func (f *lockOrderFixture) allIDsAscending() []string {
 // id. Ordering by name satisfied neither, and not only under a tie: the name
 // order and the id order are different orders even when every name is distinct.
 func TestLocationsOverOrdersByID(t *testing.T) {
+	t.Parallel()
 	f := newLockOrderFixture(t)
 	ctx := context.Background()
 
@@ -146,6 +147,7 @@ func TestLocationsOverOrdersByID(t *testing.T) {
 // misses rather than a test that sometimes fails. TestLocationsOverOrdersByID
 // above is the deterministic half.
 func TestLocationsOverOrderIsIndependentOfItsRoute(t *testing.T) {
+	t.Parallel()
 	f := newLockOrderFixture(t)
 	ctx := context.Background()
 
@@ -193,6 +195,7 @@ func TestLocationsOverOrderIsIndependentOfItsRoute(t *testing.T) {
 // stays a cheap liveness check and cannot fail for an unrelated reason like a
 // starved connection pool.
 func TestConcurrentRecomputesOverDuplicateNames(t *testing.T) {
+	t.Parallel()
 	f := newLockOrderFixture(t)
 	ctx := context.Background()
 

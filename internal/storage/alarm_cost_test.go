@@ -175,6 +175,7 @@ func measureRaiseClear(t *testing.T, gw storage.Gateway, c *querycount.Counter, 
 // compared, because a fixture that quietly deduplicated its alarms would report a
 // beautifully flat number while varying nothing at all.
 func TestAlarmRecomputeCostIsFlatInAlarmCount(t *testing.T) {
+	t.Parallel()
 	const ceiling = 32 // 29 in #674, plus #618's savepointed read of the action rules
 
 	quiet, qc := alarmProbe(t, 1, 1)
@@ -214,6 +215,7 @@ func TestAlarmRecomputeCostIsFlatInAlarmCount(t *testing.T) {
 // so that a change is reported as which term moved, and so that a ceiling
 // generous enough to look comfortable can never hide the slope underneath it.
 func TestAlarmRecomputeCostGrowsWithTheOwnersItTouches(t *testing.T) {
+	t.Parallel()
 	// A room's ancestors are the building and the campus above it, so L is the
 	// room count plus two.
 	for _, tc := range []struct{ staffs, rooms int }{

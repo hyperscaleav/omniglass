@@ -140,6 +140,7 @@ func plantWideMetrics(t *testing.T, conn *pgx.Conn) {
 // id carries on past the wide table's. Rolled back, the wide table holds the
 // same rows again, and migrated forward a second time it arrives again.
 func TestNarrowMetricKeepsEveryRow(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	if err := migrate.RollbackBelow(dsn, metricNarrowVersion); err != nil {
 		t.Fatalf("roll back below the narrow lane: %v", err)
@@ -217,6 +218,7 @@ func TestNarrowMetricKeepsEveryRow(t *testing.T) {
 // the narrow lane does not hold every wide row: the count check is what makes
 // the swap's drop of the wide table safe.
 func TestNarrowMetricBackfillRefusesALostRow(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	if err := migrate.RollbackBelow(dsn, metricNarrowVersion); err != nil {
 		t.Fatalf("roll back below the narrow lane: %v", err)

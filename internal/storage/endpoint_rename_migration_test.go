@@ -36,6 +36,7 @@ func endpointRenameUpSQL(t *testing.T) string {
 }
 
 func TestEndpointRenameCarriesTheData(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	if err := migrate.RollbackBelow(dsn, endpointRenameVersion); err != nil {
 		t.Fatalf("roll back below the endpoint rename: %v", err)

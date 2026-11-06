@@ -18,6 +18,7 @@ import (
 // value), a declared value coexists as its own provenance series, and a
 // provenance with no rows is a clean miss.
 func TestCurrentValueReads(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -108,6 +109,7 @@ func TestCurrentValueReads(t *testing.T) {
 // observed value is the series' latest row (is), and drift is computed on read
 // (want present, is present, differ). Declared equal to observed is no drift.
 func TestReconciliation(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

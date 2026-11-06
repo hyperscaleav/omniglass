@@ -21,6 +21,7 @@ import (
 // is now cheap to satisfy: if anyone reintroduces a name-keyed arc, this is what
 // notices when the rename starts failing or orphaning rows.
 func TestOwnerArcsSurviveARename(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

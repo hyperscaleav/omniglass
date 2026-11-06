@@ -10,6 +10,7 @@ import (
 // a named instance is read as asked, an unnamed read takes the one measured
 // instance, and two measured instances are refused with both listed.
 func TestPickInstance(t *testing.T) {
+	t.Parallel()
 	named := "tls"
 	empty := ""
 	for _, tc := range []struct {

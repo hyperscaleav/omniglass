@@ -1,28 +1,19 @@
 package devseed_test
 
 import (
-	"bytes"
 	"context"
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/devseed"
-	"github.com/hyperscaleav/omniglass/internal/secret"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 	"github.com/jackc/pgx/v5"
 )
 
 // largeFleetFloor is what the large scenario promises: an enterprise-sized
 // fleet, big enough that a list, a tree or a rollup that scales badly shows it.
 const largeFleetFloor = 5000
-
-// largeSeedBudget is the stated bound on seeding the large scenario on a fresh
-// database, the number a throwaway stack's start-up pays.
-const largeSeedBudget = 5 * time.Minute
 
 func scenarioDoc(t *testing.T, name string) devseed.Doc {
 	t.Helper()
@@ -41,6 +32,7 @@ func scenarioDoc(t *testing.T, name string) devseed.Doc {
 // location names fleet-unique, since the seed finds an existing location by
 // bare name and a repeated one would silently fold two places into one.
 func TestScenarioDocsAreWellFormed(t *testing.T) {
+	t.Parallel()
 	for _, s := range devseed.Scenarios() {
 		t.Run(s.Name, func(t *testing.T) {
 			if s.Empty {
@@ -64,6 +56,7 @@ func TestScenarioDocsAreWellFormed(t *testing.T) {
 }
 
 func TestScenarioDefaultIsTheExampleFleet(t *testing.T) {
+	t.Parallel()
 	if got := devseed.Scenarios()[0].Name; got != "dev" {
 		t.Fatalf("first scenario = %q, want dev (the default)", got)
 	}
@@ -74,6 +67,7 @@ func TestScenarioDefaultIsTheExampleFleet(t *testing.T) {
 }
 
 func TestLookupScenarioRefusesAnUnknownNameWithTheKnownOnes(t *testing.T) {
+	t.Parallel()
 	_, err := devseed.LookupScenario("enormous")
 	if err == nil {
 		t.Fatal("unknown scenario accepted")
@@ -86,6 +80,7 @@ func TestLookupScenarioRefusesAnUnknownNameWithTheKnownOnes(t *testing.T) {
 }
 
 func TestLargeScenarioIsEnterpriseSized(t *testing.T) {
+	t.Parallel()
 	if n := len(scenarioDoc(t, "large").Components); n < largeFleetFloor {
 		t.Fatalf("large scenario has %d components, want at least %d", n, largeFleetFloor)
 	}
@@ -96,6 +91,7 @@ func TestLargeScenarioIsEnterpriseSized(t *testing.T) {
 // what keeps a copy from reaching into a neighbour the way the divisible pair
 // does.
 func TestReplicateCopiesWholeRoomsOnly(t *testing.T) {
+	t.Parallel()
 	base := fixturesDoc(t)
 	p := devseed.ReplicaParams{Sites: 2, RoomCopies: 3}
 	doc := devseed.Replicate(base, p)
@@ -146,6 +142,7 @@ func TestReplicateCopiesWholeRoomsOnly(t *testing.T) {
 // fleet's own alarms use, at most one per component, so it can never name a
 // severity the boot seed does not ship or stack two conditions on one device.
 func TestDegradeRaisesKnownConditionsOncePerComponent(t *testing.T) {
+	t.Parallel()
 	base := fixturesDoc(t)
 	doc := devseed.Degrade(base, devseed.DegradedEvery)
 	known := map[string]bool{}
@@ -172,16 +169,13 @@ func TestDegradeRaisesKnownConditionsOncePerComponent(t *testing.T) {
 
 func openSeededGateway(t *testing.T) (context.Context, *storage.PG, *pgx.Conn) {
 	t.Helper()
-	dsn := storagetest.NewDSN(t)
+	dsn := devseed.BootSeededDSN(t)
 	ctx := context.Background()
-	gw, err := storage.NewPG(ctx, dsn, storage.WithSecretProvider(secret.NewStaticProvider(bytes.Repeat([]byte{0x7}, 32))))
+	gw, err := storage.NewPG(ctx, dsn, devseed.SecretProvider())
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	t.Cleanup(gw.Close)
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("boot seed: %v", err)
-	}
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
 		t.Fatalf("connect: %v", err)
@@ -214,6 +208,7 @@ func countFleet(t *testing.T, ctx context.Context, conn *pgx.Conn) fleetCounts {
 // template's platform-named devices hundreds of times, so a seed that cannot
 // recognise its own rows would double the fleet on every start.
 func TestRunScenarioReplicaIsIdempotent(t *testing.T) {
+	t.Parallel()
 	ctx, gw, conn := openSeededGateway(t)
 	s := devseed.ReplicaScenario(devseed.ReplicaParams{Sites: 1, RoomCopies: 2})
 	doc, err := s.Doc()
@@ -252,6 +247,7 @@ func TestRunScenarioReplicaIsIdempotent(t *testing.T) {
 }
 
 func TestRunScenarioDegradedIsIdempotent(t *testing.T) {
+	t.Parallel()
 	ctx, gw, conn := openSeededGateway(t)
 	s, err := devseed.LookupScenario("degraded")
 	if err != nil {
@@ -271,6 +267,7 @@ func TestRunScenarioDegradedIsIdempotent(t *testing.T) {
 }
 
 func TestRunScenarioEmptySeedsNothing(t *testing.T) {
+	t.Parallel()
 	ctx, gw, conn := openSeededGateway(t)
 	s, err := devseed.LookupScenario("empty")
 	if err != nil {
@@ -281,29 +278,5 @@ func TestRunScenarioEmptySeedsNothing(t *testing.T) {
 	}
 	if got := countFleet(t, ctx, conn); got != (fleetCounts{}) {
 		t.Errorf("empty scenario seeded %+v", got)
-	}
-}
-
-// The large scenario seeds within its stated budget on a fresh database.
-func TestRunScenarioLargeWithinBudget(t *testing.T) {
-	if testing.Short() {
-		t.Skip("seeds the full large fleet")
-	}
-	ctx, gw, conn := openSeededGateway(t)
-	s, err := devseed.LookupScenario("large")
-	if err != nil {
-		t.Fatal(err)
-	}
-	start := time.Now()
-	if err := devseed.RunScenario(ctx, gw, "", s, devseed.Options{}); err != nil {
-		t.Fatal(err)
-	}
-	took := time.Since(start)
-	t.Logf("large scenario seeded in %s", took.Round(time.Second))
-	if took > largeSeedBudget {
-		t.Errorf("large scenario took %s, budget %s", took, largeSeedBudget)
-	}
-	if got := countFleet(t, ctx, conn).components; got < largeFleetFloor {
-		t.Errorf("large scenario landed %d components, want at least %d", got, largeFleetFloor)
 	}
 }

@@ -72,6 +72,7 @@ func str(s string) *string { return &s }
 // patches a shipped component_type, the patch takes effect on every read, and
 // the platform's own row is unchanged underneath it.
 func TestForkLeavesTheShippedRowPristine(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	dsn := storagetest.NewDSN(t)
 	gw, err := storage.NewPG(ctx, dsn)
@@ -152,6 +153,7 @@ func TestForkLeavesTheShippedRowPristine(t *testing.T) {
 // TestRestoreDiscardsTheShadow proves restore-to-defaults: the shadow row goes
 // away and reads return the shipped values again.
 func TestRestoreDiscardsTheShadow(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	dsn := storagetest.NewDSN(t)
 	gw, err := storage.NewPG(ctx, dsn)
@@ -211,6 +213,7 @@ func TestRestoreDiscardsTheShadow(t *testing.T) {
 // back. Without that, "the fork survived the re-seed" would pass even if the
 // seed had skipped the row entirely, which is the vacuous version of this test.
 func TestReseedNeitherClobbersNorResurrectsAShadow(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	dsn := storagetest.NewDSN(t)
 	gw, err := storage.NewPG(ctx, dsn)
@@ -283,6 +286,7 @@ func TestReseedNeitherClobbersNorResurrectsAShadow(t *testing.T) {
 // child inherits its shadowed parent's values, and a shadowed child still
 // inherits everything it does not itself override.
 func TestForkedAncestorReachesAnUnshadowedDescendant(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	dsn := storagetest.NewDSN(t)
 	gw, err := storage.NewPG(ctx, dsn)
@@ -386,6 +390,7 @@ func TestForkedAncestorReachesAnUnshadowedDescendant(t *testing.T) {
 // official lock intact: a shipped row still cannot be deleted, forked or not,
 // and a custom row still patches in place instead of growing a shadow.
 func TestForkDoesNotOpenTheOfficialRowToDelete(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	dsn := storagetest.NewDSN(t)
 	gw, err := storage.NewPG(ctx, dsn)
@@ -433,6 +438,7 @@ func TestForkDoesNotOpenTheOfficialRowToDelete(t *testing.T) {
 // entity: a fork and its restore both record against the shipped row's uuid,
 // which is the only id the operator ever sees.
 func TestForkAuditsAgainstTheShippedRowsID(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	dsn := storagetest.NewDSN(t)
 	gw, err := storage.NewPG(ctx, dsn)

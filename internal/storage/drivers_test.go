@@ -11,6 +11,7 @@ import (
 )
 
 func TestDriverCRUD(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
 	if err != nil {

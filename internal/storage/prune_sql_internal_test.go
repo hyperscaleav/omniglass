@@ -15,6 +15,7 @@ import (
 //     inside the index rather than the planner preferring to read the table once
 //     retention has made severity and time correlate.
 func TestPruneStatementsKeepTheirShape(t *testing.T) {
+	t.Parallel()
 	var all []string
 	for lane := range sampleLanes {
 		for _, arc := range sampleArcs {

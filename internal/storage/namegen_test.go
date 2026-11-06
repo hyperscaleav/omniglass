@@ -15,6 +15,7 @@ var display = componentMint("display")
 // the first ordinal is 1. Also the "ordinal always present" half of the
 // rule: a lone component is stem-1, never a bare stem.
 func TestPickOrdinalEmptyScope(t *testing.T) {
+	t.Parallel()
 	if got := pickOrdinal(nil, display); got != 1 {
 		t.Errorf("pickOrdinal(nil, display) = %d, want 1", got)
 	}
@@ -26,6 +27,7 @@ func TestPickOrdinalEmptyScope(t *testing.T) {
 // TestPickOrdinalSkipsGap proves the smallest-unused rule over a gap: 1 and 3
 // taken, 2 is free and wins over 4.
 func TestPickOrdinalSkipsGap(t *testing.T) {
+	t.Parallel()
 	if got := pickOrdinal([]string{"display-1", "display-3"}, display); got != 2 {
 		t.Errorf("pickOrdinal({display-1,display-3}, display) = %d, want 2", got)
 	}
@@ -34,6 +36,7 @@ func TestPickOrdinalSkipsGap(t *testing.T) {
 // TestPickOrdinalIgnoresForeignStems proves a sibling with a different stem
 // never blocks an ordinal: "mic-1" occupies nothing in "display"'s space.
 func TestPickOrdinalIgnoresForeignStems(t *testing.T) {
+	t.Parallel()
 	if got := pickOrdinal([]string{"mic-1", "mic-2"}, display); got != 1 {
 		t.Errorf("pickOrdinal({mic-1,mic-2}, display) = %d, want 1 (foreign stem must not block)", got)
 	}
@@ -44,6 +47,7 @@ func TestPickOrdinalIgnoresForeignStems(t *testing.T) {
 // starts with "display-" but is not of the form "display-<digits>", so it
 // must not be read as display's ordinal 1.
 func TestPickOrdinalIgnoresPrefixCollision(t *testing.T) {
+	t.Parallel()
 	if got := pickOrdinal([]string{"display-panel-1"}, display); got != 1 {
 		t.Errorf("pickOrdinal({display-panel-1}, display) = %d, want 1 (a foreign stem sharing a prefix must not collide)", got)
 	}
@@ -53,6 +57,7 @@ func TestPickOrdinalIgnoresPrefixCollision(t *testing.T) {
 // "display" (no ordinal suffix at all) never occupies an ordinal: it is not
 // of the form "display-<digits>", so "display-1" is still free.
 func TestPickOrdinalOperatorNameNoOrdinalDoesNotBlock(t *testing.T) {
+	t.Parallel()
 	if got := pickOrdinal([]string{"display"}, display); got != 1 {
 		t.Errorf("pickOrdinal({display}, display) = %d, want 1 (a name with no ordinal must not block one)", got)
 	}
@@ -61,6 +66,7 @@ func TestPickOrdinalOperatorNameNoOrdinalDoesNotBlock(t *testing.T) {
 // TestPickOrdinalNonDigitSuffixIgnored proves a name that merely LOOKS close
 // ("display-a") does not parse as an ordinal and does not block one.
 func TestPickOrdinalNonDigitSuffixIgnored(t *testing.T) {
+	t.Parallel()
 	if got := pickOrdinal([]string{"display-a"}, display); got != 1 {
 		t.Errorf("pickOrdinal({display-a}, display) = %d, want 1", got)
 	}
@@ -69,6 +75,7 @@ func TestPickOrdinalNonDigitSuffixIgnored(t *testing.T) {
 // TestPickOrdinalFillsFromOne proves a single existing ordinal 2 (no 1) still
 // yields 1, not 3: the rule is smallest UNUSED, never "one past the max".
 func TestPickOrdinalFillsFromOne(t *testing.T) {
+	t.Parallel()
 	if got := pickOrdinal([]string{"display-2"}, display); got != 1 {
 		t.Errorf("pickOrdinal({display-2}, display) = %d, want 1", got)
 	}
@@ -82,6 +89,7 @@ func TestPickOrdinalFillsFromOne(t *testing.T) {
 // name it would MINT for each candidate ordinal against the bucket, so an
 // empty stem is not a special case, it is just a shorter mint.
 func TestPickOrdinalStemlessAllocates(t *testing.T) {
+	t.Parallel()
 	stemless := componentMint("")
 	if got := pickOrdinal(nil, stemless); got != 1 {
 		t.Errorf("pickOrdinal(nil, \"\") = %d, want 1", got)
@@ -107,6 +115,7 @@ func TestPickOrdinalStemlessAllocates(t *testing.T) {
 // the scoped-name unique index is on the name. Reading only stored ordinals
 // would pick 1 here and turn an ordinary operator workflow into a 23505.
 func TestPickOrdinalOperatorTypedGeneratedShapeBlocks(t *testing.T) {
+	t.Parallel()
 	if got := pickOrdinal([]string{"display-1"}, display); got != 2 {
 		t.Errorf("pickOrdinal({display-1}, display) = %d, want 2 (a hand-typed name in the mint's shape still holds that name)", got)
 	}
@@ -116,6 +125,7 @@ func TestPickOrdinalOperatorTypedGeneratedShapeBlocks(t *testing.T) {
 // yields "<stem>-<n>"; no stem yields the ordinal alone, never a leading "-"
 // (which validateEntityName refuses outright).
 func TestMintName(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		stem string
 		n    int
@@ -138,6 +148,7 @@ func TestMintName(t *testing.T) {
 // stem and every later one the ordinal. "br" then "br-2", and "br-1" is a name
 // this mint never produces at any ordinal.
 func TestMintNameSuppressesTheFirstOrdinal(t *testing.T) {
+	t.Parallel()
 	br := systemMint("br")
 	cases := []struct {
 		n    int
@@ -164,6 +175,7 @@ func TestMintNameSuppressesTheFirstOrdinal(t *testing.T) {
 // suppressing it would leave nothing at all, and validateEntityName refuses
 // "". The stem-less branch wins over bareFirst for exactly that reason.
 func TestMintNameStemlessIgnoresSuppression(t *testing.T) {
+	t.Parallel()
 	m := nameMint{stem: "", bareFirst: true}
 	if got := m.name(1); got != "1" {
 		t.Errorf("a suppressed stem-less mint at ordinal 1 = %q, want \"1\"", got)
@@ -181,6 +193,7 @@ func TestMintNameStemlessIgnoresSuppression(t *testing.T) {
 // together by the assertion and not only by both being read from the same
 // fields.
 func TestSuppressesAgreesWithTheNameItWouldMint(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		what string
 		m    nameMint
@@ -217,6 +230,7 @@ func TestSuppressesAgreesWithTheNameItWouldMint(t *testing.T) {
 // rather than as prose: deleting the only "br" and creating another yields "br"
 // while "br-2" still exists.
 func TestPickOrdinalSuppressedMintAgreesWithItself(t *testing.T) {
+	t.Parallel()
 	br := systemMint("br")
 	cases := []struct {
 		name     string
@@ -247,6 +261,7 @@ func TestPickOrdinalSuppressedMintAgreesWithItself(t *testing.T) {
 // The hand-typed row holds the NAME and no ordinal, which is exactly the row an
 // ordinal-reading allocator cannot see (ADR-0097).
 func TestPickOrdinalSuppressedYieldsToAHandTypedName(t *testing.T) {
+	t.Parallel()
 	br := systemMint("br")
 	got := pickOrdinal([]string{"br"}, br)
 	if name := br.name(got); name != "br-2" {
@@ -260,6 +275,7 @@ func TestPickOrdinalSuppressedYieldsToAHandTypedName(t *testing.T) {
 // different entity kinds is two different buckets: two generators that cannot
 // collide must never serialize against each other.
 func TestNameScopeBuckets(t *testing.T) {
+	t.Parallel()
 	p, l := "parent-1", "loc-1"
 	keys := map[string]string{
 		"component parent":   componentNameScope(&p, nil).lockKey(),
@@ -294,6 +310,7 @@ func TestNameScopeBuckets(t *testing.T) {
 // in one bucket take different locks, read the same siblings, mint the same
 // name, and the loser gets a 23505 on a create that supplied no name at all.
 func TestTwoStemsCanMintOneName(t *testing.T) {
+	t.Parallel()
 	if a, b := systemMint("wall").name(2), systemMint("wall-2").name(1); a != b {
 		t.Fatalf("systemMint(\"wall\").name(2) = %q and systemMint(\"wall-2\").name(1) = %q: this test is asserting an overlap that no longer exists, so re-check whether lockKey may carry the stem again", a, b)
 	}
@@ -323,6 +340,7 @@ func TestTwoStemsCanMintOneName(t *testing.T) {
 // share is not a value a location's constructor can produce, so the filter it
 // builds never names a column the table does not have.
 func TestLocationNameScopeHasTwoBuckets(t *testing.T) {
+	t.Parallel()
 	p := "parent-1"
 	if got, want := locationNameScope(&p).where, "parent_id = $1"; got != want {
 		t.Errorf("a parented location filters on %q, want %q", got, want)
@@ -346,6 +364,7 @@ func TestLocationNameScopeHasTwoBuckets(t *testing.T) {
 // IS the stored rule, so a rule cannot mean one name to the allocator and
 // another to the caller.
 func TestNameRuleIsItsMint(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name    string
 		rule    NameRule
@@ -394,6 +413,7 @@ func TestNameRuleIsItsMint(t *testing.T) {
 // a name that IS its ordinal leaves nothing), so storing it true would give two
 // rules that mint identically and compare unequal.
 func TestNameRuleNormalizesTheIgnoredFlag(t *testing.T) {
+	t.Parallel()
 	got := NameRule{Stem: "", BareFirst: true}.normalized()
 	if got != (NameRule{}) {
 		t.Errorf("NameRule{stem:\"\", bareFirst:true}.normalized() = %+v, want the zero rule", got)
@@ -410,6 +430,7 @@ func TestNameRuleNormalizesTheIgnoredFlag(t *testing.T) {
 // not when a location is created". It refuses by MINTING, so the check and the
 // generator cannot disagree about what the rule produces.
 func TestValidateNameRuleRefusesWhatItCannotMint(t *testing.T) {
+	t.Parallel()
 	ok := []NameRule{
 		{},                              // positional
 		{Stem: "wing"},                  // counted
@@ -474,6 +495,7 @@ func stemOfLen(n int) string { return "w" + strings.Repeat("a", n-1) }
 // (another suppression rule, a separator) reach the console without anyone
 // editing TypeScript.
 func TestNameRuleExamplesAreWhatItMints(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name string
 		rule NameRule

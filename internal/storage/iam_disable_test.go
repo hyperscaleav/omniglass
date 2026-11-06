@@ -16,6 +16,7 @@ import (
 // it, the last active owner cannot be disabled, and a swap is allowed. Skipped
 // under -short.
 func TestDisablePrincipal(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)

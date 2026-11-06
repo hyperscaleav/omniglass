@@ -15,6 +15,7 @@ import (
 // this metric?) walked the whole table. Names mirror the property siblings'
 // post-rename shape: <table>_metric_type_idx on (metric_type_id).
 func TestMetricContractTypeIndexes(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

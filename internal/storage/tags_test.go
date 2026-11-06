@@ -42,6 +42,7 @@ func mustTag(t *testing.T, gw storage.Gateway, name string, appliesTo []string, 
 // TestTagRegistryCRUD covers minting keys, the all-scope gate, key/applies_to
 // validation, the duplicate conflict, listing, and update.
 func TestTagRegistryCRUD(t *testing.T) {
+	t.Parallel()
 	gw := tagGateway(t)
 	ctx := context.Background()
 
@@ -94,6 +95,7 @@ func TestTagRegistryCRUD(t *testing.T) {
 // TestTagBindingLifecycle covers the applies_to gate, the value gate, upsert
 // (replace), direct listing, and delete, all on a component binding.
 func TestTagBindingLifecycle(t *testing.T) {
+	t.Parallel()
 	gw := tagGateway(t)
 	ctx := context.Background()
 	seedTree(t, gw)
@@ -154,6 +156,7 @@ func TestTagBindingLifecycle(t *testing.T) {
 // the action scope is forbidden (readable) or not-found (unreadable), and a
 // platform binding needs an all-scope action.
 func TestTagBindingScope(t *testing.T) {
+	t.Parallel()
 	gw := tagGateway(t)
 	ctx := context.Background()
 	seedTree(t, gw)
@@ -185,6 +188,7 @@ func TestTagBindingScope(t *testing.T) {
 // override most-specific-wins, and a non-propagating key resolves only from the
 // component itself.
 func TestTagCascadeResolve(t *testing.T) {
+	t.Parallel()
 	gw := tagGateway(t)
 	ctx := context.Background()
 	comp := seedTree(t, gw)
@@ -247,6 +251,7 @@ func TestTagCascadeResolve(t *testing.T) {
 
 // TestTagDeleteCascadesBindings covers that deleting a key removes its bindings.
 func TestTagDeleteCascadesBindings(t *testing.T) {
+	t.Parallel()
 	gw := tagGateway(t)
 	ctx := context.Background()
 	seedTree(t, gw)

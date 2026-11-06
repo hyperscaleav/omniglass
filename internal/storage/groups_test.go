@@ -32,6 +32,7 @@ func scopeGrants(grants []storage.Grant) []scope.Grant {
 // the inheritance rides the single grant-loader union (nothing else changes).
 // Removing the member, and deleting the group, both drop the inherited access.
 func TestGroupGrantsInheritScopeAndPerms(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)

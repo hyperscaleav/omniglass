@@ -14,6 +14,7 @@ import (
 // An operator's create lands in `local`, and the database itself refuses an
 // `og` row that is not official, so no write path can plant one (#1431).
 func TestAnOperatorsCatalogRowIsLocalAndOgIsOfficialOnly(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	dsn := storagetest.NewDSN(t)
 	gw, err := storage.NewPG(ctx, dsn)
@@ -59,6 +60,7 @@ func TestAnOperatorsCatalogRowIsLocalAndOgIsOfficialOnly(t *testing.T) {
 // deleting theirs lets the shipped one answer. An operator's own create never
 // takes a shipped name: a shadow arises only from a release.
 func TestABareNameReachesTheOperatorsRowAndTheShippedOneWaits(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw := storagetest.NewDB(t)
 

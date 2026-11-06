@@ -15,6 +15,7 @@ import (
 // impairs the component's own verdict wholesale, #626); clearing reopens the
 // key for a fresh incident.
 func TestAlarmOneOpenPerCondition(t *testing.T) {
+	t.Parallel()
 	gw, _ := secretGateway(t)
 	ctx := context.Background()
 	all := scope.Set{All: true}

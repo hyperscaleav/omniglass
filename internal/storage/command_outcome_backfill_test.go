@@ -36,6 +36,7 @@ func outcomeBackfillSQL(t *testing.T) (up, down string) {
 }
 
 func TestOutcomeBackfillRetiresEventsNoCommandWrote(t *testing.T) {
+	t.Parallel()
 	r := newStatusRig(t, valueReply)
 	up, down := outcomeBackfillSQL(t)
 	// A command's own outcome event, which stays.

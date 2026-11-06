@@ -6,6 +6,7 @@ import (
 )
 
 func TestNextLockout(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, 7, 9, 12, 0, 0, 0, time.UTC)
 
 	// Below the threshold: just increment, no lock.
@@ -33,6 +34,7 @@ func TestNextLockout(t *testing.T) {
 }
 
 func TestIsLocked(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, 7, 9, 12, 0, 0, 0, time.UTC)
 	past := now.Add(-time.Minute)
 	future := now.Add(time.Minute)

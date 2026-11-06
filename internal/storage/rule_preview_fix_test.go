@@ -52,6 +52,7 @@ func edgeKinds(p *storage.RulePreview) []string {
 // before the window leave it in force, so the 60 inside it is a clear edge,
 // as the ingest judged it.
 func TestPreviewSeedsFromTheNewestDecisiveSample(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 	mkComponents(t, f, "hy-1")
@@ -73,6 +74,7 @@ func TestPreviewSeedsFromTheNewestDecisiveSample(t *testing.T) {
 // says so rather than guessing: its first decisive sample sets the state
 // without an edge.
 func TestPreviewStateUnknown(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 	mkComponents(t, f, "un-1")
@@ -95,6 +97,7 @@ func TestPreviewStateUnknown(t *testing.T) {
 // A sample that arrives older than its series' newest is history to the
 // ingest, which judges nothing by it; the preview walks the same way.
 func TestPreviewSkipsLateSamples(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 	mkComponents(t, f, "late-1")
@@ -116,6 +119,8 @@ func TestPreviewSkipsLateSamples(t *testing.T) {
 // on a fleet with more samples than the cap judges its component whole.
 // The cap takes whole series, counted.
 func TestPreviewSelectsAndCapsWholeSeries(t *testing.T) {
+	// Serial: it lowers a package-level preview cap (a Set*Cap hook), which
+	// every parallel test would otherwise see.
 	f := newHealthFixture(t)
 	ctx := context.Background()
 	var names []string
@@ -155,6 +160,7 @@ func TestPreviewSelectsAndCapsWholeSeries(t *testing.T) {
 // Every per-series read is an index probe on the series index, never a scan
 // of the lane.
 func TestPreviewReadsAreIndexProbes(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 	if _, err := f.conn.Exec(ctx, "set enable_seqscan = off"); err != nil {

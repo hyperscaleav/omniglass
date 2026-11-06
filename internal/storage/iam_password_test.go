@@ -17,6 +17,7 @@ import (
 // fail with ErrBadCredentials, and SetPassword rotates the credential. Skipped
 // under -short.
 func TestPasswordAuth(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 
@@ -91,6 +92,7 @@ func TestPasswordAuth(t *testing.T) {
 // the admin (not the target) as the actor, a non-all scope is refused, and an unknown
 // id is not-found. Skipped under -short.
 func TestSetPrincipalPassword(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)

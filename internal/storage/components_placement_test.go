@@ -18,6 +18,7 @@ import (
 // (with the all-scoped grant that now guards it), and an unknown parent. The
 // tree starts root-a > mid > leaf.
 func TestComponentReparent(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -67,6 +68,7 @@ func TestComponentReparent(t *testing.T) {
 // TestComponentRelocate covers the location three-state on MoveComponent: set,
 // clear, and an unknown location.
 func TestComponentRelocate(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -107,6 +109,7 @@ func TestComponentRelocate(t *testing.T) {
 // still be able to reparent within its own subtree (proving the refusal is
 // specific to root, not a blanket denial).
 func TestScopedPrincipalCannotLiftToRoot(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -147,6 +150,7 @@ func TestScopedPrincipalCannotLiftToRoot(t *testing.T) {
 // as "the move is auditable" would already be satisfied by the old
 // verb="update" row whose JSON happened to contain parent_id, forcing nothing.
 func TestMoveComponentAudited(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
@@ -214,6 +218,7 @@ func TestMoveComponentAudited(t *testing.T) {
 // same "scope decides before ambiguity does" resolution every other bare-name
 // reference in this codebase relies on.
 func TestMoveCollisionNamesBothParties(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -245,6 +250,7 @@ func TestMoveCollisionNamesBothParties(t *testing.T) {
 // proving the recompute is conditional on name_generated, not automatic for
 // every mover.
 func TestMoveRecomputesGeneratedName(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -329,6 +335,7 @@ func TestMoveRecomputesGeneratedName(t *testing.T) {
 // empty-string product before it ever reaches here), so it is the only place
 // this path is still exercised.
 func TestComponentUpdateEmptyProductReclassifiesToGeneric(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -355,6 +362,7 @@ func TestComponentUpdateEmptyProductReclassifiesToGeneric(t *testing.T) {
 // component and property_type, not by product) while the new product's contract
 // defaults take over for the properties nobody set.
 func TestComponentProductSwapKeepsSetValues(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -409,6 +417,7 @@ func TestComponentProductSwapKeepsSetValues(t *testing.T) {
 // a parent outside the caller's action scope is forbidden even when the moved
 // component is itself in scope, and a reparent onto an in-scope parent succeeds.
 func TestComponentReparentScope(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {

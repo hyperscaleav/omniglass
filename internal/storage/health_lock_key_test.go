@@ -18,6 +18,7 @@ import "testing"
 // decided before any SQL runs, and the deadlock-order half is already covered by
 // TestLockOrderIsByID against a real database.
 func TestTheHealthLockKeyPartitionsByID(t *testing.T) {
+	t.Parallel()
 	const (
 		roomA = "0198f000-0000-7000-8000-00000000000a"
 		roomB = "0198f000-0000-7000-8000-00000000000b"

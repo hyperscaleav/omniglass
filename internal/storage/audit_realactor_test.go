@@ -15,6 +15,7 @@ import (
 // real actor: a plain profile edit audits with a null real_actor, while the same
 // edit under WithRealActor records the impersonating admin. Skipped under -short.
 func TestSelfProfileAuditsRealActor(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
@@ -86,6 +87,7 @@ func TestSelfProfileAuditsRealActor(t *testing.T) {
 // uuidv7 id was the first fix here and turned out to be a clock in disguise;
 // TestAuditOrderSurvivesClockStep covers that half.)
 func TestAuditListOrdersByWriteSequenceNotTS(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

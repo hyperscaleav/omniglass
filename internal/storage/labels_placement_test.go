@@ -45,6 +45,7 @@ func makeRoomWithLabel(t *testing.T, gw *storage.PG, ctx context.Context, name, 
 // that reads the system's type, the location, and the component's own type
 // produces "Boardroom 204B Display".
 func TestTheWorkedExampleReadsPlacement(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	if _, err := gw.SetLabelRule(ctx, "", "component", "{{.SystemTypeLabel}} {{.LocationLabel}} {{.TypeName}}"); err != nil {
 		t.Fatalf("set the component rule: %v", err)
@@ -70,6 +71,7 @@ func TestTheWorkedExampleReadsPlacement(t *testing.T) {
 // covers the component map; this one covers the two new keys explicitly, so a
 // reader of this slice sees what it widened rather than having to diff a list.
 func TestThePlacementKeysAreExactlyTwoOnComponentAndOneOnSystem(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	room := makeRoomWithLabel(t, gw, ctx, "room-a", "Room A")
 	s, err := gw.CreateSystem(ctx, "", storage.SystemSpec{
@@ -136,6 +138,7 @@ func TestThePlacementKeysAreExactlyTwoOnComponentAndOneOnSystem(t *testing.T) {
 // reads raw kebab names, and it has to read them EXACTLY, never a prettified
 // version invented on the read path.
 func TestLocationLabelFallsThroughToTheLocationName(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	if _, err := gw.SetLabelRule(ctx, "", "component", "[{{.LocationLabel}}]"); err != nil {
 		t.Fatalf("set the component rule: %v", err)
@@ -170,6 +173,7 @@ func TestLocationLabelFallsThroughToTheLocationName(t *testing.T) {
 
 // Renaming a location restamps the rows that read it, and only those.
 func TestRenamingALocationRestampsTheRowsThatReadIt(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	if _, err := gw.SetLabelRule(ctx, "", "component", "{{.LocationLabel}} {{.TypeName}}"); err != nil {
 		t.Fatalf("component rule: %v", err)
@@ -233,6 +237,7 @@ func TestRenamingALocationRestampsTheRowsThatReadIt(t *testing.T) {
 // A location's LABEL moving is the same cascade as its name moving, and it is
 // the one that matters most, since it is the fact the worked example reads.
 func TestRelabellingALocationRestampsTheRowsThatReadIt(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	if _, err := gw.SetLabelRule(ctx, "", "component", "{{.LocationLabel}} {{.TypeName}}"); err != nil {
 		t.Fatalf("component rule: %v", err)
@@ -275,6 +280,7 @@ func TestRelabellingALocationRestampsTheRowsThatReadIt(t *testing.T) {
 // members are not the row being written, so nothing in slice 2 would have
 // restamped them.
 func TestReclassifyingASystemRestampsItsMembers(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	if _, err := gw.SetLabelRule(ctx, "", "component", "{{.SystemTypeLabel}} {{.TypeName}}"); err != nil {
 		t.Fatalf("component rule: %v", err)
@@ -309,6 +315,7 @@ func TestReclassifyingASystemRestampsItsMembers(t *testing.T) {
 // component's primary system is a row in system_member, and every act that
 // binds, unbinds or re-defaults one changes what SystemTypeLabel reads.
 func TestMembershipChangesRestampTheComponent(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	if _, err := gw.SetLabelRule(ctx, "", "component", "[{{.SystemTypeLabel}}]"); err != nil {
 		t.Fatalf("component rule: %v", err)
@@ -375,6 +382,7 @@ func TestMembershipChangesRestampTheComponent(t *testing.T) {
 // write path on these three tiers that stamped NO label before this slice,
 // because a system's map carried no fact a move could touch. It does now.
 func TestMovingASystemRestampsItsOwnLabel(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	if _, err := gw.SetLabelRule(ctx, "", "system", "{{.LocationLabel}} {{.TypeName}}"); err != nil {
 		t.Fatalf("system rule: %v", err)
@@ -400,6 +408,7 @@ func TestMovingASystemRestampsItsOwnLabel(t *testing.T) {
 // A component's own move changes its own LocationLabel, on top of the ordinal
 // re-mint slice 2 already stamped for.
 func TestMovingAComponentRestampsItsLocationLabel(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	if _, err := gw.SetLabelRule(ctx, "", "component", "{{.LocationLabel}} {{.TypeName}}"); err != nil {
 		t.Fatalf("component rule: %v", err)
@@ -423,6 +432,7 @@ func TestMovingAComponentRestampsItsLocationLabel(t *testing.T) {
 // cascades, which is the pen's whole contract applied to a write the operator
 // did not make on that row.
 func TestAnOperatorOwnedLabelSurvivesEveryCascade(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	if _, err := gw.SetLabelRule(ctx, "", "component", "{{.LocationLabel}} {{.SystemTypeLabel}}"); err != nil {
 		t.Fatalf("component rule: %v", err)
@@ -474,6 +484,7 @@ func TestAnOperatorOwnedLabelSurvivesEveryCascade(t *testing.T) {
 // (#687's positional types are the obvious candidate), this test fails and the
 // cascade has to grow a location-subtree arm.
 func TestMovingALocationChangesNoLabelUnderIt(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	if _, err := gw.SetLabelRule(ctx, "", "component", "{{.LocationLabel}} {{.TypeName}}"); err != nil {
 		t.Fatalf("component rule: %v", err)
@@ -506,6 +517,7 @@ func TestMovingALocationChangesNoLabelUnderIt(t *testing.T) {
 // A preview lists exactly the rows a rule change would alter, and changes
 // nothing; applying then changes exactly that set; a re-apply is idempotent.
 func TestAPreviewListsExactlyWhatAnApplyThenChanges(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	room := makeRoom(t, gw, ctx, "room-a")
 	var ids []string
@@ -591,6 +603,7 @@ func TestAPreviewListsExactlyWhatAnApplyThenChanges(t *testing.T) {
 
 // The verb covers all three kinds, not components alone.
 func TestTheVerbRecomputesSystemsAndLocationsToo(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	room := makeRoom(t, gw, ctx, "room-a")
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sys-a", SystemTypeID: strptr("board"), LocationName: &room}, all, all); err != nil {
@@ -639,6 +652,7 @@ func TestTheVerbRecomputesSystemsAndLocationsToo(t *testing.T) {
 // An unknown entity kind is refused by name rather than silently recomputing
 // nothing, which is what a typo in a generated client would otherwise be.
 func TestTheVerbRefusesAnUnknownKind(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	if _, err := gw.PreviewLabelRecompute(ctx, "node", all, all); err == nil {
 		t.Fatalf("preview over an unknown kind succeeded, want a refusal")
@@ -653,6 +667,7 @@ func TestTheVerbRefusesAnUnknownKind(t *testing.T) {
 // Scope is respected on both halves of the verb: a caller sees and changes
 // only the rows inside both their read and their update scope.
 func TestTheVerbRespectsScope(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	mine := makeRoom(t, gw, ctx, "room-mine")
 	theirs := makeRoom(t, gw, ctx, "room-theirs")
@@ -775,6 +790,7 @@ func assertNoLabelDrift(t *testing.T, gw *storage.PG, ctx context.Context) {
 // whether any stored label disagrees with what its rules produce. A write path
 // nobody thought of fails it, which is the property an enumeration cannot have.
 func TestNoActLeavesALabelStaleAnywhere(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	// Rules that read everything a rule can read about placement, so an act
 	// that fails to restamp is a visible mismatch rather than a coincidence.
@@ -953,6 +969,7 @@ func TestNoActLeavesALabelStaleAnywhere(t *testing.T) {
 // because a role assignment needs a standard, and the fixture that gives it one
 // would drown the loop it sits in.
 func TestStaffingARoleRestampsTheComponentItBinds(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	if _, err := gw.SetLabelRule(ctx, "", "component", "[{{.SystemTypeLabel}}]"); err != nil {
 		t.Fatalf("component rule: %v", err)
@@ -990,6 +1007,7 @@ func TestStaffingARoleRestampsTheComponentItBinds(t *testing.T) {
 // membership (AddMember, RemoveMember, SetPrimaryMember, AssignRole); this is
 // the implicit one the database performs on the gateway's behalf.
 func TestDeletingASystemRestampsItsMembers(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	if _, err := gw.SetLabelRule(ctx, "", "component", "[{{.SystemTypeLabel}}]"); err != nil {
 		t.Fatalf("component rule: %v", err)
@@ -1027,6 +1045,7 @@ func TestDeletingASystemRestampsItsMembers(t *testing.T) {
 // rather than theoretical: with no default at all a rule reading
 // .SystemTypeLabel renders empty for a component that is still in a system.
 func TestDeletingASystemPromotesTheSoleSurvivingMembership(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	if _, err := gw.SetLabelRule(ctx, "", "component", "[{{.SystemTypeLabel}}]"); err != nil {
 		t.Fatalf("component rule: %v", err)

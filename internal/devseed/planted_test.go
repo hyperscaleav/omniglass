@@ -11,6 +11,7 @@ import (
 // agent refuses). The lab's readiness does not wait on them, and it reads
 // them from the seed, never from a list kept beside it.
 func TestPlantedFaultsAreReadFromTheSeed(t *testing.T) {
+	t.Parallel()
 	dev, err := devseed.LookupScenario("dev")
 	if err != nil {
 		t.Fatal(err)

@@ -132,6 +132,7 @@ func has(list []string, want string) bool {
 }
 
 func TestFleetProjectionCarriesTheWholeInScopeTree(t *testing.T) {
+	t.Parallel()
 	f := newFleetFixture(t)
 	v := f.project(t, f.all, f.all, f.all)
 
@@ -167,6 +168,7 @@ func TestFleetProjectionCarriesTheWholeInScopeTree(t *testing.T) {
 // (the canvas still draws) and expensive (a fleet-sized component list on
 // every paint), so the shape is pinned rather than trusted.
 func TestFleetProjectionCarriesDotsNotComponentRows(t *testing.T) {
+	t.Parallel()
 	f := newFleetFixture(t)
 	v := f.project(t, f.all, f.all, f.all)
 
@@ -191,6 +193,7 @@ func TestFleetProjectionCarriesDotsNotComponentRows(t *testing.T) {
 // as a ghost everywhere else, so the fleet's component count does not
 // double-count a box that exists once.
 func TestFleetProjectionMarksASharedComponentOwnedOnceAndGhostElsewhere(t *testing.T) {
+	t.Parallel()
 	f := newFleetFixture(t)
 	v := f.project(t, f.all, f.all, f.all)
 
@@ -218,6 +221,7 @@ func TestFleetProjectionMarksASharedComponentOwnedOnceAndGhostElsewhere(t *testi
 // A system's verdict comes from the same rollup the health read serves, so the
 // canvas and the detail page can never disagree about a room.
 func TestFleetProjectionSystemVerdictMatchesTheHealthRead(t *testing.T) {
+	t.Parallel()
 	f := newFleetFixture(t)
 	v := f.project(t, f.all, f.all, f.all)
 
@@ -236,6 +240,7 @@ func TestFleetProjectionSystemVerdictMatchesTheHealthRead(t *testing.T) {
 // principal who can read no location sees an empty canvas, which is not an
 // error: there is simply nothing of theirs to draw.
 func TestFleetProjectionIsEmptyWithoutScopeRatherThanFailing(t *testing.T) {
+	t.Parallel()
 	f := newFleetFixture(t)
 	v := f.project(t, scope.Set{}, scope.Set{}, scope.Set{})
 	if len(v.Locations) != 0 || len(v.Systems) != 0 {
@@ -248,6 +253,7 @@ func TestFleetProjectionIsEmptyWithoutScopeRatherThanFailing(t *testing.T) {
 // may read the place tree but not its components see the shape of their fleet
 // without its contents.
 func TestFleetProjectionScopesEachTierOnItsOwn(t *testing.T) {
+	t.Parallel()
 	f := newFleetFixture(t)
 	v := f.project(t, f.all, f.all, scope.Set{})
 
@@ -272,6 +278,7 @@ func TestFleetProjectionScopesEachTierOnItsOwn(t *testing.T) {
 // tiny and Postgres would rightly scan it whatever exists; what the planner
 // reaches for INSTEAD is what it will choose once the lane is real.
 func TestFleetProjectionVerdictLookupsAreIndexed(t *testing.T) {
+	t.Parallel()
 	f := newFleetFixture(t)
 	ctx := context.Background()
 

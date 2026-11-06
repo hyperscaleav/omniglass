@@ -12,6 +12,7 @@ import "testing"
 // suppressed first ordinal ("boardroom" is 1, "boardroom-2" is 2) sorts
 // correctly here and would sort backwards by name.
 func TestGenIndexHandsOutAllocationOrder(t *testing.T) {
+	t.Parallel()
 	room := genSlot{bucket: "location/room-1", class: "board"}
 	idx := newGenIndex([]genRow{
 		{slot: room, ordinal: 2, id: "second"},
@@ -33,6 +34,7 @@ func TestGenIndexHandsOutAllocationOrder(t *testing.T) {
 // together are the space, so the same room's displays and video bars are
 // separate runs of ordinals, and the same product in another room is another.
 func TestGenIndexKeepsSlotsApart(t *testing.T) {
+	t.Parallel()
 	displays := genSlot{bucket: "location/room-1", class: "boreal-edge-55"}
 	bars := genSlot{bucket: "location/room-1", class: "kestrel-vroom"}
 	elsewhere := genSlot{bucket: "location/room-2", class: "boreal-edge-55"}
@@ -61,6 +63,7 @@ func TestGenIndexKeepsSlotsApart(t *testing.T) {
 // second would resolve to the first and the fleet would come up one short, which
 // a fresh run's counts would never notice.
 func TestGenIndexAdvancesEvenWhenTheFleetIsShort(t *testing.T) {
+	t.Parallel()
 	room := genSlot{bucket: "location/room-1", class: "boreal-edge-55"}
 	idx := newGenIndex([]genRow{{slot: room, ordinal: 1, id: "already-here"}})
 	if got, want := idx.take(room), "already-here"; got != want {
@@ -91,6 +94,7 @@ func TestGenIndexAdvancesEvenWhenTheFleetIsShort(t *testing.T) {
 // product is not "unclassified", the gateway resolves it to generic-device, and
 // that is what the row then reports back.
 func TestProductClassSpellsTheGenericTheGatewayResolves(t *testing.T) {
+	t.Parallel()
 	if got := productClass(""); got != "generic-device" {
 		t.Errorf("productClass(\"\") = %q, want generic-device (what CreateComponent's own COALESCE resolves)", got)
 	}
@@ -103,6 +107,7 @@ func TestProductClassSpellsTheGenericTheGatewayResolves(t *testing.T) {
 // the scoped-name unique indexes it mirrors: a parent wins over a location, and
 // a row with neither is unplaced.
 func TestBucketOfPrefersTheParent(t *testing.T) {
+	t.Parallel()
 	if got, want := bucketOf("p", "l"), "parent/p"; got != want {
 		t.Errorf("bucketOf(parent, location) = %q, want %q (a parent wins)", got, want)
 	}

@@ -253,6 +253,7 @@ func byNameSites(t *testing.T, dir string) []byNameSite {
 // namespace; one that means to look across namespaces is listed in
 // byNameAllowed with its reason.
 func TestNoByNameLookupSkipsTheSearchPath(t *testing.T) {
+	t.Parallel()
 	if _, err := os.Stat("name_lane.go"); err != nil {
 		t.Fatal("run from the storage package directory")
 	}

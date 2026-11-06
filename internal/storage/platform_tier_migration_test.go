@@ -12,6 +12,7 @@ import (
 // is legal on every owner_kind that carries the tier, 'global' is not, and the
 // partial unique index moved with it.
 func TestPlatformTierRename(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	conn := connectMigrated(t)
 
@@ -64,6 +65,7 @@ func TestPlatformTierRename(t *testing.T) {
 // `drop index if exists` on a name that never existed succeeds silently, so the
 // names are asserted rather than assumed.
 func TestPlatformTierIndexNames(t *testing.T) {
+	t.Parallel()
 	conn := connectMigrated(t)
 
 	for _, name := range []string{"variable_platform_name", "secret_platform_name", "tag_binding_platform_key"} {

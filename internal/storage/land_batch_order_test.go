@@ -15,6 +15,7 @@ import (
 // judging any would find the second row newer than the first, skip the first
 // as stale, and never fire.
 func TestABatchJudgesEachSampleOfASeriesInOrder(t *testing.T) {
+	t.Parallel()
 	r := newEdgeRig(t)
 	if _, err := r.f.gw.CreateEventRule(r.ctx, "", storage.EventRuleSpec{
 		Name: "hot-room", SampleKey: "room-temperature", Severity: "high",

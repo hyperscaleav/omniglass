@@ -14,6 +14,7 @@ import (
 // second Run is idempotent. The transports are a code registry (ADR-0073,
 // internal/transport), no longer seeded rows, so they are not asserted here.
 func TestRegistrySeed(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

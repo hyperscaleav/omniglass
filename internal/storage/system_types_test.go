@@ -18,6 +18,7 @@ import (
 // resolves both, the child carrying its parent's id, on the same shape
 // component_type's round trip pins.
 func TestSystemTypeRoundTrip(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
 	if err != nil {
@@ -130,6 +131,7 @@ func TestSystemTypeRoundTrip(t *testing.T) {
 // returns the root's). A fixture that overrode only at the leaf, or that gave
 // every level the same value, would pass whether or not any of that works.
 func TestSystemTypeFactsInheritOverrideMidChain(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
 	if err != nil {
@@ -203,6 +205,7 @@ func TestSystemTypeFactsInheritOverrideMidChain(t *testing.T) {
 // boardroom's resolved icon must be room's and never av's. It fails if the seed
 // stops setting an icon mid-chain, or if the walk takes the root's value.
 func TestSeededSystemTypeInheritsMidChain(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
 	if err != nil {
@@ -262,6 +265,7 @@ func TestSeededSystemTypeInheritsMidChain(t *testing.T) {
 // The #507 lesson is that a registry delete must never cascade through
 // classified rows, so each refusal leaves the world exactly as it was.
 func TestSystemTypeDeleteRestricted(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
 	if err != nil {
@@ -311,6 +315,7 @@ func TestSystemTypeDeleteRestricted(t *testing.T) {
 // cleared by the house empty-string sentinel. A patch that omits the field
 // leaves it alone, which is the leg a coalesce-only implementation gets wrong.
 func TestSystemCarriesItsType(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
 	if err != nil {
@@ -391,6 +396,7 @@ func TestSystemCarriesItsType(t *testing.T) {
 // the registry has no rename leg on the gateway (component_type has none
 // either); the invariant under test is the storage shape, not the verb.
 func TestSystemTypeRenameKeepsItsSystems(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	dsn := storagetest.NewDSN(t)
 	gw, err := storage.NewPG(ctx, dsn)
@@ -438,6 +444,7 @@ func TestSystemTypeRenameKeepsItsSystems(t *testing.T) {
 // upsert, like component_type's, not location_type's seed-if-absent), and that
 // an operator row alongside them is left completely alone by a re-seed.
 func TestSeedSystemTypesIdempotent(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
 	if err != nil {
@@ -518,6 +525,7 @@ func TestSeedSystemTypesIdempotent(t *testing.T) {
 // "inherit", it is "nothing", and every stemless descendant would resolve to
 // "". A child with no stem is fine, which is the whole point of the tree.
 func TestRootSystemTypeRequiresStem(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
 	if err != nil {
@@ -546,6 +554,7 @@ func TestRootSystemTypeRequiresStem(t *testing.T) {
 // system name, so it follows the entity name rule on create and on update. A
 // nil stem (inherit) is untouched, since there is nothing to validate.
 func TestSystemTypeStemMustBeAValidName(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
 	if err != nil {

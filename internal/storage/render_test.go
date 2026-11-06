@@ -7,6 +7,7 @@ import "testing"
 // into the render ("boi-17c-216b-$comp-display-1"), which is not what an
 // operator wants on a cable tag or a asset label. RenderDash strips it.
 func TestRenderDashStripsAccessor(t *testing.T) {
+	t.Parallel()
 	got := RenderDash(parseOrFail(t, "boi.17c.216b.$comp.display-1"))
 	want := "boi-17c-216b-display-1"
 	if got != want {
@@ -15,6 +16,7 @@ func TestRenderDashStripsAccessor(t *testing.T) {
 }
 
 func TestRenderDashSystemAccessor(t *testing.T) {
+	t.Parallel()
 	got := RenderDash(parseOrFail(t, "boi.17c.$sys.av"))
 	want := "boi-17c-av"
 	if got != want {
@@ -23,6 +25,7 @@ func TestRenderDashSystemAccessor(t *testing.T) {
 }
 
 func TestRenderDashUnplacedOpensOnAccessor(t *testing.T) {
+	t.Parallel()
 	// Root is empty (an unplaced/orphan component): the accessor is still the
 	// first segment and still stripped, leaving just the component's own
 	// tail.
@@ -34,6 +37,7 @@ func TestRenderDashUnplacedOpensOnAccessor(t *testing.T) {
 }
 
 func TestRenderDashPlainLocationHasNoAccessorToStrip(t *testing.T) {
+	t.Parallel()
 	got := RenderDash(parseOrFail(t, "boi.17c.416a"))
 	want := "boi-17c-416a"
 	if got != want {
@@ -48,6 +52,7 @@ func TestRenderDashPlainLocationHasNoAccessorToStrip(t *testing.T) {
 // STORED on the row (#681), so the render reads a fact rather than
 // reconstructing one from the name it is about to replace.
 func TestRenderBareReplacesStemOrdinalWithAbbrev(t *testing.T) {
+	t.Parallel()
 	got := RenderBare(parseOrFail(t, "boi.17c.216b.$comp.display-1"), ordp(1), "dsp")
 	want := "boi17c216bdsp1"
 	if got != want {
@@ -56,6 +61,7 @@ func TestRenderBareReplacesStemOrdinalWithAbbrev(t *testing.T) {
 }
 
 func TestRenderBareMultiDigitOrdinal(t *testing.T) {
+	t.Parallel()
 	got := RenderBare(parseOrFail(t, "boi.$comp.display-12"), ordp(12), "dsp")
 	want := "boidsp12"
 	if got != want {
@@ -68,6 +74,7 @@ func TestRenderBareMultiDigitOrdinal(t *testing.T) {
 // to compact the final segment TO, so RenderBare falls back to the dash
 // render's segments, just concatenated instead of dashed.
 func TestRenderBareNoAbbrevFallsBackToConcatenation(t *testing.T) {
+	t.Parallel()
 	got := RenderBare(parseOrFail(t, "boi.17c.216b.$comp.display-1"), ordp(1), "")
 	want := "boi17c216bdisplay-1"
 	if got != want {
@@ -80,6 +87,7 @@ func TestRenderBareNoAbbrevFallsBackToConcatenation(t *testing.T) {
 // so there is nothing to substitute and the segment is left exactly as the
 // dash render has it.
 func TestRenderBareNoOrdinalTailLeavesSegmentUnchanged(t *testing.T) {
+	t.Parallel()
 	got := RenderBare(parseOrFail(t, "boi.$comp.front-desk-display"), nil, "dsp")
 	want := "boifront-desk-display"
 	if got != want {
@@ -95,6 +103,7 @@ func TestRenderBareNoOrdinalTailLeavesSegmentUnchanged(t *testing.T) {
 // appears nowhere in the entity's name. A NULL ordinal cannot be compacted, so
 // the render no longer has to recognise the case, it simply has no number.
 func TestRenderBareLeavesAForeignStemAlone(t *testing.T) {
+	t.Parallel()
 	got := RenderBare(parseOrFail(t, "boi.$comp.rack-3"), nil, "dsp")
 	want := "boirack-3"
 	if got != want {
@@ -107,6 +116,7 @@ func TestRenderBareLeavesAForeignStemAlone(t *testing.T) {
 // ordinal column and the backfill could not read a number off. The digits in
 // the name are not evidence, the column is.
 func TestRenderBareNoStoredOrdinalLeavesSegmentUnchanged(t *testing.T) {
+	t.Parallel()
 	got := RenderBare(parseOrFail(t, "boi.$comp.display-1"), nil, "dsp")
 	want := "boidisplay-1"
 	if got != want {
@@ -115,6 +125,7 @@ func TestRenderBareNoStoredOrdinalLeavesSegmentUnchanged(t *testing.T) {
 }
 
 func TestRenderBareEmptySegments(t *testing.T) {
+	t.Parallel()
 	if got := RenderBare(nil, ordp(1), "dsp"); got != "" {
 		t.Fatalf("RenderBare(nil) = %q, want empty", got)
 	}
@@ -125,6 +136,7 @@ func TestRenderBareEmptySegments(t *testing.T) {
 func ordp(n int) *int { return &n }
 
 func TestRenderDashEmptySegments(t *testing.T) {
+	t.Parallel()
 	if got := RenderDash(nil); got != "" {
 		t.Fatalf("RenderDash(nil) = %q, want empty", got)
 	}

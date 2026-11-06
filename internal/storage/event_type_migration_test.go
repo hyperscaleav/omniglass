@@ -12,6 +12,7 @@ import (
 // exists, the log kind has left property_type, and the event table is repointed
 // onto event_type with the new origin/causation columns and no property_type_id.
 func TestEventTypeFamilyMigration(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	conn := connectMigrated(t)
 

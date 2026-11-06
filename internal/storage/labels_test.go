@@ -37,6 +37,7 @@ const labelsBar = "labels-bar"
 // A component created with a product and a location gets a label without the
 // operator typing one: the first acceptance behavior.
 func TestCreatedComponentGetsALabelNobodyTyped(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	room := makeRoom(t, gw, ctx, "room-a")
 
@@ -74,6 +75,7 @@ func TestCreatedComponentGetsALabelNobodyTyped(t *testing.T) {
 // rule renders again. Both halves of the second acceptance behavior, in the
 // order an operator performs them.
 func TestSettingALabelTakesThePenAndClearingItGivesItBack(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	room := makeRoom(t, gw, ctx, "room-a")
 	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(edge55), LocationName: &room}, all, all, all, all)
@@ -130,6 +132,7 @@ func TestSettingALabelTakesThePenAndClearingItGivesItBack(t *testing.T) {
 // exists to fix exactly that, so "nothing to say today" must not read as
 // "someone else's field".
 func TestARuleRenderingNothingLeavesTheLabelUnsetRatherThanBlank(t *testing.T) {
+	t.Parallel()
 	gw, ctx, dsn := seededGatewayDSN(t)
 
 	// First the create case, where the row starts with no label and the rule
@@ -185,6 +188,7 @@ func TestARuleRenderingNothingLeavesTheLabelUnsetRatherThanBlank(t *testing.T) {
 // second assertion is the one that matters: the refusal is not just a returned
 // error, the column still holds what it held before.
 func TestAnUnparseableRuleIsRefusedAndNeverStored(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	if _, err := gw.UpdateComponentType(ctx, "", "display", storage.ComponentTypePatch{LabelRule: strptr("{{.TypeName | title}}")}); err != nil {
 		t.Fatalf("set a good rule first: %v", err)
@@ -214,6 +218,7 @@ func TestAnUnparseableRuleIsRefusedAndNeverStored(t *testing.T) {
 // type it forks that row and becomes effective for every component of it, so it
 // would re-trigger on every later create, rename, move, reclassify and reset.
 func TestARuleThatWouldAllocateWithoutBoundCannotBeStored(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 
 	assign := `{{$a := printf "%1000s" .TypeName}}`
@@ -255,6 +260,7 @@ func TestARuleThatWouldAllocateWithoutBoundCannotBeStored(t *testing.T) {
 // succeeds, the label is left unset, and the read that follows is a row rather
 // than a 500.
 func TestARuleThatFailsToRenderDegradesRatherThanFailingTheWrite(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	// Parses (a field access is valid syntax), fails at execution (a string has
 	// no field), which is exactly the class edit-time validation cannot catch.
@@ -280,6 +286,7 @@ func TestARuleThatFailsToRenderDegradesRatherThanFailingTheWrite(t *testing.T) {
 // by adding one tier at a time to the SAME row, so each step's expected value
 // is only reachable if precedence is what changed.
 func TestAMoreSpecificTierWins(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(edge55)}, all, all, all, all)
 	if err != nil {
@@ -318,6 +325,7 @@ func TestAMoreSpecificTierWins(t *testing.T) {
 // ADR-0095): the operator's rule is what a component resolves, and the official
 // row is byte-identical afterwards so a later release can still improve it.
 func TestARuleOnAShippedTypeForksItRatherThanWritingIt(t *testing.T) {
+	t.Parallel()
 	gw, ctx, dsn := seededGatewayDSN(t)
 	forked, err := gw.UpdateComponentType(ctx, "", "display", storage.ComponentTypePatch{LabelRule: strptr("Panel {{.Ordinal}}")})
 	if err != nil {
@@ -358,6 +366,7 @@ func TestARuleOnAShippedTypeForksItRatherThanWritingIt(t *testing.T) {
 // under display, so forking the PARENT's rule reaches it, and a rule of its own
 // then overrides for itself alone.
 func TestATypeRuleInheritsFromItsAncestorAndAChildOverrides(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	// An operator's product classified under the child type, so the component
 	// resolves through interactive-display -> display.
@@ -407,6 +416,7 @@ func TestATypeRuleInheritsFromItsAncestorAndAChildOverrides(t *testing.T) {
 // builder. Then a rule that names credentials by every word it might use, over
 // a database that really holds one, rendering nothing.
 func TestASecretIsNotReachableFromARule(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 
 	// A real secret, with a real value, in the same database the rule runs
@@ -465,6 +475,7 @@ func TestASecretIsNotReachableFromARule(t *testing.T) {
 }
 
 func TestTheSystemAndLocationDataMapsAreClosedToo(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	room := makeRoom(t, gw, ctx, "room-a")
 	sys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sys-a", LocationName: &room}, all, all)
@@ -523,6 +534,7 @@ func TestTheSystemAndLocationDataMapsAreClosedToo(t *testing.T) {
 // labels_placement_test.go; the fleet-wide invariant that no longer takes any
 // enumeration on trust is TestNoActLeavesALabelStaleAnywhere.
 func TestALabelFollowsEveryActThatChangesItsInputs(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	if _, err := gw.UpdateComponentType(ctx, "", "display", storage.ComponentTypePatch{
 		LabelRule: strptr("{{.TypeName}}/{{.Name}}/{{if .Ordinal}}{{.Ordinal}}{{else}}-{{end}}"),
@@ -590,6 +602,7 @@ func TestALabelFollowsEveryActThatChangesItsInputs(t *testing.T) {
 }
 
 func TestASystemAndALocationGetLabelsToo(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	room := makeRoom(t, gw, ctx, "room-a")
 
@@ -649,6 +662,7 @@ func TestASystemAndALocationGetLabelsToo(t *testing.T) {
 // asserted, and so is the fact that they DIFFER, because two labels that agree
 // would satisfy an assertion of either string on its own.
 func TestTwoSameTypeSystemsInOneRoomReadDifferently(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	room := makeRoom(t, gw, ctx, "room-a")
 
@@ -696,6 +710,7 @@ func TestTwoSameTypeSystemsInOneRoomReadDifferently(t *testing.T) {
 // count changes, in the write that changed it: a second arriving, one
 // leaving by delete, one moving out.
 func TestAPlaceHoldingSeveralSystemsNamesEachKind(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	room := makeRoom(t, gw, ctx, "room-a")
 	other := makeRoom(t, gw, ctx, "room-b")
@@ -750,6 +765,7 @@ func TestAPlaceHoldingSeveralSystemsNamesEachKind(t *testing.T) {
 // itself: its own name, read as words. And an operator's own label is never
 // restamped by a sibling arriving.
 func TestASharedPlaceNamesAnUnclassifiedSystemByItselfAndKeepsAnOperatorLabel(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	room := makeRoom(t, gw, ctx, "room-a")
 	typed, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "front-of-house", Label: "FOH Rack", LocationName: &room}, all, all)
@@ -773,6 +789,7 @@ func TestASharedPlaceNamesAnUnclassifiedSystemByItselfAndKeepsAnOperatorLabel(t 
 // space and ordinal, as every system did before, and an unclassified one
 // reads nothing (the read ladder falls back to its name).
 func TestAnUnplacedSystemReadsItsKind(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	typed, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strptr("board")}, all, all)
 	if err != nil {
@@ -800,6 +817,7 @@ func TestAnUnplacedSystemReadsItsKind(t *testing.T) {
 // columns, resolved one over the other, is the only arrangement where re-seeding
 // and operator ownership are both true.
 func TestTheGlobalRuleIsSeededAuthoritativelyAndStillOperatorOwned(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 
 	shipped, err := gw.GetLabelRule(ctx, "component")
@@ -872,6 +890,7 @@ func TestTheGlobalRuleIsSeededAuthoritativelyAndStillOperatorOwned(t *testing.T)
 // have produced. The kind carries no other fact worth rendering (the type is
 // "Room" for every room in the fleet), which is why this rule and not another.
 func TestTheShippedLocationRuleReadsTheNameAsWords(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 
 	shipped, err := gw.GetLabelRule(ctx, "location")
@@ -948,6 +967,7 @@ func TestTheShippedLocationRuleReadsTheNameAsWords(t *testing.T) {
 // rows whose effective rule read nothing a rename touches, so the stamps were
 // asserted by the key list and by nothing else.
 func TestASystemsLabelFollowsItsRenameAndItsReclassify(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	if _, err := gw.SetLabelRule(ctx, "", "system", "{{.TypeName}}/{{.Name}}"); err != nil {
 		t.Fatalf("set the global system rule: %v", err)
@@ -976,6 +996,7 @@ func TestASystemsLabelFollowsItsRenameAndItsReclassify(t *testing.T) {
 }
 
 func TestALocationsLabelFollowsItsRenameAndItsReclassify(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	if _, err := gw.SetLabelRule(ctx, "", "location", "{{.TypeName}}/{{.Name}}"); err != nil {
 		t.Fatalf("set the global location rule: %v", err)
@@ -1018,6 +1039,7 @@ func TestALocationsLabelFollowsItsRenameAndItsReclassify(t *testing.T) {
 // been renamed, moved, reclassified and reset, and rows whose label the operator
 // owns (which the invariant must skip, not silently rewrite).
 func TestEveryStoredLabelEqualsWhatItsRuleProduces(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	if _, err := gw.UpdateComponentType(ctx, "", "display", storage.ComponentTypePatch{
 		LabelRule: strptr("{{.TypeName | upper}} {{.Name}}{{if .Ordinal}} #{{.Ordinal}}{{end}}"),
@@ -1132,6 +1154,7 @@ func TestEveryStoredLabelEqualsWhatItsRuleProduces(t *testing.T) {
 // Both rules here read .Name, so a rename that fails to re-render is a
 // mismatch, and both fleets are edited rather than only created.
 func TestEveryStoredSystemAndLocationLabelEqualsWhatItsRuleProduces(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	if _, err := gw.SetLabelRule(ctx, "", "system", "{{.TypeName}} {{.Name | upper}}"); err != nil {
 		t.Fatalf("system rule: %v", err)
@@ -1240,6 +1263,7 @@ func TestEveryStoredSystemAndLocationLabelEqualsWhatItsRuleProduces(t *testing.T
 // harness minted label-less products; the harness now sets labels, which walks
 // around the defect rather than fixing it, so the coverage has to live here.
 func TestAComponentResolvesALabelFromALabellessProduct(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	room := makeRoom(t, gw, ctx, "room-labelless")
 

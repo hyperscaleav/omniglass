@@ -39,6 +39,7 @@ import (
 // TestACreateHonoursTheNameTheFormWasShown is the ordinary path: the form
 // previews, nothing else happens, the create lands the name it expected.
 func TestACreateHonoursTheNameTheFormWasShown(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	room := makeRoomWithLabel(t, gw, ctx, "room-204b", "204B")
 
@@ -74,6 +75,7 @@ func TestACreateHonoursTheNameTheFormWasShown(t *testing.T) {
 // silently renamed to display-2, because the whole point of the locked field is
 // that the operator was shown the name they get.
 func TestACreateRefusesANameAnotherCreateTook(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	room := makeRoomWithLabel(t, gw, ctx, "room-204b", "204B")
 
@@ -135,6 +137,7 @@ func TestACreateRefusesANameAnotherCreateTook(t *testing.T) {
 // therefore MET, and the row lands as monitor-1, which is precisely the silent
 // rename the precondition exists to prevent.
 func TestACreateRefusesANameTheTypeMovedUnderneath(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	room := makeRoomWithLabel(t, gw, ctx, "room-204b", "204B")
 
@@ -206,6 +209,7 @@ func TestACreateRefusesANameTheTypeMovedUnderneath(t *testing.T) {
 // expectation posted beside one can never be checked. Refused rather than
 // ignored: a precondition nobody evaluates reads as a guarantee and is not one.
 func TestTheNamePreconditionIsRefusedOnAnOperatorTypedName(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	room := makeRoomWithLabel(t, gw, ctx, "room-204b", "204B")
 
@@ -234,6 +238,7 @@ func TestTheNamePreconditionIsRefusedOnAnOperatorTypedName(t *testing.T) {
 // outside it, which is the other reason the name is the better claim: the
 // suppressed "boardroom" and the "boardroom-2" beside it are one comparison.
 func TestTheNamePreconditionHoldsOnEveryTierThatGenerates(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	room := makeRoomWithLabel(t, gw, ctx, "room-204b", "204B")
 

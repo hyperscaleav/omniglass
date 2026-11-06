@@ -18,6 +18,7 @@ import (
 // upsert dropped the metric arm on the floor and a bare subselect silently
 // NULLed an unregistered property target.
 func TestUpsertCommandTypeTargetArms(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
@@ -89,6 +90,7 @@ func TestUpsertCommandTypeTargetArms(t *testing.T) {
 // the target as one fact with two forms: setting either arm replaces it
 // wholesale (the other arm clears), the empty string clears it outright.
 func TestCommandTypeTargetSpecPatch(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
@@ -188,6 +190,7 @@ func TestCommandTypeTargetSpecPatch(t *testing.T) {
 // construction, and the shipped `reboot` type carries it. The floor is the
 // smallest one that admits every meaning the field has.
 func TestCommandTypeRefusesANegativeSettleWindow(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)

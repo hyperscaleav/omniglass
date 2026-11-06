@@ -76,6 +76,7 @@ func avgSpec(name string) storage.CalcRuleSpec {
 // key is referenced by id on its lane, a write bumps its version and is
 // audited, and rules read like a registry, written only on an all-scope grant.
 func TestCalcRules(t *testing.T) {
+	t.Parallel()
 	r := newCalcRig(t)
 	got, err := r.create(avgSpec("temp-mean"))
 	if err != nil {
@@ -248,6 +249,7 @@ func TestCalcRules(t *testing.T) {
 // keys (probekeys). An observed sample is no declaration: a hand-posted or
 // simulated one leaves the key free.
 func TestCalcRuleOutputCollected(t *testing.T) {
+	t.Parallel()
 	r := newCalcRig(t)
 	for _, key := range probekeys.Native() {
 		if key == probekeys.CollectionFailed {
@@ -280,6 +282,7 @@ func TestCalcRuleOutputCollected(t *testing.T) {
 // One enabled rule writes an output key: a second enabled writer is refused
 // naming the first, a disabled one is accepted, and enabling it is checked.
 func TestCalcRuleOneWriter(t *testing.T) {
+	t.Parallel()
 	r := newCalcRig(t)
 	if _, err := r.create(avgSpec("temp-mean")); err != nil {
 		t.Fatal(err)
@@ -321,6 +324,7 @@ func TestCalcRuleOneWriter(t *testing.T) {
 // Deleting a property or metric type an enabled or disabled calc rule writes
 // is refused naming the rule, on both lanes.
 func TestCalcRuleOutputTypeDelete(t *testing.T) {
+	t.Parallel()
 	r := newCalcRig(t)
 	if _, err := r.create(avgSpec("temp-mean")); err != nil {
 		t.Fatal(err)
@@ -348,6 +352,7 @@ func TestCalcRuleOutputTypeDelete(t *testing.T) {
 // its line and column when the expression is what failed; it can still be
 // disabled, but enabling it again is refused until it compiles.
 func TestCalcRuleCalcError(t *testing.T) {
+	t.Parallel()
 	r := newCalcRig(t)
 	got, err := r.create(storage.CalcRuleSpec{Name: "busy", OwnerKind: "component", Inputs: []rules.CalcInput{{Alias: "c", Key: "in-call"}},
 		Reduce: rules.CalcReduce{Expr: "any(c)"}, OutputKey: "busy-flag"})
@@ -402,6 +407,7 @@ func TestCalcRuleCalcError(t *testing.T) {
 // is outside the graph until it is enabled, and an update is judged against
 // the graph without its own stored version.
 func TestCalcRuleCycle(t *testing.T) {
+	t.Parallel()
 	r := newCalcRig(t)
 	if _, err := r.create(avgSpec("temp-mean")); err != nil { // room-temperature -> avg-temp
 		t.Fatal(err)
@@ -453,6 +459,7 @@ func TestCalcRuleCycle(t *testing.T) {
 // uuid and version, the old name stops resolving, the rename is audited on
 // the uuid, and the cycle graph (keyed by rule) still knows it.
 func TestCalcRuleRename(t *testing.T) {
+	t.Parallel()
 	r := newCalcRig(t)
 	got, err := r.create(avgSpec("before"))
 	if err != nil {

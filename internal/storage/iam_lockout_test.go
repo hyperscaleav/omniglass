@@ -18,6 +18,7 @@ import (
 // window is still refused, forcing the lock to expire lets the correct password
 // through and clears the counter, and a success below the threshold resets it.
 func TestLoginLockout(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
