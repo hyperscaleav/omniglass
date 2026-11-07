@@ -257,6 +257,9 @@ command itself; here is when you would reach for each:
 - `--image` runs an omniglass image of your choosing, with a warning: a lab whose server and binary
   disagree is yours to debug.
 
+- `--systems` and `--plan` size and preview a [scale lab scenario](#scale-lab-scenarios) instead of
+  a seeded fleet.
+
 A few more flags are hidden from the help because they are for scripts, not for you: the repo's
 own browser tests, docs screenshots, demo recorders and probe each bring up a throwaway lab of their
 own through them (a project of its own whose data goes when it stops, held for the script, or one
@@ -269,6 +272,85 @@ refuses an image whose label is not its own build id, saying to run `make`. The 
 anything itself, so it always runs the code you built. A release binary runs
 `ghcr.io/hyperscaleav/omniglass:v<version>`, pulled if absent
 ([container image](/guides/container-image/#where-it-ships)).
+
+## Scale lab scenarios
+
+The dev fleet is one fixed size. The [scale lab](https://github.com/hyperscaleav/omniglass/issues/1357) asks how the platform behaves at 100, 1,000
+and 3,000 systems, so it describes an environment once and sizes it with a knob: a **scenario
+manifest** names the sites, the buildings each site's rooms sit in, the standards placed at each site
+as ratios, and the product filling each role of each standard. One manifest ships today, `corporate`
+(a headquarters and three regional offices of huddle rooms, meeting rooms, divisible conference rooms
+and lobby signage), in
+[`internal/lab/scenario/manifests/`](https://github.com/hyperscaleav/omniglass/tree/main/internal/lab/scenario/manifests).
+
+Bringing a scenario up is still to come ([#1554](https://github.com/hyperscaleav/omniglass/issues/1554)). What works now is the plan: resolve the manifest at a
+size and print what it would build, without starting anything or needing Docker.
+
+```sh
+omniglass lab run --scenario corporate --systems 1000 --plan
+```
+
+The plan lists each site's floors and its systems of each standard, the totals, and the components
+of each product the systems take. Without `--plan`, a scenario says bring-up is not built yet; without
+`--systems`, it asks for a size (1 to 10,000).
+
+### The manifest format
+
+```yaml
+name: corporate                 # the scenario's name, what --scenario takes
+label: Corporate
+standards:
+  - name: mr65                  # a standard template from the catalog
+    system_type: meeting        # a registered system type
+    products:                   # role -> catalog product
+      video-bar: kestrel-vroom
+      main-display: boreal-edge-65
+      touch-control: newtron-panel-7
+      scheduling-panel: newtron-slate-5
+sites:
+  - name: hq
+    label: Headquarters
+    weight: 40                  # the site's share of the systems
+    buildings:
+      - { name: tower, floors: 30 }
+    systems:                    # standard -> ratio, in tie-break order
+      huddle-room: 30
+      mr65: 20
+```
+
+The vocabulary is the platform's own, so a scenario never invents a device. Each standard is a
+[standard template](/architecture/templates/) and staffs its roles the way a system template does, through
+the same planner: a role with a quorum of two takes two of its product, and a choice is answered by
+naming the roles of one alternate. Every product is a catalog product a simulator profile serves, so
+the lab can simulate every component it plans. The validator collects every problem at once and
+names each with the manifest line to fix:
+
+```text
+corporate.yaml:52: unknown product "boreal-cast-m9": the catalog has no product of that name
+corporate.yaml:58: product "polaris-sky-c6" has no simulator profile, so the lab cannot simulate it
+```
+
+### How a size is split
+
+`--systems N` is split twice, both times by the **largest remainder** method in exact whole-number
+arithmetic:
+
+1. Across the sites by weight. Each site first takes the whole part of `N × weight ÷ total weight`;
+   the systems left over go one each to the sites with the largest fractional remainders, a tie going
+   to the site written first.
+2. Within each site, its count across its standards by ratio, the same way.
+
+So the plan always has exactly N systems, each site is within one system of its exact share, and
+each standard at a site is within one of its exact share of that site. Fleet-wide, a standard is
+within two systems per site of its exact share of N (for `corporate`'s four sites, within eight). A
+small N can round a rare standard at a small site to zero; that is the rule, not a bug.
+
+Each site's systems are then placed in its standard order, round-robin over its floors (buildings in
+order, floors bottom up), so system `j` of a site with `F` floors sits in room `j ÷ F + 1` of floor
+`j mod F`: every floor fills evenly. A system is named `<site>-<standard>-<k>`, its room
+`<site>-<building>-<floor>-<room>`, and it takes a friendly label from the same name generator the
+simulator's fleets use, seeded from the scenario, site, standard and index, so the same manifest at
+the same size always resolves to the same plan.
 
 ## Why Docker is required
 

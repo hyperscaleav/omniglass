@@ -1,0 +1,104 @@
+# The corporate vertical (#1553, epic #1357): a headquarters campus and three
+# regional offices, meeting spaces sized from huddle rooms to divisible
+# conference rooms, and lobby signage. `omniglass lab run --scenario corporate
+# --systems N --plan` resolves it at N systems; the format and the rounding
+# rule are in the lab guide (docs/src/content/docs/guides/lab.mdx).
+#
+# Every standard is a standard template from the catalog, every system_type a
+# registered system type, and every product a catalog product a simulator
+# profile serves.
+name: corporate
+label: Corporate
+description: >-
+  A corporate headquarters and three regional offices: huddle rooms, meeting
+  rooms sized by display, divisible conference rooms and lobby signage.
+
+standards:
+  - name: huddle-room
+    system_type: huddle
+    products:
+      main-display: boreal-edge-55
+      conf-bar: kestrel-vroom
+  - name: mr65
+    system_type: meeting
+    products:
+      video-bar: kestrel-vroom
+      main-display: boreal-edge-65
+      touch-control: newtron-panel-7
+      scheduling-panel: newtron-slate-5
+  - name: mr75
+    system_type: meeting
+    products:
+      video-bar: kestrel-vroom
+      main-display: boreal-edge-75
+      touch-control: newtron-panel-7
+      scheduling-panel: newtron-slate-5
+  - name: mr86
+    system_type: meeting
+    products:
+      video-bar: kestrel-vroom
+      main-display: boreal-edge-86
+      touch-control: newtron-panel-7
+      scheduling-panel: newtron-slate-5
+  - name: divisible-conference
+    system_type: conference
+    products:
+      video-bar: kestrel-vroom
+      main-display: boreal-edge-86
+      room-mic: lyra-arc-a2
+      dsp: polaris-dsp-16
+      amplifier: polaris-amp-4100
+      touch-control: newtron-panel-7
+      scheduling-panel: newtron-slate-5
+  - name: ds55
+    system_type: sign
+    products:
+      panel: boreal-edge-55
+      player: boreal-cast-m1
+
+sites:
+  - name: hq
+    label: Headquarters
+    weight: 40
+    buildings:
+      - { name: tower, floors: 30 }
+      - { name: annex, floors: 10 }
+    systems:
+      huddle-room: 30
+      mr65: 20
+      mr75: 12
+      mr86: 6
+      divisible-conference: 4
+      ds55: 8
+  - name: east
+    label: East Regional Office
+    weight: 25
+    buildings:
+      - { name: main, floors: 12 }
+    systems:
+      huddle-room: 35
+      mr65: 25
+      mr75: 10
+      mr86: 4
+      ds55: 6
+  - name: west
+    label: West Regional Office
+    weight: 20
+    buildings:
+      - { name: main, floors: 10 }
+    systems:
+      huddle-room: 35
+      mr65: 25
+      mr75: 10
+      mr86: 4
+      ds55: 6
+  - name: south
+    label: South Regional Office
+    weight: 15
+    buildings:
+      - { name: main, floors: 8 }
+    systems:
+      huddle-room: 40
+      mr65: 25
+      mr75: 8
+      ds55: 5
