@@ -38,13 +38,41 @@ type Spec struct {
 	Series  int
 	Span    time.Duration
 	Seed    uint64
+	// Name, when set, labels the dataset in place of its cadence.
+	Name string `json:",omitempty"`
+	// Start, when set, is where the dataset starts in place of Epoch.
+	Start time.Time `json:",omitzero"`
+	// Phases, when set, is each series' polling, one slice a series: the
+	// series count is len(Phases), and Cadence only names the dataset.
+	Phases [][]Phase `json:",omitempty"`
+}
+
+// Phase is a stretch of one series polled at one cadence, From and To being
+// offsets from the dataset's start.
+type Phase struct {
+	From    time.Duration
+	To      time.Duration
+	Cadence time.Duration
+}
+
+// Label is the dataset's name, or its cadence as the tickets write it.
+func (s Spec) Label() string {
+	if s.Name != "" {
+		return s.Name
+	}
+	return CadenceLabel(s.Cadence)
 }
 
 // Epoch is where every dataset starts. It is well before any run, so every
 // day partition and chunk is sealed by the time a candidate compresses it.
 var Epoch = time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
 
-func (s Spec) start() time.Time { return Epoch }
+func (s Spec) start() time.Time {
+	if !s.Start.IsZero() {
+		return s.Start
+	}
+	return Epoch
+}
 
 // End is the instant after the dataset's last possible sample.
 func (s Spec) End() time.Time { return s.start().Add(s.Span) }
@@ -73,6 +101,9 @@ const dupeRate = 0.02
 // order. It is deterministic in spec. Timestamps carry millisecond precision:
 // a poll lands on its cadence plus a jitter, never on a whole second only.
 func Generate(spec Spec) []Sample {
+	if len(spec.Phases) > 0 {
+		return generatePhases(spec)
+	}
 	polls := int(spec.Span / spec.Cadence)
 	jitter := min(spec.Cadence/8, 250*time.Millisecond)
 	out := make([]Sample, 0, spec.Series*polls*51/50)
@@ -94,6 +125,41 @@ func Generate(spec Spec) []Sample {
 			out = append(out, Sample{id, ts, g.next()})
 			if rng.Float64() < dupeRate {
 				out = append(out, Sample{id, ts, g.next()})
+			}
+		}
+	}
+	return out
+}
+
+// generatePhases is Generate for a dataset whose series each poll through
+// their own phases. A phase polls as a whole dataset at its cadence does, so
+// every poll lands inside it and the series stays in timestamp order.
+func generatePhases(spec Spec) []Sample {
+	var out []Sample
+	for i, phases := range spec.Phases {
+		id := int64(i + 1)
+		rng := rand.New(rand.NewPCG(spec.Seed, uint64(id)))
+		k := kinds[i%len(kinds)]
+		var g *gen
+		for _, ph := range phases {
+			if g == nil {
+				g = newGen(k, rng, ph.Cadence)
+			} else if k == kindCounter {
+				g.step = ph.Cadence.Hours()
+			}
+			jitter := min(ph.Cadence/8, 250*time.Millisecond)
+			phase := time.Duration(rng.Int64N(int64(ph.Cadence/time.Millisecond))) * time.Millisecond
+			phase = min(phase, ph.Cadence-2*jitter-time.Millisecond)
+			for p := 0; p < int((ph.To-ph.From)/ph.Cadence); p++ {
+				var j time.Duration
+				if jitter >= time.Millisecond {
+					j = time.Duration(rng.Int64N(int64(jitter/time.Millisecond))) * time.Millisecond
+				}
+				ts := spec.start().Add(ph.From + time.Duration(p)*ph.Cadence + phase + j)
+				out = append(out, Sample{id, ts, g.next()})
+				if rng.Float64() < dupeRate {
+					out = append(out, Sample{id, ts, g.next()})
+				}
 			}
 		}
 	}
@@ -186,7 +252,12 @@ func Buckets(samples []Sample, series int64, from, to time.Time, width time.Dura
 		if s.SeriesID != series || s.TS.Before(from) || !s.TS.Before(to) {
 			continue
 		}
-		b := Epoch.Add(s.TS.Sub(Epoch) / width * width)
+		d := s.TS.Sub(Epoch)
+		k := d / width
+		if d%width < 0 {
+			k--
+		}
+		b := Epoch.Add(k * width)
 		i, ok := idx[b]
 		if !ok {
 			i = len(out)
@@ -235,4 +306,83 @@ func SameBuckets(want, got []Bucket) error {
 		}
 	}
 	return nil
+}
+
+// Summary is one series' samples in one UTC hour: what a block carries for
+// each hour it spans, so an hourly read never opens the sample arrays.
+type Summary struct {
+	SeriesID int64
+	Hour     time.Time
+	Count    int64
+	Min      float64
+	Max      float64
+	Sum      float64
+	First    float64
+	Last     float64
+}
+
+// HourlySummaries is the reference summary of every hour that has a sample,
+// by series then hour. samples is in series, timestamp and landing order, so
+// the first and last of an hour are its first and last in that order.
+func HourlySummaries(samples []Sample) []Summary {
+	var out []Summary
+	for _, s := range samples {
+		h := s.TS.UTC().Truncate(time.Hour)
+		if n := len(out); n > 0 && out[n-1].SeriesID == s.SeriesID && out[n-1].Hour.Equal(h) {
+			x := &out[n-1]
+			x.Count++
+			x.Min = math.Min(x.Min, s.Value)
+			x.Max = math.Max(x.Max, s.Value)
+			x.Sum += s.Value
+			x.Last = s.Value
+			continue
+		}
+		out = append(out, Summary{s.SeriesID, h, 1, s.Value, s.Value, s.Value, s.Value, s.Value})
+	}
+	return out
+}
+
+// SameSummaries is nil when got matches want: every hour, its count, minimum,
+// maximum, first and last exactly, its sum to a relative 1e-12.
+func SameSummaries(want, got []Summary) error {
+	if len(got) != len(want) {
+		return fmt.Errorf("got %d hourly summaries, want %d", len(got), len(want))
+	}
+	for i, w := range want {
+		g := got[i]
+		if g.SeriesID != w.SeriesID || !g.Hour.Equal(w.Hour) || g.Count != w.Count || g.Min != w.Min || g.Max != w.Max ||
+			g.First != w.First || g.Last != w.Last || math.Abs(g.Sum-w.Sum) > 1e-12*math.Max(1, math.Abs(w.Sum)) {
+			return fmt.Errorf("hourly summary %d: got %+v, want %+v", i, g, w)
+		}
+	}
+	return nil
+}
+
+// lateValue is the late sample's value: one no series kind generates.
+const lateValue = 4242.4242
+
+// Late is the late sample a merge lands for series: a second report at the
+// instant of the series' middle sample, so the block it lands in is closed
+// and already holds a sample at that instant, which the late one follows.
+func Late(samples []Sample, series int64) Sample {
+	var at []int
+	for i, s := range samples {
+		if s.SeriesID == series {
+			at = append(at, i)
+		}
+	}
+	return Sample{series, samples[at[len(at)/2]].TS, lateValue}
+}
+
+// WithLate is samples with late landed after every sample at its series and
+// instant: the order a round trip must give back after the merge.
+func WithLate(samples []Sample, late Sample) []Sample {
+	i := sort.Search(len(samples), func(i int) bool {
+		s := samples[i]
+		return s.SeriesID > late.SeriesID || s.SeriesID == late.SeriesID && s.TS.After(late.TS)
+	})
+	out := make([]Sample, 0, len(samples)+1)
+	out = append(out, samples[:i]...)
+	out = append(out, late)
+	return append(out, samples[i:]...)
 }

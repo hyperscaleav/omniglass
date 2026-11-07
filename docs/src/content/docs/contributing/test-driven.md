@@ -298,19 +298,33 @@ generator to render.
 
 `make compress-bench` answers one question the instruments above cannot: what a metric
 sample costs under a different storage format. It compresses the same seeded series (with
-duplicate instants, ADR-0061) under each candidate (hour and day blocks of SQL arrays in
-benchmark-only tables, pg_deltax and TimescaleDB) on throwaway Postgres 18 containers, at
-2 s, 30 s, 60 s and 24 h. It reports bytes per sample after `VACUUM` (heap, TOAST, indexes
-and any companion or chunk tables), compression time per thousand samples, and the 24 h raw
-and 30 d bucketed read latency, each the median of N runs. Every candidate must give back
-exactly what it was given, or the run fails. Then the fit probes ask both extensions, on a
-real server, what happens to retention, a late row, `DETACH`, `pg_dump` and a streaming
-standby. The extension images are test-only, built from official, unmodified releases with
-their licenses (`internal/compressbench/images`). Like the lab footprint it gates nothing.
+duplicate instants, ADR-0061) under each candidate on throwaway Postgres 18 containers, at
+10 s, 30 s, 60 s, 5 m, 1 h and 24 h. The candidates are blocks of SQL arrays in
+benchmark-only tables, one row per series per span (hour and day everywhere, week and month
+too at 1 h; a block longer than an hour carries per-hour summary arrays), raw rows, and
+TimescaleDB. It reports bytes per sample after `VACUUM` (heap, TOAST, indexes and any
+companion or chunk tables), the share of those bytes the summaries take, the share of rows
+Postgres actually compressed, compression time per thousand samples, the 24 h raw and 30 d
+bucketed read latency, and what one late sample costs to merge (time and WAL bytes), each
+the median of N runs. Every candidate must give back exactly what it was given, hourly
+summaries included, before and after the late merge, or the run fails. From those cells it
+derives a span rule: per cadence, the shortest span whose rows compress, and the cadence at
+which a series stays raw. Then the fit probes ask pg_deltax and TimescaleDB, on a real server,
+what happens to retention, a late row, `DETACH`, `pg_dump` and a streaming standby. The extension
+images are test-only, built from official, unmodified releases with their licenses
+(`internal/compressbench/images`). Like the lab footprint it gates nothing.
+
+`-plain` measures the summary-free block instead: each series-day takes the span its count
+earns (hour, day, or a share of an ISO-week block), beside the summary-carrying blocks and an
+hourly trend table. It sweeps week blocks from 1 to 168 samples a week against raw rows for the
+week minimum, then holds a week of series that change cadence mid-week to the span rule, sample
+for sample.
 
 ```bash
-make compress-bench                                                     # everything, about a quarter hour
-make compress-bench COMPRESS_BENCH_ARGS="-cadences 60s -days 3 -probes=false"
+make compress-bench                                                     # formats, span rule and fit probes
+make compress-bench COMPRESS_BENCH_ARGS="-probes=false"                 # formats and span rule, about a quarter hour
+make compress-bench COMPRESS_BENCH_ARGS="-cadences 1h -days 30 -probes=false"
+make compress-bench COMPRESS_BENCH_ARGS="-bench=false -probes=false -plain"   # summary-free blocks, about ten minutes
 ```
 
 ### Benchmarks are diagnostic, never a gate
