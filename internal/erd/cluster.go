@@ -29,7 +29,7 @@ var Subsystems = []Cluster{
 		"registry_shadow",
 	}},
 	{Name: "telemetry", Tables: []string{
-		"property_type", "metric_type", "metric", "metric_series", "metric_declared", "metric_trend", "metric_trend_dirty", "metric_trend_mark", "metric_block", "metric_block_dirty", "metric_block_mark", "property",
+		"property_type", "metric_type", "metric", "metric_series", "metric_declared", "metric_trend", "metric_trend_dirty", "metric_trend_mark", "metric_block", "metric_block_mark", "property",
 		"event_type", "event", "log_line", "alarm", "alarm_snooze", "severity_level", "event_rule", "event_rule_state", "event_rule_live",
 		"event_rule_condition", "calc_rule", "calc_rule_input", "calc_pending", "calc_rule_state",
 		"command_type", "command",

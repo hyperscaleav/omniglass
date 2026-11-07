@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math/rand/v2"
 	"strings"
 	"time"
@@ -220,6 +221,27 @@ func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs
 		}
 		stamps[i] = MetricTime(stamps[i])
 	}
+	// laneDays is the metric lane's window, read once and only by a batch
+	// that needs it: one with a sample a day old or a late sample to merge.
+	var lane int
+	laneDays := func() (int, error) {
+		if lane == 0 {
+			s, err := p.platformSettings(ctx, tx)
+			if err != nil {
+				return 0, err
+			}
+			lane = s.Retention.MetricDays
+		}
+		return lane, nil
+	}
+	// An observed sample older than its series' window is dropped and logged
+	// (#1529): the prune would take its row, and the block that covered its
+	// day, at once. A calculated sample is the platform's own, dated now.
+	if provenance == "observed" {
+		if evs, arcs, stamps, err = dropTooOldSamples(ctx, tx, evs, arcs, stamps, laneDays); err != nil {
+			return err
+		}
+	}
 	// A series the batch carries once lands with every other such series in
 	// one statement (#1274). A series it carries more than once keeps the
 	// per-sample order below, insert then judge, so judging a sample never
@@ -246,11 +268,10 @@ func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs
 	// hour once it is folded; an on-time sample marks nothing. The announced
 	// mark is read by metric_trend_announced(), which first takes the trend
 	// lock shared until the transaction ends: the compaction's drain
-	// (drainTrendWrites) waits for every insert holding it. The same late
-	// sample marks its series' UTC day dirty for the block fold (#1528), which
-	// rebuilds a folded day's blocks from the raw rows; a block day closes only
-	// after its every hour has, so the trend's mark covers it, and the two
-	// marks cost no statement of their own.
+	// (drainTrendWrites) waits for every insert holding it. The statement
+	// yields each late sample's raw row for the block merge (mergeLateBlocks,
+	// #1529): a block day closes only after its every hour has, so a sample
+	// of a folded day is always late, and an on-time batch yields nothing.
 	//
 	// Each sample's series is found by its key, or started in the same statement
 	// when the batch is its first sample. A series another transaction started
@@ -294,24 +315,24 @@ func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs
 		from u left join series s on s.owner_id = u.owner and s.metric_type_id = u.type_id
 			and s.instance = u.instance and s.source = u.source
 		order by u.ord
-		returning series_id, ts),
+		returning series_id, ts, id, value),
 	late as (
-		select l.series_id, l.ts from landed l
+		select l.series_id, l.ts, l.id, l.value from landed l
 		where $8::text = 'observed' and l.ts < (select metric_trend_announced())),
-	day_dirtied as (
-		insert into metric_block_dirty (series_id, day)
-		select distinct series_id, date_bin('1 day', ts, timestamptz '2000-01-01 00:00:00+00') from late
+	hour_dirtied as (
+		insert into metric_trend_dirty (series_id, hour)
+		select distinct series_id, date_bin('1 hour', ts, timestamptz '2000-01-01 00:00:00+00') from late
 		on conflict do nothing)
-	insert into metric_trend_dirty (series_id, hour)
-	select distinct series_id, date_bin('1 hour', ts, timestamptz '2000-01-01 00:00:00+00') from late
-	on conflict do nothing`
+	select series_id, ts, id, value from late`
 	// insert lands the samples at idx in one statement, in their order, so the
 	// rows take ids in the order the batch carried them (metricInsertSQL: each
 	// sample's series is found, or started, in the same statement). An unknown
 	// type name finds no series and fails the insert on series_id's NOT NULL,
-	// a failure the ingest redelivers rather than refuses (IsRefusedWrite). A
-	// closure, so the write stays inside this admitted write path.
+	// a failure the ingest redelivers rather than refuses (IsRefusedWrite).
+	// Each late sample's raw row joins late. A closure, so the write stays
+	// inside this admitted write path.
 	collector := w.collector()
+	var late lateSamples
 	insert := func(idx []int) error {
 		if len(idx) == 0 {
 			return nil
@@ -327,8 +348,23 @@ func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs
 			ts[j], kinds[j], owners[j], keys[j] = stamps[i], evs[i].OwnerKind, arcs[i], evs[i].Key
 			instances[j], values[j], sources[j] = evs[i].Instance, evs[i].Value, evs[i].Source
 		}
-		_, err := tx.Exec(ctx, metricInsertSQL,
+		rows, err := tx.Query(ctx, metricInsertSQL,
 			ts, kinds, owners, keys, instances, values, sources, provenance, sourceRule, sourceVersion, sourceRuleID, collector, w.sourceConduit())
+		if err == nil {
+			for rows.Next() {
+				var id, series int64
+				var at time.Time
+				var v float64
+				if err = rows.Scan(&series, &at, &id, &v); err != nil {
+					break
+				}
+				late.series, late.ts, late.id, late.value = append(late.series, series), append(late.ts, at), append(late.id, id), append(late.value, v)
+			}
+			rows.Close()
+			if err == nil {
+				err = rows.Err()
+			}
+		}
 		if err != nil {
 			named := make([]string, 0, len(idx))
 			for _, i := range idx {
@@ -352,7 +388,101 @@ func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs
 			return err
 		}
 	}
+	if len(late.series) > 0 {
+		days, err := laneDays()
+		if err != nil {
+			return err
+		}
+		if err := mergeLateBlocks(ctx, tx, late, days); err != nil {
+			return err
+		}
+	}
 	return eval.stampJudged(ctx, tx)
+}
+
+// tooOldSlack is how far back a sample's stamp may be before the batch asks
+// whether it is older than its series' window: a window is at least a day.
+const tooOldSlack = 23 * time.Hour
+
+// dropTooOldSamples drops each sample of evs (arcs and stamps beside it)
+// older than its series' window (its type's retention_days, else laneDays(),
+// the metric lane's), logging one line a series with how many it dropped and
+// the oldest's age, and returns the rest in their order. The window is the
+// prune's, so the prune would take the row at once.
+func dropTooOldSamples(ctx context.Context, tx pgx.Tx, evs []MetricSampleWrite, arcs []string, stamps []time.Time, laneDays func() (int, error)) ([]MetricSampleWrite, []string, []time.Time, error) {
+	var cand []int
+	var ts []time.Time
+	var keys []string
+	horizon := time.Now().Add(-tooOldSlack)
+	for i, at := range stamps {
+		if at.Before(horizon) {
+			cand, ts, keys = append(cand, i), append(ts, at), append(keys, evs[i].Key)
+		}
+	}
+	if len(cand) == 0 {
+		return evs, arcs, stamps, nil
+	}
+	lane, err := laneDays()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	rows, err := tx.Query(ctx, `select u.ord, extract(epoch from now() - u.ts)
+		from unnest($1::timestamptz[], $2::text[]) with ordinality as u(ts, key, ord)
+		join metric_type_in_effect() mt on mt.name = u.key
+		where u.ts < now() - make_interval(days => coalesce(mt.retention_days, $3::int))
+		order by u.ord`, ts, keys, lane)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("storage: hold the samples to their windows: %w", err)
+	}
+	type dropped struct {
+		n      int
+		oldest time.Duration
+	}
+	drop := map[int]bool{}
+	bySeries := map[string]*dropped{}
+	for rows.Next() {
+		var ord int
+		var age float64
+		if err := rows.Scan(&ord, &age); err != nil {
+			rows.Close()
+			return nil, nil, nil, fmt.Errorf("storage: hold the samples to their windows: %w", err)
+		}
+		i := cand[ord-1]
+		drop[i] = true
+		k := metricSeriesKey(evs[i], arcs[i])
+		d := bySeries[k]
+		if d == nil {
+			d = &dropped{}
+			bySeries[k] = d
+		}
+		d.n++
+		d.oldest = max(d.oldest, time.Duration(age*float64(time.Second)))
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, nil, nil, fmt.Errorf("storage: hold the samples to their windows: %w", err)
+	}
+	if len(drop) == 0 {
+		return evs, arcs, stamps, nil
+	}
+	keptEvs, keptArcs, keptStamps := evs[:0:0], arcs[:0:0], stamps[:0:0]
+	logged := map[string]bool{}
+	for i, ev := range evs {
+		if !drop[i] {
+			keptEvs, keptArcs, keptStamps = append(keptEvs, ev), append(keptArcs, arcs[i]), append(keptStamps, stamps[i])
+			continue
+		}
+		k := metricSeriesKey(ev, arcs[i])
+		if logged[k] {
+			continue
+		}
+		logged[k] = true
+		d := bySeries[k]
+		slog.Warn("metric samples older than their series' window were dropped; the rest of the batch lands",
+			"facility", "ingest", "owner_kind", ev.OwnerKind, "owner", ev.OwnerID, "key", ev.Key, "instance", ev.Instance,
+			"samples", d.n, "age", d.oldest.Truncate(time.Second).String())
+	}
+	return keptEvs, keptArcs, keptStamps, nil
 }
 
 // LatestMetric returns the most recent observed metric row for a component and

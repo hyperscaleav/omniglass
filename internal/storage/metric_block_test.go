@@ -17,14 +17,16 @@ import (
 // The compacted tier's blocks (#1528, ADR-1528): each closed UTC day of an
 // observed series folds into hour, day or week blocks by its own sample count,
 // every block unnests to exactly the raw rows it was folded from, a cancelled
-// pass resumes where it stopped, and a late sample rebuilds its block.
+// pass resumes where it stopped, and a late sample merges into the block
+// that covers it (metric_block_merge_test.go).
 
 // blockLaneDays is the metric lane's window the block tests fold under: long
 // enough that a closed ISO week of samples sits wholly inside it.
 const blockLaneDays = 30
 
 // blockRig is a prune fixture whose block marks stand at week, a Monday
-// whose ISO week closed more than a week ago and is still inside the window.
+// whose ISO week closed more than a week ago and is still inside the window,
+// prune-rtt's own window being blockLaneDays.
 type blockRig struct {
 	*pruneFixture
 	week time.Time
@@ -33,6 +35,7 @@ type blockRig struct {
 func newBlockRig(t *testing.T) *blockRig {
 	t.Helper()
 	f := newPruneFixture(t)
+	mustExec(t, f.conn, `update metric_type set retention_days = $1 where name = 'prune-rtt'`, blockLaneDays)
 	from := time.Now().UTC().Add(-(blockLaneDays - 3) * 24 * time.Hour).Truncate(24 * time.Hour)
 	week := from.AddDate(0, 0, (8-int(from.Weekday()))%7)
 	if err := f.gw.SetMetricBlockMarks(f.ctx, week); err != nil {
@@ -428,49 +431,8 @@ func TestABlockFoldCancelledMidDayFoldsEachSeriesDayWholeOrNot(t *testing.T) {
 	}
 }
 
-// TestALateSampleRebuildsItsBlock: a sample that lands in a folded day marks
-// it dirty in its own insert, and the next pass rebuilds the day's blocks and
-// its week's from the raw rows: a day block grows, a week block grows, and a
-// leftover day that crosses 170 leaves the week block for a day block of its
-// own.
-func TestALateSampleRebuildsItsBlock(t *testing.T) {
-	t.Parallel()
-	r := newBlockRig(t)
-	a := r.series("", "observed")
-	r.spaced(a, r.day(0), 170)
-	r.spaced(a, r.day(3), 5)
-	r.spaced(a, r.day(4), 169)
-	r.fold(storage.BlockFold{MaxDays: blockLaneDays})
-	if got := r.blocksOf(a); !slices.Equal(got, []string{"day 0+00:00 170", "week 0+00:00 174"}) {
-		t.Fatalf("before the late samples the blocks are %v", got)
-	}
-	for _, ts := range []time.Time{r.day(0).Add(10 * time.Hour), r.day(3).Add(time.Hour), r.day(4).Add(time.Hour)} {
-		if err := r.gw.InsertMetricSamples(r.ctx, storage.PushWriter(), []storage.MetricSampleWrite{
-			{OwnerKind: "component", OwnerID: "prune-c1", Key: "prune-rtt", Value: 99, TS: ts}}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if n := r.count(`select count(*) from metric_block_dirty where series_id = $1`, a); n != 3 {
-		t.Fatalf("%d days marked dirty, want the 3 the late samples landed in", n)
-	}
-	if bad, err := r.gw.VerifyMetricBlocks(r.ctx, blockLaneDays); err != nil || len(bad) != 2 {
-		t.Errorf("before the rebuild the check finds %v, %v; want the day and the week block stale", bad, err)
-	}
-	c := r.fold(storage.BlockFold{MaxDays: blockLaneDays})
-	if c.Rebuilt != 3 {
-		t.Errorf("the pass rebuilt %d days, want 3", c.Rebuilt)
-	}
-	if got := r.blocksOf(a); !slices.Equal(got, []string{"day 0+00:00 171", "week 0+00:00 6", "day 4+00:00 170"}) {
-		t.Errorf("after the rebuild the blocks are %v", got)
-	}
-	if n := r.count(`select count(*) from metric_block_dirty`); n != 0 {
-		t.Errorf("%d dirty marks left after the rebuild", n)
-	}
-}
-
 // TestOnlyObservedSeriesBlock: a calculated series, an intended series and
-// the property lane fold into no block, and a late calculated
-// sample marks no day.
+// the property lane fold into no block.
 func TestOnlyObservedSeriesBlock(t *testing.T) {
 	t.Parallel()
 	r := newBlockRig(t)
@@ -486,10 +448,6 @@ func TestOnlyObservedSeriesBlock(t *testing.T) {
 	r.fold(storage.BlockFold{MaxDays: blockLaneDays})
 	if n := r.count(`select count(*) from metric_block`); n != 0 {
 		t.Errorf("%d blocks, want none", n)
-	}
-	mustExec(t, r.conn, `insert into metric (series_id, ts, value) values ($1, $2, 1)`, calc, r.day(0).Add(time.Hour))
-	if n := r.count(`select count(*) from metric_block_dirty`); n != 0 {
-		t.Errorf("%d dirty marks, want none", n)
 	}
 }
 
