@@ -213,6 +213,12 @@ type ownerRef struct {
 // in a fixed order (components, then systems, then locations, each by id), which
 // is what keeps two recomputes over overlapping chains from deadlocking on each
 // other's locks.
+//
+// Each owner is recomputed once per call, however many of its descendants the
+// call touches, and from its direct inputs only: a system from its roles, a
+// location from its children's recorded verdicts (locationVerdict). So the
+// cost of a write is its chain's length, not the size of the fleet under it
+// (#1562).
 func (p *PG) recomputeChain(ctx context.Context, q txQuerier, components, systems, locations []ownerRef) error {
 	affected := newRefSet(systems)
 
@@ -249,9 +255,13 @@ func (p *PG) recomputeChain(ctx context.Context, q txQuerier, components, system
 		}
 	}
 
-	// A location's verdict reads the systems' RECORDED values, which the loop
-	// above has just refreshed inside this transaction.
-	affectedLocations, err := p.locationsOver(ctx, q, systemRefs, locations)
+	// A location's verdict reads its children's RECORDED values: its own
+	// systems, which the loop above has just refreshed inside this
+	// transaction, and its child locations, which the loop below refreshes
+	// before it reaches their parent. Every lock is taken first, in the lock
+	// order, and only then is the chain computed bottom-up: the visit order
+	// the rollup needs is not the order the locks must be taken in.
+	affectedLocations, parents, err := p.locationsOver(ctx, q, systemRefs, locations)
 	if err != nil {
 		return err
 	}
@@ -259,6 +269,8 @@ func (p *PG) recomputeChain(ctx context.Context, q txQuerier, components, system
 		if err := lockHealthOwner(ctx, q, "location", l.ID); err != nil {
 			return err
 		}
+	}
+	for _, l := range bottomUp(affectedLocations, parents) {
 		v, err := p.locationVerdict(ctx, q, l.ID)
 		if err != nil {
 			return err
@@ -268,6 +280,40 @@ func (p *PG) recomputeChain(ctx context.Context, q txQuerier, components, system
 		}
 	}
 	return nil
+}
+
+// bottomUp orders a location chain so every location comes after each of its
+// children in the set, which is the order locationVerdict needs: a location
+// folds its children's recorded verdicts, so a child has to be recorded before
+// its parent reads it. parents maps a location's id to its parent's; the set is
+// closed upward (locationsOver returns every ancestor), so a location's depth
+// is the number of its ancestors in the set. Deepest first, and by id within a
+// depth, so the order is deterministic. Pure.
+func bottomUp(locations []ownerRef, parents map[string]string) []ownerRef {
+	depth := make(map[string]int, len(locations))
+	var depthOf func(id string) int
+	depthOf = func(id string) int {
+		if d, ok := depth[id]; ok {
+			return d
+		}
+		d := 0
+		if parent, ok := parents[id]; ok {
+			d = depthOf(parent) + 1
+		}
+		depth[id] = d
+		return d
+	}
+	out := append([]ownerRef(nil), locations...)
+	for _, l := range out {
+		depthOf(l.ID)
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if depth[out[i].ID] != depth[out[j].ID] {
+			return depth[out[i].ID] > depth[out[j].ID]
+		}
+		return out[i].ID < out[j].ID
+	})
+	return out
 }
 
 // lockHealthOwner takes the owner's health lock for the rest of the caller's
@@ -383,7 +429,7 @@ func (p *PG) recomputeMovedSystem(ctx context.Context, q txQuerier, system strin
 }
 
 // recomputeMovedLocation is the trigger shape for a location that changed
-// parent (#642). A location's rollup folds every system in its own subtree, so
+// parent (#642). A location's verdict is the worst over its whole subtree, so
 // a move carries that whole contribution from one ancestor chain to another and
 // BOTH chains move: the one it joined is reachable from its row, the one it
 // LEFT is not, so that parent is named, exactly as recomputeMovedSystem names
@@ -399,7 +445,7 @@ func (p *PG) recomputeMovedSystem(ctx context.Context, q txQuerier, system strin
 // own ancestry reads the same before and after.
 //
 // The moved location itself is included and costs nothing. Its own verdict
-// cannot move (the subtree it folds travelled with it), and recordHealth writes
+// cannot move (the children it folds travelled with it), and recordHealth writes
 // nothing when the value has not changed, so it contributes the new chain's
 // seed without adding an edge of its own.
 func (p *PG) recomputeMovedLocation(ctx context.Context, q txQuerier, moved ownerRef, leftParentID *string) error {
@@ -596,7 +642,10 @@ func (p *PG) systemsForRoleOwner(ctx context.Context, q txQuerier, ownerKind, ow
 // change can move. The explicit arm carries the location a system has just LEFT,
 // which its row no longer points at. Both inputs and the result are ownerRefs,
 // resolved by id (systems.location_id, location.parent_id are both ids
-// already), never by re-joining on a name.
+// already), never by re-joining on a name. parents maps each returned
+// location's id to its parent's, for every location that has one: the set is
+// closed upward, so every parent is in it too, and bottomUp orders the rollup
+// from it.
 //
 // Ordered by ID, which is the recompute's lock order (see recomputeChain) and
 // the same key refSet.sorted() gives the component and system tiers. It used to
@@ -609,9 +658,9 @@ func (p *PG) systemsForRoleOwner(ctx context.Context, q txQuerier, ownerKind, ow
 // recomputeMovedSystem reaching one through a system and naming the other)
 // really did visit the same pair in opposite orders, which is the deadlock
 // precondition the per-owner advisory locks depend on being impossible.
-func (p *PG) locationsOver(ctx context.Context, q txQuerier, systems, named []ownerRef) ([]ownerRef, error) {
+func (p *PG) locationsOver(ctx context.Context, q txQuerier, systems, named []ownerRef) ([]ownerRef, map[string]string, error) {
 	if len(systems) == 0 && len(named) == 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 	rows, err := q.Query(ctx, `
 		with recursive placed as (
@@ -628,35 +677,62 @@ func (p *PG) locationsOver(ctx context.Context, q txQuerier, systems, named []ow
 			select p.id, p.name, p.parent_id
 			from location p join ancestry a on a.parent_id = p.id
 		)
-		select distinct id, name from ancestry order by id`, refIDs(systems), refIDs(named))
+		select distinct id, name, parent_id from ancestry order by id`, refIDs(systems), refIDs(named))
 	if err != nil {
-		return nil, fmt.Errorf("storage: locations over systems: %w", err)
+		return nil, nil, fmt.Errorf("storage: locations over systems: %w", err)
 	}
 	defer rows.Close()
-	return scanOwnerRefs(rows, "locations over systems")
+	var out []ownerRef
+	parents := map[string]string{}
+	for rows.Next() {
+		var r ownerRef
+		var parent *string
+		if err := rows.Scan(&r.ID, &r.Name, &parent); err != nil {
+			return nil, nil, fmt.Errorf("storage: scan locations over systems: %w", err)
+		}
+		out = append(out, r)
+		if parent != nil {
+			parents[r.ID] = *parent
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, fmt.Errorf("storage: iterate locations over systems: %w", err)
+	}
+	return out, parents, nil
 }
 
-// locationVerdict rolls up a location from the RECORDED health of every system
-// placed anywhere in its subtree.
+// locationVerdict rolls up a location from the RECORDED health of its direct
+// children: the systems placed in it and the locations under it. That is the
+// same answer as folding every system in its subtree, because the rollup is
+// worst-wins (health.RollUp) and a child location's recorded verdict is
+// already the fold of its own subtree. It is what makes a recompute cost what
+// it touches: the read is one latest row per child, by the owner indexes,
+// however large the subtree and however long each child's history.
 //
-// Folding the subtree's systems directly, rather than the child locations'
-// verdicts, is what makes the recompute order-independent: the recursive
-// definition and this one agree (a location's only inputs are systems, however
-// deep), but this one never depends on a child having been recomputed first.
-// Takes the location's id directly (see activeAlarmSeverities).
+// It depends on the children being current, which the recompute guarantees:
+// every write that moves a system's recorded verdict recomputes every
+// location above it in the same transaction (locationsOver), children before
+// parents (bottomUp), and a concurrent recompute that touched one of those
+// children held this location's lock until it committed. A child with no
+// recorded row has never been unhealthy and is skipped, which is
+// health.RollUp's own reading of nothing. Takes the location's id directly
+// (see activeAlarmRanks).
 func (p *PG) locationVerdict(ctx context.Context, q txQuerier, locationID string) (health.Verdict, error) {
 	rows, err := q.Query(ctx, `
-		with recursive subtree as (
-			select id from location where id = $1::uuid
-			union
-			select c.id from location c join subtree s on c.parent_id = s.id
+		with health as (
+			select id from property_type_in_effect() property_type where name = $2
 		)
-		select distinct on (sd.system_id) sd.value #>> '{}'
-		from property sd
-		where sd.property_type_id = (select id from property_type_in_effect() property_type where name = $2)
-		  and sd.provenance = 'calculated'
-		  and sd.system_id in (select id from system where location_id in (select id from subtree))
-		order by sd.system_id, sd.id desc`, locationID, healthKey)
+		select (select sd.value #>> '{}' from property sd
+		         where sd.property_type_id = (select id from health) and sd.system_id = s.id
+		           and sd.instance = '' and sd.provenance = 'calculated'
+		         order by sd.id desc limit 1)
+		from system s where s.location_id = $1::uuid
+		union all
+		select (select ld.value #>> '{}' from property ld
+		         where ld.property_type_id = (select id from health) and ld.location_id = c.id
+		           and ld.instance = '' and ld.provenance = 'calculated'
+		         order by ld.id desc limit 1)
+		from location c where c.parent_id = $1::uuid`, locationID, healthKey)
 	if err != nil {
 		return health.Healthy, fmt.Errorf("storage: location verdict %q: %w", locationID, err)
 	}
@@ -664,11 +740,13 @@ func (p *PG) locationVerdict(ctx context.Context, q txQuerier, locationID string
 
 	var children []health.Verdict
 	for rows.Next() {
-		var value string
+		var value *string
 		if err := rows.Scan(&value); err != nil {
 			return health.Healthy, fmt.Errorf("storage: scan location verdict %q: %w", locationID, err)
 		}
-		children = append(children, health.ParseVerdict(value))
+		if value != nil {
+			children = append(children, health.ParseVerdict(*value))
+		}
 	}
 	if err := rows.Err(); err != nil {
 		return health.Healthy, fmt.Errorf("storage: iterate location verdict %q: %w", locationID, err)

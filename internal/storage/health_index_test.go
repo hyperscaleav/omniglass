@@ -69,9 +69,18 @@ func TestHealthReadsReachTheSystemOwnerIndex(t *testing.T) {
 	}
 	defer func() { _ = conn.Close(ctx) }()
 
-	for _, read := range []struct{ name, marker string }{
-		{"SystemVerdicts, the bulk read a system list paints its column from", "distinct on (v.system_id)"},
-		{"locationVerdict, the rollup every recompute pays per location", "distinct on (sd.system_id)"},
+	// The location rollup reads one latest row per direct child (#1562): its
+	// systems' (alias sd) by the system owner index and its child locations'
+	// (alias ld) by the location owner index, so each scan of property is held
+	// to its own index.
+	for _, read := range []struct {
+		name, marker string
+		reach        map[string]string // property's alias in the statement -> the index it must reach
+	}{
+		{"SystemVerdicts, the bulk read a system list paints its column from", "distinct on (v.system_id)",
+			map[string]string{"": "property_system_owner_idx"}},
+		{"locationVerdict, the rollup every recompute pays per location", "ld.location_id = c.id",
+			map[string]string{"sd": "property_system_owner_idx", "ld": "property_location_owner_idx"}},
 	} {
 		t.Run(read.name, func(t *testing.T) {
 			call := oneCall(t, counter, read.marker)
@@ -79,11 +88,29 @@ func TestHealthReadsReachTheSystemOwnerIndex(t *testing.T) {
 			if err != nil {
 				t.Fatalf("explain the captured statement: %v", err)
 			}
-			if ok, why := plan.MustReach("property", "property_system_owner_idx"); !ok {
-				t.Errorf("the health read cannot reach the index it exists for: %s", why)
+			for alias, index := range read.reach {
+				if ok, why := scansAliased(plan, alias).MustReach("property", index); !ok {
+					t.Errorf("the health read cannot reach the index it exists for: %s", why)
+				}
 			}
 		})
 	}
+}
+
+// scansAliased narrows a plan to the scans the statement gave alias, so a
+// statement that reads one relation twice, by two different indexes, can hold
+// each read to its own. An empty alias is the whole plan.
+func scansAliased(plan accesspath.Plan, alias string) accesspath.Plan {
+	if alias == "" {
+		return plan
+	}
+	var out accesspath.Plan
+	for _, s := range plan {
+		if s.Alias == alias {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // oneCall finds the captured statement containing marker, and fails if there is
