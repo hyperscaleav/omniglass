@@ -254,11 +254,16 @@ bench:
 # telemetry handler over the dev scenario's fleet, printing what one node batch
 # costs the database (statements, rows per observation, heap and index bytes
 # per row, receipt bytes, WAL bytes per observation, and the statements of one
-# batch). The same test runs in make test and holds the counts; this target
-# prints them and exits with the test's own status.
+# batch). Then the block footprint (#1528): what the compacted tier's blocks
+# cost a sample at each product cadence, against #1525's figures. The same
+# tests run in make test and hold the counts; this target prints them and
+# exits with the tests' own status.
 footprint:
 	@out=$$(go test ./internal/bus/ -run '^TestIngestFootprint$$' -count=1 -v 2>&1); status=$$?; \
 	printf '%s\n' "$$out" | grep -E 'footprint_test.go|^ {10}[a-z]|^(ok|FAIL|---)'; \
+	if [ $$status -ne 0 ]; then printf '%s\n' "$$out" | tail -40; exit $$status; fi; \
+	out=$$(go test ./internal/storage/ -run '^TestBlockFootprint$$' -count=1 -v 2>&1); status=$$?; \
+	printf '%s\n' "$$out" | grep -E 'metric_block_test.go|^(ok|FAIL|---)'; \
 	if [ $$status -ne 0 ]; then printf '%s\n' "$$out" | tail -40; fi; exit $$status
 
 # The lab footprint (#1277): a throwaway lab at a cadence profile, warmed up,

@@ -364,6 +364,21 @@ telemetry: {
   metric: {
     shape: sql_table
   }
+  metric_block: {
+    shape: sql_table
+    series_id: bigint {constraint: primary_key}
+    span: text {constraint: primary_key}
+    span_start: timestamp with time zone {constraint: primary_key}
+  }
+  metric_block_dirty: {
+    shape: sql_table
+    day: timestamp with time zone {constraint: primary_key}
+    series_id: bigint {constraint: primary_key}
+  }
+  metric_block_mark: {
+    shape: sql_table
+    id: boolean {constraint: primary_key}
+  }
   metric_declared: {
     shape: sql_table
     id: bigint {constraint: primary_key}
@@ -707,6 +722,7 @@ telemetry.event_rule_live.rule_id -> telemetry.event_rule.id
 telemetry.event_rule_state.component_id -> fleet.component.id
 telemetry.event_rule_state.rule_id -> telemetry.event_rule.id
 telemetry.log_line.component_id -> fleet.component.id
+telemetry.metric_block.series_id -> telemetry.metric_series.id
 telemetry.metric_declared.command_id -> telemetry.command.id
 telemetry.metric_declared.event_id -> telemetry.event.id
 telemetry.metric_declared.series_id -> telemetry.metric_series.id

@@ -35,6 +35,9 @@ const (
 	// (#1276): an upgrade's backlog of a month of samples closes in a pass a
 	// minute over about half an hour, and a pass that kept up closes one.
 	trendCompactHours = 48
+	// blockCompactDays is how many UTC days one pass folds into blocks
+	// (#1528): the trend compaction's 48 hours, so the folds keep pace.
+	blockCompactDays = 2
 )
 
 // nextRetentionWait is how long the loop waits after a pass: an hour when the
@@ -57,6 +60,7 @@ type retentionStore interface {
 	DropMetricPartitions(ctx context.Context, before time.Time) ([]string, error)
 	CompactMetricTrends(ctx context.Context, maxHours, laneDays int) (storage.TrendCompaction, error)
 	PruneMetricTrends(ctx context.Context, before time.Time, limit int) (int64, error)
+	CompactMetricBlocks(ctx context.Context, f storage.BlockFold) (storage.BlockCompaction, error)
 }
 
 // retentionLane is one thing a pass prunes to one window: a sample lane, or a
@@ -113,6 +117,8 @@ type retentionReport struct {
 	Created, Dropped []string
 	// Trends is what the pass's trend compaction did (#1276).
 	Trends storage.TrendCompaction
+	// Blocks is what the pass's block fold did (#1528).
+	Blocks storage.BlockCompaction
 }
 
 // retentionPass prunes each lane to its window once (retentionLanes): the metric
@@ -172,6 +178,18 @@ func retentionPass(ctx context.Context, store retentionStore, now time.Time, chu
 			rep.Behind = append(rep.Behind, "metric_trend compaction")
 		} else if trends.Behind {
 			rep.Behind = append(rep.Behind, "metric_trend compaction")
+		}
+		// The days whose every hour the trends have closed fold into blocks
+		// (#1528), on the trend compaction's marks.
+		bctx, bdone := bounded()
+		blocks, err := store.CompactMetricBlocks(bctx, storage.BlockFold{MaxDays: blockCompactDays, LaneDays: w.MetricDays})
+		bdone()
+		rep.Blocks = blocks
+		if err != nil {
+			errs = append(errs, fmt.Errorf("compact metric blocks: %w", err))
+			rep.Behind = append(rep.Behind, "metric_block compaction")
+		} else if blocks.Behind {
+			rep.Behind = append(rep.Behind, "metric_block compaction")
 		}
 	}
 	// The types with windows of their own. A failed read loses only their own
@@ -236,6 +254,10 @@ func (s *Server) startSampleRetention() {
 			if rep.Trends.Hours > 0 || rep.Trends.Recomputed > 0 {
 				slog.Info("metric hours closed into trends", "facility", "retention",
 					"hours", rep.Trends.Hours, "through", rep.Trends.Through, "recomputed", rep.Trends.Recomputed)
+			}
+			if b := rep.Blocks; b.Days > 0 || b.Weeks > 0 || b.Rebuilt > 0 {
+				slog.Info("metric days folded into blocks", "facility", "retention", "days", b.Days, "through", b.Through,
+					"weeks", b.Weeks, "week_through", b.WeekThrough, "blocks", b.Blocks, "rebuilt", b.Rebuilt)
 			}
 			if len(rep.Created) > 0 || len(rep.Dropped) > 0 {
 				slog.Info("metric partitions rolled", "facility", "retention",

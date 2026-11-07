@@ -5031,6 +5031,114 @@
      }
     ]
    },
+   "metric_block": {
+    "columns": [
+     {
+      "name": "series_id",
+      "type": "bigint",
+      "nullable": false,
+      "pk": true,
+      "fk": true,
+      "fk_target": "metric_series.id"
+     },
+     {
+      "name": "span_start",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "pk": true
+     },
+     {
+      "name": "span",
+      "type": "text",
+      "nullable": false,
+      "pk": true
+     },
+     {
+      "name": "n",
+      "type": "integer",
+      "nullable": false
+     },
+     {
+      "name": "offset_ms",
+      "type": "ARRAY",
+      "nullable": false
+     },
+     {
+      "name": "value",
+      "type": "ARRAY",
+      "nullable": false
+     }
+    ],
+    "checks": [
+     {
+      "name": "metric_block_n_check",
+      "expr": "CHECK (((n \u003e 0) AND (cardinality(offset_ms) = n) AND (cardinality(value) = n)))"
+     },
+     {
+      "name": "metric_block_span_check",
+      "expr": "CHECK ((span = ANY (ARRAY['hour'::text, 'day'::text, 'week'::text])))"
+     }
+    ]
+   },
+   "metric_block_dirty": {
+    "columns": [
+     {
+      "name": "series_id",
+      "type": "bigint",
+      "nullable": false,
+      "pk": true
+     },
+     {
+      "name": "day",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "pk": true
+     }
+    ]
+   },
+   "metric_block_mark": {
+    "columns": [
+     {
+      "name": "id",
+      "type": "boolean",
+      "nullable": false,
+      "default": "true",
+      "pk": true
+     },
+     {
+      "name": "blocked_through",
+      "type": "timestamp with time zone",
+      "nullable": false
+     },
+     {
+      "name": "blocked_series",
+      "type": "bigint",
+      "nullable": false,
+      "default": "0"
+     },
+     {
+      "name": "week_through",
+      "type": "timestamp with time zone",
+      "nullable": false
+     },
+     {
+      "name": "week_series",
+      "type": "bigint",
+      "nullable": false,
+      "default": "0"
+     }
+    ],
+    "checks": [
+     {
+      "name": "metric_block_mark_one_row",
+      "expr": "CHECK (id)"
+     },
+     {
+      "name": "metric_block_mark_order",
+      "expr": "CHECK ((week_through \u003c= blocked_through))"
+     }
+    ]
+   },
    "metric_declared": {
     "columns": [
      {
