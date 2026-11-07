@@ -22,6 +22,7 @@ import (
 // the owner's endpoint as its instance, issues exactly the statements a batch
 // of one does, counted at the gateway's pool.
 func TestPushCostsOneScopeCheckPerBatch(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

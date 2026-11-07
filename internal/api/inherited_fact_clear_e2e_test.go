@@ -26,6 +26,7 @@ import (
 // operator's emptied box travels: PATCH {"stem": ""} is a 200 and the row reads
 // back declaring nothing, resolving its parent's glyph again on the listing.
 func TestClearingAnInheritedComponentFactOverTheWireAPI(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw := storagetest.NewDB(t)
 	if err := seed.Run(ctx, gw); err != nil {
@@ -77,6 +78,7 @@ func TestClearingAnInheritedComponentFactOverTheWireAPI(t *testing.T) {
 // EMPTY alternation in the pattern, not the absence of one, so every malformed
 // stem the rule refused before is still a 422 and only "" is admitted.
 func TestClearingAStemDoesNotWeakenTheStemRuleAPI(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw := storagetest.NewDB(t)
 	if err := seed.Run(ctx, gw); err != nil {
@@ -110,6 +112,7 @@ func TestClearingAStemDoesNotWeakenTheStemRuleAPI(t *testing.T) {
 // so the refusal that guards create guards the clear too, on both registries,
 // and it names the reason rather than returning a 500 from a later mint.
 func TestClearingARootTypesStemIsA422API(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw := storagetest.NewDB(t)
 	if err := seed.Run(ctx, gw); err != nil {
@@ -147,16 +150,14 @@ func TestClearingARootTypesStemIsA422API(t *testing.T) {
 // it, and the drafted name has to go back to the parent's stem. A fork leg that
 // stored the sentinel verbatim would refuse the draft instead.
 func TestClearingAStemOnAShippedTypeForksAndTheWalkResumesAPI(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
@@ -224,6 +225,7 @@ func TestClearingAStemOnAShippedTypeForksAndTheWalkResumesAPI(t *testing.T) {
 // from the parent, and a source field that assumed "the parent" would be wrong
 // on one of the two.
 func TestTheListingServesWhatAnInheritedFactWouldInheritAPI(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw := storagetest.NewDB(t)
 	if err := seed.Run(ctx, gw); err != nil {
@@ -323,6 +325,7 @@ func TestTheListingServesWhatAnInheritedFactWouldInheritAPI(t *testing.T) {
 // across both blades rather than a fact the component page can teach and the
 // system page cannot.
 func TestTheSystemTypeListingServesItsInheritedFactsAPI(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw := storagetest.NewDB(t)
 	if err := seed.Run(ctx, gw); err != nil {

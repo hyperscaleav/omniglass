@@ -36,15 +36,12 @@ func roleMaskFixture(t *testing.T) (*apiClient, string, string) {
 		t.Skip("integration test needs Postgres")
 	}
 	ctx := context.Background()
-	dsn := storagetest.NewDSN(t)
+	dsn := seededDSN(t)
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	t.Cleanup(gw.Close)
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	ownerTok := bootstrapOwnerTok(t, ctx, gw)
 	srv := httptest.NewServer(api.NewHandler(gw))
 	t.Cleanup(srv.Close)
@@ -86,6 +83,7 @@ func readDeclaredRole(t *testing.T, c *apiClient, tok, name string) declaredRole
 // label changes a label and nothing else. Before the conversion
 // this route was a PUT that wholesale-replaced most of the row.
 func TestRolePatchWithNoMaskLeavesOmittedFieldsAlone(t *testing.T) {
+	t.Parallel()
 	c, tok, path := roleMaskFixture(t)
 
 	c.do(tok, http.MethodPatch, path, map[string]any{"label": "Main Display (renamed)"}, http.StatusOK)
@@ -110,6 +108,7 @@ func TestRolePatchWithNoMaskLeavesOmittedFieldsAlone(t *testing.T) {
 // sentinel to clear it with, and under the implied mask alone "clear it" and
 // "leave it alone" are the same request.
 func TestRolePatchWithAMaskClearsCapacity(t *testing.T) {
+	t.Parallel()
 	c, tok, path := roleMaskFixture(t)
 
 	c.do(tok, http.MethodPatch, path, map[string]any{"update_mask": []string{"capacity"}}, http.StatusOK)
@@ -127,6 +126,7 @@ func TestRolePatchWithAMaskClearsCapacity(t *testing.T) {
 // mask forces: an empty list is not a populated field, so clearing one means
 // naming it in the mask, not sending [].
 func TestRolePatchWithAMaskClearsTheLists(t *testing.T) {
+	t.Parallel()
 	c, tok, path := roleMaskFixture(t)
 
 	c.do(tok, http.MethodPatch, path, map[string]any{
@@ -154,6 +154,7 @@ func TestRolePatchWithAMaskClearsTheLists(t *testing.T) {
 // empty one. If a decoder ever collapsed the two, an empty mask would quietly
 // become the implied mask and start writing the body after all.
 func TestRolePatchWithAnEmptyMaskWritesNothing(t *testing.T) {
+	t.Parallel()
 	c, tok, path := roleMaskFixture(t)
 
 	c.do(tok, http.MethodPatch, path, map[string]any{
@@ -169,6 +170,7 @@ func TestRolePatchWithAnEmptyMaskWritesNothing(t *testing.T) {
 // TestRolePatchWithAStarMaskReplacesEverything proves "*" is the PUT this route
 // used to be: every field the body omits goes back to its default.
 func TestRolePatchWithAStarMaskReplacesEverything(t *testing.T) {
+	t.Parallel()
 	c, tok, path := roleMaskFixture(t)
 
 	c.do(tok, http.MethodPatch, path, map[string]any{
@@ -189,6 +191,7 @@ func TestRolePatchWithAStarMaskReplacesEverything(t *testing.T) {
 // a mask is the caller stating intent and a typo that succeeds is worse than
 // one that fails.
 func TestRolePatchRefusesAMaskItCannotHonor(t *testing.T) {
+	t.Parallel()
 	c, tok, path := roleMaskFixture(t)
 
 	for _, mask := range [][]string{{"colour"}, {"*", "quorum"}} {
@@ -220,6 +223,7 @@ func TestRolePatchRefusesAMaskItCannotHonor(t *testing.T) {
 // too, so the same PATCH-then-GET that confirms every other field confirms this
 // one.
 func TestRoleAlternateRoundTrips(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -326,6 +330,7 @@ func TestRoleAlternateRoundTrips(t *testing.T) {
 // arc: the two share a body but not a handler, so a fix to one is not a fix to
 // the other (#639 names both).
 func TestSystemRolePatchTakesTheSameMask(t *testing.T) {
+	t.Parallel()
 	c, tok, _ := roleMaskFixture(t)
 
 	c.do(tok, http.MethodPost, "/systems", map[string]any{"name": "mask-sys"}, http.StatusCreated)

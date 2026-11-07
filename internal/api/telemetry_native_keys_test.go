@@ -14,9 +14,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/bus"
 	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
 	"github.com/hyperscaleav/omniglass/internal/scope"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -29,6 +27,7 @@ import (
 // that land. The keys come from probekeys, the one declaration the probes emit
 // from, so a key added there is covered here without editing this test.
 func TestTelemetryPushRefusesNativeKeys(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server")
 	}
@@ -207,15 +206,12 @@ func TestTelemetryPushRefusesNativeKeys(t *testing.T) {
 // the component bar-1, a real bus, and the API publishing onto it.
 func pushHarness(t *testing.T, ctx context.Context) (storage.Gateway, *apiClient, string) {
 	t.Helper()
-	dsn := storagetest.NewDSN(t)
+	dsn := seededDSN(t)
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	t.Cleanup(gw.Close)
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	tok, hash, prefix, err := auth.NewBearerToken()
 	if err != nil {
 		t.Fatalf("mint owner: %v", err)

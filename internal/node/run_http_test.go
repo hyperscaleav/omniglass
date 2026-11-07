@@ -228,6 +228,7 @@ func spkiOf(raw []byte) string {
 // refused as certificate, holds every request beneath the gate, and is
 // trusted with :retry and certificate.
 func TestNodeHTTPSKestrelPollsActuatesAndPinsItsKey(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}
@@ -356,6 +357,7 @@ func TestNodeHTTPSKestrelPollsActuatesAndPinsItsKey(t *testing.T) {
 // credential-free probe keeps reporting; the key rotated in the store brings
 // the endpoint up within a tick.
 func TestNodeHTTPAuthVariantsAndTheRefusedCredential(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}

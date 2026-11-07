@@ -18,6 +18,7 @@ import (
 // preset and tracking, beside their identity. A call placed on the codec and
 // a preset recalled on the camera read back on the next poll.
 func TestNodeKestrelRelayAndGazeReadTheirClass(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}

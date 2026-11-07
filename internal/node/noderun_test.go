@@ -28,6 +28,7 @@ func snmpPreviewTask() collection.TaskSpec {
 // raw answer and each emit that did not locate, and holds no session of its
 // own: nothing an endpoint holds is touched (#1163).
 func TestPreviewRunAnswersWhatThePollRead(t *testing.T) {
+	t.Parallel()
 	runner := &collection.Runner{SNMP: fakeGetter{res: map[string]string{"1.3.6.1.2.1.1.1.0": "Boreal Edge 86", "1.3.6.1.2.1.1.3.0": "812"}}}
 	reply := previewRun(t.Context(), runner, []collection.TaskSpec{snmpPreviewTask()}, nil, 5*time.Second)
 	if reply.Error != "" || len(reply.Results) != 1 {
@@ -48,6 +49,7 @@ func TestPreviewRunAnswersWhatThePollRead(t *testing.T) {
 // What a preview cannot run without an endpoint faults naming why, and a
 // fetch that fails is a fault with no samples.
 func TestPreviewRunRefusesWhatOnlyAnEndpointHolds(t *testing.T) {
+	t.Parallel()
 	udp := snmpPreviewTask()
 	udp.Transport = "udp"
 	_, faults, _, _ := collectPreviewTask(t.Context(), &collection.Runner{}, udp, nil)
@@ -69,6 +71,7 @@ func TestPreviewRunRefusesWhatOnlyAnEndpointHolds(t *testing.T) {
 
 // A run now refuses a task that is not a driver poll, before anything runs.
 func TestRunNowRefusesANonPoll(t *testing.T) {
+	t.Parallel()
 	probe := snmpPreviewTask()
 	probe.Mode = "probe"
 	if r := runNowTask(t.Context(), nil, "edge", &collection.Runner{}, nil, newPollSchedule(time.Second), nil, probe, time.Now().Add(time.Second)); r.Error == "" {
@@ -85,6 +88,7 @@ func (errTimeout) Error() string { return "i/o timeout" }
 // what a run now lands is what the next scheduled run compares against (the
 // #1145 change memory, shared). The answer still carries every sample.
 func TestRunNowSharesTheChangeMemory(t *testing.T) {
+	t.Parallel()
 	sched := newPollSchedule(time.Second)
 	ev := collection.Sample{Name: "last-error", Lane: driver.LaneEvent, Text: "A"}
 	first := landableRun(sched, "t1", []collection.Sample{ev})
@@ -108,6 +112,7 @@ func TestRunNowSharesTheChangeMemory(t *testing.T) {
 // every form an answer echoes it: a secret straddling the cut leaves no prefix
 // behind, and a basic credential's header value is masked too.
 func TestPreviewExcerptIsScrubbedBeforeTheCut(t *testing.T) {
+	t.Parallel()
 	secret := "straddle-s3cret"
 	body := strings.Repeat("x", collection.ExcerptLimit-6) + secret + " Authorization: Basic YWRtaW46c3RyYWRkbGUtczNjcmV0"
 	got, _ := previewExcerpt(driver.Payload{Text: body}, &driver.HTTPCredential{Scheme: driver.SchemeBasic, Username: "admin", Password: secret}, nil)
@@ -127,6 +132,7 @@ func TestPreviewExcerptIsScrubbedBeforeTheCut(t *testing.T) {
 // A run now's change memory is committed only once its landing is published:
 // a landing that failed to publish is offered again by the next run.
 func TestRunNowCommitsOnlyWhatPublished(t *testing.T) {
+	t.Parallel()
 	sched := newPollSchedule(time.Second)
 	ev := collection.Sample{Name: "last-error", Lane: driver.LaneEvent, Text: "B"}
 	landed := landableRun(sched, "t1", []collection.Sample{ev})

@@ -12,6 +12,7 @@ import (
 // 1s heartbeat runs once per interval, a task new to the worklist runs at
 // once, and a task that leaves the worklist is forgotten.
 func TestPollScheduleRunsOncePerInterval(t *testing.T) {
+	t.Parallel()
 	s := newPollSchedule(time.Second)
 	t0 := time.Date(2026, 10, 23, 12, 0, 0, 0, time.UTC)
 	var runs []int
@@ -52,6 +53,7 @@ func TestPollScheduleRunsOncePerInterval(t *testing.T) {
 // whole interval (a 24h poll that fails during a reboot must not wait 24h);
 // a success books from the due time again.
 func TestPollScheduleRetriesAFailureOnABackoff(t *testing.T) {
+	t.Parallel()
 	hb := time.Second
 	s := newPollSchedule(hb)
 	t0 := time.Date(2026, 10, 23, 12, 0, 0, 0, time.UTC)
@@ -111,6 +113,7 @@ func TestPollScheduleRetriesAFailureOnABackoff(t *testing.T) {
 // Review of #822: the cadence books from the due time, not from the tick
 // that ran it, so a tick that lands late does not push every later run back.
 func TestPollScheduleDoesNotDrift(t *testing.T) {
+	t.Parallel()
 	s := newPollSchedule(time.Second)
 	t0 := time.Date(2026, 10, 23, 12, 0, 0, 0, time.UTC)
 	s.due("p", time.Minute, t0)
@@ -127,6 +130,7 @@ func TestPollScheduleDoesNotDrift(t *testing.T) {
 // it built up against the old inputs, and its booking, belong to inputs that
 // are gone.
 func TestPollScheduleRunsAtOnceWhenTheFingerprintMoves(t *testing.T) {
+	t.Parallel()
 	s := newPollSchedule(2 * time.Second)
 	now := time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)
 	every := time.Minute
@@ -154,6 +158,7 @@ func TestPollScheduleRunsAtOnceWhenTheFingerprintMoves(t *testing.T) {
 // forgets what each poll landed, so an unchanged event or log line lands
 // again rather than staying lost with the batch the spool dropped.
 func TestForgetOccurrencesLandsThemAgain(t *testing.T) {
+	t.Parallel()
 	s := newPollSchedule(time.Second)
 	ev := []collection.Sample{{Lane: driver.LaneEvent, Name: "input-changed", Text: "hdmi-2", Emit: 0}}
 	s.commitChanged("t-1", ev)

@@ -15,9 +15,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/auth"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/secret"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
 // people is an API fixture with humans who can sign in: each username has a
@@ -38,15 +36,12 @@ type people struct {
 func newPeople(t *testing.T) *people {
 	t.Helper()
 	ctx := context.Background()
-	dsn := storagetest.NewDSN(t)
+	dsn := seededDSN(t)
 	gw, err := storage.NewPG(ctx, dsn, storage.WithSecretProvider(secret.NewStaticProvider(bytes.Repeat([]byte{0x7}, 32))))
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(gw.Close)
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatal(err)
-	}
 	// A custom role, written before the server reads its role index.
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
@@ -129,6 +124,7 @@ func (p *people) inbox(user string) inboxWire {
 // inbox at once; the recipient's name is the recipient's and the admin's
 // alone; and the bound group cannot be deleted.
 func TestAGroupIsToldInTheirInboxOnlyWhatEachCanRead(t *testing.T) {
+	t.Parallel()
 	p := newPeople(t)
 	p.human("alice", "viewer", "all", "")
 	p.human("bob", "viewer", "component", p.comps["display-2"])

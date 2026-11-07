@@ -90,6 +90,7 @@ func (f *bindingE2E) list(tok, conduit string) bindingListWire {
 
 // A binding round-trips and names both ends; a re-put is idempotent.
 func TestIdentityBindingRoundTripsOverHTTP(t *testing.T) {
+	t.Parallel()
 	f := newBindingE2E(t)
 	var b bindingWire
 	if err := json.Unmarshal(f.c.do(f.owner, http.MethodPut, bindPath("ucc-cloud", "ucc-room-id", "R-100"), ownerBody("system", "room-a"), http.StatusOK), &b); err != nil {
@@ -112,6 +113,7 @@ func TestIdentityBindingRoundTripsOverHTTP(t *testing.T) {
 // non-disclosing 404, and one it reads but cannot write is a 403 naming the
 // system:update scope.
 func TestIdentityBindingNeedsTheOwnerEnd(t *testing.T) {
+	t.Parallel()
 	f := newBindingE2E(t)
 	conduit := grant{role: "conduit-editor", scopeKind: "component", scopeID: f.ids["ucc-cloud"]}
 	conduitOnly := f.principal("conduit-only", conduit)
@@ -144,6 +146,7 @@ func TestIdentityBindingNeedsTheOwnerEnd(t *testing.T) {
 // The owner end alone cannot bind from a conduit: system:update on the room
 // and no update on the conduit is refused.
 func TestIdentityBindingNeedsTheConduitEnd(t *testing.T) {
+	t.Parallel()
 	f := newBindingE2E(t)
 	room := grant{role: "room-editor", scopeKind: "system", scopeID: f.ids["room-a"]}
 	roomOnly := f.principal("room-only", room)
@@ -170,6 +173,7 @@ func TestIdentityBindingNeedsTheConduitEnd(t *testing.T) {
 // A place or a node is no owner (422), and the match key must be registered
 // (422).
 func TestIdentityBindingRefusesPlacesNodesAndUnknownKeys(t *testing.T) {
+	t.Parallel()
 	f := newBindingE2E(t)
 	path := bindPath("ucc-cloud", "ucc-room-id", "R-1")
 	for _, kind := range []string{"location", "node"} {
@@ -184,6 +188,7 @@ func TestIdentityBindingRefusesPlacesNodesAndUnknownKeys(t *testing.T) {
 
 // One identity has one owner, and moving it costs update on both owners.
 func TestIdentityBindingMoveNeedsBothOwners(t *testing.T) {
+	t.Parallel()
 	f := newBindingE2E(t)
 	path := bindPath("ucc-cloud", "ucc-room-id", "R-1")
 	f.c.do(f.owner, http.MethodPut, path, ownerBody("system", "room-a"), http.StatusOK)
@@ -209,6 +214,7 @@ func TestIdentityBindingMoveNeedsBothOwners(t *testing.T) {
 
 // Deleting the owner or the conduit deletes the binding.
 func TestIdentityBindingGoesWithEitherEndOverHTTP(t *testing.T) {
+	t.Parallel()
 	f := newBindingE2E(t)
 	f.c.do(f.owner, http.MethodPut, bindPath("ucc-cloud", "ucc-room-id", "R-A"), ownerBody("system", "room-a"), http.StatusOK)
 	f.c.do(f.owner, http.MethodPut, bindPath("ucc-cloud", "ucc-room-id", "R-P"), ownerBody("component", "panel-1"), http.StatusOK)
@@ -224,6 +230,7 @@ func TestIdentityBindingGoesWithEitherEndOverHTTP(t *testing.T) {
 
 // The list names only owners the caller can read, and counts the rest.
 func TestIdentityBindingListCountsUnreadableOwners(t *testing.T) {
+	t.Parallel()
 	f := newBindingE2E(t)
 	f.c.do(f.owner, http.MethodPut, bindPath("ucc-cloud", "ucc-room-id", "R-A"), ownerBody("system", "room-a"), http.StatusOK)
 	f.c.do(f.owner, http.MethodPut, bindPath("ucc-cloud", "ucc-room-id", "R-B"), ownerBody("system", "room-b"), http.StatusOK)
@@ -247,6 +254,7 @@ func TestIdentityBindingListCountsUnreadableOwners(t *testing.T) {
 
 // A binding whose owner is its own conduit is a 422.
 func TestIdentityBindingRefusesTheConduitAsOwnerOverHTTP(t *testing.T) {
+	t.Parallel()
 	f := newBindingE2E(t)
 	st, raw := f.c.send(f.owner, http.MethodPut, bindPath("ucc-cloud", "ucc-room-id", "R-1"), ownerBody("component", "ucc-cloud"))
 	if st != http.StatusUnprocessableEntity || !strings.Contains(string(raw), "conduit") {
@@ -258,6 +266,7 @@ func TestIdentityBindingRefusesTheConduitAsOwnerOverHTTP(t *testing.T) {
 // percent-encoded, one segment, and round-trips: the list reads back the
 // decoded value, and the delete on the same encoded address removes it.
 func TestIdentityBindingValueWithReservedCharactersRoundTrips(t *testing.T) {
+	t.Parallel()
 	f := newBindingE2E(t)
 	for _, v := range []string{"room/1", "a b", "x?y#z%", "R:1"} {
 		p := bindPath("ucc-cloud", "ucc-room-id", strings.ReplaceAll(url.PathEscape(v), ":", "%3A"))
@@ -281,6 +290,7 @@ func TestIdentityBindingValueWithReservedCharactersRoundTrips(t *testing.T) {
 
 // Deleting a match key a binding uses is a 409 saying bindings hold it.
 func TestIdentityBindingKeyDeleteIsAConflictWhileBound(t *testing.T) {
+	t.Parallel()
 	f := newBindingE2E(t)
 	f.c.do(f.owner, http.MethodPost, "/property-types", map[string]any{"name": "amp-channel", "data_type": "string", "label": "Amp channel"}, http.StatusCreated)
 	f.c.do(f.owner, http.MethodPut, bindPath("ucc-cloud", "amp-channel", "1"), ownerBody("system", "room-a"), http.StatusOK)

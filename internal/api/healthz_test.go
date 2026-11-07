@@ -16,6 +16,7 @@ import (
 // against a real testcontainer Postgres, the Storage Gateway Ping succeeds, and
 // GET /api/v1/healthz returns 200 with status=ok, db=ok. Skipped under -short.
 func TestHealthzReportsDBOK(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 
 	if err := gw.Ping(context.Background()); err != nil {
@@ -66,6 +67,7 @@ func (s sentinel) Error() string { return string(s) }
 const errDown = sentinel("db unreachable")
 
 func TestHealthzReportsDBDown(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(api.NewHandler(degradedGateway{}))
 	defer srv.Close()
 

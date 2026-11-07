@@ -11,9 +11,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/secret"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
 // TestAPushOnlyIntegrationPushesWhereItIsGranted holds the push fence to
@@ -22,19 +20,17 @@ import (
 // component and no component:read pushes to that component; every other
 // component, real or not, is the same non-disclosing 404.
 func TestAPushOnlyIntegrationPushesWhereItIsGranted(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
 	ctx := context.Background()
-	dsn := storagetest.NewDSN(t)
+	dsn := seededDSN(t)
 	gw, err := storage.NewPG(ctx, dsn, storage.WithSecretProvider(secret.NewStaticProvider(make([]byte, 32))))
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	// The role must exist before the first request builds the role index.
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {

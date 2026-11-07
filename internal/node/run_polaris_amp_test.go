@@ -18,6 +18,7 @@ import (
 // temperature and fan. Standby entered over the amplifier's HTTP API reads
 // standby on the next poll.
 func TestNodePolarisAmpReadsItsOperatingState(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}

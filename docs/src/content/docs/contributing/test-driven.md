@@ -139,9 +139,11 @@ label and the `postgres:18` image so it never touches the compose dev stack.
 
 ### Tests run in parallel, and a fixture is seeded once
 
-Because every test owns a database, tests in `internal/storage` and
-`internal/devseed` are independent by construction, and they run in parallel on
-the package's one container. A test that is not parallel puts its whole length on
+Because every test owns a database, tests in `internal/storage`,
+`internal/devseed`, `internal/api` and `internal/node` are independent by
+construction, and they run in parallel on the package's one container. The api
+and node end-to-end stacks bind ephemeral ports only, which is what lets them
+overlap; a test that needs a fixed port says `// Serial:`. A test that is not parallel puts its whole length on
 the gate's critical path, so the default is a rule: every top-level test starts
 with `t.Parallel()`, or says in a `// Serial:` comment why it cannot. The reasons
 that hold up are process-wide state the test changes or asserts on: a
@@ -161,7 +163,9 @@ seeded fleet), run once per test binary, sealed, and cloned per test. A test
 that only reads seeded state takes a clone; a test that verifies the seeding
 itself (idempotence, an option's effect, the large scenario) still runs the seed.
 Like the base template it caches success and never failure. `internal/devseed`
-spent most of its time seeding the same fleet into every test before this.
+spent most of its time seeding the same fleet into every test before this, and
+`internal/api` now clones one booted seed (`seededDSN`) instead of running it in
+each of about two hundred tests.
 
 ## Fixtures are minted, not borrowed
 

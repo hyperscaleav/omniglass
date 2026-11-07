@@ -10,9 +10,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/secret"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -36,16 +34,14 @@ var fleetWriterPerms = []string{
 // the tier too. Without the second gate, the first half of every pair passes,
 // which is the pre-slice behaviour this test rejects.
 func TestPlatformTierNeedsItsOwnPermission(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn, storage.WithSecretProvider(secret.NewStaticProvider(bytes.Repeat([]byte{0x7}, 32))))
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 
 	// Both custom roles must exist before the first authenticated request, which
 	// is what loads the role index (lazy, once per handler).
@@ -118,16 +114,14 @@ func TestPlatformTierNeedsItsOwnPermission(t *testing.T) {
 // sits in the official roles: admin holds it explicitly and owner through its >
 // tail, while the day-to-day roles do not, however wide their scope.
 func TestSeededRolesCarryThePlatformPermission(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	bootstrapOwnerTok(t, ctx, gw)
 	adminTok := principalWithGrants(t, ctx, dsn, "platform-admin", []grant{{role: "admin", scopeKind: "all"}})
 	opTok := principalWithGrants(t, ctx, dsn, "platform-operator", []grant{{role: "operator", scopeKind: "all"}})

@@ -12,6 +12,7 @@ import (
 // member and can be unassigned, unbound and deleted; nothing is left pointing at
 // the old standard's roles, so moving back reactivates nothing.
 func TestChangingAStandardKeepsTheComponentStaffable(t *testing.T) {
+	t.Parallel()
 	f := newStaffingFixture(t)
 	c, owner := f.c, f.owner
 

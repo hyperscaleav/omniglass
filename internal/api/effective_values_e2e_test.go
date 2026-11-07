@@ -11,9 +11,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/auth"
 	"github.com/hyperscaleav/omniglass/internal/secret"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
 // The variable and secret cascades are the same engine as the tag cascade, and
@@ -42,6 +40,7 @@ type resolvedValueResp struct {
 }
 
 func TestEffectiveVariablesAPI(t *testing.T) {
+	t.Parallel()
 	c, tok, _, _ := newCascadeFixture(t)
 
 	got := effectiveValues(t, c, tok, "codec-1", "effective-variables")
@@ -75,6 +74,7 @@ func TestEffectiveVariablesAPI(t *testing.T) {
 }
 
 func TestEffectiveSecretsAPIMasksFields(t *testing.T) {
+	t.Parallel()
 	c, tok, _, _ := newCascadeFixture(t)
 
 	got := effectiveValues(t, c, tok, "codec-1", "effective-secrets")
@@ -102,6 +102,7 @@ func TestEffectiveSecretsAPIMasksFields(t *testing.T) {
 }
 
 func TestEffectiveSecretsAPIRefusesTheViewerFloor(t *testing.T) {
+	t.Parallel()
 	c, _, compID, dsn := newCascadeFixture(t)
 	// The viewer floor carries variable:read and deliberately does not carry
 	// secret:read, so the two effective reads must answer differently for it.
@@ -139,7 +140,7 @@ const cascadeSecretPlaintext = "s3cret-pw"
 // component sits in a room so the location band has something in it.
 func newCascadeFixture(t *testing.T) (*apiClient, string, string, string) {
 	t.Helper()
-	dsn := storagetest.NewDSN(t)
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn, storage.WithSecretProvider(
 		secret.NewStaticProvider(bytes.Repeat([]byte{0x7}, 32))))
@@ -147,9 +148,6 @@ func newCascadeFixture(t *testing.T) (*apiClient, string, string, string) {
 		t.Fatalf("open gateway: %v", err)
 	}
 	t.Cleanup(gw.Close)
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	tok, hash, prefix, err := auth.NewBearerToken()
 	if err != nil {
 		t.Fatalf("mint owner: %v", err)

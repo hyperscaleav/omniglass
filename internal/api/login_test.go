@@ -14,9 +14,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/auth"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
 // TestPasswordLoginCookieSession drives the whole login path against the real
@@ -24,16 +22,14 @@ import (
 // that authenticates /auth/me, no cookie is 401, and logout revokes the token so
 // the same cookie stops working. Skipped under -short.
 func TestPasswordLoginCookieSession(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 
 	pwHash, err := auth.HashPassword("s3cret-pw")
 	if err != nil {
@@ -146,16 +142,14 @@ func TestPasswordLoginCookieSession(t *testing.T) {
 // the correct password returns the same generic 401, and once the lock window
 // passes the correct password logs in again. Skipped under -short.
 func TestLoginLockoutEndpoint(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	pwHash, err := auth.HashPassword("orange-boat-42x")
 	if err != nil {
 		t.Fatalf("hash: %v", err)
@@ -213,16 +207,14 @@ func TestLoginLockoutEndpoint(t *testing.T) {
 // bootstrapped when the first owner is created, with no auth required (it drives
 // the login screen's bootstrap hint). Skipped under -short.
 func TestAuthStatus(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
@@ -261,16 +253,14 @@ func TestAuthStatus(t *testing.T) {
 // on the login page before anyone signs in. A server that is not a lab says
 // so too, so the banner never shows on a real deployment.
 func TestAuthStatusReportsALab(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	for _, tc := range []struct {
 		name string
 		opts []api.Option

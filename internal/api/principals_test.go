@@ -9,9 +9,7 @@ import (
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
 // TestPrincipalDirectoryAPI drives the admin directory against the real binary:
@@ -20,16 +18,14 @@ import (
 // creates are rejected; secrets never appear in a response; and a created human can
 // sign in with the initial password. Skipped under -short.
 func TestPrincipalDirectoryAPI(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
@@ -116,16 +112,14 @@ func TestPrincipalDirectoryAPI(t *testing.T) {
 // refused; a clash is 409, an unknown id 404, and a non-human target 422. Skipped
 // under -short.
 func TestUpdatePrincipalAPI(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 
@@ -204,16 +198,14 @@ func TestUpdatePrincipalAPI(t *testing.T) {
 // role, sees it on the principal, revokes it, cannot strip the last owner, and a
 // location-scoped admin is refused. Skipped under -short.
 func TestGrantAPI(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 
@@ -293,16 +285,14 @@ func TestGrantAPI(t *testing.T) {
 // user (who can then no longer sign in), re-enables them, cannot disable the last
 // owner, and a location-scoped admin is refused. Skipped under -short.
 func TestDisableAPI(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 

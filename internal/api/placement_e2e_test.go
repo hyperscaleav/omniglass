@@ -10,9 +10,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/auth"
 	"github.com/hyperscaleav/omniglass/internal/scope"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
 // TestComponentPlacementAPI drives the component :move and PATCH surfaces over
@@ -20,16 +18,14 @@ import (
 // clears the parent to root; a reparent onto a descendant is a 422; product
 // stays on PATCH, and an unknown one is a 422. Skipped under -short.
 func TestComponentPlacementAPI(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 
 	// Fixtures the API references: a location and a product.
 	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "loc-x", LocationType: "campus"}, scope.Set{All: true}); err != nil {
@@ -108,16 +104,14 @@ func TestComponentPlacementAPI(t *testing.T) {
 // location together, an empty string clears the parent to root, and a
 // reparent onto a descendant is a 422. Skipped under -short.
 func TestSystemPlacementAPI(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "loc-x", LocationType: "campus"}, scope.Set{All: true}); err != nil {
 		t.Fatalf("seed location: %v", err)
 	}

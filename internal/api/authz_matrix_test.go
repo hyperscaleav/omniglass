@@ -9,7 +9,6 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/auth"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 	"github.com/jackc/pgx/v5"
@@ -423,6 +422,7 @@ func (e scopedEntity) createBody(name, parent string) map[string]any {
 // Because it iterates scopedEntities, a new scoped entity is covered the moment
 // it is registered.
 func TestAuthzConformance(t *testing.T) {
+	t.Parallel()
 	for _, e := range scopedEntities {
 		t.Run(e.resource, func(t *testing.T) {
 			runAuthzMatrix(t, e)
@@ -431,16 +431,13 @@ func TestAuthzConformance(t *testing.T) {
 }
 
 func runAuthzMatrix(t *testing.T, e scopedEntity) {
-	dsn := storagetest.NewDSN(t)
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	storagetest.CreateShippedStandards(t, gw)
 
 	// A custom write-only role for this entity (create/update/delete, no

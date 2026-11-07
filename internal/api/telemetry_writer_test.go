@@ -19,6 +19,7 @@ import (
 // rule's, so each is refused by name with the writer that owns it, and none
 // lands; a collected key in the same batch still does.
 func TestTelemetryPushRefusesKeysItDoesNotWrite(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server")
 	}
@@ -79,6 +80,7 @@ func TestTelemetryPushRefusesKeysItDoesNotWrite(t *testing.T) {
 // over the API (ADR-0161), and the declared-value route refuses a reserved key
 // with a 422 naming it and who writes it, writing nothing.
 func TestWriterClassOnTheWire(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server")
 	}

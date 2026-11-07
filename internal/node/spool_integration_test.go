@@ -146,6 +146,7 @@ func selfLog(message string) *ogv1.TelemetryBatch {
 }
 
 func TestNodePublishMissingItsAckIsRetriedOnce(t *testing.T) {
+	t.Parallel()
 	f := newSpoolFixture(t)
 	ctx, conn, srv := f.ctx, f.conn, f.srv
 	nc, err := nats.Connect(srv.ClientURL(), nats.UserInfo("edge-1", "token-1"), nats.CustomInboxPrefix(collection.InboxPrefix("edge-1")))
@@ -299,6 +300,7 @@ func (r *busRelay) setDown(down bool) {
 // ships when the bus is back (#454). A connection that gave up would leave
 // the node running and never shipping again until a restart lost the spool.
 func TestNodeConnectionOutlivesALongOutage(t *testing.T) {
+	t.Parallel()
 	f := newSpoolFixture(t)
 	prior := [3]time.Duration{reconnectWait, reconnectJitter, reconnectJitterTLS}
 	reconnectWait, reconnectJitter, reconnectJitterTLS = 5*time.Millisecond, time.Millisecond, time.Millisecond
@@ -339,6 +341,7 @@ func TestNodeConnectionOutlivesALongOutage(t *testing.T) {
 // holding it at the head, where it would block every batch behind it until
 // an overflow pushed it out.
 func TestSpoolDropsABatchTheBusCanNeverTake(t *testing.T) {
+	// Serial: it captures the slog default through captureLogs, which swaps it.
 	f := newSpoolFixture(t)
 	nc, err := connectBus(f.srv.ClientURL(), "edge-1", "token-1", "edge-1")
 	if err != nil {

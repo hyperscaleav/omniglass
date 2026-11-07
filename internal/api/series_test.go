@@ -9,6 +9,7 @@ import (
 // it implies is bounded, so a fine resolution over a wide range is refused
 // rather than answered with a truncated grid.
 func TestSeriesBucketing(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name         string
 		hours, res   int

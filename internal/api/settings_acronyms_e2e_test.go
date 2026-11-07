@@ -56,6 +56,7 @@ func contains(list []string, want string) bool {
 // the admin settings read, which is what client-visibility on a platform-domain
 // namespace buys.
 func TestAcronymListIsReadableByAnyAuthenticatedCaller(t *testing.T) {
+	t.Parallel()
 	f := newSettingsFixture(t)
 	got := acronymsOf(t, decodeMe(t, f.c.do(f.viewer, http.MethodGet, "/settings/me", nil, http.StatusOK)))
 	if !contains(got, "DSP") {
@@ -67,6 +68,7 @@ func TestAcronymListIsReadableByAnyAuthenticatedCaller(t *testing.T) {
 // whatever its client-visibility says, and the settings write routes carry
 // platform:update on top of settings:update because an override is install-wide.
 func TestAcronymListIsWritableOnlyByAnAdmin(t *testing.T) {
+	t.Parallel()
 	f := newSettingsFixture(t)
 	patch := map[string]any{"acronyms": []any{"AV", "Edge 55"}}
 	f.c.do(f.viewer, http.MethodPatch, "/settings/label", patch, http.StatusForbidden)
@@ -82,6 +84,7 @@ func TestAcronymListIsWritableOnlyByAnAdmin(t *testing.T) {
 // engine's own provenance: one key, and the level that supplied it answers "is
 // this still what Omniglass ships?".
 func TestAcronymProvenanceDistinguishesTheShippedListFromAnOperators(t *testing.T) {
+	t.Parallel()
 	f := newSettingsFixture(t)
 	body := decodeSettings(t, f.c.do(f.admin, http.MethodGet, "/settings", nil, http.StatusOK))
 	if body.Sources["label.acronyms"] != "default" {
@@ -108,6 +111,7 @@ func TestAcronymProvenanceDistinguishesTheShippedListFromAnOperators(t *testing.
 // list, so the write validator has to refuse it at the surface (422) rather than
 // storing a shape the typed decode fails on later.
 func TestAcronymListRefusesAJoinedString(t *testing.T) {
+	t.Parallel()
 	f := newSettingsFixture(t)
 	f.c.do(f.admin, http.MethodPatch, "/settings/label",
 		map[string]any{"acronyms": "AV,DSP"}, http.StatusUnprocessableEntity)

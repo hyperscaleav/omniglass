@@ -12,6 +12,7 @@ import (
 // The default is a minute, as ruled: long enough that the telemetry costs a
 // few rows per endpoint per minute, short enough to see a stall.
 func TestCollectionReportWindowDefaultsToAMinute(t *testing.T) {
+	t.Parallel()
 	f := newSettingsFixture(t)
 	admin := decodeSettings(t, f.c.do(f.admin, http.MethodGet, "/settings", nil, http.StatusOK)).Values["collection"]
 	viewer := decodeMe(t, f.c.do(f.viewer, http.MethodGet, "/settings/me", nil, http.StatusOK))["collection"]
@@ -24,6 +25,7 @@ func TestCollectionReportWindowDefaultsToAMinute(t *testing.T) {
 // within ten seconds (below which a window holds about one heartbeat and the
 // rows cost more than they say) and an hour (past which a stall goes unseen).
 func TestCollectionReportWindowIsWritableOnlyByAnAdminAndInRange(t *testing.T) {
+	t.Parallel()
 	f := newSettingsFixture(t)
 	f.c.do(f.viewer, http.MethodPatch, "/settings/collection", map[string]any{"report_seconds": 30}, http.StatusForbidden)
 	f.c.do(f.admin, http.MethodPatch, "/settings/collection", map[string]any{"report_seconds": 9}, http.StatusUnprocessableEntity)

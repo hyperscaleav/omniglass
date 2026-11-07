@@ -13,9 +13,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/secret"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
 // nameAddressStack is the live HTTP stack #1133's tests drive: a campus with two
@@ -34,7 +32,7 @@ type nameAddressStack struct {
 
 func newNameAddressStack(t *testing.T) *nameAddressStack {
 	t.Helper()
-	dsn := storagetest.NewDSN(t)
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	prov := secret.NewStaticProvider(bytes.Repeat([]byte{0x7}, 32))
 	gw, err := storage.NewPG(ctx, dsn, storage.WithSecretProvider(prov))
@@ -42,9 +40,6 @@ func newNameAddressStack(t *testing.T) *nameAddressStack {
 		t.Fatalf("open gateway: %v", err)
 	}
 	t.Cleanup(gw.Close)
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	srv := httptest.NewServer(api.NewHandler(gw))
 	t.Cleanup(srv.Close)
 	s := &nameAddressStack{t: t, ctx: ctx, dsn: dsn, c: &apiClient{t: t, ctx: ctx, base: srv.URL}}
@@ -96,6 +91,7 @@ func refPath(collection, ref, verb string) string {
 // carries the uuid. A name two visible endpoints share is a 404 naming the
 // reference and each full address.
 func TestEndpointAddressAPI(t *testing.T) {
+	t.Parallel()
 	s := newNameAddressStack(t)
 	refA := s.addrA + "/https"
 
@@ -128,6 +124,7 @@ func TestEndpointAddressAPI(t *testing.T) {
 // by address or by uuid, refuses exactly as an absent one does; and a viewer who
 // may read but not retry gets the same 403 by name as by uuid.
 func TestEndpointAddressAPIScope(t *testing.T) {
+	t.Parallel()
 	s := newNameAddressStack(t)
 	op := principalWithGrants(t, s.ctx, s.dsn, "op-a", []grant{{role: "operator", scopeKind: "component", scopeID: s.dispA}})
 	viewer := principalWithGrants(t, s.ctx, s.dsn, "viewer-a", []grant{{role: "viewer", scopeKind: "component", scopeID: s.dispA}})
@@ -157,6 +154,7 @@ func TestEndpointAddressAPIScope(t *testing.T) {
 // pick one, the uuid keeps working, and a scoped operator resolves the one it
 // can see.
 func TestSecretNameAPI(t *testing.T) {
+	t.Parallel()
 	s := newNameAddressStack(t)
 	plat := s.idOf(s.c.do(s.owner, http.MethodPost, "/secrets", map[string]any{"name": "demo-panel-login", "secret_type": "basic-auth", "owner_kind": "platform",
 		"fields": map[string]string{"username": "admin", "password": "newtron"}}, http.StatusCreated))
@@ -202,6 +200,7 @@ func TestSecretNameAPI(t *testing.T) {
 // HTTP: a principal group and its members by name, a file by filename, a
 // variable by name, and a grant's scope root by dotted address.
 func TestGroupFileVariableGrantNamesAPI(t *testing.T) {
+	t.Parallel()
 	s := newNameAddressStack(t)
 
 	group := s.idOf(s.c.do(s.owner, http.MethodPost, "/principal-groups", map[string]any{"name": "night-shift"}, http.StatusCreated))
@@ -260,6 +259,7 @@ func TestGroupFileVariableGrantNamesAPI(t *testing.T) {
 // admin can probe neither usernames nor service names, and an ambiguous name's
 // uuids are listed only to a caller entitled to see them.
 func TestPrincipalNameNeedsTheDirectoryAPI(t *testing.T) {
+	t.Parallel()
 	s := newNameAddressStack(t)
 	alice := s.idOf(s.c.do(s.owner, http.MethodPost, "/principals", map[string]any{"username": "alice", "password": "orange-boat-42x"}, http.StatusCreated))
 	principalWithGrants(t, s.ctx, s.dsn, "deploy-bot", nil)

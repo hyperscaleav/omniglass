@@ -154,6 +154,7 @@ func (s *httpStack) refusedOnceThenRecovers(nodeName, comp, instance string, sec
 }
 
 func TestNodeHTTPFormAndTokenLoginsKeepTheirSession(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}
@@ -238,6 +239,7 @@ func TestNodeHTTPFormAndTokenLoginsKeepTheirSession(t *testing.T) {
 }
 
 func TestNodeHTTPDigestAnswersItsChallenge(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}

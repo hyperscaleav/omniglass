@@ -16,6 +16,7 @@ import (
 // and carried back on the worklist holds across a node restart.
 
 func TestGateBlocksItsRungAndAboveForItsFingerprint(t *testing.T) {
+	t.Parallel()
 	g := newGates()
 	g.observe("ep-1", "fp-a", "")
 	g.record("ep-1", "fp-a", &collection.TerminalError{Class: driver.ClassAuth, Reason: "auth rejected"})
@@ -40,6 +41,7 @@ func TestGateBlocksItsRungAndAboveForItsFingerprint(t *testing.T) {
 }
 
 func TestGateHoldsAcrossARestartFromItsPublishedRejection(t *testing.T) {
+	t.Parallel()
 	g := newGates()
 	g.observe("ep-1", "fp-a", "")
 	g.record("ep-1", "fp-a", &collection.TerminalError{Class: driver.ClassAuth, Reason: "auth rejected"})
@@ -71,6 +73,7 @@ func TestGateHoldsAcrossARestartFromItsPublishedRejection(t *testing.T) {
 }
 
 func TestGateClearsWhenTheRungPasses(t *testing.T) {
+	t.Parallel()
 	g := newGates()
 	g.observe("ep-1", "fp-a", "")
 	g.record("ep-1", "fp-a", &collection.TerminalError{Class: driver.ClassAuth, Reason: "x"})
@@ -91,6 +94,7 @@ func TestGateClearsWhenTheRungPasses(t *testing.T) {
 // adopts its evidence too, republishing the same value rather than one that
 // drops the keys.
 func TestAKeyRefusalPublishesBothKeysAndARestartKeepsThem(t *testing.T) {
+	t.Parallel()
 	const pinned, offered = "SHA256:" + "pinnedpinnedpinnedpinnedpinnedpinnedpinned1", "SHA256:" + "offeredofferedofferedofferedofferedoffered1"
 	g := newGates()
 	g.observe("ep-1", "fp-a", "")
@@ -125,6 +129,7 @@ func TestAKeyRefusalPublishesBothKeysAndARestartKeepsThem(t *testing.T) {
 // knows no reason (lifted, or adopted after a restart) lands the gate alone,
 // leaving the reason on record untouched.
 func TestRejectionSamplesCarryTheReasonBesideTheGate(t *testing.T) {
+	t.Parallel()
 	at := time.Date(2026, 10, 24, 12, 0, 0, 0, time.UTC)
 	got := rejectionSamples("authenticated auth fp-1", "auth: the agent answered authorizationError for the community", at)
 	if len(got) != 2 {

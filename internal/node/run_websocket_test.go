@@ -38,6 +38,7 @@ func (s *httpStack) facePort(name, protocol string) int {
 }
 
 func TestNodeWebSocketArmsPushesAnswersByIDAndRecovers(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}

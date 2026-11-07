@@ -12,6 +12,7 @@ import (
 // written on the inputs for the OpenAPI document, so it is held here to the
 // one canonical set (#1145) and cannot drift from what the gateway accepts.
 func TestLogSeverityFilterEnumIsTheCanonicalSet(t *testing.T) {
+	t.Parallel()
 	want := strings.Join(logline.Levels(), ",")
 	for _, in := range []any{componentLogsInput{}, systemLogsInput{}} {
 		f, ok := reflect.TypeOf(in).FieldByName("Severity")

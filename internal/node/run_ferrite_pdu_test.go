@@ -15,6 +15,7 @@ import (
 // the state of each outlet, the total current in amperes and the input voltage
 // in volts, beside its identity and uptime.
 func TestNodeFerritePDUReadsOutletsCurrentAndVoltage(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}

@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 	"github.com/jackc/pgx/v5"
@@ -40,19 +39,17 @@ func (w systemPropertiesWire) find(t *testing.T, name string) effectivePropertyW
 // clear of an unset property is a 404. An out-of-scope system is a non-disclosing
 // 404 (permission passes, scope injection hides it). Skipped under -short.
 func TestSystemPropertiesAPI(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
 	ctx := context.Background()
-	dsn := storagetest.NewDSN(t)
+	dsn := seededDSN(t)
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	storagetest.CreateShippedStandards(t, gw)
 	ownerTok := bootstrapOwnerTok(t, ctx, gw)
 

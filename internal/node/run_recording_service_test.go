@@ -17,6 +17,7 @@ import (
 // three work counters as samples, and a failed recording as an event on the
 // component.
 func TestNodeRecordingServiceReportsItsWork(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}

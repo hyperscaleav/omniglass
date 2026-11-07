@@ -56,6 +56,7 @@ func withFingerprint(task collection.TaskSpec, fp, rejection string) collection.
 // A rejection is published under its fingerprint, and a fingerprint that
 // changes and then passes publishes none.
 func TestSessionManagerPublishesItsRejection(t *testing.T) {
+	t.Parallel()
 	dialer := &authFakeDialer{}
 	log, rej := &transitionLog{}, &rejectionLog{}
 	m := newSessionManager(map[string]collection.SessionDialer{"tcp": dialer}, sessionHooks{transition: log.record, rejection: rej.record})
@@ -72,6 +73,7 @@ func TestSessionManagerPublishesItsRejection(t *testing.T) {
 // A restarted node honours the rejection the worklist carries back: zero
 // attempts while the fingerprint is unchanged, one as soon as it moves.
 func TestARestartedNodeMakesNoAttemptAgainstAnUnchangedFingerprint(t *testing.T) {
+	t.Parallel()
 	dialer := &authFakeDialer{}
 	log := &transitionLog{}
 	m := newSessionManager(map[string]collection.SessionDialer{"tcp": dialer}, sessionHooks{transition: log.record})
@@ -114,6 +116,7 @@ func (p *recordingSSHProber) Probe(_ context.Context, _ string, cred collection.
 // fingerprint is unchanged; the key exchange still runs, so the responds
 // rung stays observed. A changed fingerprint (a fixed credential) tries again.
 func TestSSHProbeCredentialIsGated(t *testing.T) {
+	t.Parallel()
 	prober := &recordingSSHProber{}
 	runner := &collection.Runner{SSH: prober}
 	rej := &rejectionLog{}
@@ -153,6 +156,7 @@ func TestSSHProbeCredentialIsGated(t *testing.T) {
 // A command on a gated endpoint fails fast with the refusal, whatever path
 // it would ride.
 func TestExecuteDeliveryFailsFastOnAGatedEndpoint(t *testing.T) {
+	t.Parallel()
 	m := newSessionManager(nil, sessionHooks{})
 	m.reconcile([]collection.TaskSpec{withFingerprint(collection.TaskSpec{ID: "r1", Transport: "tcp", EndpointID: "ep-1", EndpointName: "tcp",
 		EndpointParams: json.RawMessage(`{"target":"10.0.0.5:23"}`), Spec: json.RawMessage(`{}`)}, "fp-1", "responsive host-key fp-1")})
@@ -179,6 +183,7 @@ func waitFor(t *testing.T, ok func() bool, what string) {
 // detected, the driver's named request answered is the transport proven.
 // The line client carries it here; snmp's own request is #821.
 func TestRequestRungIsTheTransportProven(t *testing.T) {
+	t.Parallel()
 	task := collection.TaskSpec{ID: "r1", Transport: "tcp", EndpointID: "ep-1", EndpointName: "tcp",
 		EndpointParams: json.RawMessage(`{"target":"10.0.0.5:51325"}`), Spec: json.RawMessage(`{}`),
 		Ladder: &driver.EffectiveLadder{Transport: driver.RungRequest,
@@ -210,6 +215,7 @@ func TestRequestRungIsTheTransportProven(t *testing.T) {
 // without it), under a task from the current worklist (a re-derived driver
 // deletes the old task ids, and a sample under one is an orphan).
 func TestTheRejectionIsRepublishedUntilReflectedUnderACurrentTask(t *testing.T) {
+	t.Parallel()
 	rej := &rejectionLog{}
 	var mu sync.Mutex
 	var under []string
@@ -252,6 +258,7 @@ func TestTheRejectionIsRepublishedUntilReflectedUnderACurrentTask(t *testing.T) 
 // knows no reason of its own, so it publishes none rather than overwrite the
 // one on record, and a gate that lifts publishes none.
 func TestAGatePublishesItsReasonBesideIt(t *testing.T) {
+	t.Parallel()
 	const why = "auth: the agent answered authorizationError for the community"
 	task := func(fp, rejection string) collection.TaskSpec {
 		return withFingerprint(collection.TaskSpec{ID: "r1", Transport: "snmp", EndpointID: "ep-1", EndpointName: "snmp",
@@ -301,6 +308,7 @@ func TestAGatePublishesItsReasonBesideIt(t *testing.T) {
 // refusal, the placeholder would go out as the gate's reason and overwrite
 // the component's own words; the replay keeps the gate adopted, reasonless.
 func TestAnAdoptedGatesSessionReplayPublishesNoReason(t *testing.T) {
+	t.Parallel()
 	dialer := &authFakeDialer{}
 	log, rej := &transitionLog{}, &rejectionLog{}
 	m := newSessionManager(map[string]collection.SessionDialer{"tcp": dialer}, sessionHooks{transition: log.record, rejection: rej.record})
@@ -330,6 +338,7 @@ func TestAnAdoptedGatesSessionReplayPublishesNoReason(t *testing.T) {
 // out beside the unchanged value. Only the session's replay of the refusal
 // it was started with is not re-recorded.
 func TestAReprobedRefusalPublishesItsReasonUnderAnUnchangedGate(t *testing.T) {
+	t.Parallel()
 	dialer := &authFakeDialer{}
 	rej := &rejectionLog{}
 	m := newSessionManager(map[string]collection.SessionDialer{"tcp": dialer}, sessionHooks{rejection: rej.record})
@@ -356,6 +365,7 @@ func TestAReprobedRefusalPublishesItsReasonUnderAnUnchangedGate(t *testing.T) {
 // Finding 3: a refusal reported for an attempt made under an old
 // fingerprint never gates the new one.
 func TestARefusalUnderAnOldFingerprintIsDropped(t *testing.T) {
+	t.Parallel()
 	m := newSessionManager(nil, sessionHooks{})
 	task := withFingerprint(collection.TaskSpec{ID: "r1", Transport: "telnet", EndpointID: "ep-1", EndpointName: "telnet",
 		EndpointParams: json.RawMessage(`{"target":"10.0.0.5:23"}`), Spec: json.RawMessage(`{}`)}, "fp-new", "")

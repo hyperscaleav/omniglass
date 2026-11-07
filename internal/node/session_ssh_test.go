@@ -34,6 +34,7 @@ func sshPollTask(id, endpointID, hostKey string, secrets map[string]map[string]s
 }
 
 func TestSSHSessionAuthComesFromTheNamedSecret(t *testing.T) {
+	t.Parallel()
 	task := sshPollTask("p1", "ep-1", "SHA256:pinned", map[string]map[string]string{"login": {"username": "admin", "password": "newtron"}})
 	want, refused := desiredSessions([]collection.TaskSpec{task}, map[string]collection.SessionDialer{"ssh": &authFakeDialer{}})
 	if len(refused) != 0 {
@@ -96,6 +97,7 @@ func (p *sshFakePending) Open(in collection.Inbound, _ collection.ChannelOptions
 func (p *sshFakePending) Close() error { return nil }
 
 func TestSSHHostKeyTrustedOnFirstUsePublishesAndAPinChangeRecycles(t *testing.T) {
+	t.Parallel()
 	dialer := &sshFakeDialer{offered: "SHA256:first"}
 	log := &transitionLog{}
 	var mu sync.Mutex
@@ -146,6 +148,7 @@ func TestSSHHostKeyTrustedOnFirstUsePublishesAndAPinChangeRecycles(t *testing.T)
 // pin), and a session recycled before the server holds the pin keeps the
 // key it trusted rather than trusting whatever is offered next.
 func TestSSHPinSurvivesALostPublishAndARecycle(t *testing.T) {
+	t.Parallel()
 	dialer := &sshFakeDialer{offered: "SHA256:first"}
 	log := &transitionLog{}
 	var mu sync.Mutex
@@ -187,6 +190,7 @@ func TestSSHPinSurvivesALostPublishAndARecycle(t *testing.T) {
 // keys (#1078): the endpoint-rejection the server stores, and the console
 // reads, names the pin and the key the component offered as data.
 func TestSSHHostKeyRefusalPublishesBothKeysWithItsGate(t *testing.T) {
+	t.Parallel()
 	dialer := &sshFakeDialer{offered: "SHA256:replaced"}
 	log := &transitionLog{}
 	var mu sync.Mutex
@@ -230,6 +234,7 @@ func TestSSHHostKeyRefusalPublishesBothKeysWithItsGate(t *testing.T) {
 // learned, and the next connection trusts on first use. A key the node
 // learned itself on first use is still carried (the lost-publish case above).
 func TestSSHWithdrawnPinIsForgottenAndTrustsOnFirstUseAgain(t *testing.T) {
+	t.Parallel()
 	dialer := &sshFakeDialer{offered: "SHA256:planted"}
 	log := &transitionLog{}
 	var mu sync.Mutex

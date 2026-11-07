@@ -24,6 +24,7 @@ import (
 // bus, a real HTTP claim, and node.Run pulling the worklist and heartbeating.
 // Skipped under -short.
 func TestNodeRunOnce(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server")
 	}
@@ -135,6 +136,7 @@ func TestNodeRunOnce(t *testing.T) {
 // first. Both verdicts must land, which also proves http and tcp both route to the
 // tcp-connect reach probe. Skipped under -short.
 func TestNodeVerdictPerInterface(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server")
 	}

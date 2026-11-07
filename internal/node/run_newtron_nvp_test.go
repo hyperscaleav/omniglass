@@ -18,6 +18,7 @@ import (
 // its program state and the input beside it, the scheduling panel its
 // room's booking; a change on the device reaches the series.
 func TestNodeNewtronProcessorAndSchedulerReadTheirClassState(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}

@@ -42,6 +42,7 @@ func tlsPollTask(id, endpointID, params, pin string) collection.TaskSpec {
 const pinParams = `{"target":"10.0.0.5:51326","tls-mode":"pin"}`
 
 func TestTLSSessionWantCarriesTheModeAndTheServerName(t *testing.T) {
+	t.Parallel()
 	dialers := map[string]collection.SessionDialer{"tls": &tlsFakeDialer{}}
 	want, refused := desiredSessions([]collection.TaskSpec{tlsPollTask("p1", "ep-1", pinParams, "")}, dialers)
 	if len(refused) != 0 {
@@ -134,6 +135,7 @@ func (l *keyLog) all() []string {
 }
 
 func TestTLSKeyTrustedOnFirstUsePublishesAndAPinChangeRecycles(t *testing.T) {
+	t.Parallel()
 	dialer := &tlsFakeDialer{offered: keyFirst}
 	log, keys := &transitionLog{}, &keyLog{}
 	m := newSessionManager(map[string]collection.SessionDialer{"tls": dialer}, sessionHooks{transition: log.record, certificate: keys.record})
@@ -171,6 +173,7 @@ func TestTLSKeyTrustedOnFirstUsePublishesAndAPinChangeRecycles(t *testing.T) {
 // (it republishes while the worklist delivers no pin), and the probe shares
 // the session's pin: it never trusts a key of its own beside it.
 func TestTLSPinSurvivesALostPublishAndIsTheProbesToo(t *testing.T) {
+	t.Parallel()
 	dialer := &tlsFakeDialer{offered: keyFirst}
 	log, keys := &transitionLog{}, &keyLog{}
 	m := newSessionManager(map[string]collection.SessionDialer{"tls": dialer}, sessionHooks{transition: log.record, certificate: keys.record})
@@ -253,6 +256,7 @@ func (d *countingTCPDialer) count() int {
 // handshake reaches the new key), and a restarted node honours the gate the
 // worklist carries back.
 func TestTLSProbeCertificateRefusalGatesTheTransportRung(t *testing.T) {
+	t.Parallel()
 	prober := &fakeTLSProber{offered: keySecond}
 	tcp := &countingTCPDialer{}
 	runner := &collection.Runner{TLS: prober, TCP: tcp}
@@ -327,6 +331,7 @@ func TestTLSProbeCertificateRefusalGatesTheTransportRung(t *testing.T) {
 // A held tls session under a certificate gate starts rejected: a restarted
 // node attempts no handshake under the unchanged fingerprint.
 func TestATLSSessionUnderACertificateGateStartsRejected(t *testing.T) {
+	t.Parallel()
 	dialer := &tlsFakeDialer{offered: keySecond}
 	log := &transitionLog{}
 	m := newSessionManager(map[string]collection.SessionDialer{"tls": dialer}, sessionHooks{transition: log.record})
@@ -342,6 +347,7 @@ func TestATLSSessionUnderACertificateGateStartsRejected(t *testing.T) {
 }
 
 func TestGateRendersAndParsesTheRefusedKeys(t *testing.T) {
+	t.Parallel()
 	g := newGates()
 	g.observe("ep-1", "fp-a", "")
 	g.record("ep-1", "fp-a", &collection.TerminalError{Class: driver.ClassCertificate, Pinned: keyFirst, Offered: keySecond, Reason: "changed"})
@@ -378,6 +384,7 @@ func (p *verifyRefusingProber) Probe(ctx context.Context, target string, trust c
 // self-logged once, when the probe meets it; beneath the gate nothing
 // repeats it.
 func TestTLSProbeLogsTheRefusalsReasonOnce(t *testing.T) {
+	// Serial: it swaps the slog default to count the refusal log lines.
 	var buf bytes.Buffer
 	prior := slog.Default()
 	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
@@ -406,6 +413,7 @@ func TestTLSProbeLogsTheRefusalsReasonOnce(t *testing.T) {
 // the server: the node forgets it, never republishes it, and the session
 // redials trusting on first use.
 func TestTLSWithdrawnPinIsForgottenAndTrustsOnFirstUseAgain(t *testing.T) {
+	t.Parallel()
 	dialer := &tlsFakeDialer{offered: "SHA256:planted"}
 	log, keys := &transitionLog{}, &keyLog{}
 	m := newSessionManager(map[string]collection.SessionDialer{"tls": dialer}, sessionHooks{transition: log.record, certificate: keys.record})

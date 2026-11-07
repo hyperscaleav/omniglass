@@ -13,6 +13,7 @@ import (
 // TestParseTCPTask: the dial target and timeout come off the interface params;
 // an empty target is a usage error the caller skips on.
 func TestParseTCPTask(t *testing.T) {
+	t.Parallel()
 	spec := collection.TaskSpec{ID: "t1", Transport: "tcp", EndpointParams: json.RawMessage(`{"target":"10.0.0.5:22","timeout":"2s"}`)}
 	got, err := parseTCPTask(spec)
 	if err != nil {
@@ -30,6 +31,7 @@ func TestParseTCPTask(t *testing.T) {
 // TestParseICMPTask: the ping target, count, and timeout come off the interface
 // params; an empty target is a usage error the caller skips on.
 func TestParseICMPTask(t *testing.T) {
+	t.Parallel()
 	spec := collection.TaskSpec{ID: "t1", Transport: "icmp", EndpointParams: json.RawMessage(`{"target":"10.0.0.5","count":3,"timeout":"2s"}`)}
 	got, err := parseICMPTask(spec)
 	if err != nil {
@@ -49,6 +51,7 @@ func TestParseICMPTask(t *testing.T) {
 // result on metrics, a text verdict on properties as canonical JSON text. The
 // probes know their lanes statically, so no registry is consulted node-side.
 func TestBuildBatchLanes(t *testing.T) {
+	t.Parallel()
 	dps := []collection.Sample{
 		{Name: collection.SignalTCPOpen, Value: 1, Labels: map[string]string{collection.ReasonLabel: "responded"}},
 		{Name: collection.SignalTCPConnectTime, Value: 3.5},
@@ -76,6 +79,7 @@ func TestBuildBatchLanes(t *testing.T) {
 // The old wire stamped timestamppb.New(zero) on unstamped samples, which reads
 // as the year one downstream, so absence must be encoded as absence.
 func TestBuildBatchTS(t *testing.T) {
+	t.Parallel()
 	stamped := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	dps := []collection.Sample{
 		{Name: collection.SignalTCPOpen, Value: 1, TS: stamped},
@@ -98,6 +102,7 @@ func TestBuildBatchTS(t *testing.T) {
 // nothing, and a flip emits again. This is the primary defense; the ingest guard
 // is the restart net.
 func TestAppendVerdict(t *testing.T) {
+	t.Parallel()
 	verdicts := map[string]string{}
 	up := []collection.Sample{{Name: collection.SignalTCPOpen, Value: 1}}
 	down := []collection.Sample{{Name: collection.SignalTCPOpen, Value: 0}}
@@ -134,6 +139,7 @@ func TestAppendVerdict(t *testing.T) {
 // params (#812); the ssh credential is optional and rides plain params until
 // the driver spec's secret references (#813).
 func TestParseHTTPTask(t *testing.T) {
+	t.Parallel()
 	spec := collection.TaskSpec{ID: "t1", Transport: "http", EndpointParams: json.RawMessage(`{"target":"10.0.0.5:80","timeout":"3s"}`)}
 	got, err := parseHTTPTask(spec)
 	if err != nil {
@@ -148,6 +154,7 @@ func TestParseHTTPTask(t *testing.T) {
 }
 
 func TestParseSSHTask(t *testing.T) {
+	t.Parallel()
 	spec := collection.TaskSpec{ID: "t1", Transport: "ssh", EndpointParams: json.RawMessage(`{"target":"10.0.0.5:22","username":"svc","password":"pw"}`)}
 	got, err := parseSSHTask(spec)
 	if err != nil {
@@ -161,6 +168,7 @@ func TestParseSSHTask(t *testing.T) {
 // TestCollectTaskDispatchesTheLadder: the http and ssh transports reach their
 // own L7 probes since #812, no longer the plain tcp connect.
 func TestCollectTaskDispatchesTheLadder(t *testing.T) {
+	t.Parallel()
 	runner := &collection.Runner{
 		HTTP: dispatchHTTPFake{},
 		SSH:  dispatchSSHFake{},
@@ -224,6 +232,7 @@ func (f fakeGetter) Get(context.Context, string, string, []string, time.Duration
 // poll task fetches with the worklist-delivered credential and lands its emits
 // typed by lane, and each fault is a story, never a silent drop.
 func TestCollectDriverTask(t *testing.T) {
+	t.Parallel()
 	spec := json.RawMessage(`{"driver": "snmp-generic", "function": "scalars",
 		"request": {"get": ["1.3.6.1.2.1.1.1.0", "1.3.6.1.2.1.1.3.0"]},
 		"emits": [
@@ -287,6 +296,7 @@ func (l *lineRecorder) Exchange(_ context.Context, _, line string, _ time.Durati
 // to the device once, any answer counts as actuated (settlement judges the
 // outcome), and a transport with no actuator is a failure story, not a panic.
 func TestExecuteDelivery(t *testing.T) {
+	t.Parallel()
 	rec := &lineRecorder{}
 	runner := &collection.Runner{Line: rec}
 	d := collection.CommandDelivery{ID: 7, CommandType: "set-input", Transport: "tcp", Target: "10.0.0.5:4998", Line: "SET INPUT hdmi-2"}

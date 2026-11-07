@@ -18,6 +18,7 @@ import (
 // reads every registration in the package and fails one whose handler never
 // checks.
 func TestEveryPlatformStampedRouteEnforcesIt(t *testing.T) {
+	t.Parallel()
 	files, err := filepath.Glob("*.go")
 	if err != nil {
 		t.Fatal(err)

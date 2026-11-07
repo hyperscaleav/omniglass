@@ -123,6 +123,7 @@ func tagged(tag string) *ogv1.TelemetryBatch {
 // the order they were sent, and every attempt at one batch carries the one
 // id it was minted with.
 func TestSpoolShipsEveryBatchOnceInOrder(t *testing.T) {
+	t.Parallel()
 	pub := &stubPublisher{down: true}
 	s := newTelemetrySpool("og.v1.telemetry.edge", pub.publish)
 	for _, tag := range []string{"b1", "b2", "b3"} {
@@ -219,6 +220,7 @@ func attr(r slog.Record, key string) (slog.Value, bool) {
 // is reported to the run loop once, so it can re-send what it remembers as
 // sent.
 func TestSpoolDropsTheOldestAtItsCapAndSaysHowMany(t *testing.T) {
+	// Serial: it captures the slog default through captureLogs, which swaps it.
 	pub := &stubPublisher{down: true}
 	s := newTelemetrySpool("og.v1.telemetry.edge", pub.publish)
 	s.maxBatches = 3
@@ -257,6 +259,7 @@ func TestSpoolDropsTheOldestAtItsCapAndSaysHowMany(t *testing.T) {
 // TestSpoolBoundsItsBytes: the byte cap drops the oldest batch too, so a run
 // of large batches cannot grow the spool past it.
 func TestSpoolBoundsItsBytes(t *testing.T) {
+	t.Parallel()
 	pub := &stubPublisher{down: true}
 	s := newTelemetrySpool("og.v1.telemetry.edge", pub.publish)
 	one, _ := proto.Marshal(tagged("b1"))
@@ -280,6 +283,7 @@ func TestSpoolBoundsItsBytes(t *testing.T) {
 // not dropped by an overflow behind it; once acked it leaves, and the
 // newest batches ship after it.
 func TestSpoolNeverDropsTheBatchInFlight(t *testing.T) {
+	t.Parallel()
 	release := make(chan struct{})
 	entered := make(chan struct{})
 	var once sync.Once
@@ -321,6 +325,7 @@ func TestSpoolNeverDropsTheBatchInFlight(t *testing.T) {
 // TestSpoolConcurrentSendsShipOnce: many goroutines sending at once (the
 // session hooks beside the tick) ship every batch once.
 func TestSpoolConcurrentSendsShipOnce(t *testing.T) {
+	t.Parallel()
 	pub := &stubPublisher{}
 	s := newTelemetrySpool("og.v1.telemetry.edge", pub.publish)
 	var wg sync.WaitGroup
@@ -355,6 +360,7 @@ func TestSpoolConcurrentSendsShipOnce(t *testing.T) {
 // drain, and a batch still held when the stream will not take it is an
 // error, never a quiet return.
 func TestSpoolDrainReportsWhatItCouldNotShip(t *testing.T) {
+	t.Parallel()
 	pub := &stubPublisher{down: true}
 	s := newTelemetrySpool("og.v1.telemetry.edge", pub.publish)
 	_ = s.send(tagged("b1"))
@@ -374,6 +380,7 @@ func TestSpoolDrainReportsWhatItCouldNotShip(t *testing.T) {
 // server's receipt horizon, so a batch the stream stored but whose ack was
 // lost cannot come back after its receipt is pruned and land twice.
 func TestSpoolDropsABatchPastItsAge(t *testing.T) {
+	t.Parallel()
 	pub := &stubPublisher{down: true}
 	s := newTelemetrySpool("og.v1.telemetry.edge", pub.publish)
 	now := time.Unix(1_000_000, 0)
@@ -401,6 +408,7 @@ func TestSpoolDropsABatchPastItsAge(t *testing.T) {
 // everyone's batches, and the spool keeps several batches with the stream at
 // once, so it ships faster than one per round trip, still in order.
 func TestSpoolSendNeverWaitsOnTheStream(t *testing.T) {
+	t.Parallel()
 	var mu sync.Mutex
 	var shipped []string
 	// A stream 50 ms away: a batch is stored in the order it was published,

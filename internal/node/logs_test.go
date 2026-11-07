@@ -10,6 +10,7 @@ import (
 // TestLogSinkCapturesAndDrains proves the sink buffers every record (with its
 // bound and inline attrs) and that drain clears the buffer.
 func TestLogSinkCapturesAndDrains(t *testing.T) {
+	t.Parallel()
 	sink := newLogSink(slog.NewTextHandler(io.Discard, nil))
 	logger := slog.New(sink).With("node", "site-a")
 
@@ -40,6 +41,7 @@ func TestLogSinkCapturesAndDrains(t *testing.T) {
 // into the LogLine columns, the rest ride the attributes JSON, and severity
 // carries through.
 func TestSelfLogEventMapping(t *testing.T) {
+	t.Parallel()
 	recs := []capturedLog{{
 		severity: "warning",
 		message:  "task skipped",
@@ -74,6 +76,7 @@ func TestSelfLogEventMapping(t *testing.T) {
 // TestSelfLogEventDefaultsAndEmpty proves source defaults to "node" when unset and
 // that an empty record set ships nothing.
 func TestSelfLogEventDefaultsAndEmpty(t *testing.T) {
+	t.Parallel()
 	if ev := selfLogBatch("site-a", nil); ev != nil {
 		t.Fatalf("selfLogBatch(nil) = %+v, want nil (nothing to ship)", ev)
 	}
@@ -98,6 +101,7 @@ func deepNodeWork() {
 // sink as the process default, node code anywhere emits self-logs through the
 // package-level slog with no logger threaded to it.
 func TestSelfLogsAreNodeWide(t *testing.T) {
+	// Serial: it swaps the slog default to read the self-log the probe writes through the package-level logger.
 	sink := newLogSink(slog.NewTextHandler(io.Discard, nil))
 	restore := slog.Default()
 	slog.SetDefault(slog.New(sink).With("node", "site-a"))
@@ -123,6 +127,7 @@ func TestSelfLogsAreNodeWide(t *testing.T) {
 // drains) would otherwise leak. The newest records win and the drain leads with an
 // honest overflow line rather than silently losing the count.
 func TestLogSinkBoundsBuffer(t *testing.T) {
+	t.Parallel()
 	sink := newLogSink(slog.NewTextHandler(io.Discard, nil))
 	logger := slog.New(sink)
 	for i := 0; i < maxBufferedLogs+10; i++ {
@@ -145,6 +150,7 @@ func TestLogSinkBoundsBuffer(t *testing.T) {
 }
 
 func TestSeverityOf(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		level slog.Level
 		want  string

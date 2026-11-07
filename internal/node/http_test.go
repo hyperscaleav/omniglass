@@ -45,6 +45,7 @@ func httpTasks() []collection.TaskSpec {
 }
 
 func TestACredentialedHTTPPollSendsAtTheSessionRung(t *testing.T) {
+	t.Parallel()
 	tasks := httpTasks()
 	if statelessRung(tasks[1]) != rungAuthenticated {
 		t.Fatal("a credentialed http poll does not send at the session rung")
@@ -60,6 +61,7 @@ func TestACredentialedHTTPPollSendsAtTheSessionRung(t *testing.T) {
 }
 
 func TestAnHTTPCommandTakesItsCredentialFromTheWorklist(t *testing.T) {
+	t.Parallel()
 	m := newSessionManager(nil, sessionHooks{})
 	m.reconcile(httpTasks())
 	f := &recordingFetcher{ans: collection.HTTPAnswer{Status: 200, Body: []byte(`{"ok":true,"echo":"kestrel"}`)}}
@@ -102,6 +104,7 @@ func TestAnHTTPCommandTakesItsCredentialFromTheWorklist(t *testing.T) {
 // A command rides the worklist's address with the worklist's credential:
 // one naming an address the worklist does not is never sent.
 func TestAnHTTPCommandIsNeverSentWhereTheWorklistDoesNotPoint(t *testing.T) {
+	t.Parallel()
 	m := newSessionManager(nil, sessionHooks{})
 	m.reconcile(httpTasks())
 	f := &recordingFetcher{ans: collection.HTTPAnswer{Status: 200, Body: []byte(`{"ok":true}`)}}
@@ -118,6 +121,7 @@ func TestAnHTTPCommandIsNeverSentWhereTheWorklistDoesNotPoint(t *testing.T) {
 }
 
 func TestBookPollRunForHTTPAnswers(t *testing.T) {
+	t.Parallel()
 	now := time.Now()
 	s := newPollSchedule(time.Second)
 	every := time.Hour
@@ -150,6 +154,7 @@ func TestBookPollRunForHTTPAnswers(t *testing.T) {
 // marshals: a protobuf string refuses invalid UTF-8, which would fail the
 // whole batch (and, for a collection-failed, the tick).
 func TestABatchCarryingAComponentsBytesStillMarshals(t *testing.T) {
+	t.Parallel()
 	bad := string([]byte{0xe9, 'x', 0xff})
 	ev := buildBatch("t1", "n1", []collection.Sample{
 		{Name: collection.SignalEndpointAuthenticated, Text: "no", IsText: true, Labels: map[string]string{collection.ReasonLabel: bad}},
@@ -188,6 +193,7 @@ func (d blockingDialer) ConnectTLS(ctx context.Context, _ string, _ time.Duratio
 // first attempt under the fingerprint, so a credential the stream is about
 // to have refused is not sent beside it (#1038).
 func TestHTTPPollsAndCommandsWaitForTheStreamsFirstVerdict(t *testing.T) {
+	t.Parallel()
 	d := blockingDialer{release: make(chan struct{})}
 	m := newSessionManager(map[string]collection.SessionDialer{"https": d}, sessionHooks{})
 	defer m.closeAll()

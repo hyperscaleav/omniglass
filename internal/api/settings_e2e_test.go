@@ -10,9 +10,7 @@ import (
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
 // settingsFixture spins up a migrated, seeded gateway behind the live handler and
@@ -30,16 +28,13 @@ type settingsFixture struct {
 
 func newSettingsFixture(t *testing.T) settingsFixture {
 	t.Helper()
-	dsn := storagetest.NewDSN(t)
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	t.Cleanup(gw.Close)
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	// An owner must exist so the role index (lazy) loads on the first authenticated
 	// request; the admin and viewer principals carry the grants under test.
 	bootstrapOwnerTok(t, ctx, gw)
@@ -73,6 +68,7 @@ func decodeSettings(t *testing.T, raw []byte) struct {
 }
 
 func TestSettingsAdminReadReturnsProvenance(t *testing.T) {
+	t.Parallel()
 	f := newSettingsFixture(t)
 	raw := f.c.do(f.admin, http.MethodGet, "/settings", nil, http.StatusOK)
 	body := decodeSettings(t, raw)
@@ -85,6 +81,7 @@ func TestSettingsAdminReadReturnsProvenance(t *testing.T) {
 }
 
 func TestSettingsPatchThenReadReflectsOverride(t *testing.T) {
+	t.Parallel()
 	f := newSettingsFixture(t)
 	f.c.do(f.admin, http.MethodPatch, "/settings/ui", map[string]any{"theme": "omniglass-light"}, http.StatusOK)
 	raw := f.c.do(f.admin, http.MethodGet, "/settings", nil, http.StatusOK)
@@ -107,6 +104,7 @@ func TestSettingsPatchThenReadReflectsOverride(t *testing.T) {
 // Writing the row through the Gateway (not the API) pins the durable value
 // independently of whatever scope the write path happens to use.
 func TestSettingsReadResolvesRowsStoredAtPlatformScope(t *testing.T) {
+	t.Parallel()
 	f := newSettingsFixture(t)
 	if _, err := f.gw.UpsertSettingOverride(f.c.ctx, "", "platform", "ui",
 		map[string]any{"theme": "omniglass-light"}, nil); err != nil {
@@ -126,6 +124,7 @@ func TestSettingsReadResolvesRowsStoredAtPlatformScope(t *testing.T) {
 // must land on the same scope the migration and the resolver speak, or the next
 // release's rows are orphaned all over again.
 func TestSettingsPatchStoresAtPlatformScope(t *testing.T) {
+	t.Parallel()
 	f := newSettingsFixture(t)
 	f.c.do(f.admin, http.MethodPatch, "/settings/ui", map[string]any{"theme": "omniglass-light"}, http.StatusOK)
 
@@ -139,11 +138,13 @@ func TestSettingsPatchStoresAtPlatformScope(t *testing.T) {
 }
 
 func TestSettingsMeIsReadableByViewer(t *testing.T) {
+	t.Parallel()
 	f := newSettingsFixture(t)
 	f.c.do(f.viewer, http.MethodGet, "/settings/me", nil, http.StatusOK)
 }
 
 func TestSettingsAdminReadForbiddenToViewer(t *testing.T) {
+	t.Parallel()
 	f := newSettingsFixture(t)
 	f.c.do(f.viewer, http.MethodGet, "/settings", nil, http.StatusForbidden)
 }
@@ -156,6 +157,7 @@ func TestSettingsAdminReadForbiddenToViewer(t *testing.T) {
 // free-string keys), else validation rejects the patch with 422 before the race is
 // even reached.
 func TestSettingsConcurrentPatchesNoLostUpdate(t *testing.T) {
+	t.Parallel()
 	f := newSettingsFixture(t)
 	keys := []string{"open_detail", "open_edit", "close_blade", "command_palette"}
 	want := map[string]string{
@@ -208,6 +210,7 @@ func TestSettingsConcurrentPatchesNoLostUpdate(t *testing.T) {
 // the typed schema (reflected from the Settings struct) is enforced at the HTTP edge,
 // not only in the pure Validate unit.
 func TestSettingsPatchRejectsInvalidValue(t *testing.T) {
+	t.Parallel()
 	f := newSettingsFixture(t)
 	f.c.do(f.admin, http.MethodPatch, "/settings/ui", map[string]any{"theme": "chartreuse"}, http.StatusUnprocessableEntity)
 	// The rejected write left no override: the value still resolves to the default.
@@ -220,6 +223,7 @@ func TestSettingsPatchRejectsInvalidValue(t *testing.T) {
 // TestSettingsPatchUnknownNamespaceIs404 confirms a write to a namespace that is not
 // in the Settings struct is a 404, distinct from a 422 on a known namespace's bad key.
 func TestSettingsPatchUnknownNamespaceIs404(t *testing.T) {
+	t.Parallel()
 	f := newSettingsFixture(t)
 	f.c.do(f.admin, http.MethodPatch, "/settings/bogus", map[string]any{"whatever": "x"}, http.StatusNotFound)
 }

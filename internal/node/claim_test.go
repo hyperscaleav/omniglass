@@ -17,6 +17,7 @@ import (
 // TestAnUnreachableClaimNeverEchoesTheServersPassword: net/http masks the
 // password in its own error, but the claim wrapped the raw URL around it.
 func TestAnUnreachableClaimNeverEchoesTheServersPassword(t *testing.T) {
+	t.Parallel()
 	server := "http://operator:hunter2@" + nettest.RefusedAddr(t)
 	_, err := node.Claim(context.Background(), server, "edge-hq", "ogp_enroll")
 	if err == nil {
@@ -30,6 +31,7 @@ func TestAnUnreachableClaimNeverEchoesTheServersPassword(t *testing.T) {
 // TestAMalformedClaimURLNeverEchoesItsPassword: a password with a reserved
 // character does not parse, and the parser's error quotes the whole URL.
 func TestAMalformedClaimURLNeverEchoesItsPassword(t *testing.T) {
+	t.Parallel()
 	_, err := node.Claim(context.Background(), "https://operator:hunter2@omniglass.example:80a", "edge-hq", "ogp_enroll")
 	if err == nil {
 		t.Fatal("a claim to an unparseable server URL succeeded")
@@ -43,6 +45,7 @@ func TestAMalformedClaimURLNeverEchoesItsPassword(t *testing.T) {
 // without failing landed in the dial error whole, and sim run logged it on
 // every retry (#979's review).
 func TestAMisreadClaimPasswordIsNeverShown(t *testing.T) {
+	t.Parallel()
 	addr := nettest.RefusedAddr(t)
 	for _, server := range []string{"http://operator:/abcSECRET@" + addr, "operator:abcSECRET@" + addr} {
 		_, err := node.Claim(context.Background(), server, "edge-hq", "ogp_enroll")

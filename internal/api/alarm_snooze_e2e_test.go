@@ -39,6 +39,7 @@ func decodeSnooze(t *testing.T, raw []byte) snoozeView {
 // principal: the alarm reads the snooze, the list read carries it, and an
 // unsnooze takes it off.
 func TestAnOperatorSnoozesAndUnsnoozesInScope(t *testing.T) {
+	t.Parallel()
 	f := newAckFixture(t)
 
 	got := decodeSnooze(t, f.c.do(f.responder, http.MethodPost, snoozePath(f.mine, f.mineAlarm, "snooze"),
@@ -71,6 +72,7 @@ func TestAnOperatorSnoozesAndUnsnoozesInScope(t *testing.T) {
 // TestSnoozeRefusesWithoutTheCapability: a viewer and a deploy-only principal
 // hold no alarm:snooze, so the gate refuses them before scope is consulted.
 func TestSnoozeRefusesWithoutTheCapability(t *testing.T) {
+	t.Parallel()
 	f := newAckFixture(t)
 	deployer := principalWithGrants(t, f.c.ctx, f.dsn, "deployer", []grant{{role: "deploy", scopeKind: "all"}})
 	for _, tok := range []string{f.watcher, deployer} {
@@ -88,6 +90,7 @@ func TestSnoozeRefusesWithoutTheCapability(t *testing.T) {
 // component is a truthful 403; a principal whose grant reaches one component
 // and reads nothing else is owed the non-disclosing 404 on the far one.
 func TestSnoozeRefusesOutsideTheScope(t *testing.T) {
+	t.Parallel()
 	f := newAckFixture(t)
 	f.c.do(f.responder, http.MethodPost, snoozePath(f.theirs, f.theirsAlarm, "snooze"), map[string]any{"duration": "1h"}, http.StatusForbidden)
 
@@ -103,6 +106,7 @@ func TestSnoozeRefusesOutsideTheScope(t *testing.T) {
 // TestSnoozeDurationIsBoundedAndMissesAre404 pins the 422 naming the bound
 // (one minute to seven days, decision 3) and the misses.
 func TestSnoozeDurationIsBoundedAndMissesAre404(t *testing.T) {
+	t.Parallel()
 	f := newAckFixture(t)
 	for _, d := range []string{"30s", "169h", "8d", "soon", ""} {
 		raw := f.c.do(f.owner, http.MethodPost, snoozePath(f.mine, f.mineAlarm, "snooze"), map[string]any{"duration": d}, http.StatusUnprocessableEntity)
@@ -139,6 +143,7 @@ func readSnooze(t *testing.T, f *ackFixture, component, id string) snoozeView {
 // routes: a clear during the snooze writes suppressed rows, which the list
 // filters by status under the caller's component scope, and :retry refuses.
 func TestASnoozedConditionsNotificationsListAsSuppressed(t *testing.T) {
+	t.Parallel()
 	f := newAckFixture(t)
 	f.c.do(f.owner, http.MethodPost, "/notification-targets", map[string]any{
 		"name": "ops-chat", "kind": "webhook", "url": "https://hooks.example.com/ops",

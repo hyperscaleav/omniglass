@@ -115,6 +115,7 @@ var exemptRefs = map[string]bool{
 }
 
 func TestReferencesCarryBothForms(t *testing.T) {
+	t.Parallel()
 	raw, err := os.ReadFile("../../api/openapi.json")
 	if err != nil {
 		t.Fatalf("read spec: %v", err)

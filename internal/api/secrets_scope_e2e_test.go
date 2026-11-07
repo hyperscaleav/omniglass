@@ -11,9 +11,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/secret"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
 // TestListSecretsScopedDirectoryAPI drives #458's acceptance through the live
@@ -25,7 +23,8 @@ import (
 func wingB() *string { s := "wing-b"; return &s }
 
 func TestListSecretsScopedDirectoryAPI(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	prov := secret.NewStaticProvider(bytes.Repeat([]byte{0x7}, 32))
 	gw, err := storage.NewPG(ctx, dsn, storage.WithSecretProvider(prov))
@@ -33,9 +32,6 @@ func TestListSecretsScopedDirectoryAPI(t *testing.T) {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}

@@ -64,6 +64,7 @@ func (s *gateStack) waitMetric(comp, instance, key string, ok func(float64) bool
 // rows are the endpoint's own series (instance: the endpoint), owned by its
 // component, and a push may not forge them.
 func TestEveryEndpointReportsItsOwnCollection(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}
@@ -139,6 +140,7 @@ func (s *gateStack) latestAt(comp, instance, key string) time.Time {
 // lockout's failure count does not fall silent after its first window; and
 // a run now is a poll run, timed in its window like a scheduled one.
 func TestAGatedPollAndARunNowCountInTheReport(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}

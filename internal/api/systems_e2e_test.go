@@ -9,7 +9,6 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/auth"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
@@ -19,16 +18,14 @@ import (
 // non-disclosing 404 outside it, and is forbidden a write (capability
 // fast-reject). Mirrors TestLocationAPI; reuses its helpers. Skipped under -short.
 func TestSystemAPI(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	storagetest.CreateShippedStandards(t, gw)
 
 	ownerTok, hash, prefix, err := auth.NewBearerToken()
@@ -114,16 +111,14 @@ func TestSystemAPI(t *testing.T) {
 // 409, and a bad slug is rejected at the edge by the Huma pattern (422). Skipped
 // under -short.
 func TestSystemRenameAndCheckName(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 
 	ownerTok, hash, prefix, err := auth.NewBearerToken()
 	if err != nil {
@@ -213,16 +208,14 @@ func TestSystemRenameAndCheckName(t *testing.T) {
 // false-positive that used to block a legal create), and the advisory stays
 // blind to the caller's OWN grant scope, same as before. Skipped under -short.
 func TestSystemCheckNameIsScopedToPlacement(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 
 	ownerTok, hash, prefix, err := auth.NewBearerToken()
 	if err != nil {

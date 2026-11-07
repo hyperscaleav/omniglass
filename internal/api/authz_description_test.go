@@ -16,6 +16,7 @@ import (
 // principal purge described a two-token gate while carrying the admin-tier
 // three-token stamp.
 func TestDescriptionsNameTheirGate(t *testing.T) {
+	t.Parallel()
 	raw, err := os.ReadFile("../../api/openapi.json")
 	if err != nil {
 		t.Fatalf("read openapi.json (run make gen): %v", err)

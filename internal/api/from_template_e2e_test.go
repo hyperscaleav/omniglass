@@ -12,9 +12,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/scope"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
 // instRoles are the custom roles these tests grant, inserted before the
@@ -47,16 +45,13 @@ type instFixture struct {
 
 func newInstFixture(t *testing.T) *instFixture {
 	t.Helper()
-	dsn := storagetest.NewDSN(t)
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	t.Cleanup(gw.Close)
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	owner := bootstrapOwnerTok(t, ctx, gw)
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
@@ -126,6 +121,7 @@ func (f *instFixture) locationID(name string) string {
 }
 
 func TestCreateComponentFromTemplateAPI(t *testing.T) {
+	t.Parallel()
 	f := newInstFixture(t)
 	type out struct {
 		Template  string `json:"template"`
@@ -192,6 +188,7 @@ func TestCreateComponentFromTemplateAPI(t *testing.T) {
 }
 
 func TestCreateSystemFromTemplateAPI(t *testing.T) {
+	t.Parallel()
 	f := newInstFixture(t)
 	type comp struct {
 		Component string `json:"component"`
@@ -275,6 +272,7 @@ func TestCreateSystemFromTemplateAPI(t *testing.T) {
 }
 
 func TestCreateLocationsFromTemplateAPI(t *testing.T) {
+	t.Parallel()
 	f := newInstFixture(t)
 	type out struct {
 		Places []struct {

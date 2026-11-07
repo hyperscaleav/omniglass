@@ -15,6 +15,7 @@ import (
 // conforming system already declares itself, and a system moving onto a
 // standard that declares a name the system already does.
 func TestARoleNameAddressesOneRolePerSystem(t *testing.T) {
+	t.Parallel()
 	f := newStaffingFixture(t)
 	c, owner := f.c, f.owner
 
@@ -77,6 +78,7 @@ func TestARoleNameAddressesOneRolePerSystem(t *testing.T) {
 // that reads no system at all, and the refusal must not tell that caller which
 // system exists or what roles it declares.
 func TestARoleCollisionNamesOnlyAReadableSystem(t *testing.T) {
+	t.Parallel()
 	f := newStaffingFixture(t)
 	c, owner := f.c, f.owner
 	c.do(owner, http.MethodPost, "/standards", map[string]any{"name": "redact-std", "label": "Redact"}, http.StatusCreated)
@@ -107,6 +109,7 @@ func TestARoleCollisionNamesOnlyAReadableSystem(t *testing.T) {
 // held beside a narrow grant, and the precheck looks at every conforming
 // system, so a refusal to that caller names a system it can read, or none.
 func TestACapacityRefusalNamesOnlyAReadableSystem(t *testing.T) {
+	t.Parallel()
 	f := newStaffingFixture(t)
 	c, owner := f.c, f.owner
 	c.do(owner, http.MethodPost, "/standards", map[string]any{"name": "cap-std", "label": "Cap"}, http.StatusCreated)

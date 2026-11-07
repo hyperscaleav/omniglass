@@ -16,9 +16,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/auth"
 	"github.com/hyperscaleav/omniglass/internal/scope"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
 // A command's status is readable from issue to settlement over the API
@@ -63,16 +61,13 @@ type commandStatusRig struct {
 
 func newCommandStatusRig(t *testing.T) *commandStatusRig {
 	t.Helper()
-	dsn := storagetest.NewDSN(t)
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	t.Cleanup(gw.Close)
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	ownerTok, hash, prefix, err := auth.NewBearerToken()
 	if err != nil {
 		t.Fatalf("mint owner: %v", err)
@@ -137,6 +132,7 @@ func decodeCommand(t *testing.T, raw []byte) commandRead {
 // One command reads back whole, by its id under its component (addressed by
 // name or uuid), and the issue answers with the same body plus the verdict.
 func TestCommandStatusReads(t *testing.T) {
+	t.Parallel()
 	r := newCommandStatusRig(t)
 	srv := httptest.NewServer(api.NewHandler(r.gw))
 	defer srv.Close()
@@ -181,6 +177,7 @@ func TestCommandStatusReads(t *testing.T) {
 // The history is newest first, narrowed by status and time, a page at a
 // time; a malformed time is a 422 naming it.
 func TestCommandStatusList(t *testing.T) {
+	t.Parallel()
 	r := newCommandStatusRig(t)
 	srv := httptest.NewServer(api.NewHandler(r.gw))
 	defer srv.Close()
@@ -231,6 +228,7 @@ func TestCommandStatusList(t *testing.T) {
 // the non-disclosing 404, inside it but outside command:read the truthful
 // 403, and a principal with no read at all is refused at the gate.
 func TestCommandStatusScope(t *testing.T) {
+	t.Parallel()
 	r := newCommandStatusRig(t)
 	r.role(t, "component-reader", "component:read")
 	disp, other := r.componentID(t, "disp-1"), r.componentID(t, "other-1")
@@ -268,6 +266,7 @@ func TestCommandStatusScope(t *testing.T) {
 // its deadline rather than waiting for the sweep, or until wait_timeout,
 // when it answers with where the command stands. The timeout is bounded.
 func TestCommandIssueWaits(t *testing.T) {
+	t.Parallel()
 	r := newCommandStatusRig(t)
 	srv := httptest.NewServer(api.NewHandler(r.gw))
 	defer srv.Close()
@@ -306,6 +305,7 @@ func TestCommandIssueWaits(t *testing.T) {
 // wait past the limit is refused with a 429 before anything is issued, so a
 // refused call has no side effect to retry around.
 func TestCommandIssueWaitIsLimited(t *testing.T) {
+	t.Parallel()
 	r := newCommandStatusRig(t)
 	srv := httptest.NewServer(api.NewHandler(r.gw, api.WithCommandWaitLimits(2, 1)))
 	defer srv.Close()

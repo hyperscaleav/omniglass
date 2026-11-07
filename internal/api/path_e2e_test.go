@@ -9,9 +9,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/auth"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
 // pathTestServer boots a real Postgres-backed server with an owner principal,
@@ -19,16 +17,13 @@ import (
 // against. Skipped under -short (storagetest.NewDSN handles that).
 func pathTestServer(t *testing.T) (*apiClient, string) {
 	t.Helper()
-	dsn := storagetest.NewDSN(t)
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	t.Cleanup(gw.Close)
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 
 	ownerTok, hash, prefix, err := auth.NewBearerToken()
 	if err != nil {
@@ -52,6 +47,7 @@ func pathTestServer(t *testing.T) (*apiClient, string) {
 // SECOND route through the same mapper, not just the one every prior task
 // happened to test.
 func TestGetComponentAlarmsByAmbiguousNameIs409(t *testing.T) {
+	t.Parallel()
 	c, tok := pathTestServer(t)
 
 	c.do(tok, http.MethodPost, "/components", map[string]any{"name": "dup-alarm", "product": "generic-device"}, http.StatusCreated)
@@ -72,6 +68,7 @@ func TestGetComponentAlarmsByAmbiguousNameIs409(t *testing.T) {
 // resolvePath -> the ordinary scope-checked read. The task brief's own
 // example address, verbatim.
 func TestGetComponentByDottedAddressEndToEnd(t *testing.T) {
+	t.Parallel()
 	c, tok := pathTestServer(t)
 
 	c.do(tok, http.MethodPost, "/locations", map[string]any{"name": "boi", "location_type": "campus"}, http.StatusCreated)
@@ -95,6 +92,7 @@ func TestGetComponentByDottedAddressEndToEnd(t *testing.T) {
 
 // TestGetSystemByDottedAddressEndToEnd covers the $sys accessor over HTTP.
 func TestGetSystemByDottedAddressEndToEnd(t *testing.T) {
+	t.Parallel()
 	c, tok := pathTestServer(t)
 
 	c.do(tok, http.MethodPost, "/locations", map[string]any{"name": "boi", "location_type": "campus"}, http.StatusCreated)
@@ -113,6 +111,7 @@ func TestGetSystemByDottedAddressEndToEnd(t *testing.T) {
 // leaves a literal empty segment between two dots by the time it reaches the
 // handler.
 func TestGetComponentByEmptySegmentIs422(t *testing.T) {
+	t.Parallel()
 	c, tok := pathTestServer(t)
 
 	status, body := c.send(tok, http.MethodGet, "/components/boi.17c.415a..display-1", nil)
@@ -129,6 +128,7 @@ func TestGetComponentByEmptySegmentIs422(t *testing.T) {
 // the same non-disclosing 404 a missing component gets, not a 500 and not a
 // disclosure that the address resolved to a real row of a different kind.
 func TestGetComponentByLocationAddressIs404(t *testing.T) {
+	t.Parallel()
 	c, tok := pathTestServer(t)
 
 	c.do(tok, http.MethodPost, "/locations", map[string]any{"name": "boi", "location_type": "campus"}, http.StatusCreated)
@@ -145,6 +145,7 @@ func TestGetComponentByLocationAddressIs404(t *testing.T) {
 // explicit 422 naming that, never a fall-through 404 that looks identical to
 // an ordinary unknown node.
 func TestGetNodeByDottedRefIs422(t *testing.T) {
+	t.Parallel()
 	c, tok := pathTestServer(t)
 
 	status, body := c.send(tok, http.MethodGet, "/nodes/boi.17c", nil)
@@ -159,6 +160,7 @@ func TestGetNodeByDottedRefIs422(t *testing.T) {
 // TestGetMetricTypeByDottedRefIs422 is the lane-type companion: metric_type
 // (and its three siblings, wired identically) stays a single global token.
 func TestGetMetricTypeByDottedRefIs422(t *testing.T) {
+	t.Parallel()
 	c, tok := pathTestServer(t)
 
 	status, body := c.send(tok, http.MethodGet, "/metric-types/icmp.rtt-avg", nil)
@@ -180,6 +182,7 @@ func TestGetMetricTypeByDottedRefIs422(t *testing.T) {
 // scenario, driven over real HTTP: POST /components with a dotted "location"
 // that structurally misses.
 func TestCreateComponentWithDottedMissingLocationIs422(t *testing.T) {
+	t.Parallel()
 	c, tok := pathTestServer(t)
 
 	c.do(tok, http.MethodPost, "/locations", map[string]any{"name": "boi", "location_type": "campus"}, http.StatusCreated)
@@ -199,6 +202,7 @@ func TestCreateComponentWithDottedMissingLocationIs422(t *testing.T) {
 // still be reported as a parent problem (422), not a 404 naming the
 // component being CREATED, which cannot exist yet.
 func TestCreateComponentWithDottedMissingParentIs422(t *testing.T) {
+	t.Parallel()
 	c, tok := pathTestServer(t)
 
 	status, body := c.send(tok, http.MethodPost, "/components",
@@ -219,6 +223,7 @@ func TestCreateComponentWithDottedMissingParentIs422(t *testing.T) {
 // TestListNodeTagsByDottedRefIs422 covers :listTags, which needs no tag key
 // to exist first (resolveTagBindingOwner runs before any key lookup).
 func TestListNodeTagsByDottedRefIs422(t *testing.T) {
+	t.Parallel()
 	c, tok := pathTestServer(t)
 
 	status, body := c.send(tok, http.MethodGet, "/nodes/boi.17c:listTags", nil)
@@ -234,6 +239,7 @@ func TestListNodeTagsByDottedRefIs422(t *testing.T) {
 // BEFORE the owner, so a real key is seeded first to prove the guard fires
 // on the OWNER resolve, not merely because the key lookup already 404'd.
 func TestSetNodeTagByDottedRefIs422(t *testing.T) {
+	t.Parallel()
 	c, tok := pathTestServer(t)
 
 	c.do(tok, http.MethodPost, "/tags", map[string]any{"name": "environment"}, http.StatusCreated)

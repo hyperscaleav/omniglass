@@ -32,6 +32,7 @@ import (
 // zero once the stream goes quiet, and a window with refused posts (a bad
 // signature) lands their count.
 func TestAWebhookEndpointReportsItsOwnPosts(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server")
 	}

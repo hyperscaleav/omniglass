@@ -9,9 +9,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/auth"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -20,7 +18,8 @@ import (
 // and a principal whose role lacks role:read is 403 on /roles but still 200 on
 // /auth/me (authn does not require a capability). Skipped under -short.
 func TestAuthMeAndRoles(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 
 	gw, err := storage.NewPG(ctx, dsn)
@@ -28,10 +27,6 @@ func TestAuthMeAndRoles(t *testing.T) {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 
 	ownerTok, ownerHash, ownerPrefix, err := auth.NewBearerToken()
 	if err != nil {

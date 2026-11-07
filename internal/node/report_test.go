@@ -38,6 +38,7 @@ var t0 = time.Date(2026, 10, 28, 12, 0, 0, 0, time.UTC)
 // failed. The endpoint's several polls share its series, so the rows land
 // under one of its tasks.
 func TestAReportWindowAveragesAnEndpointsPolls(t *testing.T) {
+	t.Parallel()
 	r := newCollectionReport(time.Minute, t0)
 	r.poll("ep-bar", 40*time.Millisecond, false)
 	r.poll("ep-bar", 20*time.Millisecond, false)
@@ -75,6 +76,7 @@ func TestAReportWindowAveragesAnEndpointsPolls(t *testing.T) {
 // report only when there were some. An endpoint seen in one window and not
 // the next reports nothing in the next: nothing ran there and nothing is held.
 func TestAReportWindowCountsAHeldEndpointsPushes(t *testing.T) {
+	t.Parallel()
 	r := newCollectionReport(time.Minute, t0)
 	r.pushes("ep-panel", 3, 0)
 	r.pushes("ep-panel", 2, 1)
@@ -98,6 +100,7 @@ func TestAReportWindowCountsAHeldEndpointsPushes(t *testing.T) {
 // Every row of a window is stamped at the window's end, and the next window
 // starts there, so the windows tile time with no gap or overlap.
 func TestAReportWindowStampsItsEndAndStartsTheNext(t *testing.T) {
+	t.Parallel()
 	r := newCollectionReport(time.Minute, t0)
 	r.poll("ep", time.Millisecond, false)
 	end := t0.Add(61 * time.Second)
@@ -120,6 +123,7 @@ func TestAReportWindowStampsItsEndAndStartsTheNext(t *testing.T) {
 // window in progress (it is due by the new length), and a window the worklist
 // does not carry (an older server) keeps the node's own default.
 func TestAReportWindowFollowsTheWorklist(t *testing.T) {
+	t.Parallel()
 	r := newCollectionReport(time.Minute, t0)
 	r.setEvery(0)
 	if r.due(t0.Add(30*time.Second)) || !r.due(t0.Add(time.Minute)) {
@@ -137,6 +141,7 @@ func TestAReportWindowFollowsTheWorklist(t *testing.T) {
 // node's stuck-task signal for nothing. An endpoint with no task left (it
 // was deleted, or moved to another node) reports nothing.
 func TestAReportWindowPublishesUnderATaskTheNodeHoldsNow(t *testing.T) {
+	t.Parallel()
 	r := newCollectionReport(time.Minute, t0)
 	r.poll("ep-bar", 30*time.Millisecond, false)
 	r.poll("ep-gone", 30*time.Millisecond, false)
@@ -150,6 +155,7 @@ func TestAReportWindowPublishesUnderATaskTheNodeHoldsNow(t *testing.T) {
 // not run: a failure, as the scheduler books it, counted every window the
 // gate holds, while the mean time stays the time of the polls that ran.
 func TestARefusedPollIsAFailureWithoutATime(t *testing.T) {
+	t.Parallel()
 	r := newCollectionReport(time.Minute, t0)
 	r.poll("ep", 40*time.Millisecond, false)
 	r.refused("ep")
@@ -169,6 +175,7 @@ func TestARefusedPollIsAFailureWithoutATime(t *testing.T) {
 // task of an endpoint names its component and its endpoint, and the least
 // holds still while the worklist does.
 func TestPublishTasksPicksEachEndpointsLeastTask(t *testing.T) {
+	t.Parallel()
 	got := publishTasks([]collection.TaskSpec{
 		{ID: "t-9", EndpointID: "ep-1"}, {ID: "t-2", EndpointID: "ep-1"}, {ID: "t-5", EndpointID: "ep-2"},
 	})
