@@ -2,15 +2,21 @@ package storage_test
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"log/slog"
+	"os"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/internal/storage/storagetest/querycount"
 )
 
 // A late observed sample merges into the block that covers it (#1529,
@@ -379,4 +385,332 @@ func TestABatchFailingMidMergeLandsNothing(t *testing.T) {
 		t.Errorf("after the redelivery the blocks are %v, want each late sample in its day block once", got)
 	}
 	r.verify()
+}
+
+// freezeClock stands the rig's database clock at now for every connection
+// opened after it: a schema ahead of pg_catalog on the search path holds a
+// now() that reads the database setting clock.now, so the window's cutoff
+// (now minus the series' days) sits exactly where a test puts it, and the
+// rig's gateway is replaced by one opened afterward. The merge, the ingest's
+// window check and the trend recompute all read it, as they read now().
+func (r *blockRig) freezeClock(now time.Time) {
+	r.t.Helper()
+	var db string
+	if err := r.conn.QueryRow(r.ctx, `select current_database()`).Scan(&db); err != nil {
+		r.t.Fatal(err)
+	}
+	mustExec(r.t, r.conn, `create schema clock`)
+	mustExec(r.t, r.conn, `create function clock.now() returns timestamptz language sql stable
+		as $$ select current_setting('clock.now')::timestamptz $$`)
+	id := pgx.Identifier{db}.Sanitize()
+	mustExec(r.t, r.conn, `alter database `+id+` set clock.now = '`+now.UTC().Format(time.RFC3339Nano)+`'`)
+	mustExec(r.t, r.conn, `alter database `+id+` set search_path = clock, pg_catalog, public`)
+	gw, err := storage.NewPG(r.ctx, r.dsn)
+	if err != nil {
+		r.t.Fatal(err)
+	}
+	r.t.Cleanup(gw.Close)
+	r.gw = gw
+}
+
+// trendRow is the trend row of series id at hour as "count min max sum first
+// last", empty when it has none.
+func (r *blockRig) trendRow(id int64, hour time.Time) string {
+	r.t.Helper()
+	var out string
+	if err := r.conn.QueryRow(r.ctx, `select coalesce((select concat_ws(' ', count, min, max, sum, first, last)
+		from metric_trend where series_id = $1 and hour = $2), '')`, id, hour).Scan(&out); err != nil {
+		r.t.Fatal(err)
+	}
+	return out
+}
+
+// rawTrendRow is the row a trend of series id's hour would hold were it folded
+// from the raw rows, in trendRow's form, empty when the hour has none.
+func (r *blockRig) rawTrendRow(id int64, hour time.Time) string {
+	r.t.Helper()
+	var out string
+	if err := r.conn.QueryRow(r.ctx, `select coalesce(concat_ws(' ', count(*), min(value), max(value), sum(value),
+		(array_agg(value order by ts, id))[1], (array_agg(value order by ts desc, id desc))[1]), '')
+		from metric where series_id = $1 and ts >= $2 and ts < $2 + interval '1 hour'`, id, hour).Scan(&out); err != nil {
+		r.t.Fatal(err)
+	}
+	return out
+}
+
+// foldedDay is how a test's folded day is cut: the span its block takes, the
+// day of the rig's week it sits on and the samples it holds.
+type foldedDay struct {
+	name string
+	day  int
+	n    int
+	want string
+}
+
+var foldedDays = []foldedDay{
+	{"hour", 0, 4080, "hour 0+00:00 170"},
+	{"day", 1, 170, "day 1+00:00 170"},
+	{"week", 3, 5, "week 0+00:00 5"},
+}
+
+// windowRig folds c's day under the rig's window, then moves the window to
+// days (a type's own retention_days when override, else the metric lane's, by
+// the platform setting) and freezes the clock so the window's cutoff is at.
+// It returns the series.
+func (r *blockRig) windowRig(c foldedDay, cutoff time.Time, days int, override bool) (series int64) {
+	r.t.Helper()
+	series = r.series("", "observed")
+	r.spaced(series, r.day(c.day), c.n)
+	r.fold(storage.BlockFold{MaxDays: blockLaneDays})
+	if got := r.blocksOf(series); !slices.Contains(got, c.want) {
+		r.t.Fatalf("before the window moves the blocks are %v, want %q among them", got, c.want)
+	}
+	if override {
+		mustExec(r.t, r.conn, `update metric_type set retention_days = $1 where name = 'prune-rtt'`, days)
+	} else {
+		mustExec(r.t, r.conn, `update metric_type set retention_days = null where name = 'prune-rtt'`)
+		if _, err := r.gw.UpsertSettingOverride(r.ctx, "", "platform", "retention", map[string]any{"metric_days": days}, nil); err != nil {
+			r.t.Fatal(err)
+		}
+	}
+	r.freezeClock(cutoff.Add(time.Duration(days) * 24 * time.Hour))
+	return series
+}
+
+// TestAnIntactHourOfADayPastTheWindowCutoffTrendsFromItsRawRows: a day folded
+// while it was intact whose start has since slipped past its series' window,
+// the cutoff inside it, takes no late sample into its block (the merge needs
+// the whole day), so a late sample of one of its hours still inside the
+// window lands raw only; the recompute of that hour reads the same
+// predicate, so it reads the raw rows, and the hour's trend row is the one
+// they give, whatever span the day was folded at (#1546, ADR-1529).
+func TestAnIntactHourOfADayPastTheWindowCutoffTrendsFromItsRawRows(t *testing.T) {
+	t.Parallel()
+	for _, c := range foldedDays {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			r := newBlockRig(t)
+			day := r.day(c.day)
+			a := r.windowRig(c, day.Add(6*time.Hour+30*time.Minute), 7, true)
+			hour := day.Add(10 * time.Hour)
+			r.ingest(sampleOf("", hour.Add(30*time.Minute+time.Millisecond), -7))
+			if got := r.blocksOf(a); !slices.Contains(got, c.want) {
+				t.Fatalf("the late sample of a day past the cutoff reached its block: the blocks are %v", got)
+			}
+			if _, err := r.gw.CompactMetricTrends(r.ctx, 1, blockLaneDays); err != nil {
+				t.Fatal(err)
+			}
+			want := r.rawTrendRow(a, hour)
+			if !strings.Contains(want, "-7") {
+				t.Fatalf("the raw rows' fold %q lacks the late sample", want)
+			}
+			if got := r.trendRow(a, hour); got != want {
+				t.Errorf("the trend of the intact hour is %q, want %q, the fold of its raw rows", got, want)
+			}
+		})
+	}
+}
+
+// TestEachHourAtTheWindowCutoffTrendsFromOneSource: at the window's boundary
+// each dirtied hour reads exactly one source, raw rows or its covering block,
+// by the merge's own test of its day, and its trend row matches the raw rows'
+// (a late sample is in it, whichever source held it). The cutoff sits on a
+// day's start (the day is intact: the sample merged into the block and the
+// block is read), on an hour's start (the day is not: raw), inside an hour (that
+// hour is out of the window, so not recomputed, and the next is read from
+// raw), and a series of a type with its own retention_days is held to that
+// window rather than the lane's.
+func TestEachHourAtTheWindowCutoffTrendsFromOneSource(t *testing.T) {
+	t.Parallel()
+	cuts := []struct {
+		name   string
+		at     time.Duration // the cutoff, from the folded day's start
+		intact bool          // the folded day's start is inside the window
+		hours  []int         // dirtied hours, in the window or not
+		inside func(h int) bool
+	}{
+		{"the day's start is the cutoff", 0, true, []int{0, 1, 23}, func(h int) bool { return true }},
+		{"an hour's start is the cutoff", 6 * time.Hour, false, []int{5, 6, 7, 23}, func(h int) bool { return h >= 6 }},
+		{"the cutoff is inside an hour", 6*time.Hour + 30*time.Minute, false, []int{5, 6, 7, 23}, func(h int) bool { return h >= 7 }},
+		{"a second past the day's start", time.Second, false, []int{0, 1, 23}, func(h int) bool { return h >= 1 }},
+	}
+	for _, c := range foldedDays {
+		for _, cut := range cuts {
+			for _, override := range []bool{true, false} {
+				name := fmt.Sprintf("%s/%s/override=%v", c.name, cut.name, override)
+				t.Run(name, func(t *testing.T) {
+					t.Parallel()
+					r := newBlockRig(t)
+					day := r.day(c.day)
+					a := r.windowRig(c, day.Add(cut.at), 7, override)
+					lane := blockLaneDays
+					if !override {
+						lane = 7
+					}
+					// A late sample of an hour inside the window comes through the
+					// ingest, which merges it where its day is intact. The ingest
+					// drops one older than the cutoff, so an hour outside it is
+					// planted and marked dirty directly: the recompute's own filter
+					// is what holds that hour to the window.
+					for _, h := range cut.hours {
+						hour := day.Add(time.Duration(h) * time.Hour)
+						ts := hour.Add(20*time.Minute + time.Millisecond)
+						if cut.inside(h) {
+							r.ingest(sampleOf("", ts, -float64(h+1)))
+							continue
+						}
+						r.plantAt(a, ts, -float64(h+1))
+						mustExec(t, r.conn, `insert into metric_trend_dirty (series_id, hour) values ($1, $2) on conflict do nothing`, a, hour)
+					}
+					if merged := !slices.Contains(r.blocksOf(a), c.want); merged != cut.intact {
+						t.Errorf("the late samples merged into the folded day's blocks: %v, want %v (the day is intact: %v); the blocks are %v",
+							merged, cut.intact, cut.intact, r.blocksOf(a))
+					}
+					if _, err := r.gw.CompactMetricTrends(r.ctx, 1, lane); err != nil {
+						t.Fatal(err)
+					}
+					for _, h := range cut.hours {
+						hour := day.Add(time.Duration(h) * time.Hour)
+						got, want := r.trendRow(a, hour), r.rawTrendRow(a, hour)
+						if !cut.inside(h) {
+							want = ""
+						}
+						if got != want {
+							t.Errorf("hour %02d: trend row %q, want %q", h, got, want)
+						}
+					}
+				})
+			}
+		}
+	}
+}
+
+// TestALateBatchWaitsOutAFoldWithoutBeingGivenUp: a fold holding the block
+// lock exclusive for longer than the consumer's five deliveries last (about
+// 15 s, then the batch is Term'd and lost) leaves the late batch waiting, not
+// failing: the merge sets no lock_timeout, and when the fold commits the
+// batch lands every sample once, on its first and only delivery (#1546,
+// ADR-1529).
+func TestALateBatchWaitsOutAFoldWithoutBeingGivenUp(t *testing.T) {
+	t.Parallel()
+	const hold = 21 * time.Second
+	r := newBlockRig(t)
+	a := r.series("", "observed")
+	r.spaced(a, r.day(1), 170)
+	r.fold(storage.BlockFold{MaxDays: blockLaneDays})
+	fold, err := r.conn.Begin(r.ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = fold.Rollback(context.WithoutCancel(r.ctx)) }()
+	if _, err := fold.Exec(r.ctx, `select pg_advisory_xact_lock(hashtextextended('metric_block:fold', 0))`); err != nil {
+		t.Fatal(err)
+	}
+	b := storage.IngestBatch{BatchID: "waits-on-fold", Writer: storage.PushWriter(), Metrics: []storage.MetricSampleWrite{
+		sampleOf("", r.day(1).Add(time.Hour+time.Millisecond), 1),
+		sampleOf("", r.day(1).Add(2*time.Hour+time.Millisecond), 2),
+	}}
+	type result struct {
+		landed bool
+		err    error
+		after  time.Duration
+	}
+	done := make(chan result, 1)
+	start := time.Now()
+	go func() {
+		landed, err := r.gw.LandBatch(r.ctx, b)
+		done <- result{landed, err, time.Since(start)}
+	}()
+	select {
+	case got := <-done:
+		t.Fatalf("the batch returned %v, %v after %s behind a fold holding the block lock, want it waiting", got.landed, got.err, got.after)
+	case <-time.After(hold):
+	}
+	if err := fold.Commit(r.ctx); err != nil {
+		t.Fatal(err)
+	}
+	got := <-done
+	if got.err != nil || !got.landed {
+		t.Fatalf("after the fold committed the batch landed %v, %v, want it landed without an error (an error is a Nak, and the fifth is a Term)", got.landed, got.err)
+	}
+	if got.after < hold {
+		t.Errorf("the batch landed after %s, before the fold committed at %s", got.after, hold)
+	}
+	if n := r.count(`select count(*) from metric where series_id = $1`, a); n != 172 {
+		t.Errorf("series a holds %d rows, want 172, each sample once", n)
+	}
+	if blocks := r.blocksOf(a); !slices.Equal(blocks, []string{"day 1+00:00 172"}) {
+		t.Errorf("the blocks are %v, want both samples in the day block once", blocks)
+	}
+	if n := r.count(`select count(*) from telemetry_receipt where batch_id = 'waits-on-fold'`); n != 1 {
+		t.Errorf("the batch left %d receipts, want 1", n)
+	}
+	r.verify()
+}
+
+// TestMergeLateBlocksSetsNoLockTimeout: the late merge takes the block lock
+// with no lock_timeout of its own, so a batch is never failed for waiting on
+// a fold (the wait is bounded by trendDrainTimeout failing the compaction, not
+// the batch, ADR-1529).
+func TestMergeLateBlocksSetsNoLockTimeout(t *testing.T) {
+	t.Parallel()
+	src, err := os.ReadFile("metric_block.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if set := regexp.MustCompile(`(?i)set\s+(local\s+)?lock_timeout`); set.Match(src) {
+		t.Error("metric_block.go sets a lock_timeout: a late batch must wait for the fold, a timeout would Term its batch after the consumer's redeliveries")
+	}
+}
+
+// TestALateBatchAddsThreeStatementsAndAnOldOneAddsTheWindowCheck: against a
+// batch landing on time, a batch with a late sample adds the settings read,
+// the block lock and the merge (3), a batch carrying a sample a day old or
+// more adds the settings read and the window check (2), and a batch that is
+// both adds the settings read once (4); the on-time batch's own count, 18,
+// is held by the ingest footprint test (ADR-1529 decision 8).
+func TestALateBatchAddsThreeStatementsAndAnOldOneAddsTheWindowCheck(t *testing.T) {
+	t.Parallel()
+	r := newBlockRig(t)
+	counter := querycount.New()
+	gw, err := storage.NewPG(r.ctx, r.dsn, storage.WithQueryTracer(counter))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(gw.Close)
+	a := r.series("", "observed")
+	r.spaced(a, r.day(1), 170)
+	r.fold(storage.BlockFold{MaxDays: blockLaneDays})
+	now := time.Now().UTC()
+	statements := func(name string, announced time.Time, ts time.Time) int {
+		t.Helper()
+		if err := r.gw.SetMetricTrendMark(r.ctx, announced); err != nil {
+			t.Fatal(err)
+		}
+		b := storage.IngestBatch{BatchID: name, Writer: storage.PushWriter(), Metrics: []storage.MetricSampleWrite{sampleOf("", ts, 1)}}
+		if _, err := gw.LandBatch(r.ctx, b); err != nil { // warms the gateway's caches
+			t.Fatal(err)
+		}
+		counter.Reset()
+		b.BatchID += "-measured"
+		if _, err := gw.LandBatch(r.ctx, b); err != nil {
+			t.Fatal(err)
+		}
+		return counter.N()
+	}
+	onTime := statements("on-time", now.Add(-72*time.Hour), now.Add(-time.Minute))
+	for _, c := range []struct {
+		name      string
+		announced time.Time
+		ts        time.Time
+		add       int
+	}{
+		{"late", now.Add(time.Hour), now.Add(-time.Minute), 3},
+		{"old", now.Add(-72 * time.Hour), now.Add(-30 * time.Hour), 2},
+		{"late and old", now.Add(time.Hour), r.day(1).Add(2*time.Hour + time.Millisecond), 4},
+	} {
+		if got := statements(c.name, c.announced, c.ts); got != onTime+c.add {
+			t.Errorf("a %s batch cost %d statements, want the on-time batch's %d and %d more", c.name, got, onTime, c.add)
+		}
+	}
 }

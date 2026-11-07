@@ -63,7 +63,11 @@ const blockUpsert = `on conflict (series_id, span_start, span) do update set n =
 // blockIntact is the condition that a series' day (t its metric type, day the
 // day's start) is still wholly inside the series' window ($lane the metric
 // lane's days): a day the prune has begun is not folded, since what remains
-// would be only part of it, and it goes with the next prune.
+// would be only part of it, and it goes with the next prune. It is also the
+// one test of whether a block covers a late sample: the late merge folds a
+// sample into a day's block only while the day is intact, and the trend
+// recompute reads an hour from a day's blocks only while it is, so the two
+// never disagree about a sample (#1546, ADR-1529).
 func blockIntact(day, lane string) string {
 	return day + ` >= now() - make_interval(days => coalesce(t.retention_days, ` + lane + `::int))`
 }
@@ -486,6 +490,12 @@ var mergeBlocksSQL = fmt.Sprintf(`with l as (
 // have landed: the block lock taken shared in a statement of its own, so the
 // merge's own statement reads the marks every fold that wrote before it
 // committed, and no fold commits past them before the batch does.
+//
+// The wait for the lock has no lock_timeout, on purpose: the consumer Terms a
+// message after maxTelemetryDeliveries redeliveries (about 15 s), so a fold
+// chunk longer than that would drop the batch, its on-time rows included. The
+// stall a long wait can cause on a multi-server install is bounded where it
+// bites, by trendDrainTimeout failing the compaction (ADR-1529, decision 9).
 func mergeLateBlocks(ctx context.Context, tx pgx.Tx, late lateSamples, laneDays int) error {
 	if len(late.series) == 0 {
 		return nil
