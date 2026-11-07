@@ -294,7 +294,11 @@ func (p *PG) recomputeDirtyTrends(ctx context.Context, laneDays int) (int64, err
 // covers it, which a late sample merges into in its own insert's
 // transaction (#1529): the hour or day block when the day has hour or day
 // blocks, else the week block of its ISO week; any other hour is read from
-// its raw rows.
+// its raw rows. A block covers a sample only while its day is intact
+// (blockIntact, the merge's own test, #1546): a day whose start has slipped
+// past the window takes no late sample into its block, so an hour of it
+// still inside the window reads its raw rows, which hold what the block
+// does not. Each hour reads exactly one source.
 func (p *PG) recomputeDirtyChunk(ctx context.Context, laneDays int) (int64, error) {
 	tx, err := p.pool.BeginTx(ctx, trendTxOptions)
 	if err != nil {
@@ -312,17 +316,18 @@ func (p *PG) recomputeDirtyChunk(ctx context.Context, laneDays int) (int64, erro
 			where x.series_id = y.series_id and x.hour = y.hour
 			returning x.series_id, x.hour),
 		intact as (
-			select d.series_id, d.hour from d
+			select d.series_id, d.hour, `+blockIntact("date_bin('1 day', d.hour, "+trendEpoch+")", "$2")+` as day_intact
+			from d
 			join metric_series s on s.id = d.series_id
 			join metric_type t on t.id = s.metric_type_id
 			where d.hour >= now() - make_interval(days => coalesce(t.retention_days, $2::int))),
 		f as (
-			select i.series_id, i.hour, date_bin('1 day', i.hour, `+trendEpoch+`) as day from intact i),
+			select i.series_id, i.hour, i.day_intact, date_bin('1 day', i.hour, `+trendEpoch+`) as day from intact i),
 		c as (
 			select f.series_id, f.hour, f.day, date_bin('7 days', f.day, `+blockWeekEpoch+`) as week,
-				exists (select 1 from metric_block b where b.series_id = f.series_id and b.span <> 'week'
+				f.day_intact and exists (select 1 from metric_block b where b.series_id = f.series_id and b.span <> 'week'
 					and b.span_start >= f.day and b.span_start < f.day + interval '24 hours') as day_blocked,
-				exists (select 1 from metric_block b where b.series_id = f.series_id and b.span = 'week'
+				f.day_intact and exists (select 1 from metric_block b where b.series_id = f.series_id and b.span = 'week'
 					and b.span_start = date_bin('7 days', f.day, `+blockWeekEpoch+`)) as week_blocked
 			from f),
 		samples as (

@@ -181,7 +181,7 @@ var IdentityShapes = map[string]TableIdentity{
 	"metric_trend":       {Shape: ShapeIDOnly, Reason: "a metric series' trend for one hour (#1276), keyed by series and hour; nothing addresses it by name"},
 	"metric_trend_dirty": {Shape: ShapeIDOnly, Reason: "a closed hour a late sample landed in (#1276), keyed by series and hour; the compaction's work list, never named"},
 	"metric_trend_mark":  {Shape: ShapeIDOnly, Reason: "how far the trend compaction has announced and folded hours (#1276): one row, keyed by a constant true; nothing addresses it by name"},
-	"metric_block":       {Shape: ShapeIDOnly, Reason: "an observed metric series' samples over one hour, day or week (#1528), keyed by series, span start and span; nothing addresses it by name"},
+	"metric_block":       {Shape: ShapeIDOnly, Reason: "an observed or calculated metric series' samples over one hour, day or week (#1528, #1534), keyed by series, span start, span and calc rule lineage; nothing addresses it by name"},
 	"metric_block_mark":  {Shape: ShapeIDOnly, Reason: "how far the block folds have gone (#1528): one row, keyed by a constant true; nothing addresses it by name"},
 	"metric_declared":    {Shape: ShapeIDOnly, Reason: "a command's intended metric row, the metric lane's declared tier (#1275); read through its command, never named"},
 	"node_log":           {Shape: ShapeIDOnly},

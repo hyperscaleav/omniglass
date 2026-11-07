@@ -11,17 +11,19 @@ import (
 )
 
 // The compacted tier's blocks (#1528, ADR-1528): each closed UTC day of every
-// observed metric series folds into lossless metric_block rows of millisecond
-// offsets and values, in landing order, at the span its own sample count
-// earns. A dense day is cut into hour blocks, a moderate one is one day block,
+// observed or calculated metric series folds into lossless metric_block rows
+// of millisecond offsets and values, in landing order, at the span its own
+// sample count earns. A calculated series' block carries the one calc rule
+// lineage its samples were written under, so its day splits at every lineage
+// change and each lineage earns its span alone (#1534, ADR-1534). A dense day is cut into hour blocks, a moderate one is one day block,
 // and a sparse one waits for its ISO week, whose leftover days fold into one
 // week block. Every block crosses Postgres's 2 KB compression threshold or is
 // the only row its sparse week costs. The blocks are written beside the raw
 // rows, which stay authoritative: nothing reads a block yet but the trend's
 // recompute of a dirtied hour, and no prune waits on one. A late sample for
 // a folded day lands raw and merges into the block that covers it, in its
-// own batch's transaction (#1529, ADR-1529). Calculated series are sparse
-// already and never block; properties and declared rows are other tables.
+// own batch's transaction (#1529, ADR-1529). Properties and declared rows are
+// other tables.
 
 const (
 	// BlockHourMin is the samples a series-day holds at which it is cut into
@@ -55,15 +57,52 @@ func blockOffset(start string) string {
 	return `round((extract(epoch from m.ts) - extract(epoch from ` + start + `)) * 1000)::int4`
 }
 
+// blockSeries is the provenance condition on a series (alias s) whose
+// samples fold into blocks.
+const blockSeries = `s.provenance in ('observed', 'calculated')`
+
+// blockLineage is a row's (alias a) lineage columns, as the metric table and
+// the block key order them: null for an observed series' rows, the calc rule
+// that wrote them for a calculated one's (ADR-1534).
+func blockLineage(a string) string {
+	return a + `.source_rule, ` + a + `.source_rule_version, ` + a + `.source_rule_id`
+}
+
+// sameLineage is the condition that rows a and b carry the same lineage, no
+// lineage matching no lineage.
+func sameLineage(a, b string) string {
+	return a + `.source_rule is not distinct from ` + b + `.source_rule and ` +
+		a + `.source_rule_version is not distinct from ` + b + `.source_rule_version and ` +
+		a + `.source_rule_id is not distinct from ` + b + `.source_rule_id`
+}
+
+// blockInsert is the column list a block is written by.
+const blockInsert = `insert into metric_block (series_id, span_start, span, source_rule, source_rule_version, source_rule_id, n, offset_ms, value)`
+
+// blockConflict is the block key a write lands on: its series, span and
+// lineage (the metric_block_lineage migration).
+const blockConflict = `on conflict on constraint metric_block_key`
+
 // blockUpsert replaces a refolded block whole: a fold writes every sample
 // its span holds, never an increment.
-const blockUpsert = `on conflict (series_id, span_start, span) do update set n = excluded.n,
+const blockUpsert = blockConflict + ` do update set n = excluded.n,
 	offset_ms = excluded.offset_ms, value = excluded.value`
+
+// blockSamplesOf unnests block b's samples in landing order, as ts, value and
+// ord (its place in the block).
+func blockSamplesOf(b string) string {
+	return `lateral (select ` + b + `.span_start + u.o * interval '1 millisecond' as ts, u.v as value, u.ord
+		from unnest(` + b + `.offset_ms, ` + b + `.value) with ordinality as u(o, v, ord))`
+}
 
 // blockIntact is the condition that a series' day (t its metric type, day the
 // day's start) is still wholly inside the series' window ($lane the metric
 // lane's days): a day the prune has begun is not folded, since what remains
-// would be only part of it, and it goes with the next prune.
+// would be only part of it, and it goes with the next prune. It is also the
+// one test of whether a block covers a late sample: the late merge folds a
+// sample into a day's block only while the day is intact, and the trend
+// recompute reads an hour from a day's blocks only while it is, so the two
+// never disagree about a sample (#1546, ADR-1529).
 func blockIntact(day, lane string) string {
 	return day + ` >= now() - make_interval(days => coalesce(t.retention_days, ` + lane + `::int))`
 }
@@ -71,51 +110,58 @@ func blockIntact(day, lane string) string {
 // blockDaysSQL folds series-days into hour and day blocks: pairs yields
 // (series_id, day) rows, bound narrows the metric scan to its days where the
 // caller knows them (so the plan prunes partitions), and lane is the metric
-// lane's days. A series-day under BlockDayMin writes nothing here: its week
-// fold takes it.
+// lane's days. Each lineage of a series-day is counted and folded alone, so
+// a calculated day splits at its rule's every change (ADR-1534). A lineage
+// under BlockDayMin in its day writes nothing here: its week fold takes it.
 func blockDaysSQL(pairs, bound, lane string) string {
-	return fmt.Sprintf(`with sd as (%s),
+	return fmt.Sprintf(`with sd as (%[1]s),
 	d as (
-		select m.series_id, sd.day, m.ts, m.id, m.value, count(*) over (partition by m.series_id, sd.day) as n
-		from sd join metric_series s on s.id = sd.series_id and s.provenance = 'observed'
+		select m.series_id, sd.day, m.ts, m.id, m.value, %[2]s,
+			count(*) over (partition by m.series_id, sd.day, %[2]s) as n
+		from sd join metric_series s on s.id = sd.series_id and %[3]s
 		join metric_type t on t.id = s.metric_type_id
-		join metric m on m.series_id = sd.series_id and m.ts >= sd.day and m.ts < sd.day + interval '24 hours'%s
-		where %s),
+		join metric m on m.series_id = sd.series_id and m.ts >= sd.day and m.ts < sd.day + interval '24 hours'%[4]s
+		where %[5]s),
 	b as (
-		select d.series_id, d.ts, d.id, d.value,
-			case when d.n >= %d then date_bin('1 hour', d.ts, %s) else d.day end as span_start,
-			case when d.n >= %d then 'hour' else 'day' end as span
-		from d where d.n >= %d)
-	insert into metric_block (series_id, span_start, span, n, offset_ms, value)
-	select m.series_id, m.span_start, m.span, count(*), array_agg(%s order by m.ts, m.id),
+		select d.series_id, d.ts, d.id, d.value, %[6]s,
+			case when d.n >= %[7]d then date_bin('1 hour', d.ts, %[8]s) else d.day end as span_start,
+			case when d.n >= %[7]d then 'hour' else 'day' end as span
+		from d where d.n >= %[9]d)
+	%[10]s
+	select m.series_id, m.span_start, m.span, %[11]s, count(*), array_agg(%[12]s order by m.ts, m.id),
 		array_agg(m.value order by m.ts, m.id)
-	from b m group by m.series_id, m.span_start, m.span
-	%s`, pairs, bound, blockIntact("sd.day", lane), BlockHourMin, trendEpoch, BlockHourMin, BlockDayMin,
-		blockOffset("m.span_start"), blockUpsert)
+	from b m group by m.series_id, m.span_start, m.span, %[11]s
+	%[13]s`, pairs, blockLineage("m"), blockSeries, bound, blockIntact("sd.day", lane), blockLineage("d"),
+		BlockHourMin, trendEpoch, BlockDayMin, blockInsert, blockLineage("m"), blockOffset("m.span_start"), blockUpsert)
 }
 
-// blockWeekSQL folds each series' leftover days of an ISO week, the days of
-// the week that have no hour or day block, into one week block: pairs yields
-// (series_id, week) rows, bound narrows the metric scan as blockDaysSQL's
-// does, and lane is the metric lane's days. There is no minimum: a week block
-// of one sample is still the only row its week costs. A leftover day the
-// prune has begun is left out.
+// blockWeekSQL folds each series' leftover days of an ISO week into one week
+// block for each lineage: pairs yields (series_id, week) rows, bound narrows
+// the metric scan as blockDaysSQL's does, and lane is the metric lane's days.
+// A lineage's leftover days are those of the week where it has no hour or
+// day block: an observed series' whole days, and a calculated series' rows
+// of a lineage too sparse in its day, beside a block of another lineage there
+// or not. There is no minimum: a week block of one sample is still the only
+// row its week costs. A leftover day the prune has begun is left out.
 func blockWeekSQL(pairs, bound, lane string) string {
-	return fmt.Sprintf(`with sw as (%s),
+	return fmt.Sprintf(`with sw as (%[1]s),
 	sd as (
-		select sw.series_id, sw.week, g.day
-		from sw join metric_series s on s.id = sw.series_id and s.provenance = 'observed'
+		select sw.series_id, sw.week, g.day, s.provenance = 'calculated' as calc
+		from sw join metric_series s on s.id = sw.series_id and %[2]s
 		join metric_type t on t.id = s.metric_type_id
 		cross join lateral generate_series(sw.week, sw.week + interval '144 hours', interval '24 hours') as g(day)
-		where %s
-			and not exists (select 1 from metric_block b where b.series_id = sw.series_id and b.span <> 'week'
-				and b.span_start >= g.day and b.span_start < g.day + interval '24 hours'))
-	insert into metric_block (series_id, span_start, span, n, offset_ms, value)
-	select sd.series_id, sd.week, 'week', count(*), array_agg(%s order by m.ts, m.id),
+		where %[3]s
+			and (s.provenance = 'calculated' or not exists (select 1 from metric_block b where b.series_id = sw.series_id
+				and b.span <> 'week' and b.span_start >= g.day and b.span_start < g.day + interval '24 hours')))
+	%[4]s
+	select sd.series_id, sd.week, 'week', %[5]s, count(*), array_agg(%[6]s order by m.ts, m.id),
 		array_agg(m.value order by m.ts, m.id)
-	from sd join metric m on m.series_id = sd.series_id and m.ts >= sd.day and m.ts < sd.day + interval '24 hours'%s
-	group by sd.series_id, sd.week
-	%s`, pairs, blockIntact("g.day", lane), blockOffset("sd.week"), bound, blockUpsert)
+	from sd join metric m on m.series_id = sd.series_id and m.ts >= sd.day and m.ts < sd.day + interval '24 hours'%[7]s
+	where not sd.calc or not exists (select 1 from metric_block b where b.series_id = sd.series_id and b.span <> 'week'
+		and b.span_start >= sd.day and b.span_start < sd.day + interval '24 hours' and %[8]s)
+	group by sd.series_id, sd.week, %[5]s
+	%[9]s`, pairs, blockSeries, blockIntact("g.day", lane), blockInsert, blockLineage("m"), blockOffset("sd.week"), bound,
+		sameLineage("b", "m"), blockUpsert)
 }
 
 // BlockFold is how far one block pass may go.
@@ -156,6 +202,45 @@ type BlockKey struct {
 	SeriesID  int64
 	SpanStart time.Time
 	Span      string
+	// Lineage is the calc rule a calculated series' block was written by,
+	// nil for an observed series'.
+	Lineage *BlockLineage
+}
+
+// BlockLineage is the calc rule that wrote a calculated sample, as its raw
+// row and the block holding it carry it: the rule's name and id and its
+// version when it wrote (ADR-1534).
+type BlockLineage struct {
+	Rule    string
+	RuleID  string
+	Version int64
+}
+
+// BlockSample is one sample as a block holds it: its instant, its value, and
+// its lineage, nil for an observed sample.
+type BlockSample struct {
+	TS      time.Time
+	Value   float64
+	Lineage *BlockLineage
+}
+
+// scanLineage is the lineage of a row's nullable source_rule, source_rule_id
+// and source_rule_version, nil when all three are null.
+func scanLineage(rule, ruleID *string, version *int64) *BlockLineage {
+	if rule == nil && ruleID == nil && version == nil {
+		return nil
+	}
+	var l BlockLineage
+	if rule != nil {
+		l.Rule = *rule
+	}
+	if ruleID != nil {
+		l.RuleID = *ruleID
+	}
+	if version != nil {
+		l.Version = *version
+	}
+	return &l
 }
 
 // blockMarks is the two folds' cursors (the metric_block_mark migration):
@@ -316,12 +401,12 @@ func (p *PG) seedBlockMarks(ctx context.Context, now, target time.Time, laneDays
 	return marks, err
 }
 
-// nextBlockSeries is up to n observed series after the id after, by id: the
-// next batch a fold transaction blocks.
+// nextBlockSeries is up to n observed or calculated series after the id
+// after, by id: the next batch a fold transaction blocks.
 func nextBlockSeries(ctx context.Context, tx pgx.Tx, after int64, n int) ([]int64, error) {
 	var ids []int64
 	if err := tx.QueryRow(ctx, `select coalesce(array_agg(id order by id), '{}') from (
-		select id from metric_series where provenance = 'observed' and id > $1 order by id limit $2) s`, after, n).Scan(&ids); err != nil {
+		select id from metric_series s where `+blockSeries+` and id > $1 order by id limit $2) s`, after, n).Scan(&ids); err != nil {
 		return nil, fmt.Errorf("storage: list the series to block: %w", err)
 	}
 	return ids, nil
@@ -428,13 +513,18 @@ func lockBlockFolds(ctx context.Context, tx pgx.Tx) error {
 	return nil
 }
 
-// lateSamples is the observed samples a batch landed in hours the trend
-// compaction had announced, as their raw rows landed: the late merge's input.
+// lateSamples is the samples a batch landed in hours the trend compaction had
+// announced, as their raw rows landed, and the lineage the batch wrote them
+// under (null for observed; one writer writes a batch): the late merge's
+// input.
 type lateSamples struct {
 	series []int64
 	ts     []time.Time
 	id     []int64
 	value  []float64
+	// rule, version and ruleID are the batch's source_rule,
+	// source_rule_version and source_rule_id.
+	rule, version, ruleID any
 }
 
 // mergeBlocksSQL merges late samples ($1..$4 their raw rows' series, ts, id
@@ -452,12 +542,14 @@ type lateSamples struct {
 var mergeBlocksSQL = fmt.Sprintf(`with l as (
 		select u.series_id, u.ts, u.id, u.value, date_bin('1 day', u.ts, %[1]s) as day
 		from unnest($1::bigint[], $2::timestamptz[], $3::bigint[], $4::float8[]) as u(series_id, ts, id, value)),
+	x as (select $6::text as source_rule, $7::bigint as source_rule_version, $8::uuid as source_rule_id),
 	k as (
 		select l.series_id, l.ts, l.id, l.value, l.day, date_bin('7 days', l.day, %[2]s) as week, mk.week_through, mk.week_series,
 			exists (select 1 from metric_block b where b.series_id = l.series_id and b.span = 'hour'
-				and b.span_start >= l.day and b.span_start < l.day + interval '24 hours') as hours,
-			exists (select 1 from metric_block b where b.series_id = l.series_id and b.span = 'day' and b.span_start = l.day) as whole
-		from l join metric_series s on s.id = l.series_id and s.provenance = 'observed'
+				and b.span_start >= l.day and b.span_start < l.day + interval '24 hours' and %[5]s) as hours,
+			exists (select 1 from metric_block b where b.series_id = l.series_id and b.span = 'day' and b.span_start = l.day
+				and %[5]s) as whole
+		from l cross join x join metric_series s on s.id = l.series_id and %[6]s
 		join metric_type t on t.id = s.metric_type_id
 		cross join metric_block_mark mk
 		where (l.day < mk.blocked_through or l.day = mk.blocked_through and l.series_id <= mk.blocked_series)
@@ -468,24 +560,31 @@ var mergeBlocksSQL = fmt.Sprintf(`with l as (
 			case when k.hours then 'hour' when k.whole then 'day' else 'week' end as span
 		from k
 		where k.hours or k.whole or k.week < k.week_through or k.week = k.week_through and k.series_id <= k.week_series)
-	insert into metric_block (series_id, span_start, span, n, offset_ms, value)
-	select m.series_id, m.span_start, m.span, count(*), array_agg(%[4]s order by m.ts, m.id),
+	%[7]s
+	select m.series_id, m.span_start, m.span, $6::text, $7::bigint, $8::uuid, count(*), array_agg(%[4]s order by m.ts, m.id),
 		array_agg(m.value order by m.ts, m.id)
 	from m group by m.series_id, m.span_start, m.span
 	order by m.series_id, m.span_start, m.span
-	on conflict (series_id, span_start, span) do update set (n, offset_ms, value) = (
+	%[8]s do update set (n, offset_ms, value) = (
 		select count(*), array_agg(x.o order by x.o, x.src, x.ord), array_agg(x.v order by x.o, x.src, x.ord)
 		from (
 			select u.o, u.v, 0 as src, u.ord from unnest(metric_block.offset_ms, metric_block.value) with ordinality as u(o, v, ord)
 			union all
 			select u.o, u.v, 1, u.ord from unnest(excluded.offset_ms, excluded.value) with ordinality as u(o, v, ord)) x)`,
-	trendEpoch, blockWeekEpoch, blockIntact("l.day", "$5"), blockOffset("m.span_start"))
+	trendEpoch, blockWeekEpoch, blockIntact("l.day", "$5"), blockOffset("m.span_start"), sameLineage("b", "x"), blockSeries,
+	blockInsert, blockConflict)
 
 // mergeLateBlocks merges a batch's late samples into the blocks that cover
 // them (mergeBlocksSQL), in the batch's transaction, after their raw rows
 // have landed: the block lock taken shared in a statement of its own, so the
 // merge's own statement reads the marks every fold that wrote before it
 // committed, and no fold commits past them before the batch does.
+//
+// The wait for the lock has no lock_timeout, on purpose: the consumer Terms a
+// message after maxTelemetryDeliveries redeliveries (about 15 s), so a fold
+// chunk longer than that would drop the batch, its on-time rows included. The
+// stall a long wait can cause on a multi-server install is bounded where it
+// bites, by trendDrainTimeout failing the compaction (ADR-1529, decision 9).
 func mergeLateBlocks(ctx context.Context, tx pgx.Tx, late lateSamples, laneDays int) error {
 	if len(late.series) == 0 {
 		return nil
@@ -493,7 +592,8 @@ func mergeLateBlocks(ctx context.Context, tx pgx.Tx, late lateSamples, laneDays 
 	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock_shared(hashtextextended($1, 0))`, blockLockKey); err != nil {
 		return fmt.Errorf("storage: merge late samples into their blocks: %w", err)
 	}
-	if _, err := tx.Exec(ctx, mergeBlocksSQL, late.series, late.ts, late.id, late.value, laneDays); err != nil {
+	if _, err := tx.Exec(ctx, mergeBlocksSQL, late.series, late.ts, late.id, late.value, laneDays,
+		late.rule, late.version, late.ruleID); err != nil {
 		return fmt.Errorf("storage: merge late samples into their blocks: %w", err)
 	}
 	return nil
@@ -501,28 +601,36 @@ func mergeLateBlocks(ctx context.Context, tx pgx.Tx, late lateSamples, laneDays 
 
 // verifyBlocksSQL holds every block whose span starts inside its series'
 // window ($1 the lane's days) to the raw rows it was folded from: unnested,
-// its samples are exactly the span's rows (a week's, those of its days with
-// no hour or day block), timestamps and value bits alike, in ts then id
-// order. It yields each block that differs, at most 100.
+// its samples are exactly the span's rows of its lineage (a week's, those of
+// its lineage's days with no hour or day block of it), timestamps and value
+// bits alike, in ts then id order, so a sample read back under a lineage its
+// raw row was not written with is missing from one block and extra in
+// another. It yields each block that differs, at most 100. Each block is
+// paired with its rows by bk, a key of its own for the pass: a full join
+// cannot match the lineage's nulls.
 var verifyBlocksSQL = fmt.Sprintf(`with b as (
-		select b.series_id, b.span_start, b.span, b.offset_ms, b.value from metric_block b
+		select row_number() over () as bk, b.series_id, b.span_start, b.span, %[1]s, b.offset_ms, b.value from metric_block b
 		join metric_series s on s.id = b.series_id
 		join metric_type t on t.id = s.metric_type_id
-		where %s),
+		where %[2]s),
 	got as (
-		select b.series_id, b.span_start, b.span, u.ord, b.span_start + u.o * interval '1 millisecond' as ts, u.v as value
-		from b, unnest(b.offset_ms, b.value) with ordinality as u(o, v, ord)),
+		select b.bk, u.ord, u.ts, u.value from b cross join %[3]s u),
 	want as (
-		select b.series_id, b.span_start, b.span, m.ts, m.value,
-			row_number() over (partition by b.series_id, b.span_start, b.span order by m.ts, m.id) as ord
+		select b.bk, m.ts, m.value, row_number() over (partition by b.bk order by m.ts, m.id) as ord
 		from b join metric m on m.series_id = b.series_id and m.ts >= b.span_start and m.ts < b.span_start +
 			case b.span when 'hour' then interval '1 hour' when 'day' then interval '24 hours' else interval '168 hours' end
+			and %[4]s
 		where b.span <> 'week' or not exists (select 1 from metric_block o where o.series_id = b.series_id and o.span <> 'week'
-			and o.span_start >= date_bin('1 day', m.ts, %s) and o.span_start < date_bin('1 day', m.ts, %s) + interval '24 hours'))
-	select distinct coalesce(g.series_id, w.series_id), coalesce(g.span_start, w.span_start), coalesce(g.span, w.span)
-	from got g full join want w on w.series_id = g.series_id and w.span_start = g.span_start and w.span = g.span and w.ord = g.ord
-	where g.ts is distinct from w.ts or float8send(g.value) is distinct from float8send(w.value)
-	order by 1, 2, 3 limit 100`, blockIntact("b.span_start", "$1"), trendEpoch, trendEpoch)
+			and o.span_start >= date_bin('1 day', m.ts, %[5]s) and o.span_start < date_bin('1 day', m.ts, %[5]s) + interval '24 hours'
+			and %[6]s)),
+	bad as (
+		select distinct coalesce(g.bk, w.bk) as bk
+		from got g full join want w on w.bk = g.bk and w.ord = g.ord
+		where g.ts is distinct from w.ts or float8send(g.value) is distinct from float8send(w.value))
+	select b.series_id, b.span_start, b.span, b.source_rule, b.source_rule_id::text, b.source_rule_version
+	from bad join b on b.bk = bad.bk
+	order by 1, 2, 3, 6, 4 limit 100`, blockLineage("b"), blockIntact("b.span_start", "$1"), blockSamplesOf("b"),
+	sameLineage("m", "b"), trendEpoch, sameLineage("o", "b"))
 
 // VerifyMetricBlocks holds every block inside its window to the raw rows it
 // was folded from (verifyBlocksSQL) and returns the blocks that differ, none
@@ -534,7 +642,10 @@ func (p *PG) VerifyMetricBlocks(ctx context.Context, laneDays int) ([]BlockKey, 
 	}
 	keys, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (BlockKey, error) {
 		var k BlockKey
-		err := r.Scan(&k.SeriesID, &k.SpanStart, &k.Span)
+		var rule, ruleID *string
+		var version *int64
+		err := r.Scan(&k.SeriesID, &k.SpanStart, &k.Span, &rule, &ruleID, &version)
+		k.Lineage = scanLineage(rule, ruleID, version)
 		return k, err
 	})
 	if err != nil {
@@ -543,7 +654,46 @@ func (p *PG) VerifyMetricBlocks(ctx context.Context, laneDays int) ([]BlockKey, 
 	return keys, nil
 }
 
+// blockSamplesSQL reads series $1's samples in [$2, $3) back from its
+// blocks, each with its block's lineage: by ts, then by lineage (rows of one
+// instant under two rule versions are rare, and the older version wrote
+// first), then in landing order. A series' blocks of one lineage never
+// overlap, so within a lineage the order is the raw rows' ts then id.
+var blockSamplesSQL = `select u.ts, u.value, b.source_rule, b.source_rule_id::text, b.source_rule_version
+	from metric_block b cross join ` + blockSamplesOf("b") + ` u
+	where b.series_id = $1 and b.span_start < $3 and b.span_start + case b.span when 'hour' then interval '1 hour'
+		when 'day' then interval '24 hours' else interval '168 hours' end > $2
+		and u.ts >= $2 and u.ts < $3
+	order by u.ts, b.source_rule_version nulls first, b.source_rule_id, b.source_rule, u.ord`
+
+// MetricBlockSamples reads series seriesID's samples in [from, to) back from
+// its blocks (blockSamplesSQL), each with the lineage its raw row was
+// written with: the unnest the compacted tier's series reads build on. It
+// reads blocks alone, so a span the fold has not reached reads as empty.
+func (p *PG) MetricBlockSamples(ctx context.Context, seriesID int64, from, to time.Time) ([]BlockSample, error) {
+	rows, err := p.pool.Query(ctx, blockSamplesSQL, seriesID, from, to)
+	if err != nil {
+		return nil, fmt.Errorf("storage: read series %d's blocks: %w", seriesID, err)
+	}
+	out, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (BlockSample, error) {
+		var s BlockSample
+		var rule, ruleID *string
+		var version *int64
+		err := r.Scan(&s.TS, &s.Value, &rule, &ruleID, &version)
+		s.Lineage = scanLineage(rule, ruleID, version)
+		return s, err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("storage: read series %d's blocks: %w", seriesID, err)
+	}
+	return out, nil
+}
+
 // String is the block as the errors name it.
 func (k BlockKey) String() string {
-	return strings.Join([]string{fmt.Sprint(k.SeriesID), k.Span, k.SpanStart.UTC().Format(time.RFC3339)}, " ")
+	parts := []string{fmt.Sprint(k.SeriesID), k.Span, k.SpanStart.UTC().Format(time.RFC3339)}
+	if k.Lineage != nil {
+		parts = append(parts, fmt.Sprintf("%s@%d", k.Lineage.Rule, k.Lineage.Version))
+	}
+	return strings.Join(parts, " ")
 }
