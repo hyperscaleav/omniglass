@@ -106,6 +106,7 @@ func (r *seedRig) count(sql string, args ...any) int {
 // the registry lacks fails the seed and leaves no role behind, so the role can
 // never be committed accepting anything.
 func TestSeedSystemRoleLandsWholeOrNotAtAll(t *testing.T) {
+	t.Parallel()
 	r := newSeedRig(t)
 	err := r.seedRole(storage.SystemRoleSpec{Name: "probe-role", Quorum: 2, AcceptedTypes: []string{"display", "not-a-type"}})
 	if err == nil {
@@ -132,6 +133,7 @@ func TestSeedSystemRoleLandsWholeOrNotAtAll(t *testing.T) {
 // boot, idempotently; a set that holds rows, and a role an operator revised,
 // are never touched.
 func TestSeedSystemRoleRepairsAnUnrevisedRolesMissingSet(t *testing.T) {
+	t.Parallel()
 	r := newSeedRig(t)
 	pinned := storagetest.MintProduct(t, r.ctx, r.gw, "display").Name
 

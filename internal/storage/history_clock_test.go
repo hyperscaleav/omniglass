@@ -29,6 +29,7 @@ import (
 // Go-computed argument) and cannot be satisfied by a read that computes the
 // edge in Go.
 func TestHistoryWindowsAreBoundedByTheDatabaseClock(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -105,6 +106,7 @@ func TestHistoryWindowsAreBoundedByTheDatabaseClock(t *testing.T) {
 // property as above from the other side: the process names no instant, and here
 // it names no interval either.
 func TestAZeroWindowBindsNoBoundary(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

@@ -17,6 +17,7 @@ import (
 // and LatestMetricInstance resolves one endpoint's latest probe value rather than
 // the newest across every endpoint (as the instance-blind LatestMetric does).
 func TestReachabilityReads(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

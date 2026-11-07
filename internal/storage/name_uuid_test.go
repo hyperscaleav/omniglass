@@ -16,6 +16,7 @@ import (
 // The slug rule alone does not prevent it. A uuid is lowercase hex and hyphens,
 // so it satisfies `^[a-z0-9][a-z0-9-]*$` exactly.
 func TestNamesCannotBeUUIDShaped(t *testing.T) {
+	t.Parallel()
 	uuids := []string{
 		"019f8754-461f-7b82-b5f2-fc4bbe1c3765", // a real one from the dev fleet
 		"00000000-0000-0000-0000-000000000000", // the nil uuid
@@ -32,6 +33,7 @@ func TestNamesCannotBeUUIDShaped(t *testing.T) {
 // The rule has to be narrow. Hyphenated hex-looking names are ordinary in an AV
 // fleet and must keep working; only the exact uuid shape is refused.
 func TestHexLookingNamesAreStillFine(t *testing.T) {
+	t.Parallel()
 	fine := []string{
 		"boardroom-a",
 		"019f8754",                              // hex, but not a uuid
@@ -51,6 +53,7 @@ func TestHexLookingNamesAreStillFine(t *testing.T) {
 // uuid satisfies the slug rule and the generic message would describe exactly
 // what the operator typed.
 func TestUUIDRefusalIsDistinguishable(t *testing.T) {
+	t.Parallel()
 	if err := storage.ValidateName("component", "019f8754-461f-7b82-b5f2-fc4bbe1c3765"); !errors.Is(err, storage.ErrEntityNameIsUUID) {
 		t.Errorf("uuid-shaped name = %v, want ErrEntityNameIsUUID", err)
 	}

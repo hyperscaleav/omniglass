@@ -44,6 +44,7 @@ import (
 // two writes to one series, the earlier-written row wins, because it carries the
 // later `ts`. The tiebreak cannot help there, since there is no tie.
 func TestTheSeriesTiebreakIsInsertionOrderNotARandomIdentifier(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

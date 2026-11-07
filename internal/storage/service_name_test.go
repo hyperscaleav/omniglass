@@ -30,6 +30,7 @@ import (
 // separate implementations of the same fact (#671) and drift apart if only one
 // is driven.
 func TestAServicePrincipalReadsBackItsName(t *testing.T) {
+	t.Parallel()
 	gw, dsn := secretGateway(t)
 	ctx := context.Background()
 	id := insertServicePrincipal(t, dsn, "ingest-bot")
@@ -69,6 +70,7 @@ func TestAServicePrincipalReadsBackItsName(t *testing.T) {
 // unresolvable after the fact, with no uuid left beside the text to tell them
 // apart.
 func TestTwoServicePrincipalsCannotShareAName(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	insertServicePrincipal(t, dsn, "ingest-bot")
 
@@ -161,6 +163,7 @@ func dedupeSQL(t *testing.T) string {
 // before the floor, writes three service accounts sharing one name in a known
 // creation order, and runs the extracted SQL twice.
 func TestServiceNameDedupeKeepsTheOldestAndIsIdempotent(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	if err := migrate.RollbackBelow(dsn, "20260813172000"); err != nil {
 		t.Fatalf("rollback below the service name floor: %v", err)

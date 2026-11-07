@@ -17,6 +17,7 @@ import (
 // platform's collection report window (#1369), the default a minute, so an
 // admin's change reaches every node on its next pull with nothing cached.
 func TestAWorklistCarriesTheCollectionReportWindow(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -47,6 +48,7 @@ func TestAWorklistCarriesTheCollectionReportWindow(t *testing.T) {
 // window carries one. The push lane may not write them: the server counts
 // its own posts.
 func TestTheWebhookReceiversCountsLandOnTheEndpointsComponent(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -99,6 +101,7 @@ func TestTheWebhookReceiversCountsLandOnTheEndpointsComponent(t *testing.T) {
 // down) lands every other component's counts and drops only the deleted
 // one's, without an error: the receiver's window is not lost to it.
 func TestADeletedComponentCostsOnlyItsOwnWebhookCounts(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

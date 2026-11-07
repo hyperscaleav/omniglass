@@ -41,6 +41,11 @@ func newPruneFixture(t *testing.T) *pruneFixture {
 	mustExec(t, conn, `insert into system (name) values ('prune-s1')`)
 	mustExec(t, conn, `insert into property_type (name, data_type) values ('prune-power', 'string')`)
 	mustExec(t, conn, `insert into metric_type (name, data_type) values ('prune-rtt', 'float')`)
+	// The metric prune never passes the trend compaction's mark (#1276);
+	// these tests are about the prune, so every hour reads as closed.
+	if err := gw.SetMetricTrendMark(ctx, time.Now().Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
 	return &pruneFixture{t: t, ctx: ctx, gw: gw, conn: conn, dsn: dsn}
 }
 
@@ -53,7 +58,7 @@ func (f *pruneFixture) row(lane, owner string, ts time.Time, provenance string, 
 		col, name = "system_id", "prune-s1"
 	}
 	if lane == "metric" {
-		if err := f.gw.MakeMetricMonths(f.ctx, ts); err != nil {
+		if err := f.gw.MakeMetricDays(f.ctx, ts); err != nil {
 			f.t.Fatal(err)
 		}
 		mustExec(f.t, f.conn, storagetest.WideMetricInsert(`ts, owner_kind, `+col+`, metric_type_id, instance, provenance, value`,
@@ -118,6 +123,7 @@ func (f *pruneFixture) prune(lane string, before time.Time, limit int) int64 {
 // is stored, so a series still measured has a recent row, and one past its
 // window reads as no reading within retention. A re-run deletes nothing.
 func TestPruneSamplesKeepsDeclaredAndLatestRows(t *testing.T) {
+	t.Parallel()
 	f := newPruneFixture(t)
 	now := time.Now().UTC()
 	twoYears := now.Add(-2 * 365 * 24 * time.Hour)
@@ -163,6 +169,7 @@ func TestPruneSamplesKeepsDeclaredAndLatestRows(t *testing.T) {
 // statements of its own, and the chunk boundary loses nothing and spares the
 // row inside the window.
 func TestPruneSamplesCompletesABacklogInChunks(t *testing.T) {
+	t.Parallel()
 	f := newPruneFixture(t)
 	now := time.Now().UTC()
 	start := now.Add(-30 * 24 * time.Hour)
@@ -197,6 +204,7 @@ func TestPruneSamplesCompletesABacklogInChunks(t *testing.T) {
 // preference and not asserted. No writer gives a node a sample today and no index serves one, so the
 // node arc is left out until something writes one.
 func TestPruneSamplesReachesAnIndexOnEveryArc(t *testing.T) {
+	t.Parallel()
 	f := newPruneFixture(t)
 	want := map[string]map[string]string{
 		"property": {"component": "property_series_idx", "system": "property_system_owner_idx", "location": "property_location_owner_idx"},
@@ -262,6 +270,7 @@ func TestPruneSamplesReachesAnIndexOnEveryArc(t *testing.T) {
 // retention pass prunes by from the platform settings level, defaults filled,
 // so an admin's change is the next pass's window.
 func TestRetentionWindowsReadTheSettingsStore(t *testing.T) {
+	t.Parallel()
 	f := newPruneFixture(t)
 	w, err := f.gw.RetentionWindows(f.ctx)
 	if err != nil {
@@ -283,6 +292,7 @@ func TestRetentionWindowsReadTheSettingsStore(t *testing.T) {
 // table (never pruned) reads back by its command_id, however many rows came
 // after it.
 func TestPruneSamplesSparesWhatAReaderCallsLatest(t *testing.T) {
+	t.Parallel()
 	f := newPruneFixture(t)
 	now := time.Now().UTC()
 	mustExec(t, f.conn, `insert into command_type (name, label, target_property_type_id)
@@ -309,12 +319,13 @@ func TestPruneSamplesSparesWhatAReaderCallsLatest(t *testing.T) {
 	}
 }
 
-// TestPruneMetricSamplesReadOneMonthAtATime holds the metric prune's access
+// TestPruneMetricSamplesReadOneDayAtATime holds the metric prune's access
 // path (#1275): the lane's prune reads the one partition it is given and
-// deletes the rows it chose by TID, never a probe into another month; a typed
+// deletes the rows it chose by TID, never a probe into another day; a typed
 // prune walks its type's series through metric_series_type_idx and searches
 // each series' old rows through the partition's series index.
-func TestPruneMetricSamplesReadOneMonthAtATime(t *testing.T) {
+func TestPruneMetricSamplesReadOneDayAtATime(t *testing.T) {
+	t.Parallel()
 	f := newPruneFixture(t)
 	parts, err := f.gw.MetricPartitions(f.ctx)
 	if err != nil || len(parts) == 0 {
@@ -328,7 +339,7 @@ func TestPruneMetricSamplesReadOneMonthAtATime(t *testing.T) {
 	}
 	for _, s := range plan {
 		if strings.HasPrefix(s.Relation, "metric_p") && s.Relation != part {
-			t.Errorf("the lane prune of %s reads another month, %s:\n\t%s", part, s.Relation, plan)
+			t.Errorf("the lane prune of %s reads another day, %s:\n\t%s", part, s.Relation, plan)
 		}
 	}
 	tid := false

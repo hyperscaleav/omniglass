@@ -19,6 +19,7 @@ import (
 // within an accepted type's subtree, naming both what the component is and what
 // the role wants.
 func TestEffectiveRolesAndAssignment(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -209,6 +210,7 @@ func typedSlotSystem(t *testing.T, ctx context.Context, gw storage.Gateway, all 
 // 422-shaped error naming both parties in operator vocabulary, exactly the
 // touch-panel-into-a-display-slot example from the task brief.
 func TestAssignRefusesWrongType(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -250,6 +252,7 @@ func TestAssignRefusesWrongType(t *testing.T) {
 // a role that accepts "display" also accepts "interactive-display", one of
 // its declared children, without the role naming the subtype itself.
 func TestAssignAcceptsSubtype(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -292,6 +295,7 @@ func TestAssignAcceptsSubtype(t *testing.T) {
 // different product is refused naming the pinned products, and the pinned
 // product itself is accepted.
 func TestAssignProductPin(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -349,6 +353,7 @@ func TestAssignProductPin(t *testing.T) {
 // assigned to a second, and the refusal names both the component and the
 // role it already holds, not just the status.
 func TestSecondRoleSameComponentRefused(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -408,6 +413,7 @@ func TestSecondRoleSameComponentRefused(t *testing.T) {
 // carries today (Task 9 fixes that one; this test guards capacity from
 // inheriting it).
 func TestCapacitySurvivesUnrelatedEdit(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -449,6 +455,7 @@ func TestCapacitySurvivesUnrelatedEdit(t *testing.T) {
 // staffing, so it is refused at declare time rather than left to confuse an
 // operator staffing to quorum later.
 func TestCapacityBelowQuorumRefused(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -479,6 +486,7 @@ func TestCapacityBelowQuorumRefused(t *testing.T) {
 // ANY conforming system exceeds the new cap, even when the system that
 // triggered the edit would itself be fine.
 func TestLoweringCapacityBelowCountRefusedAcrossInheritingSystems(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

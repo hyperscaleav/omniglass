@@ -14,6 +14,7 @@ import (
 // enrollment_token column (the enrollment secret is a credential row now).
 // Skipped under -short.
 func TestNodeSchema(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

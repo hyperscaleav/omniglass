@@ -28,6 +28,7 @@ func locationTypeNamed(t *testing.T, gw storage.Gateway, name string) *storage.L
 // operator-owned (official=false), which is precisely why the seed could not
 // rewrite it and why a withdrawn value could never leave a fleet.
 func TestShippedLocationTypeForksAndRestores(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
@@ -122,6 +123,7 @@ func TestShippedLocationTypeForksAndRestores(t *testing.T) {
 // operator created is theirs outright, written in place with no shadow, and
 // restore has nothing to give it back.
 func TestOperatorLocationTypeIsUntouchedByTheFork(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
@@ -176,6 +178,7 @@ func TestOperatorLocationTypeIsUntouchedByTheFork(t *testing.T) {
 // as the missed withdrawal. What the raw statement leaves behind is exactly what
 // a fleet that booted the release carrying floor's rule holds today.
 func TestWithdrawnShippedValueLeavesTheFleet(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
@@ -208,6 +211,7 @@ func TestWithdrawnShippedValueLeavesTheFleet(t *testing.T) {
 // both landed is the generator, which is what a rule is FOR: a nameless create
 // mints a name while the rule stands and refuses once it is cleared.
 func TestClearNameRuleOnBothTypeKinds(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -287,6 +291,7 @@ func TestClearNameRuleOnBothTypeKinds(t *testing.T) {
 // was official), and activating it would have taken the contract editor away
 // for the four types a fleet actually uses.
 func TestShippedLocationTypeContractStaysWritable(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {

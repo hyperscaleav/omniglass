@@ -17,6 +17,7 @@ import (
 // alike, and a name shared in and out of scope resolves to the one in scope,
 // naming no other.
 func TestCalcPreviewSelectorInScope(t *testing.T) {
+	t.Parallel()
 	r := newEvalRig(t)
 	for _, loc := range []string{"east", "west"} {
 		if _, err := r.gw.CreateLocation(r.ctx, "", storage.LocationSpec{Name: loc, LocationType: "campus"}, r.all); err != nil {
@@ -68,6 +69,7 @@ func TestCalcPreviewSelectorInScope(t *testing.T) {
 // A preview holds no lock a save waits on (#998 review 2): a save proceeds
 // while a preview is held mid-computation.
 func TestCalcPreviewBlocksNoSave(t *testing.T) {
+	t.Parallel()
 	r := newEvalRig(t)
 	r.metric("room-temperature", "", 20)
 	held, release := make(chan struct{}), make(chan struct{})
@@ -110,6 +112,8 @@ func TestCalcPreviewBlocksNoSave(t *testing.T) {
 // holding one of its inputs (#998 review 4), and bounds its total reads
 // (review 3), saying so as truncation.
 func TestCalcPreviewOwnersAndWork(t *testing.T) {
+	// Serial: it lowers a package-level preview cap (a Set*Cap hook), which
+	// every parallel test would otherwise see.
 	r := newEvalRig(t)
 	for _, name := range []string{"bare-1", "bare-2"} {
 		if _, err := r.gw.CreateComponent(r.ctx, "", storage.ComponentSpec{Name: name}, r.all, r.all, r.all, r.all); err != nil {
@@ -145,6 +149,7 @@ func TestCalcPreviewOwnersAndWork(t *testing.T) {
 // A rule's pending depth counts only the owners the caller may read (#998
 // review 5).
 func TestCalcStatePendingDepthScoped(t *testing.T) {
+	t.Parallel()
 	r := newEvalRig(t)
 	other, err := r.gw.CreateComponent(r.ctx, "", storage.ComponentSpec{Name: "other-one"}, r.all, r.all, r.all, r.all)
 	if err != nil {

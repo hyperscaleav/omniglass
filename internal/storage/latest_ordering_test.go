@@ -28,6 +28,7 @@ import (
 // no basis for a regression test; the ordering rule it violates is exact and can
 // be stated in two rows.
 func TestCalculatedSeriesIsCurrentAtHighestID(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

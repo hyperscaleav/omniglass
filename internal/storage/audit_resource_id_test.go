@@ -98,6 +98,7 @@ func auditedRenames() []auditedRename {
 // for two addressings. The rename hazard is the whole risk here: the name IS the
 // address, which is exactly why the trail cannot also be keyed on it.
 func TestAuditResourceIDOnANameAddressedRegistry(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -148,6 +149,7 @@ func TestAuditResourceIDOnANameAddressedRegistry(t *testing.T) {
 // binds into, so that system's uuid is the key. The system name is a snapshot in
 // the row image, where a rename cannot break it.
 func TestAuditResourceIDOnAMembershipJoinRow(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newMemberFixture(t, ctx)
 
@@ -185,6 +187,7 @@ func TestAuditResourceIDOnAMembershipJoinRow(t *testing.T) {
 }
 
 func TestAuditResourceIDIsAlwaysThePrimaryKey(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
 	if err != nil {

@@ -9,10 +9,12 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/storage"
 	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // The spool's caps (#454): how many batches, how many encoded bytes, and how
@@ -135,6 +137,7 @@ func newTelemetrySpool(subject string, publish publishFunc) *telemetrySpool {
 // spool is holding. It never waits on the stream; it fails only on a batch it
 // cannot encode.
 func (s *telemetrySpool) send(ev *ogv1.TelemetryBatch) error {
+	stampMetricMillis(ev)
 	b, err := proto.Marshal(ev)
 	if err != nil {
 		return fmt.Errorf("node: marshal telemetry batch: %w", err)
@@ -152,6 +155,23 @@ func (s *telemetrySpool) send(ev *ogv1.TelemetryBatch) error {
 		s.tellOverflowStart()
 	}
 	return nil
+}
+
+// stampMetricMillis puts every metric sample of ev on its own ts, whole
+// milliseconds (#1526): a sample with no ts takes the batch's, and a batch with
+// neither is left for the ingest to stamp. Done where every batch leaves the
+// node, so no probe, driver or session has to remember to. The other lanes, and
+// the batch's own ts, are sent as they were.
+func stampMetricMillis(ev *ogv1.TelemetryBatch) {
+	for _, m := range ev.GetMetrics() {
+		ts := m.GetTs()
+		if ts == nil {
+			ts = ev.GetTs()
+		}
+		if ts != nil {
+			m.Ts = timestamppb.New(storage.MetricTime(ts.AsTime()))
+		}
+	}
 }
 
 // tellOverflowStart says, once per overflow, that the spool began dropping.

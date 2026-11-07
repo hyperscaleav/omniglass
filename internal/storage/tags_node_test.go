@@ -15,6 +15,7 @@ import (
 // CASCADE of a node's bindings is declared in the migration and exercised by
 // DeleteNode (N3).
 func TestNodeTags(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

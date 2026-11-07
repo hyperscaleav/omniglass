@@ -23,6 +23,7 @@ import (
 // and then migrates forward over them. The REAL migration file runs, not a
 // copy of its SQL, so the two cannot drift.
 func TestComponentOrdinalBackfill(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	if err := migrate.RollbackBelow(dsn, "20260810091000"); err != nil {
 		t.Fatalf("roll back below the ordinal backfill: %v", err)

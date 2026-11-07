@@ -74,6 +74,7 @@ const snmpSpec = `{
 }`
 
 func TestDriverSpecRefusesAtWrite(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -124,6 +125,7 @@ func TestDriverSpecRefusesAtWrite(t *testing.T) {
 }
 
 func TestAttachDriverAuthorsTheEndpointAndDerivesTasks(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -240,6 +242,7 @@ func TestAttachDriverAuthorsTheEndpointAndDerivesTasks(t *testing.T) {
 }
 
 func TestAttachDriverListenerDerivesAStandingTask(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -294,6 +297,7 @@ func TestAttachDriverListenerDerivesAStandingTask(t *testing.T) {
 }
 
 func TestAttachDriverRefusals(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -404,6 +408,7 @@ func TestAttachDriverRefusals(t *testing.T) {
 // Delivery rides the per-node worklist subject, whose NATS grant is the
 // isolation boundary; the attach audit row is the record of the binding.
 func TestNodeWorklistDeliversSecretInputs(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -480,6 +485,7 @@ func TestNodeWorklistDeliversSecretInputs(t *testing.T) {
 // send operators chasing a credential that exists. The node keeps its last-good
 // worklist on a failed pull and retries.
 func TestNodeWorklistPropagatesUnsealFailure(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -537,6 +543,7 @@ func TestNodeWorklistPropagatesUnsealFailure(t *testing.T) {
 // them dispatched (redelivered only after silence), and records the execution
 // report once, under the same per-node confinement the worklist carries.
 func TestCommandWireDelivery(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -695,6 +702,7 @@ func TestCommandWireDelivery(t *testing.T) {
 // out-of-scope secret and an admin-sensitive one (without the admin tier) both
 // refuse indistinguishably from an absent one, with no existence-or-type oracle.
 func TestAttachScopesSecretReference(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -773,6 +781,7 @@ func TestAttachScopesSecretReference(t *testing.T) {
 // the credential to a target the inputs never named). The host and port inputs
 // are the write path for its address, in place (the #1061 ruling).
 func TestUpdateEndpointRefusesDriverParams(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

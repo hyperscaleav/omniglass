@@ -17,6 +17,7 @@ import (
 // through the gateway nor inserted past the schema CHECK. Variables keep
 // their system band; this is secret-only.
 func TestSecretSystemBandRetired(t *testing.T) {
+	t.Parallel()
 	gw, dsn := secretGateway(t)
 	ctx := context.Background()
 	all := scope.Set{All: true}

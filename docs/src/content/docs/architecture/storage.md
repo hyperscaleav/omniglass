@@ -19,10 +19,11 @@ per-call `scope.Set` argument; seed and system callers pass an all-scope set. An
 lands in one transaction under its receipt (`telemetry_receipt`), so a redelivery lands each row
 once while `metric` / `property` carry no uniqueness key of their own
 ([ADR-0311](/architecture/decisions/#adr-0311-a-telemetry-batch-lands-once-in-one-transaction-under-its-receipt)).
-The metric lane is narrow and partitioned by month: a sample row is `(id, series_id, ts, value)`,
+The metric lane is narrow and partitioned by UTC day: a sample row is `(id, series_id, ts, value)`,
 what it is a sample of is one `metric_series` row, and a command's intended rows live apart in
 `metric_declared` ([below](#the-narrow-metric-lane),
-[ADR-1275](/architecture/decisions/#adr-1275-the-metric-lane-is-narrow-rows-on-a-series-dimension-partitioned-by-month)). Current values are derived
+[ADR-1275](/architecture/decisions/#adr-1275-the-metric-lane-is-narrow-rows-on-a-series-dimension-partitioned-by-month),
+[ADR-1527](/architecture/decisions/#adr-1527-the-metric-lane-is-partitioned-by-utc-day)). Current values are derived
 from the series (latest row per series); the maintained latest-value cache retired
 ([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)),
 and the server prunes `metric` and `property` samples to their retention windows above the
@@ -238,27 +239,74 @@ The lane is three tables:
   owner or a type removes its series (`on delete cascade`).
 - **`metric`**, the hot tier: `(id, series_id, ts, value)`, plus a calculated sample's rule
   lineage in nullable columns that cost nothing when empty. Observed and calculated samples only.
-  Range partitioned by month on `ts` from birth, with one btree, `(series_id, ts desc, id desc)`,
+  Range partitioned by UTC day on `ts`, with one btree, `(series_id, ts desc, id desc)`,
   and block range indexes on `id` and `ts`. It has no primary key and no foreign key to the
   series: a deleted owner's samples are invisible to every reader (each joins the series) and
-  leave with their month or the next retention pass.
+  leave with their day or the next retention pass.
 - **`metric_declared`**, the declared tier: a command's intended rows, with their command and
   event lineage, never pruned.
 
 A batch lands its metric lane in one statement still ([ADR-1274](/architecture/decisions/#adr-1274-a-batch-lands-its-metric-lane-in-one-statement-except-a-series-it-carries-twice)):
 the statement finds each sample's series, or starts it, and inserts the samples. A series'
-newest sample is an index probe of each month's series index, newest month first, stopping at
+newest sample is an index probe of each day's series index, newest day first, stopping at
 the first that holds one. The `make footprint` harness measures the row at about 60 bytes of
 heap and 40 of index after `REINDEX` (126 and 91 before).
 
-**Partitions roll by the server.** The server keeps a partition for this month and the next two:
-it checks at boot, before its ingest starts, and refuses to start when it cannot, and again on
-every retention pass. A partition is created detached and then attached, so the parent is held
-only at `SHARE UPDATE EXCLUSIVE`, under a five-second lock timeout. A sample whose month has no
-partition (a late roll, a node clock far out) is not a refused write: the batch's months are made
-and it lands, and a batch that misses again is redelivered, never dropped (#420). A month is UTC.
+**Partitions roll by the server.** The server keeps a partition for today and the next three days
+([ADR-1527](/architecture/decisions/#adr-1527-the-metric-lane-is-partitioned-by-utc-day)), at boot
+before its ingest starts and again on every retention pass. After making any day that is missing,
+it reads the partitions back and refuses unless they cover every instant from the start of today
+through the end of the third day ahead, naming the first one uncovered; the boot starts no consumer
+over a refusal. A partition is created detached and then attached, so the parent is held only at
+`SHARE UPDATE EXCLUSIVE`, under a five-second lock timeout. A sample whose day has no partition (a
+late roll, a batch across midnight, a node clock far out) is not a refused write: the batch's days
+are made and it lands, and a batch that misses again is redelivered, never dropped (#420). A day is
+UTC.
 
 `property` is not partitioned: its rows are transitions, sparse by construction.
+
+**Hourly trends beside the samples.** Beside the hot tier is the trend tier, `metric_trend`: one row
+per observed series per UTC hour holding the hour's count, minimum, maximum, sum, first and last
+value, so a chart beyond the hot window still draws every hour, a one-sample spike surviving as its
+hour's maximum ([ADR-1276](/architecture/decisions/#adr-1276-hourly-trends-close-an-hour-a-day-after-it-ends-and-hold-back-the-prune)).
+The retention pass writes them by **compaction**: it closes each hour that ended a day ago (the
+late-data horizon, past the node spool's replay), up to 48 hours a pass, oldest first. Calculated
+series are not compacted (they are sparse already), and properties have no trends.
+
+- **Two marks.** `metric_trend_mark` holds how far the compaction has announced it will close hours
+  (`announced_through`) and how far it has folded them (`compacted_through`). A pass moves the
+  announced mark first, then folds each hour in a transaction of its own that moves the compacted
+  mark past it, so a pass cancelled or failed anywhere leaves no hour skipped: the next pass folds
+  from the compacted mark. The first pass starts at the oldest day the hot tier holds or the longest
+  window back from now, whichever is later, so an upgrade does not fold years of hours.
+- **A lock for the writes in flight.** Every metric insert reads the announced mark through
+  `metric_trend_announced()`, which first takes the `metric_trend:announce` advisory lock shared until
+  the insert commits. After announcing, the compaction takes the lock exclusive and lets it go at
+  once: that waits for every insert that may have read the old mark, and every insert after it reads
+  the new one, so each sample lands either before the fold or as a late one. Only metric inserts take
+  the lock, so a long transaction of any other kind, or in another database, never stalls the
+  compaction or the prune behind it; an insert holding the lock past 5 seconds fails the pass, which
+  the next pass retries. The sample write and the compaction's transactions run at READ COMMITTED
+  whatever the server's `default_transaction_isolation`: each reads, after the lock is granted, what
+  committed before it.
+- **The ingest can wait on the compaction.** While the compaction waits for the lock exclusive, a new
+  metric insert queues behind it, so a batch can stall up to 5 seconds per attempt when an insert ahead
+  of it holds the lock that long, and for the length of one recompute chunk (below). Most passes take
+  the lock for milliseconds, and a pass with no hour to close and no hour dirtied takes it not at all.
+- **A late sample recomputes its hour.** A sample landing in an announced hour (a spool replayed past
+  the horizon) marks its series' hour in `metric_trend_dirty` in its own insert, and a compaction
+  folds that hour again from its samples once the hour is folded. An on-time sample marks nothing. A late sample already past
+  its type's window does not reach the trend. The recompute takes the trend lock exclusive too, up to
+  500 dirtied hours a transaction, before it reads the samples: a second late batch into an hour
+  already marked finds the mark there and locks no row, so the lock alone keeps the recompute from
+  clearing the mark and folding the hour without that batch.
+- **The prune waits for the trend.** The metric prune and the day drop never pass the compacted
+  mark, so no hour leaves the hot tier before its trend exists.
+
+Trends are kept for `retention.trend_days` (730 by default) and pruned a chunk at a time, a window of
+their own: nothing forces it to exceed `retention.metric_days`, so a trend can go before its samples. A trend row
+costs about 145 bytes with its key, about 3.5 KB per series per day. Reading trends beyond the hot
+window is the bucketed series read (#1269).
 
 ## The lineage CHECK (the pattern)
 
@@ -339,8 +387,8 @@ The server prunes the two sample tables to a window each
 ([ADR-0417](/architecture/decisions/#adr-0417-the-server-prunes-each-sample-lane-to-a-window-in-bounded-chunks)):
 `metric` to `retention.metric_days` (14 by default) and `property` to `retention.property_days`
 (90), install-wide settings an admin changes on the console's Settings page (a platform-domain
-namespace that any signed-in caller reads). `retention.trend_days` (730) waits for the hourly
-trends of #1276. Each window is whole days from 1 to 36,500. The pass runs at server start, beside
+namespace that any signed-in caller reads), and the hourly trends to `retention.trend_days` (730,
+[above](#the-narrow-metric-lane)). Each window is whole days from 1 to 36,500. The pass runs at server start, beside
 the receipt prune, and again an hour later, or a minute later while a lane is behind.
 
 Every prune goes through the **`PruneSamples`** gateway primitive, which carries the one
@@ -370,16 +418,19 @@ rows, each statement its own short transaction. The cutoff applies first. On the
 statement takes one owner arc, and each old row's check for a newer row of its series is a scalar
 subquery limited to one row, which stays a per-row index search (an `EXISTS` can be flattened into
 a hash over the whole table) through `property_series_idx` for a component and the owner indexes
-for a system or a location. On the metric lane a statement takes one month, oldest first, and
+for a system or a location. On the metric lane a statement takes one day, oldest first, and
 deletes the rows it chose by TID; a type with a window of its own walks its series and searches
 each one's old rows through the series index. A pass removes at most 40 chunks of 5,000 rows a
 lane and names any lane it left behind, and the next pass comes a minute later.
 
-**A month past every window is dropped whole.** Before the chunks, the pass drops each metric
-month that lies wholly before the metric window and before every type's own window, so a type kept
-longer keeps its months. It detaches the month `CONCURRENTLY` (waiting for the readers already in it
-rather than queueing every reader behind an exclusive lock) and then drops it, and finishes a detach
-an earlier pass left halfway. The chunked prune keeps the window exact inside the months that remain.
+**A day past every window is dropped whole.** Before the chunks, the pass drops each metric day
+that lies wholly before the metric window and the trend's compacted mark, unless it holds a sample
+of a type whose own window still reaches into it: a type kept longer keeps the days its samples are
+in, and only those
+([ADR-1527](/architecture/decisions/#adr-1527-the-metric-lane-is-partitioned-by-utc-day)). It
+detaches the day `CONCURRENTLY` (waiting for the readers already in it rather than queueing every
+reader behind an exclusive lock) and then drops it, and finishes a detach an earlier pass left
+halfway. The chunked prune keeps every window exact inside the days that remain.
 On the property lane, finding the old rows reads every page the `ts` BRIN cannot rule out, which
 reused pages widen over time: hence the hourly steady state.
 

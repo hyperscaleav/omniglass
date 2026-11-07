@@ -26,6 +26,7 @@ const ruleDedupKeyVersion = "20261021050000"
 // refuses, a taken name is a conflict, an illegal name is invalid, and a
 // bounded grant is forbidden.
 func TestRuleRename(t *testing.T) {
+	t.Parallel()
 	r := newEdgeRig(t)
 	r.rule(storage.EventRuleSpec{Name: "before", Severity: "high", ClearEventType: "condition-ended"})
 	id := r.ruleID()
@@ -118,6 +119,7 @@ func TestRuleRename(t *testing.T) {
 // TestRuleRenameKeepsStreaks proves a rename is not a material change: a
 // streak waiting out its sustain keeps running.
 func TestRuleRenameKeepsStreaks(t *testing.T) {
+	t.Parallel()
 	r := newEdgeRig(t)
 	r.rule(storage.EventRuleSpec{Name: "slow", Severity: "high", FireSustain: time.Hour})
 	r.observe("tcp", "down")
@@ -144,6 +146,7 @@ func TestRuleRenameKeepsStreaks(t *testing.T) {
 // they are, restores the names on the way down, and changes nothing on a
 // second run.
 func TestRuleDedupKeyMigration(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -203,6 +206,7 @@ func TestRuleDedupKeyMigration(t *testing.T) {
 // recovery clears it with the clear event carrying it. Raised with no
 // condition row, a recovery still clears it. A disable clears one too.
 func TestRuleLegacyKeyAlarmIsTheRules(t *testing.T) {
+	t.Parallel()
 	r := newEdgeRig(t)
 	r.rule(storage.EventRuleSpec{Name: "legacy", Severity: "high", ClearEventType: "condition-ended"})
 	legacy := func(instance string, condition bool) string {
@@ -277,6 +281,7 @@ func TestRuleLegacyKeyAlarmIsTheRules(t *testing.T) {
 // in the rule namespace (#977): a rule: prefix would let a hand raise stand
 // in for, or be cleared as, a rule's condition.
 func TestHandRaiseRefusesARuleKey(t *testing.T) {
+	t.Parallel()
 	r := newEdgeRig(t)
 	for _, key := range []string{"rule:x", "rule:"} {
 		if _, err := r.f.gw.RaiseAlarm(r.ctx, "", "bar-1", storage.AlarmSpec{Severity: "high", Message: "m", DedupKey: key}); !errors.Is(err, storage.ErrAlarmInvalid) {

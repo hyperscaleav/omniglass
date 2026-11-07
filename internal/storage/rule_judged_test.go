@@ -18,6 +18,7 @@ import (
 // rule does not judge (its rule disabled, its component not selected, older
 // than its series' newest) stamps nothing.
 func TestRuleLastJudged(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx, all := context.Background(), scope.Set{All: true}
 	if _, err := f.gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "other-c"}, all, all, all, all); err != nil {
@@ -108,6 +109,7 @@ func TestRuleLastJudged(t *testing.T) {
 // A batch never queues on a rule's stamp: while another transaction holds
 // the stamp row, a batch past the bound skips it and commits at once.
 func TestRuleStampNeverWaits(t *testing.T) {
+	t.Parallel()
 	r := newStreakRig(t, "busy", 0)
 	ctx := context.Background()
 	r.observe(t, "tcp", "down", time.Now().UTC())

@@ -26,6 +26,7 @@ import (
 // instead, holding both open across the decision point, which is the only way to
 // land in the window every run.
 func TestFirstMembershipRaceIsSerialized(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -118,7 +119,7 @@ func TestFirstMembershipRaceIsSerialized(t *testing.T) {
 		var n int
 		if err := watcher.QueryRow(ctx, `
 			select count(*) from pg_stat_activity
-			where wait_event_type = 'Lock' and state = 'active' and pid <> pg_backend_pid()`).Scan(&n); err != nil {
+			where datname = current_database() and wait_event_type = 'Lock' and state = 'active' and pid <> pg_backend_pid()`).Scan(&n); err != nil {
 			t.Fatalf("watch: %v", err)
 		}
 		if n > 0 {

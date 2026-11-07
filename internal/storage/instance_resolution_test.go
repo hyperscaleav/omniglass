@@ -21,6 +21,7 @@ import (
 // worst-case (any instance disagreeing with want), and the answer names the
 // instance it came from. `told` is the newest intended row across instances.
 func TestReconciliationResolvesEveryObservedInstance(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -115,6 +116,7 @@ func TestReconciliationResolvesEveryObservedInstance(t *testing.T) {
 // owner in drift on what a removed connection once saw. An instance a push
 // sender names is the sender's own and keeps counting (ADR-0456).
 func TestReconciliationLeavesOutARetiredObserver(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -181,6 +183,7 @@ func TestReconciliationLeavesOutARetiredObserver(t *testing.T) {
 // intended rows' own index, so a command that named an endpoint's instance,
 // whose series also holds every observation of it, costs no filtering either.
 func TestToldReadsOnlyTheInstancesCommandsNamed(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -279,6 +282,7 @@ func rowsRemovedByFilter(t *testing.T, plan string) int {
 // off because the fixture's tables are tiny, as TestSeriesNewestIsAnIndexProbe
 // does for the one-series read.
 func TestLatestPerInstanceIsAnIndexWalk(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -309,7 +313,7 @@ func TestLatestPerInstanceIsAnIndexWalk(t *testing.T) {
 		}
 		rows.Close()
 		// On the metric lane (#1275) the walk is the owner's series of the key,
-		// through the series key, and the newest probe each month's series index.
+		// through the series key, and the newest probe each day's series index.
 		if tc.lane == "metric" && !strings.Contains(plan, "metric_series_key") {
 			t.Errorf("the metric lane's per-instance read does not find its series through metric_series_key:\n%s", plan)
 		}

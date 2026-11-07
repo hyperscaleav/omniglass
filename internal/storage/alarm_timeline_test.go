@@ -15,6 +15,7 @@ import (
 // the rule, or the person who acted. An alarm on another component, or an
 // id that names no alarm, is not found.
 func TestAlarmTimeline(t *testing.T) {
+	t.Parallel()
 	r := newEdgeRig(t)
 	editor := r.editor()
 	r.rule(storage.EventRuleSpec{Name: "timed", Severity: "high", Message: "bar unreachable", ClearEventType: "condition-ended"})

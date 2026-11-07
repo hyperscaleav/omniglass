@@ -18,6 +18,7 @@ func self(ids ...string) scope.Set { return scope.Set{SelfIDs: ids} }
 // version, what was missing or skipped, and whether it is pending; an
 // out-of-scope member shows as a count, never a name.
 func TestCalcRuleState(t *testing.T) {
+	t.Parallel()
 	r := newSystemRig(t)
 	r.assign("sys-1", "left", "m1")
 	r.assign("sys-1", "right", "m2")
@@ -108,6 +109,8 @@ func (r *evalRig) tableCounts() string {
 // from the current output; missing and skipped inputs; bounded by the owner
 // cap; and a candidate that could not be saved is refused as a save would be.
 func TestCalcPreview(t *testing.T) {
+	// Serial: it lowers a package-level preview cap (a Set*Cap hook), which
+	// every parallel test would otherwise see.
 	r := newSystemRig(t)
 	r.assign("sys-1", "left", "m1")
 	r.assign("sys-1", "right", "m2")
@@ -196,6 +199,7 @@ func TestCalcPreview(t *testing.T) {
 // component or a system links to the rule that derived it, and each rule
 // reads its live counts on the owners the caller may read.
 func TestCalcLineageAndCounts(t *testing.T) {
+	t.Parallel()
 	r := newSystemRig(t)
 	r.assign("sys-1", "left", "m1")
 	r.temp("m1", "", 20)

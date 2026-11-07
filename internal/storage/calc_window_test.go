@@ -26,6 +26,7 @@ func windowSpec(name string, seconds int) storage.CalcRuleSpec {
 // key's samples in its window, so avg(t) is their mean, a sample older than
 // the window is left out, and the window is kept on the rule as written.
 func TestCalcWindowAverages(t *testing.T) {
+	t.Parallel()
 	r := newEvalRig(t)
 	now := time.Now()
 	r.metricAt("room-temperature", 100, now.Add(-time.Hour+time.Minute)) // outside a 5m window
@@ -59,6 +60,7 @@ func TestCalcWindowAverages(t *testing.T) {
 // without the sample. A window left empty writes nothing and says its input
 // is missing, as a key with no value does.
 func TestCalcWindowAgesOut(t *testing.T) {
+	t.Parallel()
 	r := newEvalRig(t)
 	if _, err := r.create(windowSpec("temp-3s", 3)); err != nil {
 		t.Fatal(err)
@@ -102,6 +104,7 @@ func TestCalcWindowAgesOut(t *testing.T) {
 // newest MaxCalcWindowSamples samples in it are reduced, the older ones left
 // out.
 func TestCalcWindowBounded(t *testing.T) {
+	t.Parallel()
 	r := newEvalRig(t)
 	n := rules.MaxCalcWindowSamples + 5
 	base := time.Now().Add(-time.Duration(n) * time.Millisecond)
@@ -126,6 +129,7 @@ func TestCalcWindowBounded(t *testing.T) {
 // system rule, is refused at write on its field (#1142), on create and on
 // update.
 func TestCalcWindowRefused(t *testing.T) {
+	t.Parallel()
 	r := newEvalRig(t)
 	for name, spec := range map[string]storage.CalcRuleSpec{
 		"over an hour": windowSpec("too-long", 3601),
@@ -152,6 +156,8 @@ func TestCalcWindowRefused(t *testing.T) {
 // mean, and that a windowed input weighs on the preview's work cap as the
 // range read it is, not as one current-value read (#1142 review).
 func TestCalcWindowPreview(t *testing.T) {
+	// Serial: it lowers a package-level preview cap (a Set*Cap hook), which
+	// every parallel test would otherwise see.
 	r := newEvalRig(t)
 	other, err := r.gw.CreateComponent(r.ctx, "", storage.ComponentSpec{Name: "calc-other"}, r.all, r.all, r.all, r.all)
 	if err != nil {
@@ -190,6 +196,7 @@ func TestCalcWindowPreview(t *testing.T) {
 // row is half a day old, and a rule still producing it keeps a value within
 // any window a metric type may keep; a younger unchanged result writes nothing.
 func TestASteadyMetricOutputStaysWithinRetention(t *testing.T) {
+	t.Parallel()
 	r := newEvalRig(t)
 	now := time.Now()
 	r.metricAt("room-temperature", 20, now.Add(-time.Minute))
@@ -201,6 +208,11 @@ func TestASteadyMetricOutputStaysWithinRetention(t *testing.T) {
 	r.drain()
 	if got := r.calculated("avg-temp"); len(got) != 1 {
 		t.Fatalf("avg-temp rows %v, want one: an unchanged result inside half a day writes nothing", got)
+	}
+	// Thirteen hours back may be yesterday, a day the install has no
+	// partition for yet.
+	if err := r.gw.MakeMetricDays(r.ctx, now.Add(-14*time.Hour)); err != nil {
+		t.Fatal(err)
 	}
 	if _, err := r.conn.Exec(r.ctx, `update metric set ts = ts - interval '13 hours'
 		where series_id in (select id from metric_series where provenance = 'calculated')`); err != nil {

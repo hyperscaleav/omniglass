@@ -13,6 +13,7 @@ import (
 // the boot-seed contract), and ListLocationTypes returns them alphabetically by
 // label.
 func TestLocationTypeRegistry(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 

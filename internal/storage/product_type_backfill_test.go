@@ -36,6 +36,7 @@ func backfillUpSQL(t *testing.T) string {
 // its connection; running its SQL text again (twice, for good measure) must
 // change nothing.
 func TestBackfillIdempotent(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	// Stand the database just below #613's rename. The migration under test
 	// names `display_name`, which is what the column is called for every

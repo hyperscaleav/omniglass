@@ -37,6 +37,7 @@ func openGateway(t *testing.T) storage.Gateway {
 // name, because component_location_name_key is keyed on (location_id, name),
 // not name alone.
 func TestSameNameTwoRooms(t *testing.T) {
+	t.Parallel()
 	gw := openGateway(t)
 	ctx := context.Background()
 
@@ -74,6 +75,7 @@ func TestSameNameTwoRooms(t *testing.T) {
 // components placed at the SAME room may not share a name, because they land
 // in the identical (location_id, name) bucket.
 func TestSameNameSameRoomRefused(t *testing.T) {
+	t.Parallel()
 	gw := openGateway(t)
 	ctx := context.Background()
 
@@ -95,6 +97,7 @@ func TestSameNameSameRoomRefused(t *testing.T) {
 // NULL AND location_id IS NULL. Two components (or systems) with neither a
 // parent nor a location still collide.
 func TestSameNameUnplacedRefused(t *testing.T) {
+	t.Parallel()
 	gw := openGateway(t)
 	ctx := context.Background()
 
@@ -119,6 +122,7 @@ func TestSameNameUnplacedRefused(t *testing.T) {
 // share a name no matter how unrelated they are, unlike a nested location
 // under two different parents.
 func TestRootLocationNamesGloballyUnique(t *testing.T) {
+	t.Parallel()
 	gw := openGateway(t)
 	ctx := context.Background()
 
@@ -141,6 +145,7 @@ func TestRootLocationNamesGloballyUnique(t *testing.T) {
 // generic ErrLocationExists sentinel or a mismatched constraint name in
 // mapLocationWriteErr's 23505 switch.
 func TestSubLocationScopesToParent(t *testing.T) {
+	t.Parallel()
 	gw := openGateway(t)
 	ctx := context.Background()
 
@@ -175,6 +180,7 @@ func TestSubLocationScopesToParent(t *testing.T) {
 // under different parents are both legal; two named "port-1" under the SAME
 // parent are not.
 func TestSubComponentScopesToParent(t *testing.T) {
+	t.Parallel()
 	gw := openGateway(t)
 	ctx := context.Background()
 
@@ -211,6 +217,7 @@ func TestSubComponentScopesToParent(t *testing.T) {
 // thing under two DIFFERENT root systems would both fall into the orphan
 // bucket and collide if the parent bucket did not exist.
 func TestSiblingSubsystemsUnderDifferentParentsBothLegal(t *testing.T) {
+	t.Parallel()
 	gw := openGateway(t)
 	ctx := context.Background()
 
@@ -236,6 +243,7 @@ func TestSiblingSubsystemsUnderDifferentParentsBothLegal(t *testing.T) {
 }
 
 func TestSiblingSubsystemsSameParentRefused(t *testing.T) {
+	t.Parallel()
 	gw := openGateway(t)
 	ctx := context.Background()
 
@@ -256,6 +264,7 @@ func TestSiblingSubsystemsSameParentRefused(t *testing.T) {
 // identity outside any placement, so node_name_key stays a plain global
 // UNIQUE(name) rather than gaining placement buckets.
 func TestNodeNameStaysGlobal(t *testing.T) {
+	t.Parallel()
 	gw := openGateway(t)
 	ctx := context.Background()
 
@@ -277,6 +286,7 @@ func TestNodeNameStaysGlobal(t *testing.T) {
 // single resolved row) could not do better: scopedByName picked whichever row
 // sorted first and would have raised ErrAmbiguousName before scope ever ran.
 func TestNameAmbiguousGloballyButUniqueToCallerResolvesCleanly(t *testing.T) {
+	t.Parallel()
 	gw := openGateway(t)
 	ctx := context.Background()
 
@@ -326,6 +336,7 @@ func TestNameAmbiguousGloballyButUniqueToCallerResolvesCleanly(t *testing.T) {
 // every one of them. The last two now take a resolved id instead (#749), so
 // they are driven that way below and no longer resolve a name at all.
 func TestOwnerScopedReadsResolveAmbiguousNameWithinScope(t *testing.T) {
+	t.Parallel()
 	gw := openGateway(t)
 	ctx := context.Background()
 
@@ -445,6 +456,7 @@ func TestOwnerScopedReadsResolveAmbiguousNameWithinScope(t *testing.T) {
 // "edge", entirely outside campus's subtree, proves the out-of-scope row never
 // appears in Candidates.
 func TestAmbiguousNameCandidatesNeverLeakOutOfScopeRow(t *testing.T) {
+	t.Parallel()
 	gw := openGateway(t)
 	ctx := context.Background()
 
@@ -498,6 +510,7 @@ func TestAmbiguousNameCandidatesNeverLeakOutOfScopeRow(t *testing.T) {
 // name taken in one room is reported free at a different one, and taken
 // wherever it collides with the same bucket.
 func TestCheckNameIsScopedToPlacement(t *testing.T) {
+	t.Parallel()
 	gw := openGateway(t)
 	ctx := context.Background()
 
@@ -564,6 +577,7 @@ func TestCheckNameIsScopedToPlacement(t *testing.T) {
 // because no scope narrower than "all" ever meaningfully applies to a
 // cross-tier reference from these call sites.
 func TestScopedCreateBindsCrossTierSystemAndLocation(t *testing.T) {
+	t.Parallel()
 	gw := openGateway(t)
 	ctx := context.Background()
 
@@ -644,6 +658,7 @@ func TestScopedCreateBindsCrossTierSystemAndLocation(t *testing.T) {
 // refusal. A scoped principal that can read the component must still see the
 // system band its own tags cascade includes.
 func TestResolveTagsSystemBandSurvivesScopedCaller(t *testing.T) {
+	t.Parallel()
 	gw := openGateway(t)
 	ctx := context.Background()
 
@@ -701,6 +716,7 @@ func TestResolveTagsSystemBandSurvivesScopedCaller(t *testing.T) {
 // TestUnassignRoleResolvesFleetWideDuplicateWithinOccupancy and
 // TestUnassignRoleStillRefusesWhenBothDuplicatesOccupyTheSameRole below cover it.
 func TestAssignRoleComponentAmbiguityNeverLeaksCandidates(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
@@ -794,6 +810,7 @@ func TestAssignRoleComponentAmbiguityNeverLeaksCandidates(t *testing.T) {
 // from the bare name alone, exactly the string the wire's own AssignedTo
 // gives a caller (internal/api's EffectiveRoleBody.AssignedTo, names only).
 func TestUnassignRoleResolvesFleetWideDuplicateWithinOccupancy(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
@@ -870,6 +887,7 @@ func TestUnassignRoleResolvesFleetWideDuplicateWithinOccupancy(t *testing.T) {
 // occupants" no longer holds, and the fix must still refuse ambiguously
 // rather than silently picking whichever row sorted first.
 func TestUnassignRoleStillRefusesWhenBothDuplicatesOccupyTheSameRole(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
@@ -934,6 +952,7 @@ func TestUnassignRoleStillRefusesWhenBothDuplicatesOccupyTheSameRole(t *testing.
 // form SystemMemberBody.component gives a caller (internal/api/members.go),
 // even though the same name is ambiguous fleet-wide.
 func TestRemoveMemberResolvesFleetWideDuplicateWithinMembership(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
@@ -1010,6 +1029,7 @@ func TestRemoveMemberResolvesFleetWideDuplicateWithinMembership(t *testing.T) {
 // a dotted address too (loadByRef parses one), which is what makes the listed
 // answer actionable rather than only informative.
 func TestAPlacementBindNamesTheCandidatesItMatched(t *testing.T) {
+	t.Parallel()
 	gw := openGateway(t)
 	ctx := context.Background()
 
@@ -1062,6 +1082,7 @@ func TestAPlacementBindNamesTheCandidatesItMatched(t *testing.T) {
 // it the 422 it is. path_body_ref_test.go drives the same fold through every
 // other call site; this one pins it on the seam the redaction just left.
 func TestAPlacementBindStillFoldsAPathMiss(t *testing.T) {
+	t.Parallel()
 	gw := openGateway(t)
 	ctx := context.Background()
 

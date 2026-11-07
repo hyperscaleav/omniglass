@@ -70,6 +70,7 @@ func liveTables(t *testing.T) map[string]bool {
 // content hash, a task's derived id) or a closed vocabulary the platform
 // declares (ShapeFixedKey).
 func TestADeclaredShapeAgreesWithThePrimaryKey(t *testing.T) {
+	t.Parallel()
 	pks := primaryKeys(t)
 	for table, id := range storage.IdentityShapes {
 		pk, ok := pks[table]
@@ -111,6 +112,7 @@ func TestADeclaredShapeAgreesWithThePrimaryKey(t *testing.T) {
 // rather than the declaration's own prose, exactly as the primary-key guard
 // above does.
 func TestADeclaredIDOnlyTableCarriesNoName(t *testing.T) {
+	t.Parallel()
 	cols := columnsByTable(t)
 	for table, id := range storage.IdentityShapes {
 		if id.Shape != storage.ShapeIDOnly {
@@ -150,6 +152,7 @@ func TestADeclaredIDOnlyTableCarriesNoName(t *testing.T) {
 //  3. A table NOBODY names carries no label. There is no name for an unset label
 //     to fall back to, so the column could only render a blank row.
 func TestEveryNamedTableCarriesALabelOrSaysWhyNot(t *testing.T) {
+	t.Parallel()
 	cols := columnsByTable(t)
 	has := func(table string) bool {
 		for _, c := range cols[table] {
@@ -273,6 +276,7 @@ func primaryKeys(t *testing.T) map[string][]schemaColumn {
 // than leaning on CI, and because a contributor who edits the declaration should
 // learn it needs regenerating before they push.
 func TestIdentityShapesMatchesCommitted(t *testing.T) {
+	t.Parallel()
 	fresh, err := storage.IdentityShapesJSON()
 	if err != nil {
 		t.Fatalf("IdentityShapesJSON: %v", err)
@@ -288,6 +292,7 @@ func TestIdentityShapesMatchesCommitted(t *testing.T) {
 }
 
 func TestEveryTableHasADeclaredIdentityShape(t *testing.T) {
+	t.Parallel()
 	live := liveTables(t)
 
 	var undeclared []string
@@ -347,6 +352,7 @@ func TestEveryTableHasADeclaredIdentityShape(t *testing.T) {
 // This exists because the two used to be independent lists. Sixteen tables were
 // classified, ten were proved, and nothing noticed the six in between.
 func TestEveryKeyBearingTableIsProved(t *testing.T) {
+	t.Parallel()
 	proved := provedByCreateTables()
 	for table, id := range storage.IdentityShapes {
 		// Both name-bearing shapes, not just one. Checking only key-bearing left the
@@ -385,6 +391,7 @@ func TestEveryKeyBearingTableIsProved(t *testing.T) {
 // would ship the 500 with a green suite. This reads the literals out of the source
 // instead, so coverage does not depend on which paths happen to have tests.
 func TestEveryValidateNameCallSiteNamesADeclaredTable(t *testing.T) {
+	t.Parallel()
 	call := regexp.MustCompile(`ValidateName\("([^"]*)"`)
 
 	var checked int

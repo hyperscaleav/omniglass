@@ -86,6 +86,10 @@ func (f fakeStore) PruneSamples(context.Context, string, time.Time, int) (int64,
 	return 0, nil
 }
 func (f fakeStore) EnsureMetricPartitions(context.Context) ([]string, error) { return nil, nil }
+func (f fakeStore) CompactMetricTrends(context.Context, int, int) (storage.TrendCompaction, error) {
+	return storage.TrendCompaction{}, nil
+}
+func (f fakeStore) PruneMetricTrends(context.Context, time.Time, int) (int64, error) { return 0, nil }
 func (f fakeStore) DropMetricPartitions(context.Context, time.Time) ([]string, error) {
 	return nil, nil
 }

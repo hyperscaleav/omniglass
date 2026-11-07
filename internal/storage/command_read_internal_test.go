@@ -13,6 +13,7 @@ import (
 // awaiting the observation; a command nothing can carry awaits observation
 // from its issue; a terminal command's phase is its status.
 func TestCommandPhase(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		status, mode                     string
 		delivered, executed, deliverable bool
@@ -39,6 +40,7 @@ func TestCommandPhase(t *testing.T) {
 // command that sets a value otherwise settles on observation, and one that
 // sets nothing settles not at all.
 func TestSettleModeOf(t *testing.T) {
+	t.Parallel()
 	reply := &driver.CommandBinding{Settle: &driver.Settle{From: driver.SettleFromResponse}}
 	observe := &driver.CommandBinding{Settle: &driver.Settle{From: driver.SettleFromObserve}}
 	unsaid := &driver.CommandBinding{}
@@ -63,6 +65,7 @@ func TestSettleModeOf(t *testing.T) {
 // A timeout says where the command stopped, naming the node, the endpoint or
 // the type as the facts allow.
 func TestTimeoutWords(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name                         string
 		delivered, executed, carried bool
@@ -89,6 +92,7 @@ func TestTimeoutWords(t *testing.T) {
 // Stored evidence is valid text with no NUL, cut on a rune boundary at the
 // cap and marked.
 func TestStoredText(t *testing.T) {
+	t.Parallel()
 	if got := storedText("INPUT hdmi3"); got != "INPUT hdmi3" {
 		t.Fatalf("short text = %q, want it whole", got)
 	}

@@ -14,6 +14,7 @@ import (
 // accepts a changed key with :retry and certificate, and its bare mode is
 // checked at write. A plain http endpoint pins nothing.
 func TestAnHTTPSEndpointPinsItsCertificateKey(t *testing.T) {
+	t.Parallel()
 	f := newTLSFixture(t)
 	plain, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Transport: "http", Component: &f.component, Node: &f.node,
 		Params: []byte(`{"target":"10.0.0.9:80"}`)}, f.all)

@@ -202,6 +202,7 @@ func provedByCreateTables() map[string]bool {
 }
 
 func TestEveryKeyBearingTableValidates(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
@@ -249,6 +250,7 @@ func TestEveryKeyBearingTableValidates(t *testing.T) {
 // name is a dot-joined path, so the dot itself is legal here and the illegal set is
 // about the segments and the whole.
 func TestEveryKeyspaceTableValidates(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)

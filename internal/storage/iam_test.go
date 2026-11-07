@@ -14,6 +14,7 @@ import (
 // the same username is a no-op that mints no second credential. Skipped under
 // -short.
 func TestBootstrapOwnerIdempotent(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 

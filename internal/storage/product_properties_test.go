@@ -12,6 +12,7 @@ import (
 )
 
 func TestProductPropertyCRUD(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

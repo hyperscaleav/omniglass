@@ -36,6 +36,7 @@ var taskFieldFingerprint = map[string]string{
 }
 
 func TestEveryTaskFieldIsAFingerprintInputOrDeclaredNotOne(t *testing.T) {
+	t.Parallel()
 	inputs := reflect.TypeOf(fingerprint.Inputs{})
 	// DriverInputs is fingerprinted from the endpoint row, which the worklist
 	// reads but does not deliver.

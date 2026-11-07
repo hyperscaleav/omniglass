@@ -24,6 +24,7 @@ import (
 // (icmp, a bare probe) counts on its connection tier. A gap is listed with its
 // issue; a listed method the lab exercises now fails as stale.
 func TestEveryCollectionMethodRunsOnAHealthyLabComponent(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("needs Postgres")
 	}
@@ -151,6 +152,7 @@ func readsCollectedValues(spec *driver.Spec) bool {
 // role (telemetry:push alone) on the HQ boardroom's system alone, with no
 // token until the lab mints one. A second run adds no grant.
 func TestSeededFleetHoldsAPusherOnOneSystem(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("needs Postgres")
 	}

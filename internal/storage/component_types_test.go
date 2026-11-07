@@ -15,6 +15,7 @@ func strp(s string) *string { return &s }
 // TestComponentTypeRoundTrip creates a root and a child under it and checks
 // Get resolves both, the child carrying its parent's id.
 func TestComponentTypeRoundTrip(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
 	if err != nil {
@@ -121,6 +122,7 @@ func TestComponentTypeRoundTrip(t *testing.T) {
 // separate Get so the assertion is against what actually persisted, not just
 // the update call's return value.
 func TestComponentTypeUpdateTagsPatch(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
 	if err != nil {
@@ -203,6 +205,7 @@ func TestComponentTypeUpdateTagsPatch(t *testing.T) {
 // child with a null stem resolves the parent's, while a child's own non-null
 // abbrev overrides the parent's.
 func TestComponentTypeFactsInherit(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
 	if err != nil {
@@ -259,6 +262,7 @@ func TestComponentTypeFactsInherit(t *testing.T) {
 // TestComponentTypeDeleteRestricted proves the RESTRICT lesson from #507: a
 // component_type with a child cannot be deleted.
 func TestComponentTypeDeleteRestricted(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
 	if err != nil {
@@ -291,6 +295,7 @@ func TestComponentTypeDeleteRestricted(t *testing.T) {
 // TestComponentTypeSubtree proves TypeIsWithin's self-inclusive descendant
 // test: a child is within its root, a sibling tree's root is not.
 func TestComponentTypeSubtree(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
 	if err != nil {
@@ -345,6 +350,7 @@ func TestComponentTypeSubtree(t *testing.T) {
 // authoritative: seeding twice leaves the row count stable and updates the
 // existing official rows in place rather than duplicating them.
 func TestSeedComponentTypesIdempotent(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
 	if err != nil {
@@ -410,6 +416,7 @@ func TestSeedComponentTypesIdempotent(t *testing.T) {
 // name is, on both create and update. A nil stem (inherit from the parent)
 // is untouched: there is nothing to validate.
 func TestComponentTypeStemMustBeAValidName(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
 	if err != nil {
@@ -464,6 +471,7 @@ func TestComponentTypeStemMustBeAValidName(t *testing.T) {
 // fail: CreateComponentType then succeeds with the bad stem, the component
 // generates "Bad Stem-1", and the final ValidateName check catches it.
 func TestBadStemNeverProducesAnInvalidComponentName(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -513,6 +521,7 @@ func TestBadStemNeverProducesAnInvalidComponentName(t *testing.T) {
 // succeeds, minting the component name "-1", which is not what this test
 // asserts and is not a legal entity name either.
 func TestEmptyStemRefusesGeneration(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -544,6 +553,7 @@ func TestEmptyStemRefusesGeneration(t *testing.T) {
 // covers that; this test is specifically the root side of the same
 // invariant).
 func TestRootComponentTypeRequiresStem(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {

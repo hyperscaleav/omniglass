@@ -16,6 +16,7 @@ import (
 // database at the schema immediately before that migration, write the
 // violating pair directly, and migrate forward over it.
 func TestDuplicateStaffingPreflightRaises(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	if err := migrate.RollbackBelow(dsn, "20260807140000"); err != nil {
 		t.Fatalf("rollback below the role capacity migration: %v", err)
@@ -84,6 +85,7 @@ update system_role_assignment sra
 // directly: positions 1, 2, 3 after the first run, unchanged after the
 // second.
 func TestPositionBackfillIdempotent(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	if err := migrate.RollbackBelow(dsn, "20260807146000"); err != nil {
 		t.Fatalf("rollback below the position floor: %v", err)

@@ -25,6 +25,7 @@ func imageOf(t *testing.T, v any) map[string]any {
 // carries them as the JSON they are, never as encoding/json's base64 of the
 // bytes (#1088).
 func TestAnAuditImageCarriesJSONBytesAsJSON(t *testing.T) {
+	t.Parallel()
 	ep := &Endpoint{
 		ID: "ep-1", Name: "ssh", Transport: "ssh",
 		Params: []byte(`{"target":"127.60.0.19:22","timeout":"5s"}`),
@@ -46,6 +47,7 @@ func TestAnAuditImageCarriesJSONBytesAsJSON(t *testing.T) {
 // pinned): the promoted fields are inlined too, and a nil embedded endpoint
 // leaves only the pin.
 func TestAnAuditImageInlinesThroughAnEmbeddedEndpoint(t *testing.T) {
+	t.Parallel()
 	type pinned struct {
 		*Endpoint
 		HostKey string `json:"host_key,omitempty"`
@@ -65,6 +67,7 @@ func TestAnAuditImageInlinesThroughAnEmbeddedEndpoint(t *testing.T) {
 // Only bytes that hold JSON are inlined, under the key encoding/json gives
 // the field; anything else marshals exactly as before.
 func TestAnAuditImageInlinesOnlyJSONUnderItsKey(t *testing.T) {
+	t.Parallel()
 	type named struct {
 		Spec   []byte `json:"spec"`
 		Hidden []byte `json:"-"`
@@ -104,6 +107,7 @@ func TestAnAuditImageInlinesOnlyJSONUnderItsKey(t *testing.T) {
 // bytes are not looked for at the top, where a same-named field would be
 // clobbered.
 func TestAnAuditImageLeavesANamedEmbedAlone(t *testing.T) {
+	t.Parallel()
 	type Inner struct{ Params []byte }
 	type outer struct {
 		Inner `json:"inner"`
@@ -118,6 +122,7 @@ func TestAnAuditImageLeavesANamedEmbedAlone(t *testing.T) {
 // An image that is not a struct (a map, as the secret and principal writes
 // pass) and a missing image marshal as they always did.
 func TestAnAuditImageOfAMapOrNothingIsUnchanged(t *testing.T) {
+	t.Parallel()
 	image := imageOf(t, map[string]any{"name": "core-snmp", "owner_id": nil})
 	if !reflect.DeepEqual(image, map[string]any{"name": "core-snmp", "owner_id": nil}) {
 		t.Fatalf("map image = %#v", image)
@@ -131,6 +136,7 @@ func TestAnAuditImageOfAMapOrNothingIsUnchanged(t *testing.T) {
 // tagged field that owns the name keeps its value, at the top or beside an
 // embed, so the image never gains bytes the row did not carry.
 func TestAnAuditImageInlinesOnlyAKeyTheFieldOwns(t *testing.T) {
+	t.Parallel()
 	type outer struct {
 		*Endpoint
 		Other string `json:"Params"`
@@ -157,6 +163,7 @@ func TestAnAuditImageInlinesOnlyAKeyTheFieldOwns(t *testing.T) {
 // string, a NUL escape) stay base64: inlined, they would fail the audit
 // insert and the write with it.
 func TestAnAuditImageLeavesJSONThatJSONBRefuses(t *testing.T) {
+	t.Parallel()
 	type row struct{ Bad, Nul []byte }
 	bad := []byte("{\"a\":\"\xff\"}")
 	nul := []byte(`{"a":"x\u0000y"}`)

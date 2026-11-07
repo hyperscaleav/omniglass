@@ -69,6 +69,7 @@ func (f *notifyFixture) list(t *testing.T, filter storage.NotificationFilter) []
 }
 
 func TestATransitionQueuesItsNotificationsInItsOwnTransaction(t *testing.T) {
+	t.Parallel()
 	f := newNotifyFixture(t)
 	ctx := f.ctx
 
@@ -174,6 +175,7 @@ func drainAll(t *testing.T, f *notifyFixture, s *sender) {
 }
 
 func TestTheDrainRetriesWithBackoffToAFinalFailureAndARetryRequeues(t *testing.T) {
+	t.Parallel()
 	f := newNotifyFixture(t)
 	a, err := f.gw.RaiseAlarm(f.ctx, "", "display-1", storage.AlarmSpec{Severity: "high", Message: "no video"})
 	if err != nil {
@@ -230,6 +232,7 @@ func TestTheDrainRetriesWithBackoffToAFinalFailureAndARetryRequeues(t *testing.T
 }
 
 func TestTwoDrainersNeverSendOneNotificationTwice(t *testing.T) {
+	t.Parallel()
 	f := newNotifyFixture(t)
 	for i := 0; i < 5; i++ {
 		if _, err := f.gw.RaiseAlarm(f.ctx, "", "display-1", storage.AlarmSpec{Severity: "high", Message: "fault", DedupKey: "k" + string(rune('a'+i))}); err != nil {
@@ -272,6 +275,7 @@ func TestTwoDrainersNeverSendOneNotificationTwice(t *testing.T) {
 }
 
 func TestQueuedNotificationsSurviveARestart(t *testing.T) {
+	t.Parallel()
 	f := newNotifyFixture(t)
 	if _, err := f.gw.RaiseAlarm(f.ctx, "", "display-1", storage.AlarmSpec{Severity: "high", Message: "no video"}); err != nil {
 		t.Fatal(err)
@@ -298,6 +302,7 @@ func TestQueuedNotificationsSurviveARestart(t *testing.T) {
 }
 
 func TestNotificationReadsAreScopedByTheAlarmsComponent(t *testing.T) {
+	t.Parallel()
 	f := newNotifyFixture(t)
 	a1, err := f.gw.RaiseAlarm(f.ctx, "", "display-1", storage.AlarmSpec{Severity: "high", Message: "one"})
 	if err != nil {
@@ -333,6 +338,7 @@ func TestNotificationReadsAreScopedByTheAlarmsComponent(t *testing.T) {
 }
 
 func TestANotificationJoinsItsAlarmsTimelineAfterTheEdge(t *testing.T) {
+	t.Parallel()
 	f := newNotifyFixture(t)
 	a, err := f.gw.RaiseAlarm(f.ctx, "", "display-1", storage.AlarmSpec{Severity: "high", Message: "no video"})
 	if err != nil {
@@ -363,6 +369,7 @@ func TestANotificationJoinsItsAlarmsTimelineAfterTheEdge(t *testing.T) {
 // notification is a failed row with the reason, and it is never retried,
 // since it holds no message.
 func TestARenderTheDatabaseWouldRefuseFailsTheRowNotTheTransition(t *testing.T) {
+	t.Parallel()
 	f := newNotifyFixture(t)
 	if _, err := f.gw.CreateNotificationType(f.ctx, "", storage.NotificationTypeSpec{Name: "nul", Subject: `x{{"\x00"}}`, Text: `{{"\xff"}}`}); err != nil {
 		t.Fatal(err)
@@ -392,6 +399,7 @@ func TestARenderTheDatabaseWouldRefuseFailsTheRowNotTheTransition(t *testing.T) 
 // before still delivers, and re-enabling it makes the next transition queue
 // one again.
 func TestADisabledActionRuleQueuesNothing(t *testing.T) {
+	t.Parallel()
 	f := newNotifyFixture(t)
 	before, err := f.gw.RaiseAlarm(f.ctx, "", "display-1", storage.AlarmSpec{Severity: "high", Message: "queued while enabled"})
 	if err != nil {

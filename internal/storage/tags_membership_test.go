@@ -24,6 +24,7 @@ import (
 // A component that is a member of a system inherits that system's tags, with no
 // pointer involved anywhere.
 func TestMembershipSeedsTheSystemBand(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newResolveFixture(t, ctx)
 
@@ -42,6 +43,7 @@ func TestMembershipSeedsTheSystemBand(t *testing.T) {
 // model could not express at all: one component, two systems, the same key bound
 // differently on each, and a different answer for each.
 func TestResolutionIsPerMembership(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newResolveFixture(t, ctx)
 
@@ -65,6 +67,7 @@ func TestResolutionIsPerMembership(t *testing.T) {
 // membership. That is what makes the default a convenience for context-free
 // callers rather than a resolution rule, and moving the default moves the answer.
 func TestContextFreeResolutionFollowsThePrimary(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newResolveFixture(t, ctx)
 
@@ -92,6 +95,7 @@ func TestContextFreeResolutionFollowsThePrimary(t *testing.T) {
 // else, without erroring. Most of a fleet looks like this before anyone models
 // it, so it must not be a special case.
 func TestNoMembershipResolvesTheOtherBands(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newResolveFixture(t, ctx)
 
@@ -109,6 +113,7 @@ func TestNoMembershipResolvesTheOtherBands(t *testing.T) {
 // system. Membership is what grants the inheritance, so naming a system the
 // component has no binding to must not borrow its configuration.
 func TestResolvingAgainstAStrangerSystemInheritsNothing(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newResolveFixture(t, ctx)
 
@@ -127,6 +132,7 @@ func TestResolvingAgainstAStrangerSystemInheritsNothing(t *testing.T) {
 // owner for it, so the secret cascade carries no system band at all. This is an
 // ownership decision, not a tiebreak.
 func TestSecretsDoNotInheritFromASystem(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newResolveFixture(t, ctx)
 

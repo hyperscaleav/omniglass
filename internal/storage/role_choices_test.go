@@ -41,6 +41,7 @@ func newChoiceTestGateway(t *testing.T) (*storage.PG, context.Context, string) {
 // that a second identically-typo'd write would then update under
 // system_role_name_key's NULLS NOT DISTINCT.
 func TestUnknownOwnerRefused(t *testing.T) {
+	t.Parallel()
 	gw, ctx, _ := newChoiceTestGateway(t)
 
 	_, err := gw.SetSystemRole(ctx, "", "standard", "no-such-standard-at-all", storage.SystemRoleSpec{
@@ -68,6 +69,7 @@ func TestUnknownOwnerRefused(t *testing.T) {
 // ErrRoleRefNotFound (422) a bad accepted type or pinned product already
 // gets, not a bare constraint violation.
 func TestRoleCannotJoinForeignAlternate(t *testing.T) {
+	t.Parallel()
 	gw, ctx, _ := newChoiceTestGateway(t)
 
 	for _, name := range []string{"foreign-std-a", "foreign-std-b"} {
@@ -110,6 +112,7 @@ func TestRoleCannotJoinForeignAlternate(t *testing.T) {
 // attached, rather than let the constraint surface as a bare violation (or,
 // worse, silently promote every role of a deleted alternate to mandatory).
 func TestDeletingAlternateWithRolesRefused(t *testing.T) {
+	t.Parallel()
 	gw, ctx, _ := newChoiceTestGateway(t)
 
 	std := "delete-refused-std"
@@ -173,6 +176,7 @@ func TestDeletingAlternateWithRolesRefused(t *testing.T) {
 // it) moves it from conditional to unconditional, and it then counts on its
 // own regardless of whether its former choice is satisfied.
 func TestDetachedRoleBecomesUnconditional(t *testing.T) {
+	t.Parallel()
 	gw, ctx, _ := newChoiceTestGateway(t)
 	all := scopeAll()
 
@@ -249,6 +253,7 @@ func TestDetachedRoleBecomesUnconditional(t *testing.T) {
 // leave the stored alternate_id untouched and the system's verdict
 // unmoved, not just the recorded string but the live column too.
 func TestEditingRoleLeavesAlternateAlone(t *testing.T) {
+	t.Parallel()
 	gw, ctx, dsn := newChoiceTestGateway(t)
 	all := scopeAll()
 
@@ -342,6 +347,7 @@ func TestEditingRoleLeavesAlternateAlone(t *testing.T) {
 // role is impaired AND that mattered" apart from "this role is impaired but
 // its alternate lost", which is exactly what Active answers.
 func TestHealthRoleReportsChoiceAndActive(t *testing.T) {
+	t.Parallel()
 	gw, ctx, _ := newChoiceTestGateway(t)
 	all := scopeAll()
 
@@ -443,6 +449,7 @@ func TestHealthRoleReportsChoiceAndActive(t *testing.T) {
 // succeeds and that every alternate, new and existing, ends up at its
 // newly-declared position.
 func TestSeedRoleChoiceConvergesOnReorderedPositions(t *testing.T) {
+	t.Parallel()
 	gw, ctx, dsn := newChoiceTestGateway(t)
 
 	std := "reorder-std"
@@ -514,6 +521,7 @@ func TestSeedRoleChoiceConvergesOnReorderedPositions(t *testing.T) {
 // refusing and naming the role is more honest than a silent cascade that
 // would detach it).
 func TestSeedRoleChoiceReconcilesRenamesAndDrops(t *testing.T) {
+	t.Parallel()
 	gw, ctx, dsn := newChoiceTestGateway(t)
 
 	std := "reconcile-std"

@@ -31,6 +31,7 @@ func (r *evalRig) latest(key string) string {
 // old value and drop the change (review finding 1: input 99, output 30,
 // nothing pending).
 func TestCalcMarkHeldByUncommittedBatch(t *testing.T) {
+	t.Parallel()
 	r := newEvalRig(t)
 	r.avgRule("echo", "room-temperature", "avg-temp")
 	r.metric("room-temperature", "", 30)
@@ -64,6 +65,7 @@ func TestCalcMarkHeldByUncommittedBatch(t *testing.T) {
 // ingest retries its whole transaction, so the batch lands and both rules
 // compute (review finding 2).
 func TestCalcIngestRetriesADeadlock(t *testing.T) {
+	t.Parallel()
 	r := newEvalRig(t)
 	// Two rules reading room-temperature, the later one also reading the
 	// earlier one's output, so the tick's write of the first marks the
@@ -109,7 +111,7 @@ func TestCalcIngestRetriesADeadlock(t *testing.T) {
 	// Wait until the batch is blocked on the tick's deleted mark, then let
 	// the tick write (and mark second).
 	deadline := time.Now().Add(10 * time.Second)
-	for count(t, r.conn, `select count(*) from pg_stat_activity where wait_event_type = 'Lock'`) == 0 {
+	for count(t, r.conn, `select count(*) from pg_stat_activity where datname = current_database() and wait_event_type = 'Lock'`) == 0 {
 		if time.Now().After(deadline) {
 			t.Fatal("the batch never waited on the tick")
 		}
@@ -135,6 +137,7 @@ func TestCalcIngestRetriesADeadlock(t *testing.T) {
 // of its inputs, so a rule over a stable property computes without a new
 // sample, and an edited reduce replaces the old output.
 func TestCalcRuleWriteMarks(t *testing.T) {
+	t.Parallel()
 	r := newEvalRig(t)
 	r.metric("room-temperature", "", 20)
 	r.avgRule("echo", "room-temperature", "avg-temp")
@@ -178,6 +181,7 @@ func TestCalcRuleWriteMarks(t *testing.T) {
 // A narrowed selector drops the state of owners it no longer selects
 // (review finding 8).
 func TestCalcStateFollowsTheSelector(t *testing.T) {
+	t.Parallel()
 	r := newEvalRig(t)
 	other, err := r.gw.CreateComponent(r.ctx, "", storage.ComponentSpec{Name: "other-one"}, r.all, r.all, r.all, r.all)
 	if err != nil {
@@ -210,6 +214,7 @@ func TestCalcStateFollowsTheSelector(t *testing.T) {
 // recorded, its mark pushed back by the backoff, and the pass goes on to the
 // next mark.
 func TestCalcFailingMarkDefers(t *testing.T) {
+	t.Parallel()
 	r := newEvalRig(t)
 	r.avgRule("echo", "room-temperature", "avg-temp")
 	r.avgRule("people", "occupancy-count", "temp-sum")
@@ -244,6 +249,7 @@ func TestCalcFailingMarkDefers(t *testing.T) {
 // the rule recorded, never re-resolved by name (review finding 4: the
 // float64 assertion panicked).
 func TestCalcOutputByRecordedLane(t *testing.T) {
+	t.Parallel()
 	r := newEvalRig(t)
 	r.avgRule("echo", "room-temperature", "avg-temp")
 	if _, err := r.conn.Exec(r.ctx, `insert into property_type (name, data_type) values ('avg-temp', 'string')`); err != nil {
@@ -260,6 +266,7 @@ func TestCalcOutputByRecordedLane(t *testing.T) {
 // when there is no other, and skips instances not heard from within the
 // staleness bound, naming them in the state (review finding 6).
 func TestCalcReducerInstances(t *testing.T) {
+	t.Parallel()
 	r := newEvalRig(t)
 	if _, err := r.create(storage.CalcRuleSpec{Name: "mean", OwnerKind: rules.OwnerComponent,
 		Inputs: []rules.CalcInput{{Alias: "t", Key: "room-temperature"}}, Reduce: rules.CalcReduce{Expr: "avg(t)"}, OutputKey: "avg-temp"}); err != nil {

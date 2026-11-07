@@ -3,6 +3,7 @@ package storage
 import "testing"
 
 func TestTargetHost(t *testing.T) {
+	t.Parallel()
 	for in, want := range map[string]string{
 		"10.0.0.5:80": "10.0.0.5",
 		"10.0.0.5":    "10.0.0.5",

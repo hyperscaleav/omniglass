@@ -16,6 +16,8 @@ import (
 // one in the last 24h, in order, sustains ignored), it reports the edges it
 // would have written and the series in force now, and writes nothing.
 func TestPreviewEventRule(t *testing.T) {
+	// Serial: it lowers a package-level preview cap (a Set*Cap hook), which
+	// every parallel test would otherwise see.
 	f := newHealthFixture(t)
 	ctx := context.Background()
 	product := f.bar.Name

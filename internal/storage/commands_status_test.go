@@ -34,6 +34,7 @@ func commandStatus(t *testing.T, conn *pgx.Conn, id int64) (string, *time.Time) 
 // pending command stays issued until the settle window expires, and the
 // intended row a command opens names it (command_id) beside the caused event.
 func TestCommandStatusRecording(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)

@@ -42,6 +42,7 @@ func roleMaskGateway(t *testing.T) (*storage.PG, context.Context, scope.Set) {
 // slot go with them, so the whole declaration now reads one way instead of
 // field by field.
 func TestUnrelatedEditLeavesTheRestOfTheDeclarationAlone(t *testing.T) {
+	t.Parallel()
 	gw, ctx, all := roleMaskGateway(t)
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "mask-preserve-sys"}, all, all); err != nil {
 		t.Fatalf("create system: %v", err)
@@ -92,6 +93,7 @@ func TestUnrelatedEditLeavesTheRestOfTheDeclarationAlone(t *testing.T) {
 // sentinel to clear it with, so before the mask an operator who set one could
 // only ever narrow it, and raw SQL was the only way back to unbounded.
 func TestExplicitMaskClearsCapacity(t *testing.T) {
+	t.Parallel()
 	gw, ctx, all := roleMaskGateway(t)
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "mask-clear-sys"}, all, all); err != nil {
 		t.Fatalf("create system: %v", err)
@@ -124,6 +126,7 @@ func TestExplicitMaskClearsCapacity(t *testing.T) {
 // change the mask forces: an empty list is not a populated field, so clearing
 // one now means naming it in the mask rather than sending [].
 func TestExplicitMaskClearsTheTypedSlotAndLabels(t *testing.T) {
+	t.Parallel()
 	gw, ctx, all := roleMaskGateway(t)
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "mask-clear-list-sys"}, all, all); err != nil {
 		t.Fatalf("create system: %v", err)
@@ -158,6 +161,7 @@ func TestExplicitMaskClearsTheTypedSlotAndLabels(t *testing.T) {
 // default, which is exactly the wholesale replace the old verb did on every
 // write whether the caller meant it or not.
 func TestStarMaskReplacesTheWholeDeclaration(t *testing.T) {
+	t.Parallel()
 	gw, ctx, all := roleMaskGateway(t)
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "mask-star-sys"}, all, all); err != nil {
 		t.Fatalf("create system: %v", err)
@@ -193,6 +197,7 @@ func TestStarMaskReplacesTheWholeDeclaration(t *testing.T) {
 // nothing to preserve, a field outside the mask lands on its default rather
 // than on whatever the body happened to carry.
 func TestMaskedCreateTakesDefaultsForWhatItDoesNotName(t *testing.T) {
+	t.Parallel()
 	gw, ctx, all := roleMaskGateway(t)
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "mask-create-sys"}, all, all); err != nil {
 		t.Fatalf("create system: %v", err)
@@ -216,6 +221,7 @@ func TestMaskedCreateTakesDefaultsForWhatItDoesNotName(t *testing.T) {
 // TestAnEmptyMaskWritesNothing is the present-but-empty reading: the caller
 // named no fields, so nothing moves, however full the rest of the body is.
 func TestAnEmptyMaskWritesNothing(t *testing.T) {
+	t.Parallel()
 	gw, ctx, all := roleMaskGateway(t)
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "mask-empty-sys"}, all, all); err != nil {
 		t.Fatalf("create system: %v", err)

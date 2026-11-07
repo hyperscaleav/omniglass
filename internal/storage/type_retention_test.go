@@ -19,6 +19,7 @@ func days(n int) *int { return &n }
 // audited as its own action, is bounded as the lane windows are, and clears
 // with null.
 func TestATypesRetentionOverrideIsSetOnAnOfficialType(t *testing.T) {
+	t.Parallel()
 	f := newPruneFixture(t)
 	if err := seed.Run(f.ctx, f.gw); err != nil {
 		t.Fatalf("seed: %v", err)
@@ -55,6 +56,7 @@ func TestATypesRetentionOverrideIsSetOnAnOfficialType(t *testing.T) {
 // a shipped type's definition, but an override is the install's, so a re-seed
 // (every server start) keeps it.
 func TestARetentionOverrideSurvivesTheBootSeed(t *testing.T) {
+	t.Parallel()
 	f := newPruneFixture(t)
 	if err := seed.Run(f.ctx, f.gw); err != nil {
 		t.Fatalf("seed: %v", err)
@@ -79,6 +81,7 @@ func TestARetentionOverrideSurvivesTheBootSeed(t *testing.T) {
 // lane's default window and is pruned by its own, shorter or longer. The lane
 // prune skips it; the type's own prune takes it to its window.
 func TestPruneSamplesHonorsATypesOverride(t *testing.T) {
+	t.Parallel()
 	f := newPruneFixture(t)
 	for _, name := range []string{"rt-short", "rt-default", "rt-long"} {
 		mustExec(t, f.conn, `insert into metric_type (name, data_type) values ($1, 'float')`, name)
@@ -92,7 +95,7 @@ func TestPruneSamplesHonorsATypesOverride(t *testing.T) {
 	now := time.Now().UTC()
 	row := func(typ string, age time.Duration) {
 		t.Helper()
-		if err := f.gw.MakeMetricMonths(f.ctx, now.Add(-age)); err != nil {
+		if err := f.gw.MakeMetricDays(f.ctx, now.Add(-age)); err != nil {
 			t.Fatal(err)
 		}
 		mustExec(t, f.conn, storagetest.WideMetricInsert(`ts, owner_kind, component_id, metric_type_id, instance, provenance, value`,

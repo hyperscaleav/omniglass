@@ -137,6 +137,32 @@ either mechanism fires), sweep them with `make clean-testcontainers`. It
 force-removes leftover Postgres test containers, scoped by the testcontainers
 label and the `postgres:18` image so it never touches the compose dev stack.
 
+### Tests run in parallel, and a fixture is seeded once
+
+Because every test owns a database, tests in `internal/storage` and
+`internal/devseed` are independent by construction, and they run in parallel on
+the package's one container. A test that is not parallel puts its whole length on
+the gate's critical path, so the default is a rule: every top-level test starts
+with `t.Parallel()`, or says in a `// Serial:` comment why it cannot. The reasons
+that hold up are process-wide state the test changes or asserts on: a
+package-level cap hook, `slog.SetDefault`, a global counter such as
+`rules.CompileCount`. Serial tests finish before any parallel test is released,
+so they never overlap one. `storagetest.RequireParallelOrSerial` is the scanner,
+and each package runs it as a test, so the gain cannot quietly rot. Queries over
+cluster-wide views such as `pg_stat_activity` filter on
+`datname = current_database()`, or one test sees another's sessions. The harness
+starts Postgres with `fsync=off` and `max_connections=400`, safe for a throwaway
+database and sized for the parallelism; `TEST_PARALLEL=1` still bounds how many
+packages share a machine.
+
+The same idea one layer up is `storagetest.NewDSNFrom(t, key, build)`: a
+**derived template** is the base template plus a build step (a boot seed, a
+seeded fleet), run once per test binary, sealed, and cloned per test. A test
+that only reads seeded state takes a clone; a test that verifies the seeding
+itself (idempotence, an option's effect, the large scenario) still runs the seed.
+Like the base template it caches success and never failure. `internal/devseed`
+spent most of its time seeding the same fleet into every test before this.
+
 ## Fixtures are minted, not borrowed
 
 A behavior test that needs "a product classified display" mints one:
@@ -238,7 +264,7 @@ It holds five things and reports the rest:
   stores transitions only, so a steady window writes no property rows.
 - **Metric rows per full heap page**, exact, after `VACUUM`. Density rather than a page count,
   so a fleet that grows by a few endpoints moves nothing unless a row does. The metric table is
-  partitioned by month ([storage](/architecture/storage/#the-narrow-metric-lane)), so its bytes are
+  partitioned by day ([storage](/architecture/storage/#the-narrow-metric-lane)), so its bytes are
   summed over its partitions.
 - **The metric table's index definitions**, exact, so an added, dropped or re-keyed index
   fails by name.

@@ -35,6 +35,7 @@ import (
 // an assertion that a narrow caller is refused proves nothing on its own, since
 // a broken path refuses everyone.
 func TestANodeBindsOnlyALocationTheCallerCanRead(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

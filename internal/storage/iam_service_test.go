@@ -16,6 +16,7 @@ import (
 // replaces the one before, so each lab run's freshly minted token is the only
 // one that authenticates it. An unknown service is reported, not created.
 func TestAServiceKeepsOneTokenTheTrustedLaneSets(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
 	if err != nil {
@@ -56,6 +57,7 @@ func TestAServiceKeepsOneTokenTheTrustedLaneSets(t *testing.T) {
 // holding other permissions, or an official one, is refused rather than
 // overwritten.
 func TestEnsureRoleCreatesOnceAndNeverOverwrites(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	dsn := storagetest.NewDSN(t)
 	gw, err := storage.NewPG(ctx, dsn)

@@ -62,6 +62,7 @@ const day = 24 * time.Hour
 // error each go by their own cutoff, and a line with no severity goes with
 // info. A re-run deletes nothing.
 func TestPruneLogsKeepsEachBandToItsWindow(t *testing.T) {
+	t.Parallel()
 	f := newLogFixture(t)
 	for _, table := range []string{"log_line", "node_log"} {
 		f.logRow(table, "debug", 5*day, "debug-5d")
@@ -93,6 +94,7 @@ func TestPruneLogsKeepsEachBandToItsWindow(t *testing.T) {
 // TestPruneLogsCompletesABacklogInChunks: a backlog larger than one call's limit
 // completes across calls, each deleting at most the limit.
 func TestPruneLogsCompletesABacklogInChunks(t *testing.T) {
+	t.Parallel()
 	f := newLogFixture(t)
 	for i := 0; i < 15; i++ {
 		f.logRow("log_line", "info", 20*day, "old-info")
@@ -122,6 +124,7 @@ func TestPruneLogsCompletesABacklogInChunks(t *testing.T) {
 // severity through its (ts) index for them, so a chunk reads only rows it may
 // delete, never the table.
 func TestPruneLogsReachesItsIndex(t *testing.T) {
+	t.Parallel()
 	f := newLogFixture(t)
 	for _, table := range []string{"log_line", "node_log"} {
 		stmts := storage.ExportPruneLogsSQL(table)
@@ -159,6 +162,7 @@ func TestPruneLogsReachesItsIndex(t *testing.T) {
 // never pruned (#1159), measured at 27.7s for a 2,000-line chunk over 200k events
 // against 8.8ms with the index (the 2026-10-28 review).
 func TestPruningALogLineClearsItsEventsLinkThroughAnIndex(t *testing.T) {
+	t.Parallel()
 	f := newLogFixture(t)
 	f.logRow("log_line", "debug", 5*day, "the-source")
 	var lineID int64

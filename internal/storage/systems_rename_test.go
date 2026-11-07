@@ -11,6 +11,7 @@ import (
 )
 
 func TestRenameSystem(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)

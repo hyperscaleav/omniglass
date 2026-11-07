@@ -9,6 +9,7 @@ import (
 // partitioned by value type, each carrying only its own facts, and neither able
 // to hold the other's row.
 func TestMetricTypeSplitMigration(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	conn := connectMigrated(t)
 

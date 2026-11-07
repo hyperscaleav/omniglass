@@ -41,6 +41,7 @@ var auditKeyAllowed = map[string]string{
 }
 
 func TestEveryAuditRowIsKeyedOnAPrimaryKey(t *testing.T) {
+	t.Parallel()
 	// writeAuditRes(ctx, tx, actor, verb, resource, resourceID, old, new)
 	call := regexp.MustCompile(`writeAuditRes\([^,]+,\s*[^,]+,\s*[^,]+,\s*([^,]+),\s*([^,]+),\s*([^,]+),`)
 

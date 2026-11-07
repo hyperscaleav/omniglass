@@ -54,6 +54,7 @@ func previewOf(driverRef string, inputs map[string]string) storage.PreviewInput 
 }
 
 func TestDriverSpecFindings(t *testing.T) {
+	t.Parallel()
 	gw, ctx := runStack(t)
 	good, err := gw.GetDriver(ctx, "boreal-edge-web")
 	if err != nil {
@@ -73,6 +74,7 @@ func TestDriverSpecFindings(t *testing.T) {
 // deliver it: the dial target from the inputs, the secret unsealed, and the
 // asking audited on the node and on the secret.
 func TestPlanDriverPreview(t *testing.T) {
+	t.Parallel()
 	gw, ctx := runStack(t)
 	plan, err := gw.PlanDriverPreview(ctx, "", previewOf("boreal-edge-web", map[string]string{"host": "10.20.4.31", "login": "display-login"}))
 	if err != nil {
@@ -109,6 +111,7 @@ func TestPlanDriverPreview(t *testing.T) {
 // riding a held session, a poll the spec does not have, and a secret the
 // caller may read but not reveal (a preview hands it to the target named).
 func TestPlanDriverPreviewRefuses(t *testing.T) {
+	t.Parallel()
 	gw, ctx := runStack(t)
 	inputs := map[string]string{"host": "10.20.4.31", "login": "display-login"}
 
@@ -149,6 +152,7 @@ func TestPlanDriverPreviewRefuses(t *testing.T) {
 // and audits the asking; a poll the endpoint does not have, or an endpoint no
 // node holds, is refused naming why.
 func TestPlanEndpointRun(t *testing.T) {
+	t.Parallel()
 	gw, ctx := runStack(t)
 	all := scope.Set{All: true}
 	comp, node, drv := "display-p", "edge-p", "boreal-edge-web"

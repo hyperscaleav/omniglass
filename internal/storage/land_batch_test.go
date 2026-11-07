@@ -101,6 +101,7 @@ func fullBatch(id, power string, ts time.Time) storage.IngestBatch {
 // and says so. Concurrent deliveries of one batch land it once too: the
 // receipt's key serializes them.
 func TestLandBatchLandsEachRowOnce(t *testing.T) {
+	t.Parallel()
 	f := newLandFixture(t)
 	ctx := context.Background()
 	ts := time.Now().UTC().Add(-time.Minute)
@@ -179,6 +180,7 @@ func TestLandBatchLandsEachRowOnce(t *testing.T) {
 // that preceded it are not left behind to be written again on redelivery,
 // and the receipt rolls back with them, so the corrected batch still lands.
 func TestLandBatchIsAllOrNothing(t *testing.T) {
+	t.Parallel()
 	f := newLandFixture(t)
 	ctx := context.Background()
 	ts := time.Now().UTC().Add(-time.Minute)
@@ -209,6 +211,7 @@ func TestLandBatchIsAllOrNothing(t *testing.T) {
 // equal to the series' latest is not written, a change is, and two equal
 // values for one series in one batch write once.
 func TestLandBatchTransitionGuardInTheInsert(t *testing.T) {
+	t.Parallel()
 	f := newLandFixture(t)
 	ctx := context.Background()
 	ts := time.Now().UTC().Add(-10 * time.Minute)
@@ -248,6 +251,7 @@ func TestLandBatchTransitionGuardInTheInsert(t *testing.T) {
 // never a consecutive duplicate. The rounds alternate the verdict, so every
 // round is a transition the guard must let through exactly once.
 func TestLandBatchTransitionGuardHoldsUnderConcurrentDispatch(t *testing.T) {
+	t.Parallel()
 	f := newLandFixture(t)
 	ctx := context.Background()
 	ts := time.Now().UTC().Add(-time.Hour)
@@ -292,6 +296,7 @@ func TestLandBatchTransitionGuardHoldsUnderConcurrentDispatch(t *testing.T) {
 // a fresh one is kept, so a batch past the horizon could land again and one
 // inside it cannot.
 func TestPruneTelemetryReceipts(t *testing.T) {
+	t.Parallel()
 	f := newLandFixture(t)
 	ctx := context.Background()
 	for i := 0; i < 5; i++ {
@@ -323,6 +328,7 @@ func TestPruneTelemetryReceipts(t *testing.T) {
 // answered 202. The gateway replaces NUL with U+FFFD on every lane's text and
 // jsonb before the insert, as it does for log lines, so the batch lands.
 func TestLandBatchCleansNUL(t *testing.T) {
+	t.Parallel()
 	f := newLandFixture(t)
 	ctx := context.Background()
 	ts := time.Now().UTC().Add(-time.Minute)
@@ -366,6 +372,7 @@ func TestLandBatchCleansNUL(t *testing.T) {
 // edit holds FOR UPDATE, and the edit, wanting the health lock next, would
 // deadlock with it.
 func TestLandBatchTakesItsRuleRowsBeforeAnyHealthLock(t *testing.T) {
+	t.Parallel()
 	f := newLandFixture(t)
 	ctx := context.Background()
 	all := scope.Set{All: true}
@@ -407,7 +414,7 @@ func TestLandBatchTakesItsRuleRowsBeforeAnyHealthLock(t *testing.T) {
 	deadline := time.Now().Add(10 * time.Second)
 	for {
 		var waiting int
-		if err := edit.QueryRow(ctx, `select count(*) from pg_stat_activity where wait_event_type = 'Lock' and pid <> pg_backend_pid()`).Scan(&waiting); err != nil {
+		if err := edit.QueryRow(ctx, `select count(*) from pg_stat_activity where datname = current_database() and wait_event_type = 'Lock' and pid <> pg_backend_pid()`).Scan(&waiting); err != nil {
 			t.Fatalf("read the waits: %v", err)
 		}
 		if waiting > 0 {

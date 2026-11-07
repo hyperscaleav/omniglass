@@ -17,6 +17,7 @@ import (
 // back with its name now, so a key rename leaves the rule computing; an
 // unchanged input given again by its new name is no change.
 func TestCalcInputsHeldByID(t *testing.T) {
+	t.Parallel()
 	r := newEvalRig(t)
 	tempID := scalar(t, r.conn, `select id::text from metric_type where name = 'room-temperature'`)
 	rule, err := r.create(storage.CalcRuleSpec{Name: "spread", OwnerKind: rules.OwnerComponent,
@@ -93,6 +94,7 @@ func calcBackfillUpSQL(t *testing.T) string {
 // changes nothing. The migrated rules then read and compile through the
 // gateway.
 func TestCalcRuleInputBackfill(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -218,6 +220,7 @@ func TestCalcRuleInputBackfill(t *testing.T) {
 // deleted key is, and reads back with a calc_error on that alias; a rule
 // with a fine alias is left alone; the backfill run again changes nothing.
 func TestCalcRuleReservedAliasBackfill(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -281,6 +284,7 @@ func TestCalcRuleReservedAliasBackfill(t *testing.T) {
 // the type's list and get (#1019): the enabled writer, or a disabled one when
 // none is enabled. A type no rule writes names none.
 func TestKeyWrittenByCalcRule(t *testing.T) {
+	t.Parallel()
 	r := newCalcRig(t)
 	mean, err := r.create(avgSpec("temp-mean"))
 	if err != nil {

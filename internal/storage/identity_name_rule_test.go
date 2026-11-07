@@ -22,6 +22,7 @@ import (
 // The load-bearing case. An unknown table must be an error and never a silent pass,
 // because a silent pass is exactly the failure this replaces.
 func TestValidateNameRefusesAnUndeclaredTable(t *testing.T) {
+	t.Parallel()
 	err := storage.ValidateName("table_that_does_not_exist", "perfectly-legal")
 	if err == nil {
 		t.Fatal("an undeclared table accepted a name; a table nobody classified must not validate by default")
@@ -35,6 +36,7 @@ func TestValidateNameRefusesAnUndeclaredTable(t *testing.T) {
 // mistake, not a question with an answer. Returning nil would let a caller believe
 // it had validated something.
 func TestValidateNameRefusesATableThatBearsNoName(t *testing.T) {
+	t.Parallel()
 	for _, table := range []string{
 		"metric",      // id only
 		"tag_binding", // id only
@@ -52,6 +54,7 @@ func TestValidateNameRefusesATableThatBearsNoName(t *testing.T) {
 // of them, selected by the table's declared shape. The dotted rule is gone, so a name
 // is always exactly one token and `icmp.rtt-avg` is now `icmp-rtt-avg`.
 func TestNoTableAcceptsADottedName(t *testing.T) {
+	t.Parallel()
 	for _, table := range []string{"component", "property_type", "event_type", "command_type"} {
 		if err := storage.ValidateName(table, "icmp.rtt-avg"); err == nil {
 			t.Errorf("ValidateName(%q, \"icmp.rtt-avg\") accepted a dotted name; there is one rule and it has no dots", table)
@@ -62,6 +65,7 @@ func TestNoTableAcceptsADottedName(t *testing.T) {
 // The kebab form of every name that used to carry a dot is legal, so the backfill has
 // somewhere to land.
 func TestTheKebabFormOfAFormerlyDottedNameIsLegal(t *testing.T) {
+	t.Parallel()
 	for _, table := range []string{"property_type", "event_type", "command_type"} {
 		for _, name := range []string{"icmp-rtt-avg", "call-started", "video-input", "command-issued"} {
 			if err := storage.ValidateName(table, name); err != nil {
@@ -75,6 +79,7 @@ func TestTheKebabFormOfAFormerlyDottedNameIsLegal(t *testing.T) {
 // the nine the create sweep already drives through the gateway; here they are pinned
 // as pure logic so a rule change is caught without a database.
 func TestBothRulesRefuseTheSameIllegalShapes(t *testing.T) {
+	t.Parallel()
 	illegal := map[string]string{
 		"empty":            "",
 		"uppercase":        "BadName",
@@ -104,6 +109,7 @@ func TestBothRulesRefuseTheSameIllegalShapes(t *testing.T) {
 // that takes this shape makes the resolution a property of the data rather than of
 // the request.
 func TestNoRuleAcceptsAUUIDShapedName(t *testing.T) {
+	t.Parallel()
 	const uuid = "019f8754-3a1b-7c2d-8e4f-5a6b7c8d9e0f"
 	for _, table := range []string{"component", "system", "property_type", "event_type"} {
 		if err := storage.ValidateName(table, uuid); err == nil {
@@ -115,6 +121,7 @@ func TestNoRuleAcceptsAUUIDShapedName(t *testing.T) {
 // One rule, one ceiling. The keyspace ceiling of 128 existed because that name was a
 // path; with no paths there is one number.
 func TestOneCeilingAppliesToEveryTable(t *testing.T) {
+	t.Parallel()
 	atMax := strings.Repeat("a", storage.MaxEntityNameLen)
 	for _, table := range []string{"component", "property_type", "event_type", "command_type"} {
 		if err := storage.ValidateName(table, atMax); err != nil {
@@ -128,6 +135,7 @@ func TestOneCeilingAppliesToEveryTable(t *testing.T) {
 
 // The ordinary case, so the refusals above are not passing for the wrong reason.
 func TestValidateNameAcceptsRealNames(t *testing.T) {
+	t.Parallel()
 	for table, name := range map[string]string{
 		"component":     "hq-boardroom-dsp",
 		"location":      "rm215a",

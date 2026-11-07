@@ -16,6 +16,7 @@ import (
 // owner-arc FK rejects an occurrence whose owner component does not exist, and that
 // the since/limit window bounds the read.
 func TestInsertEvents(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -81,6 +82,7 @@ func TestInsertEvents(t *testing.T) {
 // members', one list newest first, each row saying which owner raised it.
 // The workspace's Events tab renders exactly this.
 func TestListSystemEvents(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

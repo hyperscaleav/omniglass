@@ -13,6 +13,7 @@ import (
 // order, and a spec with nothing to drop, or one that does not parse, comes
 // back byte for byte.
 func TestRulingEmits(t *testing.T) {
+	t.Parallel()
 	calcOwned := map[string]bool{"avg-uptime": true}
 	spec := []byte(`{"driver":"legacy","function":"status","emits":[
 		{"name":"video-input","lane":"property","extract":{"regex":"^I (\\S+)$"}},

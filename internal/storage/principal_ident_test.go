@@ -20,6 +20,7 @@ import (
 // account's name, which outranks a node's name, and a principal with none of
 // the three reads as empty rather than as something invented.
 func TestPrincipalIdentPrefersTheUsername(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name     string
 		username *string
@@ -57,6 +58,7 @@ func TestPrincipalIdentPrefersTheUsername(t *testing.T) {
 // fact drift unless something compares them, so this drives every principal
 // kind through both and fails on the first disagreement.
 func TestPrincipalIdentAgreesWithTheExpressionItBinds(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	conn, err := pgx.Connect(ctx, dsn)
@@ -149,6 +151,7 @@ func TestPrincipalIdentAgreesWithTheExpressionItBinds(t *testing.T) {
 // slice), and a human and a service account ride beside it because a surface
 // that named nobody would otherwise pass on the node row alone.
 func TestEverySurfaceNamesTheKindThatActed(t *testing.T) {
+	t.Parallel()
 	gw, dsn := secretGateway(t)
 	ctx := context.Background()
 	conn, err := pgx.Connect(ctx, dsn)
@@ -292,6 +295,7 @@ func insertPrincipalOfKind(t *testing.T, conn *pgx.Conn, kind string) string {
 // have moved nothing: the exception to "logic lives in Go, never the database"
 // is the OBJECT, so the object has to be gone.
 func TestPrincipalLabelIsNotAStoredFunction(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	conn, err := pgx.Connect(ctx, dsn)

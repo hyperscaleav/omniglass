@@ -20,6 +20,7 @@ import (
 // longer be uuid-shaped (#344). Without that rule this would resolve differently
 // depending on which entity happened to exist.
 func TestReferencesResolveByEitherForm(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -64,6 +65,7 @@ func TestReferencesResolveByEitherForm(t *testing.T) {
 // A join field takes either form too, so the same placement can be expressed
 // with whichever handle the caller has.
 func TestJoinFieldsAcceptEitherForm(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

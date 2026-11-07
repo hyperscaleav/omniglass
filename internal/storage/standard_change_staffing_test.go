@@ -98,6 +98,7 @@ const strandedAssignments = `
 // declares a table-mic it still fits carries it across, audited as one update
 // of its assignment, and the health the move records already counts it.
 func TestStandardChangeCarriesStaffingOntoTheRolesThatStillExist(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newHealthFixture(t)
 	f.declareRole(t, ctx, "huddle-next", storage.SystemRoleSpec{
@@ -147,6 +148,7 @@ func TestStandardChangeCarriesStaffingOntoTheRolesThatStillExist(t *testing.T) {
 // carried first when the new role has less room, and an occupant past the new
 // capacity is released, still a member, audited as a delete of its assignment.
 func TestStandardChangeKeepsPositionsWithinTheNewCapacity(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newHealthFixture(t)
 	three, one := 3, 1
@@ -201,6 +203,7 @@ func TestStandardChangeKeepsPositionsWithinTheNewCapacity(t *testing.T) {
 // the point the gateway's own change holds: the system's staffing lock taken
 // exclusive and its standard repointed, the carry not yet committed.
 func TestStaffingWaitsOutAStandardChange(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newHealthFixture(t)
 	f.declareRole(t, ctx, "huddle-next", storage.SystemRoleSpec{
@@ -275,6 +278,7 @@ func TestStaffingWaitsOutAStandardChange(t *testing.T) {
 const strandedBackfill = "migrations/20261026180000_stranded_role_assignment_backfill.sql"
 
 func TestStrandedAssignmentBackfillReleasesOnlyTheStrands(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newHealthFixture(t)
 	raw, err := db.FS.ReadFile(strandedBackfill)

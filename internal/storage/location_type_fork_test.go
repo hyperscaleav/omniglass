@@ -22,6 +22,7 @@ func nameRulePtr(stem string, bareFirst bool) *NameRule {
 // object: an omitted key and an explicit null both decode to the same nil
 // pointer in Go, so the body alone can never spell the difference.
 func TestApplyLocationTypePatchWriteSet(t *testing.T) {
+	t.Parallel()
 	base := LocationType{
 		Name: "floor", Official: true, Label: "Floor", Icon: "layers",
 		AllowedParentTypes: []string{"building", "campus"},
@@ -160,6 +161,7 @@ func TestApplyLocationTypePatchWriteSet(t *testing.T) {
 // re-adopt the shipped rule on the very next read, which is the bug with extra
 // steps.
 func TestLocationTypeShadowRoundTrip(t *testing.T) {
+	t.Parallel()
 	official := LocationType{
 		Name: "floor", Official: true, Label: "Floor", Icon: "layers",
 		AllowedParentTypes: []string{"building", "campus"},
@@ -273,6 +275,7 @@ func TestLocationTypeShadowRoundTrip(t *testing.T) {
 // exactly the set of fields a caller set a pointer for, which is what the
 // coalesce-per-column statement this replaced wrote.
 func TestLocationTypePopulatedIsThePointerSet(t *testing.T) {
+	t.Parallel()
 	empty := ""
 	set := []string{}
 	full := LocationTypePatch{

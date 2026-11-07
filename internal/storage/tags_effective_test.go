@@ -42,6 +42,7 @@ func tagFleet(t *testing.T, gw storage.Gateway) (campus, room, sysID, compID str
 // union on key, override on value (system beats location beats platform), and the
 // non-propagating key resolving only from the component itself.
 func TestEffectiveTagsComponent(t *testing.T) {
+	t.Parallel()
 	gw := tagGateway(t)
 	ctx := context.Background()
 	_, _, _, compID := tagFleet(t, gw)
@@ -76,6 +77,7 @@ func TestEffectiveTagsComponent(t *testing.T) {
 // TestEffectiveTagsSystem covers the design decision that a system inherits its
 // own location's tags: platform + its location tree + its system tree.
 func TestEffectiveTagsSystem(t *testing.T) {
+	t.Parallel()
 	gw := tagGateway(t)
 	ctx := context.Background()
 	_, _, sysID, _ := tagFleet(t, gw)
@@ -108,6 +110,7 @@ func TestEffectiveTagsSystem(t *testing.T) {
 // TestEffectiveTagsLocation covers a location resolving platform + its own location
 // tree, most-specific-wins.
 func TestEffectiveTagsLocation(t *testing.T) {
+	t.Parallel()
 	gw := tagGateway(t)
 	ctx := context.Background()
 	campusID, roomID, _, _ := tagFleet(t, gw)
@@ -134,6 +137,7 @@ func TestEffectiveTagsLocation(t *testing.T) {
 // an ancestor location: each resolves independently and the shared ancestor does
 // not trip a false cycle.
 func TestEffectiveTagsBatchSharedAncestor(t *testing.T) {
+	t.Parallel()
 	gw := tagGateway(t)
 	ctx := context.Background()
 	tagFleet(t, gw)
@@ -167,6 +171,7 @@ func TestEffectiveTagsBatchSharedAncestor(t *testing.T) {
 
 // TestEffectiveTagsEmptyAndUnknown covers the edge inputs.
 func TestEffectiveTagsEmptyAndUnknown(t *testing.T) {
+	t.Parallel()
 	gw := tagGateway(t)
 	ctx := context.Background()
 

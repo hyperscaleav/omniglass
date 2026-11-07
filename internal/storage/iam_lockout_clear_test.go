@@ -21,6 +21,7 @@ import (
 // the window: were the lock still set, AuthenticatePassword would return
 // ErrAccountLocked whatever the password. Skipped under -short.
 func TestPasswordRotationClearsLockout(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)

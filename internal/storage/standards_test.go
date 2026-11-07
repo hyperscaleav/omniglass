@@ -12,6 +12,7 @@ import (
 )
 
 func TestStandardCRUD(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
 	if err != nil {
@@ -102,6 +103,7 @@ func TestStandardCRUD(t *testing.T) {
 // A system conforms to a standard optionally: a one-off carries none, and the
 // column round-trips as nil rather than an empty string.
 func TestSystemStandardOptional(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
 	if err != nil {
@@ -175,6 +177,7 @@ func TestSystemStandardOptional(t *testing.T) {
 // declaration, validated in Go (bounds, duplicate positions), stored as one
 // jsonb value, nil when the standard declares none.
 func TestStandardMapDeclaration(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
 	if err != nil {

@@ -54,6 +54,7 @@ func near(t *testing.T, what string, got *time.Time, want time.Time) {
 // behavior: an hour's snooze reads about an hour out, names the person who
 // set it, and writes one snooze audit row on the alarm it was called on.
 func TestSnoozeRecordsWhoAndUntilWhenOnTheCondition(t *testing.T) {
+	t.Parallel()
 	gw, dsn, comp, raised := ackFixture(t)
 	ctx := context.Background()
 	actor := ackActor(t, dsn, "jordan-ops")
@@ -100,6 +101,7 @@ func TestSnoozeRecordsWhoAndUntilWhenOnTheCondition(t *testing.T) {
 // attaches to (decision 1): a re-raise of the same condition is a new row,
 // and it reads snoozed; another condition on the same component does not.
 func TestASnoozeCoversEveryAlarmOfItsConditionAndNoOther(t *testing.T) {
+	t.Parallel()
 	gw, dsn, comp, raised := ackFixture(t)
 	ctx := context.Background()
 	if _, err := gw.SnoozeAlarm(ctx, ackActor(t, dsn, "jordan-ops"), comp, raised.ID, time.Hour); err != nil {
@@ -138,6 +140,7 @@ func TestASnoozeCoversEveryAlarmOfItsConditionAndNoOther(t *testing.T) {
 // snooze per condition, and a second one replaces its deadline (shorter or
 // longer) with an audit row carrying the before and the after.
 func TestReSnoozingReplacesTheDeadlineWithOneAuditRow(t *testing.T) {
+	t.Parallel()
 	gw, dsn, comp, raised := ackFixture(t)
 	ctx := context.Background()
 	actor := ackActor(t, dsn, "jordan-ops")
@@ -161,6 +164,7 @@ func TestReSnoozingReplacesTheDeadlineWithOneAuditRow(t *testing.T) {
 // TestUnsnoozeEndsItAndAnUnsnoozedConditionIsANoOp pins the early end's
 // record, and that ending a snooze that is not there writes nothing.
 func TestUnsnoozeEndsItAndAnUnsnoozedConditionIsANoOp(t *testing.T) {
+	t.Parallel()
 	gw, dsn, comp, raised := ackFixture(t)
 	ctx := context.Background()
 	actor := ackActor(t, dsn, "jordan-ops")
@@ -194,6 +198,7 @@ func TestUnsnoozeEndsItAndAnUnsnoozedConditionIsANoOp(t *testing.T) {
 // not snooze, a snoozed alarm still degrades its component and still sits in
 // the unacknowledged queue, and a cleared alarm can be snoozed.
 func TestSnoozeIsOrthogonalToAcknowledgementAndHealth(t *testing.T) {
+	t.Parallel()
 	gw, dsn, comp, raised := ackFixture(t)
 	ctx := context.Background()
 	actor := ackActor(t, dsn, "jordan-ops")
@@ -235,6 +240,7 @@ func TestSnoozeIsOrthogonalToAcknowledgementAndHealth(t *testing.T) {
 // minute to seven days) and the misses: an id on another component, an
 // unknown one, a malformed one.
 func TestSnoozeRefusesABadDurationAndAMiss(t *testing.T) {
+	t.Parallel()
 	gw, dsn, comp, raised := ackFixture(t)
 	ctx := context.Background()
 	actor := ackActor(t, dsn, "jordan-ops")
@@ -266,6 +272,7 @@ func TestSnoozeRefusesABadDurationAndAMiss(t *testing.T) {
 // caller, so an unsnooze writes snooze-end from the platform (and the
 // announcement it owes), never an unsnooze that ended nothing.
 func TestUnsnoozingAnExpiredSnoozeEndsItAsTheSweepWould(t *testing.T) {
+	t.Parallel()
 	gw, dsn, comp, raised := ackFixture(t)
 	ctx := context.Background()
 	actor := ackActor(t, dsn, "jordan-ops")
@@ -298,6 +305,7 @@ func TestUnsnoozingAnExpiredSnoozeEndsItAsTheSweepWould(t *testing.T) {
 // condition at once serialize on the condition, so exactly one of them audits
 // a null deadline before and the other audits the deadline it replaced.
 func TestConcurrentFirstSnoozesAuditTheReplacement(t *testing.T) {
+	t.Parallel()
 	gw, dsn, comp, raised := ackFixture(t)
 	ctx := context.Background()
 	actor := ackActor(t, dsn, "jordan-ops")

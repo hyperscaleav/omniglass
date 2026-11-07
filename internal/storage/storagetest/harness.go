@@ -142,6 +142,10 @@ var runPostgres = runPostgresContainer
 
 func runPostgresContainer(ctx context.Context) (*tcpostgres.PostgresContainer, error) {
 	return tcpostgres.Run(ctx, "postgres:18",
+		// The module's own default command (fsync=off) plus connection headroom:
+		// a package's parallel tests share this one container, each with a pool
+		// of its own, and the stock 100 is a ceiling a wide -parallel can hit.
+		testcontainers.WithCmd("postgres", "-c", "fsync=off", "-c", "max_connections=400"),
 		tcpostgres.WithDatabase("postgres"),
 		tcpostgres.WithUsername("omniglass"),
 		tcpostgres.WithPassword("omniglass"),
@@ -275,10 +279,11 @@ func buildTemplate(ctx context.Context) error {
 	if err := migrate.Run(withDBName(adminDSN, templateName)); err != nil {
 		return fmt.Errorf("migrate template %s: %w", templateName, err)
 	}
-	return sealTemplate(ctx)
+	return sealDatabase(ctx, templateName)
 }
 
-// sealTemplate closes the template to connections so copying from it can never
+// sealDatabase closes a template database (the base template, or a derived one,
+// see [NewDSNFrom]) to connections so copying from it can never
 // race one. internal/migrate builds a dbmate.DB it never explicitly closes, so
 // the harness cannot assume dbmate left no session behind: it terminates
 // whatever is still attached and then refuses connections outright. With
@@ -286,7 +291,7 @@ func buildTemplate(ctx context.Context) error {
 // what makes CREATE DATABASE ... TEMPLATE deterministic. Retrying on "source
 // database is being accessed by other users" would only turn a deterministic
 // failure into an intermittent one.
-func sealTemplate(ctx context.Context) error {
+func sealDatabase(ctx context.Context, name string) error {
 	admin, err := pgx.Connect(ctx, adminDSN)
 	if err != nil {
 		return fmt.Errorf("admin connect: %w", err)
@@ -295,12 +300,12 @@ func sealTemplate(ctx context.Context) error {
 
 	if _, err := admin.Exec(ctx,
 		`select pg_terminate_backend(pid) from pg_stat_activity
-		  where datname = $1 and pid <> pg_backend_pid()`, templateName); err != nil {
-		return fmt.Errorf("terminate backends on %s: %w", templateName, err)
+		  where datname = $1 and pid <> pg_backend_pid()`, name); err != nil {
+		return fmt.Errorf("terminate backends on %s: %w", name, err)
 	}
-	if _, err := admin.Exec(ctx, "alter database "+pgx.Identifier{templateName}.Sanitize()+
+	if _, err := admin.Exec(ctx, "alter database "+pgx.Identifier{name}.Sanitize()+
 		" with is_template = true allow_connections = false"); err != nil {
-		return fmt.Errorf("seal template %s: %w", templateName, err)
+		return fmt.Errorf("seal template %s: %w", name, err)
 	}
 	return nil
 }
@@ -360,6 +365,12 @@ func reclaimTemplate() error {
 		return fmt.Errorf("admin connect: %w", err)
 	}
 	defer func() { _ = admin.Close(ctx) }()
+	// Derived templates are copies of the base, so they go first.
+	for _, name := range derivedNames() {
+		if err := dropTemplate(ctx, admin, name); err != nil {
+			return err
+		}
+	}
 	return dropTemplate(ctx, admin, templateName)
 }
 
@@ -396,6 +407,13 @@ func NewDSN(t testing.TB) string {
 	if err := ensureTemplate(); err != nil {
 		t.Fatal(err)
 	}
+	return cloneDatabase(t, templateName)
+}
+
+// cloneDatabase creates a test database as a CREATE DATABASE ... TEMPLATE copy
+// of source, the base template or a derived one, and registers its drop.
+func cloneDatabase(t testing.TB, source string) string {
+	t.Helper()
 	ctx := context.Background()
 
 	dbName := testDBNameFor(procTag, dbCounter.Add(1))
@@ -404,13 +422,13 @@ func NewDSN(t testing.TB) string {
 		t.Fatalf("admin connect: %v", err)
 	}
 	_, err = admin.Exec(ctx, "CREATE DATABASE "+pgx.Identifier{dbName}.Sanitize()+
-		" TEMPLATE "+pgx.Identifier{templateName}.Sanitize())
+		" TEMPLATE "+pgx.Identifier{source}.Sanitize())
 	_ = admin.Close(ctx)
 	if err != nil {
-		t.Fatalf("create database %s from template %s: %v", dbName, templateName, err)
+		t.Fatalf("create database %s from template %s: %v", dbName, source, err)
 	}
-	// Registered here, before NewDSN returns, so every cleanup the caller adds
-	// afterwards runs BEFORE this one (last in, first out). NewDB and
+	// Registered here, before the DSN is returned, so every cleanup the caller
+	// adds afterwards runs BEFORE this one (last in, first out). NewDB and
 	// NewCountingDB rely on that: they register gw.Close after this returns, so
 	// the pool closes before the database is dropped.
 	t.Cleanup(func() { dropTestDB(t, dbName) })

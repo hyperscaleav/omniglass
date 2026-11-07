@@ -25,6 +25,7 @@ import (
 // mandatory. A single-owner table needs neither an owner_kind discriminator nor
 // an arc CHECK.
 func TestLogLineIsComponentOnly(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -60,6 +61,7 @@ func TestLogLineIsComponentOnly(t *testing.T) {
 // to node(principal_id) with the same cascade the old node arm had, and the
 // (node_id, ts desc) index the newest-first list read leans on.
 func TestNodeLogShape(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -118,6 +120,7 @@ func TestNodeLogShape(t *testing.T) {
 // exists, so before the split this insert succeeded; only the narrowing turns
 // it into a named refusal.
 func TestInsertLogLinesRefusesANonComponentBinding(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

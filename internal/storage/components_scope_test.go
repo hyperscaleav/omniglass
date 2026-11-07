@@ -16,6 +16,7 @@ import (
 // helpers: subtree scope, the 3-way split, occupancy, the system/location
 // belongs-to + located-at FK resolution, FK faults, and audit.
 func TestComponentScopeCRUD(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)

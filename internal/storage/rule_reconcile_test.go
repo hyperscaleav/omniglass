@@ -73,6 +73,7 @@ func maxSampleID(t *testing.T, f *healthFixture, table string) int64 {
 // meanwhile, then lets the batch commit: the endpoint reads down and the rule
 // holds nothing. One reconcile pass heals it.
 func TestReconcileHealsEnableDuringBatch(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx, all := context.Background(), scope.Set{All: true}
 	off := false
@@ -115,6 +116,7 @@ func TestReconcileHealsEnableDuringBatch(t *testing.T) {
 // health lock, so the batch (waiting first) detects the cycle and aborts
 // itself. One reconcile pass raises the alarm icmp's down called for.
 func TestReconcileHealsDeadlockAbort(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx, all := context.Background(), scope.Set{All: true}
 	// A collected key: one batch carrying two of its series is a push's (or
@@ -177,6 +179,7 @@ func TestReconcileHealsDeadlockAbort(t *testing.T) {
 // reads only samples past its mark, so once the lag has moved past the
 // drift's sample, nothing heals it until a later sample touches the series.
 func TestReconcileLeavesAgreementAlone(t *testing.T) {
+	t.Parallel()
 	r := newStreakRig(t, "steady", 10*time.Second)
 	ctx := context.Background()
 	r.observe(t, "tcp", "down", time.Now().UTC())
@@ -226,6 +229,7 @@ func TestReconcileLeavesAgreementAlone(t *testing.T) {
 // work), and its second pass does not reread from the start either. A
 // drifted series older than the lookback is left; one inside it is healed.
 func TestReconcileFirstPassIsBounded(t *testing.T) {
+	t.Parallel()
 	r := newStreakRig(t, "bounded", 10*time.Second)
 	ctx := context.Background()
 	r.observe(t, "tcp", "down", time.Now().UTC())
@@ -273,6 +277,7 @@ func TestReconcileFirstPassIsBounded(t *testing.T) {
 // correction fail by holding the series' lock past the correction's lock
 // timeout.
 func TestReconcileRetriesAFailedSeriesWithoutPinningTheMark(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx, all := context.Background(), scope.Set{All: true}
 	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: "pin", SampleKey: "endpoint-reachable",
@@ -327,6 +332,7 @@ func TestReconcileRetriesAFailedSeriesWithoutPinningTheMark(t *testing.T) {
 // The metric lane reconciles the same way, and a selector still confines a
 // rule: a series its rule does not watch is not drift, however it reads.
 func TestReconcileMetricLaneAndSelector(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx, all := context.Background(), scope.Set{All: true}
 	if _, err := f.gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "other-c"}, all, all, all, all); err != nil {
@@ -377,6 +383,7 @@ func TestReconcileMetricLaneAndSelector(t *testing.T) {
 // is off for the question because the fixture's tables are tiny; what the
 // planner reaches for instead is what it will choose once the lane is real.
 func TestSeriesNewestIsAnIndexProbe(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 	if _, err := f.conn.Exec(ctx, "set enable_seqscan = off"); err != nil {

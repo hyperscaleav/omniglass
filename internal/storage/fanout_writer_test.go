@@ -52,6 +52,7 @@ func newFanFixture(t *testing.T) fanFixture {
 // has not bound, and any key outside the collected class: a node-probe key,
 // a platform key, a calc rule's output.
 func TestFanoutWriterIsHeldToTheConduitsBindings(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -98,6 +99,7 @@ func TestFanoutWriterIsHeldToTheConduitsBindings(t *testing.T) {
 // binding is the fence) maps each identity a batch names to its bound owner
 // and leaves an unbound one out, naming the conduit.
 func TestResolveIdentityBindingsInOneRead(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -123,6 +125,7 @@ func TestResolveIdentityBindingsInOneRead(t *testing.T) {
 // every other owner's with it): it fails transiently, writes nothing, and the
 // redelivery resolves the bindings afresh.
 func TestAStaleFanOutIsRedeliveredNotDropped(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -147,6 +150,7 @@ func TestAStaleFanOutIsRedeliveredNotDropped(t *testing.T) {
 // unbound and commits after the operator bound it does not put it back in
 // the inbox.
 func TestTheInboxNeverHoldsABoundIdentity(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

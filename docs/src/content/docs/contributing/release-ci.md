@@ -10,17 +10,25 @@ Thirteen workflows carry it: `test`, `pr-title`, `image`, `docs-shots`, `gen-dri
 
 ## On every pull request
 
-- **`test.yml`** (the test gate) runs `go build ./...` and then `make test`, the same target
-  contributors run locally, so the CI gate cannot drift from the local one (#214): the SPA
-  typecheck and vitest suite (`test-web`), every Go package, then the NET_ADMIN tier in its
-  container. It runs on a runner with a Docker daemon, so the testcontainers-backed integration
-  and e2e tiers actually execute (after widening `net.ipv4.ping_group_range` so the collection
-  tier's unprivileged ICMP probe can open its socket), and with `TEST_PARALLEL` raised to the
-  runner's core count. A second job in the same workflow runs the browser e2e tier
+- **`test.yml`** (the test gate) runs the parts of `make test`, the target contributors run
+  locally, as parallel jobs, so the CI gate cannot drift from the local one (#214) and its wall
+  time is the slowest part rather than the sum (#1536): the SPA typecheck and vitest suite
+  (`test-web`), the Go tier as three shards (`test-go-storage` and `test-go-devseed`, the two
+  slowest packages, and `test-go-rest`, every other package), and the NET_ADMIN tier in its
+  container (`test-netadmin`). The rest shard's package list is derived from `go list ./...`
+  minus the named shards, and `make test-go-shards-check` fails if a package is in no shard or in
+  two. The jobs run on runners with a Docker daemon, so the testcontainers-backed integration and
+  e2e tiers actually execute; only `test-go-rest` widens `net.ipv4.ping_group_range` (the
+  collection tier's unprivileged ICMP probe needs it), and `TEST_PARALLEL` is raised to the
+  runner's core count. Each Go shard runs under `cmd/gotestreport`: the log reads as a plain
+  `go test` run, and ends with the shard's 20 slowest tests and every package's wall time.
+  The required check is the final job, named `test`, which `needs` every shard, runs
+  `if: always()`, and fails unless each one succeeded; add a new shard to its `needs`. A second
+  job in the same workflow runs the browser e2e tier
   (`make test-e2e`): the console driven as an operator would against the real binary, on a
   throwaway lab, covering the CRUD round-trips plus one smoke per console route from the
-  route manifest, so a PR cannot merge with a route that errors in a real browser. Both jobs
-  also run on `main` after merge.
+  route manifest, so a PR cannot merge with a route that errors in a real browser. All of these
+  jobs also run on `main` after merge.
 - **`pr-title.yml`** lints the PR title to the conventional-commit grammar. This matters
   because the repo squash-merges: the squash subject *is* the PR title, and semantic-release
   reads it to decide the next version. A malformed title would either mis-version or silently

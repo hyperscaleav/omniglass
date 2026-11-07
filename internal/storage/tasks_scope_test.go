@@ -18,6 +18,7 @@ import (
 // interface's owning component's scope (A-scope sees A's task, B's is a
 // non-disclosing 404).
 func TestTaskDerivedScope(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)

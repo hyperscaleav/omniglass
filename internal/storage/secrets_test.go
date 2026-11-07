@@ -37,6 +37,7 @@ func secretGateway(t *testing.T) (storage.Gateway, string) {
 // TestSecretRegistrySeed asserts the boot seed installs the official secret_types
 // with their per-field shape intact.
 func TestSecretRegistrySeed(t *testing.T) {
+	t.Parallel()
 	gw, _ := secretGateway(t)
 	ctx := context.Background()
 
@@ -60,6 +61,7 @@ func TestSecretRegistrySeed(t *testing.T) {
 // jsonb -> scan -> unseal against real Postgres, is masked everywhere but the
 // reveal, and is never stored in plaintext.
 func TestSecretSealRoundTrip(t *testing.T) {
+	t.Parallel()
 	gw, dsn := secretGateway(t)
 	ctx := context.Background()
 
@@ -103,6 +105,7 @@ func TestSecretSealRoundTrip(t *testing.T) {
 // TestSecretFieldValidation covers the create gate: an unknown field and a
 // missing operator field are both refused before any write.
 func TestSecretFieldValidation(t *testing.T) {
+	t.Parallel()
 	gw, _ := secretGateway(t)
 	ctx := context.Background()
 
@@ -143,6 +146,7 @@ func TestSecretFieldValidation(t *testing.T) {
 // TestSecretOwnerScope covers the owner-arc scope gate on create and the
 // scope-filtered list (a secret outside the read scope is dropped).
 func TestSecretOwnerScope(t *testing.T) {
+	t.Parallel()
 	gw, _ := secretGateway(t)
 	ctx := context.Background()
 	// campus is the official type allowed at root; the type is incidental
@@ -198,6 +202,7 @@ func TestSecretOwnerScope(t *testing.T) {
 // resolves to the most-specific owner (highest band, then deepest), and the
 // shadowed candidates come back too.
 func TestSecretCascadeResolve(t *testing.T) {
+	t.Parallel()
 	gw, _ := secretGateway(t)
 	ctx := context.Background()
 

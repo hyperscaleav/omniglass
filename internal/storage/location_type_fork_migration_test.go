@@ -29,6 +29,7 @@ import (
 // The first real release changes that calculus and owes its fleets a migration
 // of its own; this one may not quietly grow the machinery back.
 func TestShippedLocationTypesFlipToPlatformOwned(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	if err := migrate.RollbackBelow(dsn, "20260812093000"); err != nil {
 		t.Fatalf("roll back below the fork adoption: %v", err)

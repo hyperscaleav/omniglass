@@ -17,6 +17,7 @@ import (
 // an optional password, refuses a duplicate username, and audits the write.
 // Skipped under -short.
 func TestPrincipalDirectory(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
@@ -109,6 +110,7 @@ func TestPrincipalDirectory(t *testing.T) {
 // transactions), and a stamp-led sort flapped the screenshot gate when a run's
 // node landed an earlier stamp than its humans. Skipped under -short.
 func TestPrincipalListGroupsKinds(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)

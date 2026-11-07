@@ -14,6 +14,7 @@ import (
 // custom metric type registers with its numeric facts (unit, precision), the
 // seeded canon is read-only, and the sentinels map one to one.
 func TestMetricTypeCRUD(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -111,6 +112,7 @@ func TestMetricTypeCRUD(t *testing.T) {
 // every metric_type mutation writes an audit row in the same transaction, keyed
 // on the uuid (a rename must not orphan the trail), never on the name.
 func TestAuditResourceIDOnTheMetricLane(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

@@ -16,6 +16,7 @@ import (
 // through unchanged (even an unknown one, so the caller's own not-found applies),
 // and an unknown username is ErrPrincipalNotFound. Skipped under -short.
 func TestResolvePrincipalRef(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)

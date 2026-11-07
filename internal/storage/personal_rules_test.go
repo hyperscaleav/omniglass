@@ -25,6 +25,7 @@ func (f *peopleFixture) personal(t *testing.T, owner, name, when string) {
 }
 
 func TestAPersonalRuleNeverMatchesOutsideItsOwnersScope(t *testing.T) {
+	t.Parallel()
 	f := newPeopleFixture(t)
 	// bob reads display-2 alone. One rule always holds; the other's when
 	// fails whenever it runs (a division by zero), which would itself write a
@@ -67,6 +68,7 @@ func TestAPersonalRuleNeverMatchesOutsideItsOwnersScope(t *testing.T) {
 }
 
 func TestAPersonalRuleIsItsOwnersAlone(t *testing.T) {
+	t.Parallel()
 	f := newPeopleFixture(t)
 	f.personal(t, "bob", "my-displays", "true")
 	alice := f.ids["alice"]
@@ -122,6 +124,7 @@ func TestAPersonalRuleIsItsOwnersAlone(t *testing.T) {
 }
 
 func TestATestJudgesTheOwnersRecentAlarmsInScope(t *testing.T) {
+	t.Parallel()
 	f := newPeopleFixture(t)
 	f.personal(t, "bob", "loud", "severity_rank >= 50")
 	for _, a := range []struct{ comp, sev string }{{"display-1", "disaster"}, {"display-2", "high"}, {"display-2", "disaster"}} {
@@ -154,6 +157,7 @@ func TestATestJudgesTheOwnersRecentAlarmsInScope(t *testing.T) {
 // rather than being held by it; an owner who loses notification:subscribe is
 // told nothing more; a paused rule's queued email does not send.
 func TestAPersonsRulesAreBoundedAndReleaseWhatAnAdminDeletes(t *testing.T) {
+	t.Parallel()
 	f := newPeopleFixture(t)
 	bob := f.ids["bob"]
 	for i := range storage.PersonalRuleCap {
@@ -180,6 +184,7 @@ func TestAPersonsRulesAreBoundedAndReleaseWhatAnAdminDeletes(t *testing.T) {
 }
 
 func TestAnOwnerWithoutSubscribeIsToldNothing(t *testing.T) {
+	t.Parallel()
 	f := newPeopleFixture(t)
 	f.personal(t, "alice", "everything", "true")
 	conn, err := pgx.Connect(f.ctx, f.dsn)

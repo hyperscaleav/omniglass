@@ -17,6 +17,7 @@ import (
 // channel rides the context the way the real actor does, so only server code
 // that sets it (the MCP dispatch) can stamp it. Skipped under -short.
 func TestAuditRowCarriesItsChannelAndClient(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -102,6 +103,7 @@ func TestAuditRowCarriesItsChannelAndClient(t *testing.T) {
 // long name is cut, so a hostile declaration cannot forge a line in a log or
 // swell the row.
 func TestAuditClientIsSanitized(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ in, want string }{
 		{"claude-code/2.1.0", "claude-code/2.1.0"},
 		{"  spaced  ", "spaced"},

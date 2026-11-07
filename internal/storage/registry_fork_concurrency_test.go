@@ -52,6 +52,7 @@ func newForkGateway(t *testing.T) *storage.PG {
 }
 
 func TestConcurrentComponentTypeForksKeepBothEdits(t *testing.T) {
+	t.Parallel()
 	gw := newForkGateway(t)
 	ctx := context.Background()
 
@@ -95,6 +96,7 @@ func TestConcurrentComponentTypeForksKeepBothEdits(t *testing.T) {
 }
 
 func TestConcurrentLocationTypeForksKeepBothEdits(t *testing.T) {
+	t.Parallel()
 	gw := newForkGateway(t)
 	ctx := context.Background()
 
@@ -150,6 +152,7 @@ func TestConcurrentLocationTypeForksKeepBothEdits(t *testing.T) {
 // call on both registries and the location half of the pair is covered by
 // TestConcurrentLocationTypeForksKeepBothEdits.
 func TestConcurrentForkAndRestoreSeeEachOther(t *testing.T) {
+	t.Parallel()
 	gw := newForkGateway(t)
 	ctx := context.Background()
 

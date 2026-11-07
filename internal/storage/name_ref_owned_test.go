@@ -67,6 +67,7 @@ func newOwnedNameFixture(t *testing.T) *ownedNameFixture {
 // dotted address, bare name, uuid or `$platform`, and the uuid as before. The
 // row returned carries its uuid whichever spelling found it.
 func TestSecretAnswersToItsName(t *testing.T) {
+	t.Parallel()
 	f := newOwnedNameFixture(t)
 	ctx := context.Background()
 	label := "relabelled"
@@ -113,6 +114,7 @@ func TestSecretAnswersToItsName(t *testing.T) {
 // one owner is refused with each one's owner-qualified spelling; a caller who
 // can see only one of them resolves it.
 func TestSecretNameAmbiguityIsJudgedInScope(t *testing.T) {
+	t.Parallel()
 	f := newOwnedNameFixture(t)
 	ctx := context.Background()
 
@@ -140,6 +142,7 @@ func TestSecretNameAmbiguityIsJudgedInScope(t *testing.T) {
 // read scope, or admin-sensitive without the tier) refuses exactly as one that
 // does not exist, in every spelling, with no candidate.
 func TestSecretNameLookupDisclosesNothing(t *testing.T) {
+	t.Parallel()
 	f := newOwnedNameFixture(t)
 	ctx := context.Background()
 	refusal := func(ref string, read scope.Set, canAdmin bool) string {
@@ -172,6 +175,7 @@ func TestSecretNameLookupDisclosesNothing(t *testing.T) {
 // TestSecretWritesByNameKeepTheScopeSplit: a name changes how the secret is
 // found, never what may be done to it.
 func TestSecretWritesByNameKeepTheScopeSplit(t *testing.T) {
+	t.Parallel()
 	f := newOwnedNameFixture(t)
 	ctx := context.Background()
 	label := "x"
@@ -193,6 +197,7 @@ func TestSecretWritesByNameKeepTheScopeSplit(t *testing.T) {
 // owner-arc table: a bare name, `<owner>/<name>`, and the uuid; a shared name
 // refused with its owner-qualified spellings; scope narrowing first.
 func TestVariableAnswersToItsName(t *testing.T) {
+	t.Parallel()
 	f := newOwnedNameFixture(t)
 	ctx := context.Background()
 	mk := func(ownerKind string, owner *string) string {

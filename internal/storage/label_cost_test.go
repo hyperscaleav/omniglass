@@ -61,6 +61,7 @@ func labelFleet(t *testing.T, roomCount int) (storage.Gateway, *querycount.Count
 // FIXED between the two measurements while row count grows, which is the honest
 // shape of the claim: cost is bounded by the registry, not by the fleet.
 func TestTheBulkRecomputeCostIsFlatInFleetSize(t *testing.T) {
+	t.Parallel()
 	gw, counter, rooms := labelFleet(t, 4)
 	ctx := context.Background()
 	edge55 := storagetest.MintProduct(t, ctx, gw, "display").Name
@@ -114,6 +115,7 @@ func TestTheBulkRecomputeCostIsFlatInFleetSize(t *testing.T) {
 // twenty. This is the cascade's own blast radius, and the one an operator can
 // reach by accident: renaming a busy room is an ordinary afternoon.
 func TestTheLocationCascadeCostIsFlatInWhatIsPlacedThere(t *testing.T) {
+	t.Parallel()
 	gw, counter, rooms := labelFleet(t, 2)
 	ctx := context.Background()
 	edge55 := storagetest.MintProduct(t, ctx, gw, "display").Name
@@ -182,6 +184,7 @@ func TestTheLocationCascadeCostIsFlatInWhatIsPlacedThere(t *testing.T) {
 // resolve that grows a second round trip, and a create whose cost depends on
 // how full the room already is.
 func TestAPlacedCreateStillCostsAFixedNumberOfStatements(t *testing.T) {
+	t.Parallel()
 	gw, counter, rooms := labelFleet(t, 1)
 	ctx := context.Background()
 	edge55 := storagetest.MintProduct(t, ctx, gw, "display").Name

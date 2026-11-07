@@ -32,6 +32,7 @@ func newFileGW(t *testing.T) (context.Context, storage.Gateway, blob.Store) {
 }
 
 func TestCreateFileStoresBlobAndDownloadsIdenticalBytes(t *testing.T) {
+	t.Parallel()
 	ctx, gw, _ := newFileGW(t)
 	payload := []byte("PK\x03\x04 firmware image bytes")
 
@@ -61,6 +62,7 @@ func TestCreateFileStoresBlobAndDownloadsIdenticalBytes(t *testing.T) {
 }
 
 func TestCreateFileDedupsIdenticalBytesToOneBlob(t *testing.T) {
+	t.Parallel()
 	ctx, gw, _ := newFileGW(t)
 	payload := []byte("identical runbook contents")
 
@@ -81,6 +83,7 @@ func TestCreateFileDedupsIdenticalBytesToOneBlob(t *testing.T) {
 }
 
 func TestDeleteFileFreesUnreferencedBlob(t *testing.T) {
+	t.Parallel()
 	ctx, gw, bs := newFileGW(t)
 	payload := []byte("a packet capture")
 
@@ -104,6 +107,7 @@ func TestDeleteFileFreesUnreferencedBlob(t *testing.T) {
 }
 
 func TestDeleteFileKeepsBlobStillReferencedByAnotherHandle(t *testing.T) {
+	t.Parallel()
 	ctx, gw, bs := newFileGW(t)
 	payload := []byte("shared firmware bytes")
 
@@ -138,6 +142,7 @@ func TestDeleteFileKeepsBlobStillReferencedByAnotherHandle(t *testing.T) {
 }
 
 func TestCreateFileRejectsMalformedUpload(t *testing.T) {
+	t.Parallel()
 	ctx, gw, _ := newFileGW(t)
 	_, err := gw.CreateFile(ctx, "", storage.FileSpec{Name: "a/b.txt", ContentType: "text/plain", Data: []byte("x")}, false)
 	if !errors.Is(err, storage.ErrFileInvalid) {
@@ -148,6 +153,7 @@ func TestCreateFileRejectsMalformedUpload(t *testing.T) {
 // The sensitive flag mirrors secret.admin_sensitive: creating one needs the
 // admin tier, and a flagged file is invisible / non-disclosing without it.
 func TestSensitiveFileRequiresAdminToCreate(t *testing.T) {
+	t.Parallel()
 	ctx, gw, _ := newFileGW(t)
 	_, err := gw.CreateFile(ctx, "", storage.FileSpec{
 		Name: "competitive-quote.pdf", ContentType: "application/pdf", Data: []byte("bid"), Sensitive: true,
@@ -158,6 +164,7 @@ func TestSensitiveFileRequiresAdminToCreate(t *testing.T) {
 }
 
 func TestSensitiveFileHiddenFromNonAdminListAndGet(t *testing.T) {
+	t.Parallel()
 	ctx, gw, _ := newFileGW(t)
 	// admin creates one sensitive and one ordinary file.
 	sens, err := gw.CreateFile(ctx, "", storage.FileSpec{Name: "quote.pdf", ContentType: "application/pdf", Data: []byte("bid"), Sensitive: true}, true)

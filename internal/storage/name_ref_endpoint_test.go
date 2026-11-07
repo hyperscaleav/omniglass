@@ -63,6 +63,7 @@ func newEndpointNameFixture(t *testing.T) *endpointNameFixture {
 // resolver takes it (a dotted address, a bare name, a uuid), and its own uuid
 // keeps working. Whatever form found it, the endpoint returned carries its uuid.
 func TestEndpointAnswersToItsAddress(t *testing.T) {
+	t.Parallel()
 	f := newEndpointNameFixture(t)
 	ctx := context.Background()
 
@@ -94,6 +95,7 @@ func TestEndpointAnswersToItsAddress(t *testing.T) {
 // address, and a caller who can see only one of them resolves it cleanly, never
 // learning the other exists.
 func TestEndpointNameAmbiguityIsJudgedInScope(t *testing.T) {
+	t.Parallel()
 	f := newEndpointNameFixture(t)
 	ctx := context.Background()
 
@@ -124,6 +126,7 @@ func TestEndpointNameAmbiguityIsJudgedInScope(t *testing.T) {
 // endpoint that exists outside the caller's read scope and one that does not
 // exist at all give the same refusal, in every spelling, with no candidate.
 func TestEndpointNameLookupDisclosesNothingOutOfScope(t *testing.T) {
+	t.Parallel()
 	f := newEndpointNameFixture(t)
 	ctx := context.Background()
 
@@ -159,6 +162,7 @@ func TestEndpointNameLookupDisclosesNothingOutOfScope(t *testing.T) {
 // TestEndpointRefMalformed: a reference that is neither a uuid nor a
 // component/endpoint pair names nothing, and says how an endpoint is addressed.
 func TestEndpointRefMalformed(t *testing.T) {
+	t.Parallel()
 	f := newEndpointNameFixture(t)
 	ctx := context.Background()
 	for _, ref := range []string{"https", "display-1/https/extra", "/https", "display-1/"} {
@@ -179,6 +183,7 @@ func TestEndpointRefMalformed(t *testing.T) {
 // read scope is the non-disclosing miss, readable but out of action scope the
 // 403), and the audit row keys on the endpoint's uuid, never the spelling.
 func TestEndpointWritesByNameKeepTheScopeSplit(t *testing.T) {
+	t.Parallel()
 	f := newEndpointNameFixture(t)
 	ctx := context.Background()
 	refA, refB := f.addrA+"/https", f.addrB+"/https"

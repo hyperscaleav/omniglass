@@ -85,6 +85,7 @@ func rederiveFixture(t *testing.T) (context.Context, *storage.PG, *pgx.Conn, *st
 // A re-seed with nothing changed touches no task and no endpoint: the derived
 // ids are content hashes, so the same spec re-derives the same rows.
 func TestReseedWithNoChangeTouchesNothing(t *testing.T) {
+	t.Parallel()
 	ctx, gw, conn, ep := rederiveFixture(t)
 	before := endpointTasks(t, ctx, conn, ep.ID)
 	var epUpdated time.Time
@@ -131,6 +132,7 @@ func TestReseedWithNoChangeTouchesNothing(t *testing.T) {
 // A reply and error shape added to an official spec reaches an endpoint that
 // was attached before it: the seed re-derives, the superseded tasks retire.
 func TestSeededSpecChangeReachesAttachedEndpoints(t *testing.T) {
+	t.Parallel()
 	ctx, gw, conn, ep := rederiveFixture(t)
 	// Roll the official spec back to one without reply shapes, as an older
 	// binary's seed carried it.
@@ -190,6 +192,7 @@ func TestSeededSpecChangeReachesAttachedEndpoints(t *testing.T) {
 // A custom driver's spec update re-derives in the update's transaction,
 // audited by the update's one row; the old task retires.
 func TestDriverUpdateRederivesAttachedEndpoints(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -353,6 +356,7 @@ func attachRace(ctx context.Context, gw *storage.PG) (*storage.Endpoint, error) 
 // old committed spec and the update's re-derive could not see the attach's
 // uncommitted endpoint, so the endpoint kept the old spec for good.
 func TestAttachDuringADriverUpdateDerivesTheNewSpec(t *testing.T) {
+	t.Parallel()
 	ctx, gw, dsn := raceFixture(t)
 	upd, err := pgx.Connect(ctx, dsn)
 	if err != nil {
@@ -404,6 +408,7 @@ func TestAttachDuringADriverUpdateDerivesTheNewSpec(t *testing.T) {
 // Review of #823: a re-derive that meets an endpoint being deleted skips it
 // rather than failing the update (or the seed) on the task foreign key.
 func TestRederiveSkipsAnEndpointDeletedConcurrently(t *testing.T) {
+	t.Parallel()
 	ctx, gw, dsn := raceFixture(t)
 	ep, err := attachRace(ctx, gw)
 	if err != nil {

@@ -38,6 +38,14 @@ type MetricSample struct {
 	Source     string
 }
 
+// MetricTime is a metric sample's ts as it is stored: whole milliseconds
+// (#1526). Node clocks are NTP-synced, accurate to a few milliseconds, so the
+// digits below are noise; a raw row and the compacted block that later holds it
+// (int4 millisecond offsets, #1265) then agree exactly. It truncates rather
+// than refuses, so a spool replayed from an older node lands. The metric lane
+// only: the property, event and log lanes keep the ts they were sent.
+func MetricTime(ts time.Time) time.Time { return ts.Truncate(time.Millisecond) }
+
 // ErrUnknownOwnerKind guards the owner-arc column mapping.
 var ErrUnknownOwnerKind = errors.New("storage: unknown sample owner_kind")
 
@@ -73,7 +81,7 @@ func (p *PG) InsertMetricSamples(ctx context.Context, w KeyWriter, evs []MetricS
 	}
 	err := write()
 	if isPartitionRoutingMiss(err) {
-		if perr := p.landMetricMonths(ctx, evs); perr != nil {
+		if perr := p.landMetricDays(ctx, evs); perr != nil {
 			return perr
 		}
 		err = write()
@@ -105,8 +113,12 @@ func (p *PG) sampleWrite(ctx context.Context, what string, write func(pgx.Tx) er
 	}
 }
 
+// sampleWriteOnce runs the write in a READ COMMITTED transaction
+// (trendTxOptions): the metric insert reads the trend's announced mark after
+// taking the trend lock, and must see the mark a compaction moved before the
+// lock was granted.
 func (p *PG) sampleWriteOnce(ctx context.Context, what string, write func(pgx.Tx) error) error {
-	tx, err := p.pool.Begin(ctx)
+	tx, err := p.pool.BeginTx(ctx, trendTxOptions)
 	if err != nil {
 		return fmt.Errorf("storage: begin %s: %w", what, err)
 	}
@@ -206,6 +218,7 @@ func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs
 		if stamps[i], err = clock.cap(ctx, ev.Key, ts); err != nil {
 			return err
 		}
+		stamps[i] = MetricTime(stamps[i])
 	}
 	// A series the batch carries once lands with every other such series in
 	// one statement (#1274). A series it carries more than once keeps the
@@ -226,6 +239,14 @@ func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs
 	// sources, in the batch's order; $8 the provenance, $9..$11 a calculated
 	// sample's rule lineage, $12 the collecting node (null for none), $13 a
 	// fanned sample's conduit (source_conduit_id, #1282; null for none).
+	//
+	// An observed sample dated in an hour the trend compaction has announced
+	// (#1276: a late sample, a spool replayed past the horizon) marks its
+	// series' hour dirty in the same statement, so a compaction recomputes the
+	// hour once it is folded; an on-time sample marks nothing. The announced
+	// mark is read by metric_trend_announced(), which first takes the trend
+	// lock shared until the transaction ends: the compaction's drain
+	// (drainTrendWrites) waits for every insert holding it.
 	//
 	// Each sample's series is found by its key, or started in the same statement
 	// when the batch is its first sample. A series another transaction started
@@ -262,12 +283,19 @@ func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs
 		on conflict do nothing
 		returning id, owner_id, metric_type_id, instance, source
 	),
-	series as (select * from known union all select * from fresh)
-	insert into metric (series_id, ts, value, source_rule, source_rule_version, source_rule_id)
-	select s.id, u.ts, u.value, $9::text, $10::bigint, $11::uuid
-	from u left join series s on s.owner_id = u.owner and s.metric_type_id = u.type_id
-		and s.instance = u.instance and s.source = u.source
-	order by u.ord`
+	series as (select * from known union all select * from fresh),
+	landed as (
+		insert into metric (series_id, ts, value, source_rule, source_rule_version, source_rule_id)
+		select s.id, u.ts, u.value, $9::text, $10::bigint, $11::uuid
+		from u left join series s on s.owner_id = u.owner and s.metric_type_id = u.type_id
+			and s.instance = u.instance and s.source = u.source
+		order by u.ord
+		returning series_id, ts)
+	insert into metric_trend_dirty (series_id, hour)
+	select distinct l.series_id, date_bin('1 hour', l.ts, timestamptz '2000-01-01 00:00:00+00')
+	from landed l
+	where $8::text = 'observed' and l.ts < (select metric_trend_announced())
+	on conflict do nothing`
 	// insert lands the samples at idx in one statement, in their order, so the
 	// rows take ids in the order the batch carried them (metricInsertSQL: each
 	// sample's series is found, or started, in the same statement). An unknown
@@ -439,8 +467,8 @@ func metricSeriesKey(ev MetricSampleWrite, arc string) string {
 
 // metricNewestSQL is one metric series' newest hot-tier sample (ts, id, value
 // and the lineage columns), series an SQL expression (a lateral's column): an
-// index probe of metric_series_ts_idx in each month, newest month first,
-// stopping at the first month that holds one (TestMetricNewestReadsTheNewestMonthFirst).
+// index probe of metric_series_ts_idx in each day, newest day first, stopping
+// at the first day that holds one (TestMetricNewestReadsTheNewestDayFirst).
 func metricNewestSQL(series string) string {
 	return `select m.ts, m.id, m.value, m.source_rule, m.source_rule_version, m.source_rule_id
 		from metric m where m.series_id = ` + series + `

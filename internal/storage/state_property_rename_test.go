@@ -11,6 +11,7 @@ import (
 // identifier follows the table, and the two value columns (text value plus the
 // value_json sidecar) converged on one `value jsonb NOT NULL`.
 func TestStateBecomesPropertyMigration(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	conn := connectMigrated(t)
 

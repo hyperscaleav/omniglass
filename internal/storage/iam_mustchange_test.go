@@ -15,6 +15,7 @@ import (
 // own change-password clears it. Read back through AuthenticateBearer, the path the
 // authn gate uses. Skipped under -short.
 func TestMustChangePasswordFlag(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)

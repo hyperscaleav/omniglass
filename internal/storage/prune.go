@@ -182,10 +182,19 @@ func pruneMetricSampleSQL(part string, typed bool) string {
 
 // pruneMetricSamples is pruneSamples on the metric lane: the partitions that
 // begin before the cutoff, oldest first, a statement each until limit rows
-// are deleted. A month wholly past every window is dropped whole by
-// DropMetricPartitions; this keeps the window exact inside the months that
-// remain.
+// are deleted. A day wholly past every window is dropped whole by
+// DropMetricPartitions; this keeps the window exact inside the days that
+// remain, a day a longer type's window still holds among them.
 func (p *PG) pruneMetricSamples(ctx context.Context, typeID string, days int, before time.Time, limit int) (int64, error) {
+	// No sample of an hour the trend compaction has not closed is removed
+	// (#1276), so the trend tier never misses an hour retention reached first.
+	before, err := metricPruneHorizon(ctx, p.pool, before)
+	if err != nil {
+		return 0, err
+	}
+	if before.IsZero() {
+		return 0, nil
+	}
 	parts, err := metricPartitions(ctx, p.pool)
 	if err != nil {
 		return 0, err

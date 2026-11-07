@@ -40,6 +40,18 @@ func legacyBackfillSQL(t *testing.T) (up, down string) {
 	return strings.TrimPrefix(up, "-- migrate:up"), down
 }
 
+// metricTrendFile is the hourly trend's migration (#1276), which builds on the
+// narrow metric lane.
+const metricTrendFile = "20261029171258_metric_trend.sql"
+
+// metricMillisFile is the metric timestamp migration (#1526), which sets the
+// default of metric_declared, a narrow-lane table.
+const metricMillisFile = "20261106050800_metric_ts_milliseconds.sql"
+
+// metricDayMigration is the day partitions' swap (#1527), which rebuilds the
+// narrow metric lane's sample table.
+const metricDayMigration = "20261106050925_metric_day_partitions.sql"
+
 // belowNarrowMetric stands a fixture's database just below the narrow metric
 // lane (#1275): the backfill is frozen at the wide metric table it ran
 // against, so it runs there, as it did on every install.
@@ -49,7 +61,11 @@ func legacyBackfillSQL(t *testing.T) (up, down string) {
 // namespace and its search path, #318). Those are re-applied: each migration
 // newer than the lane that is not part of it, run as its own up section. A
 // migration is idempotent by house rule, so the forward migrate after the
-// backfill runs it again harmlessly.
+// backfill runs it again harmlessly. A migration that builds on the narrow lane
+// itself (the hourly trend, #1276, references metric_series; the millisecond
+// default, #1526, alters metric_declared; the day partitions, #1527, rebuild
+// its sample table) cannot stand beside the wide table and is left to that
+// forward migrate: metricTrendFile, metricMillisFile and metricDayMigration.
 func belowNarrowMetric(t *testing.T, dsn string) {
 	t.Helper()
 	if err := migrate.RollbackBelow(dsn, metricNarrowVersion); err != nil {
@@ -74,6 +90,9 @@ func belowNarrowMetric(t *testing.T, dsn string) {
 			t.Fatal(err)
 		}
 		up, _, _ := strings.Cut(string(raw), "-- migrate:down")
+		if e.Name() == metricTrendFile || e.Name() == metricMillisFile || e.Name() == metricDayMigration {
+			continue
+		}
 		if _, err := conn.Exec(context.Background(), strings.TrimPrefix(up, "-- migrate:up")); err != nil {
 			t.Fatalf("re-apply %s beside the wide metric lane: %v", e.Name(), err)
 		}
@@ -105,6 +124,7 @@ var bornUnderTheRuling = map[string]bool{
 // code declares is listed (or born after the migration, bornUnderTheRuling),
 // and nothing the code does not declare.
 func TestLegacyBackfillNamesTheRuling(t *testing.T) {
+	t.Parallel()
 	up, _ := legacyBackfillSQL(t)
 	list := func(name string) []string {
 		t.Helper()
@@ -153,6 +173,7 @@ func TestLegacyBackfillNamesTheRuling(t *testing.T) {
 // retired_sample with its reason), that the reads stop serving them, that the
 // honest rows are untouched, and that a second run changes nothing.
 func TestLegacyBackfillRetiresWhatTheRulingRefuses(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -364,6 +385,7 @@ func TestLegacyBackfillRetiresWhatTheRulingRefuses(t *testing.T) {
 // it retired back where it was, id and all, so the retirement is reversible
 // in full.
 func TestLegacyBackfillDownRestoresTheRows(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -409,6 +431,7 @@ func TestLegacyBackfillDownRestoresTheRows(t *testing.T) {
 // in the series. Neither is delivered as the pin until an operator's :retry
 // confirms the key.
 func TestRetiredPlantedPinIsNeverRelearned(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -483,6 +506,7 @@ func TestRetiredPlantedPinIsNeverRelearned(t *testing.T) {
 // the ruling now reserves) is logged and skipped, never stopping the rest, and
 // the heal runs once over what was retired: a second heal judges nothing.
 func TestRetiredRowsReleaseTheConditionsTheyRaised(t *testing.T) {
+	t.Parallel()
 	r := newEdgeRig(t)
 	belowNarrowMetric(t, r.f.dsn)
 	r.rule(storage.EventRuleSpec{Name: "edge", Severity: "high", ClearEventType: "condition-ended"})
@@ -553,6 +577,7 @@ func TestRetiredRowsReleaseTheConditionsTheyRaised(t *testing.T) {
 // before someone declared the same key through the plain property route is
 // the node's own, so retiring the declared row leaves it the pin in force.
 func TestPinLearnedBeforeAPlantStaysThePin(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

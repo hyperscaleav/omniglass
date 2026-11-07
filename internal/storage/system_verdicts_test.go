@@ -89,6 +89,7 @@ func verdictFleet(t *testing.T, gw storage.Gateway, systems int) {
 // agreement is asserted rather than assumed, over a fleet deliberately holding
 // all three verdicts AND a system nothing has ever recomputed.
 func TestSystemVerdictsAgreeWithTheReport(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -142,6 +143,7 @@ func TestSystemVerdictsAgreeWithTheReport(t *testing.T) {
 // The point of the read is that it does not pay per system, on the server any
 // more than in the browser.
 func TestSystemVerdictsCostIsFlatInFleetSize(t *testing.T) {
+	t.Parallel()
 	small, smallCounter := storagetest.NewCountingDB(t)
 	large, largeCounter := storagetest.NewCountingDB(t)
 	ctx := context.Background()
@@ -168,6 +170,7 @@ func TestSystemVerdictsCostIsFlatInFleetSize(t *testing.T) {
 // that answered for more would leak a verdict for a row the caller cannot see; a
 // read that answered for fewer would send those rows back to fetching their own.
 func TestSystemVerdictsScopeMatchesTheList(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {

@@ -20,6 +20,7 @@ import (
 // binding declares them). Skipped under -short.
 
 func TestListenPortIsADriverInputAndMovesTheFingerprint(t *testing.T) {
+	t.Parallel()
 	f := newTLSFixture(t)
 	drv := "newtron-nvp-udp"
 	ep, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Driver: &drv, Component: &f.component, Node: &f.node,
@@ -70,6 +71,7 @@ func TestListenPortIsADriverInputAndMovesTheFingerprint(t *testing.T) {
 // A bare udp endpoint's params carry the listen port as given, so one the
 // node cannot bind is refused where it is written.
 func TestABareUDPEndpointsListenPortIsCheckedAtWrite(t *testing.T) {
+	t.Parallel()
 	f := newTLSFixture(t)
 	if _, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Transport: "udp", Component: &f.component, Node: &f.node,
 		Params: []byte(`{"target":"10.0.0.9:51327","listen-port":"any"}`)}, f.all); !errors.Is(err, storage.ErrEndpointParamsInvalid) || !strings.Contains(err.Error(), driver.ListenPortInput) {
@@ -96,6 +98,7 @@ const udpNoRetrySpec = `{"version":1,"transport":"udp",
  "commands":[{"command_type":"set-input","request":{"line":"SET INPUT ${value}","reply":{"prefix":"INPUT "}}}]}`
 
 func TestAUDPCommandDeliveryCarriesItsRetries(t *testing.T) {
+	t.Parallel()
 	f := newTLSFixture(t)
 	if _, err := f.gw.CreateDriver(f.ctx, "", storage.Driver{Name: "udp-no-retry", Label: "UDP no retry", Version: "1.0.0", Spec: []byte(udpNoRetrySpec)}); err != nil {
 		t.Fatalf("create driver: %v", err)

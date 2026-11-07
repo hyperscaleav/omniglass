@@ -32,6 +32,7 @@ import (
 // secret and interface a label. What is pinned here is the ordering the
 // registries have TODAY, made insensitive to the nullability change.
 func TestAnUnlabelledRegistryRowSortsLast(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
 	if err != nil {

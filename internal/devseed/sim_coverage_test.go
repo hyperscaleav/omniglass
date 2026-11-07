@@ -23,6 +23,7 @@ import (
 // actually places to it, so a fixture adding a component of an unserved,
 // unlisted product fails here, naming the product and its components.
 func TestEverySeededComponentIsSimulatedOrAccountedFor(t *testing.T) {
+	t.Parallel()
 	s, err := devseed.LookupScenario("dev")
 	if err != nil {
 		t.Fatal(err)

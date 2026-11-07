@@ -36,6 +36,7 @@ const titleTheName = "{{title (words .Name)}}"
 // A shipped acronym renders correctly cased with no operator configuration at
 // all, which is the whole point of shipping a list rather than an empty one.
 func TestAShippedAcronymRendersCorrectlyCased(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	setLocationRule(t, gw, ctx, titleTheName)
 
@@ -50,6 +51,7 @@ func TestAShippedAcronymRendersCorrectlyCased(t *testing.T) {
 // created first is proof the engine is not captured once per process; the row
 // created second is proof the new dictionary is what later writes see.
 func TestAnOperatorAddedAcronymTakesEffectWithoutARestart(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	setLocationRule(t, gw, ctx, titleTheName)
 
@@ -83,6 +85,7 @@ func TestAnOperatorAddedAcronymTakesEffectWithoutARestart(t *testing.T) {
 // behavior an operator meets, not an implementation detail: the console edits
 // the effective list, so the shipped entries are in the box being edited.
 func TestAnOperatorListReplacesTheShippedOne(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	setLocationRule(t, gw, ctx, titleTheName)
 
@@ -97,6 +100,7 @@ func TestAnOperatorListReplacesTheShippedOne(t *testing.T) {
 // A rule that does not title-case anything is unaffected by the list, so an
 // operator editing the dictionary cannot reach a rule that never asked for it.
 func TestARuleThatDoesNotTitleIsUnaffectedByTheList(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	setLocationRule(t, gw, ctx, "{{.Name}}")
 
@@ -114,6 +118,7 @@ func TestARuleThatDoesNotTitleIsUnaffectedByTheList(t *testing.T) {
 // and quietly skip the file), and the failure is silent: the settings read shows
 // the operator's list while every label renders from another one.
 func TestTheSettingsFileLayerReachesTheEngine(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t),
 		storage.WithSecretProvider(secret.NewStaticProvider(bytes.Repeat([]byte{0x7}, 32))),
@@ -148,6 +153,7 @@ func TestTheSettingsFileLayerReachesTheEngine(t *testing.T) {
 // test reaches the deadlock deterministically instead of hoping for it under
 // load. It is bounded so a regression fails rather than hangs.
 func TestRenderingALabelNeedsNoSecondConnection(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t)+"&pool_max_conns=1",

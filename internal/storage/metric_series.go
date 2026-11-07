@@ -12,7 +12,7 @@ import (
 )
 
 // The narrow metric lane (#1275, ADR-1275). A metric sample is a row of
-// (id, series_id, ts, value) in metric, range partitioned by month on ts; what
+// (id, series_id, ts, value) in metric, range partitioned by UTC day on ts (#1527); what
 // it is a sample of (type, owner arc, instance, provenance, source, and the
 // node that collected it) is one row of metric_series, shared by every sample
 // of the series. A command's intended rows live in metric_declared, a plain
@@ -36,31 +36,33 @@ func metricHeldSQL(owner, typeMatch string) string {
 			or exists (select 1 from metric_declared hd where hd.series_id = hs.id)))`
 }
 
-// Monthly partitions. A month is a UTC calendar month, and its partition is
-// named metric_pYYYYMM.
+// Daily partitions (#1527, ADR-1527, amending ADR-1275's months). A day is a
+// UTC calendar day, and its partition is named metric_pYYYYMMDD. A day, not a
+// month, so retention drops raw rows whole a day after they pass the window,
+// rather than deleting them chunk by chunk for up to a month first.
 
-// metricPartitionsAhead is how many months past the current one the server
-// keeps a partition for, so a sample stamped a little ahead, or a month
-// that starts while the roll is late, always has somewhere to land.
-const metricPartitionsAhead = 2
+// metricPartitionsAhead is how many days past the current one the server
+// keeps a partition for, so a sample stamped a little ahead, or a day that
+// starts while the roll is late, always has somewhere to land.
+const metricPartitionsAhead = 3
 
 // partitionLockTimeout bounds how long a partition's attach or detach waits
 // for its lock on metric, so it never queues long in front of the readers
 // and writers behind it; a roll that times out is tried again by the next.
 const partitionLockTimeout = 5 * time.Second
 
-// metricMonth is the UTC month t falls in.
-func metricMonth(t time.Time) time.Time {
+// metricDay is the UTC day t falls in.
+func metricDay(t time.Time) time.Time {
 	u := t.UTC()
-	return time.Date(u.Year(), u.Month(), 1, 0, 0, 0, 0, time.UTC)
+	return time.Date(u.Year(), u.Month(), u.Day(), 0, 0, 0, 0, time.UTC)
 }
 
-// metricPartitionName is a month's partition's table name.
-func metricPartitionName(month time.Time) string {
-	return "metric_p" + month.UTC().Format("200601")
+// metricPartitionName is a day's partition's table name.
+func metricPartitionName(day time.Time) string {
+	return "metric_p" + day.UTC().Format("20060102")
 }
 
-// MetricPartition is one month's partition of the metric table.
+// MetricPartition is one day's partition of the metric table.
 type MetricPartition struct {
 	Name     string
 	From, To time.Time
@@ -88,62 +90,100 @@ func metricPartitions(ctx context.Context, q querier) ([]MetricPartition, error)
 	return parts, nil
 }
 
-// MetricPartitions lists the metric table's monthly partitions, oldest first.
+// MetricPartitions lists the metric table's daily partitions, oldest first.
 func (p *PG) MetricPartitions(ctx context.Context) ([]MetricPartition, error) {
 	return metricPartitions(ctx, p.pool)
 }
 
+// metricCoverageGap is the first instant in [from, to) that no partition in
+// parts (oldest first, as metricPartitions lists them) covers, ok false when
+// they cover all of it.
+func metricCoverageGap(parts []MetricPartition, from, to time.Time) (time.Time, bool) {
+	at := from
+	for _, part := range parts {
+		if !at.Before(to) {
+			break
+		}
+		if part.From.After(at) {
+			return at, true
+		}
+		if part.To.After(at) {
+			at = part.To
+		}
+	}
+	if at.Before(to) {
+		return at, true
+	}
+	return time.Time{}, false
+}
+
 // EnsureMetricPartitions makes sure the metric table has a partition for the
-// current month and the metricPartitionsAhead after it, creating any that is
-// missing, and returns the names it created. The server calls it at boot,
-// before its ingest starts, and on every retention pass after (#420's roll).
+// current day and the metricPartitionsAhead after it, creating any that is
+// missing, and returns the names it created. It then reads the partitions
+// back and refuses, naming the first instant uncovered, unless they cover
+// every instant from the start of today through the end of the last day
+// ahead: the server calls it at boot and starts no ingest over a refusal,
+// and on every retention pass after (#420's roll).
 func (p *PG) EnsureMetricPartitions(ctx context.Context) ([]string, error) {
 	now, err := dbNow(ctx, p.pool)
 	if err != nil {
 		return nil, err
 	}
-	months := make([]time.Time, 0, metricPartitionsAhead+1)
+	days := make([]time.Time, 0, metricPartitionsAhead+1)
 	for i := 0; i <= metricPartitionsAhead; i++ {
-		months = append(months, metricMonth(now).AddDate(0, i, 0))
+		days = append(days, metricDay(now).AddDate(0, 0, i))
 	}
-	return p.ensureMetricMonths(ctx, months)
+	created, err := p.ensureMetricDays(ctx, days)
+	if err != nil {
+		return created, err
+	}
+	parts, err := metricPartitions(ctx, p.pool)
+	if err != nil {
+		return created, err
+	}
+	through := metricDay(now).AddDate(0, 0, metricPartitionsAhead+1)
+	if gap, ok := metricCoverageGap(parts, metricDay(now), through); ok {
+		return created, fmt.Errorf("storage: metric partitions do not cover %s (want every instant from %s to %s)",
+			gap.Format(time.RFC3339), metricDay(now).Format(time.RFC3339), through.Format(time.RFC3339))
+	}
+	return created, nil
 }
 
-// ensureMetricMonths creates the partition of each month that has none and
+// ensureMetricDays creates the partition of each day that has none and
 // returns the names it created. Each is created detached and then attached,
 // so metric is held only at SHARE UPDATE EXCLUSIVE (readers and writers go
 // on), under partitionLockTimeout; two servers ensuring at once serialize on
 // an advisory lock.
-func (p *PG) ensureMetricMonths(ctx context.Context, months []time.Time) ([]string, error) {
+func (p *PG) ensureMetricDays(ctx context.Context, days []time.Time) ([]string, error) {
 	have, err := metricPartitions(ctx, p.pool)
 	if err != nil {
 		return nil, err
 	}
-	covered := func(m time.Time) bool {
-		return slices.ContainsFunc(have, func(x MetricPartition) bool { return !m.Before(x.From) && m.Before(x.To) })
+	covered := func(d time.Time) bool {
+		return slices.ContainsFunc(have, func(x MetricPartition) bool { return !d.Before(x.From) && d.Before(x.To) })
 	}
 	var created []string
-	for _, m := range months {
-		m = metricMonth(m)
-		if covered(m) || slices.Contains(created, metricPartitionName(m)) {
+	for _, d := range days {
+		d = metricDay(d)
+		if covered(d) || slices.Contains(created, metricPartitionName(d)) {
 			continue
 		}
-		made, err := p.createMetricPartition(ctx, m)
+		made, err := p.createMetricPartition(ctx, d)
 		if err != nil {
 			return created, err
 		}
 		if made {
-			created = append(created, metricPartitionName(m))
+			created = append(created, metricPartitionName(d))
 		}
 	}
 	return created, nil
 }
 
-// createMetricPartition creates and attaches one month's partition, reporting
+// createMetricPartition creates and attaches one day's partition, reporting
 // false when another server's attach got there first.
-func (p *PG) createMetricPartition(ctx context.Context, month time.Time) (bool, error) {
-	name := pgx.Identifier{"public", metricPartitionName(month)}.Sanitize()
-	from, to := month.Format(time.RFC3339), month.AddDate(0, 1, 0).Format(time.RFC3339)
+func (p *PG) createMetricPartition(ctx context.Context, day time.Time) (bool, error) {
+	name := pgx.Identifier{"public", metricPartitionName(day)}.Sanitize()
+	from, to := day.Format(time.RFC3339), day.AddDate(0, 0, 1).Format(time.RFC3339)
 	made := false
 	err := pgx.BeginFunc(ctx, p.pool, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, fmt.Sprintf(`set local lock_timeout = '%dms'`, partitionLockTimeout.Milliseconds())); err != nil {
@@ -174,26 +214,26 @@ func (p *PG) createMetricPartition(ctx context.Context, month time.Time) (bool, 
 		return nil
 	})
 	if errors.Is(err, errDetachPending) {
-		// A retention pass's detach of this month stopped halfway (a reader
-		// held the parent past its lock timeout): the month routes nothing
-		// until the detach is finished. Finish it and drop the month, then
+		// A retention pass's detach of this day stopped halfway (a reader
+		// held the parent past its lock timeout): the day routes nothing
+		// until the detach is finished. Finish it and drop the day, then
 		// make it afresh, so a sample dated in it lands rather than missing
 		// again on every delivery.
-		if ferr := p.finishMetricDetach(ctx, metricPartitionName(month)); ferr != nil {
-			return false, fmt.Errorf("storage: create metric partition %s: %w", metricPartitionName(month), ferr)
+		if ferr := p.finishMetricDetach(ctx, metricPartitionName(day)); ferr != nil {
+			return false, fmt.Errorf("storage: create metric partition %s: %w", metricPartitionName(day), ferr)
 		}
-		return p.createMetricPartition(ctx, month)
+		return p.createMetricPartition(ctx, day)
 	}
 	if err != nil {
-		return false, fmt.Errorf("storage: create metric partition %s: %w", metricPartitionName(month), err)
+		return false, fmt.Errorf("storage: create metric partition %s: %w", metricPartitionName(day), err)
 	}
 	return made, nil
 }
 
-// errDetachPending is a month whose partition is still detaching.
+// errDetachPending is a day whose partition is still detaching.
 var errDetachPending = errors.New("storage: metric partition still detaching")
 
-// finishMetricDetach finishes a pending detach of one month and drops it,
+// finishMetricDetach finishes a pending detach of one day and drops it,
 // outside a transaction block (FINALIZE cannot run in one), under
 // partitionLockTimeout.
 func (p *PG) finishMetricDetach(ctx context.Context, name string) error {
@@ -216,13 +256,28 @@ func (p *PG) finishMetricDetach(ctx context.Context, name string) error {
 	return nil
 }
 
-// DropMetricPartitions drops every metric partition whose whole month lies
-// before both before (the lane's window) and the longest window any metric
-// type keeps for itself (retention_days), so a type kept longer than the
-// lane keeps its months; it returns the names it dropped. Each is detached
-// CONCURRENTLY first, which waits for the readers already in it rather than
-// queueing every reader behind an exclusive lock, and then dropped; a detach
-// an earlier pass left unfinished is finished first.
+// metricPartitionHeldSQL is whether one partition (part, a sanitized name)
+// holds a sample a type's own window still reaches: a series of a type with
+// retention_days whose cutoff (now less its days) falls before the
+// partition's end ($1), with a sample in the partition, probed series by
+// series through the partition's series index. Only a type kept longer than
+// the lane can hold a day the lane's window has passed.
+func metricPartitionHeldSQL(part string) string {
+	return `select exists (select 1 from metric_type t join metric_series s on s.metric_type_id = t.id
+		where t.retention_days is not null and now() - make_interval(days => t.retention_days) < $1
+			and exists (select 1 from ` + part + ` m where m.series_id = s.id))`
+}
+
+// DropMetricPartitions drops every metric partition whose whole day lies
+// before before (the lane's window) and before the trend compaction's
+// compacted mark (#1276), and that holds no sample of a type whose own
+// window (retention_days) still reaches into the day: a day holding a sample
+// of a type kept longer than the lane stays until that window passes too,
+// and only the chunked prune runs inside it until then. It returns the names
+// it dropped. Each is detached CONCURRENTLY first, which waits for the
+// readers already in it rather than queueing every reader behind an
+// exclusive lock, and then dropped; a detach an earlier pass left unfinished
+// is finished first.
 func (p *PG) DropMetricPartitions(ctx context.Context, before time.Time) ([]string, error) {
 	conn, err := p.pool.Acquire(ctx)
 	if err != nil {
@@ -249,10 +304,14 @@ func (p *PG) DropMetricPartitions(ctx context.Context, before time.Time) ([]stri
 		}
 	}
 
-	var horizon time.Time
-	if err := conn.QueryRow(ctx, `select least($1::timestamptz,
-			now() - make_interval(days => coalesce((select max(retention_days) from metric_type), 0)))`, before).Scan(&horizon); err != nil {
-		return nil, fmt.Errorf("storage: drop metric partitions: %w", err)
+	// A day holding an hour the trend compaction has not closed stays
+	// (#1276).
+	horizon, err := metricPruneHorizon(ctx, conn, before)
+	if err != nil {
+		return nil, err
+	}
+	if horizon.IsZero() {
+		return nil, nil
 	}
 	parts, err := metricPartitions(ctx, conn)
 	if err != nil {
@@ -261,9 +320,16 @@ func (p *PG) DropMetricPartitions(ctx context.Context, before time.Time) ([]stri
 	var dropped []string
 	for _, part := range parts {
 		if part.To.After(horizon) {
-			continue
+			break
 		}
 		name := pgx.Identifier{"public", part.Name}.Sanitize()
+		var held bool
+		if err := conn.QueryRow(ctx, metricPartitionHeldSQL(name), part.To).Scan(&held); err != nil {
+			return dropped, fmt.Errorf("storage: drop metric partitions: %s: %w", part.Name, err)
+		}
+		if held {
+			continue
+		}
 		if _, err := conn.Exec(ctx, `alter table public.metric detach partition `+name+` concurrently`); err != nil {
 			return dropped, fmt.Errorf("storage: detach %s: %w", part.Name, err)
 		}
@@ -286,24 +352,24 @@ func isPartitionRoutingMiss(err error) bool {
 	return errors.As(err, &pgErr) && pgErr.Code == "23514" && pgErr.ConstraintName == "" && pgErr.TableName == "metric"
 }
 
-// landMetricMonths makes the partitions a write's samples need after it
-// missed one: the month of every sample, as the write will stamp it (a zero
+// landMetricDays makes the partitions a write's samples need after it
+// missed one: the day of every sample, as the write will stamp it (a zero
 // ts lands now). A collected key keeps its producer's time however far it
-// is (TestNodeProbeSampleCannotOutliveItsTime), so its month is made
-// whatever it is; a month in the past is dropped again by the next
+// is (TestNodeProbeSampleCannotOutliveItsTime), so its day is made
+// whatever it is; a day in the past is dropped again by the next
 // retention pass once it is past every window.
-func (p *PG) landMetricMonths(ctx context.Context, samples []MetricSampleWrite) error {
+func (p *PG) landMetricDays(ctx context.Context, samples []MetricSampleWrite) error {
 	now, err := dbNow(ctx, p.pool)
 	if err != nil {
 		return err
 	}
-	months := make([]time.Time, 0, len(samples)+1)
-	months = append(months, metricMonth(now))
+	days := make([]time.Time, 0, len(samples)+1)
+	days = append(days, metricDay(now))
 	for _, s := range samples {
 		if !s.TS.IsZero() {
-			months = append(months, metricMonth(s.TS))
+			days = append(days, metricDay(s.TS))
 		}
 	}
-	_, err = p.ensureMetricMonths(ctx, months)
+	_, err = p.ensureMetricDays(ctx, days)
 	return err
 }

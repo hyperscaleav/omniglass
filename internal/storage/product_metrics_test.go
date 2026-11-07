@@ -19,6 +19,7 @@ import (
 // fixed alongside): an unknown classifier is ErrTypeNotFound, never a raw
 // constraint violation.
 func TestProductMetricCRUD(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

@@ -19,6 +19,7 @@ import (
 // series lock after it has loaded the rule and before it raises, starts the
 // rename meanwhile, then lets both go.
 func TestSeverityRenameDuringARaisingBatch(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx, all := context.Background(), scope.Set{All: true}
 	if _, err := f.gw.CreateSeverityLevel(ctx, "", storage.SeverityLevel{Name: "major", Label: "Major", Color: "orange", Rank: 35}, all); err != nil {

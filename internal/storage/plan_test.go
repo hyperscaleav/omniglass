@@ -55,6 +55,7 @@ func allScopes() storage.PlanScopes {
 // in one write, every audit row naming the template; the same plan with one
 // bad piece at the end lands nothing at all.
 func TestCreatePlanLandsWhole(t *testing.T) {
+	t.Parallel()
 	gw, count := planFixture(t)
 	ctx := context.Background()
 	bar := storagetest.MintProduct(t, ctx, gw, "video-bar")
@@ -131,6 +132,7 @@ func TestCreatePlanLandsWhole(t *testing.T) {
 // not components, or who may not fork a standard the plan needs, is refused
 // at that piece, and nothing lands.
 func TestCreatePlanChecksEveryPieceInScope(t *testing.T) {
+	t.Parallel()
 	gw, count := planFixture(t)
 	ctx := context.Background()
 	disp := storagetest.MintProduct(t, ctx, gw, "display")

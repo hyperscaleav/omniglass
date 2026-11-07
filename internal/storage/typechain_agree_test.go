@@ -27,6 +27,7 @@ import (
 // icon to the stem and the abbrev, so the agreement has to widen with it). It
 // is the test that permits the duplication.
 func TestBothTypeChainWalksAgreeOnEverySeededRow(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
 	if err != nil {

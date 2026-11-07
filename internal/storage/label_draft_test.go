@@ -47,6 +47,7 @@ import (
 // null by design, #681), so the render has no unknown in it at all and the two
 // strings must match character for character.
 func TestTheDraftLabelIsTheLabelTheCreateStores(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	// The epic's worked example, so both placement facts are exercised: the
 	// draft resolves the location's label and the system's TYPE label from the
@@ -93,6 +94,7 @@ func TestTheDraftLabelIsTheLabelTheCreateStores(t *testing.T) {
 // went; the number is read from the bucket before the label is rendered, so
 // there is nothing left in either value for the create to fill in.
 func TestTheDraftIsTheIdentityTheCreateStampsForAGeneratedName(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	room := makeRoomWithLabel(t, gw, ctx, "room-204b", "204B")
 
@@ -150,6 +152,7 @@ func stemOf(t *testing.T, gw *storage.PG, ctx context.Context, product string) s
 // wrong bucket would still show a plausible number, which is why this asserts
 // two buckets at once rather than one twice.
 func TestTheDraftedOrdinalIsTheLowestFreeOneInThatBucket(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	here := makeRoomWithLabel(t, gw, ctx, "room-here", "Here")
 	there := makeRoomWithLabel(t, gw, ctx, "room-there", "There")
@@ -191,6 +194,7 @@ func TestTheDraftedOrdinalIsTheLowestFreeOneInThatBucket(t *testing.T) {
 // pickOrdinal, so the only way they can disagree is if one of them is handed a
 // different mint or a different bucket, which is exactly what this catches.
 func TestTheDraftedNameIsWhatTheAllocatorWouldMint(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	room := makeRoomWithLabel(t, gw, ctx, "room-204b", "204B")
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
@@ -227,6 +231,7 @@ func TestTheDraftedNameIsWhatTheAllocatorWouldMint(t *testing.T) {
 // with each other perfectly. That is what this test asserted before, and it is
 // why the rule's own change could not have failed it.
 func TestTheDraftSystemLabelCarriesTheOrdinalItWillLandWith(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	room := makeRoomWithLabel(t, gw, ctx, "room-204b", "204B")
 
@@ -262,6 +267,7 @@ func TestTheDraftSystemLabelCarriesTheOrdinalItWillLandWith(t *testing.T) {
 // corner of it. The form shows it locked, and the create beside it must store
 // the same string or the locked field was a lie.
 func TestTheDraftedLocationLabelIsTheOneTheCreateStores(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	drafted, err := gw.RenderLocationDraftLabel(ctx, storage.LocationLabelDraft{
 		LocationTypeRef: "room", Name: "north-boardroom",
@@ -294,6 +300,7 @@ func TestTheDraftedLocationLabelIsTheOneTheCreateStores(t *testing.T) {
 // operator who clears the rule at every tier gets an empty label rather than a
 // refusal, and the form has to have words for that.
 func TestTheDraftLabelIsEmptyWhereNoRuleResolves(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	if err := gw.UpsertLabelRuleDefault(ctx, "location", ""); err != nil {
 		t.Fatalf("blank the shipped location rule: %v", err)
@@ -327,6 +334,7 @@ func TestTheDraftLabelIsEmptyWhereNoRuleResolves(t *testing.T) {
 // it as a fact from nowhere. It is also the only way an operator can tell "no
 // rule applies" from "the rule rendered nothing for this row".
 func TestTheDraftLabelReportsTheRuleItRendered(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	drafted, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
 		ProductName: edge55, Name: "front-panel",
@@ -344,6 +352,7 @@ func TestTheDraftLabelReportsTheRuleItRendered(t *testing.T) {
 // does and returns the SAME sentinels. A form that showed a lock over a value
 // the create then declines to produce is worse than one that showed nothing.
 func TestTheDraftLabelRefusesWhatANamelessCreateRefuses(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 
 	// A system with no system_type at all: the stem lives on the registry row.
@@ -370,6 +379,7 @@ func TestTheDraftLabelRefusesWhatANamelessCreateRefuses(t *testing.T) {
 // holding: it is the case a form cannot reach through the picker and would
 // therefore never have been noticed by hand.
 func TestTheDraftLabelRefusesAComponentTypeChainWithNoStem(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	if _, err := gw.UpsertComponentType(ctx, storage.ComponentType{
 		Name: "stemless", Label: "Stemless", Official: true,
@@ -395,6 +405,7 @@ func TestTheDraftLabelRefusesAComponentTypeChainWithNoStem(t *testing.T) {
 // Driven by a narrow-scoped principal deliberately: three scope defects in this
 // epic survived review because every fixture drove a principal holding all.
 func TestTheDraftLabelRendersWithinTheCallersReadScope(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	if _, err := gw.SetLabelRule(ctx, "", "component", "{{.LocationLabel}} {{.TypeName}}"); err != nil {
 		t.Fatalf("set the component rule: %v", err)
@@ -422,6 +433,7 @@ func TestTheDraftLabelRendersWithinTheCallersReadScope(t *testing.T) {
 // TestTheDraftSystemLabelRendersWithinTheCallersReadScope is the same gate on
 // the system tier, whose map reads its location's label.
 func TestTheDraftSystemLabelRendersWithinTheCallersReadScope(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	if _, err := gw.SetLabelRule(ctx, "", "system", "{{.LocationLabel}} {{.TypeName}}"); err != nil {
 		t.Fatalf("set the system rule: %v", err)
@@ -446,6 +458,7 @@ func TestTheDraftSystemLabelRendersWithinTheCallersReadScope(t *testing.T) {
 // the component leak: SystemTypeLabel comes off a SYSTEM row, and a system the
 // caller cannot read must not answer either.
 func TestTheDraftComponentLabelReadsTheSystemWithinScope(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	theirs := makeRoomWithLabel(t, gw, ctx, "room-theirs", "Theirs")
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{
@@ -480,6 +493,7 @@ func TestTheDraftComponentLabelReadsTheSystemWithinScope(t *testing.T) {
 // argument would observe nothing at all and report a flat, fictional zero,
 // which is the one failure mode of this instrument that reads as coverage.
 func TestTheDraftLabelAllocatesNothing(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw, counter := storagetest.NewCountingDB(t)
 	if err := seed.Run(ctx, gw); err != nil {
@@ -552,6 +566,7 @@ func TestTheDraftLabelAllocatesNothing(t *testing.T) {
 // The three tiers are driven together because it is one seam (draftParentID),
 // and a per-tier fix is exactly how two of them would drift.
 func TestTheDraftRefusesTheParentlessBucketItCannotCreateIn(t *testing.T) {
+	t.Parallel()
 	gw, ctx := seededGateway(t)
 	hq, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "campus"}, all)
 	if err != nil {
@@ -619,6 +634,7 @@ func TestTheDraftRefusesTheParentlessBucketItCannotCreateIn(t *testing.T) {
 // names do not, which is a stem edit under an open form: an ordinal claim passes
 // it and lands a name nobody was shown, and a name claim refuses it.
 func TestTheNamePreconditionIsPureAndSaysSo(t *testing.T) {
+	t.Parallel()
 	one, two := 1, 2
 	display1, display2 := "display-1", "display-2"
 	if err := storage.ExportConfirmDraftedName(nil, &one, "display-1"); err != nil {

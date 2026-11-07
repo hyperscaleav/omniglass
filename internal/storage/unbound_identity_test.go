@@ -17,6 +17,7 @@ import (
 // nothing twice), bounded per conduit with the least recently heard evicted,
 // aged out after seven days, and read only inside the caller's component read.
 func TestUnboundIdentityInbox(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -107,6 +108,7 @@ func TestUnboundIdentityInbox(t *testing.T) {
 // samples carried by type id, so renaming a key's type lists it under its
 // new name (#1188 makes telemetry types renameable).
 func TestTheInboxNamesKeysAcrossARename(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

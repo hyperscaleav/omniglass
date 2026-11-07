@@ -12,6 +12,7 @@ import (
 // a provided field is set, an absent field is left unchanged, and an explicitly
 // empty field clears the nullable column. Skipped under -short.
 func TestUpdateHumanProfile(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 

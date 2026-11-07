@@ -18,6 +18,7 @@ import (
 // another principal's credential id is not revocable (a no-op, false). This backs
 // the self-service session list and revoke (issue #172, slice 1).
 func TestListAndRevokeBearerCredentials(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -126,6 +127,7 @@ func TestListAndRevokeBearerCredentials(t *testing.T) {
 // it, and a last_used_at that AuthenticateBearer bumps (issues #193, #205). The bootstrap
 // token gets a default description; a session leaves description empty.
 func TestBearerIdentityFields(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -195,6 +197,7 @@ func TestBearerIdentityFields(t *testing.T) {
 // owning principal so it never reaches another's credentials. This backs the admin
 // "revoke all sessions" / "revoke all tokens" blade actions (issue #172).
 func TestRevokeBearersByPurpose(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -285,6 +288,7 @@ func TestRevokeBearersByPurpose(t *testing.T) {
 // password change and the self-service "revoke all sessions" (keep the one you are on),
 // while leaving tokens untouched (issues #173, #195).
 func TestRevokeBearersByPurposeExcept(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -358,6 +362,7 @@ func TestRevokeBearersByPurposeExcept(t *testing.T) {
 // carry an expiry) and returns only LIVE rows: a credential whose expires_at has
 // passed is excluded, mirroring AuthenticateBearer's own filter (issue #172).
 func TestListBearerCredentialsPurposeAndLiveFilter(t *testing.T) {
+	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {

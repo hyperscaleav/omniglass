@@ -17,6 +17,7 @@ import (
 // three-way 404/403 split, occupancy, FK faults, and in-tx audit. It also
 // exercises located-at (system.location_id) resolution.
 func TestSystemScopeCRUD(t *testing.T) {
+	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)

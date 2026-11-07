@@ -5007,7 +5007,7 @@
       "name": "ts",
       "type": "timestamp with time zone",
       "nullable": false,
-      "default": "now()"
+      "default": "date_trunc('milliseconds'::text, now())"
      },
      {
       "name": "value",
@@ -5050,7 +5050,7 @@
       "name": "ts",
       "type": "timestamp with time zone",
       "nullable": false,
-      "default": "now()"
+      "default": "date_trunc('milliseconds'::text, now())"
      },
      {
       "name": "value",
@@ -5172,6 +5172,107 @@
      {
       "name": "metric_series_key",
       "definition": "CREATE UNIQUE INDEX metric_series_key ON public.metric_series USING btree (owner_id, metric_type_id, instance, provenance, source, collector_node_id, source_conduit_id) NULLS NOT DISTINCT"
+     }
+    ]
+   },
+   "metric_trend": {
+    "columns": [
+     {
+      "name": "series_id",
+      "type": "bigint",
+      "nullable": false,
+      "pk": true,
+      "fk": true,
+      "fk_target": "metric_series.id"
+     },
+     {
+      "name": "hour",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "pk": true
+     },
+     {
+      "name": "count",
+      "type": "integer",
+      "nullable": false
+     },
+     {
+      "name": "min",
+      "type": "double precision",
+      "nullable": false
+     },
+     {
+      "name": "max",
+      "type": "double precision",
+      "nullable": false
+     },
+     {
+      "name": "sum",
+      "type": "double precision",
+      "nullable": false
+     },
+     {
+      "name": "first",
+      "type": "double precision",
+      "nullable": false
+     },
+     {
+      "name": "last",
+      "type": "double precision",
+      "nullable": false
+     }
+    ],
+    "checks": [
+     {
+      "name": "metric_trend_count_check",
+      "expr": "CHECK ((count \u003e 0))"
+     }
+    ]
+   },
+   "metric_trend_dirty": {
+    "columns": [
+     {
+      "name": "series_id",
+      "type": "bigint",
+      "nullable": false,
+      "pk": true
+     },
+     {
+      "name": "hour",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "pk": true
+     }
+    ]
+   },
+   "metric_trend_mark": {
+    "columns": [
+     {
+      "name": "id",
+      "type": "boolean",
+      "nullable": false,
+      "default": "true",
+      "pk": true
+     },
+     {
+      "name": "announced_through",
+      "type": "timestamp with time zone",
+      "nullable": false
+     },
+     {
+      "name": "compacted_through",
+      "type": "timestamp with time zone",
+      "nullable": false
+     }
+    ],
+    "checks": [
+     {
+      "name": "metric_trend_mark_one_row",
+      "expr": "CHECK (id)"
+     },
+     {
+      "name": "metric_trend_mark_order",
+      "expr": "CHECK ((compacted_through \u003c= announced_through))"
      }
     ]
    },

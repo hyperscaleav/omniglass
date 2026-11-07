@@ -16,6 +16,7 @@ import (
 // these are hand-verified to fail on a specific reversion, in path_test.go's
 // own package comment rather than a separate file.
 func TestParseAddressFullComponentPath(t *testing.T) {
+	t.Parallel()
 	addr, err := storage.ParseAddress("boi.17c.415a.$comp.display-1")
 	if err != nil {
 		t.Fatalf("ParseAddress: %v", err)
@@ -31,6 +32,7 @@ func TestParseAddressFullComponentPath(t *testing.T) {
 }
 
 func TestParseAddressSubComponentPath(t *testing.T) {
+	t.Parallel()
 	addr, err := storage.ParseAddress("boi.17c.415a.$comp.dsp-1.dante-card-1")
 	if err != nil {
 		t.Fatalf("ParseAddress: %v", err)
@@ -46,6 +48,7 @@ func TestParseAddressSubComponentPath(t *testing.T) {
 }
 
 func TestParseAddressSystemPath(t *testing.T) {
+	t.Parallel()
 	addr, err := storage.ParseAddress("boi.17c.$sys.av")
 	if err != nil {
 		t.Fatalf("ParseAddress: %v", err)
@@ -64,6 +67,7 @@ func TestParseAddressSystemPath(t *testing.T) {
 // $role for its role. Not in the task's required list but the grammar
 // explicitly reserves the accessor, so it is covered here.
 func TestParseAddressSystemRolePath(t *testing.T) {
+	t.Parallel()
 	addr, err := storage.ParseAddress("boi.17c.$sys.av.$role.primary-dsp")
 	if err != nil {
 		t.Fatalf("ParseAddress: %v", err)
@@ -83,6 +87,7 @@ func TestParseAddressSystemRolePath(t *testing.T) {
 // and #627 Task 10/11's ambiguous bare-name resolution already handles it.
 // ParseAddress declining is what keeps that behavior untouched.
 func TestParseAddressRootOnlyIsNotAnAddress(t *testing.T) {
+	t.Parallel()
 	addr, err := storage.ParseAddress("boi")
 	if err != nil {
 		t.Fatalf("ParseAddress: %v", err)
@@ -96,6 +101,7 @@ func TestParseAddressRootOnlyIsNotAnAddress(t *testing.T) {
 // section of the task brief, verbatim). $loc must be refused, not silently
 // treated as a location-plane switch that does nothing.
 func TestParseAddressRejectsDollarLoc(t *testing.T) {
+	t.Parallel()
 	_, err := storage.ParseAddress("boi.17c.$loc.415a")
 	if err == nil {
 		t.Fatal("ParseAddress accepted $loc; there is no $loc accessor")
@@ -114,6 +120,7 @@ func TestParseAddressRejectsDollarLoc(t *testing.T) {
 // glob-expand or drop the unquoted $comp, and the resulting empty segment
 // must name that cause, not just say "invalid".
 func TestParseAddressEmptySegmentNamesTheShellCause(t *testing.T) {
+	t.Parallel()
 	_, err := storage.ParseAddress("boi.17c.415a..display-1")
 	if err == nil {
 		t.Fatal("ParseAddress accepted an empty segment")
@@ -133,6 +140,7 @@ func TestParseAddressEmptySegmentNamesTheShellCause(t *testing.T) {
 // so the segment "17c/bad" must fail the entity name rule here, before any
 // query runs, rather than being handed to a WHERE clause verbatim.
 func TestParseAddressRejectsASegmentFailingTheNameRule(t *testing.T) {
+	t.Parallel()
 	_, err := storage.ParseAddress("boi.17c/bad.415a")
 	if err == nil {
 		t.Fatal("ParseAddress accepted a segment containing a slash")
@@ -146,6 +154,7 @@ func TestParseAddressRejectsASegmentFailingTheNameRule(t *testing.T) {
 // A uuid is never dotted and never accessor-bearing, but is tested explicitly
 // so the two dispatch paths (uuid vs address) never accidentally overlap.
 func TestParseAddressUUIDPassthrough(t *testing.T) {
+	t.Parallel()
 	const uuid = "019f8754-3a1b-7c2d-8e4f-5a6b7c8d9e0f"
 	addr, err := storage.ParseAddress(uuid)
 	if err != nil {
@@ -159,6 +168,7 @@ func TestParseAddressUUIDPassthrough(t *testing.T) {
 // An address that opens directly on an accessor names an unplaced row
 // (component_orphan_name_key): Root is legitimately empty.
 func TestParseAddressUnplacedComponent(t *testing.T) {
+	t.Parallel()
 	addr, err := storage.ParseAddress("$comp.display-1")
 	if err != nil {
 		t.Fatalf("ParseAddress: %v", err)
@@ -170,6 +180,7 @@ func TestParseAddressUnplacedComponent(t *testing.T) {
 }
 
 func TestParseAddressAccessorWithNothingAfterIsInvalid(t *testing.T) {
+	t.Parallel()
 	_, err := storage.ParseAddress("boi.17c.$comp")
 	if err == nil {
 		t.Fatal("ParseAddress accepted an address ending on a bare accessor")
@@ -181,6 +192,7 @@ func TestParseAddressAccessorWithNothingAfterIsInvalid(t *testing.T) {
 }
 
 func TestParseAddressRoleOutsideSystemPathIsInvalid(t *testing.T) {
+	t.Parallel()
 	_, err := storage.ParseAddress("boi.17c.$comp.dsp-1.$role.primary-dsp")
 	if err == nil {
 		t.Fatal("ParseAddress accepted $role within a component path")
@@ -192,6 +204,7 @@ func TestParseAddressRoleOutsideSystemPathIsInvalid(t *testing.T) {
 }
 
 func TestParseAddressMidPathAccessorIsInvalid(t *testing.T) {
+	t.Parallel()
 	_, err := storage.ParseAddress("boi.$comp.a.$sys.b")
 	if err == nil {
 		t.Fatal("ParseAddress accepted a second plane switch mid-path")
@@ -204,6 +217,7 @@ func TestParseAddressMidPathAccessorIsInvalid(t *testing.T) {
 // a dotted ref sent to one of these must be refused explicitly, never fall
 // through to a bare 404 that never says why it missed.
 func TestRejectAddressFormRefusesADottedRefForARegistryKind(t *testing.T) {
+	t.Parallel()
 	err := storage.RejectAddressForm("node", "boi.17c")
 	if err == nil {
 		t.Fatal("RejectAddressForm accepted a dotted ref for a single-token registry")
@@ -221,12 +235,14 @@ func TestRejectAddressFormRefusesADottedRefForARegistryKind(t *testing.T) {
 }
 
 func TestRejectAddressFormRefusesALeadingAccessor(t *testing.T) {
+	t.Parallel()
 	if err := storage.RejectAddressForm("tag", "$comp.foo"); err == nil {
 		t.Fatal("RejectAddressForm accepted a leading accessor for a single-token registry")
 	}
 }
 
 func TestRejectAddressFormPassesOrdinaryNamesAndUUIDs(t *testing.T) {
+	t.Parallel()
 	const uuid = "019f8754-3a1b-7c2d-8e4f-5a6b7c8d9e0f"
 	for _, ref := range []string{"node-1", uuid, "icmp-rtt-avg"} {
 		if err := storage.RejectAddressForm("node", ref); err != nil {

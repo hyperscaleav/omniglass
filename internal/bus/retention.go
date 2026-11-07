@@ -31,6 +31,10 @@ const (
 	sampleRetentionTimeout   = 5 * time.Minute // a lane's deadline within a pass
 	sampleRetentionChunk     = 5000
 	sampleRetentionMaxChunks = 40
+	// trendCompactHours is how many hours one pass closes into trends
+	// (#1276): an upgrade's backlog of a month of samples closes in a pass a
+	// minute over about half an hour, and a pass that kept up closes one.
+	trendCompactHours = 48
 )
 
 // nextRetentionWait is how long the loop waits after a pass: an hour when the
@@ -51,6 +55,8 @@ type retentionStore interface {
 	PruneSamplesOfType(ctx context.Context, lane, typeID string, days int, before time.Time, limit int) (int64, error)
 	EnsureMetricPartitions(ctx context.Context) ([]string, error)
 	DropMetricPartitions(ctx context.Context, before time.Time) ([]string, error)
+	CompactMetricTrends(ctx context.Context, maxHours, laneDays int) (storage.TrendCompaction, error)
+	PruneMetricTrends(ctx context.Context, before time.Time, limit int) (int64, error)
 }
 
 // retentionLane is one thing a pass prunes to one window: a sample lane, or a
@@ -76,6 +82,8 @@ func retentionLanes(store retentionStore, w settings.RetentionSettings, override
 			return store.PruneSamples(ctx, l.name, before, limit)
 		}})
 	}
+	// The hourly trends, to the trend window (#1276).
+	lanes = append(lanes, retentionLane{"metric_trend", w.TrendDays, store.PruneMetricTrends})
 	for _, o := range overrides {
 		lanes = append(lanes, retentionLane{o.Lane + "/" + o.TypeName, o.Days, func(ctx context.Context, before time.Time, limit int) (int64, error) {
 			return store.PruneSamplesOfType(ctx, o.Lane, o.TypeID, o.Days, before, limit)
@@ -101,8 +109,10 @@ type retentionReport struct {
 	Deleted map[string]int64
 	Behind  []string
 	// Created and Dropped are the metric partitions the pass's roll made
-	// and the months it dropped whole (#420).
+	// and the days it dropped whole (#420, #1527).
 	Created, Dropped []string
+	// Trends is what the pass's trend compaction did (#1276).
+	Trends storage.TrendCompaction
 }
 
 // retentionPass prunes each lane to its window once (retentionLanes): the metric
@@ -132,9 +142,10 @@ func retentionPass(ctx context.Context, store retentionStore, now time.Time, chu
 		return rep, err
 	}
 	var errs []error
-	// The metric table's roll (#420): the next months' partitions made, then
-	// each month wholly past the metric window (and every type's own) dropped,
-	// before the lanes' chunked prune keeps the window exact inside the rest.
+	// The metric table's roll (#420, #1527): the next days' partitions made,
+	// then each day wholly past the metric window (and past every longer
+	// window of a type it holds a sample of) dropped, before the lanes'
+	// chunked prune keeps the window exact inside the rest.
 	pctx, pdone := bounded()
 	created, err := store.EnsureMetricPartitions(pctx)
 	rep.Created = created
@@ -149,6 +160,20 @@ func retentionPass(ctx context.Context, store retentionStore, now time.Time, chu
 		}
 	}
 	pdone()
+	// The hours past the late-data horizon close into trends (#1276) before
+	// any prune, which never removes a sample of an hour still open.
+	if w.MetricDays > 0 && w.MetricDays <= settings.RetentionMaxDays {
+		cctx, cdone := bounded()
+		trends, err := store.CompactMetricTrends(cctx, trendCompactHours, w.MetricDays)
+		cdone()
+		rep.Trends = trends
+		if err != nil {
+			errs = append(errs, fmt.Errorf("compact metric trends: %w", err))
+			rep.Behind = append(rep.Behind, "metric_trend compaction")
+		} else if trends.Behind {
+			rep.Behind = append(rep.Behind, "metric_trend compaction")
+		}
+	}
 	// The types with windows of their own. A failed read loses only their own
 	// lanes this pass: the lane prunes skip them regardless (storage holds that).
 	octx, odone := bounded()
@@ -207,6 +232,10 @@ func (s *Server) startSampleRetention() {
 			if total > 0 || len(rep.Behind) > 0 {
 				slog.Info("rows pruned past their retention window", "facility", "retention",
 					"deleted", rep.Deleted, "behind", rep.Behind)
+			}
+			if rep.Trends.Hours > 0 || rep.Trends.Recomputed > 0 {
+				slog.Info("metric hours closed into trends", "facility", "retention",
+					"hours", rep.Trends.Hours, "through", rep.Trends.Through, "recomputed", rep.Trends.Recomputed)
 			}
 			if len(rep.Created) > 0 || len(rep.Dropped) > 0 {
 				slog.Info("metric partitions rolled", "facility", "retention",

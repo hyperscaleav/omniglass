@@ -16,6 +16,7 @@ import (
 // PropertyTransitions returns the ordered rows for the availability strip, and the
 // owner-arc FK rejects a state for a component that does not exist.
 func TestInsertPropertySamples(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

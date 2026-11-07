@@ -3,7 +3,7 @@
 # #1193). Production deploy is BYO Postgres; tests use ephemeral testcontainer
 # Postgres.
 
-.PHONY: all lab test-lab footprint lab-footprint compress-bench build build-web web image gen gen-proto gen-web adr-renumber migration migration-check test test-web test-short test-e2e bench clean-testcontainers tidy dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify docs-walkthroughs bench-sim test-netadmin walkthroughs test-walkthroughs demo test-demos probe
+.PHONY: all lab test-lab footprint lab-footprint compress-bench build build-web web image gen gen-proto gen-web adr-renumber migration migration-check test test-web test-short test-go test-go-storage test-go-devseed test-go-rest test-go-shards-check test-e2e bench clean-testcontainers tidy dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify docs-walkthroughs bench-sim test-netadmin walkthroughs test-walkthroughs demo test-demos probe
 
 # The bare `make` (#1196) needs only Docker. From one Dockerfile and one tree
 # it builds the image omniglass:dev and exports this machine's own binary to
@@ -150,9 +150,61 @@ migration-check:
 # for it should raise this, and the run gets faster with no other change.
 # Override per invocation: make test TEST_PARALLEL=8.
 TEST_PARALLEL ?= 1
-test: test-web
-	go test -p $(TEST_PARALLEL) ./...
+test:
+	$(MAKE) test-web
+	$(MAKE) test-go
 	$(MAKE) test-netadmin
+
+# Every Go package, as three shards (#1536). CI runs each shard as its own job
+# so the two slowest packages (internal/storage and internal/devseed, each
+# minutes of Postgres-backed tests) do not queue behind everything else, and
+# the required `test` check is the roll-up of those jobs; this target runs them
+# one after another, so the local gate covers exactly what CI does (#214).
+# The shards run serially even under make -j: TEST_PARALLEL bounds the
+# containers and link jobs of one go test, and three of them at once would
+# multiply it.
+test-go:
+	$(MAKE) test-go-storage
+	$(MAKE) test-go-devseed
+	$(MAKE) test-go-rest
+
+# The two named shards are packages (with any sub-packages, so a helper
+# package moves with its parent); the rest is derived, never hand-listed, so a
+# new package joins test-go-rest on its own. Lazily expanded (=): go list runs
+# only for a target that reads it, not on every make invocation.
+GO_PKGS_STORAGE = $(shell go list ./internal/storage/...)
+GO_PKGS_DEVSEED = $(shell go list ./internal/devseed/...)
+GO_PKGS_REST = $(filter-out $(GO_PKGS_STORAGE) $(GO_PKGS_DEVSEED),$(shell go list ./...))
+
+# Each shard runs under cmd/gotestreport: go test -json, printed as go test
+# prints it, then the 20 slowest tests and every package's wall time at the end
+# of the log (the list the follow-up that makes the suite faster starts from).
+# It exits with go test's status.
+GO_TEST_SHARD = go run ./cmd/gotestreport -n 20 -- -p $(TEST_PARALLEL)
+
+test-go-storage: test-go-shards-check
+	$(GO_TEST_SHARD) $(GO_PKGS_STORAGE)
+
+test-go-devseed: test-go-shards-check
+	$(GO_TEST_SHARD) $(GO_PKGS_DEVSEED)
+
+test-go-rest: test-go-shards-check
+	$(GO_TEST_SHARD) $(GO_PKGS_REST)
+
+# Fails if any package go list reports is in no shard or in two. The rest is
+# derived, so this guards the day someone hand-lists it or names a shard that
+# overlaps another.
+test-go-shards-check:
+	@d=$$(mktemp -d); trap 'rm -rf $$d' EXIT; \
+	go list ./... | sort > $$d/all; \
+	printf '%s\n' $(GO_PKGS_STORAGE) $(GO_PKGS_DEVSEED) $(GO_PKGS_REST) | sort > $$d/sharded; \
+	uniq -d $$d/sharded > $$d/twice; comm -23 $$d/all $$d/sharded > $$d/none; \
+	if [ -s $$d/twice ] || [ -s $$d/none ]; then \
+		[ ! -s $$d/twice ] || { echo "in more than one Go test shard:"; sed 's/^/  /' $$d/twice; }; \
+		[ ! -s $$d/none ] || { echo "in no Go test shard:"; sed 's/^/  /' $$d/none; }; \
+		exit 1; \
+	fi; \
+	echo "go test shards cover all $$(wc -l < $$d/all | tr -d ' ') packages exactly once"
 
 # The SPA typecheck + unit and theming-ban tests. Part of the local gate so
 # web-only regressions (an illegible badge class, a broken page descriptor, a
