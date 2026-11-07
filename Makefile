@@ -3,7 +3,7 @@
 # #1193). Production deploy is BYO Postgres; tests use ephemeral testcontainer
 # Postgres.
 
-.PHONY: all lab test-lab footprint lab-footprint compress-bench build build-web web image gen gen-proto gen-web adr-renumber migration migration-check test test-web test-short test-go test-go-storage test-go-devseed test-go-rest test-go-shards-check test-e2e bench clean-testcontainers tidy dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify docs-walkthroughs bench-sim test-netadmin walkthroughs test-walkthroughs demo test-demos probe
+.PHONY: all lab test-lab scale-lab footprint lab-footprint compress-bench build build-web web image gen gen-proto gen-web adr-renumber migration migration-check test test-web test-short test-go test-go-storage test-go-devseed test-go-rest test-go-shards-check test-e2e bench clean-testcontainers tidy dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify docs-walkthroughs bench-sim test-netadmin walkthroughs test-walkthroughs demo test-demos probe
 
 # The bare `make` (#1196) needs only Docker. From one Dockerfile and one tree
 # it builds the image omniglass:dev and exports this machine's own binary to
@@ -37,6 +37,17 @@ lab: all
 # Outside make test, because it builds the image (as the demo targets do).
 test-lab: all
 	OMNIGLASS_LAB_TEST=1 go test -tags labintegration -count=1 -p 1 -timeout 30m -v -run Integration ./internal/lab/ ./internal/labfootprint/
+
+# The scale lab (#1554): a scale lab scenario at a size, one node per site,
+# checked by scripts/scale-lab.sh (a node container per site, every simulated
+# component at its own loopback address, the containers' memory and CPU, and
+# a teardown that leaves nothing). Outside make test and CI: it builds the
+# image and stands up thousands of simulated devices. SYSTEMS sets the size,
+# SCENARIO the scenario, SCALE_LAB_ARGS passes lab run flags.
+SYSTEMS  ?= 100
+SCENARIO ?= corporate
+scale-lab: all
+	scripts/scale-lab.sh $(SYSTEMS) $(SCENARIO) $(SCALE_LAB_ARGS)
 
 # Build the single binary with the Go toolchain (no console embedded; serves
 # the build-the-console placeholder under /web), stamped with the build id.

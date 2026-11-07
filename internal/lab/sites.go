@@ -20,7 +20,8 @@ type SiteState struct {
 	Want      int
 	Listed    int
 	Up        int
-	// NotUp names the components listed but not up yet.
+	// NotUp names the components listed but not up yet, each with its
+	// loopback address (a name is unique only within its system).
 	NotUp []string
 }
 
@@ -39,6 +40,7 @@ func readSites(ctx context.Context, c *http.Client, base string, nodes []SiteNod
 	type device struct {
 		ComponentID string `json:"component_id"`
 		Component   string `json:"component"`
+		Address     string `json:"address"`
 		Status      string `json:"status"`
 	}
 	sims := make([][]device, len(nodes))
@@ -90,7 +92,7 @@ func readSites(ctx context.Context, c *http.Client, base string, nodes []SiteNod
 			if up[d.ComponentID] {
 				states[i].Up++
 			} else {
-				states[i].NotUp = append(states[i].NotUp, d.Component)
+				states[i].NotUp = append(states[i].NotUp, d.Component+" at "+d.Address)
 			}
 		}
 	}

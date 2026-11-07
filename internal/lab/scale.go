@@ -36,14 +36,18 @@ type CostModel struct {
 }
 
 // MeasuredCost is the cost model as measured with docker stats on a 12-core,
-// 32 GB WSL dev host at --systems 100 and --systems 1000 (the PR that
-// brought the scale lab up records the readings). The base is the server and
-// Postgres together, the node is a node container serving nothing, and the
-// component cost is the rest divided over the components.
+// 32 GiB dev host (scripts/scale-lab.sh, settled 30 seconds after ready) at
+// --systems 20 (3 sites, 67 components) and --systems 100 (3 sites, 322
+// components). A node container took about 40 MiB at 6 to 24 components, 72
+// at 68 and 199 at 230: 36 MiB plus 0.7 MiB a component, rounded up for the
+// small sites. The server and Postgres took 180 MiB at 67 components and
+// 223 at 322: 170 MiB plus 0.17 MiB a component. CPU is the mean of spiky
+// samples: the server and Postgres a tenth of a core at 67 components and
+// three tenths at 322, a node a hundredth or less.
 var MeasuredCost = CostModel{
-	Base:      Footprint{MemMiB: 260, CPU: 0.30},
-	Node:      Footprint{MemMiB: 32, CPU: 0.02},
-	Component: Footprint{MemMiB: 0.9, CPU: 0.004},
+	Base:      Footprint{MemMiB: 170, CPU: 0.05},
+	Node:      Footprint{MemMiB: 36, CPU: 0.01},
+	Component: Footprint{MemMiB: 0.9, CPU: 0.001},
 }
 
 // Estimate is what a lab of sites sites and components simulated components
@@ -133,41 +137,87 @@ func scaleTotals(o Options) (sites, components int) {
 	return len(o.SiteNodes), components
 }
 
-// checkCapacity refuses a scale lab the host cannot fit, before anything is
-// created, naming the estimate, the host, and the largest size that fits.
-func (r *Runner) checkCapacity(ctx context.Context, cfg Config) error {
-	sc := cfg.ScaleRun
-	host, err := r.Engine.Resources(ctx)
-	if err != nil {
-		return fmt.Errorf("read the Docker host's memory and CPUs: %w", err)
+// Capacity is a scale lab's estimate against a host, and the decision: it
+// fits, or the largest size that does (LargestOK false when none does).
+type Capacity struct {
+	Systems, Sites, Components int
+	Need                       Footprint
+	Host                       HostResources
+	Fits                       bool
+	Largest                    int
+	LargestOK                  bool
+	MinSystems                 int
+}
+
+// AssessCapacity estimates a scale lab of systems systems (sites sites,
+// components components) and decides whether the host fits it, searching
+// for the largest size that does when it does not.
+func AssessCapacity(sc ScaleRun, host HostResources, systems, sites, components int) (Capacity, error) {
+	c := Capacity{Systems: systems, Sites: sites, Components: components, Host: host, MinSystems: sc.MinSystems,
+		Need: sc.Cost.Estimate(sites, components)}
+	c.Fits = host.Fits(c.Need)
+	if c.Fits {
+		return c, nil
 	}
-	if sc.HostMemory > 0 {
-		host.MemBytes = sc.HostMemory
-	}
-	sites, comps := scaleTotals(cfg.Options)
-	need := sc.Cost.Estimate(sites, comps)
-	use := host.Usable()
-	r.step("capacity", fmt.Sprintf("%d systems: %d sites, %d components; about %s and %.1f cores of the %s and %.1f cores this host can spare",
-		cfg.Systems, sites, comps, mib(need.MemMiB), need.CPU, mib(use.MemMiB), use.CPU))
-	if host.Fits(need) {
+	var err error
+	c.Largest, c.LargestOK, err = LargestFit(sc.Shape, sc.MinSystems, sc.MaxSystems, sc.Cost, host)
+	return c, err
+}
+
+// Summary is the estimate set against what the host can spare.
+func (c Capacity) Summary() string {
+	use := c.Host.Usable()
+	return fmt.Sprintf("%d systems: %d sites, %d components; about %s and %.1f cores of the %s and %.1f cores this host can spare",
+		c.Systems, c.Sites, c.Components, FormatMiB(c.Need.MemMiB), c.Need.CPU, FormatMiB(use.MemMiB), use.CPU)
+}
+
+// Err is the refusal of a size that does not fit, naming the largest that
+// does; nil when it fits.
+func (c Capacity) Err() error {
+	if c.Fits {
 		return nil
 	}
 	cause := fmt.Sprintf("A scale lab of %d systems (%d sites, %d simulated components) needs about %s of memory and %.1f cores; this Docker host has %s and %d cores, of which the lab plans to use at most %.0f%%.",
-		cfg.Systems, sites, comps, mib(need.MemMiB), need.CPU, mib(float64(host.MemBytes)/(1<<20)), host.CPUs, (1-Headroom)*100)
-	largest, ok, err := LargestFit(sc.Shape, sc.MinSystems, sc.MaxSystems, sc.Cost, host)
+		c.Systems, c.Sites, c.Components, FormatMiB(c.Need.MemMiB), c.Need.CPU, FormatMiB(float64(c.Host.MemBytes)/(1<<20)), c.Host.CPUs, (1-Headroom)*100)
+	if !c.LargestOK {
+		return &PreflightError{Cause: cause + " Not even the smallest size fits.",
+			Fix: fmt.Sprintf("give Docker more memory or CPUs; the smallest scale lab, --systems %d, needs more than this host can spare.", c.MinSystems)}
+	}
+	return &PreflightError{Cause: cause,
+		Fix: fmt.Sprintf("run --systems %d, the largest that fits, or give Docker more memory or CPUs.", c.Largest)}
+}
+
+// ScaleHost is the host a scale lab plans against: the Docker host's own
+// report, with its memory replaced by a forced limit when one is set.
+func ScaleHost(ctx context.Context, eng Engine, forcedMem int64) (HostResources, error) {
+	host, err := eng.Resources(ctx)
+	if err != nil {
+		return host, fmt.Errorf("read the Docker host's memory and CPUs: %w", err)
+	}
+	if forcedMem > 0 {
+		host.MemBytes = forcedMem
+	}
+	return host, nil
+}
+
+// checkCapacity refuses a scale lab the host cannot fit, before anything is
+// created, naming the estimate, the host, and the largest size that fits.
+func (r *Runner) checkCapacity(ctx context.Context, cfg Config) error {
+	host, err := ScaleHost(ctx, r.Engine, cfg.ScaleRun.HostMemory)
 	if err != nil {
 		return err
 	}
-	if !ok {
-		return &PreflightError{Cause: cause + " Not even the smallest size fits.",
-			Fix: fmt.Sprintf("give Docker more memory or CPUs; the smallest scale lab, --systems %d, needs more than this host can spare.", sc.MinSystems)}
+	sites, comps := scaleTotals(cfg.Options)
+	c, err := AssessCapacity(*cfg.ScaleRun, host, cfg.Systems, sites, comps)
+	if err != nil {
+		return err
 	}
-	return &PreflightError{Cause: cause,
-		Fix: fmt.Sprintf("run --systems %d, the largest that fits, or give Docker more memory or CPUs.", largest)}
+	r.step("capacity", c.Summary())
+	return c.Err()
 }
 
-// mib reads a size in MiB as a person would.
-func mib(m float64) string {
+// FormatMiB reads a size in MiB as a person would.
+func FormatMiB(m float64) string {
 	if m >= 1024 {
 		return fmt.Sprintf("%.1f GiB", m/1024)
 	}

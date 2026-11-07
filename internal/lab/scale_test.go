@@ -2,6 +2,7 @@ package lab
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -60,5 +61,27 @@ func TestLargestFitIsTheLargestSizeTheHostCanTake(t *testing.T) {
 	boom := errors.New("boom")
 	if _, _, err := LargestFit(func(int) (int, int, error) { return 0, 0, boom }, 10, 3000, testCost, h); !errors.Is(err, boom) {
 		t.Fatalf("a shape's error: %v", err)
+	}
+}
+
+// The assessment --plan prints and bring-up acts on: the estimate against
+// what the host can spare, and a refusal naming the largest size that fits.
+func TestAssessCapacityDecides(t *testing.T) {
+	sc := ScaleRun{Shape: linearShape, MinSystems: 10, MaxSystems: 3000, Cost: testCost}
+	host := HostResources{MemBytes: 600 << 20, CPUs: 100}
+	fits, err := AssessCapacity(sc, host, 50, 6, 150)
+	if err != nil || !fits.Fits || fits.Err() != nil {
+		t.Fatalf("50 systems on 480 usable MiB: %+v %v", fits, err)
+	}
+	if want := "50 systems: 6 sites, 150 components; about 310 MiB and 3.1 cores of the 480 MiB and 80.0 cores this host can spare"; fits.Summary() != want {
+		t.Fatalf("summary %q, want %q", fits.Summary(), want)
+	}
+	big, err := AssessCapacity(sc, host, 1000, 101, 3000)
+	if err != nil || big.Fits || big.Largest != 93 {
+		t.Fatalf("1000 systems: %+v %v, want refused with 93 the largest", big, err)
+	}
+	var pe *PreflightError
+	if !errors.As(big.Err(), &pe) || !strings.Contains(pe.Fix, "--systems 93, the largest that fits") {
+		t.Fatalf("refusal %v", big.Err())
 	}
 }

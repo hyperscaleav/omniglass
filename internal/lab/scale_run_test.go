@@ -28,8 +28,9 @@ func scaleServer(t *testing.T, sites map[string][]string, silent, down map[strin
 			return
 		}
 		var devs []string
-		for _, c := range comps {
-			devs = append(devs, fmt.Sprintf(`{"component_id":"id-%s","component":%q,"status":"running"}`, c, c))
+		for i, c := range comps {
+			devs = append(devs, fmt.Sprintf(`{"component_id":"id-%s","component":%q,"address":"127.0.%d.%d","status":"running"}`,
+				c, c, len(node), i+1))
 		}
 		fmt.Fprintf(w, `{"connected":%v,"devices":[%s]}`, !silent[node], strings.Join(devs, ","))
 	})
@@ -87,6 +88,12 @@ func TestScaleRunBringsUpOneNodePerSite(t *testing.T) {
 			t.Errorf("status lacks %q:\n%s", line, out.String())
 		}
 	}
+	// A scale lab is thrown away on stop and is not the walkthroughs' lab.
+	for _, line := range []string{"data is kept", WalkthroughsURL} {
+		if strings.Contains(out.String(), line) {
+			t.Errorf("a scale lab's banner says %q:\n%s", line, out.String())
+		}
+	}
 }
 
 // A size the host cannot fit is refused before anything is created, naming
@@ -139,7 +146,7 @@ func TestScaleRunTimesOutNamingWhatIsNotUp(t *testing.T) {
 	if !errors.As(err, &notUp) {
 		t.Fatalf("got %v, want the sites not up named", err)
 	}
-	for _, want := range []string{"within 300ms", "edge-hq: 1 of 3 components not up: hq-dsp-1", "edge-branch-01: its simulator has not connected"} {
+	for _, want := range []string{"within 300ms", "edge-hq: 1 of 3 components not up: hq-dsp-1 at 127.0.7.3", "edge-branch-01: its simulator has not connected"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("%q lacks %q", err, want)
 		}

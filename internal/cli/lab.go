@@ -141,12 +141,30 @@ func runLabScenario(ctx context.Context, out io.Writer, m *labscenario.Manifest,
 	if err != nil {
 		return err
 	}
-	if f.plan {
-		return labscenario.WritePlan(out, plan)
-	}
 	hostMemory, err := parseByteSize(f.scale.hostMemory)
 	if err != nil {
 		return fmt.Errorf("--host-memory: %w", err)
+	}
+	scale := &lab.ScaleRun{
+		Shape: func(n int) (int, int, error) {
+			p, err := labscenario.Resolve(m, cat, n)
+			if err != nil {
+				return 0, 0, err
+			}
+			return len(p.Sites), p.Totals.Components, nil
+		},
+		MinSystems: labscenario.MinSystems(m), MaxSystems: labscenario.MaxSystems,
+		Cost: lab.MeasuredCost, HostMemory: hostMemory, Timeout: f.scale.timeout,
+	}
+	if f.plan {
+		if err := labscenario.WritePlan(out, plan); err != nil {
+			return err
+		}
+		readHost := f.readHost
+		if readHost == nil {
+			readHost = scaleHost
+		}
+		return writeScaleCapacity(ctx, out, scale, plan, readHost)
 	}
 	nodes := make([]lab.SiteNode, len(plan.Sites))
 	for i, site := range plan.Sites {
@@ -185,19 +203,51 @@ func runLabScenario(ctx context.Context, out io.Writer, m *labscenario.Manifest,
 			Ephemeral: true, Cadence: cadence,
 		},
 		Image: choice, Hold: true, ReadyFile: f.script.readyFile, WhilePID: f.script.whilePID,
-		ScaleRun: &lab.ScaleRun{
-			Shape: func(n int) (int, int, error) {
-				p, err := labscenario.Resolve(m, cat, n)
-				if err != nil {
-					return 0, 0, err
-				}
-				return len(p.Sites), p.Totals.Components, nil
-			},
-			MinSystems: labscenario.MinSystems(m), MaxSystems: labscenario.MaxSystems,
-			Cost: lab.MeasuredCost, HostMemory: hostMemory, Timeout: f.scale.timeout,
-		},
+		ScaleRun: scale,
 	})
 	return err
+}
+
+// writeScaleCapacity follows a plan with its preflight: the estimate from
+// the measured costs and, when the Docker host can be read, the decision
+// bring-up would make on it. It starts nothing, and a refusal is printed, not
+// returned: the plan was asked for, not the lab.
+func writeScaleCapacity(ctx context.Context, out io.Writer, scale *lab.ScaleRun, plan *labscenario.Plan, readHost hostReader) error {
+	need := scale.Cost.Estimate(len(plan.Sites), plan.Totals.Components)
+	fmt.Fprintf(out, "\nPreflight: about %s of memory and %.1f cores (the server and Postgres, a node for each of %d sites, %d simulated components).\n",
+		lab.FormatMiB(need.MemMiB), need.CPU, len(plan.Sites), plan.Totals.Components)
+	host, err := readHost(ctx, scale.HostMemory)
+	if err != nil {
+		fmt.Fprintf(out, "No decision: %v\n", err)
+		return nil
+	}
+	c, err := lab.AssessCapacity(*scale, host, plan.Totals.Systems, len(plan.Sites), plan.Totals.Components)
+	if err != nil {
+		return err
+	}
+	use := host.Usable()
+	fmt.Fprintf(out, "This Docker host can spare %s and %.1f cores (%.0f%% of its %s and %d cores).\n",
+		lab.FormatMiB(use.MemMiB), use.CPU, (1-lab.Headroom)*100, lab.FormatMiB(float64(host.MemBytes)/(1<<20)), host.CPUs)
+	if err := c.Err(); err != nil {
+		fmt.Fprintf(out, "Decision: refused. %v\n", err)
+		return nil
+	}
+	fmt.Fprintln(out, "Decision: fits.")
+	return nil
+}
+
+// hostReader reads the host a scale lab plans against, with its memory
+// forced when forcedMem is set.
+type hostReader func(ctx context.Context, forcedMem int64) (lab.HostResources, error)
+
+// scaleHost reads this machine's Docker host for a plan's preflight,
+// quietly; a Docker that does not answer is the error.
+func scaleHost(ctx context.Context, forcedMem int64) (lab.HostResources, error) {
+	eng, _, err := labEngine(ctx, io.Discard)
+	if err != nil {
+		return lab.HostResources{}, err
+	}
+	return lab.ScaleHost(ctx, eng, forcedMem)
 }
 
 // defaultScaleTimeout bounds a scale lab's bring-up, the seed included.
@@ -253,6 +303,9 @@ type labFlags struct {
 	script                           labScript
 	scale                            labScale
 	version                          string
+	// readHost, when set, stands in for this machine's Docker host in a
+	// plan's preflight.
+	readHost hostReader
 }
 
 func runLab(ctx context.Context, out io.Writer, version string, f labFlags) error {

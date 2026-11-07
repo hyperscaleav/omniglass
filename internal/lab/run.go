@@ -710,13 +710,19 @@ func (r *Runner) readyBanner(lab *Lab, cfg Config) {
 	r.say("  Console    %s", lab.ConsoleURL)
 	r.say("  Sign in    user %s, password %s", LoginUser, LoginPassword)
 	r.say("")
-	r.say("  Stop it    press Ctrl-C here. Your lab's data is kept for next time;")
-	r.say("             omniglass lab run --fresh starts over from the seed.")
+	if lab.Spec.Ephemeral {
+		r.say("  Stop it    press Ctrl-C here. The lab is removed with its data.")
+	} else {
+		r.say("  Stop it    press Ctrl-C here. Your lab's data is kept for next time;")
+		r.say("             omniglass lab run --fresh starts over from the seed.")
+	}
 	r.say("")
-	r.say("Where to go next: the guided walkthroughs, each recorded on this same lab,")
-	r.say("so every screen matches yours:")
-	r.say("  %s", WalkthroughsURL)
-	r.say("")
+	if cfg.ScaleRun == nil {
+		r.say("Where to go next: the guided walkthroughs, each recorded on this same lab,")
+		r.say("so every screen matches yours:")
+		r.say("  %s", WalkthroughsURL)
+		r.say("")
+	}
 	r.say("The lab is one Docker project; see it with: docker compose -p %s ps", lab.Spec.Project)
 	if cfg.Listen != DefaultListen {
 		r.say("")
