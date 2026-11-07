@@ -31,12 +31,16 @@ func (e *Error) Error() string {
 	return strings.Join(lines, "\n")
 }
 
-// maxNameLen bounds a site or building name, so the floor and room names
-// built from them stay inside the platform's 100-character name rule.
+// maxNameLen bounds an archetype or building name, so the site, floor and
+// room names built from them stay inside the platform's 100-character name
+// rule.
 const maxNameLen = 40
 
 // nameRule is the platform's entity name rule (internal/template, storage).
 var nameRule = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
+
+// repeatedName is the suffix a repeated archetype's site names take.
+var repeatedName = regexp.MustCompile(`^-[0-9]+$`)
 
 // compiled is a validated manifest: each standard with the components one of
 // its systems takes, in role order.
@@ -52,8 +56,9 @@ type compiledStandard struct {
 
 // Validate checks a manifest against the catalog: every standard a template
 // standard, every system type registered, every product a catalog product a
-// simulator profile serves, every standard's products staffing it, and every
-// site well formed. A refusal is an *Error naming each problem and its line.
+// simulator profile serves, every standard's products staffing it, every
+// archetype well formed with exactly one headquarters, and the site bounds
+// in order. A refusal is an *Error naming each problem and its line.
 func Validate(m *Manifest, cat Catalog) error {
 	_, err := compile(m, cat)
 	return err
@@ -88,13 +93,11 @@ func compile(m *Manifest, cat Catalog) (*compiled, error) {
 		}
 	}
 
-	sites := map[string]int{}
-	for _, site := range m.Sites {
-		probs = append(probs, checkSite(site, declared, sites)...)
+	archetypes := map[string]int{}
+	for _, a := range m.Archetypes {
+		probs = append(probs, checkArchetype(a, declared, archetypes)...)
 	}
-	if len(m.Sites) == 0 {
-		add(1, "the manifest places no sites")
-	}
+	probs = append(probs, checkSiteBounds(m)...)
 
 	if len(probs) > 0 {
 		sort.SliceStable(probs, func(i, j int) bool { return probs[i].Line < probs[j].Line })
@@ -205,60 +208,119 @@ func compileStandard(s Standard, cat Catalog) (compiledStandard, []Problem) {
 	return cs, probs
 }
 
-// checkSite checks one site: a legal unique name, a positive weight, its
-// buildings, and ratios over declared standards.
-func checkSite(site Site, standards, seen map[string]int) []Problem {
+// checkSiteBounds checks the archetypes against the site bounds: exactly one
+// headquarters, the bounds in order and above zero, and room for more than
+// one site only if an archetype repeats.
+func checkSiteBounds(m *Manifest) []Problem {
 	var probs []Problem
 	add := func(line int, format string, args ...any) {
 		probs = append(probs, Problem{Line: line, Message: fmt.Sprintf(format, args...)})
 	}
-	name := site.Name.Name
-	switch {
-	case name == "":
-		add(site.Line, "a site has no name")
-	case !legalName(name):
-		add(site.Name.Line, "site name %q is not a name (lowercase letters, digits and dashes, at most %d)", name, maxNameLen)
-	case seen[name] != 0:
-		add(site.Name.Line, "site %q is declared twice (first on line %d)", name, seen[name])
-	default:
-		seen[name] = site.Name.Line
+	if len(m.Archetypes) == 0 {
+		add(1, "the manifest declares no site archetypes")
+		return probs
 	}
-	if site.Weight < 1 {
-		add(site.Line, "site %q has weight %d; a site's weight is a whole number above zero", name, site.Weight)
+	var hqs []string
+	repeated := false
+	for _, a := range m.Archetypes {
+		if a.Headquarters {
+			hqs = append(hqs, fmt.Sprintf("%s (line %d)", a.Name.Name, a.Line))
+		} else {
+			repeated = true
+		}
+	}
+	switch {
+	case len(hqs) == 0:
+		add(m.Archetypes[0].Line, "no archetype is the headquarters; mark the one placed exactly once with headquarters: true")
+	case len(hqs) > 1:
+		add(m.Archetypes[0].Line, "%d archetypes are the headquarters (%s); a scenario has one", len(hqs), strings.Join(hqs, ", "))
 	}
 
-	if len(site.Buildings) == 0 {
-		add(site.Line, "site %q has no buildings to place its rooms in", name)
+	// A repeated archetype's sites are <name>-NN, so a headquarters named
+	// like one would be planned twice.
+	for _, hq := range m.Archetypes {
+		for _, a := range m.Archetypes {
+			if hq.Headquarters && !a.Headquarters && repeatedName.MatchString(strings.TrimPrefix(hq.Name.Name, a.Name.Name)) {
+				add(hq.Name.Line, "headquarters %q is named like a site of archetype %q (%s-01, %s-02 and on)", hq.Name.Name, a.Name.Name, a.Name.Name, a.Name.Name)
+			}
+		}
+	}
+
+	b := m.Sites
+	line := lineOr(b.Line, 1)
+	switch {
+	case b.Line == 0:
+		add(1, "the manifest declares no site bounds; say sites: { min: N, max: M }")
+	case b.Min < 1:
+		add(line, "sites min is %d; a scenario has at least its headquarters, so min is 1 or more", b.Min)
+	case b.Max < b.Min:
+		add(line, "sites max %d is below min %d", b.Max, b.Min)
+	case b.Max > 1 && !repeated:
+		add(line, "sites max is %d, but every archetype is the headquarters, so the scenario has one site", b.Max)
+	}
+	return probs
+}
+
+// checkArchetype checks one archetype: a legal unique name, a positive
+// typical size, a weight only if it repeats, its buildings, and ratios over
+// declared standards.
+func checkArchetype(a Archetype, standards, seen map[string]int) []Problem {
+	var probs []Problem
+	add := func(line int, format string, args ...any) {
+		probs = append(probs, Problem{Line: line, Message: fmt.Sprintf(format, args...)})
+	}
+	name := a.Name.Name
+	switch {
+	case name == "":
+		add(a.Line, "an archetype has no name")
+	case !legalName(name):
+		add(a.Name.Line, "archetype name %q is not a name (lowercase letters, digits and dashes, at most %d)", name, maxNameLen)
+	case seen[name] != 0:
+		add(a.Name.Line, "archetype %q is declared twice (first on line %d)", name, seen[name])
+	default:
+		seen[name] = a.Name.Line
+	}
+	switch {
+	case a.Headquarters && a.Weight != 0:
+		add(a.Line, "archetype %q is the headquarters, placed exactly once, so it takes no weight", name)
+	case !a.Headquarters && a.Weight < 1:
+		add(a.Line, "archetype %q has weight %d; a repeated archetype's weight is a whole number above zero", name, a.Weight)
+	}
+	if a.TypicalSystems < 1 {
+		add(a.Line, "archetype %q has typical_systems %d; a site has at least one system", name, a.TypicalSystems)
+	}
+	if len(a.Buildings) == 0 {
+		add(a.Line, "archetype %q has no buildings to place its rooms in", name)
 	}
 	buildings := map[string]bool{}
-	for _, b := range site.Buildings {
+	for _, b := range a.Buildings {
 		switch {
 		case !legalName(b.Name.Name):
-			add(lineOr(b.Name.Line, site.Line), "building name %q of site %q is not a name (lowercase letters, digits and dashes, at most %d)", b.Name.Name, name, maxNameLen)
+			add(lineOr(b.Name.Line, a.Line), "building name %q of archetype %q is not a name (lowercase letters, digits and dashes, at most %d)", b.Name.Name, name, maxNameLen)
 		case buildings[b.Name.Name]:
-			add(b.Name.Line, "building %q of site %q is declared twice", b.Name.Name, name)
+			add(b.Name.Line, "building %q of archetype %q is declared twice", b.Name.Name, name)
 		}
 		buildings[b.Name.Name] = true
 		if b.Floors < 1 {
-			add(lineOr(b.Name.Line, site.Line), "building %q of site %q has %d floors; it needs at least one", b.Name.Name, name, b.Floors)
+			add(lineOr(b.Name.Line, a.Line), "building %q of archetype %q has %d floors; it needs at least one", b.Name.Name, name, b.Floors)
 		}
 	}
 
-	if len(site.Systems) == 0 {
-		add(site.Line, "site %q places no systems", name)
+	if len(a.Systems) == 0 {
+		add(a.Line, "archetype %q places no systems", name)
 	}
 	ratios := map[string]bool{}
-	for _, r := range site.Systems {
+	for _, r := range a.Systems {
 		st := r.Standard
 		switch {
 		case standards[st.Name] == 0:
-			add(st.Line, "unknown standard %q: site %q places it, but the manifest's standards do not declare it", st.Name, name)
+			add(st.Line, "unknown standard %q: archetype %q places it, but the manifest's standards do not declare it", st.Name, name)
 		case ratios[st.Name]:
-			add(st.Line, "site %q places standard %q twice", name, st.Name)
+			add(st.Line, "archetype %q places standard %q twice", name, st.Name)
 		}
 		ratios[st.Name] = true
 		if r.Weight < 1 {
-			add(st.Line, "standard %q has ratio %d at site %q; a ratio is a whole number above zero", st.Name, r.Weight, name)
+			add(st.Line, "standard %q has ratio %d at archetype %q; a ratio is a whole number above zero", st.Name, r.Weight, name)
 		}
 	}
 	return probs

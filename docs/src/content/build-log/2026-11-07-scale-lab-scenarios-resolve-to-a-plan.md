@@ -5,9 +5,9 @@ refs: [1553, 1357, 1554, 914]
 ---
 
 The first slice of the scale lab: a scenario manifest describes a vertical environment once, and a
-size knob turns it into a plan. `internal/lab/scenario` parses a manifest (sites, each site's
-buildings and floors, the standards placed per site as ratios, and the catalog product filling each
-role of each standard), validates it, and resolves it at N systems. `corporate` is the one manifest
+size knob turns it into a plan. `internal/lab/scenario` parses a manifest (site archetypes, each
+archetype's buildings and floors, the standards placed at its sites as ratios, and the catalog
+product filling each role of each standard), validates it, and resolves it at N systems. `corporate` is the one manifest
 that ships. `omniglass lab run --scenario corporate --systems N --plan` prints the plan and exits;
 without `--plan` it says bring-up lands with #1554.
 
@@ -17,10 +17,22 @@ standard template, and its products are planned through the shared system planne
 is answered by one alternate's roles. A product must be in the shipped catalog and served by a
 simulator profile. Every problem comes back at once, each with the manifest line that holds it.
 
-N splits across sites by weight, then each site's share across its standards by ratio, both by the
-largest remainder method in whole-number arithmetic with ties going to the earlier entry. The plan
-always totals N. Each site is within one system of its quota and each standard within one of its
-quota at a site, and the tests hold that bound at 100, 1,000 and 3,000. Labels come from the
+The number of sites scales with N, so a big plan means many nodes rather than a few big ones. A
+manifest declares one headquarters, placed exactly once, plus repeated archetypes, each with a
+weight and a typical number of systems per site, and the bounds on its site count. The plan has
+the headquarters plus one site for each average repeated site's worth of systems beyond the
+headquarters' typical size, clamped to the bounds. The repeated archetypes share the other sites by
+weight, and their sites are numbered from the archetype's name (`regional-03`, `branch-12`).
+Corporate's bounds of 3 to 30 give 3 sites at 100 systems, 18 at 1,000 and 30 at 3,000, an
+enterprise of the size the scale lab targets. A missing or doubled headquarters and inverted bounds
+are refused with their line.
+
+N is then split across the sites, each taking one system and the rest going by typical size, and
+then each site's share across its standards by ratio. Both splits use the largest remainder method
+in whole-number arithmetic, with ties going to the earlier entry. The plan always totals N. Each
+site is within one system of its quota and each standard within one of its quota at a site. The
+tests hold those bounds at 100, 1,000 and 3,000, and they check that the site count stays inside
+the bounds and never falls at any size the knob takes. Labels come from the
 simulator fleet's name generator, now exported as `fleet.NameGenerator`, seeded per system, so a
 plan is deterministic. The shipped catalog is read without a database through new `seed`
 accessors.

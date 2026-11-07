@@ -3,6 +3,7 @@ package scenario
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -40,12 +41,24 @@ func TestNamesListsTheShippedManifests(t *testing.T) {
 }
 
 // TestResolveAtScale resolves corporate at the scale lab's three sizes from
-// the one manifest and holds the documented rounding: the totals sum to the
-// size, each site is within one system of its weighted quota, each standard
-// within one of its ratio quota at a site, and fleet-wide each standard is
+// the one manifest and holds the documented rules: the site count is
+// SiteCount's, inside the manifest's bounds and never falling as the size
+// grows; the headquarters is placed once and the repeated archetypes share the
+// rest by weight; the totals sum to the size; each site is within one system
+// of its quota (one, plus its typical-size share of the rest); each standard
+// within one of its ratio quota at a site; and fleet-wide each standard is
 // within two per site of its exact share.
 func TestResolveAtScale(t *testing.T) {
 	m, cat := corporate(t)
+	arch := map[string]Archetype{}
+	repeatedWeight := 0
+	for _, a := range m.Archetypes {
+		arch[a.Name.Name] = a
+		if !a.Headquarters {
+			repeatedWeight += a.Weight
+		}
+	}
+	prevSites := 0
 	for _, size := range []int{100, 1000, 3000} {
 		p, err := Resolve(m, cat, size)
 		if err != nil {
@@ -55,31 +68,59 @@ func TestResolveAtScale(t *testing.T) {
 			t.Fatalf("size %d: planned %d systems (%d listed)", size, p.Totals.Systems, len(p.allSystems()))
 		}
 
+		n := len(p.Sites)
+		if n != SiteCount(m, size) || n < m.Sites.Min || n > m.Sites.Max {
+			t.Fatalf("size %d: %d sites, SiteCount %d, bounds %d to %d", size, n, SiteCount(m, size), m.Sites.Min, m.Sites.Max)
+		}
+		if n < prevSites {
+			t.Fatalf("size %d: %d sites, fewer than the %d of a smaller size", size, n, prevSites)
+		}
+		prevSites = n
+		placed := 0
+		for _, ap := range p.Archetypes {
+			a := arch[ap.Name]
+			placed += ap.Sites
+			if a.Headquarters {
+				if ap.Sites != 1 {
+					t.Errorf("size %d: the headquarters %s is placed %d times", size, ap.Name, ap.Sites)
+				}
+				continue
+			}
+			quota := float64(n-1) * float64(a.Weight) / float64(repeatedWeight)
+			if diff := float64(ap.Sites) - quota; diff <= -1 || diff >= 1 {
+				t.Errorf("size %d: archetype %s has %d sites, quota %.2f", size, ap.Name, ap.Sites, quota)
+			}
+		}
+		if placed != n {
+			t.Errorf("size %d: the archetypes place %d sites, the plan lists %d", size, placed, n)
+		}
+
 		sumW := 0
-		for _, s := range m.Sites {
-			sumW += s.Weight
+		for _, sp := range p.Sites {
+			sumW += arch[sp.Archetype].TypicalSystems
 		}
 		exact := map[string]float64{}
-		for i, site := range m.Sites {
-			got := p.Sites[i].Totals.Systems
-			quota := float64(size) * float64(site.Weight) / float64(sumW)
+		for _, sp := range p.Sites {
+			a := arch[sp.Archetype]
+			got := sp.Totals.Systems
+			quota := 1 + float64(size-n)*float64(a.TypicalSystems)/float64(sumW)
 			if diff := float64(got) - quota; diff <= -1 || diff >= 1 {
-				t.Errorf("size %d: site %s has %d systems, quota %.2f", size, site.Name.Name, got, quota)
+				t.Errorf("size %d: site %s has %d systems, quota %.2f", size, sp.Name, got, quota)
 			}
 			sumR := 0
-			for _, r := range site.Systems {
+			for _, r := range a.Systems {
 				sumR += r.Weight
 			}
-			for _, r := range site.Systems {
+			for _, r := range a.Systems {
 				siteQuota := float64(got) * float64(r.Weight) / float64(sumR)
-				have := countOf(p.Sites[i].Totals.Standards, r.Standard.Name)
+				have := countOf(sp.Totals.Standards, r.Standard.Name)
 				if diff := float64(have) - siteQuota; diff <= -1 || diff >= 1 {
-					t.Errorf("size %d: site %s has %d %s, quota %.2f", size, site.Name.Name, have, r.Standard.Name, siteQuota)
+					t.Errorf("size %d: site %s has %d %s, quota %.2f", size, sp.Name, have, r.Standard.Name, siteQuota)
 				}
 				exact[r.Standard.Name] += quota * float64(r.Weight) / float64(sumR)
 			}
 		}
-		bound := 2 * float64(len(m.Sites))
+		bound := 2 * float64(n)
 		for _, st := range p.Totals.Standards {
 			if diff := float64(st.Count) - exact[st.Name]; diff < -bound || diff > bound {
 				t.Errorf("size %d: %d %s, exact share %.2f, outside +/-%v", size, st.Count, st.Name, exact[st.Name], bound)
@@ -101,6 +142,36 @@ func TestResolveAtScale(t *testing.T) {
 	}
 }
 
+// TestCorporateSiteCounts holds corporate to its target (#1357): an
+// enterprise of 15 to 30 sites at 1,000 and 3,000 systems, at the top at
+// 3,000, and its floor of 3 at 100.
+func TestCorporateSiteCounts(t *testing.T) {
+	m, _ := corporate(t)
+	if got := SiteCount(m, 100); got != 3 {
+		t.Errorf("100 systems: %d sites, want 3", got)
+	}
+	if got := SiteCount(m, 1000); got < 15 || got > 30 {
+		t.Errorf("1,000 systems: %d sites, want 15 to 30", got)
+	}
+	if got := SiteCount(m, 3000); got != 30 {
+		t.Errorf("3,000 systems: %d sites, want 30", got)
+	}
+}
+
+// Across every size the knob takes, the site count stays inside the bounds
+// and never falls.
+func TestSiteCountNeverFalls(t *testing.T) {
+	m, _ := corporate(t)
+	prev := 0
+	for size := MinSystems(m); size <= MaxSystems; size++ {
+		n := SiteCount(m, size)
+		if n < prev || n < m.Sites.Min || n > m.Sites.Max {
+			t.Fatalf("size %d: %d sites after %d (bounds %d to %d)", size, n, prev, m.Sites.Min, m.Sites.Max)
+		}
+		prev = n
+	}
+}
+
 // TestResolveCorporateAt100 pins the small plan, so a change to the rounding
 // or the manifest shows here as a diff.
 func TestResolveCorporateAt100(t *testing.T) {
@@ -109,17 +180,45 @@ func TestResolveCorporateAt100(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	perSite := map[string]int{}
+	var perSite []Count
 	for _, s := range p.Sites {
-		perSite[s.Name] = s.Totals.Systems
+		perSite = append(perSite, Count{s.Name, s.Totals.Systems})
 	}
-	if want := map[string]int{"hq": 40, "east": 25, "west": 20, "south": 15}; !reflect.DeepEqual(perSite, want) {
+	// 3 sites take one system each; the other 97 split 250:80:25 (sum 355)
+	// are 68, 22 and 7.
+	if want := []Count{{"hq", 69}, {"regional-01", 23}, {"branch-01", 8}}; !reflect.DeepEqual(perSite, want) {
 		t.Fatalf("systems per site = %v, want %v", perSite, want)
 	}
-	// hq's 40 split 30:20:12:6:4:8 (sum 80) is 15, 10, 6, 3, 2, 4.
-	want := []Count{{"huddle-room", 15}, {"mr65", 10}, {"mr75", 6}, {"mr86", 3}, {"divisible-conference", 2}, {"ds55", 4}}
+	// hq's 69 split 30:20:12:6:4:8 (sum 80) is 26, 17, 10, 5, 4, 7.
+	want := []Count{{"huddle-room", 26}, {"mr65", 17}, {"mr75", 10}, {"mr86", 5}, {"divisible-conference", 4}, {"ds55", 7}}
 	if got := p.Sites[0].Totals.Standards; !reflect.DeepEqual(got, want) {
 		t.Fatalf("hq per standard = %v, want %v", got, want)
+	}
+}
+
+// A repeated archetype's sites are numbered from its name, in order, the same
+// at the same size; the headquarters keeps its own name.
+func TestResolveNamesSitesFromTheirArchetype(t *testing.T) {
+	m, cat := corporate(t)
+	p, err := Resolve(m, cat, 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"hq"}
+	for _, ap := range p.Archetypes[1:] {
+		for k := 1; k <= ap.Sites; k++ {
+			want = append(want, fmt.Sprintf("%s-%02d", ap.Name, k))
+		}
+	}
+	var got []string
+	for _, s := range p.Sites {
+		got = append(got, s.Name)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("sites = %v, want %v", got, want)
+	}
+	if s := p.Sites[1]; s.Name != "regional-01" || s.Label != "Regional Office 01" || s.Archetype != "regional" {
+		t.Fatalf("second site = %s %q (%s), want regional-01 \"Regional Office 01\" (regional)", s.Name, s.Label, s.Archetype)
 	}
 }
 
@@ -165,7 +264,7 @@ standards:
     products:
       screen: t-panel-75
       bar: t-bar
-`+strings.ReplaceAll(oneSite, "sign-55", "room")))
+`+strings.ReplaceAll(oneArchetype, "sign-55", "room")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -232,10 +331,13 @@ func TestResolveIsDeterministic(t *testing.T) {
 
 func TestResolveRefusesASizeOutOfRange(t *testing.T) {
 	m, cat := corporate(t)
-	for _, size := range []int{0, -1, MaxSystems + 1} {
-		if _, err := Resolve(m, cat, size); err == nil {
-			t.Errorf("size %d resolved", size)
+	for _, size := range []int{0, -1, m.Sites.Min - 1, MaxSystems + 1} {
+		if _, err := Resolve(m, cat, size); err == nil || !strings.Contains(err.Error(), "out of range") {
+			t.Errorf("size %d resolved: %v", size, err)
 		}
+	}
+	if _, err := Resolve(m, cat, m.Sites.Min); err != nil {
+		t.Errorf("size %d, one system a site: %v", m.Sites.Min, err)
 	}
 }
 
@@ -250,8 +352,8 @@ func TestWritePlan(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := b.String()
-	for _, want := range []string{"scenario corporate (Corporate): 100 systems", "across 4 sites",
-		"SITE", "huddle-room", "hq ", "total ", "PRODUCT", p.Totals.Products[0].Name} {
+	for _, want := range []string{"scenario corporate (Corporate): 100 systems", "across 3 sites",
+		"ARCHETYPE", "SITE ", "huddle-room", "hq ", "regional-01 ", "branch-01 ", "total ", "PRODUCT", p.Totals.Products[0].Name} {
 		if !strings.Contains(out, want) {
 			t.Errorf("plan output lacks %q:\n%s", want, out)
 		}
@@ -295,7 +397,7 @@ standards:
     products:
       panel: t-panel-55
       player: t-player-9
-` + oneSite, `t.yaml:7: unknown product "t-player-9"`},
+` + oneArchetype, `t.yaml:7: unknown product "t-player-9"`},
 		{"no simulator profile", `
 name: t
 standards:
@@ -309,7 +411,7 @@ standards:
     products:
       panel: t-panel-55
       player: t-horn
-` + oneSite, `t.yaml:12: product "t-horn" has no simulator profile`},
+` + oneArchetype, `t.yaml:12: product "t-horn" has no simulator profile`},
 		{"unknown standard", `
 name: t
 standards:
@@ -317,22 +419,24 @@ standards:
     system_type: sign
     products:
       panel: t-panel-55
-` + oneSite, `t.yaml:3: unknown standard "sign-54"`},
-		{"undeclared standard at a site", `
+` + oneArchetype, `t.yaml:3: unknown standard "sign-54"`},
+		{"undeclared standard at an archetype", `
 name: t
+sites: { min: 1, max: 1 }
 standards:
   - name: sign-55
     system_type: sign
     products:
       panel: t-panel-55
       player: t-player
-sites:
+archetypes:
   - name: a
-    weight: 1
+    headquarters: true
+    typical_systems: 1
     buildings: [{ name: b, floors: 1 }]
     systems:
       mr65: 1
-`, `t.yaml:13: unknown standard "mr65"`},
+`, `t.yaml:15: unknown standard "mr65"`},
 		{"unknown system type", `
 name: t
 standards:
@@ -341,7 +445,7 @@ standards:
     products:
       panel: t-panel-55
       player: t-player
-` + oneSite, `t.yaml:4: unknown system type "signage"`},
+` + oneArchetype, `t.yaml:4: unknown system type "signage"`},
 		{"undeclared role", `
 name: t
 standards:
@@ -351,7 +455,7 @@ standards:
       panel: t-panel-55
       player: t-player
       speaker: t-player
-` + oneSite, `t.yaml:8: standard "sign-55" declares no role "speaker"`},
+` + oneArchetype, `t.yaml:8: standard "sign-55" declares no role "speaker"`},
 		{"product off its pin", `
 name: t
 standards:
@@ -360,7 +464,7 @@ standards:
     products:
       panel: t-panel-75
       player: t-player
-` + oneSite, `t.yaml:6: role panel of standard "sign-55" takes t-panel-75: no pinned product (t-panel-55) is named`},
+` + oneArchetype, `t.yaml:6: role panel of standard "sign-55" takes t-panel-75: no pinned product (t-panel-55) is named`},
 		{"role left unfilled", `
 name: t
 standards:
@@ -368,7 +472,7 @@ standards:
     system_type: sign
     products:
       panel: t-panel-55
-` + oneSite, `leaves role "player" unfilled`},
+` + oneArchetype, `leaves role "player" unfilled`},
 		{"misspelt field", `
 name: t
 standards:
@@ -388,18 +492,26 @@ standards:
 	}
 }
 
-func TestValidateChecksSites(t *testing.T) {
+func TestValidateChecksArchetypes(t *testing.T) {
 	cat := fakeCatalog()
 	m, err := Parse("t.yaml", []byte(`name: t
+sites: { min: 1, max: 2 }
 standards:
   - name: sign-55
     system_type: sign
     products:
       panel: t-panel-55
       player: t-player
-sites:
+archetypes:
+  - name: hq
+    headquarters: true
+    typical_systems: 1
+    buildings: [{ name: b, floors: 1 }]
+    systems:
+      sign-55: 1
   - name: Bad_Name
     weight: 0
+    typical_systems: 0
     buildings: [{ name: b, floors: 0 }]
     systems:
       sign-55: 0
@@ -412,7 +524,8 @@ sites:
 	if !errors.As(err, &e) {
 		t.Fatalf("got %v, want an *Error", err)
 	}
-	for _, want := range []string{`t.yaml:9: site name "Bad_Name" is not a name`, `has weight 0`, `has 0 floors`, `ratio 0`} {
+	for _, want := range []string{`t.yaml:16: archetype name "Bad_Name" is not a name`, `has weight 0`,
+		`has typical_systems 0`, `has 0 floors`, `ratio 0`} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("refusal lacks %q:\n%v", want, err)
 		}
@@ -424,9 +537,65 @@ sites:
 	}
 }
 
-const oneSite = `sites:
+// TestValidateChecksSiteBounds refuses bounds the site count cannot keep and
+// a scenario without exactly one headquarters, each named with its line.
+func TestValidateChecksSiteBounds(t *testing.T) {
+	const standards = `standards:
+  - name: sign-55
+    system_type: sign
+    products:
+      panel: t-panel-55
+      player: t-player
+`
+	archetype := func(name, placement string) string {
+		return `  - name: ` + name + `
+    ` + placement + `
+    typical_systems: 5
+    buildings: [{ name: b, floors: 1 }]
+    systems:
+      sign-55: 1
+`
+	}
+	hq, office := archetype("hq", "headquarters: true"), archetype("office", "weight: 1")
+	for _, tc := range []struct {
+		name, yaml, want string
+	}{
+		{"min above max", "name: t\nsites: { min: 5, max: 3 }\n" + standards + "archetypes:\n" + hq + office,
+			`t.yaml:2: sites max 3 is below min 5`},
+		{"min below one", "name: t\nsites: { min: 0, max: 3 }\n" + standards + "archetypes:\n" + hq + office,
+			`t.yaml:2: sites min is 0`},
+		{"no bounds", "name: t\n" + standards + "archetypes:\n" + hq + office,
+			`t.yaml:1: the manifest declares no site bounds`},
+		{"no headquarters", "name: t\nsites: { min: 1, max: 3 }\n" + standards + "archetypes:\n" + office,
+			`t.yaml:10: no archetype is the headquarters`},
+		{"two headquarters", "name: t\nsites: { min: 1, max: 3 }\n" + standards + "archetypes:\n" + hq + archetype("hq2", "headquarters: true"),
+			`t.yaml:10: 2 archetypes are the headquarters (hq (line 10), hq2 (line 16))`},
+		{"headquarters with a weight", "name: t\nsites: { min: 1, max: 3 }\n" + standards + "archetypes:\n" + archetype("hq", "headquarters: true\n    weight: 2") + office,
+			`t.yaml:10: archetype "hq" is the headquarters, placed exactly once, so it takes no weight`},
+		{"many sites, nothing repeats", "name: t\nsites: { min: 1, max: 3 }\n" + standards + "archetypes:\n" + hq,
+			`t.yaml:2: sites max is 3, but every archetype is the headquarters`},
+		{"headquarters named like a repeated site", "name: t\nsites: { min: 1, max: 3 }\n" + standards + "archetypes:\n" + archetype("office-02", "headquarters: true") + office,
+			`t.yaml:10: headquarters "office-02" is named like a site of archetype "office"`},
+		{"no archetypes", "name: t\nsites: { min: 1, max: 3 }\n" + standards,
+			`t.yaml:1: the manifest declares no site archetypes`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m, err := Parse("t.yaml", []byte(tc.yaml))
+			if err == nil {
+				err = Validate(m, fakeCatalog())
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("got %v, want an error containing %q", err, tc.want)
+			}
+		})
+	}
+}
+
+const oneArchetype = `sites: { min: 1, max: 1 }
+archetypes:
   - name: a
-    weight: 1
+    headquarters: true
+    typical_systems: 1
     buildings: [{ name: b, floors: 1 }]
     systems:
       sign-55: 1

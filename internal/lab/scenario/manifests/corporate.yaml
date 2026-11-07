@@ -1,6 +1,7 @@
-# The corporate vertical (#1553, epic #1357): a headquarters campus and three
-# regional offices, meeting spaces sized from huddle rooms to divisible
-# conference rooms, and lobby signage. `omniglass lab run --scenario corporate
+# The corporate vertical (#1553, epic #1357): one headquarters campus plus
+# regional and branch offices, as many as the size calls for (3 to 30 sites),
+# with meeting spaces sized from huddle rooms to divisible conference rooms,
+# and lobby signage. `omniglass lab run --scenario corporate
 # --systems N --plan` resolves it at N systems; the format and the rounding
 # rule are in the lab guide (docs/src/content/docs/guides/lab.mdx).
 #
@@ -10,8 +11,15 @@
 name: corporate
 label: Corporate
 description: >-
-  A corporate headquarters and three regional offices: huddle rooms, meeting
-  rooms sized by display, divisible conference rooms and lobby signage.
+  A corporate headquarters with regional and branch offices: huddle rooms,
+  meeting rooms sized by display, divisible conference rooms and lobby
+  signage.
+
+# 100 systems is a headquarters and two offices; 1,000 is 18 sites; from 1,485
+# systems the enterprise is at its 30 sites and the sites grow instead.
+sites:
+  min: 3
+  max: 30
 
 standards:
   - name: huddle-room
@@ -56,10 +64,11 @@ standards:
       panel: boreal-edge-55
       player: boreal-cast-m1
 
-sites:
+archetypes:
   - name: hq
     label: Headquarters
-    weight: 40
+    headquarters: true
+    typical_systems: 250
     buildings:
       - { name: tower, floors: 30 }
       - { name: annex, floors: 10 }
@@ -70,33 +79,24 @@ sites:
       mr86: 6
       divisible-conference: 4
       ds55: 8
-  - name: east
-    label: East Regional Office
-    weight: 25
-    buildings:
-      - { name: main, floors: 12 }
-    systems:
-      huddle-room: 35
-      mr65: 25
-      mr75: 10
-      mr86: 4
-      ds55: 6
-  - name: west
-    label: West Regional Office
-    weight: 20
-    buildings:
-      - { name: main, floors: 10 }
-    systems:
-      huddle-room: 35
-      mr65: 25
-      mr75: 10
-      mr86: 4
-      ds55: 6
-  - name: south
-    label: South Regional Office
-    weight: 15
+  - name: regional
+    label: Regional Office
+    weight: 1
+    typical_systems: 80
     buildings:
       - { name: main, floors: 8 }
+    systems:
+      huddle-room: 35
+      mr65: 25
+      mr75: 10
+      mr86: 4
+      ds55: 6
+  - name: branch
+    label: Branch Office
+    weight: 2
+    typical_systems: 25
+    buildings:
+      - { name: main, floors: 3 }
     systems:
       huddle-room: 40
       mr65: 25

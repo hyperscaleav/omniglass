@@ -86,7 +86,7 @@ func TestLabNodeCommandIsARealCommand(t *testing.T) {
 // A scale lab scenario's --plan (#1553) prints the resolved plan and starts
 // nothing: no Docker is needed, so this runs anywhere.
 func TestLabRunScenarioPlan(t *testing.T) {
-	for _, size := range []string{"100", "1000", "3000"} {
+	for size, sites := range map[string]string{"100": "3", "1000": "18", "3000": "30"} {
 		var out strings.Builder
 		root := newRoot("test")
 		root.SetOut(&out)
@@ -95,7 +95,8 @@ func TestLabRunScenarioPlan(t *testing.T) {
 		if err := root.Execute(); err != nil {
 			t.Fatalf("--systems %s: %v", size, err)
 		}
-		for _, want := range []string{"scenario corporate (Corporate): " + size + " systems", "huddle-room", "PRODUCT"} {
+		for _, want := range []string{"scenario corporate (Corporate): " + size + " systems", "across " + sites + " sites",
+			"ARCHETYPE", "regional-01", "huddle-room", "PRODUCT"} {
 			if !strings.Contains(out.String(), want) {
 				t.Errorf("--systems %s: the plan lacks %q:\n%s", size, want, out.String())
 			}
@@ -112,9 +113,10 @@ func TestLabRunScenarioRefusals(t *testing.T) {
 		want string
 	}{
 		{[]string{"--scenario", "corporate", "--systems", "100"}, "not built yet (#1554); add --plan"},
-		{[]string{"--scenario", "corporate", "--plan"}, "--systems N"},
+		{[]string{"--scenario", "corporate", "--plan"}, "--systems N (3 to 10000)"},
 		{[]string{"--scenario", "corporate", "--systems", "0", "--plan"}, "--systems N"},
 		{[]string{"--scenario", "corporate", "--systems", "-3", "--plan"}, "out of range"},
+		{[]string{"--scenario", "corporate", "--systems", "2", "--plan"}, "ask for 3 to 10000"},
 		{[]string{"--scenario", "dev", "--systems", "100"}, `"dev" is a seeded fleet`},
 		{[]string{"--scenario", "nope", "--plan"}, "scale lab scenarios: corporate"},
 	} {

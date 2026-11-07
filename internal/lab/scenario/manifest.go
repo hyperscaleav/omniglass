@@ -1,8 +1,10 @@
 // Package scenario is the scale lab's scenario manifest (#1553, epic #1357):
-// a vertical environment described once, as sites, each site's location tree,
-// the standards placed per site as ratios, and the catalog product filling each
-// role of each standard. A size knob turns it into a concrete plan of sites,
-// systems and components (Resolve). Pure: the manifest, the catalog and the
+// a vertical environment described once, as site archetypes (one headquarters
+// and the kinds of office repeated around it), each archetype's location tree,
+// the standards placed at its sites as ratios, and the catalog product filling
+// each role of each standard. A size knob turns it into a concrete plan of
+// sites, systems and components (Resolve), the number of sites growing with
+// the size between the bounds the manifest declares. Pure: the manifest, the catalog and the
 // size come in, the plan goes out, the same plan every time.
 //
 // The vocabulary is the platform's (#914): a system type here is a standard
@@ -27,12 +29,21 @@ import (
 // the line it was written on, so a refusal names the line to fix.
 type Manifest struct {
 	// File is the manifest's file name, the prefix of every refusal.
-	File        string     `yaml:"-"`
-	Name        string     `yaml:"name"`
-	Label       string     `yaml:"label"`
-	Description string     `yaml:"description"`
-	Standards   []Standard `yaml:"standards"`
-	Sites       []Site     `yaml:"sites"`
+	File        string      `yaml:"-"`
+	Name        string      `yaml:"name"`
+	Label       string      `yaml:"label"`
+	Description string      `yaml:"description"`
+	Sites       SiteBounds  `yaml:"sites"`
+	Standards   []Standard  `yaml:"standards"`
+	Archetypes  []Archetype `yaml:"archetypes"`
+}
+
+// SiteBounds are the fewest and the most sites the scenario resolves to,
+// whatever the size: the site count grows with the size and is clamped here.
+type SiteBounds struct {
+	Min  int `yaml:"min"`
+	Max  int `yaml:"max"`
+	Line int `yaml:"-"`
 }
 
 // Standard is one system type the scenario places: a standard from the
@@ -45,16 +56,21 @@ type Standard struct {
 	Line       int            `yaml:"-"`
 }
 
-// Site is one site: a campus with its own node (one node per site, #1357), its
-// share of the scenario's systems (Weight), the buildings its rooms are spread
-// over, and the ratio of each standard among its systems.
-type Site struct {
-	Name      Ref        `yaml:"name"`
-	Label     string     `yaml:"label"`
-	Weight    int        `yaml:"weight"`
-	Buildings []Building `yaml:"buildings"`
-	Systems   Ratios     `yaml:"systems"`
-	Line      int        `yaml:"-"`
+// Archetype is one kind of site, each site a campus with its own node (one
+// node per site, #1357): the buildings its rooms are spread over, the ratio of
+// each standard among its systems, and how many systems a site of it
+// typically has (TypicalSystems), which weighs its share of the size. The
+// headquarters is placed exactly once; every other archetype is repeated, its
+// Weight its share of the sites besides the headquarters.
+type Archetype struct {
+	Name           Ref        `yaml:"name"`
+	Label          string     `yaml:"label"`
+	Headquarters   bool       `yaml:"headquarters"`
+	Weight         int        `yaml:"weight"`
+	TypicalSystems int        `yaml:"typical_systems"`
+	Buildings      []Building `yaml:"buildings"`
+	Systems        Ratios     `yaml:"systems"`
+	Line           int        `yaml:"-"`
 }
 
 // Building is one building of a site and how many floors it has.
@@ -78,13 +94,13 @@ func (r *Ref) UnmarshalYAML(n *yaml.Node) error {
 	return nil
 }
 
-// Ratio is one standard's share of a site's systems.
+// Ratio is one standard's share of an archetype's systems.
 type Ratio struct {
 	Standard Ref
 	Weight   int
 }
 
-// Ratios are a site's standards and their ratios, in the order written: the
+// Ratios are an archetype's standards and their ratios, in the order written: the
 // order breaks a rounding tie, so it is kept rather than read into a map.
 type Ratios []Ratio
 
@@ -116,13 +132,23 @@ func (s *Standard) UnmarshalYAML(n *yaml.Node) error {
 	return nil
 }
 
-// UnmarshalYAML decodes a site and keeps its line.
-func (s *Site) UnmarshalYAML(n *yaml.Node) error {
-	type plain Site
-	if err := decodeKnown(n, (*plain)(s), "name", "label", "weight", "buildings", "systems"); err != nil {
+// UnmarshalYAML decodes an archetype and keeps its line.
+func (a *Archetype) UnmarshalYAML(n *yaml.Node) error {
+	type plain Archetype
+	if err := decodeKnown(n, (*plain)(a), "name", "label", "headquarters", "weight", "typical_systems", "buildings", "systems"); err != nil {
 		return err
 	}
-	s.Line = n.Line
+	a.Line = n.Line
+	return nil
+}
+
+// UnmarshalYAML decodes the site bounds and keeps their line.
+func (b *SiteBounds) UnmarshalYAML(n *yaml.Node) error {
+	type plain SiteBounds
+	if err := decodeKnown(n, (*plain)(b), "min", "max"); err != nil {
+		return err
+	}
+	b.Line = n.Line
 	return nil
 }
 
@@ -170,7 +196,7 @@ func Parse(file string, data []byte) (*Manifest, error) {
 	}
 	m := &Manifest{}
 	type plain Manifest
-	if err := decodeKnown(root.Content[0], (*plain)(m), "name", "label", "description", "standards", "sites"); err != nil {
+	if err := decodeKnown(root.Content[0], (*plain)(m), "name", "label", "description", "sites", "standards", "archetypes"); err != nil {
 		return nil, fmt.Errorf("%s: %w", file, err)
 	}
 	m.File = file

@@ -124,7 +124,7 @@ func newLabRunCmd(version string) *cobra.Command {
 // scenario up is #1554's.
 func runLabScenario(out io.Writer, m *labscenario.Manifest, f labFlags) error {
 	if f.systems == 0 {
-		return fmt.Errorf("scenario %s is a scale lab scenario: say how many systems with --systems N (1 to %d)", m.Name, labscenario.MaxSystems)
+		return fmt.Errorf("scenario %s is a scale lab scenario: say how many systems with --systems N (%d to %d)", m.Name, labscenario.MinSystems(m), labscenario.MaxSystems)
 	}
 	cat, err := labscenario.ShippedCatalog()
 	if err != nil {

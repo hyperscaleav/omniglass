@@ -8,8 +8,9 @@ import (
 )
 
 // WritePlan prints a plan as `lab run --plan` shows it: a headline, the
-// systems of each standard per site with each site's floors and totals, and
-// the components per product.
+// systems of each standard per archetype with its sites, floors and totals,
+// each site's systems and components, and the components per product. The
+// per-site table is narrow, so it reads at the scenario's most sites.
 func WritePlan(w io.Writer, p *Plan) error {
 	label := p.Scenario
 	if p.Label != "" {
@@ -21,20 +22,26 @@ func WritePlan(w io.Writer, p *Plan) error {
 	}
 
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	head := []string{"SITE", "FLOORS"}
+	head := []string{"ARCHETYPE", "SITES", "FLOORS"}
 	for _, s := range p.Totals.Standards {
 		head = append(head, s.Name)
 	}
 	head = append(head, "SYSTEMS", "COMPONENTS")
 	fmt.Fprintln(tw, strings.Join(head, "\t"))
-	for _, site := range p.Sites {
-		floors := 0
-		for _, b := range site.Buildings {
-			floors += b.Floors
-		}
-		fmt.Fprintln(tw, row(site.Name, fmt.Sprint(floors), site.Totals))
+	for _, a := range p.Archetypes {
+		fmt.Fprintln(tw, row(a.Name, fmt.Sprint(a.Sites), fmt.Sprint(a.Floors), a.Totals))
 	}
-	fmt.Fprintln(tw, row("total", "", p.Totals))
+	fmt.Fprintln(tw, row("total", fmt.Sprint(len(p.Sites)), "", p.Totals))
+	if err := tw.Flush(); err != nil {
+		return err
+	}
+
+	fmt.Fprintln(w)
+	tw = tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(tw, "SITE\tARCHETYPE\tSYSTEMS\tCOMPONENTS")
+	for _, s := range p.Sites {
+		fmt.Fprintf(tw, "%s\t%s\t%d\t%d\n", s.Name, s.Archetype, s.Totals.Systems, s.Totals.Components)
+	}
 	if err := tw.Flush(); err != nil {
 		return err
 	}
@@ -48,8 +55,8 @@ func WritePlan(w io.Writer, p *Plan) error {
 	return tw.Flush()
 }
 
-func row(name, floors string, t Totals) string {
-	cells := []string{name, floors}
+func row(name, sites, floors string, t Totals) string {
+	cells := []string{name, sites, floors}
 	for _, s := range t.Standards {
 		cells = append(cells, fmt.Sprint(s.Count))
 	}
