@@ -13,9 +13,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/secret"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
 // The MCP server is one more client of the API (#1162): an external MCP client,
@@ -54,15 +52,12 @@ func newMCPStack(t *testing.T) *mcpStack {
 		t.Skip("integration test needs Postgres")
 	}
 	ctx := context.Background()
-	dsn := storagetest.NewDSN(t)
+	dsn := seededDSN(t)
 	gw, err := storage.NewPG(ctx, dsn, storage.WithSecretProvider(secret.NewStaticProvider(bytes.Repeat([]byte{0x7}, 32))))
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	t.Cleanup(gw.Close)
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	srv := httptest.NewServer(api.NewHandler(gw, api.WithVersion("test")))
 	t.Cleanup(srv.Close)
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
@@ -105,6 +100,7 @@ func callTool(t *testing.T, cs *sdk.ClientSession, name string, args map[string]
 // An external client lists exactly the generated catalog, each tool carrying
 // the annotations the rule gave it.
 func TestMCPServesTheGeneratedCatalog(t *testing.T) {
+	t.Parallel()
 	s := newMCPStack(t)
 	cs := s.session(t, s.owner, "catalog-check")
 	tools := map[string]*sdk.Tool{}
@@ -147,6 +143,7 @@ func TestMCPServesTheGeneratedCatalog(t *testing.T) {
 
 // A read tool answers exactly what the route answers, by name.
 func TestMCPToolCallIsTheRoute(t *testing.T) {
+	t.Parallel()
 	s := newMCPStack(t)
 	s.c.do(s.owner, http.MethodPost, "/components", map[string]any{"name": "mcp-probe-1", "product": "generic-device"}, http.StatusCreated)
 	cs := s.session(t, s.owner, "route-check")
@@ -175,6 +172,7 @@ func TestMCPToolCallIsTheRoute(t *testing.T) {
 // A write through MCP is audited as the user who made it, with the MCP channel
 // and the client it declared; the same write made directly carries neither.
 func TestMCPWriteIsAuditedAsTheUserViaMCP(t *testing.T) {
+	t.Parallel()
 	s := newMCPStack(t)
 	cs := s.session(t, s.owner, "audit-agent")
 	res, text := callTool(t, cs, "create-secret", map[string]any{
@@ -228,6 +226,7 @@ func TestMCPWriteIsAuditedAsTheUserViaMCP(t *testing.T) {
 // its scope; and no token, a wrong token or a session cookie alone gets no MCP
 // session at all.
 func TestMCPAuthorizationIsTheRoutes(t *testing.T) {
+	t.Parallel()
 	s := newMCPStack(t)
 	viewer := principalWithGrants(t, s.ctx, s.dsn, "mcp-viewer", []grant{{role: "viewer", scopeKind: "all"}})
 	cs := s.session(t, viewer, "viewer-agent")
@@ -280,6 +279,7 @@ func TestMCPAuthorizationIsTheRoutes(t *testing.T) {
 // behaves as everywhere (act-as writes as the target and records the real actor,
 // view-as writes nothing).
 func TestMCPTokenLifecycleAndImpersonation(t *testing.T) {
+	t.Parallel()
 	s := newMCPStack(t)
 	var minted struct {
 		Token  string `json:"token"`

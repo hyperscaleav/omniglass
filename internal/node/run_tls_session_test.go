@@ -75,6 +75,7 @@ func (s *gateStack) metric(comp, instance, key string) (float64, bool) {
 // a restarted node runs none either. The operator accepts the offered key
 // with :retry: the session comes up on it.
 func TestNodeTLSSessionPinsTheKeyAndRefusesAChange(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}
@@ -200,6 +201,7 @@ func TestNodeTLSSessionPinsTheKeyAndRefusesAChange(t *testing.T) {
 // reads that verification is skipped; each edit moves the fingerprint, so a
 // gate lifts without a retry.
 func TestNodeTLSModesVerifyAndSkip(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}

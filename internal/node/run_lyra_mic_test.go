@@ -16,6 +16,7 @@ import (
 // both, and the wireless system's battery as a ratio, beside identity. A
 // mute set on a microphone reads back on the next poll.
 func TestNodeLyraMicsReadMuteLevelAndBattery(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}

@@ -9,9 +9,7 @@ import (
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
 // TestResetPasswordAPI drives the admin password-reset endpoint: an operator lacks the
@@ -19,16 +17,14 @@ import (
 // admin resets a user's password (204) and the user can then sign in with the new
 // password but not the old, and an unknown id is 404. Skipped under -short.
 func TestResetPasswordAPI(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 
@@ -92,16 +88,14 @@ func TestResetPasswordAPI(t *testing.T) {
 // at all-scope) but holds the target's real capability only at a narrow scope cannot
 // reset the target to escalate that capability fleet-wide. Skipped under -short.
 func TestResetScopeEscalation(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	// A custom role granting only the reset capability (an all-scope reset-password
 	// grant, without the target's other capabilities).
 	if err := gw.UpsertRole(ctx, storage.Role{Name: "resetter", Permissions: []string{"principal:reset-password"}}); err != nil {

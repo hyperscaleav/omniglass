@@ -17,6 +17,7 @@ import (
 // its storage is (a ratio), beside its identity. Paused on the player, it reads
 // paused on the next poll.
 func TestNodeBorealCastReadsItsPlayback(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}

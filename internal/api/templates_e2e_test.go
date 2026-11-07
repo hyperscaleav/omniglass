@@ -9,9 +9,7 @@ import (
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 	"github.com/hyperscaleav/omniglass/internal/template"
 )
 
@@ -19,16 +17,14 @@ import (
 // is the binary's catalog by kind, one template reads whole, and an unknown
 // name is a 404. Nothing a template describes is a row.
 func TestTemplatesAPI(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	_ = bootstrapOwnerTok(t, ctx, gw)
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
@@ -97,16 +93,14 @@ func TestTemplatesAPI(t *testing.T) {
 // held is a 422 naming the template to fork first, and an unknown template is
 // a 404. A fresh install holds no standard until one is forked.
 func TestCreateStandardFromTemplateAPI(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	owner := bootstrapOwnerTok(t, ctx, gw)
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()

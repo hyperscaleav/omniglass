@@ -125,6 +125,7 @@ func (l *authLog) all() []collection.AuthVerdict {
 // A driver that declares a session block holds its session for a poll, with
 // no listener: its login cannot run on a throwaway connection.
 func TestDesiredSessionsHoldsForAPollWhoseDriverDeclaresASession(t *testing.T) {
+	t.Parallel()
 	want, refused := desiredSessions([]collection.TaskSpec{pollTaskWithLogin("p1", "ep-1", "newtron", 0)},
 		map[string]collection.SessionDialer{"tcp": &authFakeDialer{}})
 	if len(refused) != 0 {
@@ -142,6 +143,7 @@ func TestDesiredSessionsHoldsForAPollWhoseDriverDeclaresASession(t *testing.T) {
 // A login whose credential was not delivered refuses the session by
 // reference, never by value.
 func TestDesiredSessionsRefusesALoginWithNoCredential(t *testing.T) {
+	t.Parallel()
 	task := pollTaskWithLogin("p1", "ep-1", "newtron", 0)
 	task.Secrets = map[string]map[string]string{"login": {"username": "admin"}}
 	_, refused := desiredSessions([]collection.TaskSpec{task}, map[string]collection.SessionDialer{"tcp": &authFakeDialer{}})
@@ -159,6 +161,7 @@ func TestDesiredSessionsRefusesALoginWithNoCredential(t *testing.T) {
 // (an operator's retry) dials exactly once more; the fixed credential
 // reconnects at the next reconcile.
 func TestSessionManagerRejectsThenRetriesThenRecovers(t *testing.T) {
+	t.Parallel()
 	dialer := &authFakeDialer{}
 	log, auth := &transitionLog{}, &authLog{}
 	m := newSessionManager(map[string]collection.SessionDialer{"tcp": dialer}, sessionHooks{transition: log.record, auth: auth.record})
@@ -202,6 +205,7 @@ func TestSessionManagerRejectsThenRetriesThenRecovers(t *testing.T) {
 // With a session block the poll never falls back to a throwaway connection:
 // with none held it faults; over a rejected one it fails fast, terminal.
 func TestDriverPollNeverFallsBackWhenItsDriverDeclaresASession(t *testing.T) {
+	t.Parallel()
 	throwaway := &lineRecorder{}
 	runner := &collection.Runner{Line: throwaway}
 	task := pollTaskWithLogin("p1", "ep-1", "wrong", 0)
@@ -233,6 +237,7 @@ func TestDriverPollNeverFallsBackWhenItsDriverDeclaresASession(t *testing.T) {
 
 // A terminal fault waits the poll's interval, never the failure backoff.
 func TestTerminalFaultBooksTheFullInterval(t *testing.T) {
+	t.Parallel()
 	sched := newPollSchedule(5 * time.Second)
 	now := time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)
 	every := time.Hour
@@ -257,6 +262,7 @@ func TestTerminalFaultBooksTheFullInterval(t *testing.T) {
 // rejected, but runs at the first tick the session is up again, so a fixed
 // credential lands data within a tick, not an interval later.
 func TestARefusedPollRunsOnceItsSessionIsUpAgain(t *testing.T) {
+	t.Parallel()
 	sched := newPollSchedule(5 * time.Second)
 	now := time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)
 	every := time.Hour
@@ -280,6 +286,7 @@ func TestARefusedPollRunsOnceItsSessionIsUpAgain(t *testing.T) {
 // A command on an endpoint whose driver declares a session rides it or
 // fails: never a throwaway connection.
 func TestExecuteDeliveryNeverFallsBackForASessionOnlyEndpoint(t *testing.T) {
+	t.Parallel()
 	throwaway := &lineRecorder{}
 	d := collection.CommandDelivery{ID: 11, CommandType: "set-input", Transport: "tcp", Target: "10.0.0.5:23",
 		EndpointID: "ep-1", Line: "SET INPUT hdmi2", SessionOnly: true}
@@ -295,6 +302,7 @@ func TestExecuteDeliveryNeverFallsBackForASessionOnlyEndpoint(t *testing.T) {
 // A transition renders as session-state and session-reason: the reason is a
 // property an event rule can read, not only an unpersisted label.
 func TestSessionSamplesCarryTheReason(t *testing.T) {
+	t.Parallel()
 	at := time.Date(2026, 10, 23, 12, 0, 0, 0, time.UTC)
 	dps := sessionSamples(collection.SessionTransition{State: collection.SessionRejected, Reason: "auth: auth rejected", At: at})
 	ev := buildBatch("p1", "edge-1", dps)
@@ -309,6 +317,7 @@ func TestSessionSamplesCarryTheReason(t *testing.T) {
 
 // The auth verdict renders as the endpoint-authenticated rung.
 func TestAuthSample(t *testing.T) {
+	t.Parallel()
 	at := time.Date(2026, 10, 23, 12, 0, 0, 0, time.UTC)
 	ev := buildBatch("p1", "edge-1", []collection.Sample{authSample(collection.AuthVerdict{Authenticated: false, Reason: "auth: auth rejected", At: at})})
 	if len(ev.Properties) != 1 || ev.Properties[0].Name != "endpoint-authenticated" || ev.Properties[0].ValueJson != `"no"` {
@@ -329,6 +338,7 @@ func (p *countingTelnetProbe) Probe(context.Context, string, time.Duration) (col
 // connection (gear that admits one telnet client would refuse it and read
 // not responsive beside an up session): the up session is the proof.
 func TestTelnetProbeDefersToAnUpSession(t *testing.T) {
+	t.Parallel()
 	probe := &countingTelnetProbe{}
 	runner := &collection.Runner{Telnet: probe}
 	task := collection.TaskSpec{ID: "r1", Mode: "poll", Transport: "telnet", EndpointID: "ep-1", EndpointName: "telnet",
@@ -366,6 +376,7 @@ func TestTelnetProbeDefersToAnUpSession(t *testing.T) {
 // which is how a rejected one leaves rejected on its own; the retry counter
 // is not part of it, and the identity holds no credential in the clear.
 func TestSessionIdentityIsADigestOverWhatItConnectsWith(t *testing.T) {
+	t.Parallel()
 	base := pollTaskWithLogin("p1", "ep-1", "wrong", 0)
 	identity := func(task collection.TaskSpec) sessionConn {
 		t.Helper()

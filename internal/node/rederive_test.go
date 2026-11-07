@@ -27,6 +27,7 @@ import (
 // nothing; the fix re-derives the endpoint's poll, and the next poll lands
 // the value.
 func TestDriverFixReachesTheNextPoll(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server")
 	}
@@ -160,6 +161,7 @@ func (c *countingLine) count() int {
 // every 400ms. Over the 1.3s after the first poll, ungated the device would be
 // asked on all ~26 ticks; gated it is asked at 0, 0.4, 0.8 and 1.2s.
 func TestNodeHonorsThePollSchedule(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server")
 	}

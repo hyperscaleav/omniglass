@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
@@ -50,16 +49,14 @@ func renderLabelAt(t *testing.T, c *apiClient, tok, path string, body map[string
 // compare the string the form would have shown with the column the row came
 // back carrying.
 func TestTheRenderedLabelIsTheLabelTheCreateStoresAPI(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
@@ -127,16 +124,14 @@ func TestTheRenderedLabelIsTheLabelTheCreateStoresAPI(t *testing.T) {
 // lands with exactly the name it showed. Everything below this tier can see one
 // half or the other; only this can see the round trip a form makes.
 func TestTheDraftedNameIsTheNameTheCreateStampsAPI(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
@@ -243,16 +238,14 @@ func withDraftedName(body map[string]any, name string) map[string]any {
 // one, and the create beside it would then be refused by the very precondition
 // meant to protect it.
 func TestTheDraftedOrdinalFollowsThePlacementBucketAPI(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
@@ -307,16 +300,14 @@ func TestTheDraftedOrdinalFollowsThePlacementBucketAPI(t *testing.T) {
 // only to prove the fixture would have disclosed it: an assertion that a narrow
 // principal sees nothing passes just as well when the route is broken.
 func TestTheRenderedLabelStopsAtTheCallersReadScope(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
@@ -374,16 +365,14 @@ func TestTheRenderedLabelStopsAtTheCallersReadScope(t *testing.T) {
 // the gate has to be one fact the spec publishes rather than a judgement call
 // per route.
 func TestTheRenderedLabelNeedsTheCreatePermission(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
@@ -403,16 +392,14 @@ func TestTheRenderedLabelNeedsTheCreatePermission(t *testing.T) {
 // where the create would, or the console shows a lock over a value that cannot
 // be produced.
 func TestTheRenderedLabelRefusesWhatANamelessCreateRefuses(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
@@ -447,16 +434,14 @@ func TestTheRenderedLabelRefusesWhatANamelessCreateRefuses(t *testing.T) {
 // the label the create is about to store, and the two are asserted to be the
 // same string rather than assumed to be.
 func TestTheRenderedLocationLabelIsTheShippedRulesInAShippedFleet(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
@@ -491,6 +476,7 @@ func TestTheRenderedLocationLabelIsTheShippedRulesInAShippedFleet(t *testing.T) 
 // location_type:create alone) supplies whatever stem the caller wants asked
 // about.
 func TestTheDraftRefusesTheRootBucketItCannotCreateIn(t *testing.T) {
+	t.Parallel()
 	f := newLocationGrantFixture(t)
 
 	// A generating type, declared the way an operator reaches one today: no
@@ -539,16 +525,14 @@ func TestTheDraftRefusesTheRootBucketItCannotCreateIn(t *testing.T) {
 // in the query key that would have re-asked); a CLI or API caller had no shield
 // at all.
 func TestThePreconditionBindsTheNameTheFormShowed(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}

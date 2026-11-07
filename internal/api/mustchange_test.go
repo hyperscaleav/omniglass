@@ -12,9 +12,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/auth"
 	"github.com/hyperscaleav/omniglass/internal/scope"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
 // TestForceChangePasswordGate drives the force-change gate through the real binary
@@ -23,16 +21,14 @@ import (
 // required" 403 until they change the password, after which the gate releases.
 // Skipped under -short.
 func TestForceChangePasswordGate(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	_, bh, bp, _ := auth.NewBearerToken()
 	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "ops", SecretHash: bh, Prefix: bp}); err != nil {
 		t.Fatalf("bootstrap: %v", err)

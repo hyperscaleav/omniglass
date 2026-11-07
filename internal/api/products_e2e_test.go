@@ -9,9 +9,7 @@ import (
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
 // productBodyWire is the decoded product wire shape for the e2e assertions.
@@ -36,16 +34,14 @@ type productBodyWire struct {
 // the admin deletes the custom row. Mirrors TestVendorsAPI; product is a flat
 // registry like vendor, so product:* is wired exactly like vendor:*.
 func TestProductsAPI(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	ownerTok := bootstrapOwnerTok(t, ctx, gw)
 
 	srv := httptest.NewServer(api.NewHandler(gw))
@@ -171,16 +167,14 @@ func TestProductsAPI(t *testing.T) {
 // folded into app at the schema floor) with a 422 that names the surviving
 // three. Skipped under -short.
 func TestProductRequiresTypeAndKind(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	ownerTok := bootstrapOwnerTok(t, ctx, gw)
 
 	srv := httptest.NewServer(api.NewHandler(gw))

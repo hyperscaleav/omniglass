@@ -17,6 +17,7 @@ import (
 // signals the lab's DSPs read nothing but identity without. A mute set over
 // the DSP's HTTP API reads back as muted on the next poll.
 func TestNodePolarisDSPReadsItsProgramOutput(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}

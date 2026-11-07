@@ -14,7 +14,6 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/auth"
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/internal/scope"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 	"github.com/hyperscaleav/omniglass/internal/sim/profiles"
 	"github.com/hyperscaleav/omniglass/internal/simhub"
@@ -40,16 +39,14 @@ type systemPlanBody struct {
 // components, each at its own free address on the node, as one write.
 // Adding needs simulation:update and the creates it makes.
 func TestSimulatedSystemAPI(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatal(err)
-	}
 	storagetest.CreateShippedStandards(t, gw)
 	ownerTok, hash, prefix, err := auth.NewBearerToken()
 	if err != nil {

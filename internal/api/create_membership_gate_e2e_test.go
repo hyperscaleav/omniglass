@@ -10,9 +10,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/auth"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
 // A create that writes a membership is gated as a membership write (#707).
@@ -32,16 +30,14 @@ import (
 // permission half, with the two principals side by side so the refusal is a
 // permission boundary and not a broken route.
 func TestCreatingAComponentIntoASystemNeedsTheMembershipPermission(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	ownerTok, hash, prefix, err := auth.NewBearerToken()
 	if err != nil {
 		t.Fatalf("mint owner: %v", err)
@@ -130,6 +126,7 @@ func TestCreatingAComponentIntoASystemNeedsTheMembershipPermission(t *testing.T)
 // all-scoped viewer floor, so before this slice the bind resolved in a
 // system:read scope covering the whole fleet and the create was served.
 func TestTheCreatesSystemBindResolvesInTheUpdateScope(t *testing.T) {
+	t.Parallel()
 	f := newPlacementFixture(t)
 
 	// The fixture's narrow principal, plus the read floor: system:read now
@@ -182,6 +179,7 @@ func TestTheCreatesSystemBindResolvesInTheUpdateScope(t *testing.T) {
 // the create's own tests use, and each refusal is asserted to be the SAME
 // refusal on both routes rather than merely a refusal.
 func TestTheDraftRefusesTheSystemBindTheCreateRefuses(t *testing.T) {
+	t.Parallel()
 	f := newPlacementFixture(t)
 
 	// The permission half: component:create and no system:update at all, beside

@@ -22,6 +22,7 @@ import (
 // system, a component) is the non-disclosing 404. It reads its one owner off
 // its own grant, which is how the simulator learns where to push.
 func TestTheSimulatedPusherPushesOnlyToItsOneSystem(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server")
 	}

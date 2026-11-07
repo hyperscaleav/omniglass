@@ -13,9 +13,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/auth"
 	"github.com/hyperscaleav/omniglass/internal/expression"
 	"github.com/hyperscaleav/omniglass/internal/rules"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
 type validateOut struct {
@@ -44,16 +42,14 @@ type validateOut struct {
 // the site's bindings, builtins and budget, all read from its declaration.
 // Gated by rule:read; an unknown site or key is a 422.
 func TestValidateExpression(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatal(err)
-	}
 	ownerTok, hash, prefix, err := auth.NewBearerToken()
 	if err != nil {
 		t.Fatal(err)

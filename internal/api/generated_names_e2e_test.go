@@ -29,6 +29,7 @@ type nameBody struct {
 // gateway: name_generated has to reach the console for it to show who owns the
 // name at all.
 func TestSystemGeneratedNameAPI(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
 	if err != nil {
@@ -100,6 +101,7 @@ func TestSystemGeneratedNameAPI(t *testing.T) {
 // from. The pen ships on the wire too, always false, so the console can render
 // one control for all three trees.
 func TestLocationResetNameRefusesAPI(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
 	if err != nil {
@@ -169,6 +171,7 @@ func TestLocationResetNameRefusesAPI(t *testing.T) {
 // still required a name would leave the whole feature unreachable from the
 // outside whatever the storage layer can do.
 func TestLocationGeneratedNameAPI(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
 	if err != nil {
@@ -286,6 +289,7 @@ func TestLocationGeneratedNameAPI(t *testing.T) {
 // not something "name it yourself" says: there is no name field on the patch to
 // name it in.
 func TestReclassifyingAPlatformNamedLocationNamesTheEscape(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
 	if err != nil {

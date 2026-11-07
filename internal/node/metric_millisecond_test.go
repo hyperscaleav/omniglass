@@ -38,6 +38,7 @@ func (c *capturePublisher) publish(_ string, data []byte, _ string) (ackWait, er
 // the property, event and log lanes of the same batch. The metric ts reach
 // the stream on their millisecond; the others are sent as they were.
 func TestSpoolShipsMetricTimestampsOnTheMillisecond(t *testing.T) {
+	t.Parallel()
 	at := time.Date(2026, 11, 5, 12, 0, 0, 123456789, time.UTC)
 	batchTS := at.Add(time.Second)
 	dps := []collection.Sample{

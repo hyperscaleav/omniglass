@@ -14,9 +14,7 @@ import (
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
 // onePxPNGB64 is a valid 8x8 solid-white PNG, base64-encoded. Built with the stdlib
@@ -41,16 +39,14 @@ var onePxPNGB64 = func() string {
 // returns the normalized JPEG as base64, and a remove (204) flips the flag back to
 // false and turns the read endpoint into a 404. Skipped under -short.
 func TestSelfSetAndReadAvatar(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 
@@ -93,16 +89,14 @@ func TestSelfSetAndReadAvatar(t *testing.T) {
 // TestGetAvatar_404WhenAbsent proves the read endpoint is a 404 for a principal
 // that has never set a picture (not an empty 200). Skipped under -short.
 func TestGetAvatar_404WhenAbsent(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 
@@ -115,16 +109,14 @@ func TestGetAvatar_404WhenAbsent(t *testing.T) {
 // TestSelfSetAvatar_RejectsGarbage proves the normalize guard rejects a non-image
 // upload with a 422 (not a 500), so a bad upload is a client error. Skipped under -short.
 func TestSelfSetAvatar_RejectsGarbage(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 
@@ -140,16 +132,14 @@ func TestSelfSetAvatar_RejectsGarbage(t *testing.T) {
 // another human's picture (204) and the directory then reports has_avatar true, and
 // a remove (204) clears it. Skipped under -short.
 func TestAdminSetAvatar_GatedByPermission(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 
@@ -198,16 +188,14 @@ func TestAdminSetAvatar_GatedByPermission(t *testing.T) {
 // principal's avatar, exactly as GET /principals/{id} does. An all-scope owner reads
 // the same picture (200). Skipped under -short.
 func TestGetPrincipalAvatar_ScopedReaderForbidden(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 

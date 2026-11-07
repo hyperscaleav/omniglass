@@ -22,9 +22,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/ingress"
 	"github.com/hyperscaleav/omniglass/internal/notify"
 	"github.com/hyperscaleav/omniglass/internal/secret"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
 type notificationTargetWire struct {
@@ -73,16 +71,14 @@ func (r *receiver) last(t *testing.T) ingress.Post {
 // it; and a delivery is signed so the inbound hmac scheme verifies the exact
 // bytes received.
 func TestNotificationTargetAPI(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn, storage.WithSecretProvider(secret.NewStaticProvider(bytes.Repeat([]byte{0x6}, 32))))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatal(err)
-	}
 	ownerTok, hash, prefix, err := auth.NewBearerToken()
 	if err != nil {
 		t.Fatal(err)

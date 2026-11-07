@@ -18,6 +18,7 @@ import (
 // shutter and the input. A shutter closed and an input switched on the
 // projector read back on the next poll.
 func TestNodeBorealBeamReadsItsProjectorState(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}

@@ -11,9 +11,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/scope"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
 // standardWire is the decoded standard wire shape for the e2e assertions.
@@ -34,16 +32,14 @@ type standardWire struct {
 // TestProductsAPI: standard is the system-side counterpart of product, so
 // standard:* is wired exactly like product:*.
 func TestStandardsAPI(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	ownerTok := bootstrapOwnerTok(t, ctx, gw)
 
 	srv := httptest.NewServer(api.NewHandler(gw))
@@ -134,16 +130,14 @@ func TestStandardsAPI(t *testing.T) {
 // carries it back verbatim, an invalid one is a 422 naming the reason, and a
 // JSON null clears it.
 func TestStandardMapOnTheWire(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	ownerTok := bootstrapOwnerTok(t, ctx, gw)
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
@@ -200,16 +194,14 @@ func TestStandardMapOnTheWire(t *testing.T) {
 // The series reads on the wire (#794): raw samples newest first for both
 // owner arcs, sharing the effective reads' route grammar.
 func TestSeriesReadsOnTheWire(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	ownerTok := bootstrapOwnerTok(t, ctx, gw)
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
@@ -244,16 +236,14 @@ func TestSeriesReadsOnTheWire(t *testing.T) {
 // tail into every regular bucket of the range, a spike survives as a bucket's
 // max, and the raw body is untouched when no resolution is asked for.
 func TestBucketedSeriesReadsOnTheWire(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	ownerTok := bootstrapOwnerTok(t, ctx, gw)
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()

@@ -10,9 +10,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/auth"
 	"github.com/hyperscaleav/omniglass/internal/secret"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
 // The label of the last four tables, over HTTP, as an operator drives it (#613).
@@ -24,16 +22,14 @@ import (
 // it alone. The last is the one a body shape gets wrong silently, since a
 // missing field and an empty one look identical in a map.
 func TestTheFourCarryALabelOverTheWire(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn, storage.WithSecretProvider(secret.NewStaticProvider(make([]byte, 32))))
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	tok, hash, prefix, err := auth.NewBearerToken()
 	if err != nil {
 		t.Fatalf("mint owner: %v", err)

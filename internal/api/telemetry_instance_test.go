@@ -23,6 +23,7 @@ import (
 // owner-level read would then treat as a retired observer's. A push naming the
 // owner's endpoint, or no instance at all, lands.
 func TestPushRefusesAnInstanceNamingNoEndpoint(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

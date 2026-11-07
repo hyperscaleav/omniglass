@@ -76,6 +76,7 @@ func recomputeHarness(t *testing.T) (*apiClient, string, string, storage.Product
 // A rule edit, previewed, applied, and applied again: the whole verb, on the
 // wire, with the fleet checked between each step.
 func TestRuleChangePreviewsThenAppliesOverHTTP(t *testing.T) {
+	t.Parallel()
 	c, tok, _, disp, stop := recomputeHarness(t)
 	defer stop()
 
@@ -152,6 +153,7 @@ func TestRuleChangePreviewsThenAppliesOverHTTP(t *testing.T) {
 // changes, so the operator sees the true blast radius rather than the first hop
 // of it.
 func TestALocationRecomputeReportsWhatItStales(t *testing.T) {
+	t.Parallel()
 	c, tok, _, disp, stop := recomputeHarness(t)
 	defer stop()
 
@@ -192,6 +194,7 @@ func TestALocationRecomputeReportsWhatItStales(t *testing.T) {
 // A viewer can neither preview nor apply, on any of the three kinds: both
 // halves are gated by the entity's own :update, and a viewer holds only :read.
 func TestAViewerCannotPreviewOrRecomputeLabels(t *testing.T) {
+	t.Parallel()
 	c, tok, dsn, _, stop := recomputeHarness(t)
 	defer stop()
 	c.do(tok, http.MethodPost, "/locations",
@@ -220,6 +223,7 @@ func TestAViewerCannotPreviewOrRecomputeLabels(t *testing.T) {
 // first pass of this file, and previewing on the read scope alone is what the
 // verb did until ADR-0100's scoping was applied to both halves.
 func TestAPreviewIsBoundedByTheUpdateScopeJustAsTheApplyIs(t *testing.T) {
+	t.Parallel()
 	c, tok, dsn, disp, stop := recomputeHarness(t)
 	defer stop()
 	ctx := context.Background()

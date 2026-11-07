@@ -9,9 +9,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/auth"
 	"github.com/hyperscaleav/omniglass/internal/bus"
 	"github.com/hyperscaleav/omniglass/internal/scope"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 	"github.com/jackc/pgx/v5"
 	"net/http/httptest"
 )
@@ -43,11 +41,12 @@ func pushDupStrptr(s string) *string { return &s }
 // real and the constraint it drops no longer exists to drop a second time
 // here, so the hack is gone.
 func TestTelemetryPushSurvivesDuplicateComponentNames(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server")
 	}
 	ctx := context.Background()
-	dsn := storagetest.NewDSN(t)
+	dsn := seededDSN(t)
 
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
@@ -60,9 +59,6 @@ func TestTelemetryPushSurvivesDuplicateComponentNames(t *testing.T) {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 
 	ownerTok, hash, prefix, err := auth.NewBearerToken()
 	if err != nil {

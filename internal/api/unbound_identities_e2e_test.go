@@ -11,9 +11,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/auth"
 	"github.com/hyperscaleav/omniglass/internal/scope"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -22,19 +20,17 @@ import (
 // heard, the keys carried); a viewer out of scope on the conduit gets the
 // non-disclosing 404, and an in-scope one its own conduit's empty inbox.
 func TestUnboundIdentitiesAPI(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
 	ctx := context.Background()
-	dsn := storagetest.NewDSN(t)
+	dsn := seededDSN(t)
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	ownerTok, hash, prefix, err := auth.NewBearerToken()
 	if err != nil {
 		t.Fatalf("mint owner: %v", err)

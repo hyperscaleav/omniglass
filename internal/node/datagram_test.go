@@ -135,6 +135,7 @@ func udpParams(target string, extra ...string) string {
 }
 
 func TestDesiredDatagrams(t *testing.T) {
+	t.Parallel()
 	a := udpParams("10.0.0.5:51327", `,"listen-port":"51400"`)
 	badPort := udpParams("10.0.0.6:51327", `,"listen-port":"a lot"`)
 	tasks := []collection.TaskSpec{
@@ -186,6 +187,7 @@ func samplesByName(dps []collection.Sample) map[string]collection.Sample {
 }
 
 func TestTheUDPRequestRungIsTheTransportRung(t *testing.T) {
+	t.Parallel()
 	peer := newComponent(t, nvpAnswers)
 	c := newCapture()
 	m := newDatagramManager(t, c)
@@ -230,6 +232,7 @@ func TestTheUDPRequestRungIsTheTransportRung(t *testing.T) {
 }
 
 func TestTheUDPRequestRungReadsAClosedPortRefused(t *testing.T) {
+	t.Parallel()
 	// A privileged port: no test process can bind it, so it stays closed.
 	closed := "127.0.0.1:1"
 	m := newDatagramManager(t, newCapture())
@@ -247,6 +250,7 @@ func TestTheUDPRequestRungReadsAClosedPortRefused(t *testing.T) {
 // A terminal reply gates the endpoint at the transport rung (nothing logs in
 // over udp), and beneath the gate no request is sent under that fingerprint.
 func TestAUDPTerminalReplyGatesTheEndpoint(t *testing.T) {
+	t.Parallel()
 	peer := newComponent(t, func(string) []string { return []string{"-ERR locked"} })
 	m := newDatagramManager(t, newCapture())
 	task := udpProbeTask("r1", "ep-1", udpParams(peer.addr()))
@@ -283,6 +287,7 @@ func TestAUDPTerminalReplyGatesTheEndpoint(t *testing.T) {
 }
 
 func TestAUDPPollRidesTheEndpointsSocketAndRetries(t *testing.T) {
+	t.Parallel()
 	peer := newComponent(t, nvpAnswers)
 	peer.set(nvpAnswers, func(n int32) bool { return n <= 2 })
 	m := newDatagramManager(t, newCapture())
@@ -305,6 +310,7 @@ func TestAUDPPollRidesTheEndpointsSocketAndRetries(t *testing.T) {
 }
 
 func TestAUDPCommandIsSentOnceUnlessItDeclaresRetries(t *testing.T) {
+	t.Parallel()
 	peer := newComponent(t, nvpAnswers)
 	m := newDatagramManager(t, newCapture())
 	m.reconcile([]collection.TaskSpec{udpPollTask("p1", "ep-1", udpParams(peer.addr()))})
@@ -339,6 +345,7 @@ func TestAUDPCommandIsSentOnceUnlessItDeclaresRetries(t *testing.T) {
 }
 
 func TestAUDPEndpointArmsAtOpenAndOnRecovery(t *testing.T) {
+	t.Parallel()
 	peer := newComponent(t, nvpAnswers)
 	c := newCapture()
 	m := newDatagramManager(t, c)
@@ -386,6 +393,7 @@ func TestAUDPEndpointArmsAtOpenAndOnRecovery(t *testing.T) {
 // session's do (#1369), and a socket closed before the window is taken keeps
 // its counts.
 func TestAUDPEndpointReportsItsListenersPushes(t *testing.T) {
+	t.Parallel()
 	peer := newComponent(t, nvpAnswers)
 	c := newCapture()
 	m := newDatagramManager(t, c)
@@ -407,6 +415,7 @@ func TestAUDPEndpointReportsItsListenersPushes(t *testing.T) {
 }
 
 func TestAUDPEndpointDropsAndLogsAnotherSourcesDatagramsOncePerTick(t *testing.T) {
+	// Serial: it swaps the slog default to count the drop log lines.
 	peer := newComponent(t, nvpAnswers)
 	c := newCapture()
 	m := newDatagramManager(t, c)
@@ -437,6 +446,7 @@ func TestAUDPEndpointDropsAndLogsAnotherSourcesDatagramsOncePerTick(t *testing.T
 }
 
 func TestAUDPSocketRebindsOnlyWhenWhatItDependsOnChanges(t *testing.T) {
+	t.Parallel()
 	peer := newComponent(t, nvpAnswers)
 	other := newComponent(t, nvpAnswers)
 	m := newDatagramManager(t, newCapture())
@@ -497,6 +507,7 @@ func eventually(t *testing.T, what string, ok func() bool) {
 // and once the gate lifts (an operator's :retry moves the fingerprint) the
 // first answered rung arms (review of #1037, finding 1).
 func TestAUDPEndpointArmsNothingBeneathAGate(t *testing.T) {
+	t.Parallel()
 	peer := newComponent(t, nvpAnswers)
 	m := newDatagramManager(t, newCapture())
 	p := udpParams(peer.addr())
@@ -526,6 +537,7 @@ func TestAUDPEndpointArmsNothingBeneathAGate(t *testing.T) {
 // An arm line is an instantiation command, sent once: a component that
 // subscribes silently gets one subscribe, never one per retry (finding 4).
 func TestAUDPArmIsSentOnce(t *testing.T) {
+	t.Parallel()
 	peer := newComponent(t, nvpAnswers)
 	peer.set(nvpAnswers, func(int32) bool { return true })
 	c := newCapture()
@@ -546,6 +558,7 @@ func TestAUDPArmIsSentOnce(t *testing.T) {
 // rung reads responsive and lands that answer's round trip, so an endpoint
 // answering -ERR still has a timing series (ported from #1105).
 func TestTheUDPRequestRungTimesAnErrorShapedAnswer(t *testing.T) {
+	t.Parallel()
 	peer := newComponent(t, func(string) []string { return []string{"-ERR busy"} })
 	m := newDatagramManager(t, newCapture())
 	task := udpProbeTask("r1", "ep-1", udpParams(peer.addr()))

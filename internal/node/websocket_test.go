@@ -37,6 +37,7 @@ func basicUpgrade(path string) *driver.SessionSpec {
 }
 
 func TestAWebSocketSessionsAuthStepIsItsUpgrade(t *testing.T) {
+	t.Parallel()
 	dialers := map[string]collection.SessionDialer{"wss": collection.NewWebSocketDialer()}
 	want, refused := desiredSessions([]collection.TaskSpec{wsPollTask("p1", "ep-1", basicUpgrade("/api/ws"), "kestrel", "fp-1")}, dialers)
 	if len(refused) != 0 {
@@ -76,6 +77,7 @@ func TestAWebSocketSessionsAuthStepIsItsUpgrade(t *testing.T) {
 }
 
 func TestAWebSocketPollNeverFallsBackToAThrowawayConnection(t *testing.T) {
+	t.Parallel()
 	throwaway := &lineRecorder{}
 	runner := &collection.Runner{Line: throwaway}
 	// Even an open websocket (no session block) rides only its held socket.
@@ -89,6 +91,7 @@ func TestAWebSocketPollNeverFallsBackToAThrowawayConnection(t *testing.T) {
 }
 
 func TestAWebSocketEndpointsLearnedAuthIsKeptUnderItsFingerprint(t *testing.T) {
+	t.Parallel()
 	m := newSessionManager(nil, sessionHooks{})
 	task := wsPollTask("p1", "ep-1", basicUpgrade("/api/ws"), "kestrel", "fp-1")
 	state := m.httpAuthOf("ep-1", "fp-1")

@@ -8,9 +8,7 @@ import (
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
 // productMetricWire is the decoded contract line: the metric the product
@@ -33,19 +31,17 @@ type productMetricsWire struct {
 // a 404. The seeded official product's contract is seed-owned and refuses both
 // writes with a 422. Skipped under -short.
 func TestProductMetricsAPI(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
 	ctx := context.Background()
-	dsn := storagetest.NewDSN(t)
+	dsn := seededDSN(t)
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	ownerTok := bootstrapOwnerTok(t, ctx, gw)
 
 	srv := httptest.NewServer(api.NewHandler(gw))

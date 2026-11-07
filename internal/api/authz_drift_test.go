@@ -34,6 +34,7 @@ var aheadOfRoutes = map[string]string{
 // signal that the capability is not enforced yet. The test also rejects stale
 // aheadOfRoutes entries, so coverage tightens automatically as routes land.
 func TestSeedGrantsResolveToUniverse(t *testing.T) {
+	t.Parallel()
 	// Spec generation never queries the gateway, so a stub keeps this no-DB.
 	var gw storage.Gateway = storage.UnimplementedGateway{}
 	var universe []string

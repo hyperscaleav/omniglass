@@ -13,6 +13,7 @@ import (
 // as data (#1078); none, a malformed value, and a rung the ladder does not
 // have read as no gate at all.
 func TestParseRejection(t *testing.T) {
+	t.Parallel()
 	pinned, offered := "SHA256:"+strings.Repeat("A", 43), "SHA256:"+strings.Repeat("B", 43)
 	cases := []struct {
 		in              string
@@ -52,6 +53,7 @@ func TestParseRejection(t *testing.T) {
 // as data (so a surface offering to trust the new key never parses a reason),
 // and still never the fingerprint.
 func TestParseRejectionCarriesTheRefusedKeys(t *testing.T) {
+	t.Parallel()
 	pinned, offered := "SHA256:"+strings.Repeat("A", 43), "SHA256:"+strings.Repeat("B", 43)
 	got := parseRejection("responsive certificate 9f86d081 " + pinned + " " + offered)
 	if got == nil || got.Rung != "responsive" || got.Class != "certificate" || got.PinnedKey != pinned || got.OfferedKey != offered {
@@ -66,6 +68,7 @@ func TestParseRejectionCarriesTheRefusedKeys(t *testing.T) {
 }
 
 func TestCapReason(t *testing.T) {
+	t.Parallel()
 	if got := capReason("auth: auth rejected"); got != "auth: auth rejected" {
 		t.Fatalf("a short reason changed: %q", got)
 	}
@@ -85,6 +88,7 @@ func TestCapReason(t *testing.T) {
 // gate) is one the push lane refuses, so no push can stand in for the node
 // here. A new key read here that is not ruled node-only fails this test.
 func TestReachabilityReadsOnlyNodeOnlyKeys(t *testing.T) {
+	t.Parallel()
 	keys := []string{verdictKey, responsiveKey, authKey, sessionStateKey, sessionReasonKey, rejectionKey,
 		tlsKeyKey, tlsExpiryKey, tlsDaysLeftKey, tlsHandshakeKey, udpResponseKey, snmpResponseKey}
 	for _, l := range reachLayers {

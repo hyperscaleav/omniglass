@@ -32,6 +32,7 @@ var factsList = regexp.MustCompile(`facts \(([^)]*)\)`)
 var funcsList = regexp.MustCompile(`the functions ([a-z]+(?:, [a-z]+)*(?: and [a-z]+)?)`)
 
 func TestLabelRuleDescriptionsNameTheDeclaredKeysAndFunctions(t *testing.T) {
+	t.Parallel()
 	raw, err := os.ReadFile("../../api/openapi.json")
 	if err != nil {
 		t.Fatalf("read openapi.json (run make gen): %v", err)

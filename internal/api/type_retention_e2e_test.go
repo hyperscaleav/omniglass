@@ -12,6 +12,7 @@ import (
 // admin with install-wide authority), bounded as they are, and cleared with
 // null.
 func TestATypesRetentionIsSetThroughItsOwnMethod(t *testing.T) {
+	t.Parallel()
 	f := newSettingsFixture(t)
 	read := func(path string) map[string]any {
 		t.Helper()

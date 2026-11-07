@@ -103,6 +103,7 @@ func (s *httpStack) waitVolume(comp, instance string, want float64) time.Duratio
 }
 
 func TestNodeHTTPStreamLandsChangesAndResumes(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}
@@ -182,6 +183,7 @@ func TestNodeHTTPStreamLandsChangesAndResumes(t *testing.T) {
 }
 
 func TestNodeHTTPStreamBehindAFormLogin(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}

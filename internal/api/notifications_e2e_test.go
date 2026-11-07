@@ -23,9 +23,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/notify"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/secret"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
 type notificationWire struct {
@@ -49,16 +47,14 @@ type notificationWire struct {
 // the last status, :retry re-queues it to a success, the clear notifies too,
 // and the timeline and the scoped list show it all.
 func TestAnAlarmTransitionIsDeliveredEndToEnd(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn, storage.WithSecretProvider(secret.NewStaticProvider(bytes.Repeat([]byte{0x5}, 32))))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatal(err)
-	}
 	ownerTok, hash, prefix, err := auth.NewBearerToken()
 	if err != nil {
 		t.Fatal(err)

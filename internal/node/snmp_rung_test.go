@@ -58,6 +58,7 @@ func snmpProbeTask(fp string) collection.TaskSpec {
 }
 
 func TestTheSNMPRungIsAStandardGetAnswered(t *testing.T) {
+	t.Parallel()
 	fake := &snmpFake{res: map[string]string{driver.SysUpTimeOID: "8123456"}, delay: time.Millisecond}
 	runner := &collection.Runner{SNMP: fake}
 	m := newDatagramManager(t, newCapture())
@@ -111,6 +112,7 @@ func TestTheSNMPRungIsAStandardGetAnswered(t *testing.T) {
 }
 
 func TestAnSNMPAuthorizationErrorGatesTheSessionRungAndHoldsTheGet(t *testing.T) {
+	t.Parallel()
 	fake := &snmpFake{err: &collection.TerminalError{Class: driver.ClassAuth, Reason: "the agent answered authorizationError for the community"}}
 	runner := &collection.Runner{SNMP: fake}
 	m := newDatagramManager(t, newCapture())
@@ -181,6 +183,7 @@ func TestAnSNMPAuthorizationErrorGatesTheSessionRungAndHoldsTheGet(t *testing.T)
 }
 
 func TestAnSNMPRungWithNoCommunityIsSkippedByName(t *testing.T) {
+	t.Parallel()
 	task := snmpProbeTask("fp-1")
 	task.Secrets = nil
 	_, err := collectProbe(t.Context(), &collection.Runner{SNMP: &snmpFake{}}, task, nil)

@@ -13,6 +13,7 @@ import (
 )
 
 func TestSimulationBodyConnectedWindow(t *testing.T) {
+	t.Parallel()
 	now := time.Unix(1_800_000_000, 0)
 	devs := []storage.SimDevice{{ComponentID: "b", Name: "zeta"}, {ComponentID: "a", Name: "alpha"}}
 	fresh := simulationBody(devs, simhub.Status{LastSeen: now.Add(-30 * time.Second)}, true, now)
@@ -31,6 +32,7 @@ func TestSimulationBodyConnectedWindow(t *testing.T) {
 // The simulator's list of impaired devices covers its whole node; a caller
 // sees only the ids of devices in its own view.
 func TestSimulationBodyKeepsImpairedToVisibleDevices(t *testing.T) {
+	t.Parallel()
 	st := simhub.Status{LastSeen: time.Now(), Impairments: collection.SimImpairmentStatus{Available: true, Impaired: []string{"seen", "hidden"}}}
 	out := simulationBody([]storage.SimDevice{{ComponentID: "seen", Name: "a"}}, st, true, time.Now())
 	if got := out.Body.Impairments.Impaired; len(got) != 1 || got[0] != "seen" {
@@ -44,6 +46,7 @@ func TestSimulationBodyKeepsImpairedToVisibleDevices(t *testing.T) {
 var bareInterface = regexp.MustCompile(`\binterfaces?\b`)
 
 func TestSimSurfaceSpeaksTheVocabulary(t *testing.T) {
+	t.Parallel()
 	store, err := simCatalog()
 	if err != nil {
 		t.Fatal(err)
@@ -79,6 +82,7 @@ func TestSimSurfaceSpeaksTheVocabulary(t *testing.T) {
 // simulator stopped reporting, starting when added since the simulator's
 // last pull, failed when handed over but not started, running otherwise.
 func TestSimulationBodyStates(t *testing.T) {
+	t.Parallel()
 	now := time.Unix(1_800_000_000, 0)
 	devs := []storage.SimDevice{{ComponentID: "on", Name: "a"}, {ComponentID: "new", Name: "b"}, {ComponentID: "broken", Name: "c"}, {ComponentID: "fresh", Name: "d"}}
 	st := simhub.Status{LastSeen: now.Add(-5 * time.Second),

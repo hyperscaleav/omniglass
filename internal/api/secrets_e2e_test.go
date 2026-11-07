@@ -11,9 +11,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/auth"
 	"github.com/hyperscaleav/omniglass/internal/secret"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
 // TestSecretAPI drives the secret surface over HTTP: an owner seals secrets at
@@ -21,7 +19,8 @@ import (
 // (plaintext only through the audited reveal / copy), while a component-scoped
 // viewer is forbidden every secret surface.
 func TestSecretAPI(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	prov := secret.NewStaticProvider(bytes.Repeat([]byte{0x7}, 32))
 	gw, err := storage.NewPG(ctx, dsn, storage.WithSecretProvider(prov))
@@ -29,9 +28,6 @@ func TestSecretAPI(t *testing.T) {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 
 	ownerTok, hash, prefix, err := auth.NewBearerToken()
 	if err != nil {
@@ -197,7 +193,8 @@ func TestSecretAPI(t *testing.T) {
 // independently. A component-scoped operator and a component-scoped admin share the
 // same scope, so the flag, not scope, is what separates their reach.
 func TestSecretAdminSensitive(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	prov := secret.NewStaticProvider(bytes.Repeat([]byte{0x7}, 32))
 	gw, err := storage.NewPG(ctx, dsn, storage.WithSecretProvider(prov))
@@ -205,9 +202,6 @@ func TestSecretAdminSensitive(t *testing.T) {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 
 	ownerTok, hash, prefix, err := auth.NewBearerToken()
 	if err != nil {

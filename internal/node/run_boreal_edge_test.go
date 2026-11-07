@@ -16,6 +16,7 @@ import (
 // Power cycled and the input switched on the display's web admin read back on
 // the next poll.
 func TestNodeBorealEdgeReadsItsDisplayState(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}

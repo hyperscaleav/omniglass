@@ -12,6 +12,7 @@ import (
 // OpenAPI), so it is checked against the registry: a site registered in
 // internal/rules and not here, or the reverse, fails.
 func TestValidateSiteEnumIsTheRegistry(t *testing.T) {
+	t.Parallel()
 	f, ok := reflect.TypeFor[validateExpressionInput]().FieldByName("Body")
 	if !ok {
 		t.Fatal("no Body")

@@ -39,6 +39,7 @@ import (
 // and dials no more. The operator retries with the new key: the session
 // redials onto it and reads up.
 func TestNodeSSHSessionPinsTheHostKeyAndRefusesAChange(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}

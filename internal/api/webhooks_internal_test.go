@@ -13,6 +13,7 @@ import (
 // one every sender shares (#1024): a sender at one post a second is admitted
 // every time, while a stranger posts a thousand a second beside it.
 func TestOneSourcesFloodNeverStarvesAnother(t *testing.T) {
+	t.Parallel()
 	rc := newWebhookReceiver(storage.UnimplementedGateway{}, nil)
 	start := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
 	admitted := 0
@@ -55,6 +56,7 @@ func (s *unclaimedStore) ListUnclaimedSources(context.Context) ([]storage.Unclai
 // The receiver's memory of the inbox's sources is the table's own rows,
 // bounded as the table is, however many distinct strangers post.
 func TestTheInboxMirrorStaysWithinTheTablesBound(t *testing.T) {
+	t.Parallel()
 	st := &unclaimedStore{}
 	rc := newWebhookReceiver(st, nil)
 	at := time.Now()
@@ -77,6 +79,7 @@ func TestTheInboxMirrorStaysWithinTheTablesBound(t *testing.T) {
 // post waits, however its sender drips it, and each read's deadline follows
 // its size.
 func TestBodiesBeingReadAreBudgeted(t *testing.T) {
+	t.Parallel()
 	rc := newWebhookReceiver(storage.UnimplementedGateway{}, nil)
 	held := 0
 	for rc.reserveReading(declaredSize("")) {

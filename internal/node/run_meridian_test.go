@@ -17,6 +17,7 @@ import (
 // input. A route set over the switcher's HTTP API reads back as the routed
 // input on the next poll.
 func TestNodeMeridianReadsRouteLinkAndSignal(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}

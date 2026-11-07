@@ -40,6 +40,7 @@ type pollRun struct {
 }
 
 func TestOnDemandRunsOverTheWire(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}

@@ -62,16 +62,14 @@ func locationTypeByName(t *testing.T, c *apiClient, tok, name string) locationTy
 // actually get. A restatement that drifted from the mint would fail here, which
 // is the whole reason the field exists rather than a TypeScript function.
 func TestANameRuleReadsBackWithTheNamesItMintsAPI(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
@@ -132,16 +130,14 @@ func TestANameRuleReadsBackWithTheNamesItMintsAPI(t *testing.T) {
 // the platform's row rather than write it, with :restore taking the rule away
 // again.
 func TestSettingANameRuleOnAShippedTypeForksAndRestoresAPI(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
@@ -202,6 +198,7 @@ func TestSettingANameRuleOnAShippedTypeForksAndRestoresAPI(t *testing.T) {
 // schema admits mints legally at both ends. The refusals a surface has to
 // render are therefore the schema's, and they are the ones asserted here.
 func TestTheRefusalANameRuleEditorHasToSurfaceAPI(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	gw := storagetest.NewDB(t)
 	if err := seed.Run(ctx, gw); err != nil {

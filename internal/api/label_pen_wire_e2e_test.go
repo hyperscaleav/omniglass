@@ -79,6 +79,7 @@ func decodePen(t *testing.T, what string, raw []byte) pen {
 // The field exists on the read body of every labelled entity, with the polarity
 // name_generated already established: TRUE means the platform owns it.
 func TestLabelPenOnTheWire(t *testing.T) {
+	t.Parallel()
 	c, tok, p, stop := penHarness(t)
 	defer stop()
 
@@ -155,6 +156,7 @@ func TestLabelPenOnTheWire(t *testing.T) {
 // cannot claim or surrender it except by writing the label itself. Huma refuses
 // an unknown body field, so the assertion is that the write is refused at all.
 func TestLabelPenIsNotWritable(t *testing.T) {
+	t.Parallel()
 	c, tok, p, stop := penHarness(t)
 	defer stop()
 

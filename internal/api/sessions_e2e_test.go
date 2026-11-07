@@ -12,9 +12,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/auth"
 	"github.com/hyperscaleav/omniglass/internal/scope"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
 type sessionRow struct {
@@ -33,16 +31,14 @@ type sessionRow struct {
 // authenticating, a credential id that is not theirs is a 404 (no cross-principal
 // revoke), and revoking the current session signs it out. Skipped under -short.
 func TestSelfServiceSessions(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 
 	// The owner (a password login) plus its bootstrap bearer, an API "token" with a
 	// bounded (90-day) expiry, distinct from a web-login "session". Both are bearers;
@@ -233,16 +229,14 @@ func TestSelfServiceSessions(t *testing.T) {
 // purpose, always keeping the credential making the request (never a self-logout), and
 // the two purposes never cross. Skipped under -short.
 func TestSelfServiceRevokeAll(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	pwHash, err := auth.HashPassword("orange-boat-42x")
 	if err != nil {
 		t.Fatalf("hash: %v", err)
@@ -376,16 +370,14 @@ func TestSelfServiceRevokeAll(t *testing.T) {
 // in the session list as a described 'token'. A blank description or an over-cap ttl is a
 // 422. Skipped under -short.
 func TestSelfServiceCreateToken(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	pwHash, err := auth.HashPassword("orange-boat-42x")
 	if err != nil {
 		t.Fatalf("hash: %v", err)

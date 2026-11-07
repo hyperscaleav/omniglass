@@ -34,6 +34,7 @@ import (
 // Fixing the credential reconnects within a tick: up, authenticated, and the
 // poll lands its value over the telnet session.
 func TestNodeTelnetSessionRejectsThenRecoversOnTheFix(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}

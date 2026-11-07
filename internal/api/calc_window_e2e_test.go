@@ -10,9 +10,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/auth"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
 // TestCalcRuleWindowAPI drives a windowed input over HTTP (#1142): a rule
@@ -20,16 +18,14 @@ import (
 // validate route binds the window as a list of records, and a window over an
 // hour or on a system rule is a 422 placed on the input's window_seconds.
 func TestCalcRuleWindowAPI(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatal(err)
-	}
 	tok, hash, prefix, err := auth.NewBearerToken()
 	if err != nil {
 		t.Fatal(err)

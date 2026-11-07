@@ -8,9 +8,7 @@ import (
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
 // TestLocationTypesAPI drives the location_type registry read endpoint: an owner
@@ -19,16 +17,14 @@ import (
 // = label). The 403 for a principal without location_type:read is covered
 // generically by TestEveryRouteIsGated.
 func TestLocationTypesAPI(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	ownerTok := bootstrapOwnerTok(t, ctx, gw)
 
 	srv := httptest.NewServer(api.NewHandler(gw))
@@ -103,16 +99,14 @@ func TestLocationTypesAPI(t *testing.T) {
 }
 
 func TestLocationTypeCRUDAPI(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	ownerTok := bootstrapOwnerTok(t, ctx, gw)
 
 	srv := httptest.NewServer(api.NewHandler(gw))
@@ -182,16 +176,14 @@ func TestLocationTypeCRUDAPI(t *testing.T) {
 // (#692, the explicit null under update_mask that turns location auto-naming
 // back off).
 func TestLocationTypeForkAndClearAPI(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	ownerTok := bootstrapOwnerTok(t, ctx, gw)
 
 	srv := httptest.NewServer(api.NewHandler(gw))

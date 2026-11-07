@@ -20,6 +20,7 @@ type webStubGateway struct{ storage.UnimplementedGateway }
 // HTML shell under /web/, the bare /web redirect), which holds identically once
 // the real console is embedded with -tags web.
 func TestWebConsoleMount(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(api.NewHandler(webStubGateway{}))
 	defer srv.Close()
 

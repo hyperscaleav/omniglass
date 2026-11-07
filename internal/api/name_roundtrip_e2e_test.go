@@ -9,9 +9,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/auth"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
 // A name is the address, and the test of that is a ROUND TRIP: what a response
@@ -24,16 +22,14 @@ import (
 // The guard in name_address_test.go checks the shape of the contract; this checks
 // the behaviour, over HTTP, on the three fleet entities that had the defect.
 func TestPlacementRoundTripsByName(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	tok, hash, prefix, err := auth.NewBearerToken()
 	if err != nil {
 		t.Fatalf("mint owner: %v", err)
@@ -115,16 +111,14 @@ func TestPlacementRoundTripsByName(t *testing.T) {
 // A path segment takes either form, so a script holding an id and a human typing
 // a name reach the same entity.
 func TestPathsAcceptEitherForm(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	tok, hash, prefix, err := auth.NewBearerToken()
 	if err != nil {
 		t.Fatalf("mint owner: %v", err)

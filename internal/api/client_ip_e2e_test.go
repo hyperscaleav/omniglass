@@ -26,16 +26,14 @@ import (
 // hop is recorded, never the spoofable leftmost one; under "none" a forwarded
 // header changes nothing. Skipped under -short.
 func TestASessionRecordsTheClientTheTrustedProxiesResolve(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	pwHash, err := auth.HashPassword("orange-boat-42x")
 	if err != nil {
 		t.Fatalf("hash: %v", err)
@@ -112,6 +110,7 @@ func TestASessionRecordsTheClientTheTrustedProxiesResolve(t *testing.T) {
 // unclaimed-sources inbox under the address a credential would be stamped
 // with. Skipped under -short.
 func TestAWebhookSenderIsTheClientTheTrustedProxiesResolve(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
