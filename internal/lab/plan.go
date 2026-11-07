@@ -207,7 +207,26 @@ type Options struct {
 	// Cadence names the node's cadence profile (CadenceProfiles); empty is
 	// the lab's own.
 	Cadence string
+	// Systems and SiteNodes make a scale lab (#1554): the scale lab
+	// scenario Scenario resolved at Systems systems, with one node per site
+	// in place of the one dev node. The seed lays the plan down and enrolls
+	// each site's node with its token's hash.
+	Systems   int
+	SiteNodes []SiteNode
 }
+
+// SiteNode is one site's node in a scale lab: its name, the enrollment
+// token minted for it this run, and how many simulated components the plan
+// places on it.
+type SiteNode struct {
+	Name       string
+	Token      string
+	TokenHash  string
+	Components int
+}
+
+// Scale reports whether the options make a scale lab.
+func (o Options) Scale() bool { return len(o.SiteNodes) > 0 }
 
 // Mount is a named volume mounted into a container.
 type Mount struct {
@@ -274,11 +293,20 @@ type Spec struct {
 	DB            Service
 	Seed          Service
 	Server        Service
-	Node          Service
+	// Node is the lab's one node; a scale lab has none, and runs Nodes,
+	// one per site, instead.
+	Node  Service
+	Nodes []Service
 }
 
 // Services are the project's containers in start order.
-func (s Spec) Services() []Service { return []Service{s.DB, s.Seed, s.Server, s.Node} }
+func (s Spec) Services() []Service {
+	out := []Service{s.DB, s.Seed, s.Server}
+	if s.Node.Name != "" {
+		out = append(out, s.Node)
+	}
+	return append(out, s.Nodes...)
+}
 
 // ProjectLabels are the labels that select everything a project created.
 func ProjectLabels(project string) map[string]string {
@@ -325,6 +353,9 @@ func Plan(o Options) (Spec, error) {
 	cadence, err := LookupCadence(o.Cadence, o.Ephemeral)
 	if err != nil {
 		return Spec{}, err
+	}
+	if o.Scale() && (o.NoNode || o.Systems <= 0) {
+		return Spec{}, fmt.Errorf("a scale lab runs a node per site at a size: it needs --systems and cannot run with --no-node")
 	}
 	if o.NoNode && !o.Ephemeral {
 		return Spec{}, fmt.Errorf("a lab with no node is a script's, so it needs --ephemeral: a learner's lab keeps its fleet, and one seeded without the simulated wiring would never collect")
@@ -388,11 +419,17 @@ func Plan(o Options) (Spec, error) {
 	if o.NoNode {
 		seedCmd = append(seedCmd, "--no-node")
 	}
+	seedEnv := append(append([]string{}, appEnv...), "OMNIGLASS_LAB_NODE_TOKEN_HASH="+o.NodeTokenHash,
+		"OMNIGLASS_LAB_PUSH_TOKEN_HASH="+o.PushTokenHash, "OMNIGLASS_LAB_PUSH_TOKEN_PREFIX="+o.PushTokenPrefix)
+	if o.Scale() {
+		seedCmd = []string{"lab", "seed", "--scenario", o.Scenario, "--systems", strconv.Itoa(o.Systems),
+			"--user", LoginUser, "--password", LoginPassword}
+		seedEnv = append(append([]string{}, appEnv...), SiteNodeTokenHashesEnv+"="+FormatSiteNodeTokenHashes(o.SiteNodes))
+	}
 	spec.Seed = Service{
 		Name: "seed", Container: o.Project + "-seed-run-1", Image: o.Image,
-		Cmd: seedCmd,
-		Env: append(append([]string{}, appEnv...), "OMNIGLASS_LAB_NODE_TOKEN_HASH="+o.NodeTokenHash,
-			"OMNIGLASS_LAB_PUSH_TOKEN_HASH="+o.PushTokenHash, "OMNIGLASS_LAB_PUSH_TOKEN_PREFIX="+o.PushTokenPrefix),
+		Cmd:    seedCmd,
+		Env:    seedEnv,
 		Mounts: []Mount{{Volume: volData, Target: dataDir}},
 		OneOff: true,
 		Labels: svc("seed", true),
@@ -418,36 +455,86 @@ func Plan(o Options) (Spec, error) {
 	if cadence.ProbeEvery != "" {
 		nodeCmd = append(nodeCmd, "--probe-every", cadence.ProbeEvery)
 	}
-	spec.Node = Service{
-		Name: "node", Container: o.Project + "-node-1", Image: o.Image,
-		Cmd: append(nodeCmd, "--poll", cadence.SimPoll),
-		Env: []string{
-			"OMNIGLASS_SERVER=http://server:" + strconv.Itoa(consolePort),
-			"OMNIGLASS_NODE_NAME=" + NodeName,
-			"OMNIGLASS_NODE_TOKEN=" + o.NodeToken,
-			"OMNIGLASS_SIM_PUSH_TOKEN=" + o.PushToken,
-		},
-		// Distroless grants an added capability to root only, so the node
-		// runs as root inside its own container, to hold NET_ADMIN for the
-		// impairments; it reaches that container's namespace, never the
-		// host's.
-		User:    "0:0",
-		CapAdd:  []string{"NET_ADMIN"},
-		Sysctls: map[string]string{"net.ipv4.ping_group_range": pingGroupRange},
-		Restart: "on-failure",
-		Labels:  svc("node", false),
-		Role: "The edge node " + NodeName + " with the simulator in its own process: the simulated components " +
-			"sit on its loopback, and it collects from them for real. NET_ADMIN, for the impairments, " +
-			"reaches only this container's network.",
+	nodeCmd = append(nodeCmd, "--poll", cadence.SimPoll)
+	nodeService := func(service, name, token, pushToken, role string) Service {
+		return Service{
+			Name: service, Container: o.Project + "-" + service + "-1", Image: o.Image,
+			Cmd: nodeCmd,
+			Env: []string{
+				"OMNIGLASS_SERVER=http://server:" + strconv.Itoa(consolePort),
+				"OMNIGLASS_NODE_NAME=" + name,
+				"OMNIGLASS_NODE_TOKEN=" + token,
+				"OMNIGLASS_SIM_PUSH_TOKEN=" + pushToken,
+			},
+			// Distroless grants an added capability to root only, so the node
+			// runs as root inside its own container, to hold NET_ADMIN for the
+			// impairments; it reaches that container's namespace, never the
+			// host's.
+			User:    "0:0",
+			CapAdd:  []string{"NET_ADMIN"},
+			Sysctls: map[string]string{"net.ipv4.ping_group_range": pingGroupRange},
+			Restart: "on-failure",
+			Labels:  svc(service, false),
+			Role:    role,
+		}
+	}
+	services := []*Service{&spec.DB, &spec.Seed, &spec.Server}
+	if o.Scale() {
+		// One node per site, each its own container with its own loopback,
+		// where its simulator serves that site's components.
+		spec.Nodes = make([]Service, len(o.SiteNodes))
+		for i, n := range o.SiteNodes {
+			spec.Nodes[i] = nodeService(n.Name, n.Name, n.Token, "", fmt.Sprintf(
+				"The edge node %s with the simulator in its own process, serving its site's %d simulated components on its loopback.",
+				n.Name, n.Components))
+			services = append(services, &spec.Nodes[i])
+		}
+	} else {
+		spec.Node = nodeService("node", NodeName, o.NodeToken, o.PushToken,
+			"The edge node "+NodeName+" with the simulator in its own process: the simulated components "+
+				"sit on its loopback, and it collects from them for real. NET_ADMIN, for the impairments, "+
+				"reaches only this container's network.")
+		services = append(services, &spec.Node)
 	}
 	// compose lists a container as its project's only when it carries a
 	// config hash (and warns without a config-files label), so each service
 	// gets the hash of what it runs, as compose's own would be.
-	for _, p := range []*Service{&spec.DB, &spec.Seed, &spec.Server, &spec.Node} {
+	for _, p := range services {
 		p.Labels[LabelComposeHash] = configHash(*p)
 		p.Labels[LabelComposeFiles] = ""
 	}
 	return spec, nil
+}
+
+// SiteNodeTokenHashesEnv carries a scale lab's node enrollment token hashes
+// to its seed, as FormatSiteNodeTokenHashes writes them.
+const SiteNodeTokenHashesEnv = "OMNIGLASS_LAB_SITE_NODE_TOKEN_HASHES"
+
+// FormatSiteNodeTokenHashes writes each site node's token hash as
+// name=hash, comma separated; ParseSiteNodeTokenHashes reads it back.
+func FormatSiteNodeTokenHashes(nodes []SiteNode) string {
+	parts := make([]string, len(nodes))
+	for i, n := range nodes {
+		parts[i] = n.Name + "=" + n.TokenHash
+	}
+	return strings.Join(parts, ",")
+}
+
+// ParseSiteNodeTokenHashes reads FormatSiteNodeTokenHashes back, by node
+// name.
+func ParseSiteNodeTokenHashes(s string) (map[string]string, error) {
+	out := map[string]string{}
+	if s == "" {
+		return out, nil
+	}
+	for _, part := range strings.Split(s, ",") {
+		name, hash, ok := strings.Cut(part, "=")
+		if !ok || name == "" || hash == "" {
+			return nil, fmt.Errorf("lab: %s: %q is not name=hash", SiteNodeTokenHashesEnv, part)
+		}
+		out[name] = hash
+	}
+	return out, nil
 }
 
 // configHash is a service's compose config hash: the sha256 of what it runs

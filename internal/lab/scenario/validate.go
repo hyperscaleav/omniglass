@@ -52,6 +52,7 @@ type compiledStandard struct {
 	name       string
 	systemType string
 	components []Count
+	staffing   []Staff
 }
 
 // Validate checks a manifest against the catalog: every standard a template
@@ -204,6 +205,7 @@ func compileStandard(s Standard, cat Catalog) (compiledStandard, []Problem) {
 			continue
 		}
 		cs.components = append(cs.components, Count{Name: f.Product, Count: f.Count})
+		cs.staffing = append(cs.staffing, Staff{Role: f.Role, Product: f.Product, Count: f.Count})
 	}
 	return cs, probs
 }

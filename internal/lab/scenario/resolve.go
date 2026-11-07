@@ -70,7 +70,23 @@ type SystemPlan struct {
 	Floor      string
 	Room       string
 	Components []Count
+	// Staffing is which role each of those components fills: the seed
+	// assigns each one to its role, so the system is staffed as its
+	// standard declares.
+	Staffing []Staff
 }
+
+// Staff is one role of a planned system and how many of which product fill
+// it.
+type Staff struct {
+	Role    string
+	Product string
+	Count   int
+}
+
+// SiteNode is the name of the edge node a site's components are placed on:
+// the scale lab runs one node per site (#1554), named for the site.
+func SiteNode(site string) string { return "edge-" + site }
 
 // Totals counts systems and components, systems per standard (in manifest
 // order) and components per product (by name).
@@ -239,6 +255,7 @@ func resolveSite(scenario, name, label string, a *Archetype, n int, c *compiled,
 				Floor:      fl.name,
 				Room:       fmt.Sprintf("%s-%02d", fl.name, j/len(floors)+1),
 				Components: cs.components,
+				Staffing:   cs.staffing,
 			})
 			j++
 		}

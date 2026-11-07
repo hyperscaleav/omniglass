@@ -316,6 +316,118 @@ func RunWith(ctx context.Context, gw storage.Gateway, actorID string, opts Optio
 // runDoc seeds one fixture document: the example fleet, or a scenario's
 // expansion of it (scenario.go).
 func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, opts Options) error {
+	var f fleet
+	if err := seedFleet(ctx, gw, actorID, doc, &f); err != nil {
+		return err
+	}
+	locIDs, compIDs, sysIDs, seedComponent := f.locIDs, f.compIDs, f.sysIDs, f.seedComponent
+	// A worked reachability check on a component, so the console's Reachability panel
+	// renders a real verdict + availability strip instead of an empty "unknown".
+	if err := seedReachability(ctx, gw, actorID, locIDs); err != nil {
+		return err
+	}
+	// A handful of native call-started events on a boardroom video bar, so the
+	// console's event panel comes up populated instead of empty. Addressed by the
+	// id its fixture key resolved to: the bar's name is the platform's.
+	barID, ok := compIDs[eventComponent]
+	if !ok {
+		return fmt.Errorf("devseed: the event fixture component %q is not in the fleet", eventComponent)
+	}
+	if err := seedEvents(ctx, gw, barID); err != nil {
+		return err
+	}
+	// Raw device log lines on the huddle room's display, so the console's log panel
+	// (the ingest lane, ADR-0066) comes up populated. These are logs, not events.
+	displayID, ok := compIDs[logComponent]
+	if !ok {
+		return fmt.Errorf("devseed: the log fixture component %q is not in the fleet", logComponent)
+	}
+	if err := seedLogs(ctx, gw, displayID); err != nil {
+		return err
+	}
+	// The edge node's own self-logs, so the node blade's Self-logs panel comes up
+	// populated: the node narrating itself (ADR-0066), owner-bound to the node.
+	if err := seedNodeLogs(ctx, gw); err != nil {
+		return err
+	}
+	// Samples on the huddle system for the metric contract its standard
+	// declares (#790): the system zoom's KPI tiles render only what the
+	// standard declares, and a tile reads its latest sample.
+	if err := seedStandardMetrics(ctx, gw, sysIDs); err != nil {
+		return err
+	}
+	// The telemetry breadth (#796): events, logs, series, and alarm history
+	// across the fleet, so the workspace views have something real to say on
+	// more rooms than the two worked examples.
+	if err := seedTelemetryBreadth(ctx, gw, actorID, compIDs, sysIDs); err != nil {
+		return err
+	}
+	// Last: the simulated fleet, addresses and endpoints on the dev node for
+	// every component the simulator serves, so a lab's node collects for
+	// real. Last, so a failure here cannot skip the seeding before it.
+	if !opts.SimFleet {
+		return nil
+	}
+	// Only the example fleet's own devices are simulated, never a scenario's
+	// copies of them (scenario.go) nor a device added by hand: one simulator
+	// and one node collecting from thousands of devices would turn a dev
+	// start into a load test of the collector. Limited on every run, whatever
+	// the scenario, so a plain re-seed of a database a large scenario filled
+	// does not wire the copies after the fact.
+	base, err := Fixtures()
+	if err != nil {
+		return err
+	}
+	// The components that exist only beside the simulator (#1024): a cloud
+	// service the docs' screenshots, seeded without it, carry none of.
+	for _, c := range base.SimComponents {
+		if err := seedComponent(c); err != nil {
+			return err
+		}
+	}
+	only := map[string]bool{}
+	for _, c := range append(append([]Component(nil), base.Components...), base.SimComponents...) {
+		if id, ok := compIDs[c.Key]; ok {
+			only[id] = true
+		}
+	}
+	if err := seedSimFleet(ctx, gw, actorID, opts.SimPortOffset, only); err != nil {
+		return err
+	}
+	if err := seedSimEndpoints(ctx, gw, actorID, base, compIDs, opts.SimPortOffset); err != nil {
+		return err
+	}
+	if err := seedIdentityBindings(ctx, gw, actorID, base, compIDs, sysIDs); err != nil {
+		return err
+	}
+	if p := base.SimPusher; p != nil {
+		sysID, ok := sysIDs[p.System]
+		if !ok {
+			return fmt.Errorf("devseed: the simulated pusher names unknown system key %q", p.System)
+		}
+		if err := GrantPusher(ctx, gw, actorID, p.Service, sysID); err != nil {
+			return err
+		}
+	}
+	// The breadth RTT series, after the endpoints they are the node's account
+	// of.
+	return seedBreadthRTT(ctx, gw, compIDs)
+}
+
+// fleet is what seedFleet seeded or found, by fixture key, and how to seed
+// one more component the same way.
+type fleet struct {
+	locIDs, compIDs, sysIDs map[string]string
+	seedComponent           func(Component) error
+}
+
+// seedFleet seeds the parts of a document that are the fleet itself, in
+// dependency order: the standards, locations, users, variables, tags, files,
+// product contract lines, components, systems, members, role assignments,
+// alarms and property values. What it seeded lands in f. Every fleet seed
+// shares it: the example fleet adds its worked examples after it, and a scale
+// lab plan its nodes and simulated endpoints (scale.go).
+func seedFleet(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, f *fleet) error {
 	all := scope.Set{All: true}
 
 	// The standards the fleet\'s systems conform to, created from the template
@@ -331,6 +443,7 @@ func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, op
 	// placement) is resolved through: an id is a legal reference wherever a name
 	// is (ADR-0062), and two of these locations are called `1`.
 	locIDs := map[string]string{}
+	f.locIDs = locIDs
 	locIndex, err := locationGenIndex(ctx, gw, all)
 	if err != nil {
 		return err
@@ -516,6 +629,7 @@ func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, op
 	// recognised by its position among the platform-named rows of its product's
 	// classification in its own room (see identity.go).
 	compIDs := map[string]string{}
+	f.compIDs = compIDs
 	compIndex, err := componentGenIndex(ctx, gw, all)
 	if err != nil {
 		return err
@@ -563,6 +677,7 @@ func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, op
 		compIDs[c.Key] = created.ID
 		return nil
 	}
+	f.seedComponent = seedComponent
 	for _, c := range doc.Components {
 		if err := seedComponent(c); err != nil {
 			return err
@@ -574,6 +689,7 @@ func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, op
 	// seeded for the placement to resolve. Recognised the same way a component is,
 	// with the system_type as the classification whose stem is minted.
 	sysIDs := map[string]string{}
+	f.sysIDs = sysIDs
 	sysIndex, err := systemGenIndex(ctx, gw, all)
 	if err != nil {
 		return err
@@ -687,97 +803,7 @@ func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, op
 			return fmt.Errorf("devseed: set property value %s/%s: %w", pv.Component, pv.Property, err)
 		}
 	}
-	// A worked reachability check on a component, so the console's Reachability panel
-	// renders a real verdict + availability strip instead of an empty "unknown".
-	if err := seedReachability(ctx, gw, actorID, locIDs); err != nil {
-		return err
-	}
-	// A handful of native call-started events on a boardroom video bar, so the
-	// console's event panel comes up populated instead of empty. Addressed by the
-	// id its fixture key resolved to: the bar's name is the platform's.
-	barID, ok := compIDs[eventComponent]
-	if !ok {
-		return fmt.Errorf("devseed: the event fixture component %q is not in the fleet", eventComponent)
-	}
-	if err := seedEvents(ctx, gw, barID); err != nil {
-		return err
-	}
-	// Raw device log lines on the huddle room's display, so the console's log panel
-	// (the ingest lane, ADR-0066) comes up populated. These are logs, not events.
-	displayID, ok := compIDs[logComponent]
-	if !ok {
-		return fmt.Errorf("devseed: the log fixture component %q is not in the fleet", logComponent)
-	}
-	if err := seedLogs(ctx, gw, displayID); err != nil {
-		return err
-	}
-	// The edge node's own self-logs, so the node blade's Self-logs panel comes up
-	// populated: the node narrating itself (ADR-0066), owner-bound to the node.
-	if err := seedNodeLogs(ctx, gw); err != nil {
-		return err
-	}
-	// Samples on the huddle system for the metric contract its standard
-	// declares (#790): the system zoom's KPI tiles render only what the
-	// standard declares, and a tile reads its latest sample.
-	if err := seedStandardMetrics(ctx, gw, sysIDs); err != nil {
-		return err
-	}
-	// The telemetry breadth (#796): events, logs, series, and alarm history
-	// across the fleet, so the workspace views have something real to say on
-	// more rooms than the two worked examples.
-	if err := seedTelemetryBreadth(ctx, gw, actorID, compIDs, sysIDs); err != nil {
-		return err
-	}
-	// Last: the simulated fleet, addresses and endpoints on the dev node for
-	// every component the simulator serves, so a lab's node collects for
-	// real. Last, so a failure here cannot skip the seeding before it.
-	if !opts.SimFleet {
-		return nil
-	}
-	// Only the example fleet's own devices are simulated, never a scenario's
-	// copies of them (scenario.go) nor a device added by hand: one simulator
-	// and one node collecting from thousands of devices would turn a dev
-	// start into a load test of the collector. Limited on every run, whatever
-	// the scenario, so a plain re-seed of a database a large scenario filled
-	// does not wire the copies after the fact.
-	base, err := Fixtures()
-	if err != nil {
-		return err
-	}
-	// The components that exist only beside the simulator (#1024): a cloud
-	// service the docs' screenshots, seeded without it, carry none of.
-	for _, c := range base.SimComponents {
-		if err := seedComponent(c); err != nil {
-			return err
-		}
-	}
-	only := map[string]bool{}
-	for _, c := range append(append([]Component(nil), base.Components...), base.SimComponents...) {
-		if id, ok := compIDs[c.Key]; ok {
-			only[id] = true
-		}
-	}
-	if err := seedSimFleet(ctx, gw, actorID, opts.SimPortOffset, only); err != nil {
-		return err
-	}
-	if err := seedSimEndpoints(ctx, gw, actorID, base, compIDs, opts.SimPortOffset); err != nil {
-		return err
-	}
-	if err := seedIdentityBindings(ctx, gw, actorID, base, compIDs, sysIDs); err != nil {
-		return err
-	}
-	if p := base.SimPusher; p != nil {
-		sysID, ok := sysIDs[p.System]
-		if !ok {
-			return fmt.Errorf("devseed: the simulated pusher names unknown system key %q", p.System)
-		}
-		if err := GrantPusher(ctx, gw, actorID, p.Service, sysID); err != nil {
-			return err
-		}
-	}
-	// The breadth RTT series, after the endpoints they are the node's account
-	// of.
-	return seedBreadthRTT(ctx, gw, compIDs)
+	return nil
 }
 
 // kpiSystem carries the sampled KPI values: the huddle room, the fleet's

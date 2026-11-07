@@ -51,24 +51,12 @@ var simSecrets = []storage.SecretSpec{
 // components whose ids are in only are planned.
 func seedSimFleet(ctx context.Context, gw storage.Gateway, actorID string, portOffset int, only map[string]bool) error {
 	all := scope.Set{All: true}
-	store, err := profile.LoadStoreFS(profiles.FS)
+	if err := seedSimSecrets(ctx, gw, actorID); err != nil {
+		return err
+	}
+	cat, drivers, err := simCatalog(ctx, gw, portOffset)
 	if err != nil {
-		return fmt.Errorf("devseed: load simulator catalog: %w", err)
-	}
-	for _, sec := range simSecrets {
-		if _, err := gw.CreateSecret(ctx, actorID, sec, all, true); err != nil && !errors.Is(err, storage.ErrSecretExists) {
-			return fmt.Errorf("devseed: create simulator secret %s: %w", sec.Name, err)
-		}
-	}
-	products, err := gw.ListProducts(ctx)
-	if err != nil {
-		return fmt.Errorf("devseed: list products: %w", err)
-	}
-	drivers := map[string]string{}
-	for _, p := range storage.InEffect(products, func(p storage.Product) (string, string) { return p.Namespace, p.Name }) {
-		if p.DriverName != nil {
-			drivers[p.Name] = *p.DriverName
-		}
+		return err
 	}
 	comps, err := gw.ListComponents(ctx, all)
 	if err != nil {
@@ -79,13 +67,6 @@ func seedSimFleet(ctx context.Context, gw storage.Gateway, actorID string, portO
 		if c.ProductHandle != nil && only[c.ID] {
 			cands = append(cands, simfleet.Component{ID: c.ID, Product: *c.ProductHandle})
 		}
-	}
-	profileFor := func(p string) (*profile.DeviceProfile, bool) {
-		name, _, ok := store.ForProduct(p)
-		if !ok {
-			return nil, false
-		}
-		return store.Devices[name], true
 	}
 	// Components already wired keep their endpoints; every address any
 	// endpoint targets is taken.
@@ -117,11 +98,55 @@ func seedSimFleet(ctx context.Context, gw storage.Gateway, actorID string, portO
 			unwired = append(unwired, c)
 		}
 	}
-	plan, err := simfleet.Plan(unwired, used, simfleet.Catalog{ProfileFor: profileFor, DriverOf: func(p string) string { return drivers[p] }, PortOffset: portOffset})
+	plan, err := simfleet.Plan(unwired, used, cat)
 	if err != nil {
 		return err
 	}
-	node := reachNode
+	return createSimEndpoints(ctx, gw, actorID, reachNode, plan)
+}
+
+// seedSimSecrets creates the platform secrets the simulated attaches
+// reference; one already held is left as it is.
+func seedSimSecrets(ctx context.Context, gw storage.Gateway, actorID string) error {
+	all := scope.Set{All: true}
+	for _, sec := range simSecrets {
+		if _, err := gw.CreateSecret(ctx, actorID, sec, all, true); err != nil && !errors.Is(err, storage.ErrSecretExists) {
+			return fmt.Errorf("devseed: create simulator secret %s: %w", sec.Name, err)
+		}
+	}
+	return nil
+}
+
+// simCatalog is what the simulated fleet's plan reads: the simulator's
+// profiles, and each seeded product's driver (also returned, by product).
+func simCatalog(ctx context.Context, gw storage.Gateway, portOffset int) (simfleet.Catalog, map[string]string, error) {
+	store, err := profile.LoadStoreFS(profiles.FS)
+	if err != nil {
+		return simfleet.Catalog{}, nil, fmt.Errorf("devseed: load simulator catalog: %w", err)
+	}
+	products, err := gw.ListProducts(ctx)
+	if err != nil {
+		return simfleet.Catalog{}, nil, fmt.Errorf("devseed: list products: %w", err)
+	}
+	drivers := map[string]string{}
+	for _, p := range storage.InEffect(products, func(p storage.Product) (string, string) { return p.Namespace, p.Name }) {
+		if p.DriverName != nil {
+			drivers[p.Name] = *p.DriverName
+		}
+	}
+	profileFor := func(p string) (*profile.DeviceProfile, bool) {
+		name, _, ok := store.ForProduct(p)
+		if !ok {
+			return nil, false
+		}
+		return store.Devices[name], true
+	}
+	return simfleet.Catalog{ProfileFor: profileFor, DriverOf: func(p string) string { return drivers[p] }, PortOffset: portOffset}, drivers, nil
+}
+
+// createSimEndpoints creates each planned device's endpoints on the node.
+func createSimEndpoints(ctx context.Context, gw storage.Gateway, actorID, node string, plan []simfleet.Device) error {
+	all := scope.Set{All: true}
 	for _, dev := range plan {
 		comp := dev.ComponentID
 		for _, e := range dev.Endpoints {
