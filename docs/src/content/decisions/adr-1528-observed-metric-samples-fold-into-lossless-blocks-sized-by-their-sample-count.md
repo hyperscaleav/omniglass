@@ -1,12 +1,12 @@
 ---
 title: "Observed metric samples fold into lossless blocks sized by their sample count"
 date: 2026-11-07
-status: "Accepted; amended (#1529): decision 9's dirtied-day rebuild is replaced by the late merge into the covering block ([ADR-1529](#adr-1529-a-late-metric-sample-merges-into-the-block-that-covers-it))"
+status: "Accepted; amended (#1529): decision 9's dirtied-day rebuild is replaced by the late merge into the covering block ([ADR-1529](#adr-1529-a-late-metric-sample-merges-into-the-block-that-covers-it)); amended (#1534): decision 1's observed-only block gains calculated series, each block carrying its rule lineage in its key ([ADR-1534](#adr-1534-calculated-metric-series-fold-into-blocks-that-carry-their-rule-lineage))"
 summary: "Each closed UTC day of an observed metric series folds into lossless metric_block rows of int4 millisecond offsets and float8 values in landing order: hour blocks at 4,080 samples in the day or more, one day block at 170 or more, and otherwise a share of its ISO week's block, which has no minimum. Blocks carry no hourly summaries (metric_trend holds them, ADR-1276), and timestamps are whole milliseconds. History stays retention.metric_days, whose default rises to 30; trends become a per-type setting. This slice writes blocks beside the raw rows; the late merge, the pending table, block reads and the early raw drop follow. Measured at 7.2 to 8.6 bytes a sample from 10 s to 1 h (#1525). TimescaleDB, pg_deltax, fixed hour blocks and month blocks are rejected on measurement (#1516, #1518)."
-refs: [1528, 1265, 1516, 1518, 1522, 1525, 1276, 1275, 1527, 1532, 1529, 1530, 1531, 61, 79, 311, 417]
+refs: [1528, 1265, 1516, 1518, 1522, 1525, 1276, 1275, 1527, 1532, 1529, 1530, 1531, 1534, 61, 79, 311, 417]
 ---
 
-- **Date:** 2026-11-07 | **Status:** Accepted; decision 9 amended by ADR-1529 (#1529) | **Pages:** [storage](/architecture/storage/)
+- **Date:** 2026-11-07 | **Status:** Accepted; decision 9 amended by ADR-1529 (#1529), decision 1 by ADR-1534 (#1534) | **Pages:** [storage](/architecture/storage/)
 - **Decision:** (#1528, under the approved #1265: the compacted tier the architect ruled required on
   2026-11-05, its draft ADR Accepted with the 2026-11-05 amendments, recorded on #1265.)
   1. **A block is lossless and plain SQL.** `metric_block (series_id, span_start, span, n, offset_ms int4[], value float8[])`,
@@ -19,7 +19,11 @@ refs: [1528, 1265, 1516, 1518, 1522, 1525, 1276, 1275, 1527, 1532, 1529, 1530, 1
      rows carry no lineage (the narrow lane keeps `event_id` and `command_id` on `metric_declared`,
      [ADR-1275](#adr-1275-the-metric-lane-is-narrow-rows-on-a-series-dimension-partitioned-by-month)),
      so a block drops nothing. Only observed metric series block: calculated series (as in ADR-1276),
-     properties and declared rows do not.
+     properties and declared rows do not. *Amended by
+     [ADR-1534](#adr-1534-calculated-metric-series-fold-into-blocks-that-carry-their-rule-lineage)
+     (#1534): calculated series block too, each block carrying its one rule lineage, and the key is
+     `metric_block_key`, unique with `NULLS NOT DISTINCT` over series, span start, span and the
+     lineage.*
   2. **The span follows the samples, not the configured cadence.** Once a UTC day has closed past the
      late-data horizon, each observed series' samples that day decide its span:
      - **4,080 or more** (170 an hour on average) cut it into **hour blocks**;

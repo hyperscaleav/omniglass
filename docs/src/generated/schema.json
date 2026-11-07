@@ -5037,21 +5037,18 @@
       "name": "series_id",
       "type": "bigint",
       "nullable": false,
-      "pk": true,
       "fk": true,
       "fk_target": "metric_series.id"
      },
      {
       "name": "span_start",
       "type": "timestamp with time zone",
-      "nullable": false,
-      "pk": true
+      "nullable": false
      },
      {
       "name": "span",
       "type": "text",
-      "nullable": false,
-      "pk": true
+      "nullable": false
      },
      {
       "name": "n",
@@ -5067,6 +5064,21 @@
       "name": "value",
       "type": "ARRAY",
       "nullable": false
+     },
+     {
+      "name": "source_rule",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "source_rule_id",
+      "type": "uuid",
+      "nullable": true
+     },
+     {
+      "name": "source_rule_version",
+      "type": "bigint",
+      "nullable": true
      }
     ],
     "checks": [
@@ -5077,6 +5089,12 @@
      {
       "name": "metric_block_span_check",
       "expr": "CHECK ((span = ANY (ARRAY['hour'::text, 'day'::text, 'week'::text])))"
+     }
+    ],
+    "uniques": [
+     {
+      "name": "metric_block_key",
+      "definition": "CREATE UNIQUE INDEX metric_block_key ON public.metric_block USING btree (series_id, span_start, span, source_rule_id, source_rule_version, source_rule) NULLS NOT DISTINCT"
      }
     ]
    },

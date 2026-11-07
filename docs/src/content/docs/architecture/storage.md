@@ -274,7 +274,10 @@ value, so a chart beyond the hot window still draws every hour, a one-sample spi
 hour's maximum ([ADR-1276](/architecture/decisions/#adr-1276-hourly-trends-close-an-hour-a-day-after-it-ends-and-hold-back-the-prune)).
 The retention pass writes them by **compaction**: it closes each hour that ended a day ago (the
 late-data horizon, past the node spool's replay), up to 48 hours a pass, oldest first. Calculated
-series are not compacted (they are sparse already), and properties have no trends.
+series are not compacted: a trend row has no place for the rule version, so an hour spanning a rule
+edit would mix two rules' output
+([ADR-1534](/architecture/decisions/#adr-1534-calculated-metric-series-fold-into-blocks-that-carry-their-rule-lineage)).
+Properties have no trends.
 
 - **Two marks.** `metric_trend_mark` holds how far the compaction has announced it will close hours
   (`announced_through`) and how far it has folded them (`compacted_through`). A pass moves the
@@ -313,19 +316,30 @@ window is the bucketed series read (#1269).
 
 **Lossless blocks: the compacted tier.** A raw row costs about 133 bytes a sample. The compacted tier
 holds the same samples, every one exact, for about 7 to 9: `metric_block` is one row per observed
-series per span, its samples' millisecond offsets from the span's start in an `int4[]` and their
-values in a `float8[]`, in landing order, so an instant reported twice comes back twice
+or calculated series per span per lineage, its samples' millisecond offsets from the span's start in
+an `int4[]` and their values in a `float8[]`, in landing order, so an instant reported twice comes
+back twice
 ([ADR-1528](/architecture/decisions/#adr-1528-observed-metric-samples-fold-into-lossless-blocks-sized-by-their-sample-count)).
 It carries no hourly summaries, which the trends already hold. A block is a plain row, so SQL reads
-it back with `unnest`:
+it back with `unnest`, each sample with its block's lineage (`MetricBlockSamples` is this read):
 
 ```sql
-select b.span_start + o * interval '1 millisecond' as ts, v as value
+select b.span_start + o * interval '1 millisecond' as ts, v as value,
+       b.source_rule, b.source_rule_id, b.source_rule_version
 from metric_block b, unnest(b.offset_ms, b.value) as s(o, v)
 where b.series_id = $1 order by b.span_start, b.span;
 ```
 
-- **The span follows the samples.** Each UTC day of a series decides its own span by what it holds:
+- **A block carries one lineage.** A calculated sample's raw row names the calc rule that wrote it,
+  and so does its block: `source_rule`, `source_rule_id` and `source_rule_version`, null on an
+  observed block. Every sample in a block was written by one rule, under one name, at one version, so
+  a span splits wherever the rule was edited or renamed, and the key is `metric_block_key`, unique
+  with `NULLS NOT DISTINCT` over series, span start, span and the lineage
+  ([ADR-1534](/architecture/decisions/#adr-1534-calculated-metric-series-fold-into-blocks-that-carry-their-rule-lineage)).
+  A dense calculated series costs 7.25 bytes a sample in blocks against 167.10 in raw rows.
+
+- **The span follows the samples.** Each UTC day of a series decides its own span by what it holds,
+  each lineage counted alone:
   4,080 samples or more (170 an hour on average) are cut into hour blocks, 170 or more are one day
   block, and a sparser day waits for its ISO week, whose waiting days fold into one week block from its
   Monday, with no minimum. 170 is where a row's arrays cross the 2 KB at which Postgres compresses it,
@@ -336,12 +350,13 @@ where b.series_id = $1 order by b.span_start, b.span;
   whose every hour the trends have closed, up to two days a pass, a batch of series a transaction.
   The same transaction advances `metric_block_mark`, so a pass cancelled anywhere leaves no series-day
   half folded and the next pass folds from the mark. The week fold has a mark of its own, behind the
-  day mark. Calculated series, properties and declared rows never block.
+  day mark. Properties and declared rows never block.
 - **A late sample merges into its block.** A sample landing in an announced hour of a day the fold
   has passed merges into the block that covers it, in its own batch's transaction
   ([ADR-1529](/architecture/decisions/#adr-1529-a-late-metric-sample-merges-into-the-block-that-covers-it)):
   the hour block of its hour when the day was cut into hours, else the day's block, else its ISO
-  week's block once the week has folded. A sample of a day the fold has not reached lands as a raw row
+  week's block once the week has folded, each the block of the sample's own lineage (a calculated
+  sample of a rule version its day never folded starts its week's block of that version). A sample of a day the fold has not reached lands as a raw row
   for the fold. Each block is rewritten once a batch from the block alone, its samples and the new
   ones in timestamp then landing order, and keeps the span it was folded at. The merge takes the
   `metric_block:fold` advisory lock shared and each fold transaction takes it exclusive, so a merge
@@ -363,11 +378,15 @@ Measured through the fold, one ISO week of generated series at each cadence (`ma
 
 | Cadence | Span | Bytes a sample |
 | --- | --- | --: |
-| 10 s | hour | 7.82 |
-| 30 s | day | 7.18 |
-| 60 s | day | 7.37 |
-| 5 min | day | 8.01 |
-| 1 h | week | 8.25 |
+| 10 s | hour | 7.84 |
+| 30 s | day | 7.22 |
+| 60 s | day | 7.38 |
+| 5 min | day | 8.70 |
+| 1 h | week | 8.36 |
+| 30 s, calculated | day | 7.25 |
+
+An observed block's null lineage costs its row 8 bytes; at 5 min, whose day blocks sit at the size
+four rows fill a page by, that is 0.7 bytes a sample.
 
 ## The lineage CHECK (the pattern)
 
