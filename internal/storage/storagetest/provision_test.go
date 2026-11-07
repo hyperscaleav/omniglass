@@ -273,6 +273,9 @@ func databaseExists(t *testing.T, ctx context.Context, admin *pgx.Conn, name str
 // ever run and filled the CI runner at about the 905th. The database must be
 // gone once the test that asked for it has finished.
 func TestNewDSNDropsItsDatabaseAtCleanup(t *testing.T) {
+	if testing.Short() {
+		t.Skip("storagetest: skipped under -short (Postgres testcontainer)")
+	}
 	ctx := context.Background()
 	var name string
 	t.Run("provision", func(t *testing.T) {
@@ -296,6 +299,9 @@ func TestNewDSNDropsItsDatabaseAtCleanup(t *testing.T) {
 // launched, and a plain DROP DATABASE would fail on that session and leak the
 // copy. The connection here is deliberately never closed before cleanup.
 func TestNewDSNDropsDespiteAnOpenConnection(t *testing.T) {
+	if testing.Short() {
+		t.Skip("storagetest: skipped under -short (Postgres testcontainer)")
+	}
 	ctx := context.Background()
 	var name string
 	var leftOpen *pgx.Conn
@@ -346,6 +352,9 @@ func (r *logRecorder) Logf(format string, args ...any) {
 // of that ordering holding. The database name is read from the counter right
 // after construction, which is exact because these tests are not parallel.
 func TestNewDBClosesItsPoolBeforeTheDrop(t *testing.T) {
+	if testing.Short() {
+		t.Skip("storagetest: skipped under -short (Postgres testcontainer)")
+	}
 	ctx := context.Background()
 	constructors := []struct {
 		name string
