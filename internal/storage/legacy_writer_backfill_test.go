@@ -56,6 +56,10 @@ const metricDayMigration = "20261106050925_metric_day_partitions.sql"
 // metric_series.
 const metricBlockFile = "20261107004352_metric_block.sql"
 
+// metricBlockLineageFile is the blocks' lineage (#1534), which alters
+// metric_block.
+const metricBlockLineageFile = "20261107202741_metric_block_lineage.sql"
+
 // belowNarrowMetric stands a fixture's database just below the narrow metric
 // lane (#1275): the backfill is frozen at the wide metric table it ran
 // against, so it runs there, as it did on every install.
@@ -68,9 +72,10 @@ const metricBlockFile = "20261107004352_metric_block.sql"
 // backfill runs it again harmlessly. A migration that builds on the narrow lane
 // itself (the hourly trend, #1276, references metric_series; the millisecond
 // default, #1526, alters metric_declared; the day partitions, #1527, rebuild
-// its sample table; the blocks, #1528, reference metric_series) cannot stand
-// beside the wide table and is left to that forward migrate: metricTrendFile,
-// metricMillisFile, metricDayMigration and metricBlockFile.
+// its sample table; the blocks, #1528, reference metric_series, and their
+// lineage, #1534, alters them) cannot stand beside the wide table and is left
+// to that forward migrate: metricTrendFile, metricMillisFile,
+// metricDayMigration, metricBlockFile and metricBlockLineageFile.
 func belowNarrowMetric(t *testing.T, dsn string) {
 	t.Helper()
 	if err := migrate.RollbackBelow(dsn, metricNarrowVersion); err != nil {
@@ -95,7 +100,8 @@ func belowNarrowMetric(t *testing.T, dsn string) {
 			t.Fatal(err)
 		}
 		up, _, _ := strings.Cut(string(raw), "-- migrate:down")
-		if e.Name() == metricTrendFile || e.Name() == metricMillisFile || e.Name() == metricDayMigration || e.Name() == metricBlockFile {
+		if e.Name() == metricTrendFile || e.Name() == metricMillisFile || e.Name() == metricDayMigration || e.Name() == metricBlockFile ||
+			e.Name() == metricBlockLineageFile {
 			continue
 		}
 		if _, err := conn.Exec(context.Background(), strings.TrimPrefix(up, "-- migrate:up")); err != nil {
