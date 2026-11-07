@@ -745,6 +745,9 @@ func (UnimplementedGateway) DropMetricPartitions(context.Context, time.Time) ([]
 func (UnimplementedGateway) CompactMetricTrends(context.Context, int, int) (TrendCompaction, error) {
 	return TrendCompaction{}, nil
 }
+func (UnimplementedGateway) CompactMetricBlocks(context.Context, BlockFold) (BlockCompaction, error) {
+	return BlockCompaction{}, nil
+}
 func (UnimplementedGateway) PruneMetricTrends(context.Context, time.Time, int) (int64, error) {
 	return 0, nil
 }

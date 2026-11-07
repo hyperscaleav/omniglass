@@ -83,6 +83,9 @@ type Store interface {
 	// hours closed into trends on every pass, and the trend window kept.
 	CompactMetricTrends(ctx context.Context, maxHours, laneDays int) (storage.TrendCompaction, error)
 	PruneMetricTrends(ctx context.Context, before time.Time, limit int) (int64, error)
+	// CompactMetricBlocks is the compacted tier's fold (#1528): closed days
+	// folded into lossless blocks on every pass, beside the raw rows.
+	CompactMetricBlocks(ctx context.Context, f storage.BlockFold) (storage.BlockCompaction, error)
 	// PruneLogs is one chunk of one log table's severity band (#417).
 	PruneLogs(ctx context.Context, table, band string, before time.Time, limit int) (int64, error)
 	// RetentionOverrides and PruneSamplesOfType are the types with retention

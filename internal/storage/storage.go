@@ -881,6 +881,11 @@ type Gateway interface {
 	// samples into hourly trends and recomputes the closed hours a late
 	// sample dirtied (#1276); laneDays is the metric lane's window.
 	CompactMetricTrends(ctx context.Context, maxHours, laneDays int) (TrendCompaction, error)
+	// CompactMetricBlocks folds up to f.MaxDays closed UTC days of observed
+	// metric samples into lossless blocks sized by each series-day's sample
+	// count, folds each closed ISO week's leftover days into a week block,
+	// and rebuilds the folded days a late sample dirtied (#1528).
+	CompactMetricBlocks(ctx context.Context, f BlockFold) (BlockCompaction, error)
 	// PruneMetricTrends deletes up to limit trend rows of hours before before.
 	PruneMetricTrends(ctx context.Context, before time.Time, limit int) (int64, error)
 	// MetricPartitions lists the metric table's daily partitions.

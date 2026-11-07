@@ -52,6 +52,10 @@ const metricMillisFile = "20261106050800_metric_ts_milliseconds.sql"
 // narrow metric lane's sample table.
 const metricDayMigration = "20261106050925_metric_day_partitions.sql"
 
+// metricBlockFile is the compacted tier's blocks (#1528), which reference
+// metric_series.
+const metricBlockFile = "20261107004352_metric_block.sql"
+
 // belowNarrowMetric stands a fixture's database just below the narrow metric
 // lane (#1275): the backfill is frozen at the wide metric table it ran
 // against, so it runs there, as it did on every install.
@@ -64,8 +68,9 @@ const metricDayMigration = "20261106050925_metric_day_partitions.sql"
 // backfill runs it again harmlessly. A migration that builds on the narrow lane
 // itself (the hourly trend, #1276, references metric_series; the millisecond
 // default, #1526, alters metric_declared; the day partitions, #1527, rebuild
-// its sample table) cannot stand beside the wide table and is left to that
-// forward migrate: metricTrendFile, metricMillisFile and metricDayMigration.
+// its sample table; the blocks, #1528, reference metric_series) cannot stand
+// beside the wide table and is left to that forward migrate: metricTrendFile,
+// metricMillisFile, metricDayMigration and metricBlockFile.
 func belowNarrowMetric(t *testing.T, dsn string) {
 	t.Helper()
 	if err := migrate.RollbackBelow(dsn, metricNarrowVersion); err != nil {
@@ -90,7 +95,7 @@ func belowNarrowMetric(t *testing.T, dsn string) {
 			t.Fatal(err)
 		}
 		up, _, _ := strings.Cut(string(raw), "-- migrate:down")
-		if e.Name() == metricTrendFile || e.Name() == metricMillisFile || e.Name() == metricDayMigration {
+		if e.Name() == metricTrendFile || e.Name() == metricMillisFile || e.Name() == metricDayMigration || e.Name() == metricBlockFile {
 			continue
 		}
 		if _, err := conn.Exec(context.Background(), strings.TrimPrefix(up, "-- migrate:up")); err != nil {

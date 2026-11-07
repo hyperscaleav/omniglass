@@ -246,7 +246,11 @@ func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs
 	// hour once it is folded; an on-time sample marks nothing. The announced
 	// mark is read by metric_trend_announced(), which first takes the trend
 	// lock shared until the transaction ends: the compaction's drain
-	// (drainTrendWrites) waits for every insert holding it.
+	// (drainTrendWrites) waits for every insert holding it. The same late
+	// sample marks its series' UTC day dirty for the block fold (#1528), which
+	// rebuilds a folded day's blocks from the raw rows; a block day closes only
+	// after its every hour has, so the trend's mark covers it, and the two
+	// marks cost no statement of their own.
 	//
 	// Each sample's series is found by its key, or started in the same statement
 	// when the batch is its first sample. A series another transaction started
@@ -290,11 +294,16 @@ func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs
 		from u left join series s on s.owner_id = u.owner and s.metric_type_id = u.type_id
 			and s.instance = u.instance and s.source = u.source
 		order by u.ord
-		returning series_id, ts)
+		returning series_id, ts),
+	late as (
+		select l.series_id, l.ts from landed l
+		where $8::text = 'observed' and l.ts < (select metric_trend_announced())),
+	day_dirtied as (
+		insert into metric_block_dirty (series_id, day)
+		select distinct series_id, date_bin('1 day', ts, timestamptz '2000-01-01 00:00:00+00') from late
+		on conflict do nothing)
 	insert into metric_trend_dirty (series_id, hour)
-	select distinct l.series_id, date_bin('1 hour', l.ts, timestamptz '2000-01-01 00:00:00+00')
-	from landed l
-	where $8::text = 'observed' and l.ts < (select metric_trend_announced())
+	select distinct series_id, date_bin('1 hour', ts, timestamptz '2000-01-01 00:00:00+00') from late
 	on conflict do nothing`
 	// insert lands the samples at idx in one statement, in their order, so the
 	// rows take ids in the order the batch carried them (metricInsertSQL: each

@@ -27,6 +27,18 @@ type backlogStore struct {
 	// The trend compaction's answer.
 	trends   storage.TrendCompaction
 	trendErr error
+	// The block fold's answer, and the fold each call asked for.
+	blocks   storage.BlockCompaction
+	blockErr error
+	folds    []storage.BlockFold
+}
+
+// CompactMetricBlocks records itself as a call on the lane "block", beside the
+// trend compaction's, and answers with blocks.
+func (b *backlogStore) CompactMetricBlocks(_ context.Context, f storage.BlockFold) (storage.BlockCompaction, error) {
+	b.calls = append(b.calls, pruneCall{"block", time.Time{}, f.LaneDays})
+	b.folds = append(b.folds, f)
+	return b.blocks, b.blockErr
 }
 
 // CompactMetricTrends records itself as a call on the lane "compact", so a
@@ -391,6 +403,35 @@ func TestRetentionPassCompactsTrendsBeforeItPrunes(t *testing.T) {
 	rep, err = retentionPass(context.Background(), failed, now, 10, 5, 0)
 	if err == nil || rep.Deleted["metric"] != 1 || nextRetentionWait(rep) != sampleRetentionCatchUp {
 		t.Errorf("a failed compaction: err %v, metric deleted %d, wait %v; want reported, pruned, and a pass in a minute",
+			err, rep.Deleted["metric"], nextRetentionWait(rep))
+	}
+}
+
+// Each pass folds the closed days into blocks right after the trend
+// compaction, whose marks it rides (#1528), with the metric lane's window and
+// a bounded number of days. A fold left behind, or failed, brings the next
+// pass in a minute; the lanes are still pruned.
+func TestRetentionPassFoldsBlocksAfterTrends(t *testing.T) {
+	now := time.Date(2026, 11, 7, 12, 0, 0, 0, time.UTC)
+	store := &backlogStore{windows: defaultWindows(), backlog: map[string]int64{"metric": 3}}
+	if _, err := retentionPass(context.Background(), store, now, 10, 5, 0); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.calls) < 2 || store.calls[0].lane != "compact" || store.calls[1].lane != "block" {
+		t.Fatalf("calls %+v, want the trend compaction and then the block fold, before any prune", store.calls)
+	}
+	if f := store.folds[0]; f.LaneDays != 14 || f.MaxDays != blockCompactDays {
+		t.Errorf("fold %+v, want the metric window of 14 days and %d days a pass", f, blockCompactDays)
+	}
+
+	behind := &backlogStore{windows: defaultWindows(), backlog: map[string]int64{}, blocks: storage.BlockCompaction{Days: 2, Behind: true}}
+	if rep, _ := retentionPass(context.Background(), behind, now, 10, 5, 0); nextRetentionWait(rep) != sampleRetentionCatchUp {
+		t.Errorf("a fold left behind waits %v, want the catch-up", nextRetentionWait(rep))
+	}
+	failed := &backlogStore{windows: defaultWindows(), backlog: map[string]int64{"metric": 1}, blockErr: errors.New("a block differs from its raw rows")}
+	rep, err := retentionPass(context.Background(), failed, now, 10, 5, 0)
+	if err == nil || rep.Deleted["metric"] != 1 || nextRetentionWait(rep) != sampleRetentionCatchUp {
+		t.Errorf("a failed fold: err %v, metric deleted %d, wait %v; want reported, pruned, and a pass in a minute",
 			err, rep.Deleted["metric"], nextRetentionWait(rep))
 	}
 }

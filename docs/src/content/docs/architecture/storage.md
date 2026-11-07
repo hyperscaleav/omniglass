@@ -23,7 +23,10 @@ The metric lane is narrow and partitioned by UTC day: a sample row is `(id, seri
 what it is a sample of is one `metric_series` row, and a command's intended rows live apart in
 `metric_declared` ([below](#the-narrow-metric-lane),
 [ADR-1275](/architecture/decisions/#adr-1275-the-metric-lane-is-narrow-rows-on-a-series-dimension-partitioned-by-month),
-[ADR-1527](/architecture/decisions/#adr-1527-the-metric-lane-is-partitioned-by-utc-day)). Current values are derived
+[ADR-1527](/architecture/decisions/#adr-1527-the-metric-lane-is-partitioned-by-utc-day)). Each closed day of an
+observed series also folds into lossless blocks sized by its sample count, written beside the raw rows and
+not read yet ([below](#the-narrow-metric-lane),
+[ADR-1528](/architecture/decisions/#adr-1528-observed-metric-samples-fold-into-lossless-blocks-sized-by-their-sample-count)). Current values are derived
 from the series (latest row per series); the maintained latest-value cache retired
 ([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)),
 and the server prunes `metric` and `property` samples to their retention windows above the
@@ -308,6 +311,52 @@ their own: nothing forces it to exceed `retention.metric_days`, so a trend can g
 costs about 145 bytes with its key, about 3.5 KB per series per day. Reading trends beyond the hot
 window is the bucketed series read (#1269).
 
+**Lossless blocks: the compacted tier.** A raw row costs about 133 bytes a sample. The compacted tier
+holds the same samples, every one exact, for about 7 to 9: `metric_block` is one row per observed
+series per span, its samples' millisecond offsets from the span's start in an `int4[]` and their
+values in a `float8[]`, in landing order, so an instant reported twice comes back twice
+([ADR-1528](/architecture/decisions/#adr-1528-observed-metric-samples-fold-into-lossless-blocks-sized-by-their-sample-count)).
+It carries no hourly summaries, which the trends already hold. A block is a plain row, so SQL reads
+it back with `unnest`:
+
+```sql
+select b.span_start + o * interval '1 millisecond' as ts, v as value
+from metric_block b, unnest(b.offset_ms, b.value) as s(o, v)
+where b.series_id = $1 order by b.span_start, b.span;
+```
+
+- **The span follows the samples.** Each UTC day of a series decides its own span by what it holds:
+  4,080 samples or more (170 an hour on average) are cut into hour blocks, 170 or more are one day
+  block, and a sparser day waits for its ISO week, whose waiting days fold into one week block from its
+  Monday, with no minimum. 170 is where a row's arrays cross the 2 KB at which Postgres compresses it,
+  so a fixed hour block for a 60 s poll (60 samples) would be stored uncompressed. A cadence change or
+  an outage needs no special case, and a series can carry hour blocks one week and a week block the
+  next.
+- **The fold rides the trend's marks.** After the trend compaction, the retention pass folds each day
+  whose every hour the trends have closed, up to two days a pass, a batch of series a transaction.
+  The same transaction advances `metric_block_mark`, so a pass cancelled anywhere leaves no series-day
+  half folded and the next pass folds from the mark. The week fold has a mark of its own, behind the
+  day mark. Calculated series, properties and declared rows never block.
+- **A late sample rebuilds its day.** A sample landing in an announced hour marks its series' day in
+  `metric_block_dirty` in its own insert, beside its trend hour, so the ingest still costs 18
+  statements a batch. The next pass rebuilds the day's blocks from its raw rows under the trend lock,
+  and its week block once its week has folded.
+- **Nothing reads a block yet.** The blocks are written beside the raw rows, which stay
+  authoritative, and every reader still reads raw rows. `VerifyMetricBlocks` pairs every block still
+  inside its window with its raw rows, sample by sample, and names any that differ. The late merge
+  into a block (#1529), block reads, the early drop of raw days and the block prune (#1530) follow.
+  Then history is the blocks, kept for `retention.metric_days`, and raw rows live about two days.
+
+Measured through the fold, one ISO week of generated series at each cadence (`make footprint`):
+
+| Cadence | Span | Bytes a sample |
+| --- | --- | --: |
+| 10 s | hour | 7.82 |
+| 30 s | day | 7.18 |
+| 60 s | day | 7.37 |
+| 5 min | day | 8.01 |
+| 1 h | week | 8.25 |
+
 ## The lineage CHECK (the pattern)
 
 Lineage lives on the derived row, no separate execution table: a derived row *is* the evidence of its rule's run. The pointer per provenance is enforced, making "intended with no command" impossible at the storage layer. The real four-branch CHECK on `property` (on the metric lane the same rule is structural: provenance is the series', a calculated sample carries its rule, and an intended row lives in `metric_declared`, whose `command_id` is not null, so the hot tier has no command or event lineage to carry):
@@ -388,7 +437,8 @@ The server prunes the two sample tables to a window each
 `metric` to `retention.metric_days` (14 by default) and `property` to `retention.property_days`
 (90), install-wide settings an admin changes on the console's Settings page (a platform-domain
 namespace that any signed-in caller reads), and the hourly trends to `retention.trend_days` (730,
-[above](#the-narrow-metric-lane)). Each window is whole days from 1 to 36,500. The pass runs at server start, beside
+[above](#the-narrow-metric-lane)). The compacted tier's blocks are not pruned yet: they go with their
+series, and the block prune is #1530. Each window is whole days from 1 to 36,500. The pass runs at server start, beside
 the receipt prune, and again an hour later, or a minute later while a lane is behind.
 
 Every prune goes through the **`PruneSamples`** gateway primitive, which carries the one
