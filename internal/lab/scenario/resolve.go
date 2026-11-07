@@ -59,8 +59,19 @@ type BuildingPlan struct {
 	Floors int
 }
 
+// RoleFill is one role of a planned system and the product staffing it: Count
+// components of Product fill Role. A role's fill is how a seeded system comes
+// up staffed (#1555).
+type RoleFill struct {
+	Role    string
+	Product string
+	Count   int
+}
+
 // SystemPlan is one planned system: its name, its generated label, its
-// standard and system type, the room it sits in, and its components.
+// standard and system type, the room it sits in, its components, and the role
+// each component fills (Roles, the same components Components counts by
+// product).
 type SystemPlan struct {
 	Name       string
 	Label      string
@@ -70,6 +81,7 @@ type SystemPlan struct {
 	Floor      string
 	Room       string
 	Components []Count
+	Roles      []RoleFill
 }
 
 // Totals counts systems and components, systems per standard (in manifest
@@ -239,6 +251,7 @@ func resolveSite(scenario, name, label string, a *Archetype, n int, c *compiled,
 				Floor:      fl.name,
 				Room:       fmt.Sprintf("%s-%02d", fl.name, j/len(floors)+1),
 				Components: cs.components,
+				Roles:      cs.roles,
 			})
 			j++
 		}

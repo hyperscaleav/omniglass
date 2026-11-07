@@ -278,6 +278,38 @@ standards:
 	}
 }
 
+// A system's Roles say which product fills which role and how many, and sum to
+// the same components its Components count by product, so a seed can staff a
+// planned system without going back to the manifest.
+func TestResolveKeepsEachSystemsRoleFills(t *testing.T) {
+	m, cat := corporate(t)
+	p, err := Resolve(m, cat, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range p.allSystems() {
+		if len(s.Roles) == 0 {
+			t.Fatalf("system %s has no role fills", s.Name)
+		}
+		byProduct := map[string]int{}
+		for _, f := range s.Roles {
+			if f.Role == "" || f.Product == "" || f.Count < 1 {
+				t.Fatalf("system %s has an incomplete role fill %+v", s.Name, f)
+			}
+			byProduct[f.Product] += f.Count
+		}
+		for _, c := range s.Components {
+			if byProduct[c.Name] != c.Count {
+				t.Fatalf("system %s: roles fill %d %s, components count %d", s.Name, byProduct[c.Name], c.Name, c.Count)
+			}
+			delete(byProduct, c.Name)
+		}
+		if len(byProduct) != 0 {
+			t.Fatalf("system %s: roles name products its components do not: %v", s.Name, byProduct)
+		}
+	}
+}
+
 func TestResolvePlacesEverySystemInAUniqueRoom(t *testing.T) {
 	m, cat := corporate(t)
 	p, err := Resolve(m, cat, 3000)

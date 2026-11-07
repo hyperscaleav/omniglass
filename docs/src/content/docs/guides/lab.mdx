@@ -297,6 +297,16 @@ totals; each site's systems and components; and the components of each product t
 Without `--plan`, a scenario says bring-up is not built yet; without `--systems`, it asks for a size
 (one system per site at the fewest sites, up to 10,000).
 
+A plan seeds as configuration rows through `devseed.SeedPlan` (`internal/devseed/plan.go`), the one
+entry point the scale lab's bring-up calls: the sites, buildings, floors and rooms, the systems in the
+rooms, the components filling each system's roles, and the simulated endpoints on them. It drives the
+Gateway's own create methods, one row per transaction, so names, labels, audit rows and derived health
+come out as they do for an operator's writes, and the same plan always lands the same names and
+addresses. It seeds no metric history. Measured on a shared worker, the corporate plan takes about 12
+seconds at 100 systems and 2 minutes 13 seconds at 1,000, most of it the health recompute each role
+assignment triggers rather than round trips ([#1562](https://github.com/hyperscaleav/omniglass/issues/1562)).
+`PLAN_MEASURE=100,1000 go test -run TestPlanSeedMeasure ./internal/devseed/` reproduces the table.
+
 ### The manifest format
 
 ```yaml
