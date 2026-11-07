@@ -12,6 +12,7 @@ import (
 // standard declares nothing". It is a 404, and a real standard that declares
 // nothing is still an empty 200.
 func TestAnUnknownStandardListsNoRoles(t *testing.T) {
+	t.Parallel()
 	f := newStaffingFixture(t)
 	if st, raw := f.c.send(f.owner, http.MethodGet, "/standards/no-such-standard/roles", nil); st != http.StatusNotFound {
 		t.Fatalf("list the roles of an unknown standard = %d, want 404\nbody: %s", st, raw)

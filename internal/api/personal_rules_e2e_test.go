@@ -14,6 +14,7 @@ import (
 // tells its owner alone about alarms they can read, and :test judges the
 // owner's own recent alarms.
 func TestAViewerSubscribesThemselvesToWhatTheyCanSee(t *testing.T) {
+	t.Parallel()
 	p := newPeople(t)
 	p.human("alice", "viewer", "all", "")
 	p.human("bob", "viewer", "component", p.comps["display-2"])
@@ -63,6 +64,7 @@ func TestAViewerSubscribesThemselvesToWhatTheyCanSee(t *testing.T) {
 // TestAMemberOptsOutOfAGroupPageOnlyWhereAllowed drives group opt-out over
 // HTTP (#1354).
 func TestAMemberOptsOutOfAGroupPageOnlyWhereAllowed(t *testing.T) {
+	t.Parallel()
 	p := newPeople(t)
 	p.human("alice", "viewer", "all", "")
 	p.human("bob", "viewer", "all", "")
@@ -90,6 +92,7 @@ func TestAMemberOptsOutOfAGroupPageOnlyWhereAllowed(t *testing.T) {
 
 // A draft is tested before it is ever saved, by a person who owns no rule.
 func TestADraftSubscriptionIsTestedBeforeItIsSaved(t *testing.T) {
+	t.Parallel()
 	p := newPeople(t)
 	p.human("bob", "viewer", "component", p.comps["display-2"])
 	p.c.do(p.owner, http.MethodPost, "/components/display-1/alarms", map[string]any{"severity": "high", "message": "no video"}, http.StatusCreated)

@@ -12,9 +12,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/auth"
 	"github.com/hyperscaleav/omniglass/internal/scope"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
 // TestReachabilityServesHTTPGatesWithTheirReasonAndKeys drives the read the
@@ -27,19 +25,17 @@ import (
 // renders and sends, and the server takes the offered key as certificate. A
 // viewer reads the same gates and its retry is refused. Skipped under -short.
 func TestReachabilityServesHTTPGatesWithTheirReasonAndKeys(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
 	ctx := context.Background()
-	dsn := storagetest.NewDSN(t)
+	dsn := seededDSN(t)
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	ownerTok, hash, prefix, err := auth.NewBearerToken()
 	if err != nil {
 		t.Fatal(err)

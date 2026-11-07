@@ -8,9 +8,7 @@ import (
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
 // componentTypeWire is the decoded component_type wire shape for the e2e
@@ -43,16 +41,14 @@ type componentTypeWire struct {
 // an existing root (mic), and delete refuses an official row and a row still
 // parenting another. Skipped under -short.
 func TestComponentTypesAPI(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	ownerTok := bootstrapOwnerTok(t, ctx, gw)
 
 	srv := httptest.NewServer(api.NewHandler(gw))
@@ -165,16 +161,14 @@ func TestComponentTypesAPI(t *testing.T) {
 // component's name), so it is refused a bad slug at the edge exactly like
 // name is, on both create and update, and a valid one still works.
 func TestComponentTypeStemRejectsBadNames(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	ownerTok := bootstrapOwnerTok(t, ctx, gw)
 
 	srv := httptest.NewServer(api.NewHandler(gw))
@@ -208,16 +202,14 @@ func TestComponentTypeStemRejectsBadNames(t *testing.T) {
 // the address, the shipped row is still shipped, `:restore` puts the shipped
 // values back, and a caller who cannot update cannot fork.
 func TestComponentTypeForkAndRestoreAPI(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	ownerTok := bootstrapOwnerTok(t, ctx, gw)
 
 	srv := httptest.NewServer(api.NewHandler(gw))
@@ -322,16 +314,14 @@ func TestComponentTypeForkAndRestoreAPI(t *testing.T) {
 // define), and the last assertion is the one that matters: after every refusal
 // the stored rule is still the good one.
 func TestLabelRuleIsRefusedAtEditTime(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	ownerTok := bootstrapOwnerTok(t, ctx, gw)
 
 	srv := httptest.NewServer(api.NewHandler(gw))

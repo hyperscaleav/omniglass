@@ -11,9 +11,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/auth"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -24,16 +22,14 @@ import (
 // proven at the gateway in TestLocationScopeCRUD; here the viewer's write 403 is
 // the capability fast-reject. Skipped under -short.
 func TestLocationAPI(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 
 	ownerTok, hash, prefix, err := auth.NewBearerToken()
 	if err != nil {
@@ -98,16 +94,14 @@ func TestLocationAPI(t *testing.T) {
 // 409, and a bad slug is rejected at the edge by the Huma pattern (422). Skipped
 // under -short.
 func TestLocationRenameAndCheckName(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 
 	ownerTok, hash, prefix, err := auth.NewBearerToken()
 	if err != nil {
@@ -200,16 +194,14 @@ func TestLocationRenameAndCheckName(t *testing.T) {
 // cannot GET, because the check is a query against the target bucket, not a
 // read of the target row. Skipped under -short.
 func TestLocationCheckNameIsScopedToPlacement(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 
 	ownerTok, hash, prefix, err := auth.NewBearerToken()
 	if err != nil {

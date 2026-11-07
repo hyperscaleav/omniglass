@@ -26,6 +26,7 @@ import (
 // image read as base64. A driver's spec, the same kind of column, reads as
 // JSON too. Skipped under -short.
 func TestAnEndpointsAuditRowReadsAsJSON(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -86,6 +87,7 @@ func TestAnEndpointsAuditRowReadsAsJSON(t *testing.T) {
 // string, while the endpoint's rows name the secret it uses. Skipped under
 // -short.
 func TestAnEndpointsAuditRowNeverCarriesASecretValue(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

@@ -122,6 +122,7 @@ func listenTask(id, endpointID, target string) collection.TaskSpec {
 }
 
 func TestDesiredSessions(t *testing.T) {
+	t.Parallel()
 	dialers := map[string]collection.SessionDialer{"tcp": &heldFakeDialer{}}
 	poll := listenTask("p1", "ep-1", "10.0.0.5:51325")
 	poll.Mode = "poll"
@@ -149,6 +150,7 @@ func TestDesiredSessions(t *testing.T) {
 }
 
 func TestSessionManagerHoldsBorrowsAndTearsDown(t *testing.T) {
+	t.Parallel()
 	dialer := &heldFakeDialer{}
 	log := &transitionLog{}
 	m := newSessionManager(map[string]collection.SessionDialer{"tcp": dialer}, sessionHooks{transition: log.record})
@@ -219,6 +221,7 @@ func TestSessionManagerHoldsBorrowsAndTearsDown(t *testing.T) {
 }
 
 func TestSessionManagerCloseAllTearsDown(t *testing.T) {
+	t.Parallel()
 	dialer := &heldFakeDialer{}
 	log := &transitionLog{}
 	m := newSessionManager(map[string]collection.SessionDialer{"tcp": dialer}, sessionHooks{transition: log.record})
@@ -242,6 +245,7 @@ func TestSessionManagerCloseAllTearsDown(t *testing.T) {
 // A transition renders as one session-state property sample carrying the
 // reason as a label.
 func TestSessionSample(t *testing.T) {
+	t.Parallel()
 	at := time.Date(2026, 10, 23, 12, 0, 0, 0, time.UTC)
 	s := sessionSample(collection.SessionTransition{State: collection.SessionRecovering, Reason: "connection lost: EOF", At: at})
 	ev := buildBatch("l1", "edge-1", []collection.Sample{s})
@@ -258,6 +262,7 @@ func TestSessionSample(t *testing.T) {
 // later transitions publish under the new task id. A credential change does
 // recycle it.
 func TestSessionManagerKeepsTheConnectionAcrossATaskRehash(t *testing.T) {
+	t.Parallel()
 	dialer := &heldFakeDialer{}
 	log := &transitionLog{}
 	m := newSessionManager(map[string]collection.SessionDialer{"tcp": dialer}, sessionHooks{transition: log.record})
@@ -344,6 +349,7 @@ func (c *capture) samplesOf(taskID string) []collection.Sample {
 // push samples under its listen task; a line no listener claims is counted,
 // and the spec's policy decides whether the tick lands a collection-failed.
 func TestListenerRouterClaimsAndCountsTheRest(t *testing.T) {
+	t.Parallel()
 	c := newCapture()
 	want, _ := desiredSessions([]collection.TaskSpec{listenTask("l1", "ep-1", "10.0.0.5:51325")},
 		map[string]collection.SessionDialer{"tcp": &heldFakeDialer{}})
@@ -383,6 +389,7 @@ func TestListenerRouterClaimsAndCountsTheRest(t *testing.T) {
 // The unclaimed policy: discard counts and logs; collection-failed lands one
 // fault per tick under the session's listen task naming the count.
 func TestSessionManagerFlushesUnclaimedByPolicy(t *testing.T) {
+	t.Parallel()
 	c := newCapture()
 	task := listenTask("l1", "ep-1", "10.0.0.5:51325")
 	task.Spec = json.RawMessage(`{"driver":"newtron-nvp","function":"events","arm":["SUBSCRIBE INPUT"],
@@ -411,6 +418,7 @@ func TestSessionManagerFlushesUnclaimedByPolicy(t *testing.T) {
 // pin) keeps the counts its router held: they are the endpoint's, not the
 // connection's.
 func TestSessionManagerReportsItsListenersPushes(t *testing.T) {
+	t.Parallel()
 	c := newCapture()
 	task := listenTask("l1", "ep-1", "10.0.0.5:51325")
 	m := newSessionManager(map[string]collection.SessionDialer{"tcp": &heldFakeDialer{}}, c.hooks(&transitionLog{}))
@@ -449,6 +457,7 @@ func TestSessionManagerReportsItsListenersPushes(t *testing.T) {
 // The manager arms every connection with the listeners' instantiation
 // commands (plumbing: reported to the arm hook, never a command row).
 func TestSessionManagerArmsTheListeners(t *testing.T) {
+	t.Parallel()
 	dialer := &heldFakeDialer{}
 	c := newCapture()
 	log := &transitionLog{}
@@ -473,6 +482,7 @@ func TestSessionManagerArmsTheListeners(t *testing.T) {
 // #817: a command whose endpoint has a held session actuates over it (with
 // its reply shape); with none held it falls back to a throwaway connection.
 func TestExecuteDeliveryOverTheHeldSession(t *testing.T) {
+	t.Parallel()
 	dialer := &heldFakeDialer{}
 	log := &transitionLog{}
 	m := newSessionManager(map[string]collection.SessionDialer{"tcp": dialer}, sessionHooks{transition: log.record})
@@ -511,6 +521,7 @@ func TestExecuteDeliveryOverTheHeldSession(t *testing.T) {
 // Review of #817, finding 1: a command the device refuses reports the
 // device's text, both as the execution error and as the reply.
 func TestExecuteDeliveryCarriesTheRefusal(t *testing.T) {
+	t.Parallel()
 	dialer := &heldFakeDialer{}
 	log := &transitionLog{}
 	m := newSessionManager(map[string]collection.SessionDialer{"tcp": dialer}, sessionHooks{transition: log.record})
@@ -528,6 +539,7 @@ func TestExecuteDeliveryCarriesTheRefusal(t *testing.T) {
 // A tls command (#1035) rides the endpoint's held session or fails: tls has
 // no stateless line, since a throwaway handshake would bypass the pin.
 func TestExecuteDeliveryOverTLSNeverDialsAThrowaway(t *testing.T) {
+	t.Parallel()
 	throwaway := &lineRecorder{}
 	d := collection.CommandDelivery{ID: 11, CommandType: "set-input", Transport: "tls", Target: "10.0.0.5:51326",
 		EndpointID: "ep-unheld", Line: "SET INPUT hdmi2", Reply: &driver.Reply{Prefix: "INPUT "}}

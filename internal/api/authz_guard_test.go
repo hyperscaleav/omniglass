@@ -9,9 +9,7 @@ import (
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
 // ungated is the explicit allow-list of operations that carry NO capability
@@ -49,16 +47,14 @@ var ungated = map[string]bool{
 // fail here, so authorization coverage scales with the surface automatically
 // instead of relying on per-route discipline.
 func TestEveryRouteIsGated(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 
 	// An authenticated principal with NO grants: authn passes, every capability
 	// check fails.
@@ -158,6 +154,7 @@ func operations(t *testing.T, gw storage.Gateway) []apiOp {
 // stamp. Together they make "gated" and "stamped" the same set, so the spec is a
 // faithful, machine-readable map of the authz contract (goal 1 of the slice).
 func TestEveryGateIsPublished(t *testing.T) {
+	t.Parallel()
 	// Spec generation only registers routes; it never queries the gateway, so a
 	// stub keeps this a fast no-DB unit test.
 	var gw storage.Gateway = storage.UnimplementedGateway{}

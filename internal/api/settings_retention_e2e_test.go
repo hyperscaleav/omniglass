@@ -14,6 +14,7 @@ import (
 // provenance, and any caller reads the effective windows, as a chart of a
 // series' history would.
 func TestRetentionWindowsDefaultToTheRuledDays(t *testing.T) {
+	t.Parallel()
 	f := newSettingsFixture(t)
 	admin := decodeSettings(t, f.c.do(f.admin, http.MethodGet, "/settings", nil, http.StatusOK)).Values["retention"]
 	viewer := decodeMe(t, f.c.do(f.viewer, http.MethodGet, "/settings/me", nil, http.StatusOK))["retention"]
@@ -30,6 +31,7 @@ func TestRetentionWindowsDefaultToTheRuledDays(t *testing.T) {
 // century: a cutoff that far back overflows the timestamp encoding and reaches
 // the database as a date in the far future, which every row is older than.
 func TestRetentionWindowsAreWritableOnlyByAnAdminAndInRange(t *testing.T) {
+	t.Parallel()
 	f := newSettingsFixture(t)
 	f.c.do(f.viewer, http.MethodPatch, "/settings/retention", map[string]any{"metric_days": 7}, http.StatusForbidden)
 	f.c.do(f.admin, http.MethodPatch, "/settings/retention", map[string]any{"metric_days": 0}, http.StatusUnprocessableEntity)
@@ -48,6 +50,7 @@ func TestRetentionWindowsAreWritableOnlyByAnAdminAndInRange(t *testing.T) {
 // one in the same range as every window, and restoring it (a null) removes it
 // again.
 func TestNodeLogRetentionOverrideIsUnsetUntilAnAdminSetsIt(t *testing.T) {
+	t.Parallel()
 	f := newSettingsFixture(t)
 	keys := []string{"node_log_debug_days", "node_log_info_days", "node_log_warning_days", "node_log_error_days"}
 	admin := decodeSettings(t, f.c.do(f.admin, http.MethodGet, "/settings", nil, http.StatusOK)).Values["retention"]

@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
@@ -56,16 +55,13 @@ type placementFixture struct {
 
 func newPlacementFixture(t *testing.T) *placementFixture {
 	t.Helper()
-	dsn := storagetest.NewDSN(t)
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	t.Cleanup(gw.Close)
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	srv := httptest.NewServer(api.NewHandler(gw))
 	t.Cleanup(srv.Close)
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
@@ -140,6 +136,7 @@ func label(t *testing.T, raw []byte) string {
 // TestAComponentCreateRefusesAPlacementTheCallerCannotRead is the defect this
 // issue names, on both of a component's placement references.
 func TestAComponentCreateRefusesAPlacementTheCallerCannotRead(t *testing.T) {
+	t.Parallel()
 	f := newPlacementFixture(t)
 
 	// Inside its own wing the narrow principal creates normally, and the answer
@@ -189,6 +186,7 @@ func TestAComponentCreateRefusesAPlacementTheCallerCannotRead(t *testing.T) {
 // TestASystemCreateRefusesALocationTheCallerCannotRead is the system tier of the
 // same defect: a system's label reads its location's.
 func TestASystemCreateRefusesALocationTheCallerCannotRead(t *testing.T) {
+	t.Parallel()
 	f := newPlacementFixture(t)
 
 	got := f.c.do(f.narrow, http.MethodPost, "/systems", map[string]any{
@@ -216,6 +214,7 @@ func TestASystemCreateRefusesALocationTheCallerCannotRead(t *testing.T) {
 // verb. A move restamps the label from the DESTINATION, so a relocate into an
 // unreadable wing hands its label back exactly as a create into it would.
 func TestAMoveRefusesALocationTheCallerCannotRead(t *testing.T) {
+	t.Parallel()
 	f := newPlacementFixture(t)
 
 	f.c.do(f.narrow, http.MethodPost, "/components", map[string]any{
@@ -270,6 +269,7 @@ func TestAMoveRefusesALocationTheCallerCannotRead(t *testing.T) {
 // write grant, which changes no write scope (viewer carries no create), and the
 // same refused body is created.
 func TestAGrantOnOnlyTheWrittenTierBindsNoPlacement(t *testing.T) {
+	t.Parallel()
 	f := newPlacementFixture(t)
 
 	// One grant, on the component tier, at the rack that sits in wing-a.
@@ -340,6 +340,7 @@ func TestAGrantOnOnlyTheWrittenTierBindsNoPlacement(t *testing.T) {
 // the other, off the same fleet, which is what makes the filtering a property of
 // the caller's scope rather than of the fixture.
 func TestAnAmbiguousPlacementNamesOnlyTheCandidatesTheCallerCanRead(t *testing.T) {
+	t.Parallel()
 	f := newPlacementFixture(t)
 
 	// Two floors inside wing-a, so the two rooms named "1" sit in different

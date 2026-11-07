@@ -9,6 +9,7 @@ import (
 // not grow for the life of a long-running node, while keeping entries young
 // enough to still be redelivered (idempotence must survive a redelivery).
 func TestPruneCommandMemory(t *testing.T) {
+	t.Parallel()
 	now := time.Now()
 	executed := map[int64]commandOutcome{
 		1: {outcome: "", at: now.Add(-commandMemoryTTL - time.Minute)}, // stale

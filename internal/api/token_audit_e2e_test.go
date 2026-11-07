@@ -11,6 +11,7 @@ import (
 // minted it and who ended it, by the credential's id, and never carries the
 // token. Skipped under -short.
 func TestMintingAndRevokingATokenAreAudited(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

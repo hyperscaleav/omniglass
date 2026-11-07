@@ -46,6 +46,7 @@ func (s *gateStack) attachSNMP(comp, nodeName, ip string, port int, community st
 // gate, and the secret rotated brings it up. A stopped agent reads not
 // responsive.
 func TestNodeSNMPRungIsAStandardGetAnswered(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}

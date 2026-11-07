@@ -13,6 +13,7 @@ import (
 // spellings that resolve when more than one row answers, and caps that list so
 // a name a whole fleet shares does not answer with a page of addresses.
 func TestUnresolvedRefMessage(t *testing.T) {
+	t.Parallel()
 	if got, want := unresolvedRefMessage(&storage.ErrUnresolvedRef{Kind: "endpoint", Ref: "panel-1/https-admin"}),
 		`endpoint "panel-1/https-admin" not found`; got != want {
 		t.Errorf("no candidates = %q, want %q", got, want)

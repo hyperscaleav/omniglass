@@ -17,6 +17,7 @@ import (
 // poll's events and log lines fire only when they change.
 
 func TestBuildBatchCarriesEventsAndTaskLogs(t *testing.T) {
+	t.Parallel()
 	at := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
 	dps := []collection.Sample{
 		{Name: "video-input", Text: "hdmi2", IsText: true, TS: at},
@@ -42,6 +43,7 @@ func TestBuildBatchCarriesEventsAndTaskLogs(t *testing.T) {
 }
 
 func TestSampleFromEmittedKeepsEveryLane(t *testing.T) {
+	t.Parallel()
 	at := time.Now().UTC()
 	for _, e := range []driver.Emitted{
 		{Name: "uptime", Lane: driver.LaneMetric, Value: 7, TS: at},
@@ -73,6 +75,7 @@ func unmatchedLogTask(id string) collection.TaskSpec {
 // raw arrival) under the endpoint's first listen task, and is still counted
 // for the tick's self-log.
 func TestUnmatchedLogLandsEachUnclaimedMessage(t *testing.T) {
+	t.Parallel()
 	c := newCapture()
 	want, _ := desiredSessions([]collection.TaskSpec{unmatchedLogTask("l1")}, map[string]collection.SessionDialer{"tcp": &heldFakeDialer{}})
 	w := want["ep-1"]
@@ -101,6 +104,7 @@ func TestUnmatchedLogLandsEachUnclaimedMessage(t *testing.T) {
 
 // TestUnmatchedDiscardLandsNothing: the default stays discard.
 func TestUnmatchedDiscardLandsNothing(t *testing.T) {
+	t.Parallel()
 	c := newCapture()
 	want, _ := desiredSessions([]collection.TaskSpec{listenTask("l1", "ep-1", "10.0.0.5:51325")}, map[string]collection.SessionDialer{"tcp": &heldFakeDialer{}})
 	r := newListenerRouter(c.hooks(&transitionLog{}))
@@ -117,6 +121,7 @@ func TestUnmatchedDiscardLandsNothing(t *testing.T) {
 // property lane has its own transition guard); a task that leaves the
 // worklist is forgotten.
 func TestAPlainPollFiresOccurrencesOnChange(t *testing.T) {
+	t.Parallel()
 	s := newPollSchedule(time.Second)
 	t0 := time.Now().UTC()
 	tick := func(msg string, at time.Time) []collection.Sample {
@@ -152,6 +157,7 @@ func TestAPlainPollFiresOccurrencesOnChange(t *testing.T) {
 // a type; each is remembered by its emit, so neither repeats on an unchanged
 // run.
 func TestTwoNamelessOccurrencesKeepTheirOwnMemory(t *testing.T) {
+	t.Parallel()
 	s := newPollSchedule(time.Second)
 	tick := func() []collection.Sample {
 		return []collection.Sample{

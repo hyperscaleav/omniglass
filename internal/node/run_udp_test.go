@@ -57,6 +57,7 @@ func (s *gateStack) owner() string {
 // endpoint's port is dropped, and a silent face and a closed port read not
 // responsive.
 func TestNodeUDPEndpointExchangesAndListensInDatagrams(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}

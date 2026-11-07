@@ -22,6 +22,7 @@ func (d *countingDialer) Dial(context.Context, string, time.Duration) (float64, 
 // check in every 2 s for responsiveness and probe every 10 s. Unset, the
 // interval is the heartbeat and every tick probes, as before.
 func TestProbeIntervalGatesReachabilityProbes(t *testing.T) {
+	t.Parallel()
 	wl := collection.WorklistReply{Tasks: []collection.TaskSpec{{
 		ID: "t-tcp", Mode: "poll", Transport: "tcp",
 		EndpointParams: json.RawMessage(`{"target":"127.0.0.1:80"}`),
@@ -65,6 +66,7 @@ func TestProbeIntervalGatesReachabilityProbes(t *testing.T) {
 // driver poll does (#1061): its booking belongs to inputs that are gone, and
 // an operator who fixed the endpoint never waits out the probe interval.
 func TestProbeRunsAtOnceWhenItsFingerprintMoves(t *testing.T) {
+	t.Parallel()
 	task := collection.TaskSpec{
 		ID: "t-tcp", Mode: "poll", Transport: "tcp", Fingerprint: "fp-wrong-port",
 		EndpointParams: json.RawMessage(`{"target":"127.0.0.1:80"}`),
@@ -109,6 +111,7 @@ func TestProbeRunsAtOnceWhenItsFingerprintMoves(t *testing.T) {
 // so without a tolerance a tick that reached the probe a few milliseconds
 // sooner than the last found it not yet due and skipped it, doubling the gap.
 func TestAProbeAtTheHeartbeatRunsEveryJitteredTick(t *testing.T) {
+	t.Parallel()
 	wl := collection.WorklistReply{Tasks: []collection.TaskSpec{{
 		ID: "t-tcp", Mode: "poll", Transport: "tcp", Fingerprint: "fp",
 		EndpointParams: json.RawMessage(`{"target":"127.0.0.1:80"}`),
@@ -139,6 +142,7 @@ func TestAProbeAtTheHeartbeatRunsEveryJitteredTick(t *testing.T) {
 // one that was never booked (a probe at the heartbeat, a poll with no
 // schedule): retain sweeps every map by its own keys.
 func TestRetainForgetsATaskThatWasNeverBooked(t *testing.T) {
+	t.Parallel()
 	s := newPollSchedule(2 * time.Second)
 	s.rebook("p1", "fp")
 	s.refusedRun("p1")

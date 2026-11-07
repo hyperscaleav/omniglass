@@ -13,9 +13,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/secret"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
 type auditEvent struct {
@@ -32,16 +30,14 @@ type auditEvent struct {
 // 403 and the owner 200), a resource filter narrows to auth events, and an action
 // taken while impersonating records the real actor, which the surface returns.
 func TestAuditLogAPI(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
@@ -160,7 +156,8 @@ type auditDiffEvent struct {
 // secret create's audit body carries metadata only, never the sealed field
 // material (the redaction the write side promises).
 func TestAuditDiffRoundTrip(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	prov := secret.NewStaticProvider(bytes.Repeat([]byte{0x7}, 32))
 	gw, err := storage.NewPG(ctx, dsn, storage.WithSecretProvider(prov))
@@ -168,9 +165,6 @@ func TestAuditDiffRoundTrip(t *testing.T) {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}

@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 	"github.com/jackc/pgx/v5"
@@ -57,19 +56,17 @@ func (w systemRolesWire) find(t *testing.T, name string) effectiveRoleWire {
 // of the typed-slot model: a refusal an operator can act on). An out-of-scope
 // system is a non-disclosing 404. Skipped under -short.
 func TestSystemRolesAPI(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
 	ctx := context.Background()
-	dsn := storagetest.NewDSN(t)
+	dsn := seededDSN(t)
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	ownerTok := bootstrapOwnerTok(t, ctx, gw)
 
 	srv := httptest.NewServer(api.NewHandler(gw))
@@ -225,19 +222,17 @@ func TestSystemRolesAPI(t *testing.T) {
 // product can satisfy what the shipped standard asks for, and a component of
 // the wrong type is refused.
 func TestSeededStandardTypedRoles(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
 	ctx := context.Background()
-	dsn := storagetest.NewDSN(t)
+	dsn := seededDSN(t)
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	storagetest.CreateShippedStandards(t, gw)
 	ownerTok := bootstrapOwnerTok(t, ctx, gw)
 	srv := httptest.NewServer(api.NewHandler(gw))
@@ -282,19 +277,17 @@ func TestSeededStandardTypedRoles(t *testing.T) {
 // already assigned), 422 when the declaration alone is invalid (capacity
 // below quorum).
 func TestSwapPositionsAndCapacityRefusalsAPI(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
 	ctx := context.Background()
-	dsn := storagetest.NewDSN(t)
+	dsn := seededDSN(t)
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	ownerTok := bootstrapOwnerTok(t, ctx, gw)
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
@@ -383,16 +376,14 @@ func TestSwapPositionsAndCapacityRefusalsAPI(t *testing.T) {
 // both "seat-1" rows) is refused with a 409, not a silent pick of either row
 // and not a 500. Skipped under -short.
 func TestSetSystemRoleResolvesAmbiguousNameWithinCallerScope(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	ownerTok := bootstrapOwnerTok(t, ctx, gw)
 
 	srv := httptest.NewServer(api.NewHandler(gw))

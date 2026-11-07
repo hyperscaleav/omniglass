@@ -75,6 +75,7 @@ func payloadOf(t *testing.T, e storage.Event) map[string]any {
 }
 
 func TestNodeLandsAnNVPPushOnEveryLane(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}
@@ -218,6 +219,7 @@ func TestNodeLandsAnNVPPushOnEveryLane(t *testing.T) {
 }
 
 func TestNodeLandsKestrelCallEvents(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}

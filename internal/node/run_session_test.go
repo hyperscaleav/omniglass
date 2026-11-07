@@ -41,6 +41,7 @@ import (
 // reasons land in the node's own logs, and node shutdown tears the session
 // down on the device's side.
 func TestNodeHoldsASessionThroughADeviceOutage(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}
@@ -211,6 +212,7 @@ func TestNodeHoldsASessionThroughADeviceOutage(t *testing.T) {
 // panel's listener dies and returns, the session re-arms its subscription,
 // and the next change lands within a second too.
 func TestNodeLandsPushedSamplesThroughARecover(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}

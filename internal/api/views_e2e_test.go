@@ -43,6 +43,7 @@ type fleetViewWire struct {
 // the dot, so the canvas is reading the same rollup the detail page reads
 // rather than a second opinion.
 func TestFleetViewAPI(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

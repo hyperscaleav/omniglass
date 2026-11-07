@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 	"github.com/jackc/pgx/v5"
@@ -38,15 +37,12 @@ func newStaffingFixture(t *testing.T) *staffingFixture {
 		t.Skip("integration test needs Postgres")
 	}
 	ctx := context.Background()
-	dsn := storagetest.NewDSN(t)
+	dsn := seededDSN(t)
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	t.Cleanup(gw.Close)
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	srv := httptest.NewServer(api.NewHandler(gw))
 	t.Cleanup(srv.Close)
 	return &staffingFixture{
@@ -113,6 +109,7 @@ func (f *staffingFixture) component(name, product string) {
 // one it may read but not write a 403; and a member or occupant it reaches
 // through the system's own read is a 403 whichever.
 func TestStaffingWritesNeedTheComponentInScope(t *testing.T) {
+	t.Parallel()
 	f := newStaffingFixture(t)
 	c, owner := f.c, f.owner
 	// The issue's custom role, in place before the first request builds the
@@ -255,6 +252,7 @@ func crossTierPathWrites(t *testing.T) map[string]string {
 // scoped to the gated end alone and proves it is refused. A new cross-tier
 // route fails here until it is stamped, and fails there until it is driven.
 func TestEveryCrossTierPathWriteGuardsBothEnds(t *testing.T) {
+	t.Parallel()
 	writes := crossTierPathWrites(t)
 	if len(writes) == 0 {
 		t.Fatal("found no cross-tier path writes; the membership and assignment routes should be among them")

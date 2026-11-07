@@ -72,15 +72,12 @@ func newNodeRunStack(t *testing.T, opts ...api.Option) *nodeRunStack {
 		t.Skip("integration test needs Postgres")
 	}
 	ctx := context.Background()
-	dsn := storagetest.NewDSN(t)
+	dsn := seededDSN(t)
 	gw, err := storage.NewPG(ctx, dsn, storage.WithSecretProvider(secret.NewStaticProvider(bytes.Repeat([]byte{0x7}, 32))))
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(gw.Close)
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatal(err)
-	}
 	all := scope.Set{All: true}
 	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-api"}, all, all); err != nil {
 		t.Fatal(err)
@@ -100,6 +97,7 @@ var previewBody = map[string]any{"node": "edge-api", "driver": "boreal-edge-web"
 // A preview reaches the node named with the spec's polls and the secret
 // unsealed, and its answer comes back masked of that secret.
 func TestPreviewReachesTheNodeAndComesBackMasked(t *testing.T) {
+	t.Parallel()
 	s := newNodeRunStack(t)
 	raw := s.c.do(s.owner, http.MethodPost, "/drivers:preview", previewBody, http.StatusOK)
 	var out struct {
@@ -127,6 +125,7 @@ func TestPreviewReachesTheNodeAndComesBackMasked(t *testing.T) {
 // A spec that does not validate is a 422 listing its findings, and the node is
 // never asked; exactly one of driver or spec is required.
 func TestPreviewRefusals(t *testing.T) {
+	t.Parallel()
 	s := newNodeRunStack(t)
 	code, raw := s.c.send(s.owner, http.MethodPost, "/drivers:preview", map[string]any{"node": "edge-api",
 		"spec": map[string]any{"version": 1, "transport": "http", "polls": []map[string]any{{"name": "p", "schedule": map[string]any{"every": "soon"},
@@ -148,6 +147,7 @@ func TestPreviewRefusals(t *testing.T) {
 // A viewer may validate (a pure check under driver:read) but neither preview
 // nor run a poll now; an operator may do both.
 func TestOnDemandRunPermissions(t *testing.T) {
+	t.Parallel()
 	s := newNodeRunStack(t)
 	viewer := principalWithGrants(t, s.ctx, s.dsn, "run-viewer", []grant{{role: "viewer", scopeKind: "all"}})
 	operator := principalWithGrants(t, s.ctx, s.dsn, "run-operator", []grant{{role: "operator", scopeKind: "all"}})
@@ -192,6 +192,7 @@ func TestOnDemandRunPermissions(t *testing.T) {
 // The stricter class: past the per-caller bound a run is refused before
 // anything is planned or asked.
 func TestOnDemandRunsAreBounded(t *testing.T) {
+	t.Parallel()
 	s := newNodeRunStack(t, api.WithNodeRunLimits(8, 1))
 	s.runner.release = make(chan struct{})
 	done := make(chan int, 1)
@@ -220,6 +221,7 @@ func TestOnDemandRunsAreBounded(t *testing.T) {
 
 // Without a bus nothing can reach a node: 503, not a hang.
 func TestOnDemandRunsWithoutABus(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

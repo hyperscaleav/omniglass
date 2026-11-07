@@ -9,25 +9,21 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/auth"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
 // TestVariableAPI drives the variable surface over HTTP: an owner sets variables
 // at several scopes and lists the all-scope directory, a scoped operator may set
 // and edit but a viewer is forbidden create and the all-scope directory.
 func TestVariableAPI(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 
 	ownerTok, hash, prefix, err := auth.NewBearerToken()
 	if err != nil {
@@ -123,16 +119,14 @@ func TestVariableAPI(t *testing.T) {
 // accepted and round-trips, and the retired "global" is refused by the enum
 // before it can ever reach the check constraint.
 func TestCreateVariableAtPlatformTierE2E(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 
 	ownerTok, hash, prefix, err := auth.NewBearerToken()
 	if err != nil {

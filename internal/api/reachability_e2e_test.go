@@ -57,19 +57,17 @@ type reachResp struct {
 // state and metric sinks; a viewer with no scope on the component gets a
 // non-disclosing 404 (permission gate + scope injection). Skipped under -short.
 func TestReachabilityAPI(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
 	ctx := context.Background()
-	dsn := storagetest.NewDSN(t)
+	dsn := seededDSN(t)
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 
 	ownerTok, hash, prefix, err := auth.NewBearerToken()
 	if err != nil {
@@ -251,19 +249,17 @@ type sessionReachResp struct {
 // and serves nothing; an endpoint that never held a session, or no longer
 // holds one, carries no session at all. Skipped under -short.
 func TestReachabilityCarriesTheHeldSession(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
 	ctx := context.Background()
-	dsn := storagetest.NewDSN(t)
+	dsn := seededDSN(t)
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	ownerTok, hash, prefix, err := auth.NewBearerToken()
 	if err != nil {
 		t.Fatalf("mint owner: %v", err)
@@ -415,19 +411,17 @@ func TestReachabilityCarriesTheHeldSession(t *testing.T) {
 // certificate gate holds the last accepted certificate's facts are withheld
 // rather than shown as current. Skipped under -short.
 func TestReachabilityCarriesTheTLSFacts(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
 	ctx := context.Background()
-	dsn := storagetest.NewDSN(t)
+	dsn := seededDSN(t)
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	ownerTok, hash, prefix, err := auth.NewBearerToken()
 	if err != nil {
 		t.Fatal(err)
@@ -558,6 +552,7 @@ func TestReachabilityCarriesTheTLSFacts(t *testing.T) {
 // answered, and untimed once unanswered (an earlier answer's time is not
 // this probe's).
 func TestReachabilityServesTheUDPRequestLayer(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -637,6 +632,7 @@ func TestReachabilityServesTheUDPRequestLayer(t *testing.T) {
 // snmp's rung (#821) is a get answered: the read serves it as the same
 // request layer, timed by snmp-response-time while answered.
 func TestReachabilityServesTheSNMPRequestLayer(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -718,6 +714,7 @@ func TestReachabilityServesTheSNMPRequestLayer(t *testing.T) {
 // (the mode, the key it pins, the handshake time), and a plain http endpoint
 // beside it carries none. Skipped under -short.
 func TestReachabilityCarriesHTTPSTLSFacts(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

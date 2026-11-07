@@ -8,9 +8,7 @@ import (
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
 // The acknowledge route end to end (#734), driven as a caller drives it.
@@ -47,16 +45,13 @@ type ackFixture struct {
 
 func newAckFixture(t *testing.T) *ackFixture {
 	t.Helper()
-	dsn := storagetest.NewDSN(t)
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	t.Cleanup(gw.Close)
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	srv := httptest.NewServer(api.NewHandler(gw))
 	t.Cleanup(srv.Close)
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
@@ -130,6 +125,7 @@ func ackPath(component, id string) string {
 // TestAnOperatorAcknowledgesInScope is the happy path, driven by the narrow
 // principal rather than by the owner.
 func TestAnOperatorAcknowledgesInScope(t *testing.T) {
+	t.Parallel()
 	f := newAckFixture(t)
 
 	var got alarmView
@@ -159,6 +155,7 @@ func TestAnOperatorAcknowledgesInScope(t *testing.T) {
 // is a 403 rather than a non-disclosing 404. It is not an owner-shaped principal
 // and the refusal is not a broken route, which the owner control below proves.
 func TestAcknowledgeRefusesWithoutTheCapability(t *testing.T) {
+	t.Parallel()
 	f := newAckFixture(t)
 
 	// The watcher really can see it: the refusal is about the verb, not the row.
@@ -190,6 +187,7 @@ func TestAcknowledgeRefusesWithoutTheCapability(t *testing.T) {
 // it is looking straight at was a lie it could catch, and #728 filed it rather
 // than fixing one route out of step with its siblings.
 func TestAcknowledgeRefusesOutsideTheScope(t *testing.T) {
+	t.Parallel()
 	f := newAckFixture(t)
 
 	// It really can read the far component and its alarm. This is the condition
@@ -213,6 +211,7 @@ func TestAcknowledgeRefusesOutsideTheScope(t *testing.T) {
 // operator drives: a second acknowledgement is 200 and keeps the first person,
 // not a 409 an operator has to interpret after a double click.
 func TestAcknowledgeIsIdempotentOverTheRoute(t *testing.T) {
+	t.Parallel()
 	f := newAckFixture(t)
 
 	f.c.do(f.responder, http.MethodPost, ackPath(f.mine, f.mineAlarm), nil, http.StatusOK)
@@ -229,6 +228,7 @@ func TestAcknowledgeIsIdempotentOverTheRoute(t *testing.T) {
 // TestAcknowledgeMissesAre404 keeps a typo off the 500 path and keeps an
 // out-of-scope component non-disclosing.
 func TestAcknowledgeMissesAre404(t *testing.T) {
+	t.Parallel()
 	f := newAckFixture(t)
 
 	f.c.do(f.owner, http.MethodPost, ackPath(f.mine, "00000000-0000-0000-0000-000000000000"), nil, http.StatusNotFound)
@@ -241,6 +241,7 @@ func TestAcknowledgeMissesAre404(t *testing.T) {
 // TestTheReadSideExpressesRaisedAndUnacknowledged drives the queue an operator
 // actually works, over the route.
 func TestTheReadSideExpressesRaisedAndUnacknowledged(t *testing.T) {
+	t.Parallel()
 	f := newAckFixture(t)
 
 	// A second condition on the same component, so the filter has something to

@@ -8,9 +8,7 @@ import (
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
 // What a LOCATION-scoped deploy grant actually reaches on the system tier.
@@ -62,16 +60,13 @@ type locationGrantFixture struct {
 
 func newLocationGrantFixture(t *testing.T) *locationGrantFixture {
 	t.Helper()
-	dsn := storagetest.NewDSN(t)
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	t.Cleanup(gw.Close)
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	srv := httptest.NewServer(api.NewHandler(gw))
 	t.Cleanup(srv.Close)
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
@@ -106,6 +101,7 @@ func newLocationGrantFixture(t *testing.T) *locationGrantFixture {
 // system:create,update,rename,move, and none of them resolves to anything,
 // because the grant's scope_kind is "location".
 func TestALocationGrantSeesNoSystemAtAll(t *testing.T) {
+	t.Parallel()
 	f := newLocationGrantFixture(t)
 
 	if names := listNames(t, f.c, f.techEast, "/systems"); len(names) != 0 {
@@ -128,6 +124,7 @@ func TestALocationGrantSeesNoSystemAtAll(t *testing.T) {
 // the answer to "could deploy@location do system work before #707": no route
 // here is touched by this branch, and all of them refuse.
 func TestALocationGrantWritesNoSystem(t *testing.T) {
+	t.Parallel()
 	f := newLocationGrantFixture(t)
 
 	// The floor is real: the system this principal cannot write, it can read.
@@ -177,6 +174,7 @@ func TestALocationGrantWritesNoSystem(t *testing.T) {
 // caller just read this system, so answering "system not found" is a lie about
 // existence.
 func TestTheComponentCreateWasTheOnlySystemWriteALocationGrantCouldReach(t *testing.T) {
+	t.Parallel()
 	f := newLocationGrantFixture(t)
 
 	f.c.do(f.builder, http.MethodGet, "/systems/av", nil, http.StatusOK)
@@ -210,6 +208,7 @@ func TestTheComponentCreateWasTheOnlySystemWriteALocationGrantCouldReach(t *test
 // same way, so the sentence in internal/seed/roles.yaml is now backed by all
 // three of the things it talks about rather than one of them.
 func TestALocationGrantWritesNoComponentEither(t *testing.T) {
+	t.Parallel()
 	f := newLocationGrantFixture(t)
 
 	// The devseed shape, with its single grant: it cannot even SEE a component

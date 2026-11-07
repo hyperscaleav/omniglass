@@ -195,6 +195,7 @@ func (s *gateStack) attach(comp, drv, nodeName string, port int) *storage.Endpoi
 // TestTheGateLiftsOnlyWhenTheFingerprintChanges: the silent telnet face (it
 // hangs up on a wrong password with no text) and a wrong password.
 func TestTheGateLiftsOnlyWhenTheFingerprintChanges(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}
@@ -274,6 +275,7 @@ func TestTheGateLiftsOnlyWhenTheFingerprintChanges(t *testing.T) {
 // port nothing listens on reads down at the transport, retryably, never as
 // an auth refusal, and no login is ever tried.
 func TestAWrongPortIsUnreachableNeverAuth(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}
@@ -305,6 +307,7 @@ func TestAWrongPortIsUnreachableNeverAuth(t *testing.T) {
 // fingerprint holds, across a node restart too. A params edit (a new
 // fingerprint) tries again, and the right password authenticates.
 func TestTheSSHProbeCredentialIsGated(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}
@@ -340,6 +343,7 @@ func TestTheSSHProbeCredentialIsGated(t *testing.T) {
 // label edit through the same route recycles nothing; its address
 // edited in place moves the healthy session to the new component.
 func TestADriverEndpointEditsItsAddressInPlace(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}

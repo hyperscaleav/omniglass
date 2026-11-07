@@ -15,6 +15,7 @@ import (
 // apart, so each room's event lands when that room's changes.
 
 func TestBuildBatchCarriesIdentity(t *testing.T) {
+	t.Parallel()
 	at := time.Date(2026, 10, 29, 12, 0, 0, 0, time.UTC)
 	r1 := &driver.Identity{Key: "ucc-room-id", Value: "r1"}
 	dps := []collection.Sample{
@@ -40,6 +41,7 @@ func TestBuildBatchCarriesIdentity(t *testing.T) {
 }
 
 func TestChangeMemoryTellsRecordsApart(t *testing.T) {
+	t.Parallel()
 	s := &pollSchedule{occurred: map[string]map[string]string{}}
 	ev := func(room, text string) collection.Sample {
 		return collection.Sample{Name: "call-started", Lane: driver.LaneEvent, Text: text, IsText: true,
@@ -59,6 +61,7 @@ func TestChangeMemoryTellsRecordsApart(t *testing.T) {
 // a function whose identities rotate run to run keeps one run's slots, not
 // every identity it has ever heard.
 func TestChangeMemoryForgetsSlotsARunDidNotSee(t *testing.T) {
+	t.Parallel()
 	s := &pollSchedule{occurred: map[string]map[string]string{}}
 	for run := 0; run < 100; run++ {
 		dps := []collection.Sample{

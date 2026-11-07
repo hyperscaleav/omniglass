@@ -21,6 +21,7 @@ import (
 // retried with the existing backoff to a final failure, and :retry sending
 // the very bytes the failed attempts sent.
 func TestAnEmailReachesTheMailSimAndARetrySendsTheSameBytes(t *testing.T) {
+	t.Parallel()
 	p := newPeople(t)
 	sim, err := mailsim.Start("127.0.0.1:0", mailsim.Options{})
 	if err != nil {
@@ -157,6 +158,7 @@ func TestAnEmailReachesTheMailSimAndARetrySendsTheSameBytes(t *testing.T) {
 // its secret to whatever mail_relay names, so binding one (or moving the relay
 // while one is bound) is judged as binding a secret to a target is.
 func TestBindingTheRelaysSecretTakesTheRightToRevealIt(t *testing.T) {
+	t.Parallel()
 	p := newPeople(t)
 	p.c.do(p.owner, http.MethodPost, "/secrets", map[string]any{"name": "relay-login", "secret_type": "basic-auth", "owner_kind": "platform",
 		"fields": map[string]string{"username": "omniglass", "password": "relay-pass-1317"}}, http.StatusCreated)

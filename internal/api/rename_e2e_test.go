@@ -9,9 +9,7 @@ import (
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
-	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
 // A rename is its own act, not a field write.
@@ -75,16 +73,14 @@ func roleSlug(resource string) string { return strings.ReplaceAll(resource, "_",
 // rename, is refused; a caller that holds <resource>:rename is allowed. If update
 // still implied rename, the first half of every pair below would pass.
 func TestRenameIsItsOwnPermission(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 
 	// Every custom role must exist before the first authenticated request, which is
 	// what loads the role index (lazy, once per handler).
@@ -134,16 +130,14 @@ func TestRenameIsItsOwnPermission(t *testing.T) {
 // name, the group still answers to its uuid (which is how a group is addressed at
 // all), a taken name is a 409, and an illegal or uuid-shaped name is a 422.
 func TestGroupRenameOverHTTP(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
+	t.Parallel()
+	dsn := seededDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 
 	ownerTok := bootstrapOwnerTok(t, ctx, gw)
 	srv := httptest.NewServer(api.NewHandler(gw))
