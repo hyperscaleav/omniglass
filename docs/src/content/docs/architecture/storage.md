@@ -337,14 +337,25 @@ where b.series_id = $1 order by b.span_start, b.span;
   The same transaction advances `metric_block_mark`, so a pass cancelled anywhere leaves no series-day
   half folded and the next pass folds from the mark. The week fold has a mark of its own, behind the
   day mark. Calculated series, properties and declared rows never block.
-- **A late sample rebuilds its day.** A sample landing in an announced hour marks its series' day in
-  `metric_block_dirty` in its own insert, beside its trend hour, so the ingest still costs 18
-  statements a batch. The next pass rebuilds the day's blocks from its raw rows under the trend lock,
-  and its week block once its week has folded.
-- **Nothing reads a block yet.** The blocks are written beside the raw rows, which stay
-  authoritative, and every reader still reads raw rows. `VerifyMetricBlocks` pairs every block still
-  inside its window with its raw rows, sample by sample, and names any that differ. The late merge
-  into a block (#1529), block reads, the early drop of raw days and the block prune (#1530) follow.
+- **A late sample merges into its block.** A sample landing in an announced hour of a day the fold
+  has passed merges into the block that covers it, in its own batch's transaction
+  ([ADR-1529](/architecture/decisions/#adr-1529-a-late-metric-sample-merges-into-the-block-that-covers-it)):
+  the hour block of its hour when the day was cut into hours, else the day's block, else its ISO
+  week's block once the week has folded. A sample of a day the fold has not reached lands as a raw row
+  for the fold. Each block is rewritten once a batch from the block alone, its samples and the new
+  ones in timestamp then landing order, and keeps the span it was folded at. The merge takes the
+  `metric_block:fold` advisory lock shared and each fold transaction takes it exclusive, so a merge
+  reads every fold's committed marks and no fold passes a merge in flight. An on-time batch never
+  takes it and still costs 18 statements. A dirtied trend hour of a folded day recomputes from its
+  block.
+- **Too old is dropped.** An observed sample older than its series' window is dropped before it lands,
+  with one warning line a series naming the series, the count and the oldest's age, and the rest of
+  its batch lands and is acknowledged.
+- **Raw rows still lead.** The blocks are written beside the raw rows, which stay authoritative, and
+  a late sample lands raw as well as merging. Every reader but the trend recompute still reads raw
+  rows. `VerifyMetricBlocks` pairs every block still inside its window with its raw rows, sample by
+  sample, and names any that differ. Block reads, the early drop of raw days and the block prune
+  (#1530) follow.
   Then history is the blocks, kept for `retention.metric_days`, and raw rows live about two days.
 
 Measured through the fold, one ISO week of generated series at each cadence (`make footprint`):

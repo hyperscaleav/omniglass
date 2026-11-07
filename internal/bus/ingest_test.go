@@ -167,7 +167,8 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	// by ingest time, so a late-shipped observation keeps its observation time.
 	// A name with no other rows in this test (icmp-rtt-avg, seeded), so the
 	// latest-row read IS this row and its stored ts is directly assertable.
-	suppliedTS := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	// Hours old, inside the metric window: an older sample is dropped (#1529).
+	suppliedTS := time.Now().UTC().Add(-3 * time.Hour).Truncate(time.Second)
 	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
 		TaskId:  "t-a",
 		NodeId:  "node-a",
