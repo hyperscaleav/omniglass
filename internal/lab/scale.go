@@ -12,6 +12,10 @@ import (
 // the plan, so it is estimated from measured costs before anything starts,
 // and a size the host cannot fit is refused, naming the largest that fits.
 
+// ScaleProject is a scale lab's compose project: its own, so it runs beside
+// a learner's lab, and every container and network it creates carries it.
+const ScaleProject = "omniglass-scale"
+
 // Footprint is what a part of the lab takes of the host at steady state:
 // resident memory in MiB, and CPU in cores.
 type Footprint struct {
@@ -112,9 +116,10 @@ type ScaleRun struct {
 	Shape                  Shape
 	MinSystems, MaxSystems int
 	Cost                   CostModel
-	// Host, when set, stands in for what the Docker host reports (a forced
-	// low limit, to see a refusal without a small machine).
-	Host *HostResources
+	// HostMemory, when set, stands in for the memory the Docker host
+	// reports (a forced low limit, to see a refusal without a small
+	// machine).
+	HostMemory int64
 	// Timeout bounds the whole bring-up, the seed included: past it, the lab
 	// names the sites and components not up and is removed.
 	Timeout time.Duration
@@ -132,13 +137,12 @@ func scaleTotals(o Options) (sites, components int) {
 // created, naming the estimate, the host, and the largest size that fits.
 func (r *Runner) checkCapacity(ctx context.Context, cfg Config) error {
 	sc := cfg.ScaleRun
-	host := sc.Host
-	if host == nil {
-		h, err := r.Engine.Resources(ctx)
-		if err != nil {
-			return fmt.Errorf("read the Docker host's memory and CPUs: %w", err)
-		}
-		host = &h
+	host, err := r.Engine.Resources(ctx)
+	if err != nil {
+		return fmt.Errorf("read the Docker host's memory and CPUs: %w", err)
+	}
+	if sc.HostMemory > 0 {
+		host.MemBytes = sc.HostMemory
 	}
 	sites, comps := scaleTotals(cfg.Options)
 	need := sc.Cost.Estimate(sites, comps)
@@ -150,7 +154,7 @@ func (r *Runner) checkCapacity(ctx context.Context, cfg Config) error {
 	}
 	cause := fmt.Sprintf("A scale lab of %d systems (%d sites, %d simulated components) needs about %s of memory and %.1f cores; this Docker host has %s and %d cores, of which the lab plans to use at most %.0f%%.",
 		cfg.Systems, sites, comps, mib(need.MemMiB), need.CPU, mib(float64(host.MemBytes)/(1<<20)), host.CPUs, (1-Headroom)*100)
-	largest, ok, err := LargestFit(sc.Shape, sc.MinSystems, sc.MaxSystems, sc.Cost, *host)
+	largest, ok, err := LargestFit(sc.Shape, sc.MinSystems, sc.MaxSystems, sc.Cost, host)
 	if err != nil {
 		return err
 	}

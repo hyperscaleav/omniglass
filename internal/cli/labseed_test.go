@@ -10,6 +10,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/auth"
 	"github.com/hyperscaleav/omniglass/internal/lab"
+	labscenario "github.com/hyperscaleav/omniglass/internal/lab/scenario"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
@@ -102,4 +103,72 @@ func TestLabSeedGivesThePusherThisRunsToken(t *testing.T) {
 	if _, err := gw.AuthenticateBearer(ctx, first); !errors.Is(err, storage.ErrCredentialNotFound) {
 		t.Fatalf("the last run's token still authenticates: %v", err)
 	}
+}
+
+// A scale lab's seed (#1554), against a real database: the scenario's plan
+// goes down with a node per site, each enrolled with the token the lab
+// minted for it, and the report tells the lab its nodes are present. A
+// missing site hash is refused before the database is touched, and a
+// database that already holds data is refused.
+func TestLabScaleSeedEnrollsEverySiteNode(t *testing.T) {
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	t.Setenv("OMNIGLASS_DSN", dsn)
+	t.Setenv("OMNIGLASS_DATA_DIR", t.TempDir())
+	plan := corporateScalePlan(t, 3)
+	tokens := map[string][]byte{}
+	var nodes []lab.SiteNode
+	for _, site := range plan.Sites {
+		_, hash, _, err := auth.NewBearerToken()
+		if err != nil {
+			t.Fatal(err)
+		}
+		name := labscenario.SiteNode(site.Name)
+		tokens[name] = hash
+		nodes = append(nodes, lab.SiteNode{Name: name, TokenHash: hex.EncodeToString(hash)})
+	}
+	if err := runLabScaleSeed(ctx, &bytes.Buffer{}, "corporate", 3, lab.LoginUser, lab.LoginPassword,
+		lab.FormatSiteNodeTokenHashes(nodes[1:])); err == nil || !strings.Contains(err.Error(), nodes[0].Name) {
+		t.Fatalf("a missing site hash: %v, want a refusal naming %s", err, nodes[0].Name)
+	}
+
+	var out bytes.Buffer
+	if err := runLabScaleSeed(ctx, &out, "corporate", 3, lab.LoginUser, lab.LoginPassword, lab.FormatSiteNodeTokenHashes(nodes)); err != nil {
+		t.Fatalf("lab seed --systems 3: %v", err)
+	}
+	if res := lab.ParseSeedResult(out.String()); !res.Node || !strings.Contains(res.Summary, "3 systems") {
+		t.Fatalf("seed result %+v, want the nodes present and the size named", res)
+	}
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gw.Close()
+	for name, hash := range tokens {
+		pr, err := gw.AuthenticateBearer(ctx, hash)
+		if err != nil || pr.Node == nil || pr.Node.Name != name {
+			t.Errorf("%s's token = %+v, %v; want it to authenticate %s", name, pr, err, name)
+		}
+	}
+	if err := runLabScaleSeed(ctx, &bytes.Buffer{}, "corporate", 3, lab.LoginUser, lab.LoginPassword,
+		lab.FormatSiteNodeTokenHashes(nodes)); err == nil || !strings.Contains(err.Error(), "holds data") {
+		t.Fatalf("a second seed: %v, want a refusal of a database holding data", err)
+	}
+}
+
+func corporateScalePlan(t *testing.T, systems int) *labscenario.Plan {
+	t.Helper()
+	m, err := labscenario.Shipped("corporate")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cat, err := labscenario.ShippedCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := labscenario.Resolve(m, cat, systems)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
 }

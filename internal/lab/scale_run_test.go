@@ -53,7 +53,7 @@ var testSites = map[string][]string{
 func scaleConfig() Config {
 	cfg := testConfig()
 	cfg.PlantedFaults = nil
-	cfg.Project, cfg.Ephemeral, cfg.Scenario, cfg.Systems = "omniglass-scale", true, "corporate", 20
+	cfg.Project, cfg.Ephemeral, cfg.Scenario, cfg.Systems = ScaleProject, true, "corporate", 20
 	cfg.SiteNodes = []SiteNode{
 		{Name: "edge-hq", Token: "t1", TokenHash: "h1", Components: 3},
 		{Name: "edge-branch-01", Token: "t2", TokenHash: "h2", Components: 1},
@@ -94,19 +94,20 @@ func TestScaleRunBringsUpOneNodePerSite(t *testing.T) {
 func TestScaleRunRefusesASizeTheHostCannotFit(t *testing.T) {
 	srv := scaleServer(t, testSites, nil, nil)
 	for name, tc := range map[string]struct {
-		host HostResources
+		mem  int64
 		want string
 	}{
 		// 600 MiB, of which 480 usable: 100 + 10*(1+n/10) + 3n MiB is 479
 		// at 93 systems (10 sites) and 483 at 94.
-		"some size fits": {HostResources{MemBytes: 600 << 20, CPUs: 100}, "--systems 93, the largest that fits"},
-		"none fits":      {HostResources{MemBytes: 64 << 20, CPUs: 100}, "Not even the smallest size fits"},
+		"some size fits": {600 << 20, "--systems 93, the largest that fits"},
+		"none fits":      {64 << 20, "Not even the smallest size fits"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			eng := newFakeEngine(strings.TrimPrefix(srv.URL, "http://"))
+			eng.host.CPUs = 100
 			cfg := scaleConfig()
 			cfg.Systems, cfg.SiteNodes[0].Components = 1000, 3000
-			cfg.ScaleRun.Host = &tc.host
+			cfg.ScaleRun.HostMemory = tc.mem
 			_, err := testRunner(eng, &bytes.Buffer{}).Run(context.Background(), cfg)
 			var pe *PreflightError
 			if !errors.As(err, &pe) || !strings.Contains(err.Error(), tc.want) {

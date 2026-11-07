@@ -104,15 +104,32 @@ func TestLabRunScenarioPlan(t *testing.T) {
 	}
 }
 
-// Until bring-up lands (#1554), a scale lab scenario without --plan, or
-// without a size, refuses with what to do; the size knob on a seeded fleet
-// is refused too.
+// The forced host memory a scale lab plans against reads as binary sizes.
+func TestParseByteSizeReadsBinarySuffixes(t *testing.T) {
+	for in, want := range map[string]int64{
+		"": 0, "1024": 1024, "2k": 2 << 10, "512m": 512 << 20, "2g": 2 << 30, "12G": 12 << 30,
+	} {
+		got, err := parseByteSize(in)
+		if err != nil || got != want {
+			t.Errorf("parseByteSize(%q) = %d, %v; want %d", in, got, err, want)
+		}
+	}
+	for _, in := range []string{"banana", "-1g", "g", "2t"} {
+		if _, err := parseByteSize(in); err == nil {
+			t.Errorf("parseByteSize(%q) read as a size", in)
+		}
+	}
+}
+
+// A scale lab scenario without a size, or with a forced host memory that is
+// no size, refuses with what to do before it starts anything; the size knob
+// on a seeded fleet is refused too.
 func TestLabRunScenarioRefusals(t *testing.T) {
 	for _, tc := range []struct {
 		args []string
 		want string
 	}{
-		{[]string{"--scenario", "corporate", "--systems", "100"}, "not built yet (#1554); add --plan"},
+		{[]string{"--scenario", "corporate", "--systems", "100", "--host-memory", "banana"}, "--host-memory"},
 		{[]string{"--scenario", "corporate", "--plan"}, "--systems N (3 to 10000)"},
 		{[]string{"--scenario", "corporate", "--systems", "0", "--plan"}, "--systems N"},
 		{[]string{"--scenario", "corporate", "--systems", "-3", "--plan"}, "out of range"},
