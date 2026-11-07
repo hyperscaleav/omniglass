@@ -218,7 +218,7 @@
     {
       "table": "metric_block",
       "shape": "id only",
-      "reason": "an observed metric series' samples over one hour, day or week (#1528), keyed by series, span start and span; nothing addresses it by name",
+      "reason": "an observed or calculated metric series' samples over one hour, day or week (#1528, #1534), keyed by series, span start, span and calc rule lineage; nothing addresses it by name",
       "labelled": false
     },
     {

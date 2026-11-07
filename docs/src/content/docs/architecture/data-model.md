@@ -366,9 +366,7 @@ telemetry: {
   }
   metric_block: {
     shape: sql_table
-    series_id: bigint {constraint: primary_key}
-    span: text {constraint: primary_key}
-    span_start: timestamp with time zone {constraint: primary_key}
+    series_id: bigint {constraint: foreign_key}
   }
   metric_block_mark: {
     shape: sql_table

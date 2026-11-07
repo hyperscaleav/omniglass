@@ -262,16 +262,18 @@ func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs
 	// sample's rule lineage, $12 the collecting node (null for none), $13 a
 	// fanned sample's conduit (source_conduit_id, #1282; null for none).
 	//
-	// An observed sample dated in an hour the trend compaction has announced
-	// (#1276: a late sample, a spool replayed past the horizon) marks its
-	// series' hour dirty in the same statement, so a compaction recomputes the
-	// hour once it is folded; an on-time sample marks nothing. The announced
-	// mark is read by metric_trend_announced(), which first takes the trend
-	// lock shared until the transaction ends: the compaction's drain
+	// A sample dated in an hour the trend compaction has announced (#1276: a
+	// late sample, a spool replayed past the horizon) is late. A late observed
+	// sample marks its series' hour dirty in the same statement, so a
+	// compaction recomputes the hour once it is folded; a calculated series
+	// has no trend (ADR-1534), and an on-time sample marks nothing. The
+	// announced mark is read by metric_trend_announced(), which first takes
+	// the trend lock shared until the transaction ends: the compaction's drain
 	// (drainTrendWrites) waits for every insert holding it. The statement
-	// yields each late sample's raw row for the block merge (mergeLateBlocks,
-	// #1529): a block day closes only after its every hour has, so a sample
-	// of a folded day is always late, and an on-time batch yields nothing.
+	// yields each late sample's raw row, observed or calculated, for the block
+	// merge (mergeLateBlocks, #1529, #1534): a block day closes only after its
+	// every hour has, so a sample of a folded day is always late, and an
+	// on-time batch yields nothing.
 	//
 	// Each sample's series is found by its key, or started in the same statement
 	// when the batch is its first sample. A series another transaction started
@@ -318,10 +320,11 @@ func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs
 		returning series_id, ts, id, value),
 	late as (
 		select l.series_id, l.ts, l.id, l.value from landed l
-		where $8::text = 'observed' and l.ts < (select metric_trend_announced())),
+		where l.ts < (select metric_trend_announced())),
 	hour_dirtied as (
 		insert into metric_trend_dirty (series_id, hour)
 		select distinct series_id, date_bin('1 hour', ts, timestamptz '2000-01-01 00:00:00+00') from late
+		where $8::text = 'observed'
 		on conflict do nothing)
 	select series_id, ts, id, value from late`
 	// insert lands the samples at idx in one statement, in their order, so the
@@ -332,7 +335,7 @@ func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs
 	// Each late sample's raw row joins late. A closure, so the write stays
 	// inside this admitted write path.
 	collector := w.collector()
-	var late lateSamples
+	late := lateSamples{rule: sourceRule, version: sourceVersion, ruleID: sourceRuleID}
 	insert := func(idx []int) error {
 		if len(idx) == 0 {
 			return nil

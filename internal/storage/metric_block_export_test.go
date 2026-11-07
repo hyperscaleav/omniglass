@@ -18,3 +18,22 @@ func (p *PG) MetricBlockMarks(ctx context.Context) (blocked time.Time, blockedSe
 	m, ok, err := metricBlockMarks(ctx, p.pool, false)
 	return m.blocked, m.blockedSeries, m.week, m.weekSeries, ok, err
 }
+
+// WriteCalcSamples lands evs as calc rule r's output through the write a calc
+// tick lands its output by (writeCalcOutput), each at its own TS: a late or
+// recomputed calculated sample, which a tick, dating its output now, does not
+// write (#1534).
+func (p *PG) WriteCalcSamples(ctx context.Context, r *CalcRule, evs []MetricSampleWrite) error {
+	tx, err := p.pool.BeginTx(ctx, trendTxOptions)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	for i := range evs {
+		evs[i].Source = calcSource
+	}
+	if err := p.writeMetricSamples(ctx, tx, calcWriter(&sampleLineage{ruleID: r.ID, ruleName: r.Name, version: r.Version}), evs); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}

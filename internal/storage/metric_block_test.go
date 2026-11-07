@@ -431,13 +431,12 @@ func TestABlockFoldCancelledMidDayFoldsEachSeriesDayWholeOrNot(t *testing.T) {
 	}
 }
 
-// TestOnlyObservedSeriesBlock: a calculated series, an intended series and
-// the property lane fold into no block.
-func TestOnlyObservedSeriesBlock(t *testing.T) {
+// TestIntendedSeriesAndPropertiesNeverBlock: an intended series and the
+// property lane fold into no block. A calculated series blocks with its
+// lineage (metric_block_lineage_test.go).
+func TestIntendedSeriesAndPropertiesNeverBlock(t *testing.T) {
 	t.Parallel()
 	r := newBlockRig(t)
-	calc := r.series("calc", "calculated")
-	r.spaced(calc, r.day(0), 200)
 	// An intended series' rows land in metric_declared, never in metric; one
 	// planted in metric anyway is still no observation to fold.
 	intended := r.series("want", "intended")
@@ -451,27 +450,32 @@ func TestOnlyObservedSeriesBlock(t *testing.T) {
 	}
 }
 
-// blockFootprints is #1525's bytes a sample for the block at each cadence
+// blockFootprints is the bytes a sample for the block at each cadence
 // (pg_total_relation_size after VACUUM, Postgres 18 defaults), with the
 // series this test lands at it: #1525's counts, over one ISO week rather
 // than its 30 days, about 600,000 samples a cadence. Fewer and the table's
 // fixed pages (its free space and visibility maps, the index root) show in
-// the figure.
+// the figure. want is the figure since the block gained its lineage (#1534,
+// ADR-1534): an observed block's three null lineage columns give its row a
+// null bitmap, 8 bytes a row, which at 5 m, whose day blocks sit at the size
+// four rows fill a page by, costs a page for every few blocks. measured is
+// what #1525 measured before it.
 var blockFootprints = []struct {
-	cadence time.Duration
-	series  int
-	want    float64
+	cadence  time.Duration
+	series   int
+	want     float64
+	measured float64
 }{
-	{10 * time.Second, 10, 7.71},
-	{30 * time.Second, 30, 7.18},
-	{time.Minute, 60, 7.25},
-	{5 * time.Minute, 300, 7.84},
-	{time.Hour, 3000, 8.58},
+	{10 * time.Second, 10, 7.84, 7.71},
+	{30 * time.Second, 30, 7.22, 7.18},
+	{time.Minute, 60, 7.38, 7.25},
+	{5 * time.Minute, 300, 8.70, 7.84},
+	{time.Hour, 3000, 8.36, 8.58},
 }
 
 // TestBlockFootprint reports what the blocks cost a sample at each product
 // cadence over one ISO week of #1525's generated series, folded by the pass,
-// and holds each within 10% of what #1525 measured. The bytes are
+// and holds each within 10% of its want. The bytes are
 // deterministic in the data and the Postgres version, so a figure that moves
 // is the block's layout changing.
 func TestBlockFootprint(t *testing.T) {
@@ -502,10 +506,10 @@ func TestBlockFootprint(t *testing.T) {
 			for _, d := range storagetest.DaySpans(samples) {
 				spans[d.Span] = true
 			}
-			t.Logf("block footprint at %s: %.2f bytes a sample (%d samples, %d bytes; %s blocks; #1525 measured %.2f)",
-				fp.cadence, got, n, bytes, strings.Join(slices.Sorted(mapKeys(spans)), ", "), fp.want)
+			t.Logf("block footprint at %s: %.2f bytes a sample (%d samples, %d bytes; %s blocks; want %.2f, #1525 measured %.2f)",
+				fp.cadence, got, n, bytes, strings.Join(slices.Sorted(mapKeys(spans)), ", "), fp.want, fp.measured)
 			if math.Abs(got-fp.want) > 0.10*fp.want {
-				t.Errorf("blocks cost %.2f bytes a sample at %s, more than 10%% from #1525's %.2f", got, fp.cadence, fp.want)
+				t.Errorf("blocks cost %.2f bytes a sample at %s, more than 10%% from %.2f", got, fp.cadence, fp.want)
 			}
 		})
 	}
