@@ -231,6 +231,22 @@ so a location move (which names both rooms) and a system move (which reaches one
 placed in it and names the other) resolved the same pair in **opposite** orders. Ordering by id is
 total by construction, since two owners can share a name but never an id.
 
+### A location rolls up from its children
+
+A location's **recorded** verdict is the worst of its **direct children's recorded verdicts**: the
+systems placed in it and the locations under it, one latest row each, read by the owner indexes
+([ADR-1562](/architecture/decisions/#adr-1562-a-location-rolls-up-from-its-childrens-recorded-verdicts)).
+It is the same answer as the worst over every system in its subtree, because the rollup is worst-wins
+and a child location's verdict is already the worst of its own subtree. What changes is the cost: a
+write pays for the chain it touches (one system, and one row per location above it), not for the
+fleet under each of those locations or the length of each system's history.
+
+That holds only while every child is current, so a recompute **locks** its whole chain first, in the
+order above, and only then rolls it up **bottom-up**, every location after its children. A concurrent
+write under a shared ancestor holds that ancestor's lock until it commits, so whichever recompute
+reaches the ancestor second reads the other's children. The two health reads still fold the subtree
+live, and the tests hold the recorded tree to that full fold after every kind of write.
+
 ### A read never writes
 
 Self-healing on read would stamp the edge at read time, precisely the inaccuracy this model avoids.
