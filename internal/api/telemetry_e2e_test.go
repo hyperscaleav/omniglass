@@ -74,7 +74,8 @@ func TestTelemetryPushAPI(t *testing.T) {
 
 	// One batch mixing every lane, plus a name the metric catalog does not know:
 	// the acceptance's mixed batch, each entry landing in its lane's table.
-	suppliedTS := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	// Hours old, inside the metric window: an older sample is dropped (#1529).
+	suppliedTS := time.Now().UTC().Add(-3 * time.Hour).Truncate(time.Second)
 	body := map[string]any{
 		"owner":  map[string]any{"kind": "component", "ref": "bar-1"},
 		"source": "webex-cloud",

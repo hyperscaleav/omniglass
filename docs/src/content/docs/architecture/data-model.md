@@ -370,11 +370,6 @@ telemetry: {
     span: text {constraint: primary_key}
     span_start: timestamp with time zone {constraint: primary_key}
   }
-  metric_block_dirty: {
-    shape: sql_table
-    day: timestamp with time zone {constraint: primary_key}
-    series_id: bigint {constraint: primary_key}
-  }
   metric_block_mark: {
     shape: sql_table
     id: boolean {constraint: primary_key}

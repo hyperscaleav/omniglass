@@ -17,9 +17,11 @@ import (
 // and a sparse one waits for its ISO week, whose leftover days fold into one
 // week block. Every block crosses Postgres's 2 KB compression threshold or is
 // the only row its sparse week costs. The blocks are written beside the raw
-// rows, which stay authoritative: nothing reads a block yet, and no prune
-// waits on one. Calculated series are sparse already and never block;
-// properties and declared rows are other tables.
+// rows, which stay authoritative: nothing reads a block yet but the trend's
+// recompute of a dirtied hour, and no prune waits on one. A late sample for
+// a folded day lands raw and merges into the block that covers it, in its
+// own batch's transaction (#1529, ADR-1529). Calculated series are sparse
+// already and never block; properties and declared rows are other tables.
 
 const (
 	// BlockHourMin is the samples a series-day holds at which it is cut into
@@ -35,13 +37,16 @@ const (
 // Monday. The day and hour buckets share the trend's epoch.
 const blockWeekEpoch = `timestamptz '2000-01-03 00:00:00+00'`
 
-// blockSeriesChunk is how many series one fold transaction blocks, and
-// blockDirtyChunk how many dirtied series-days one rebuild transaction folds
-// again (a day each, under the trend lock, so fewer than the trend's hours).
-const (
-	blockSeriesChunk = 200
-	blockDirtyChunk  = 50
-)
+// blockSeriesChunk is how many series one fold transaction blocks.
+const blockSeriesChunk = 200
+
+// blockLockKey names the advisory lock between the folds and the late merge:
+// a fold holds it exclusive from after it takes the mark row to its commit,
+// and a batch merging late samples holds it shared from before it reads the
+// marks to its own, so the merge reads the marks of every fold that has
+// written and no fold writes past a merge in flight. An on-time batch never
+// takes it.
+const blockLockKey = "metric_block:fold"
 
 // blockOffset is a sample's (alias m) millisecond offset from the start of
 // its block. Metric timestamps are whole milliseconds (#1532) and a week is
@@ -50,8 +55,8 @@ func blockOffset(start string) string {
 	return `round((extract(epoch from m.ts) - extract(epoch from ` + start + `)) * 1000)::int4`
 }
 
-// blockUpsert replaces a refolded block whole: a block is always every sample
-// its span held when it was folded, never an increment.
+// blockUpsert replaces a refolded block whole: a fold writes every sample
+// its span holds, never an increment.
 const blockUpsert = `on conflict (series_id, span_start, span) do update set n = excluded.n,
 	offset_ms = excluded.offset_ms, value = excluded.value`
 
@@ -141,9 +146,6 @@ type BlockCompaction struct {
 	WeekThrough time.Time
 	// Blocks is how many blocks the two folds wrote.
 	Blocks int64
-	// Rebuilt is how many series-days a late sample had dirtied and the pass
-	// folded again from the raw rows.
-	Rebuilt int64
 	// Behind is true when closed days remain unfolded (the pass reached
 	// MaxDays), so the next pass should come soon.
 	Behind bool
@@ -206,14 +208,15 @@ func isoWeek(t time.Time) time.Time {
 
 // CompactMetricBlocks folds closed metric days into blocks: up to f.MaxDays
 // UTC days, oldest first, up to the last day whose every hour the trend
-// compaction has closed; then every ISO week whose days are all folded; then
-// every folded series-day a late sample has dirtied since, again.
+// compaction has closed; then every ISO week whose days are all folded.
 //
 // The day fold rides on the trend compaction's marks (#1276) rather than a
 // drain of its own: a day closes only once the trend's compacted mark has
 // passed its every hour, so every metric insert into it either committed
 // before the trend's drain, and the fold sees it, or read an announced mark
-// past it and dirtied the day for the rebuild. Each batch of series folds in
+// past it and was late: such a sample merges into its block if the day has
+// folded by the time it does (mergeLateBlocks), and lands raw for the fold
+// to read if not, the block lock ordering the two. Each batch of series folds in
 // a transaction of its own that moves the block mark past it, so a pass that
 // stops anywhere leaves each series-day either folded whole or not at all,
 // and the next pass goes on from the mark.
@@ -270,10 +273,8 @@ func (p *PG) CompactMetricBlocks(ctx context.Context, f BlockFold) (BlockCompact
 		}
 		out.WeekThrough = marks.week
 	}
-	n, err := p.rebuildDirtyBlocks(ctx, f.LaneDays)
-	out.Rebuilt = n
-	if err != nil || !f.Verify {
-		return out, err
+	if !f.Verify {
+		return out, nil
 	}
 	bad, err := p.VerifyMetricBlocks(ctx, f.LaneDays)
 	if err != nil {
@@ -341,6 +342,9 @@ func (p *PG) foldBlockBatch(ctx context.Context, f BlockFold, target time.Time, 
 	if err != nil || !m.blocked.Before(target) {
 		return m, err
 	}
+	if err := lockBlockFolds(ctx, tx); err != nil {
+		return m, err
+	}
 	day := m.blocked
 	ids, err := nextBlockSeries(ctx, tx, m.blockedSeries, f.SeriesChunk)
 	if err != nil {
@@ -383,6 +387,9 @@ func (p *PG) foldWeekBatch(ctx context.Context, f BlockFold, out *BlockCompactio
 	if err != nil || m.week.Add(7*24*time.Hour).After(m.blocked) {
 		return m, err
 	}
+	if err := lockBlockFolds(ctx, tx); err != nil {
+		return m, err
+	}
 	week := m.week
 	ids, err := nextBlockSeries(ctx, tx, m.weekSeries, f.SeriesChunk)
 	if err != nil {
@@ -411,109 +418,85 @@ func (p *PG) foldWeekBatch(ctx context.Context, f BlockFold, out *BlockCompactio
 	return m, nil
 }
 
-// rebuildDirtyBlocks folds again, from the raw rows, every folded series-day a
-// late sample dirtied, a chunk a transaction, clearing each mark it takes, and
-// returns how many it rebuilt. A mark for a day the day fold has not passed
-// waits for it (the fold reads the day whole).
-func (p *PG) rebuildDirtyBlocks(ctx context.Context, laneDays int) (int64, error) {
-	var total int64
-	for {
-		var left bool
-		if err := p.pool.QueryRow(ctx, `select exists (select 1 from metric_block_dirty
-			where day < (select blocked_through from metric_block_mark))`).Scan(&left); err != nil {
-			return total, fmt.Errorf("storage: rebuild dirtied metric blocks: %w", err)
-		}
-		if !left {
-			return total, nil
-		}
-		n, err := p.rebuildDirtyChunk(ctx, laneDays)
-		total += n
-		if err != nil {
-			return total, err
-		}
+// lockBlockFolds takes the block lock exclusive in a fold's transaction,
+// waiting for every batch merging late samples to commit, and holds it until
+// the fold's commit; a merge that starts meanwhile waits behind it.
+func lockBlockFolds(ctx context.Context, tx pgx.Tx) error {
+	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(hashtextextended($1, 0))`, blockLockKey); err != nil {
+		return fmt.Errorf("storage: wait for the late block merges: %w", err)
 	}
+	return nil
 }
 
-// rebuildDirtyChunk rebuilds up to blockDirtyChunk dirtied series-days in one
-// transaction that holds the trend lock exclusive from before it takes the
-// marks, as recomputeDirtyChunk does and for the same reason: a late insert
-// that holds the lock commits before the rebuild reads, and one that waits
-// for it marks its day again after. Each day's hour and day blocks are
-// replaced whole, and, when the week fold has passed the series' week, so is
-// its week block, since the day may have crossed BlockDayMin either way. A
-// marked day the prune has begun is cleared and left as it was.
-func (p *PG) rebuildDirtyChunk(ctx context.Context, laneDays int) (int64, error) {
-	tx, err := p.pool.BeginTx(ctx, trendTxOptions)
-	if err != nil {
-		return 0, fmt.Errorf("storage: rebuild dirtied metric blocks: %w", err)
-	}
-	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
-	marks, _, err := metricBlockMarks(ctx, tx, true)
-	if err != nil {
-		return 0, err
-	}
-	if err := lockTrendWrites(ctx, tx, "the dirtied days stay marked"); err != nil {
-		return 0, err
-	}
-	rows, err := tx.Query(ctx, `with d as (
-			delete from metric_block_dirty x using (
-				select series_id, day from metric_block_dirty where day < $1
-				order by day, series_id limit $2) y
-			where x.series_id = y.series_id and x.day = y.day
-			returning x.series_id, x.day)
-		select d.series_id, d.day from d
-		join metric_series s on s.id = d.series_id
+// lateSamples is the observed samples a batch landed in hours the trend
+// compaction had announced, as their raw rows landed: the late merge's input.
+type lateSamples struct {
+	series []int64
+	ts     []time.Time
+	id     []int64
+	value  []float64
+}
+
+// mergeBlocksSQL merges late samples ($1..$4 their raw rows' series, ts, id
+// and value; $5 the metric lane's days) into the blocks that cover them. A
+// sample's day is covered once the day fold has passed its series there and
+// the day is still intact: by the hour block of its hour when the day was cut
+// into hours (a new one when the hour had none), else by the day's block,
+// else, once the week fold has passed the series' week, by the week block.
+// A sample of a day the fold has not reached is covered by nothing and waits
+// as a raw row for the fold. Each block is written once, in key order: the
+// samples it gains, in ts then id order, join those it holds after every
+// sample at the same instant, so it unnests as it would have folded had they
+// landed on time. The block's span is never revisited, however many samples
+// it gains (ADR-1529). No mark row (no pass yet) covers nothing.
+var mergeBlocksSQL = fmt.Sprintf(`with l as (
+		select u.series_id, u.ts, u.id, u.value, date_bin('1 day', u.ts, %[1]s) as day
+		from unnest($1::bigint[], $2::timestamptz[], $3::bigint[], $4::float8[]) as u(series_id, ts, id, value)),
+	k as (
+		select l.series_id, l.ts, l.id, l.value, l.day, date_bin('7 days', l.day, %[2]s) as week, mk.week_through, mk.week_series,
+			exists (select 1 from metric_block b where b.series_id = l.series_id and b.span = 'hour'
+				and b.span_start >= l.day and b.span_start < l.day + interval '24 hours') as hours,
+			exists (select 1 from metric_block b where b.series_id = l.series_id and b.span = 'day' and b.span_start = l.day) as whole
+		from l join metric_series s on s.id = l.series_id and s.provenance = 'observed'
 		join metric_type t on t.id = s.metric_type_id
-		where `+blockIntact("d.day", "$3"), marks.blocked, blockDirtyChunk, laneDays)
-	if err != nil {
-		return 0, fmt.Errorf("storage: rebuild dirtied metric blocks: %w", err)
+		cross join metric_block_mark mk
+		where (l.day < mk.blocked_through or l.day = mk.blocked_through and l.series_id <= mk.blocked_series)
+			and %[3]s),
+	m as (
+		select k.series_id, k.ts, k.id, k.value,
+			case when k.hours then date_bin('1 hour', k.ts, %[1]s) when k.whole then k.day else k.week end as span_start,
+			case when k.hours then 'hour' when k.whole then 'day' else 'week' end as span
+		from k
+		where k.hours or k.whole or k.week < k.week_through or k.week = k.week_through and k.series_id <= k.week_series)
+	insert into metric_block (series_id, span_start, span, n, offset_ms, value)
+	select m.series_id, m.span_start, m.span, count(*), array_agg(%[4]s order by m.ts, m.id),
+		array_agg(m.value order by m.ts, m.id)
+	from m group by m.series_id, m.span_start, m.span
+	order by m.series_id, m.span_start, m.span
+	on conflict (series_id, span_start, span) do update set (n, offset_ms, value) = (
+		select count(*), array_agg(x.o order by x.o, x.src, x.ord), array_agg(x.v order by x.o, x.src, x.ord)
+		from (
+			select u.o, u.v, 0 as src, u.ord from unnest(metric_block.offset_ms, metric_block.value) with ordinality as u(o, v, ord)
+			union all
+			select u.o, u.v, 1, u.ord from unnest(excluded.offset_ms, excluded.value) with ordinality as u(o, v, ord)) x)`,
+	trendEpoch, blockWeekEpoch, blockIntact("l.day", "$5"), blockOffset("m.span_start"))
+
+// mergeLateBlocks merges a batch's late samples into the blocks that cover
+// them (mergeBlocksSQL), in the batch's transaction, after their raw rows
+// have landed: the block lock taken shared in a statement of its own, so the
+// merge's own statement reads the marks every fold that wrote before it
+// committed, and no fold commits past them before the batch does.
+func mergeLateBlocks(ctx context.Context, tx pgx.Tx, late lateSamples, laneDays int) error {
+	if len(late.series) == 0 {
+		return nil
 	}
-	var series []int64
-	var days []time.Time
-	var weekSeries []int64
-	var weeks []time.Time
-	seen := map[BlockKey]bool{}
-	for rows.Next() {
-		var id int64
-		var day time.Time
-		if err := rows.Scan(&id, &day); err != nil {
-			rows.Close()
-			return 0, fmt.Errorf("storage: rebuild dirtied metric blocks: %w", err)
-		}
-		series, days = append(series, id), append(days, day)
-		w := isoWeek(day)
-		k := BlockKey{SeriesID: id, SpanStart: w}
-		if folded := w.Before(marks.week) || w.Equal(marks.week) && id <= marks.weekSeries; folded && !seen[k] {
-			seen[k] = true
-			weekSeries, weeks = append(weekSeries, id), append(weeks, w)
-		}
+	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock_shared(hashtextextended($1, 0))`, blockLockKey); err != nil {
+		return fmt.Errorf("storage: merge late samples into their blocks: %w", err)
 	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return 0, fmt.Errorf("storage: rebuild dirtied metric blocks: %w", err)
+	if _, err := tx.Exec(ctx, mergeBlocksSQL, late.series, late.ts, late.id, late.value, laneDays); err != nil {
+		return fmt.Errorf("storage: merge late samples into their blocks: %w", err)
 	}
-	const pairs = `select * from unnest($1::bigint[], $2::timestamptz[]) as p(series_id, %s)`
-	steps := []struct {
-		sql  string
-		args []any
-	}{
-		{`delete from metric_block b using unnest($1::bigint[], $2::timestamptz[]) as p(series_id, day)
-			where b.series_id = p.series_id and b.span <> 'week'
-				and b.span_start >= p.day and b.span_start < p.day + interval '24 hours'`, []any{series, days}},
-		{blockDaysSQL(fmt.Sprintf(pairs, "day"), "", "$3"), []any{series, days, laneDays}},
-		{`delete from metric_block b using unnest($1::bigint[], $2::timestamptz[]) as p(series_id, week)
-			where b.series_id = p.series_id and b.span = 'week' and b.span_start = p.week`, []any{weekSeries, weeks}},
-		{blockWeekSQL(fmt.Sprintf(pairs, "week"), "", "$3"), []any{weekSeries, weeks, laneDays}},
-	}
-	for _, s := range steps {
-		if _, err := tx.Exec(ctx, s.sql, s.args...); err != nil {
-			return 0, fmt.Errorf("storage: rebuild dirtied metric blocks: %w", err)
-		}
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return 0, fmt.Errorf("storage: rebuild dirtied metric blocks: %w", err)
-	}
-	return int64(len(series)), nil
+	return nil
 }
 
 // verifyBlocksSQL holds every block whose span starts inside its series'

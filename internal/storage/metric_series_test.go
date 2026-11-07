@@ -304,6 +304,9 @@ func TestARoutingMissIsReadFromItsFieldsNotItsText(t *testing.T) {
 func TestAHalfDetachedDayStillLands(t *testing.T) {
 	t.Parallel()
 	f := newPruneFixture(t)
+	// A day past the lane's default window, inside prune-rtt's own: a sample
+	// older than its series' window is dropped before it routes (#1529).
+	mustExec(t, f.conn, `update metric_type set retention_days = 60 where name = 'prune-rtt'`)
 	old := dayStart(time.Now()).AddDate(0, 0, -40)
 	if err := f.gw.MakeMetricDays(f.ctx, old); err != nil {
 		t.Fatal(err)

@@ -5080,22 +5080,6 @@
      }
     ]
    },
-   "metric_block_dirty": {
-    "columns": [
-     {
-      "name": "series_id",
-      "type": "bigint",
-      "nullable": false,
-      "pk": true
-     },
-     {
-      "name": "day",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "pk": true
-     }
-    ]
-   },
    "metric_block_mark": {
     "columns": [
      {

@@ -255,9 +255,9 @@ func (s *Server) startSampleRetention() {
 				slog.Info("metric hours closed into trends", "facility", "retention",
 					"hours", rep.Trends.Hours, "through", rep.Trends.Through, "recomputed", rep.Trends.Recomputed)
 			}
-			if b := rep.Blocks; b.Days > 0 || b.Weeks > 0 || b.Rebuilt > 0 {
+			if b := rep.Blocks; b.Days > 0 || b.Weeks > 0 {
 				slog.Info("metric days folded into blocks", "facility", "retention", "days", b.Days, "through", b.Through,
-					"weeks", b.Weeks, "week_through", b.WeekThrough, "blocks", b.Blocks, "rebuilt", b.Rebuilt)
+					"weeks", b.Weeks, "week_through", b.WeekThrough, "blocks", b.Blocks)
 			}
 			if len(rep.Created) > 0 || len(rep.Dropped) > 0 {
 				slog.Info("metric partitions rolled", "facility", "retention",

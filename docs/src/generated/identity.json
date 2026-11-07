@@ -222,12 +222,6 @@
       "labelled": false
     },
     {
-      "table": "metric_block_dirty",
-      "shape": "id only",
-      "reason": "a folded day a late sample landed in (#1528), keyed by series and day; the block pass's work list, never named",
-      "labelled": false
-    },
-    {
       "table": "metric_block_mark",
       "shape": "id only",
       "reason": "how far the block folds have gone (#1528): one row, keyed by a constant true; nothing addresses it by name",
