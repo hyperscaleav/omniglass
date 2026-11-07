@@ -18,3 +18,7 @@ func (p *PG) MetricBlockMarks(ctx context.Context) (blocked time.Time, blockedSe
 	m, ok, err := metricBlockMarks(ctx, p.pool, false)
 	return m.blocked, m.blockedSeries, m.week, m.weekSeries, ok, err
 }
+
+// BlockMergeLockTimeout is how long a late batch waits for the block lock
+// before it gives up (#1546).
+const BlockMergeLockTimeout = blockMergeLockTimeout

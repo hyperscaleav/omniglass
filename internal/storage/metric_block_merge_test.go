@@ -2,6 +2,8 @@ package storage_test
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"slices"
@@ -9,6 +11,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
@@ -377,6 +381,132 @@ func TestABatchFailingMidMergeLandsNothing(t *testing.T) {
 	}
 	if got := r.blocksOf(a); !slices.Equal(got, []string{"day 1+00:00 171", "day 2+00:00 171"}) {
 		t.Errorf("after the redelivery the blocks are %v, want each late sample in its day block once", got)
+	}
+	r.verify()
+}
+
+// TestAHourPastTheWindowCutoffInAFoldedDayRecomputesFromItsRawRows: a day
+// folded while it was intact whose start has since slipped past its series'
+// window, with the cutoff inside the day, no longer takes a late sample into
+// its block (the merge needs the whole day), so the sample lands raw only,
+// and the recompute of its still-intact hour reads the raw rows too: the
+// hour's trend row is the one its raw rows give, whatever span the day was
+// folded at (#1546, ADR-1529).
+func TestAHourPastTheWindowCutoffInAFoldedDayRecomputesFromItsRawRows(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		day  int
+		n    int
+		want string
+	}{
+		{"hour", 0, 4080, "hour 0+00:00 170"},
+		{"day", 1, 170, "day 1+00:00 170"},
+		{"week", 3, 5, "week 0+00:00 5"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			r := newBlockRig(t)
+			a := r.series("", "observed")
+			r.spaced(a, r.day(c.day), c.n)
+			r.fold(storage.BlockFold{MaxDays: blockLaneDays})
+			if got := r.blocksOf(a); !slices.Contains(got, c.want) {
+				t.Fatalf("before the window moves the blocks are %v, want %q among them", got, c.want)
+			}
+			// The window shortens to the whole days between the folded day and
+			// now, so its cutoff falls inside the folded day, at now's time of
+			// day: the day is no longer intact, its hours after the cutoff are.
+			now := time.Now().UTC()
+			days := int(now.Sub(r.day(c.day)) / (24 * time.Hour))
+			mustExec(t, r.conn, `update metric_type set retention_days = $1 where name = 'prune-rtt'`, days)
+			cutoff := now.Add(-time.Duration(days) * 24 * time.Hour)
+			hour := cutoff.Add(2 * time.Minute).Truncate(time.Hour).Add(time.Hour)
+			if !hour.Add(time.Hour).Before(r.day(c.day).Add(24 * time.Hour)) {
+				t.Skip("the window's cutoff is too near the end of its day for an intact hour to follow it")
+			}
+			r.ingest(sampleOf("", hour.Add(30*time.Minute+time.Millisecond), -7))
+			if got := r.blocksOf(a); !slices.Contains(got, c.want) {
+				t.Fatalf("the late sample of an expired day reached its block: the blocks are %v", got)
+			}
+			if _, err := r.gw.CompactMetricTrends(r.ctx, 1, days); err != nil {
+				t.Fatal(err)
+			}
+			var got, want string
+			if err := r.conn.QueryRow(r.ctx, `select coalesce((select concat_ws(' ', count, min, max, sum, first, last)
+				from metric_trend where series_id = $1 and hour = $2), '')`, a, hour).Scan(&got); err != nil {
+				t.Fatal(err)
+			}
+			if err := r.conn.QueryRow(r.ctx, `select concat_ws(' ', count(*), min(value), max(value), sum(value),
+				(array_agg(value order by ts, id))[1], (array_agg(value order by ts desc, id desc))[1])
+				from metric where series_id = $1 and ts >= $2 and ts < $2 + interval '1 hour'`, a, hour).Scan(&want); err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(want, "-7") {
+				t.Fatalf("the raw rows' fold %q lacks the late sample", want)
+			}
+			if got != want {
+				t.Errorf("the trend of the hour past the cutoff is %q, want %q, the fold of its raw rows", got, want)
+			}
+		})
+	}
+}
+
+// TestALateBatchWaitingOnTheBlockLockGivesUpAndLandsOnRedelivery: a fold
+// holding the block lock exclusive past BlockMergeLockTimeout fails a late
+// batch's merge with a lock timeout rather than stalling it behind the fold
+// (and, behind it, the ingest), the batch landing nothing, and its
+// redelivery once the fold commits lands every sample once (#1546).
+func TestALateBatchWaitingOnTheBlockLockGivesUpAndLandsOnRedelivery(t *testing.T) {
+	t.Parallel()
+	r := newBlockRig(t)
+	a := r.series("", "observed")
+	r.spaced(a, r.day(1), 170)
+	r.fold(storage.BlockFold{MaxDays: blockLaneDays})
+	fold, err := r.conn.Begin(r.ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = fold.Rollback(context.WithoutCancel(r.ctx)) }()
+	if _, err := fold.Exec(r.ctx, `select pg_advisory_xact_lock(hashtextextended('metric_block:fold', 0))`); err != nil {
+		t.Fatal(err)
+	}
+	b := storage.IngestBatch{BatchID: "waits-on-fold", Writer: storage.PushWriter(), Metrics: []storage.MetricSampleWrite{
+		sampleOf("", r.day(1).Add(time.Hour+time.Millisecond), 1),
+		sampleOf("", r.day(1).Add(2*time.Hour+time.Millisecond), 2),
+	}}
+	start := time.Now()
+	landed, err := r.gw.LandBatch(r.ctx, b)
+	waited := time.Since(start)
+	var pgErr *pgconn.PgError
+	if err == nil || !errors.As(err, &pgErr) || pgErr.Code != "55P03" {
+		t.Fatalf("the batch landed %v, %v behind a fold holding the block lock, want a lock timeout (55P03)", landed, err)
+	}
+	if storage.IsRefusedWrite(err) {
+		t.Errorf("the lock timeout %v reads as a refused write, so the batch would not be redelivered", err)
+	}
+	if waited < storage.BlockMergeLockTimeout || waited > storage.BlockMergeLockTimeout+3*time.Second {
+		t.Errorf("the batch waited %s for the block lock, want about %s", waited, storage.BlockMergeLockTimeout)
+	}
+	if n := r.count(`select count(*) from metric where series_id = $1`, a); n != 170 {
+		t.Errorf("after the timed-out batch series a holds %d rows, want its 170", n)
+	}
+	if n := r.count(`select count(*) from telemetry_receipt where batch_id = 'waits-on-fold'`); n != 0 {
+		t.Errorf("the timed-out batch left %d receipts", n)
+	}
+	if err := fold.Commit(r.ctx); err != nil {
+		t.Fatal(err)
+	}
+	for i, want := range []bool{true, false} {
+		if landed, err := r.gw.LandBatch(r.ctx, b); err != nil || landed != want {
+			t.Fatalf("delivery %d landed %v, %v; want %v", i+2, landed, err, want)
+		}
+	}
+	if n := r.count(`select count(*) from metric where series_id = $1`, a); n != 172 {
+		t.Errorf("after the redelivery series a holds %d rows, want 172", n)
+	}
+	if got := r.blocksOf(a); !slices.Equal(got, []string{"day 1+00:00 172"}) {
+		t.Errorf("after the redelivery the blocks are %v, want both samples in the day block once", got)
 	}
 	r.verify()
 }

@@ -2,12 +2,12 @@
 title: "A late metric sample merges into the block that covers it"
 date: 2026-11-07
 status: Accepted
-summary: "A late observed sample for a day the block fold has passed merges into its covering block (the hour block of its hour, the day block of its day, else its ISO week's block once the week has folded) in its own batch's transaction, each block rewritten once a batch from the block alone, never from the raw rows. The fold and the merge are ordered by a block advisory lock of their own, which only late batches take, not by the trend lock. The block keeps the span it was folded at. The raw row still lands until #1530. A sample older than its series' window is dropped and logged, the rest of its batch landing. A dirtied trend hour of a folded day recomputes from its block. #1528's dirtied-day rebuild is removed."
-refs: [1529, 1528, 1265, 1276, 1530]
+summary: "A late observed sample for a day the block fold has passed merges into its covering block (the hour block of its hour, the day block of its day, else its ISO week's block once the week has folded) in its own batch's transaction, each block rewritten once a batch from the block alone, never from the raw rows. The fold and the merge are ordered by a block advisory lock of their own, which only late batches take, not by the trend lock. The block keeps the span it was folded at. The raw row still lands until #1530. A sample older than its series' window is dropped and logged, the rest of its batch landing. A dirtied trend hour of a folded day recomputes from its block while the day is intact, else from raw rows, by the merge's own intactness test. A late batch waits at most two seconds for the block lock. #1528's dirtied-day rebuild is removed."
+refs: [1529, 1528, 1265, 1276, 1530, 1546]
 ---
 
 - **Date:** 2026-11-07 | **Status:** Accepted | **Pages:** [storage](/architecture/storage/)
-- **Decision:** (#1529; amends [ADR-1528](#adr-1528-observed-metric-samples-fold-into-lossless-blocks-sized-by-their-sample-count)'s decision 9, the dirtied-day rebuild.)
+- **Decision:** (#1529, amended by #1546 in decisions 1, 7 and 9; amends [ADR-1528](#adr-1528-observed-metric-samples-fold-into-lossless-blocks-sized-by-their-sample-count)'s decision 9, the dirtied-day rebuild.)
   1. **The covering block.** A late observed sample (one landing in an hour the trend compaction has
      announced, [ADR-1276](#adr-1276-hourly-trends-close-an-hour-a-day-after-it-ends-and-hold-back-the-prune))
      whose UTC day the day fold has passed for its series, and which is still inside its series' window,
@@ -15,7 +15,8 @@ refs: [1529, 1528, 1265, 1276, 1530]
      when its hour had none); else the day's block; else, once the week fold has passed the series' ISO
      week, the week block (a new one when the week had none). A sample of a day the fold has not
      reached, or of a week the week fold has not, is covered by nothing and lands as a raw row, which
-     the fold reads.
+     the fold reads. "Still inside its series' window" is `blockIntact`: the day's start is inside the
+     window. It is the one predicate for whether a block covers a sample (decision 7 reads it too).
   2. **One write a block a batch, from the block.** After its raw rows land, the batch merges its late
      samples in one `insert ... on conflict do update` grouped by covering block and written in key
      order. The update unnests the block as it stands and the samples it gains, ordered by offset with
@@ -45,11 +46,28 @@ refs: [1529, 1528, 1265, 1276, 1530]
      block is already being pruned.
   7. **A dirtied hour recomputes from its block.** The trend recompute reads a dirtied hour of a folded
      day from the block that covers it (decision 1's choice, read from the blocks that exist), and any
-     other hour from its raw rows, so it is right once #1530 drops the raw rows.
+     other hour from its raw rows, so it is right once #1530 drops the raw rows. It reads a block only
+     where the merge would have written to it: the day passes `blockIntact` (decision 1), the same SQL
+     predicate in both. The recompute keeps an hour by the hour's own start, which is later than its
+     day's, so with the window cutoff inside a folded day a late sample of a still-intact hour is
+     kept, skipped by the merge (the day is no longer intact) and landed raw only. Reading that hour
+     from the day's block would leave the sample out and undercount a trend that is kept for
+     `trend_days`, so such an hour reads its raw rows, which exist until #1530. When #1530 drops raw
+     rows early it must keep this case covered.
   8. **The rebuild is removed.** `metric_block_dirty`, the rebuild pass and `BlockCompaction.Rebuilt`
      go. An on-time batch is unchanged at 18 statements. A late batch into a folded day adds the
      settings read, the lock and the merge, and a batch carrying a sample a day old or more adds the
      window check.
+  9. **The merge's wait for the block lock is bounded.** A late batch holds the trend lock shared
+     (the insert read the announced mark under it) while it waits for the block lock. On a multi-server
+     install a fold chunk on one server holds the block lock exclusive, so a batch waiting behind it
+     holds the trend lock shared across the wait, a trend compaction or recompute on another server
+     asking for the trend lock exclusive queues behind the batch, and every new insert queues behind
+     that request, until the fold commits or `trendDrainTimeout` (5 s) fails the compaction. The merge
+     sets `lock_timeout` to two seconds, locally, for the shared lock's statement only, so the stall
+     is at most that and under the drain's. A batch that times out fails whole (SQLSTATE 55P03 is not
+     a refused write), and the ingest redelivers it, which merges once the fold has committed. A
+     single-server install is unaffected: `retentionPass` runs the folds one after the other.
 - **Context:** #1528 rebuilt a dirtied day from its raw rows, which #1530 is about to drop early. The
   rebuild ran under the trend lock taken exclusive, which stalled the ingest while it read whole days.
   A merge costs the batch that carries the late samples, in proportion to the blocks it touches.

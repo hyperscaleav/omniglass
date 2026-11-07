@@ -48,6 +48,14 @@ const blockSeriesChunk = 200
 // takes it.
 const blockLockKey = "metric_block:fold"
 
+// blockMergeLockTimeout bounds how long a batch merging late samples waits
+// for the block lock while a fold holds it exclusive. The batch holds the
+// trend lock shared meanwhile, so a compaction asking for it exclusive, and
+// every insert queued behind that, wait on the fold too; the bound keeps the
+// stall well inside trendDrainTimeout, and a batch that gives up is retried
+// or redelivered whole (#1546).
+const blockMergeLockTimeout = 2 * time.Second
+
 // blockOffset is a sample's (alias m) millisecond offset from the start of
 // its block. Metric timestamps are whole milliseconds (#1532) and a week is
 // 604,800,000 of them, inside an int4.
@@ -63,7 +71,11 @@ const blockUpsert = `on conflict (series_id, span_start, span) do update set n =
 // blockIntact is the condition that a series' day (t its metric type, day the
 // day's start) is still wholly inside the series' window ($lane the metric
 // lane's days): a day the prune has begun is not folded, since what remains
-// would be only part of it, and it goes with the next prune.
+// would be only part of it, and it goes with the next prune. It is also the
+// one test of whether a block covers a late sample: the late merge folds a
+// sample into a day's block only while the day is intact, and the trend
+// recompute reads an hour from the day's block only while it is, so the two
+// never disagree about a sample (#1546, ADR-1529).
 func blockIntact(day, lane string) string {
 	return day + ` >= now() - make_interval(days => coalesce(t.retention_days, ` + lane + `::int))`
 }
@@ -486,11 +498,24 @@ var mergeBlocksSQL = fmt.Sprintf(`with l as (
 // have landed: the block lock taken shared in a statement of its own, so the
 // merge's own statement reads the marks every fold that wrote before it
 // committed, and no fold commits past them before the batch does.
+//
+// The wait for the lock is bounded by blockMergeLockTimeout, for that wait only:
+// a fold holding the lock exclusive would otherwise stall the batch while it
+// holds the trend lock shared, and with it a compaction on another server that
+// asks for the trend lock exclusive and every insert queued behind that. A
+// batch that times out fails whole (55P03 is not a refused write) and the
+// ingest redelivers it.
 func mergeLateBlocks(ctx context.Context, tx pgx.Tx, late lateSamples, laneDays int) error {
 	if len(late.series) == 0 {
 		return nil
 	}
+	if _, err := tx.Exec(ctx, fmt.Sprintf(`set local lock_timeout = '%dms'`, blockMergeLockTimeout.Milliseconds())); err != nil {
+		return fmt.Errorf("storage: merge late samples into their blocks: %w", err)
+	}
 	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock_shared(hashtextextended($1, 0))`, blockLockKey); err != nil {
+		return fmt.Errorf("storage: merge late samples into their blocks: wait for a fold of the blocks (%s): %w", blockMergeLockTimeout, err)
+	}
+	if _, err := tx.Exec(ctx, `set local lock_timeout = default`); err != nil {
 		return fmt.Errorf("storage: merge late samples into their blocks: %w", err)
 	}
 	if _, err := tx.Exec(ctx, mergeBlocksSQL, late.series, late.ts, late.id, late.value, laneDays); err != nil {

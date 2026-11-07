@@ -345,9 +345,10 @@ where b.series_id = $1 order by b.span_start, b.span;
   for the fold. Each block is rewritten once a batch from the block alone, its samples and the new
   ones in timestamp then landing order, and keeps the span it was folded at. The merge takes the
   `metric_block:fold` advisory lock shared and each fold transaction takes it exclusive, so a merge
-  reads every fold's committed marks and no fold passes a merge in flight. An on-time batch never
-  takes it and still costs 18 statements. A dirtied trend hour of a folded day recomputes from its
-  block.
+  reads every fold's committed marks and no fold passes a merge in flight; the merge waits at most
+  two seconds for it, and a batch that gives up is redelivered. An on-time batch never takes it and
+  still costs 18 statements. A dirtied trend hour of a folded day recomputes from its block while the
+  day is intact (the merge's own test), else from its raw rows.
 - **Too old is dropped.** An observed sample older than its series' window is dropped before it lands,
   with one warning line a series naming the series, the count and the oldest's age, and the rest of
   its batch lands and is acknowledged.
