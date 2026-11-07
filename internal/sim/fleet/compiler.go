@@ -62,7 +62,7 @@ func Compile(manifest *Manifest, store *profile.Store) (*CompiledFleet, error) {
 	c := &compiler{
 		manifest:      manifest,
 		store:         store,
-		displayNames:  newDisplayNameGenerator(),
+		displayNames:  NewNameGenerator(),
 		devices:       nil,
 		usedHostnames: make(map[string]bool),
 		usedSlugs:     make(map[string]bool),
@@ -96,7 +96,7 @@ func Compile(manifest *Manifest, store *profile.Store) (*CompiledFleet, error) {
 type compiler struct {
 	manifest      *Manifest
 	store         *profile.Store
-	displayNames  *displayNameGenerator
+	displayNames  *NameGenerator
 	devices       []CompiledDevice
 	usedHostnames map[string]bool
 	usedSlugs     map[string]bool
@@ -240,7 +240,7 @@ func (c *compiler) compileSystem(ctx siteContext, sv SystemVolume, locationPath 
 	// pseudo-randomly across the adjective×surname space and stable
 	// across reruns. The earlier serial generator clumped every
 	// system into "boring_*" / "admiring_*" buckets in alpha order.
-	displayName := c.displayNames.next(c.manifest.Name + "/" + ctx.site.Code + "/" + pathStr + "/" + room + "/" + sv.Profile)
+	displayName := c.displayNames.Next(c.manifest.Name + "/" + ctx.site.Code + "/" + pathStr + "/" + room + "/" + sv.Profile)
 
 	for _, slot := range sysprof.Devices {
 		devprof, ok := c.store.Devices[slot.Profile]
@@ -498,7 +498,7 @@ func deepCopySlice(s []any) []any {
 	return out
 }
 
-// displayNameGenerator produces unique title-cased "Adjective Surname"
+// NameGenerator produces unique title-cased "Adjective Surname"
 // names (e.g. "Affectionate Bose"). Humanizing at the source means
 // every downstream consumer (lab console, omniglass UI, sync-emitted
 // fields) sees the same friendly form without doing its own
@@ -506,14 +506,17 @@ func deepCopySlice(s []any) []any {
 //
 // Hashed-seed lookup picks a starting cell so names spread across
 // the (adjective × surname) space rather than clumping in the first
-// few buckets. Linear probing on collision preserves uniqueness.
-type displayNameGenerator struct {
+// few buckets. Linear probing on collision preserves uniqueness. The fleet
+// compiler names its systems with it, and the scale lab's scenario plan
+// (internal/lab/scenario) labels each planned system with it.
+type NameGenerator struct {
 	used  map[string]bool
 	index int // empty-seed fallback counter
 }
 
-func newDisplayNameGenerator() *displayNameGenerator {
-	return &displayNameGenerator{used: map[string]bool{}}
+// NewNameGenerator is a generator with no name handed out yet.
+func NewNameGenerator() *NameGenerator {
+	return &NameGenerator{used: map[string]bool{}}
 }
 
 var displayAdjectives = []string{
@@ -569,7 +572,7 @@ var displaySurnames = []string{
 	"lamarr", "lamport", "leakey", "leavitt", "lederberg",
 }
 
-// next returns a Docker-flavored "Adjective Surname" for the given
+// Next returns a Docker-flavored "Adjective Surname" for the given
 // seed. Each system passes its identity (site + location path + room
 // + system_name) so the picked pair is stable across reruns. The
 // hash picks a starting (adjective, surname) cell; on collision we
@@ -579,7 +582,7 @@ var displaySurnames = []string{
 // Empty seed falls back to a serial counter (preserves the original
 // counter-based contract for any caller that doesn't have a stable
 // identity to seed with).
-func (g *displayNameGenerator) next(seed string) string {
+func (g *NameGenerator) Next(seed string) string {
 	total := len(displayAdjectives) * len(displaySurnames)
 	if total == 0 {
 		return ""

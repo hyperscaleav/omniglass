@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"strings"
 	"syscall"
 	"time"
 
@@ -21,6 +22,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/config"
 	"github.com/hyperscaleav/omniglass/internal/devseed"
 	"github.com/hyperscaleav/omniglass/internal/lab"
+	labscenario "github.com/hyperscaleav/omniglass/internal/lab/scenario"
 	"github.com/hyperscaleav/omniglass/internal/migrate"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/secret"
@@ -49,6 +51,8 @@ func newLabRunCmd(version string) *cobra.Command {
 		scenario string
 		image    string
 		project  string
+		systems  int
+		plan     bool
 		script   labScript
 	)
 	cmd := &cobra.Command{
@@ -83,14 +87,18 @@ func newLabRunCmd(version string) *cobra.Command {
 			go func() { <-ctx.Done(); stop() }()
 			return runLab(ctx, cmd.OutOrStdout(), version, labFlags{
 				port: port, listen: listen, fresh: fresh, scenario: scenario, image: image, project: project,
-				script: script,
+				systems: systems, plan: plan, script: script,
 			})
 		},
 	}
 	cmd.Flags().IntVar(&port, "port", lab.DefaultPort, "the console's port on this machine; 0 lets Docker pick a free one, printed when the lab is ready")
 	cmd.Flags().StringVar(&listen, "listen", lab.DefaultListen, "the address the console is published on; anything but loopback exposes the lab, and its well-known login, to your network")
 	cmd.Flags().BoolVar(&fresh, "fresh", false, "remove the lab's data first and start over from the seed")
-	cmd.Flags().StringVar(&scenario, "scenario", lab.DefaultScenario, "the fleet the lab seeds on its first run (the seed-dev command lists them)")
+	cmd.Flags().StringVar(&scenario, "scenario", lab.DefaultScenario, "the fleet the lab seeds on its first run (the seed-dev command lists them), or a scale lab scenario ("+strings.Join(labscenario.Names(), ", ")+") sized by --systems")
+	// The scale lab (#1357): a scenario manifest resolved at a size. Bring-up
+	// lands with #1554; until then --plan prints what it would build.
+	cmd.Flags().IntVar(&systems, "systems", 0, "how many systems a scale lab scenario resolves to")
+	cmd.Flags().BoolVar(&plan, "plan", false, "print the scale lab scenario's resolved plan (sites, systems per standard, components per product) and exit, starting nothing")
 	cmd.Flags().StringVar(&image, "image", "", "run this omniglass image instead of the one this binary was built with (env OMNIGLASS_LAB_IMAGE); one that is not this binary's own build is warned about")
 	cmd.Flags().StringVar(&project, "project", lab.DefaultProject, "the Docker compose project name")
 	_ = cmd.Flags().MarkHidden("project")
@@ -111,6 +119,28 @@ func newLabRunCmd(version string) *cobra.Command {
 	return cmd
 }
 
+// runLabScenario resolves a scale lab scenario manifest at --systems and,
+// with --plan, prints the plan. Without --plan it refuses: bringing a
+// scenario up is #1554's.
+func runLabScenario(out io.Writer, m *labscenario.Manifest, f labFlags) error {
+	if f.systems == 0 {
+		return fmt.Errorf("scenario %s is a scale lab scenario: say how many systems with --systems N (%d to %d)", m.Name, labscenario.MinSystems(m), labscenario.MaxSystems)
+	}
+	cat, err := labscenario.ShippedCatalog()
+	if err != nil {
+		return err
+	}
+	plan, err := labscenario.Resolve(m, cat, f.systems)
+	if err != nil {
+		return err
+	}
+	if !f.plan {
+		return fmt.Errorf("bringing up scale lab scenario %s is not built yet (#1554); add --plan to print the %d systems it would build",
+			m.Name, plan.Totals.Systems)
+	}
+	return labscenario.WritePlan(out, plan)
+}
+
 // labScript are lab run's script-only settings.
 type labScript struct {
 	ephemeral bool
@@ -124,13 +154,22 @@ type labFlags struct {
 	port                             int
 	listen, scenario, image, project string
 	fresh                            bool
+	systems                          int
+	plan                             bool
 	script                           labScript
 }
 
 func runLab(ctx context.Context, out io.Writer, version string, f labFlags) error {
+	if m, err := labscenario.Shipped(f.scenario); err == nil {
+		return runLabScenario(out, m, f)
+	}
 	sc, err := devseed.LookupScenario(f.scenario)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w; scale lab scenarios: %s", err, strings.Join(labscenario.Names(), ", "))
+	}
+	if f.systems != 0 || f.plan {
+		return fmt.Errorf("--systems and --plan size a scale lab scenario (%s); %q is a seeded fleet, which has its own size",
+			strings.Join(labscenario.Names(), ", "), f.scenario)
 	}
 	faults, err := devseed.PlantedFaults(sc)
 	if err != nil {
