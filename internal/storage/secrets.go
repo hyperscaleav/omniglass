@@ -617,51 +617,6 @@ order by r.name, r.band desc, r.depth asc`
 
 // --- helpers -----------------------------------------------------------------
 
-// secretCoversComponent reports whether a secret owned at (ownerKind, ownerID)
-// cascades onto componentID, the same cascade resolveSecretsSQL ranks: platform
-// always covers; a location owner covers when it is in the component's location
-// chain; a component owner covers when it is the component or an ancestor of it.
-// A secret has no system band (a credential's owner is never the room a device
-// serves), so a system-owned secret never covers a component here. It is the
-// worklist delivery's confinement (#814), keeping a node off a credential its
-// endpoint's component does not own.
-func (p *PG) secretCoversComponent(ctx context.Context, ownerKind string, ownerID *string, componentID string) (bool, error) {
-	if ownerKind == "platform" {
-		return true, nil
-	}
-	if ownerID == nil || componentID == "" {
-		return false, nil
-	}
-	var covers bool
-	switch ownerKind {
-	case "component":
-		if err := p.pool.QueryRow(ctx, `
-			with recursive chain(id) as (
-				select id from component where id = $1
-				union all
-				select c.parent_id from component c join chain ch on c.id = ch.id
-				where c.parent_id is not null
-			) cycle id set cyc using path
-			select exists (select 1 from chain where id = $2)`, componentID, *ownerID).Scan(&covers); err != nil {
-			return false, err
-		}
-	case "location":
-		if err := p.pool.QueryRow(ctx, `
-			with recursive loc_chain(id) as (
-				select location_id from component where id = $1 and location_id is not null
-				union all
-				select l.parent_id from location l join loc_chain lc on l.id = lc.id
-				where l.parent_id is not null
-			) cycle id set cyc using path
-			select exists (select 1 from loc_chain where id = $2)`, componentID, *ownerID).Scan(&covers); err != nil {
-			return false, err
-		}
-	default:
-		return false, nil
-	}
-	return covers, nil
-}
-
 // resolveSecretOwner turns an owner kind + optional name into the owning id,
 // enforcing the create scope: a platform secret needs an all create scope; a
 // scoped one resolves its owner in the matching tree, within the create scope
@@ -996,127 +951,180 @@ func mapSecretWriteErr(err error) error {
 }
 
 // nodeSecretFields unseals a secret's fields by name for worklist delivery
-// (#814): a driver task's secret inputs must reach the placed node as usable
-// credentials, so the server unseals them into the per-node worklist reply
-// (the node's NATS grant is the isolation boundary). Delivery is confined to a
-// secret that CASCADES onto the endpoint's componentID (platform, an ancestor
-// location or system, or the component itself, the same cascade ResolveSecrets
-// reads): the attach scoped the reference to the operator, and this re-check
-// keeps a rename or a name collision from drifting a node onto a secret its
-// component does not own. There is no per-pull audit row (the node re-pulls at
-// heartbeat pace, and a row per pull would bury the log; the attach was the
-// audited operator action) and no admin-sensitivity gate (that was the attach's
-// job). An ambiguous name after the cascade filter refuses rather than
-// guessing. The uuid-stable binding that removes the name-drift class is #820.
+// (#814), with the secret's version: a driver task's secret inputs must reach
+// the placed node as usable credentials, so the server unseals them into the
+// per-node worklist reply (the node's NATS grant is the isolation boundary).
+// It is a one-element call of nodeSecrets, which carries the delivery rules.
 func (p *PG) nodeSecretFields(ctx context.Context, name, componentID string) (map[string]string, string, error) {
-	fields, version, err := p.nodeSecretFieldsVersioned(ctx, name, componentID)
-	return fields, version, err
+	got, err := p.nodeSecretShapedOne(ctx, name, componentID)
+	return got.fields, got.version, err
 }
 
-// nodeSecretFieldsVersioned is nodeSecretFields with the secret's version: a
-// digest of its stored (sealed) value and id, which a rotation moves (it
-// re-seals under a fresh DEK) and which carries nothing derived from the
-// plaintext of a secret field (#1056 ruling: the connection fingerprint).
-func (p *PG) nodeSecretFieldsVersioned(ctx context.Context, name, componentID string) (map[string]string, string, error) {
-	f, row, err := p.nodeSecretRow(ctx, name, componentID)
-	if err != nil {
-		return nil, "", err
-	}
-	b, _ := json.Marshal(struct {
-		ID    string                     `json:"id"`
-		Value map[string]json.RawMessage `json:"value"`
-	}{row.id, row.value})
-	sum := sha256.Sum256(b)
-	return f, hex.EncodeToString(sum[:]), nil
-}
-
-func (p *PG) nodeSecretRow(ctx context.Context, name, componentID string) (map[string]string, *secretRow, error) {
-	fields, row, _, err := p.nodeSecretShaped(ctx, name, componentID)
-	return fields, row, err
-}
-
-// nodeSecretShaped is nodeSecretRow with the secret type's shape, which says
-// which of the unsealed fields are the secret ones (a password, not the
-// username beside it).
+// nodeSecretShaped is nodeSecretFields with the secret row and the secret
+// type's shape, which says which of the unsealed fields are the secret ones (a
+// password, not the username beside it).
 func (p *PG) nodeSecretShaped(ctx context.Context, name, componentID string) (map[string]string, *secretRow, secret.Shape, error) {
-	if p.secret == nil {
-		return nil, nil, secret.Shape{}, ErrNoSecretProvider
-	}
-	rows, err := p.pool.Query(ctx, `
-		select s.id, s.name, s.owner_kind,
-			coalesce(s.component_id::text, s.system_id::text, s.location_id::text),
-			s.value, st.name
-		from secret s join secret_type st on st.id = s.secret_type
-		where s.name = $1`, name)
+	got, err := p.nodeSecretShapedOne(ctx, name, componentID)
+	return got.fields, got.row, got.shape, err
+}
+
+func (p *PG) nodeSecretShapedOne(ctx context.Context, name, componentID string) (nodeSecret, error) {
+	got, err := p.nodeSecrets(ctx, []nodeSecretRef{{name, componentID}})
 	if err != nil {
-		return nil, nil, secret.Shape{}, fmt.Errorf("storage: node secret %q: %w", name, err)
+		return nodeSecret{}, err
+	}
+	return got[0], got[0].err
+}
+
+// nodeSecretRef is one secret a node needs: the name an endpoint's input
+// references, and the endpoint's component ("" for none).
+type nodeSecretRef struct{ name, componentID string }
+
+// nodeSecret is one reference resolved: the unsealed fields, the secret's
+// version (a digest of its stored, sealed value and id, which a rotation moves
+// and which carries nothing derived from the plaintext of a secret field: the
+// #1056 connection fingerprint), its row and its type's shape. err is the
+// reference's absence, ErrSecretNotFound or *ErrAmbiguousName, and the rest is
+// empty.
+type nodeSecret struct {
+	fields  map[string]string
+	version string
+	row     *secretRow
+	shape   secret.Shape
+	err     error
+}
+
+// nodeSecrets resolves and unseals many references in one statement, in the
+// order given (#1581): a node's worklist needs one per (reference, component)
+// pair, and a resolve each made a large site's pull cost a thousand
+// statements. Delivery is confined to a secret that CASCADES onto the
+// reference's own component (nodeSecretsSQL): the attach scoped the reference
+// to the operator, and this re-check keeps a rename or a name collision from
+// drifting a node onto a secret its component does not own. There is no
+// per-pull audit row (the node re-pulls at heartbeat pace, and a row per pull
+// would bury the log; the attach was the audited operator action) and no
+// admin-sensitivity gate (that was the attach's job). A name that resolves to
+// nothing the component owns is ErrSecretNotFound on that element; one that
+// resolves to more than one candidate refuses rather than guessing
+// (*ErrAmbiguousName). The uuid-stable binding that removes the name-drift
+// class is #820. The returned error is a real failure (no key provider, a DB
+// error, an envelope that will not open), never absence.
+func (p *PG) nodeSecrets(ctx context.Context, refs []nodeSecretRef) ([]nodeSecret, error) {
+	out := make([]nodeSecret, len(refs))
+	if len(refs) == 0 {
+		return out, nil
+	}
+	if p.secret == nil {
+		return nil, ErrNoSecretProvider
+	}
+	names, comps := make([]string, len(refs)), make([]string, len(refs))
+	for i, r := range refs {
+		names[i], comps[i] = r.name, r.componentID
+	}
+	rows, err := p.pool.Query(ctx, nodeSecretsSQL, names, comps)
+	if err != nil {
+		return nil, fmt.Errorf("storage: node secrets: %w", err)
 	}
 	defer rows.Close()
-	var found []struct {
+	type candidate struct {
 		row      secretRow
 		typeName string
 	}
+	found := make([][]candidate, len(refs))
 	for rows.Next() {
-		var r secretRow
-		var ownerID *string
-		var typeName string
-		if err := rows.Scan(&r.id, &r.name, &r.ownerKind, &ownerID, &r.value, &typeName); err != nil {
-			return nil, nil, secret.Shape{}, fmt.Errorf("storage: scan node secret %q: %w", name, err)
+		var i int
+		var c candidate
+		if err := rows.Scan(&i, &c.row.id, &c.row.name, &c.row.ownerKind, &c.row.ownerID, &c.row.value, &c.typeName); err != nil {
+			return nil, fmt.Errorf("storage: scan node secret: %w", err)
 		}
-		r.ownerID = ownerID
-		covers, err := p.secretCoversComponent(ctx, r.ownerKind, ownerID, componentID)
-		if err != nil {
-			return nil, nil, secret.Shape{}, fmt.Errorf("storage: cascade node secret %q: %w", name, err)
-		}
-		if !covers {
-			continue
-		}
-		found = append(found, struct {
-			row      secretRow
-			typeName string
-		}{r, typeName})
+		found[i] = append(found[i], c)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, nil, secret.Shape{}, fmt.Errorf("storage: node secret %q: %w", name, err)
+		return nil, fmt.Errorf("storage: node secrets: %w", err)
 	}
-	if len(found) == 0 {
-		return nil, nil, secret.Shape{}, ErrSecretNotFound
-	}
-	if len(found) > 1 {
-		return nil, nil, secret.Shape{}, &ErrAmbiguousName{Kind: "secret", Ref: name}
-	}
-	shapes, err := p.shapeIndex(ctx)
-	if err != nil {
-		return nil, nil, secret.Shape{}, err
-	}
-	shape, ok := shapes[found[0].typeName]
-	if !ok {
-		return nil, nil, secret.Shape{}, fmt.Errorf("storage: node secret %q: unknown secret type %q", name, found[0].typeName)
-	}
-	row := found[0].row
-	out := make(map[string]string, len(row.value))
-	for _, f := range shape.Fields {
-		raw, ok := row.value[f.Name]
-		if !ok {
+	var shapes map[string]secret.Shape
+	opened := map[string]nodeSecret{} // secret id -> its unsealed fields, version, row and shape
+	for i, cs := range found {
+		switch {
+		case len(cs) == 0:
+			out[i].err = ErrSecretNotFound
+			continue
+		case len(cs) > 1:
+			out[i].err = &ErrAmbiguousName{Kind: "secret", Ref: refs[i].name}
 			continue
 		}
-		if !f.Secret {
-			var v string
-			if err := json.Unmarshal(raw, &v); err != nil {
-				return nil, nil, secret.Shape{}, fmt.Errorf("storage: decode node secret field %q: %w", f.Name, err)
+		// Components sharing a location's or the platform's secret unseal it once.
+		if got, ok := opened[cs[0].row.id]; ok {
+			out[i] = got
+			continue
+		}
+		if shapes == nil {
+			if shapes, err = p.shapeIndex(ctx); err != nil {
+				return nil, err
 			}
-			out[f.Name] = v
-			continue
 		}
-		var env secret.Envelope
-		if err := json.Unmarshal(raw, &env); err != nil {
-			return nil, nil, secret.Shape{}, fmt.Errorf("storage: decode node secret envelope %q: %w", f.Name, err)
+		row := cs[0].row
+		shape, ok := shapes[cs[0].typeName]
+		if !ok {
+			return nil, fmt.Errorf("storage: node secret %q: unknown secret type %q", row.name, cs[0].typeName)
 		}
-		pt, err := secret.Open(ctx, p.secret, env, secretAAD(row.ownerKind, row.ownerID, row.name, f.Name))
+		fields, _, err := p.unsealSecretFields(ctx, row, shape)
 		if err != nil {
-			return nil, nil, secret.Shape{}, fmt.Errorf("storage: unseal node secret field %q: %w", f.Name, err)
+			return nil, fmt.Errorf("storage: node secret %q: %w", row.name, err)
 		}
-		out[f.Name] = string(pt)
+		b, _ := json.Marshal(struct {
+			ID    string                     `json:"id"`
+			Value map[string]json.RawMessage `json:"value"`
+		}{row.id, row.value})
+		sum := sha256.Sum256(b)
+		out[i] = nodeSecret{fields: fields, version: hex.EncodeToString(sum[:]), row: &row, shape: shape}
+		opened[row.id] = out[i]
 	}
-	return out, &row, shape, nil
+	return out, nil
 }
+
+// nodeSecretsSQL returns, for each (name, component) reference ($1, $2 in
+// step), every secret of that name that cascades onto THAT component, the same
+// cascade resolveSecretsSQL ranks: platform always covers; a location owner
+// covers when it is in the component's location chain; a component owner
+// covers when it is the component or an ancestor of it. A secret has no system
+// band (a credential's owner is never the room a device serves), so a
+// system-owned secret never covers. Each chain row carries the component it
+// was walked up from (target), and a candidate joins only its own reference's
+// target, so the chains run once for the whole batch and a sibling's chain
+// never covers a component. The CYCLE guards protect against a corrupted
+// parent edge.
+const nodeSecretsSQL = `
+with recursive
+want(ord, name, component_id) as (
+    select k.ord - 1, k.name, nullif(k.comp, '')::uuid
+    from unnest($1::text[], $2::text[]) with ordinality as k(name, comp, ord)
+),
+targets as (
+    select c.id, c.location_id from component c where c.id in (select component_id from want)
+),
+comp_chain(target, id) as (
+    select id, id from targets
+    union all
+    select cc.target, c.parent_id
+    from component c join comp_chain cc on c.id = cc.id
+    where c.parent_id is not null
+) cycle target, id set comp_cyc using comp_path,
+loc_chain(target, id) as (
+    select id, location_id from targets where location_id is not null
+    union all
+    select lc.target, l.parent_id
+    from location l join loc_chain lc on l.id = lc.id
+    where l.parent_id is not null
+) cycle target, id set loc_cyc using loc_path
+select w.ord, s.id, s.name, s.owner_kind,
+    coalesce(s.component_id::text, s.system_id::text, s.location_id::text),
+    s.value, st.name
+from want w
+join secret s on s.name = w.name
+join secret_type st on st.id = s.secret_type
+where s.owner_kind = 'platform'
+   or (s.owner_kind = 'component' and exists (
+        select 1 from comp_chain cc where cc.target = w.component_id and cc.id = s.component_id))
+   or (s.owner_kind = 'location' and exists (
+        select 1 from loc_chain lc where lc.target = w.component_id and lc.id = s.location_id))`
