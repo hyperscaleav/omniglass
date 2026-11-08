@@ -15,8 +15,11 @@ import (
 // about eight the database is the limit.
 const DefaultWorklistWorkers = 8
 
-// worklistQueueDepth is how many pulls wait for a worker before the
-// subscription stops taking more (and NATS holds the rest).
+// worklistQueueDepth is how many pulls wait for a worker before a further
+// pull is refused as busy. The subscription never blocks on the queue: a
+// blocked callback would leave later pulls in NATS's own buffer, stamped on
+// delivery rather than arrival, and the deadline would no longer be the
+// node's.
 const worklistQueueDepth = 256
 
 // defaultWorklistBudget is the budget of a pull that states none.
@@ -48,8 +51,16 @@ func worklistDeadline(hdr nats.Header, arrived time.Time) time.Time {
 // worklistPull is one node's pull, waiting for a worker.
 type worklistPull struct {
 	node     string
-	msg      *nats.Msg
+	subject  string
+	respond  respondFunc
 	deadline time.Time
+}
+
+// pullOf is msg, a node's pull on the worklist subject, as the pool holds it.
+func pullOf(node string, msg *nats.Msg, deadline time.Time) worklistPull {
+	return worklistPull{node: node, subject: msg.Subject, deadline: deadline, respond: func(data []byte, hdr nats.Header) error {
+		return msg.RespondMsg(&nats.Msg{Subject: msg.Reply, Data: data, Header: hdr})
+	}}
 }
 
 // startWorklistPool starts n workers that build and answer queued pulls. The
@@ -75,12 +86,19 @@ func (s *Server) startWorklistPool(n int) {
 	}
 }
 
-// queueWorklistPull hands a pull to the pool, or drops it once the pool has
-// stopped.
+// queueWorklistPull hands a pull to the pool without waiting. A pull that
+// finds the queue full is refused as busy, so its node fails fast and backs
+// off rather than waiting out a budget the pool cannot meet; one that
+// arrives once the pool has stopped is dropped.
 func (s *Server) queueWorklistPull(p worklistPull) {
 	select {
-	case s.worklistQueue <- p:
 	case <-s.worklistCtx.Done():
+	case s.worklistQueue <- p:
+	default:
+		s.worklistCounts.busy.Add(1)
+		slog.Warn("worklist pull refused, the responder's queue is full", "facility", "worklist",
+			"node", p.node, "subject", p.subject, "queued", len(s.worklistQueue))
+		s.refuseWorklist(p.node, p.subject, "worklist responder is busy", p.respond)
 	}
 }
 
@@ -90,12 +108,10 @@ func (s *Server) serveWorklistPull(ctx context.Context, p worklistPull, now time
 	if !now.Before(p.deadline) {
 		s.worklistCounts.expired.Add(1)
 		slog.Warn("worklist pull expired while it queued, its node stopped waiting", "facility", "worklist",
-			"node", p.node, "subject", p.msg.Subject, "late", now.Sub(p.deadline).String())
+			"node", p.node, "subject", p.subject, "late", now.Sub(p.deadline).String())
 		return
 	}
 	bctx, done := context.WithDeadline(ctx, p.deadline)
 	defer done()
-	s.answerWorklist(bctx, p.node, p.msg.Subject, s.nc.MaxPayload(), func(data []byte, hdr nats.Header) error {
-		return p.msg.RespondMsg(&nats.Msg{Subject: p.msg.Reply, Data: data, Header: hdr})
-	}, now)
+	s.answerWorklist(bctx, p.node, p.subject, s.nc.MaxPayload(), p.respond, now)
 }

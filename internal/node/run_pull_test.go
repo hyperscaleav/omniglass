@@ -143,8 +143,8 @@ func TestANodeWhoseFirstPullsFailRetriesAndRuns(t *testing.T) {
 	}
 	select {
 	case err := <-ran:
+		ran <- err // the deferred wait reads it
 		t.Fatalf("the node exited: %v", err)
-		ran <- err
 	default:
 	}
 	// The node's own logs carry each retry and the server's reason.

@@ -64,7 +64,7 @@ func TestAWorklistPullPastItsDeadlineIsDroppedUnread(t *testing.T) {
 	reads := 0
 	s := &Server{store: worklistReads{worklistOf{n: 2}, &reads}}
 	now := time.Now()
-	s.serveWorklistPull(context.Background(), worklistPull{node: "edge-1", msg: &nats.Msg{Subject: "og.v1.worklist.edge-1"}, deadline: now}, now)
+	s.serveWorklistPull(context.Background(), worklistPull{node: "edge-1", subject: "og.v1.worklist.edge-1", deadline: now}, now)
 
 	if reads != 0 {
 		t.Errorf("an expired pull read the worklist %d times", reads)
@@ -123,5 +123,40 @@ func TestALargeWorklistReplyIsSentGzipped(t *testing.T) {
 	}
 	if s.WorklistCounts().Served != 1 {
 		t.Errorf("counts %+v, want one served", s.WorklistCounts())
+	}
+}
+
+// A pull that finds the responder's queue full is refused at once as busy,
+// counted, and never waited on: the subscription must not block, or later
+// pulls would be stamped on delivery rather than arrival and the deadline
+// would stop being the node's.
+func TestAWorklistPullFindingTheQueueFullIsRefusedAsBusy(t *testing.T) {
+	logged := capture(t, slog.LevelDebug)
+	s := &Server{worklistCtx: context.Background(), worklistQueue: make(chan worklistPull, 1)}
+	var first, second sent
+	s.queueWorklistPull(worklistPull{node: "edge-1", subject: "og.v1.worklist.edge-1", respond: first.respond})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		s.queueWorklistPull(worklistPull{node: "edge-2", subject: "og.v1.worklist.edge-2", respond: second.respond})
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the second pull blocked on a full queue")
+	}
+
+	if first.calls != 0 {
+		t.Errorf("the queued pull was answered %d times before a worker took it", first.calls)
+	}
+	second.refused(t, "busy")
+	if got := s.WorklistCounts(); got.Busy != 1 || got.Served != 0 || got.Expired != 0 {
+		t.Errorf("counts %+v, want one busy", got)
+	}
+	if line := logged.String(); !strings.Contains(line, "level=WARN") || !strings.Contains(line, "node=edge-2") || !strings.Contains(line, "queue is full") {
+		t.Errorf("no busy warning: %s", line)
+	}
+	if len(s.worklistQueue) != 1 {
+		t.Errorf("%d pulls queued, want the first alone", len(s.worklistQueue))
 	}
 }

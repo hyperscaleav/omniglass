@@ -93,7 +93,8 @@ materialized, resolved task and command instances.
 :::note[Built: a declared change reaches a running node on its next pull]
 The node keeps no endpoint config apart from its worklist: it **re-pulls the whole worklist on its
 own interval** (`--worklist-every`, [below](#pulling-the-worklist)) and runs what the latest pull
-carried, so a change the server has written is running within one pull interval, with
+carried, so a change the server has written is running within one pull interval plus one
+heartbeat (the pull carries it, the next tick reconciles sessions and runs against it), with
 no restart and nothing to apply. The server side is the re-derive: an endpoint edit
 (`PATCH /endpoints/{endpoint}`, its driver inputs included) and a driver spec change (#823) rewrite
 the affected tasks in the same transaction, and a held session whose
@@ -117,7 +118,8 @@ apart), so a short heartbeat is not a worklist rebuild as often. The lab pulls e
 walkthrough every 2 s ([the lab's cadences](/guides/lab/)).
 
 - **A missed pull is retried, never fatal.** The first pull and every later one retry with
-  jittered exponential backoff, 1 s doubling to a 30 s cap, each logged at WARN with its attempt,
+  jittered exponential backoff (each wait in the upper half of a step that doubles from 1 s to a
+  30 s cap: 0.5 to 1 s first, 15 to 30 s at most), each logged at WARN with its attempt,
   its wait and the error. Until the first pull lands the node does not heartbeat, so it reads as
   not up rather than as up with nothing to do. After it, a failed pull keeps the last good
   worklist, every task and every session of it.
@@ -135,9 +137,12 @@ walkthrough every 2 s ([the lab's cadences](/guides/lab/)).
   for that pull is its arrival plus that budget. One subscription stamps each pull's arrival and
   queues it, and a pool of workers (`bus.Config.WorklistWorkers`, default 8, held under the
   database pool's size less one connection kept for ingest) builds and answers it. A pull that
-  waited past its deadline is dropped unread, and one whose deadline passes mid-build is
-  abandoned unsent. The server counts every outcome (`Server.WorklistCounts`: served, read
-  failed, oversize, respond failed, expired, abandoned) and logs every one but a served pull at
+  waited past its deadline is dropped unread, one whose deadline passes mid-build is abandoned
+  unsent, and one that arrives with the queue full (256 pulls waiting) is refused at once as busy,
+  so the node fails fast and backs off rather than waiting out its budget; the subscription never
+  blocks, so every pull is stamped on arrival. The server counts every outcome
+  (`Server.WorklistCounts`: served, read failed, oversize, respond failed, expired, abandoned,
+  busy) and logs every one but a served pull at
   WARN, or ERROR for an oversize reply.
 
 Why it is shaped this way, and what it defers (paging, set-based reads, the materialized

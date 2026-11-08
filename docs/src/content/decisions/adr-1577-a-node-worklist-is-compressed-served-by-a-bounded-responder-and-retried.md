@@ -49,7 +49,8 @@ refs: [1577, 1571, 1556, 529, 1583, 1581, 1584, 1586, 1250]
      Compressing the reply, rejected in the proposal, is accepted (point 2).
 - **Divergences from the decision as written.**
   - *One subscription and a queue, not a NATS queue group.* The pool is one subscription that
-    stamps each pull's arrival and hands it to a bounded queue (256 deep) that the workers drain.
+    stamps each pull's arrival and hands it, without blocking, to a bounded queue (256 deep) that
+    the workers drain; a pull that finds the queue full is refused as busy, so its node backs off.
     A queue group would leave the arrival time to each worker's callback, after the pull had
     already waited in the subscription's pending buffer, so the deadline would be counted late;
     and a queue group's members each run their callbacks serially, so a pull assigned behind
@@ -63,9 +64,11 @@ refs: [1577, 1571, 1556, 529, 1583, 1581, 1584, 1586, 1250]
 - **Measured after (2026-11-08, the worker, 12 cores).** `make scale-lab SYSTEMS=1000`: all 18
   sites up (every node pulled and heartbeated) 199 s after the command, against 17 of 18 after
   10 minutes before, and no node container restarted. 18 nodes pulling the 1,000-system
-  corporate fleet at once over the real bus with 8 workers
+  corporate fleet at once over the real bus, with the default pool (8 workers on that host; the
+  test sizes it from the database pool, as the server does)
   (`TestAFleetOfNodesPullingAtOnceIsServedByTheBoundedResponder`, a fresh test database):
-  every pull served, none expired, in 1.64 to 1.72 s. That is over the 1.4 s target, and the
+  every pull served, none expired, in 1.64 to 1.72 s. The test asserts the outcome (every pull
+  served, none expired), not the time; the figure is a measurement on that host. It is over the 1.4 s target, and the
   floor is HQ's own build (about 1.2 s, on one worker) rather than the queue (the 17 others'
   builds share the other seven workers), so the set-based reads (#1578, #1581) are what take it
   under.

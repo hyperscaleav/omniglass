@@ -12,7 +12,7 @@ and no rebuild. How the pull now behaves is on the [nodes](/architecture/nodes/#
 page.
 
 - **The node never exits on a pull.** The first pull and every later one retry with jittered backoff
-  (1 s to a 30 s cap) and keep the last good worklist; the pull runs on its own interval
+  (each wait in the upper half of a step doubling from 1 s to a 30 s cap) and keep the last good worklist; the pull runs on its own interval
   (`node run --worklist-every`, 30 s by default, 5 s in the lab) instead of every heartbeat. The
   server answers a pull it cannot read in full with the reason and no body, so a database blip never
   reaches the node as a short worklist. `TestATransientStorageErrorLeavesTheNodesSessionsUntouched`
@@ -21,8 +21,9 @@ page.
 - **The reply is gzipped past 64 KB** under `Content-Encoding: gzip`. Headquarters at 1,000 systems is
   3,273,096 B of JSON and about 463 KB on the wire.
 - **A bounded responder.** A pool of 8 workers (held under the database pool less one connection for
-  ingest) answers pulls, and a pull whose `Omniglass-Timeout` budget ran out while it queued is
-  dropped unread. Every outcome is counted (`Server.WorklistCounts`).
+  ingest) answers pulls; a pull whose `Omniglass-Timeout` budget ran out while it queued is dropped
+  unread, and one arriving with the queue full is refused as busy rather than waited on. Every
+  outcome is counted (`Server.WorklistCounts`).
 
 **Measured on the worker (12 cores).** `make scale-lab SYSTEMS=1000`: all 18 sites up 199 s after the
 command (17 of 18 after 10 minutes before), and no node container restarted. The fleet test, 18 nodes

@@ -3,6 +3,7 @@ package bus
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -75,7 +76,7 @@ func (s *Server) WorklistReplyBytes() map[string]int { return s.worklistSizes.sn
 // metrics endpoint, so these are the counters a later one reads; each outcome
 // other than served is also logged.
 type worklistCounts struct {
-	served, readFailed, oversize, respondFailed, expired, abandoned atomic.Int64
+	served, readFailed, oversize, respondFailed, expired, abandoned, busy atomic.Int64
 }
 
 // WorklistCounts is how many worklist pulls ended each way since the server
@@ -97,13 +98,16 @@ type WorklistCounts struct {
 	// Abandoned is the pulls whose worklist was read, or begun, after their
 	// node had given up, and so never sent.
 	Abandoned int64
+	// Busy is the pulls refused unread because the responder's queue was
+	// full; the node was told so.
+	Busy int64
 }
 
 // WorklistCounts reads the counts.
 func (s *Server) WorklistCounts() WorklistCounts {
 	c := &s.worklistCounts
 	return WorklistCounts{Served: c.served.Load(), ReadFailed: c.readFailed.Load(), Oversize: c.oversize.Load(),
-		RespondFailed: c.respondFailed.Load(), Expired: c.expired.Load(), Abandoned: c.abandoned.Load()}
+		RespondFailed: c.respondFailed.Load(), Expired: c.expired.Load(), Abandoned: c.abandoned.Load(), Busy: c.busy.Load()}
 }
 
 // respondFunc sends a worklist reply's body under its header.
@@ -156,7 +160,15 @@ func (s *Server) answerWorklist(ctx context.Context, node, subject string, maxPa
 		s.refuseWorklist(node, subject, fmt.Sprintf("worklist is %d bytes, over max payload %d", size, maxPayload), respond)
 		return
 	}
-	if err := respond(body, hdr); err != nil {
+	if err := respond(body, hdr); errors.Is(err, nats.ErrMaxPayload) {
+		// The limit counts the header's wire form with the body, so a body
+		// just under it can still be refused by the connection.
+		s.worklistCounts.oversize.Add(1)
+		slog.Error("worklist reply is over max payload with its header and cannot be sent, the node keeps its last worklist", "facility", "worklist",
+			"node", node, "subject", subject, "reply_bytes", size, "raw_bytes", len(raw), "max_payload", maxPayload, "tasks", len(reply.Tasks))
+		s.refuseWorklist(node, subject, fmt.Sprintf("worklist is %d bytes with its header, over max payload %d", size, maxPayload), respond)
+		return
+	} else if err != nil {
 		s.worklistCounts.respondFailed.Add(1)
 		slog.Warn("worklist reply could not be sent, the node will see a timeout", "facility", "worklist",
 			"node", node, "subject", subject, "reply_bytes", size, "max_payload", maxPayload, "error", err.Error())

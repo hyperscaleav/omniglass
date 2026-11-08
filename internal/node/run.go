@@ -359,9 +359,10 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 		return wl, err
 	}
 	runCommands(ctx, nc, cfg.Name, runner, sessions, executedCommands)
-	if err := publishHeartbeat(nc, cfg.Name); err != nil {
-		return wl, err
-	}
+	// A heartbeat the connection cannot take right now (a reconnect in
+	// flight, with no reconnect buffer) is retried next tick, as in the loop
+	// below; it never ends the node (#1577).
+	_ = publishHeartbeat(nc, cfg.Name)
 	publishSelfLogs(spool, cfg.Name, sink)
 
 	if cfg.Once {

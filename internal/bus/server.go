@@ -161,7 +161,7 @@ func (s *Server) subscribe() error {
 			return
 		}
 		now := time.Now()
-		s.queueWorklistPull(worklistPull{node: node, msg: msg, deadline: worklistDeadline(msg.Header, now)})
+		s.queueWorklistPull(pullOf(node, msg, worklistDeadline(msg.Header, now)))
 	})
 	if err != nil {
 		return fmt.Errorf("bus: subscribe worklist: %w", err)

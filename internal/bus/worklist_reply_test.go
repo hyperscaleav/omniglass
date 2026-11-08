@@ -90,6 +90,33 @@ func TestAnOversizedWorklistReplyIsLoggedAsAnError(t *testing.T) {
 	}
 }
 
+// The connection counts the header's wire form against max payload, so a
+// body under the limit on its own can still be refused with ErrMaxPayload.
+// That is an oversize reply, told to the node, not a send failure that
+// leaves it waiting out its budget.
+func TestAReplyTheConnectionRefusesAsOverMaxPayloadIsOversize(t *testing.T) {
+	logged := capture(t, slog.LevelDebug)
+	s := &Server{store: worklistOf{n: 2}}
+	var r sent
+	s.answerWorklist(context.Background(), "edge-1", "og.worklist.edge-1", 1<<20, func(data []byte, hdr nats.Header) error {
+		if len(data) > 0 {
+			return nats.ErrMaxPayload
+		}
+		return r.respond(data, hdr)
+	}, time.Now())
+
+	r.refused(t, "over max payload 1048576")
+	if got := s.WorklistCounts(); got.Oversize != 1 || got.RespondFailed != 0 || got.Served != 0 {
+		t.Errorf("counts %+v, want one oversize", got)
+	}
+	if line := logged.String(); !strings.Contains(line, "level=ERROR") || !strings.Contains(line, "with its header") {
+		t.Errorf("no oversize error: %s", line)
+	}
+	if got := s.WorklistReplyBytes(); len(got) != 0 {
+		t.Errorf("a reply that was not sent was recorded: %v", got)
+	}
+}
+
 // A Respond that fails is warned about, naming the node, the size and the
 // limit, rather than dropped.
 func TestAWorklistReplyThatFailsToSendIsWarned(t *testing.T) {
