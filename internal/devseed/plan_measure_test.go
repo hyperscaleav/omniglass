@@ -15,6 +15,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/devseed"
 	"github.com/hyperscaleav/omniglass/internal/lab/scenario"
+	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
@@ -169,4 +170,55 @@ func corporatePlan(t testing.TB, size int) *scenario.Plan {
 		t.Fatal(err)
 	}
 	return p
+}
+
+// TestPlanWorklistMeasure is the measurement behind a site node's first
+// worklist pull (#1571): the corporate plan seeded as the scale lab seeds it,
+// then each site node's worklist read, with the statements it issued. A probe,
+// not a gate: set PLAN_MEASURE to the sizes (e.g. 1000) to run it.
+func TestPlanWorklistMeasure(t *testing.T) {
+	// Serial: a timing probe.
+	sizes := os.Getenv("PLAN_MEASURE")
+	if sizes == "" {
+		t.Skip("set PLAN_MEASURE=1000 to measure")
+	}
+	for _, f := range strings.Split(sizes, ",") {
+		size, _ := strconv.Atoi(f)
+		t.Run(fmt.Sprintf("%d", size), func(t *testing.T) {
+			p := corporatePlan(t, size)
+			dsn := devseed.BootSeededDSN(t)
+			ctx := context.Background()
+			tm := newStmtTimer()
+			gw, err := storage.NewPG(ctx, dsn, devseed.SecretProvider(), storage.WithQueryTracer(tm))
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(gw.Close)
+			all := scope.Set{All: true}
+			for _, site := range p.Sites {
+				if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: scenario.SiteNode(site.Name), Label: site.Name}, all, all); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := devseed.SeedPlan(ctx, gw, "", p, devseed.PlanOptions{Endpoints: true, NodeFor: scenario.SiteNode}); err != nil {
+				t.Fatal(err)
+			}
+			tm = newStmtTimer()
+			gw2, err := storage.NewPG(ctx, dsn, devseed.SecretProvider(), storage.WithQueryTracer(tm))
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(gw2.Close)
+			for _, site := range p.Sites {
+				before := tm.total
+				start := time.Now()
+				wl, err := gw2.NodeWorklist(ctx, scenario.SiteNode(site.Name))
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Logf("%-12s %4d tasks %5d statements %s", site.Name, len(wl.Tasks), tm.total-before, time.Since(start).Round(time.Millisecond))
+			}
+			tm.report(t, 10)
+		})
+	}
 }

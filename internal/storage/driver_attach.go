@@ -617,6 +617,12 @@ func secretRefsOf(driverSpec, endpointInputs []byte) (map[string]string, error) 
 	if err != nil {
 		return nil, fmt.Errorf("stored driver spec does not parse: %w", err)
 	}
+	return secretRefsFrom(sp, endpointInputs)
+}
+
+// secretRefsFrom is secretRefsOf over a spec already parsed, for a caller
+// resolving many endpoints of one driver (the worklist parses each driver once).
+func secretRefsFrom(sp *driver.Spec, endpointInputs []byte) (map[string]string, error) {
 	var inputs map[string]string
 	if len(endpointInputs) > 0 {
 		if err := json.Unmarshal(endpointInputs, &inputs); err != nil {
