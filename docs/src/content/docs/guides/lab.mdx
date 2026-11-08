@@ -416,6 +416,12 @@ How to read each row:
   commit of its row, over the newest observed metric rows the window landed (up to 20,000, the count is
   shown). It includes the node's batching, the bus, the consumer and the insert. Percentiles are
   nearest-rank. It is not network time to a real device: the simulators answer from the same host.
+  When no sample probed inside the window had committed by its end, both cells read `not measured`:
+  landing has fallen further behind than the window is long. The table then ends with the reason and
+  how long before the read the newest row committed and its sample was probed, and, if that sample was
+  probed before the window began, `ingest lag exceeds the window` with how long before the window's end
+  it was probed. That is an ingest finding, not a blank; the JSON carries the same under
+  `ingest_lag_not_measured`, and every other figure is still reported.
 - **consumer redeliveries**: batches the ingest consumer could not confirm and the bus handed it again
   (`unconfirmed acks`), and messages it dropped after repeated failures (`abandoned`), counted from
   the server's log since the window began. A redelivery that succeeds the second time logs nothing, so

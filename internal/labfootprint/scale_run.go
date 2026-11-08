@@ -314,7 +314,7 @@ func (h *harness) measureScale(ctx context.Context, cfg ScaleConfig) (ScaleRepor
 	}
 	h.say("window: %s metric rows a minute, %.0f millicores in all", count(run.Measured.MetricRowsPerMinute), totalMillicores(run.Measured))
 
-	if run.Lag, err = h.ingestLag(ctx, db0.At, db1.At); err != nil {
+	if run.Lag, run.LagGap, err = h.ingestLag(ctx, db0.At, db1.At); err != nil {
 		return ScaleReport{}, err
 	}
 	if run.Redeliveries, err = h.redeliveries(ctx, l.server, db0.At); err != nil {
@@ -398,19 +398,42 @@ func ingestLagQuery(from, to time.Time) string {
 		float64(from.UnixMilli())/1000, float64(to.UnixMilli())/1000, lagSampleRows)
 }
 
-func (h *harness) ingestLag(ctx context.Context, from, to time.Time) ([]float64, error) {
+// lagAgesQuery is how stale the newest landed observed samples are, among
+// the newest by probe time: the age of the newest commit, of the newest
+// probe, and of that probe before the window's end.
+func lagAgesQuery(to time.Time) string {
+	return fmt.Sprintf(`select extract(epoch from now() - max(pg_xact_commit_timestamp(xmin))),
+			extract(epoch from now() - max(ts)),
+			extract(epoch from to_timestamp(%.3f) - max(ts))
+		from (select ts, xmin from metric where source_rule is null order by ts desc limit %d) newest`,
+		float64(to.UnixMilli())/1000, lagSampleRows)
+}
+
+// ingestLag reads the lag of the samples the window landed. When none had,
+// it returns no lag and the gap that says how stale the newest landed sample
+// was: the run still has every other figure to report.
+func (h *harness) ingestLag(ctx context.Context, from, to time.Time) ([]float64, *LagGap, error) {
 	out, err := h.psql(ctx, ingestLagQuery(from, to))
 	if err != nil {
-		return nil, fmt.Errorf("read the ingest lag: %w", err)
+		return nil, nil, fmt.Errorf("read the ingest lag: %w", err)
 	}
 	lags, err := ParseLagSeconds(out)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	if len(lags) == 0 {
-		return nil, errors.New("read the ingest lag: no observed sample landed in the window")
+	if len(lags) > 0 {
+		return lags, nil, nil
 	}
-	return lags, nil
+	out, err = h.psql(ctx, lagAgesQuery(to))
+	if err != nil {
+		return nil, nil, fmt.Errorf("read the ingest lag gap: %w", err)
+	}
+	ages, err := ParseLagAges(out)
+	if err != nil {
+		return nil, nil, err
+	}
+	gap := NewLagGap(ages, to.Sub(from))
+	return nil, &gap, nil
 }
 
 // serverLog is what the server container logged since a time.
