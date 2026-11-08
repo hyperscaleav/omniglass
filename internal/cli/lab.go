@@ -40,7 +40,7 @@ func newLabCmd(version string) *cobra.Command {
 		Use:   "lab",
 		Short: "A working omniglass on Docker, to learn on",
 	}
-	group.AddCommand(newLabRunCmd(version), newLabSeedCmd())
+	group.AddCommand(newLabRunCmd(version), newLabMeasureCmd(), newLabSeedCmd())
 	return group
 }
 
@@ -403,7 +403,7 @@ func labRunner(eng lab.Engine, daemon lab.Daemon, out io.Writer) *lab.Runner {
 	return &lab.Runner{
 		Engine: eng, Daemon: daemon, Out: out, Host: host,
 		Alive: lab.ProcessAlive, PIDNS: lab.CurrentPIDNS(), PortFree: lab.PortFree,
-		HTTP: &http.Client{Timeout: 10 * time.Second}, Poll: time.Second, ReadyTimeout: 4 * time.Minute,
+		HTTP: &http.Client{Timeout: 10 * time.Second}, Poll: time.Second, ReadyTimeout: 4 * time.Minute, RestartGrace: 30 * time.Second,
 	}
 }
 

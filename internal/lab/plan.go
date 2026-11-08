@@ -436,6 +436,11 @@ func Plan(o Options) (Spec, error) {
 		Role: "Runs once per lab start: migrates, marks the database as a lab's, seeds the fleet and the " +
 			"login on the first run, and enrolls the node afresh.",
 	}
+	if o.Scale() {
+		// The scale lab's measurement reads each row's ingest lag from its
+		// commit time (#1556), which Postgres keeps only when asked at start.
+		spec.DB.Cmd = []string{"postgres", "-c", "track_commit_timestamp=on"}
+	}
 	spec.Server = Service{
 		Name: "server", Container: o.Project + "-server-1", Image: o.Image,
 		Cmd: []string{"server", "--lab"},

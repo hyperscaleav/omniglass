@@ -3,7 +3,7 @@
 # #1193). Production deploy is BYO Postgres; tests use ephemeral testcontainer
 # Postgres.
 
-.PHONY: all lab test-lab scale-lab footprint lab-footprint compress-bench build build-web web image gen gen-proto gen-web adr-renumber migration migration-check test test-web test-short test-go test-go-storage test-go-devseed test-go-rest test-go-shards-check test-e2e bench clean-testcontainers tidy dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify docs-walkthroughs bench-sim test-netadmin walkthroughs test-walkthroughs demo test-demos probe
+.PHONY: all lab test-lab scale-lab scale-measure footprint lab-footprint compress-bench build build-web web image gen gen-proto gen-web adr-renumber migration migration-check test test-web test-short test-go test-go-storage test-go-devseed test-go-rest test-go-shards-check test-e2e bench clean-testcontainers tidy dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify docs-walkthroughs bench-sim test-netadmin walkthroughs test-walkthroughs demo test-demos probe
 
 # The bare `make` (#1196) needs only Docker. From one Dockerfile and one tree
 # it builds the image omniglass:dev and exports this machine's own binary to
@@ -48,6 +48,17 @@ SYSTEMS  ?= 100
 SCENARIO ?= corporate
 scale-lab: all
 	scripts/scale-lab.sh $(SYSTEMS) $(SCENARIO) $(SCALE_LAB_ARGS)
+
+# The scale lab's measurement (#1556): `omniglass lab measure` brings up a
+# scale lab of SYSTEMS systems, measures it over a stated window and prints
+# one table (rows a minute, growth a day, CPU and memory per container, ingest
+# lag, redeliveries, fleet view times, the retention drain), then removes the
+# lab. It writes the same figures as JSON (lab-measure.json) so two runs
+# compare. Diagnostic, never a gate, and outside make test and CI: it stands up
+# real containers and runs for minutes. SCALE_MEASURE_ARGS passes flags
+# (SCALE_MEASURE_ARGS="--window 10m --json out.json").
+scale-measure: all
+	./bin/omniglass lab measure --scenario $(SCENARIO) --systems $(SYSTEMS) $(SCALE_MEASURE_ARGS)
 
 # Build the single binary with the Go toolchain (no console embedded; serves
 # the build-the-console placeholder under /web), stamped with the build id.

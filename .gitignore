@@ -91,3 +91,5 @@ node_modules/
 docs/package-lock.json
 
 tmp/
+# omniglass lab measure writes its figures here by default (#1556).
+/lab-measure.json

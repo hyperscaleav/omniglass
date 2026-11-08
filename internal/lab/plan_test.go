@@ -418,6 +418,26 @@ func TestPlanScaleLabSeedEnrollsEverySiteNode(t *testing.T) {
 	}
 }
 
+// A scale lab's Postgres records commit timestamps, which `lab measure` reads
+// the ingest lag from (a row's commit time less its probe time). A dev lab's
+// does not: it pays for nothing it does not read.
+func TestPlanScaleLabRecordsCommitTimestamps(t *testing.T) {
+	s, err := Plan(scaleOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(s.DB.Cmd, " "); got != "postgres -c track_commit_timestamp=on" {
+		t.Fatalf("a scale lab's database runs %q, want postgres with commit timestamps on", got)
+	}
+	dev, err := Plan(testOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(dev.DB.Cmd) != 0 {
+		t.Fatalf("a dev lab's database runs %q, want the image's own command", dev.DB.Cmd)
+	}
+}
+
 func TestPlanScaleLabNeedsASize(t *testing.T) {
 	o := scaleOptions()
 	o.Systems = 0

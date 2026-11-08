@@ -460,3 +460,31 @@ func TestReapRefusesAnOwnerInAnotherPIDNamespace(t *testing.T) {
 		t.Fatal("the reaper removed a lab owned from another PID namespace")
 	}
 }
+
+// A container restarted from outside is down for a moment, and the hold does
+// not call that a stop; one that stays down past the grace is (#1556).
+func TestSettleWaitsOutARestartButNotAStop(t *testing.T) {
+	eng := newFakeEngine("")
+	eng.states["c"] = ContainerState{Status: "exited"}
+	r := testRunner(eng, &bytes.Buffer{})
+	r.RestartGrace = 2 * time.Second
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		eng.mu.Lock()
+		eng.states["c"] = ContainerState{Running: true, Status: "running"}
+		eng.mu.Unlock()
+	}()
+	st, err := r.settle(context.Background(), "c", ContainerState{Status: "exited"})
+	if err != nil || !st.Running {
+		t.Fatalf("a restarted container: state %+v, err %v, want it running", st, err)
+	}
+
+	eng.mu.Lock()
+	eng.states["c"] = ContainerState{Status: "exited"}
+	eng.mu.Unlock()
+	r.RestartGrace = 100 * time.Millisecond
+	st, err = r.settle(context.Background(), "c", ContainerState{Status: "exited"})
+	if err != nil || st.Running {
+		t.Fatalf("a stopped container: state %+v, err %v, want it still down", st, err)
+	}
+}
