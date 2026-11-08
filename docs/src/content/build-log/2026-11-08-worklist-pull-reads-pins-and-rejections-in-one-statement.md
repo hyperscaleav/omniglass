@@ -9,7 +9,7 @@ tasks) timed out on its first worklist pull (the node waits 5 s) and restarted i
 other 17 sites came up. The cause is product code, not lab code. `NodeWorklist` read a key pin per ssh
 or tls endpoint (`keyPin`), a rejection per component endpoint (`latestRejection`), and parsed the
 driver spec once per task, so the headquarters pull issued about 4,330 statements: 1.15 s on an idle
-database, and past 5 s once 18 nodes pulled at once through the server's one worklist subscription.
+database; with 18 nodes pulling through the server's one worklist subscription it did not finish inside 5 s.
 
 The pull now reads every pin in one statement (`keyPins`) and every rejection in one (`latestRejections`),
 and parses each driver spec once per pull. `keyPin` and `latestRejection` stay as one-element calls of the
@@ -18,5 +18,9 @@ and all 18 sites' pulls together cost 1.26 s of statements, down from about 7.5 
 test (`TestNodeWorklistStatementsDoNotGrowWithEndpoints`) failed before the change (21 statements for 9
 endpoints, 7 for 2) and passes after it. `TestPlanWorklistMeasure` is the probe behind these figures.
 
-The 1,000-system bring-up still did not reach ready within 5 minutes after this change; see #1571 for
-the figures and what is open. The 1,000-system column of the scale measurement is not recorded yet.
+The 1,000-system bring-up still did not reach ready after this change: the headquarters node's pull
+still timed out ("pull worklist: nats: timeout", 17 restarts in 10 minutes) while the other 17 sites
+came up by 168 s and the server and database ran at 50 to 290% and 50 to 420% CPU. The server logs no
+per-pull timing, so the logs show the timeout but not how long the pull took under that load. Pulls
+that are answered one at a time, and abandoned ones still computed, are #1577. The 1,000-system column
+of the scale measurement is not recorded yet.

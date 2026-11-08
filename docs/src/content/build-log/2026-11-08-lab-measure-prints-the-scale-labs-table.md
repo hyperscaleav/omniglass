@@ -60,10 +60,12 @@ the receipts table grows about as fast as the metric table (1.20 GiB a day again
 database's CPU is as high as the server's. The drain figure is quantized by the half-second poll and a
 150,000-row backlog under one pass's budget, so it is a floor on the rate, not a limit.
 
-**1,000 systems: pending #1571.**
+**1,000 systems: pending #1577.**
 
 The 1,000-system run (18 sites, 3,016 components) is not in this table. On the worker the lab's
-bring-up, with the seed taking 42 seconds, was still waiting on its last site after 10 minutes (17 of 18
-sites up, 2,210 of 3,016 components), so a bring-up, a warm-up and a window did not fit one foreground
-command. That is the bring-up's cost at this size, which the harness reports and does not change (#1571).
-The 1,000-system column is recorded when #1571 lands; `make scale-measure SYSTEMS=1000` takes it where a longer command is allowed.
+bring-up did not reach ready: 17 of 18 sites and 2,210 of 3,016 components came up (the first site
+at 91 s, the 17th at 168 s, with the seed taking 41 s), and the headquarters node (806 components)
+never got its worklist, so it could not be measured (#1571). #1571 cut that node's pull from about
+4,330 statements to 1,106, which was not enough; the pull is still a request the server answers one
+at a time, and fixing that is #1577. The 1,000-system column is recorded when a bring-up reaches
+ready, with `make scale-measure SYSTEMS=1000`.
