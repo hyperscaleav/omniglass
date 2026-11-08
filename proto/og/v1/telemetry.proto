@@ -98,6 +98,50 @@ message TelemetryBatch {
   // its own, beside the node's self-logs in logs, so one batch carries both and
   // neither lands in the other's table. Set only on a node's lane.
   repeated LogLine task_logs = 13;
+
+  // groups is a node's whole tick (#1582): one TaskGroup per task that
+  // reported, so a node publishes one batch per tick instead of one per task.
+  // The batch carries ONE id (the Nats-Msg-Id) and is byte-identical on every
+  // retry, so the receipt is written once however many groups ride it. Writer
+  // identity, the observed ts and the owner are per group, resolved by the
+  // server from each group's task_id (the node asserts a task, never an owner).
+  // Node-level logs (field 7) and node_id (field 2) stay on the batch itself.
+  // Set only on a node's lane: a node batch that carries task samples in the
+  // top-level lanes (task_id, metrics, properties, events, task_logs) instead
+  // of in groups is refused. The API push lane keeps using the top-level fields.
+  repeated TaskGroup groups = 14;
+}
+
+// TaskGroup is one task's samples from one node tick (#1582). It is the unit of
+// refusal: a group the gateway refuses (an unknown owner, a value the schema
+// rejects) is dropped alone, its sibling groups in the same batch land, and the
+// batch's receipt is still written once.
+message TaskGroup {
+  // task_id is the task that produced this group. The server resolves the owner
+  // from it and confines the node to its own tasks; a group naming a task the
+  // node does not own is recorded as an orphan and skipped, not the batch.
+  string task_id = 1;
+
+  // ts is the time this group was observed. A per-sample ts overrides it when
+  // set; when neither is set the server stamps ingest time. It is per group, not
+  // per batch, because the groups of one tick are collected at different moments.
+  google.protobuf.Timestamp ts = 2;
+
+  // metrics is the numeric lane for this task; same contract as
+  // TelemetryBatch.metrics.
+  repeated MetricSample metrics = 3;
+
+  // properties is the categorical lane for this task; same contract as
+  // TelemetryBatch.properties.
+  repeated PropertySample properties = 4;
+
+  // events is the occurrence lane for this task; same contract as
+  // TelemetryBatch.events.
+  repeated EventSample events = 5;
+
+  // task_logs is the log lines this task collected from its component; same
+  // contract as TelemetryBatch.task_logs.
+  repeated LogLine task_logs = 6;
 }
 
 // Owner is an exclusive-arc address: which kind of estate entity owns the batch,
