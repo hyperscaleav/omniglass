@@ -335,9 +335,8 @@ error: A scale lab of 1000 systems (18 sites, 3016 simulated components) needs a
 
 That one was forced with the hidden `--host-memory 2g`, which plans against a memory limit of your
 choosing, so you can see where a smaller machine's ceiling sits without one. The estimate is a
-model, not a promise: it was measured at small sizes, and the scale harness
-([#1556](https://github.com/hyperscaleav/omniglass/issues/1556)) measures a running lab at 1,000
-and more.
+model, not a promise: it was measured at small sizes, and [`omniglass lab measure`](#measuring-a-scale-lab)
+measures a running lab.
 
 **A bring-up never hangs.** It is bounded by a timeout (20 minutes, or the hidden `--ready-timeout`),
 the seed included. Past it the lab removes everything it started and names what was not up: each
@@ -360,6 +359,82 @@ addresses. It seeds no metric history. Measured on a shared worker, the corporat
 seconds at 100 systems and 2 minutes 13 seconds at 1,000, most of it the health recompute each role
 assignment triggers rather than round trips ([#1562](https://github.com/hyperscaleav/omniglass/issues/1562)).
 `PLAN_MEASURE=100,1000 go test -run TestPlanSeedMeasure ./internal/devseed/` reproduces the table.
+
+### Measuring a scale lab
+
+`omniglass lab measure` says what a fleet of a size costs to run: one table, measured over a window you
+state, from a running scale lab. It is diagnostic and never a gate (ADR-0094): on a shared host the
+figures move with the neighbours, so compare runs from one machine. It is outside `make test` and CI.
+
+```bash
+make scale-measure SYSTEMS=100                                    # brings a lab up, measures it, removes it
+./bin/omniglass lab measure --systems 100 --warmup 2m --window 3m # the same, with the window chosen
+./bin/omniglass lab measure                                       # measures the scale lab already running
+```
+
+With `--systems` it brings up a throwaway scale lab, waits for it to be ready, lets it run for `--warmup`
+(the first minutes are a burst, every node's first collection), measures for `--window`, removes the
+lab and checks nothing is left. Without it, it measures the scale lab you started with
+`omniglass lab run --scenario corporate --systems N`; that lab must be one this build started, because
+the ingest lag reads the commit times Postgres records only when the lab asks it to
+(`track_commit_timestamp`), and a lab started before that says so and stops. It writes the same figures
+as JSON (`--json`, `lab-measure.json` by default, empty for none), so two runs diff.
+
+| Flag | Default | What it does |
+| --- | --- | --- |
+| `--systems` | 0 | bring up a throwaway lab of this many systems; 0 measures the running one |
+| `--scenario` | `corporate` | the scale scenario a `--systems` lab runs |
+| `--warmup` | 2m | how long the lab runs before the window starts |
+| `--window` | 5m | the window the rates, growth and usage are read over |
+| `--fleet-reads` | 20 | timed fleet view reads, spread evenly over the window |
+| `--backlog` | 150000 | aged property rows the retention probe plants; 0 skips it and its server restart |
+| `--drain-timeout` | 3m | how long the probe waits for the pass to clear the backlog |
+
+How to read each row:
+
+- **metric rows a minute, property rows a minute**: rows inserted per minute over the window, from the
+  database's own insert counters, so they count every writer (the ingest consumer, the rules that
+  calculate metrics, the server). The first is the lane the collection fills.
+- **metric rows a day, metric table a day, property table a day, receipts a day, database a day**: the
+  window's growth multiplied up to 24 hours. Row counts are inserts; the table figures are the
+  relation's size on disk including its indexes, so they step in 8 KiB pages: a lane that grows
+  by less than a page in the window reads `0 B`, and a short window is coarse. Receipts are the bus
+  consumer's delivery receipts (`telemetry_receipt`, which make a redelivered batch land once), and
+  the database line is the whole database, so it also carries the logs and anything else that grew. A daily-partitioned lane
+  is one relation per day, so its growth is the sum across them. Extrapolation assumes the window is
+  steady: a window that includes a burst reads high.
+- **WAL a day**: the write-ahead log written during the window (the difference between two log
+  positions), multiplied up to a day. It is what replication and backups would carry, and is usually
+  more than the tables, since every change is logged and indexes are logged with it.
+- **`<container>` cpu, memory**: each container's CPU in millicores (a thousand is one core) over
+  the window, from the cgroup's CPU time, and its working set (anonymous plus shared memory, the part
+  not reclaimable as page cache). One line each for the server, Postgres and every node, then the
+  total. A node is one site's simulators and its collection, so its cost is what that site's devices
+  add; the server and Postgres are what every site's writes add up to.
+- **ingest lag p50, p95**: the time from a sample's probe (the timestamp the node gave it) to the
+  commit of its row, over the newest observed metric rows the window landed (up to 20,000, the count is
+  shown). It includes the node's batching, the bus, the consumer and the insert. Percentiles are
+  nearest-rank. It is not network time to a real device: the simulators answer from the same host.
+- **consumer redeliveries**: batches the ingest consumer could not confirm and the bus handed it again
+  (`unconfirmed acks`), and messages it dropped after repeated failures (`abandoned`), counted from
+  the server's log since the window began. A redelivery that succeeds the second time logs nothing, so
+  this is a floor: zero means none was logged, not none happened. Anything above zero in a quiet lab
+  is worth a look.
+- **fleet view p50, p95**: the time of `GET /api/v1/views/fleet`, the whole-fleet view the console
+  opens on, read through the API with a token the harness mints, spread evenly over the window so it
+  is read while the lab collects, not while it idles. The reads are sequential, so these are one
+  user's response times, not a load test.
+- **retention drain**: how fast the retention pass deletes rows past their window. After the window
+  the probe plants aged property rows (`--backlog`, each with a newer row of its own series, which
+  the prune requires), restarts the server so its pass runs at start, and reads the count of rows
+  left every half second. The rate is rows deleted over the span deletes were seen in; the time before
+  the first delete (the restart and the pass's startup) is shown apart as `after N s to start`. A
+  backlog above one pass's budget (200,000 rows) is a rate over the first pass, the rest left for the
+  next. It measures the property lane, whose retention deletes in chunks; the metric lane's retention
+  mostly drops whole daily partitions, which has no rate to read. The probe removes its rows when it
+  is done, and `--backlog 0` skips it, leaving the server running as it was.
+
+The window and the warm-up are printed above the table, and belong beside any figure you quote from it.
 
 ### The manifest format
 

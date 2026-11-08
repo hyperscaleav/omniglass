@@ -32,6 +32,11 @@ type Runner struct {
 	// Poll is the readiness poll interval; ReadyTimeout bounds each wait.
 	Poll         time.Duration
 	ReadyTimeout time.Duration
+	// RestartGrace is how long a long-lived container may stay down before
+	// the hold calls it stopped: a restart from outside (the scale
+	// measurement restarts the server to run its retention pass, #1556) is
+	// a gap of seconds, a crash is not.
+	RestartGrace time.Duration
 }
 
 // Config is one run's settings.
@@ -537,11 +542,34 @@ func (r *Runner) hold(ctx context.Context, lab *Lab, whilePID int) error {
 					return fmt.Errorf("the lab's %s container is gone (removed from outside the lab)", s)
 				}
 				if !st.Running && !st.Restarting {
-					return r.stopped(ctx, s, lab.ID(s), st)
+					if st, err = r.settle(ctx, lab.ID(s), st); err != nil {
+						return fmt.Errorf("the lab's %s container is gone (removed from outside the lab)", s)
+					}
+					if !st.Running && !st.Restarting {
+						return r.stopped(ctx, s, lab.ID(s), st)
+					}
 				}
 			}
 		}
 	}
+}
+
+// settle re-reads a container seen down until it is up or RestartGrace has
+// passed, and returns the last state read.
+func (r *Runner) settle(ctx context.Context, id string, st ContainerState) (ContainerState, error) {
+	deadline := time.Now().Add(r.RestartGrace)
+	for !st.Running && !st.Restarting && time.Now().Before(deadline) {
+		select {
+		case <-ctx.Done():
+			return st, nil
+		case <-time.After(r.Poll):
+		}
+		var err error
+		if st, err = r.Engine.Inspect(ctx, id); err != nil {
+			return st, err
+		}
+	}
+	return st, nil
 }
 
 // TearDown removes every container and the network of the project, and
