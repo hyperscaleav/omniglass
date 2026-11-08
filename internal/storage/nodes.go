@@ -454,7 +454,7 @@ var pinKeyOf = func() map[string]string {
 func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 	rows, err := p.pool.Query(ctx, `
 		select t.id, t.mode, i.id::text, i.name, i.transport, i.params, t.spec, i.inputs, i.component, d.spec,
-			i.session_retry
+			i.session_retry, coalesce(d.id::text, '')
 		from task t
 		join endpoint i on i.id = t.endpoint_id
 		left join driver d on d.id = i.driver_id
@@ -479,18 +479,32 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 		key                   string // the pin's property: ssh-host-key or tls-certificate
 	}
 	var pins []pinRef // ssh and tls tasks, whose key pin rides the worklist
+	// A driver's spec parses once per pull, however many endpoints run it: a
+	// site's endpoints share a handful of drivers (#1571).
+	type parsedSpec struct {
+		spec *driver.Spec
+		err  error
+	}
+	parsed := map[string]parsedSpec{} // driver id -> its parsed spec
 	for rows.Next() {
 		var wt WorklistTask
 		var epInputs, driverSpec []byte
 		var componentID *string
-		if err := rows.Scan(&wt.ID, &wt.Mode, &wt.EndpointID, &wt.EndpointName, &wt.Transport, &wt.EndpointParams, &wt.Spec, &epInputs, &componentID, &driverSpec, &wt.SessionRetry); err != nil {
+		var driverID string
+		if err := rows.Scan(&wt.ID, &wt.Mode, &wt.EndpointID, &wt.EndpointName, &wt.Transport, &wt.EndpointParams, &wt.Spec, &epInputs, &componentID, &driverSpec, &wt.SessionRetry, &driverID); err != nil {
 			return Worklist{}, fmt.Errorf("storage: scan worklist task: %w", err)
 		}
 		// A driver task carries its driver's session block (#1049), read off
 		// the live spec so a re-authored login reaches the node at its next
 		// pull. A stored spec is validated at write; corruption delivers none.
+		var ps parsedSpec
 		if len(driverSpec) > 0 {
-			if sp, err := driver.Parse(driverSpec); err == nil {
+			var seen bool
+			if ps, seen = parsed[driverID]; !seen {
+				ps.spec, ps.err = driver.Parse(driverSpec)
+				parsed[driverID] = ps
+			}
+			if sp, err := ps.spec, ps.err; err == nil {
 				if len(wt.Spec) > 2 {
 					wt.Session = sp.Session
 				}
@@ -507,7 +521,13 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 		// probe carries none.
 		probe := len(wt.Spec) <= 2
 		if len(driverSpec) > 0 && (!probe || wt.Transport == "snmp") {
-			refs, err := secretRefsOf(driverSpec, epInputs)
+			var refs map[string]string
+			err := ps.err
+			if err != nil {
+				err = fmt.Errorf("stored driver spec does not parse: %w", err)
+			} else {
+				refs, err = secretRefsFrom(ps.spec, epInputs)
+			}
 			if err != nil {
 				return Worklist{}, fmt.Errorf("storage: node worklist %q task %s: %w", name, wt.ID, err)
 			}
@@ -595,11 +615,16 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 	// the fingerprint on it would recycle a healthy session and lift a gate
 	// held under the first fingerprint.
 	declaredPin, declaredCert := map[int]string{}, map[int]string{}
-	for _, pr := range pins {
-		declared, pin, err := keyPin(ctx, p.pool, pr.componentID, pr.instance, pr.key)
-		if err != nil {
-			return Worklist{}, fmt.Errorf("storage: node worklist %q: %w", name, err)
-		}
+	pinQs := make([]pinQuery, len(pins))
+	for i, pr := range pins {
+		pinQs[i] = pinQuery{pr.componentID, pr.instance, pr.key}
+	}
+	pinned, err := keyPins(ctx, p.pool, pinQs)
+	if err != nil {
+		return Worklist{}, fmt.Errorf("storage: node worklist %q: %w", name, err)
+	}
+	for i, pr := range pins {
+		declared, pin := pinned[i].declared, pinned[i].pin
 		switch pr.key {
 		case pinKeyOf["tls"]:
 			wl.Tasks[pr.idx].CertificatePin, declaredCert[pr.idx] = pin, declared
@@ -607,22 +632,28 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 			wl.Tasks[pr.idx].HostKey, declaredPin[pr.idx] = pin, declared
 		}
 	}
-	// The rejection a node published for the endpoint (its gate), and the
-	// connection fingerprint each task is judged against (#1056 ruling).
-	rejections := map[string]string{}
+	// The rejection a node published for the endpoint (its gate), one read
+	// for every distinct endpoint, and the connection fingerprint each task is
+	// judged against (#1056 ruling).
+	var refs []endpointRef
+	refAt := map[endpointRef]int{}
+	for idx := range wl.Tasks {
+		if cid, ok := componentOf[idx]; ok {
+			r := endpointRef{cid, wl.Tasks[idx].EndpointName}
+			if _, seen := refAt[r]; !seen {
+				refAt[r] = len(refs)
+				refs = append(refs, r)
+			}
+		}
+	}
+	rejections, err := latestRejections(ctx, p.pool, refs)
+	if err != nil {
+		return Worklist{}, fmt.Errorf("storage: node worklist %q: %w", name, err)
+	}
 	for idx := range wl.Tasks {
 		t := &wl.Tasks[idx]
 		if cid, ok := componentOf[idx]; ok {
-			key := cid + "\x00" + t.EndpointName
-			rej, seen := rejections[key]
-			if !seen {
-				var err error
-				if rej, err = latestRejection(ctx, p.pool, cid, t.EndpointName); err != nil {
-					return Worklist{}, fmt.Errorf("storage: node worklist %q: %w", name, err)
-				}
-				rejections[key] = rej
-			}
-			t.Rejection = rej
+			t.Rejection = rejections[refAt[endpointRef{cid, t.EndpointName}]]
 		}
 		// One fingerprint per endpoint, every task of it the same: the
 		// endpoint's secret versions and its driver's session block, whether

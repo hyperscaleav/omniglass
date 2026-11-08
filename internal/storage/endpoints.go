@@ -832,15 +832,51 @@ var ErrRetryHostKeyStale = errors.New("storage: retry host key stale")
 // latestRejection is the endpoint-rejection the node last published for an
 // endpoint (its gate), or "" when none was.
 func latestRejection(ctx context.Context, q querier, componentID, instance string) (string, error) {
-	var v string
-	if err := q.QueryRow(ctx, `
-		select coalesce((select value #>> '{}' from property
-		 where owner_kind = 'component' and component_id = $1::uuid and instance = $2 and provenance = 'observed'
-		   and property_type_id = (select id from property_type where namespace = 'og' and name = 'endpoint-rejection')
-		 order by ts desc, id desc limit 1), '')`, componentID, instance).Scan(&v); err != nil {
-		return "", fmt.Errorf("storage: endpoint rejection: %w", err)
+	got, err := latestRejections(ctx, q, []endpointRef{{componentID, instance}})
+	if err != nil {
+		return "", err
 	}
-	return v, nil
+	return got[0], nil
+}
+
+// endpointRef names one endpoint's observed series: its component's id and its
+// instance (the endpoint's name).
+type endpointRef struct{ componentID, instance string }
+
+// latestRejections is latestRejection for many endpoints in one round trip, in
+// the order given (#1571): a node's worklist reads one per component endpoint,
+// and a statement each made a large site's pull cost thousands of them.
+func latestRejections(ctx context.Context, q querier, refs []endpointRef) ([]string, error) {
+	out := make([]string, len(refs))
+	if len(refs) == 0 {
+		return out, nil
+	}
+	comps, insts := make([]string, len(refs)), make([]string, len(refs))
+	for i, r := range refs {
+		comps[i], insts[i] = r.componentID, r.instance
+	}
+	rows, err := q.Query(ctx, `
+		select k.ord - 1, coalesce((select value #>> '{}' from property
+		 where owner_kind = 'component' and component_id = k.comp::uuid and instance = k.inst and provenance = 'observed'
+		   and property_type_id = (select id from property_type where namespace = 'og' and name = 'endpoint-rejection')
+		 order by ts desc, id desc limit 1), '')
+		from unnest($1::text[], $2::text[]) with ordinality as k(comp, inst, ord)`, comps, insts)
+	if err != nil {
+		return nil, fmt.Errorf("storage: endpoint rejection: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var i int
+		var v string
+		if err := rows.Scan(&i, &v); err != nil {
+			return nil, fmt.Errorf("storage: endpoint rejection: %w", err)
+		}
+		out[i] = v
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("storage: endpoint rejection: %w", err)
+	}
+	return out, nil
 }
 
 // EndpointKeyPin is the key an ssh or tls endpoint pins in force (keyPin):
@@ -896,24 +932,66 @@ func retiredPinSQL(comp, inst string) string {
 // read as the pin a trust replaces; nor is an observed key retired as such a
 // pin (retiredPinSQL).
 func keyPin(ctx context.Context, q querier, componentID, instance, property string) (declared, pin string, err error) {
-	if err := q.QueryRow(ctx, `
-		select coalesce(
+	got, err := keyPins(ctx, q, []pinQuery{{componentID, instance, property}})
+	if err != nil {
+		return "", "", err
+	}
+	return got[0].declared, got[0].pin, nil
+}
+
+// pinQuery is one endpoint's key pin to read: its component's id, its
+// instance, and the property the pin rides.
+type pinQuery struct{ componentID, instance, property string }
+
+// pinPair is keyPin's answer for one endpoint.
+type pinPair struct{ declared, pin string }
+
+// keyPins is keyPin for many endpoints in one round trip, in the order given
+// (#1571): a node's worklist reads one per ssh or tls endpoint, and a
+// statement each made a large site's pull cost thousands of them.
+func keyPins(ctx context.Context, q querier, qs []pinQuery) ([]pinPair, error) {
+	out := make([]pinPair, len(qs))
+	if len(qs) == 0 {
+		return out, nil
+	}
+	comps, insts, props := make([]string, len(qs)), make([]string, len(qs)), make([]string, len(qs))
+	for i, k := range qs {
+		comps[i], insts[i], props[i] = k.componentID, k.instance, k.property
+	}
+	rows, err := q.Query(ctx, `
+		select k.ord - 1,
+		coalesce(
 			(select nullif(value, 'null'::jsonb) #>> '{}' from property
-			 where owner_kind = 'component' and component_id = $1::uuid and instance = $2 and provenance = 'declared'
+			 where owner_kind = 'component' and component_id = k.comp::uuid and instance = k.inst and provenance = 'declared'
 			   and source = '`+pinSource+`'
-			   and property_type_id = (select id from property_type_in_effect() property_type where name = $3)
+			   and property_type_id = (select id from property_type_in_effect() property_type where name = k.prop)
 			 order by id desc limit 1), ''),
-			coalesce((select o.value #>> '{}' from property o
-			 where o.owner_kind = 'component' and o.component_id = $1::uuid and o.instance = $2 and o.provenance = 'observed'
-			   and o.property_type_id = (select id from property_type_in_effect() property_type where name = $3)
-			   and not exists (`+retiredPinSQL("$1::text", "$2")+`)
-			 order by o.ts desc, o.id desc limit 1), '')`, componentID, instance, property).Scan(&declared, &pin); err != nil {
-		return "", "", fmt.Errorf("storage: %s pin: %w", property, err)
+		coalesce((select o.value #>> '{}' from property o
+			 where o.owner_kind = 'component' and o.component_id = k.comp::uuid and o.instance = k.inst and o.provenance = 'observed'
+			   and o.property_type_id = (select id from property_type_in_effect() property_type where name = k.prop)
+			   and not exists (`+retiredPinSQL("k.comp", "k.inst")+`)
+			 order by o.ts desc, o.id desc limit 1), '')
+		from unnest($1::text[], $2::text[], $3::text[]) with ordinality as k(comp, inst, prop, ord)`, comps, insts, props)
+	if err != nil {
+		return nil, fmt.Errorf("storage: key pin: %w", err)
 	}
-	if declared != "" {
-		pin = declared
+	defer rows.Close()
+	for rows.Next() {
+		var i int
+		var declared, observed string
+		if err := rows.Scan(&i, &declared, &observed); err != nil {
+			return nil, fmt.Errorf("storage: %s pin: %w", qs[0].property, err)
+		}
+		pin := observed
+		if declared != "" {
+			pin = declared
+		}
+		out[i] = pinPair{declared, pin}
 	}
-	return declared, pin, nil
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("storage: key pin: %w", err)
+	}
+	return out, nil
 }
 
 var hostKeyFingerprint = regexp.MustCompile(`^SHA256:[A-Za-z0-9+/]{43}$`)
