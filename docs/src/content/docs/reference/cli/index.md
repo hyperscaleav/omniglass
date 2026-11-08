@@ -2700,6 +2700,31 @@ omniglass healthz
 
 A working omniglass on Docker, to learn on
 
+### `omniglass lab measure`
+
+Measure a running scale lab: rows a minute, growth, CPU and memory, ingest lag, redeliveries, fleet view times and the retention drain
+
+```
+omniglass lab measure [flags]
+```
+
+Measures a scale lab (`omniglass lab run --scenario corporate --systems N`) over a stated window and prints one table: rows a minute per lane, table and WAL growth a day extrapolated from the window, CPU and memory per container, ingest lag from probe to row, consumer redeliveries, the console's fleet view response times, and the retention pass's drain rate. It writes the same figures as JSON so two runs compare.
+
+With no --systems it measures the scale lab already running. With --systems it brings up a throwaway scale lab of that size, measures it, and removes it, so the one command is the whole run.
+
+The retention probe plants a backlog of aged property rows and restarts the server to run its pass; --backlog 0 skips it and leaves the server alone. A lab started before this build's `lab run` does not record commit timestamps, which the ingest lag reads: bring it up again.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--backlog` | int64 | `150000` | aged property rows the retention probe plants; 0 skips the probe and its server restart |
+| `--drain-timeout` | duration | `3m0s` | how long the retention probe waits for the pass to clear the backlog |
+| `--fleet-reads` | int | `20` | how many timed fleet view reads, spread over the window |
+| `--json` | string | `lab-measure.json` | also write the figures here as JSON; empty writes none |
+| `--scenario` | string | `corporate` | the scale scenario a --systems lab runs |
+| `--systems` | int | `0` | bring up a throwaway scale lab of this many systems, measure it and remove it; 0 measures the one already running |
+| `--warmup` | duration | `2m0s` | how long the lab runs before the window starts |
+| `--window` | duration | `5m0s` | the window the rates, growth and usage are read over |
+
 ### `omniglass lab run`
 
 Bring up a lab: omniglass, its database and a node collecting from a simulated fleet, until Ctrl-C
