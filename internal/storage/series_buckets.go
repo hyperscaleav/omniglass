@@ -16,7 +16,8 @@ import (
 // truncates to a tail answers a 30-day request with the last 16 hours; a bucket
 // grid answers it with 720 hourly buckets whatever the cadence, and a one-sample
 // spike survives as its bucket's max. Nothing is stored for it: the buckets are
-// computed from the raw rows at read time, inside the hot window. Beyond the
+// computed from the series' samples at read time (the series read, its raw
+// rows or the blocks a folded day is read from), inside the hot window. Beyond the
 // window the hourly trends will answer (#1276); until they exist nothing is read
 // past it, and CoveredFrom says where that edge is.
 //
@@ -170,7 +171,11 @@ func scanInstances(rows pgx.Rows) ([]string, error) {
 
 // ListMetricBuckets reads one metric series as regular buckets of resolution
 // over the last window, oldest first: one instance's measured rows, bounded to
-// the hot window the series' type retains for. instance nil asks the read to
+// the hot window the series' type retains for, read through the series read
+// (metricReadSQL), so a folded day buckets as its raw rows did. A bucket's
+// last is its newest sample, of the newest series of the instance when two
+// share its instant, then of the newest lineage and the last landed (before
+// #1572 it was the last landed row of any). instance nil asks the read to
 // pick the one instance with measured rows in the window, and an
 // *AmbiguousInstanceError lists them when there is more than one. The caller
 // resolves the owner in scope first, as for ListMetricSeries.
@@ -195,15 +200,15 @@ func (p *PG) ListMetricBuckets(ctx context.Context, ownerKind, ownerRef, key str
 		return out, err
 	}
 	n := bucketCount(window, resolution)
-	args := []any{arc, typeID, resolution.Seconds(), (time.Duration(n) * resolution).Seconds(), days, ownerKind}
+	args := []any{arc, typeID, resolution.Seconds(), (time.Duration(n) * resolution).Seconds(), days, ownerKind, s.Retention.MetricDays}
+	read := metricReadSQL("s.id", bucketFloorSQL, bucketHiSQL, "$7")
 	var measured []string
 	if instance == nil {
 		rows, err := p.pool.Query(ctx, `
 			select s.instance from metric_series s
 			where s.owner_id = $1::uuid and s.owner_kind = $6 and s.metric_type_id = $2::uuid
 			  and s.provenance in `+measuredProvenance+`
-			  and exists (select 1 from metric m where m.series_id = s.id
-			    and m.ts >= `+bucketFloorSQL+` and m.ts < `+bucketHiSQL+`)
+			  and exists (`+read+`)
 			group by s.instance
 			order by s.instance`, args...)
 		if err != nil {
@@ -221,12 +226,11 @@ func (p *PG) ListMetricBuckets(ctx context.Context, ownerKind, ownerRef, key str
 		agg as (
 			select date_bin(make_interval(secs => $3), m.ts, timestamptz 'epoch') as b, count(*) as n,
 				min(m.value) as mn, max(m.value) as mx, avg(m.value) as av,
-				(array_agg(m.value order by m.ts desc, m.id desc))[1] as lst
+				(array_agg(m.value order by m.ts desc, s.id desc, `+metricLineageOrder("m", true)+`))[1] as lst
 			from metric_series s
-			join metric m on m.series_id = s.id
+			cross join lateral (`+read+`) m
 			where s.owner_id = $1::uuid and s.owner_kind = $6 and s.metric_type_id = $2::uuid
-			  and s.instance = $7 and s.provenance in `+measuredProvenance+`
-			  and m.ts >= `+bucketFloorSQL+` and m.ts < `+bucketHiSQL+`
+			  and s.instance = $8 and s.provenance in `+measuredProvenance+`
 			group by 1)`+fmt.Sprintf(bucketJoinSQL, "agg.mn, agg.mx, agg.av, agg.lst"),
 		append(args, inst)...)
 	if err != nil {

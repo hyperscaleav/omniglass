@@ -24,8 +24,9 @@ what it is a sample of is one `metric_series` row, and a command's intended rows
 `metric_declared` ([below](#the-narrow-metric-lane),
 [ADR-1275](/architecture/decisions/#adr-1275-the-metric-lane-is-narrow-rows-on-a-series-dimension-partitioned-by-month),
 [ADR-1527](/architecture/decisions/#adr-1527-the-metric-lane-is-partitioned-by-utc-day)). Each closed day of an
-observed series also folds into lossless blocks sized by its sample count, written beside the raw rows and
-not read yet ([below](#the-narrow-metric-lane),
+observed series also folds into lossless blocks sized by its sample count, written beside the raw rows,
+and every reader of a series' samples reads them through one series read that takes a folded day from
+its blocks ([below](#the-narrow-metric-lane),
 [ADR-1528](/architecture/decisions/#adr-1528-observed-metric-samples-fold-into-lossless-blocks-sized-by-their-sample-count)). Current values are derived
 from the series (latest row per series); the maintained latest-value cache retired
 ([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)),
@@ -379,12 +380,24 @@ where b.series_id = $1 order by b.span_start, b.span;
   with one warning line a series naming the series, the count and the oldest's age, and the rest of
   its batch lands and is acknowledged. The warning goes out when the batch commits, so a batch
   retried whole (a day made on a routing miss) logs its drop once.
-- **Raw rows still lead.** The blocks are written beside the raw rows, which stay authoritative, and
-  a late sample lands raw as well as merging. Every reader but the trend recompute still reads raw
-  rows. `VerifyMetricBlocks` pairs every block still inside its window with its raw rows, sample by
-  sample, and names any that differ. Block reads, the early drop of raw days and the block prune
-  (#1530) follow.
-  Then history is the blocks, kept for `retention.metric_days`, and raw rows live about two days.
+- **One series read, each sample once.** The raw read, the bucketed read at every resolution (min,
+  max, avg, count and last), the series API and the CLI all read a series' samples through one
+  Storage Gateway read (`metricReadSQL`, `MetricSeriesSamples`), so each answers the same before a
+  day folds and after
+  ([ADR-1530](/architecture/decisions/#adr-1530-a-series-read-takes-a-folded-day-from-its-blocks-and-the-rest-from-raw-rows)).
+  A late sample lands raw and merges, so a folded day holds it twice; the read takes each day of
+  each lineage from one source. A day is read from its blocks when a block of its lineage covers it
+  (an hour or day block of the day, or its ISO week's block) and the day is intact (`blockIntact`,
+  the merge's own test), and from its raw rows otherwise. A day past its window's cutoff took no late
+  sample into its block, so its raw rows hold what the block does not. Samples come back by `ts`,
+  then lineage, then landing order. The raw arm drops a covered row with a hashed anti-join on day
+  and lineage, so a folded week costs the read one probe a row; one ten-day series of 864,000
+  samples at one a second reads hourly buckets in about 1.3 s, most of it the sort that picks each
+  bucket's last.
+- **Raw rows stay.** The blocks are written beside the raw rows, which no pass drops yet.
+  `VerifyMetricBlocks` pairs every block still inside its window with its raw rows, sample by
+  sample, and names any that differ. The early drop of raw days and the block prune follow (#1574);
+  then history is the blocks, kept for `retention.metric_days`, and raw rows live about two days.
 
 Measured through the fold, one ISO week of generated series at each cadence (`make footprint`):
 
@@ -481,7 +494,7 @@ The server prunes the two sample tables to a window each
 (90), install-wide settings an admin changes on the console's Settings page (a platform-domain
 namespace that any signed-in caller reads), and the hourly trends to `retention.trend_days` (730,
 [above](#the-narrow-metric-lane)). The compacted tier's blocks are not pruned yet: they go with their
-series, and the block prune is #1530. Each window is whole days from 1 to 36,500. The pass runs at server start, beside
+series, and the block prune is #1574. Each window is whole days from 1 to 36,500. The pass runs at server start, beside
 the receipt prune, and again an hour later, or a minute later while a lane is behind.
 
 Every prune goes through the **`PruneSamples`** gateway primitive, which carries the one
