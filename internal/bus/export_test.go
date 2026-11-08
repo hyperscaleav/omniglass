@@ -91,3 +91,7 @@ func SetTelemetryNakDelay(d time.Duration) (restore func()) {
 	telemetryNakDelay = d
 	return func() { telemetryNakDelay = prior }
 }
+
+// MaxPayload is the largest message the bus accepts, as the server's own
+// client reads it from the server.
+func (s *Server) MaxPayload() int64 { return s.nc.MaxPayload() }

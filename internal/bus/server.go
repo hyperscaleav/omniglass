@@ -36,6 +36,9 @@ type Config struct {
 	Host     string
 	Port     int
 	StoreDir string
+	// MaxPayload is the largest message the server accepts, in bytes; zero
+	// means DefaultMaxPayload.
+	MaxPayload int32
 }
 
 // Server is the embedded NATS server plus the server-side control-plane handlers.
@@ -60,7 +63,8 @@ type Server struct {
 	stopOrphanFlush context.CancelFunc // ends the orphan count's flush
 	sweepStop       sync.Once
 	sweepDone       sync.WaitGroup
-	ownStoreDir     string // non-empty when the Server created (and must clean) it
+	worklistSizes   worklistSizes // each node's latest worklist reply size, warned near the limit (#1579)
+	ownStoreDir     string        // non-empty when the Server created (and must clean) it
 }
 
 // New starts an in-process NATS server (JetStream on) with the per-node auth
@@ -87,8 +91,13 @@ func New(cfg Config, store Store) (*Server, error) {
 	if port == 0 {
 		port = server.RANDOM_PORT
 	}
+	maxPayload := cfg.MaxPayload
+	if maxPayload == 0 {
+		maxPayload = DefaultMaxPayload
+	}
 	opts := &server.Options{
 		Host:                       cfg.Host,
+		MaxPayload:                 maxPayload,
 		Port:                       port,
 		JetStream:                  true,
 		StoreDir:                   storeDir,
@@ -134,15 +143,7 @@ func (s *Server) subscribe() error {
 		if msg.Reply == "" || !strings.HasPrefix(msg.Reply, collection.InboxPrefix(node)+".") {
 			return
 		}
-		reply, err := s.buildWorklistReply(node)
-		if err != nil {
-			return // read failed; drop, the node re-pulls next tick
-		}
-		b, err := json.Marshal(reply)
-		if err != nil {
-			return
-		}
-		_ = msg.Respond(b)
+		s.answerWorklist(node, msg.Subject, nc.MaxPayload(), msg.Respond, time.Now())
 	})
 	if err != nil {
 		return fmt.Errorf("bus: subscribe worklist: %w", err)
