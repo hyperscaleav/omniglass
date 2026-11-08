@@ -61,8 +61,13 @@ const (
 	// registry kept between batches (29); #1274 resolves each owner and reads
 	// the clock once per batch and lands the metric lane in one statement (19);
 	// #1299 carries the command-targeted property names on the kept registry,
-	// so the property lane no longer reads them in the batch's transaction (18).
-	wantStatementsPerBatch = 18
+	// so the property lane no longer reads them in the batch's transaction (18);
+	// #1592 moved the probe states (icmp-reachable, tcp-open) from the metric
+	// lane to the property lane, which still costs a lock and a guarded insert
+	// per sample, so the standard mix's two new properties add four (22).
+	// Landing the property lane in one statement, as #1274 did the metric
+	// lane, is #1593.
+	wantStatementsPerBatch = 22
 	// wantMetricRowsPerPage is how many of the window's metric rows fill one
 	// 8 KiB heap page (about 60 bytes a row). Exact on every full page. Density
 	// rather than a page count, so a fleet that grows by a few endpoints moves

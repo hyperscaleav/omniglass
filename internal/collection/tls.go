@@ -316,11 +316,7 @@ func (r *Runner) CollectTLSResult(ctx context.Context, t TLSTask) ([]Sample, TLS
 		return nil, TLSResult{}, err
 	}
 	now := time.Now().UTC()
-	openVal := 0.0
-	if res.Dialed {
-		openVal = 1.0
-	}
-	out := []Sample{{Name: SignalTCPOpen, Value: openVal, TS: now, Labels: map[string]string{ReasonLabel: string(res.Reason)}}}
+	out := []Sample{ProbeResult(SignalTCPOpen, res.Dialed, now, res.Reason)}
 	if res.Dialed {
 		out = append(out, Sample{Name: SignalTCPConnectTime, Value: res.DialMS, TS: now})
 	}

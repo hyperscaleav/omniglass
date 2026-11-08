@@ -275,6 +275,18 @@
  ],
  "property_types": [
   {
+   "name": "icmp-reachable",
+   "data_type": "string",
+   "label": "ICMP Reachable",
+   "description": "ICMP inline probe result: up when at least one echo returned, down when none did. A state, stored on transition only; icmp-rtt-avg carries the timing beside it."
+  },
+  {
+   "name": "tcp-open",
+   "data_type": "string",
+   "label": "TCP Port Open",
+   "description": "TCP-connect probe result: open when the port accepted a connection, closed when it refused or timed out. A state, stored on transition only; tcp-connect-time carries the timing beside it."
+  },
+  {
    "name": "endpoint-reachable",
    "data_type": "string",
    "label": "Endpoint Reachable",
@@ -505,23 +517,11 @@
  ],
  "metric_types": [
   {
-   "name": "icmp-reachable",
-   "data_type": "int",
-   "label": "ICMP Reachable",
-   "description": "ICMP inline probe result (1 = at least one echo returned, 0 = none)."
-  },
-  {
    "name": "icmp-rtt-avg",
    "data_type": "float",
    "unit": "ms",
    "label": "ICMP RTT (avg)",
    "description": "Average round-trip time over the task's echoes; absent when unreachable."
-  },
-  {
-   "name": "tcp-open",
-   "data_type": "int",
-   "label": "TCP Port Open",
-   "description": "TCP-connect probe result (1 = the port accepted a connection, 0 = refused/timeout)."
   },
   {
    "name": "tcp-connect-time",

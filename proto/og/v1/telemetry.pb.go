@@ -278,7 +278,7 @@ func (x *Owner) GetRef() string {
 // double value. The lane is the type: no value oneof, no kind routing.
 type MetricSample struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// name is the canonical metric_type name (e.g. "tcp-open"). Validated against
+	// name is the canonical metric_type name (e.g. "tcp-connect-time"). Validated against
 	// metric_type at ingest; an unregistered name is dropped.
 	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	// value is the observation. All numeric signals ride a double (the metric

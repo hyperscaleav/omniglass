@@ -30,7 +30,7 @@ func (l *fakeLab) routes() map[string]any {
 		return map[string]any{"metric_type_name": name, "is_sampled": true, "instance": "ssh"}
 	}
 	var metrics []any
-	for _, k := range []string{"tcp-open", "tcp-connect-time", "ssh-handshake-time", "poll-duration"} {
+	for _, k := range []string{"tcp-connect-time", "ssh-handshake-time", "poll-duration"} {
 		if k != l.dropBuiltIn && l.endpoint {
 			metrics = append(metrics, instance(k))
 		}
@@ -65,13 +65,13 @@ func (l *fakeLab) routes() map[string]any {
 	return map[string]any{
 		"/property-types": map[string]any{"properties": []any{
 			map[string]any{"name": "endpoint-reachable", "writer_class": "node-probe"},
+			map[string]any{"name": "tcp-open", "writer_class": "node-probe"},
 			map[string]any{"name": "endpoint-responsive", "writer_class": "node-probe"},
 			map[string]any{"name": "session-state", "writer_class": "node-probe"},
 			map[string]any{"name": "power-state", "writer_class": "collected"},
 			map[string]any{"name": "model-number", "writer_class": "collected"},
 		}},
 		"/metric-types": map[string]any{"metric_types": []any{
-			map[string]any{"name": "tcp-open", "writer_class": "node-probe"},
 			map[string]any{"name": "tcp-connect-time", "writer_class": "node-probe"},
 			map[string]any{"name": "ssh-handshake-time", "writer_class": "node-probe"},
 			map[string]any{"name": "poll-duration", "writer_class": "node-probe"},
@@ -85,6 +85,7 @@ func (l *fakeLab) routes() map[string]any {
 		"/components/c1/metrics":      map[string]any{"metrics": metrics},
 		"/components/c1/properties":   map[string]any{"properties": props},
 		"/components/c1/properties/endpoint-reachable/samples":  sample("endpoint-reachable"),
+		"/components/c1/properties/tcp-open/samples":            sample("tcp-open"),
 		"/components/c1/properties/endpoint-responsive/samples": sample("endpoint-responsive"),
 		"/components/c1/properties/session-state/samples":       sample("session-state"),
 		"/systems":               map[string]any{"systems": []any{map[string]any{"id": "s1", "name": "Boardroom"}}},

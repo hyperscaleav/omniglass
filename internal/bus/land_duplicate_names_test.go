@@ -112,25 +112,25 @@ func TestLandSurvivesDuplicateComponentNames(t *testing.T) {
 	ev := &ogv1.TelemetryBatch{
 		TaskId:  "t-a",
 		NodeId:  "node-a",
-		Metrics: []*ogv1.MetricSample{{Name: "tcp-open", Value: 1}},
+		Metrics: []*ogv1.MetricSample{{Name: "tcp-connect-time", Value: 1}},
 	}
 	bind := ingestBinding{SampleOwner: &owner, Arc: componentArc(owner), Writer: storage.NodeWriter(owner.ComponentID, owner.EndpointName)}
 	if err := s.land(ctx, "", ev, bind); err != nil {
 		t.Fatalf("land: %v", err)
 	}
 
-	dpA, err := gw.LatestMetric(ctx, compA.ID, "tcp-open")
+	dpA, err := gw.LatestMetric(ctx, compA.ID, "tcp-connect-time")
 	if err != nil {
 		t.Fatalf("latest metric compA: %v", err)
 	}
 	if dpA == nil || dpA.Value != 1 {
-		t.Fatalf("compA tcp-open = %+v, want 1", dpA)
+		t.Fatalf("compA tcp-connect-time = %+v, want 1", dpA)
 	}
-	dpB, err := gw.LatestMetric(ctx, compB.ID, "tcp-open")
+	dpB, err := gw.LatestMetric(ctx, compB.ID, "tcp-connect-time")
 	if err != nil {
 		t.Fatalf("latest metric compB: %v", err)
 	}
 	if dpB != nil {
-		t.Fatalf("compB tcp-open = %+v, want nil (cross-contaminated by the shared name)", dpB)
+		t.Fatalf("compB tcp-connect-time = %+v, want nil (cross-contaminated by the shared name)", dpB)
 	}
 }

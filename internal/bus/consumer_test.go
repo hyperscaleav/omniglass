@@ -20,7 +20,7 @@ import (
 // name that is registered on another lane (the lane is the array, #594).
 func TestDeriveMetrics(t *testing.T) {
 	reg := collection.NewRegistry([]storage.MetricType{
-		{Name: "tcp-open"},
+		{Name: "icmp-rtt-avg"},
 		{Name: "tcp-connect-time"},
 	}, []storage.PropertyType{{Name: "video-input", DataType: "string"}}, nil)
 	owner := storage.TaskOwner{ComponentID: "disp-1", EndpointName: "disp-1-tcp", Transport: "tcp"}
@@ -28,7 +28,7 @@ func TestDeriveMetrics(t *testing.T) {
 		TaskId: "t1",
 		NodeId: "node-a",
 		Metrics: []*ogv1.MetricSample{
-			{Name: "tcp-open", Value: 1},
+			{Name: "icmp-rtt-avg", Value: 1},
 			{Name: "tcp-connect-time", Value: 3.5},
 			{Name: "not.registered", Value: 9},
 			{Name: "video-input", Value: 2}, // a property name on the metric lane: refused by name
@@ -56,7 +56,7 @@ func TestDeriveMetrics(t *testing.T) {
 // one lands with the same owner stamping as a metric.
 func TestDeriveProperties(t *testing.T) {
 	reg := collection.NewRegistry(
-		[]storage.MetricType{{Name: "tcp-open"}},
+		[]storage.MetricType{{Name: "tcp-connect-time"}},
 		[]storage.PropertyType{
 			{Name: "endpoint-reachable", DataType: "string", Validation: []byte(`{"enum":["up","down"]}`)},
 			{Name: "serial-number", DataType: "string"},
@@ -69,7 +69,7 @@ func TestDeriveProperties(t *testing.T) {
 		{Name: "endpoint-reachable", ValueJson: `3`},          // not a string: dropped
 		{Name: "serial-number", ValueJson: `"SN-1"`},          // no schema: any string lands
 		{Name: "not.registered", ValueJson: `"up"`},
-		{Name: "tcp-open", ValueJson: `"up"`}, // a metric name on the property lane: refused by name
+		{Name: "tcp-connect-time", ValueJson: `"3"`}, // a metric name on the property lane: refused by name
 	}}
 	states := deriveProperties(ev, componentArc(owner), owner, reg, storage.NodeWriter(owner.ComponentID, owner.EndpointName))
 	if len(states) != 2 {
@@ -127,7 +127,7 @@ func TestDeriveEvents(t *testing.T) {
 // ingest time.
 func TestSampleTimeRule(t *testing.T) {
 	reg := collection.NewRegistry(
-		[]storage.MetricType{{Name: "tcp-open"}},
+		[]storage.MetricType{{Name: "tcp-connect-time"}},
 		[]storage.PropertyType{{Name: "serial-number", DataType: "string"}},
 		[]storage.EventType{{Name: "note"}})
 	owner := storage.TaskOwner{ComponentID: "disp-1", EndpointName: "tcp"}
@@ -137,8 +137,8 @@ func TestSampleTimeRule(t *testing.T) {
 	ev := &ogv1.TelemetryBatch{
 		Ts: timestamppb.New(batchTS),
 		Metrics: []*ogv1.MetricSample{
-			{Name: "tcp-open", Value: 1, Ts: timestamppb.New(sampleTS)},
-			{Name: "tcp-open", Value: 1},
+			{Name: "tcp-connect-time", Value: 1, Ts: timestamppb.New(sampleTS)},
+			{Name: "tcp-connect-time", Value: 1},
 		},
 		Properties: []*ogv1.PropertySample{
 			{Name: "serial-number", ValueJson: `"SN-1"`, Ts: timestamppb.New(sampleTS)},
@@ -169,7 +169,7 @@ func TestSampleTimeRule(t *testing.T) {
 	}
 
 	// Both absent: zero, so the insert path stamps ingest time.
-	bare := &ogv1.TelemetryBatch{Metrics: []*ogv1.MetricSample{{Name: "tcp-open", Value: 1}}}
+	bare := &ogv1.TelemetryBatch{Metrics: []*ogv1.MetricSample{{Name: "tcp-connect-time", Value: 1}}}
 	if got := deriveMetrics(bare, componentArc(owner), owner, reg, storage.NodeWriter(owner.ComponentID, owner.EndpointName)); len(got) != 1 || !got[0].TS.IsZero() {
 		t.Fatalf("no ts anywhere: want the zero time for the insert path, got %+v", got)
 	}

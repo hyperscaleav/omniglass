@@ -117,7 +117,7 @@ func TestAnOrphanedBatchIsWarnedOnceAndCounted(t *testing.T) {
 		publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
 			TaskId:  "t-b",
 			NodeId:  "node-a",
-			Metrics: []*ogv1.MetricSample{{Name: "tcp-open", Value: 1}, {Name: "tcp-connect-time", Value: 3}},
+			Metrics: []*ogv1.MetricSample{{Name: "icmp-rtt-avg", Value: 1}, {Name: "tcp-connect-time", Value: 3}},
 		})
 	}
 
@@ -148,7 +148,7 @@ func TestAnOrphanedBatchIsWarnedOnceAndCounted(t *testing.T) {
 	if w["level"] != "WARN" || w["node"] != "node-a" || w["task"] != "t-b" || w["samples"] != float64(2) {
 		t.Fatalf("warning = %v, want WARN naming node-a, task t-b and 2 samples", w)
 	}
-	if got, err := gw.LatestMetric(ctx, "disp-2", "tcp-open"); err == nil && got != nil {
+	if got, err := gw.LatestMetric(ctx, "disp-2", "tcp-connect-time"); err == nil && got != nil {
 		t.Fatalf("an orphaned sample landed on disp-2: %+v", got)
 	}
 }

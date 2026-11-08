@@ -10947,9 +10947,8 @@
             "type": "string"
           },
           "value": {
-            "description": "The latest signal value (1 = reachable/open, 0 = not)",
-            "format": "double",
-            "type": "number"
+            "description": "The latest signal value in the property's own words: up or down for ping, open or closed for port, up or down for request",
+            "type": "string"
           }
         },
         "required": [

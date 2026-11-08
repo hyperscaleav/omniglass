@@ -40,10 +40,10 @@ type reachResp struct {
 			TS    time.Time `json:"ts"`
 		} `json:"responsive"`
 		Layers []struct {
-			Layer  string  `json:"layer"`
-			Check  string  `json:"check"`
-			Value  float64 `json:"value"`
-			Detail string  `json:"detail"`
+			Layer  string `json:"layer"`
+			Check  string `json:"check"`
+			Value  string `json:"value"`
+			Detail string `json:"detail"`
 		} `json:"layers"`
 		History []struct {
 			TS    time.Time `json:"ts"`
@@ -98,20 +98,20 @@ func TestReachabilityAPI(t *testing.T) {
 	t0 := time.Now().UTC().Add(-3 * time.Minute)
 	t1 := t0.Add(time.Minute)
 	t2 := t1.Add(time.Minute)
-	// disp-1-tcp: up verdict + tcp-open=1 + connect_time.
+	// disp-1-tcp: up verdict + tcp-open=open (a property, #1592) + connect_time.
 	if err := insertProperties(ctx, gw, []storage.PropertySampleWrite{
 		{OwnerKind: "component", OwnerID: "disp-1", Key: "endpoint-reachable", Instance: "disp-1-tcp", Value: "up", Source: "tcp", TS: t2},
 		{OwnerKind: "component", OwnerID: "disp-1", Key: "endpoint-responsive", Instance: "disp-1-tcp", Value: "up", Source: "http", TS: t2},
+		{OwnerKind: "component", OwnerID: "disp-1", Key: "tcp-open", Instance: "disp-1-tcp", Value: "open", Source: "tcp", TS: t2},
 	}); err != nil {
 		t.Fatalf("insert tcp state: %v", err)
 	}
 	if err := insertMetrics(ctx, gw, []storage.MetricSampleWrite{
-		{OwnerKind: "component", OwnerID: "disp-1", Key: "tcp-open", Instance: "disp-1-tcp", Value: 1, Source: "tcp", TS: t2},
 		{OwnerKind: "component", OwnerID: "disp-1", Key: "tcp-connect-time", Instance: "disp-1-tcp", Value: 3.1, Source: "tcp", TS: t2},
 	}); err != nil {
 		t.Fatalf("insert tcp metrics: %v", err)
 	}
-	// disp-1-icmp: down verdict with two transitions (up then down) + icmp-reachable=0.
+	// disp-1-icmp: down verdict with two transitions (up then down) + icmp-reachable=down.
 	if err := insertProperties(ctx, gw, []storage.PropertySampleWrite{
 		{OwnerKind: "component", OwnerID: "disp-1", Key: "endpoint-reachable", Instance: "disp-1-icmp", Value: "up", Source: "icmp", TS: t0},
 	}); err != nil {
@@ -122,10 +122,10 @@ func TestReachabilityAPI(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("insert icmp down: %v", err)
 	}
-	if err := insertMetrics(ctx, gw, []storage.MetricSampleWrite{
-		{OwnerKind: "component", OwnerID: "disp-1", Key: "icmp-reachable", Instance: "disp-1-icmp", Value: 0, Source: "icmp", TS: t1},
+	if err := insertProperties(ctx, gw, []storage.PropertySampleWrite{
+		{OwnerKind: "component", OwnerID: "disp-1", Key: "icmp-reachable", Instance: "disp-1-icmp", Value: "down", Source: "icmp", TS: t1},
 	}); err != nil {
-		t.Fatalf("insert icmp metric: %v", err)
+		t.Fatalf("insert icmp result: %v", err)
 	}
 
 	// disp-1-snmp: a driver endpoint. Its samples are the driver's own
@@ -181,6 +181,13 @@ func TestReachabilityAPI(t *testing.T) {
 	}
 	if len(tcp.Layers) == 0 {
 		t.Fatalf("tcp layers: want at least the L4 layer, got none")
+	}
+	// The layer speaks the property's own words, not a number (#1592).
+	if tcp.Layers[0].Value != "open" {
+		t.Fatalf("tcp L4 layer: want open, got %+v", tcp.Layers[0])
+	}
+	if len(icmp.Layers) == 0 || icmp.Layers[0].Value != "down" {
+		t.Fatalf("icmp L3 layer: want down, got %+v", icmp.Layers)
 	}
 	if icmp.Verdict == nil || icmp.Verdict.Value != "down" {
 		t.Fatalf("icmp verdict: want down, got %+v", icmp.Verdict)
@@ -600,10 +607,10 @@ func TestReachabilityServesTheUDPRequestLayer(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 	type layer struct {
-		Layer  string  `json:"layer"`
-		Check  string  `json:"check"`
-		Value  float64 `json:"value"`
-		Detail string  `json:"detail"`
+		Layer  string `json:"layer"`
+		Check  string `json:"check"`
+		Value  string `json:"value"`
+		Detail string `json:"detail"`
 	}
 	read := func() []layer {
 		var r struct {
@@ -620,11 +627,11 @@ func TestReachabilityServesTheUDPRequestLayer(t *testing.T) {
 		return r.Endpoints[0].Layers
 	}
 	got := read()
-	if len(got) != 1 || got[0] != (layer{Layer: "request", Check: "endpoint-responsive", Value: 1, Detail: "0.7 ms"}) {
+	if len(got) != 1 || got[0] != (layer{Layer: "request", Check: "endpoint-responsive", Value: "up", Detail: "0.7 ms"}) {
 		t.Fatalf("layers = %+v, want the request layer answered in 0.7 ms", got)
 	}
 	responsive("down", at.Add(time.Second))
-	if got := read(); len(got) != 1 || got[0] != (layer{Layer: "request", Check: "endpoint-responsive", Value: 0}) {
+	if got := read(); len(got) != 1 || got[0] != (layer{Layer: "request", Check: "endpoint-responsive", Value: "down"}) {
 		t.Fatalf("layers = %+v, want the request layer unanswered and untimed", got)
 	}
 }
@@ -680,10 +687,10 @@ func TestReachabilityServesTheSNMPRequestLayer(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 	type layer struct {
-		Layer  string  `json:"layer"`
-		Check  string  `json:"check"`
-		Value  float64 `json:"value"`
-		Detail string  `json:"detail"`
+		Layer  string `json:"layer"`
+		Check  string `json:"check"`
+		Value  string `json:"value"`
+		Detail string `json:"detail"`
 	}
 	read := func() []layer {
 		var r struct {
@@ -700,11 +707,11 @@ func TestReachabilityServesTheSNMPRequestLayer(t *testing.T) {
 		return r.Endpoints[0].Layers
 	}
 	got := read()
-	if len(got) != 1 || got[0] != (layer{Layer: "request", Check: "endpoint-responsive", Value: 1, Detail: "0.7 ms"}) {
+	if len(got) != 1 || got[0] != (layer{Layer: "request", Check: "endpoint-responsive", Value: "up", Detail: "0.7 ms"}) {
 		t.Fatalf("layers = %+v, want the request layer answered in 0.7 ms", got)
 	}
 	responsive("down", at.Add(time.Second))
-	if got := read(); len(got) != 1 || got[0] != (layer{Layer: "request", Check: "endpoint-responsive", Value: 0}) {
+	if got := read(); len(got) != 1 || got[0] != (layer{Layer: "request", Check: "endpoint-responsive", Value: "down"}) {
 		t.Fatalf("layers = %+v, want the request layer unanswered and untimed", got)
 	}
 }

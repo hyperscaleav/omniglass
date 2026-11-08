@@ -35,7 +35,7 @@ const hostKeyRejected = (over: Partial<ReachEndpoint> = {}): ReachEndpoint => ({
   // The reason names other keys: a notice that parsed the prose would show them.
   session: { state: "rejected", ts: ago(30_000), reason: `host-key: the host key changed: pinned SHA256:${"x".repeat(43)}, offered SHA256:${"y".repeat(43)}` },
   rejection: { rung: "responsive", class: "host-key", ts: "2026-10-23T11:58:00.000Z", pinned_key: pinned, offered_key: offered },
-  layers: [{ layer: "ping", check: "icmp-reachable", value: 1, ts: ago(2_000) }],
+  layers: [{ layer: "ping", check: "icmp-reachable", value: "up", ts: ago(2_000) }],
   history: [],
   ...over,
 });

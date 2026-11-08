@@ -237,13 +237,13 @@ describe("the leaf's dispatch facts (#786)", () => {
         instance: "tcp", instance_count: 2,
         instances: [{ instance: "tcp", value: 4.8, ts: "2026-10-28T10:00:02Z", endpoint: true }, { instance: "http", value: 2.2, ts: "2026-10-28T10:00:01Z", endpoint: true }],
       },
-      { metric_type_name: "tcp-open", data_type: "float", value: 1, is_sampled: true, from_contract: false, required: false, instance: "tcp", instance_count: 1 },
+      { metric_type_name: "tcp-connect-time", data_type: "float", value: 1, is_sampled: true, from_contract: false, required: false, instance: "tcp", instance_count: 1 },
     ] as never);
     expect(rows[0].spread).toEqual({
       shown: "tcp", count: 2,
       instances: [{ instance: "tcp", value: 4.8, ts: "2026-10-28T10:00:02Z", endpoint: true }, { instance: "http", value: 2.2, ts: "2026-10-28T10:00:01Z", endpoint: true }],
     });
-    expect(rows[1]).toEqual({ name: "tcp-open", label: "tcp-open", value: 1, sampled: true });
+    expect(rows[1]).toEqual({ name: "tcp-connect-time", label: "tcp-connect-time", value: 1, sampled: true });
   });
 
   it("spreadSummary names the instance shown and counts endpoints, or instances when one is no endpoint", () => {

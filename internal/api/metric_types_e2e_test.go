@@ -70,7 +70,7 @@ func TestMetricTypeAPI(t *testing.T) {
 	for _, m := range listed.MetricTypes {
 		names[m.Name] = true
 	}
-	if !names["pump-speed"] || !names["icmp-rtt-avg"] || !names["tcp-open"] {
+	if !names["pump-speed"] || !names["icmp-rtt-avg"] || !names["tcp-connect-time"] {
 		t.Fatalf("list missing metric types: %v", names)
 	}
 
@@ -85,8 +85,8 @@ func TestMetricTypeAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/metric-types", map[string]any{"name": "pump-speed", "data_type": "int"}, http.StatusConflict)
 
 	// An official (seeded) metric type is read-only (409).
-	c.do(ownerTok, http.MethodPatch, "/metric-types/tcp-open", map[string]any{"label": "x"}, http.StatusConflict)
-	c.do(ownerTok, http.MethodDelete, "/metric-types/tcp-open", nil, http.StatusConflict)
+	c.do(ownerTok, http.MethodPatch, "/metric-types/tcp-connect-time", map[string]any{"label": "x"}, http.StatusConflict)
+	c.do(ownerTok, http.MethodDelete, "/metric-types/tcp-connect-time", nil, http.StatusConflict)
 
 	// An unknown metric type is a 404.
 	c.do(ownerTok, http.MethodGet, "/metric-types/nope", nil, http.StatusNotFound)

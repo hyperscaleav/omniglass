@@ -73,7 +73,7 @@ held in the metric siblings of the property contract tables (`product_metric`,
 components, a [standard](/guides/admin/standards/) for its systems, and a
 [location type](/guides/admin/location-types/) for the locations of that type. Each line names a catalog
 metric, optionally gives it a **default**, and optionally marks it **required**: a product ships a
-default sample rate, a standard requires a seat count. A node's own probe metric (`tcp-open`,
+default sample rate, a standard requires a seat count. A node's own probe metric (`tcp-connect-time`,
 `icmp-rtt-avg` and the rest) is a reserved key no contract declares, as on the property side.
 
 Type, unit, and precision are **not** repeated in the contract; they stay on the catalog entry, so
@@ -94,9 +94,10 @@ and, where several endpoints collect a metric, each one's latest
 A metric's values are **telemetry**, not something typed on an instance's detail:
 
 - An **observed** value arrives through [collection](/guides/operator/collection/): a task samples
-  the device and pushes the reading. The shipped probes are the seeded set above: the TCP-connect
-  probe writes `tcp-open` and `tcp-connect-time`, the ICMP probe writes `icmp-reachable` and
-  `icmp-rtt-avg`.
+  the device and pushes the reading. The shipped probes write the timings in the seeded set above:
+  the TCP-connect probe `tcp-connect-time`, the ICMP probe `icmp-rtt-avg`. Each probe's state
+  (`tcp-open`, `icmp-reachable`) is a [property](/guides/admin/properties/), stored when it
+  changes, not a metric row every tick.
 - A **calculated** value is produced by a rule from other telemetry, and the row names the rule
   that produced it, so a derived number is never mistaken for a reading.
 - A [command](/architecture/commands/) that targets a metric (set a volume) records the value it

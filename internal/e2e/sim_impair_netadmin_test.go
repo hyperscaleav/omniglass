@@ -22,6 +22,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/hyperscaleav/omniglass/internal/auth"
+	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 	"github.com/hyperscaleav/omniglass/internal/sim/profiles"
@@ -155,6 +156,22 @@ func TestImpairingASimulatedDeviceShowsInCollection(t *testing.T) {
 		s := out.Samples[len(out.Samples)-1]
 		return s.Value, s.TS, true
 	}
+	// state reads the device's latest probe result (tcp-open, icmp-reachable),
+	// a property since #1592: one row per change, so the newest row is the
+	// result in force and its ts is when it last flipped.
+	state := func(name string) (string, time.Time, bool) {
+		var out struct {
+			Samples []struct {
+				Value string    `json:"value"`
+				TS    time.Time `json:"ts"`
+			} `json:"samples"`
+		}
+		if !get("/components/sim-dev/properties/"+name+"/samples?limit=1", &out) || len(out.Samples) == 0 {
+			return "", time.Time{}, false
+		}
+		s := out.Samples[len(out.Samples)-1]
+		return s.Value, s.TS, true
+	}
 	// reach reads each endpoint's reachability verdict: the panel an
 	// operator watches.
 	reach := func() map[string]string {
@@ -188,12 +205,20 @@ func TestImpairingASimulatedDeviceShowsInCollection(t *testing.T) {
 			return ok && ts.After(since) && want(v)
 		})
 	}
-	up := func(v float64) bool { return v == 1 }
-	down := func(v float64) bool { return v == 0 }
+	// flipped waits for the probe result to read want, flipped after since: a
+	// change-only lane writes no row while the result holds, so a result that
+	// already read want before since is not evidence of a new answer.
+	flipped := func(what, name string, since time.Time, want string) {
+		t.Helper()
+		waitFor(t, what, func() bool {
+			v, ts, ok := state(name)
+			return ok && ts.After(since) && v == want
+		})
+	}
 
 	start := time.Now()
-	after("TCP to answer", "tcp-open", start, up)
-	after("ping to answer", "icmp-reachable", start, up)
+	flipped("TCP to answer", "tcp-open", start, collection.PortOpen)
+	flipped("ping to answer", "icmp-reachable", start, collection.PingUp)
 	waitFor(t, "both endpoints to read up", both("up"))
 
 	// ruleAlarms counts sim-dev's open alarms raised by the official
@@ -261,8 +286,8 @@ func TestImpairingASimulatedDeviceShowsInCollection(t *testing.T) {
 		}
 		time.Sleep(250 * time.Millisecond)
 	}
-	after("TCP to fail once unplugged", "tcp-open", unplugged, down)
-	after("ping to fail once unplugged", "icmp-reachable", unplugged, down)
+	flipped("TCP to fail once unplugged", "tcp-open", unplugged, collection.PortClosed)
+	flipped("ping to fail once unplugged", "icmp-reachable", unplugged, collection.PingDown)
 	waitFor(t, "both endpoints to read down", both("down"))
 	// The loop closes with no hand-raised alarm: once the verdict has read
 	// down for the rule's sustain, the sweep opens the alarm and the system
@@ -281,8 +306,8 @@ func TestImpairingASimulatedDeviceShowsInCollection(t *testing.T) {
 
 	replugged := time.Now()
 	as("component", "impairment", "set", "sim-dev")
-	after("TCP to recover once replugged", "tcp-open", replugged, up)
-	after("ping to recover once replugged", "icmp-reachable", replugged, up)
+	flipped("TCP to recover once replugged", "tcp-open", replugged, collection.PortOpen)
+	flipped("ping to recover once replugged", "icmp-reachable", replugged, collection.PingUp)
 	waitFor(t, "both endpoints to read up again", both("up"))
 	waitFor(t, "the reachability alarms to clear", func() bool { return ruleAlarms() == 0 })
 	// Each was resolved by a clear event carrying it, once.

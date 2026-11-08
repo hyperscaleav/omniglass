@@ -234,13 +234,13 @@ func TestAdmitWrite(t *testing.T) {
 		row   keyedWrite
 		admit bool
 	}{
-		{"node on its endpoint", probe, node("ssh", true), on(compA, "tcp-open", "ssh"), true},
-		{"node on another endpoint", probe, node("ssh", true), on(compA, "tcp-open", "panel"), false},
-		{"node with no instance", probe, node("ssh", true), on(compA, "tcp-open", ""), false},
-		{"node bound to no endpoint", probe, node("", false), on(compA, "tcp-open", ""), false},
-		{"node on another component's same-named endpoint", probe, node("ssh", true), on(compB, "tcp-open", "ssh"), false},
+		{"node on its endpoint", probe, node("ssh", true), on(compA, "tcp-connect-time", "ssh"), true},
+		{"node on another endpoint", probe, node("ssh", true), on(compA, "tcp-connect-time", "panel"), false},
+		{"node with no instance", probe, node("ssh", true), on(compA, "tcp-connect-time", ""), false},
+		{"node bound to no endpoint", probe, node("", false), on(compA, "tcp-connect-time", ""), false},
+		{"node on another component's same-named endpoint", probe, node("ssh", true), on(compB, "tcp-connect-time", "ssh"), false},
 		{"node writing for a system", collected, node("ssh", true), keyedWrite{key: "uptime", ownerKind: "system", owner: compA}, false},
-		{"push on a probe key", probe, PushWriter(), on(compA, "tcp-open", "ssh"), false},
+		{"push on a probe key", probe, PushWriter(), on(compA, "tcp-connect-time", "ssh"), false},
 		{"the pin on the host key", keyWriterOf{class: writerclass.NodeProbe}, gatewayWriter(writerclass.KeyPin), on(compA, "ssh-host-key", "ssh"), true},
 		{"the pin on the gate", probe, gatewayWriter(writerclass.KeyPin), on(compA, "endpoint-rejection", "ssh"), false},
 		{"its own rule", calc, asRule("r-1"), keyedWrite{key: "avg-temp"}, true},

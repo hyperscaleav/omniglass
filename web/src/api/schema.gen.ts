@@ -10149,11 +10149,8 @@ export interface components {
              * @description When the signal was observed
              */
             ts: string;
-            /**
-             * Format: double
-             * @description The latest signal value (1 = reachable/open, 0 = not)
-             */
-            value: number;
+            /** @description The latest signal value in the property's own words: up or down for ping, open or closed for port, up or down for request */
+            value: string;
         };
         ReachRejectionBody: {
             /** @description The refusal's class: auth, host-key, certificate or protocol */

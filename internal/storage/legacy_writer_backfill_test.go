@@ -249,7 +249,7 @@ func TestLegacyBackfillRetiresWhatTheRulingRefuses(t *testing.T) {
 		values ($2, 'system', $1::uuid, (select id from property_type where name = 'endpoint-reachable'), 'ssh', 'observed', 'ssh', to_jsonb('up'::text))`,
 		sys.ID, hour)
 	exec(`insert into metric (ts, owner_kind, component_id, metric_type_id, instance, provenance, source, value)
-		select v.ts, 'component', $1::uuid, (select id from metric_type where name = 'tcp-open'), v.instance, 'observed', 'tcp', v.value
+		select v.ts, 'component', $1::uuid, (select id from metric_type where name = 'tcp-connect-time'), v.instance, 'observed', 'tcp', v.value
 		from (values ($2::timestamptz, 'ssh', 0), (now() + interval '1 year', 'ssh', 1), ($2::timestamptz, 'fake', 1)) v(ts, instance, value)`,
 		d1, hour)
 	exec(`insert into event (ts, owner_kind, component_id, event_type_id, instance, origin, message, provenance, source)
@@ -305,9 +305,9 @@ func TestLegacyBackfillRetiresWhatTheRulingRefuses(t *testing.T) {
 		t.Errorf("LatestProperty = %+v (%v), want the node's down", got, err)
 	}
 	if got := f.count(t, `select value::int from metric where component_id = '`+d1+`'
-			and metric_type_id = (select id from metric_type where name = 'tcp-open') and instance = 'ssh'
+			and metric_type_id = (select id from metric_type where name = 'tcp-connect-time') and instance = 'ssh'
 			and provenance = 'observed' order by ts desc limit 1`); got != 0 {
-		t.Errorf("the newest observed tcp-open on ssh is %d, want the node's 0", got)
+		t.Errorf("the newest observed tcp-connect-time on ssh is %d, want the node's 0", got)
 	}
 	evs, err := f.gw.ListComponentEvents(f.ctx, "disp-1", 0, 50)
 	if err != nil {
@@ -406,7 +406,7 @@ func TestLegacyBackfillDownRestoresTheRows(t *testing.T) {
 	up, down := legacyBackfillSQL(t)
 	f.plantPin(t, "ssh-host-key", "ssh", "SHA256:"+strings.Repeat("p", 43))
 	if _, err := f.conn.Exec(f.ctx, `insert into metric (ts, owner_kind, component_id, metric_type_id, instance, provenance, source, value)
-		values (now(), 'component', $1::uuid, (select id from metric_type where name = 'tcp-open'), 'fake', 'observed', 'tcp', 1)`, d1); err != nil {
+		values (now(), 'component', $1::uuid, (select id from metric_type where name = 'tcp-connect-time'), 'fake', 'observed', 'tcp', 1)`, d1); err != nil {
 		t.Fatal(err)
 	}
 	ids := func() string {

@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
 	"github.com/hyperscaleav/omniglass/internal/collection/rejection"
 	"github.com/hyperscaleav/omniglass/internal/storage"
@@ -17,7 +18,7 @@ import (
 
 // The reachability read BFF: a per-component, per-endpoint composition of the
 // verdict property (endpoint-reachable), the layer signals (the raw icmp/tcp probe
-// metrics), and the recent transition history the availability strip reads. It is
+// results, properties since #1592, each timed by its metric), and the recent transition history the availability strip reads. It is
 // a plain typed Huma GET (no ViewResult framework exists), gated by component:read
 // and scope-injected through GetComponent: an out-of-scope component is a
 // non-disclosing 404, so the sample reads below only ever run on a verified,
@@ -43,11 +44,12 @@ const (
 	rejectionReasonKey = probekeys.EndpointRejectionReason
 )
 
-// reachLayer describes one probe layer the panel gates on: its primary signal
-// (0/1) and the optional companion metric that carries a timing detail.
+// reachLayer describes one probe layer the panel gates on: its state property
+// (a word, stored on change) and the companion metric that carries a timing
+// detail on every tick (#1592).
 type reachLayer struct {
 	Layer     string // the layer word: "ping" (L3) or "port" (L4)
-	SignalKey string // the primary metric key (icmp-reachable / tcp-open)
+	SignalKey string // the state property key (icmp-reachable up/down, tcp-open open/closed)
 	TimingKey string // the companion timing metric (icmp-rtt-avg / tcp-connect-time)
 }
 
@@ -65,7 +67,7 @@ type reachVerdictBody struct {
 type reachLayerBody struct {
 	Layer  string    `json:"layer" doc:"The probe layer word (ping, port, or request: a udp endpoint's request or an snmp endpoint's get answered)"`
 	Check  string    `json:"check" doc:"The property_type key of the primary signal"`
-	Value  float64   `json:"value" doc:"The latest signal value (1 = reachable/open, 0 = not)"`
+	Value  string    `json:"value" doc:"The latest signal value in the property's own words: up or down for ping, open or closed for port, up or down for request"`
 	Detail string    `json:"detail,omitempty" doc:"A human timing detail (rtt / connect time), when present"`
 	TS     time.Time `json:"ts" doc:"When the signal was observed"`
 }
@@ -276,7 +278,7 @@ func composeEndpoint(ctx context.Context, gw storage.Gateway, comp string, it st
 	}
 
 	for _, l := range reachLayers {
-		signal, err := gw.LatestMetricInstance(ctx, comp, l.SignalKey, it.Name)
+		signal, err := gw.LatestProperty(ctx, comp, l.SignalKey, it.Name)
 		if err != nil {
 			return row, err
 		}
@@ -331,10 +333,11 @@ var requestTimingKey = map[string]string{"udp": udpResponseKey, "snmp": snmpResp
 // served as this probe's.
 func composeRequestLayer(ctx context.Context, gw storage.Gateway, comp, instance string, responsive *reachVerdictBody, timingKey string) (reachLayerBody, error) {
 	lb := reachLayerBody{Layer: "request", Check: responsiveKey, TS: responsive.TS}
-	if responsive.Value != "up" {
+	lb.Value = collection.PingDown
+	if responsive.Value != collection.VerdictUp {
 		return lb, nil
 	}
-	lb.Value = 1
+	lb.Value = collection.PingUp
 	timing, err := gw.LatestMetricInstance(ctx, comp, timingKey, instance)
 	if err != nil {
 		return lb, err

@@ -28,7 +28,7 @@ func index(dps []collection.Sample) map[string]collection.Sample {
 	return m
 }
 
-// TestCollectTCPOpen: an open port yields tcp-open=1 plus a present connect_time.
+// TestCollectTCPOpen: an open port yields tcp-open=open plus a present connect_time.
 func TestCollectTCPOpen(t *testing.T) {
 	r := &collection.Runner{TCP: fakeTCP{ms: 4, reach: collection.Responded}}
 	dps, err := r.CollectTCP(context.Background(), collection.TCPTask{Target: "10.0.0.5:22", Timeout: 2 * time.Second})
@@ -37,8 +37,8 @@ func TestCollectTCPOpen(t *testing.T) {
 	}
 	got := index(dps)
 	open, ok := got[collection.SignalTCPOpen]
-	if !ok || open.Value != 1 {
-		t.Fatalf("tcp-open: want present val=1, got %+v", open)
+	if !ok || !open.IsText || open.Text != collection.PortOpen {
+		t.Fatalf("tcp-open: want present text open, got %+v", open)
 	}
 	if open.Labels[collection.ReasonLabel] != string(collection.Responded) {
 		t.Fatalf("tcp-open reason label: want responded, got %q", open.Labels[collection.ReasonLabel])
@@ -49,7 +49,7 @@ func TestCollectTCPOpen(t *testing.T) {
 	}
 }
 
-// TestCollectTCPClosed: a refused port yields tcp-open=0 with a reason, and
+// TestCollectTCPClosed: a refused port yields tcp-open=closed with a reason, and
 // tcp-connect-time is ABSENT.
 func TestCollectTCPClosed(t *testing.T) {
 	r := &collection.Runner{TCP: fakeTCP{reach: collection.Refused}}
@@ -59,8 +59,8 @@ func TestCollectTCPClosed(t *testing.T) {
 	}
 	got := index(dps)
 	open, ok := got[collection.SignalTCPOpen]
-	if !ok || open.Value != 0 {
-		t.Fatalf("tcp-open: want present val=0, got %+v (present=%v)", open, ok)
+	if !ok || !open.IsText || open.Text != collection.PortClosed {
+		t.Fatalf("tcp-open: want present text closed, got %+v (present=%v)", open, ok)
 	}
 	if open.Labels[collection.ReasonLabel] != string(collection.Refused) {
 		t.Fatalf("tcp-open reason: want refused, got %q", open.Labels[collection.ReasonLabel])

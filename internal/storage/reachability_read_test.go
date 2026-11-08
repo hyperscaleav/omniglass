@@ -61,33 +61,34 @@ func TestReachabilityReads(t *testing.T) {
 		t.Fatalf("tcp endpoint: want transport tcp with params, got %+v", ifaces[1])
 	}
 
-	// tcp-open on two different endpoint instances at different times: the newer
-	// write is on disp-1-icmp is irrelevant; instance-scoped read must return the
-	// disp-1-tcp value even though it is older.
+	// tcp-open (a property since #1592) on two different endpoint instances at
+	// different times: the newer write on disp-1-icmp is irrelevant; the
+	// instance-scoped read must return the disp-1-tcp value even though it is
+	// older.
 	older := time.Now().UTC().Add(-2 * time.Minute)
 	newer := older.Add(time.Minute)
 	// One batch per endpoint: a node writes a probe key only under the
 	// endpoint its task ran against (ADR-0161).
-	for _, w := range []storage.MetricSampleWrite{
-		{OwnerKind: "component", OwnerID: "disp-1", Key: "tcp-open", Instance: "disp-1-tcp", Value: 1, Source: "tcp", TS: older},
-		{OwnerKind: "component", OwnerID: "disp-1", Key: "tcp-open", Instance: "disp-1-icmp", Value: 0, Source: "tcp", TS: newer},
+	for _, w := range []storage.PropertySampleWrite{
+		{OwnerKind: "component", OwnerID: "disp-1", Key: "tcp-open", Instance: "disp-1-tcp", Value: "open", Source: "tcp", TS: older},
+		{OwnerKind: "component", OwnerID: "disp-1", Key: "tcp-open", Instance: "disp-1-icmp", Value: "closed", Source: "tcp", TS: newer},
 	} {
-		if err := insertMetrics(ctx, gw, []storage.MetricSampleWrite{w}); err != nil {
-			t.Fatalf("insert metrics: %v", err)
+		if err := insertProperties(ctx, gw, []storage.PropertySampleWrite{w}); err != nil {
+			t.Fatalf("insert properties: %v", err)
 		}
 	}
 
-	dp, err := gw.LatestMetricInstance(ctx, "disp-1", "tcp-open", "disp-1-tcp")
+	dp, err := gw.LatestProperty(ctx, "disp-1", "tcp-open", "disp-1-tcp")
 	if err != nil {
-		t.Fatalf("latest metric instance: %v", err)
+		t.Fatalf("latest property instance: %v", err)
 	}
-	if dp == nil || dp.Value != 1 || dp.Instance != "disp-1-tcp" {
-		t.Fatalf("tcp-open[disp-1-tcp]: want value 1, got %+v", dp)
+	if dp == nil || dp.Value != "open" || dp.Instance != "disp-1-tcp" {
+		t.Fatalf("tcp-open[disp-1-tcp]: want open, got %+v", dp)
 	}
 
 	// A series with no sample returns nil, not an error.
-	if none, err := gw.LatestMetricInstance(ctx, "disp-1", "icmp-reachable", "disp-1-icmp"); err != nil {
-		t.Fatalf("latest missing metric: %v", err)
+	if none, err := gw.LatestProperty(ctx, "disp-1", "icmp-reachable", "disp-1-icmp"); err != nil {
+		t.Fatalf("latest missing property: %v", err)
 	} else if none != nil {
 		t.Fatalf("icmp-reachable[disp-1-icmp]: want nil, got %+v", none)
 	}

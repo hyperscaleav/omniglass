@@ -22,8 +22,8 @@ const ago = (ms: number) => new Date(now - ms).toISOString();
 
 const ep = (over: Partial<ReachEndpoint>): ReachEndpoint =>
   ({ id: uuidFor("ep-1"), endpoint: "telnet", transport: "telnet", verdict: null, layers: [], history: [], ...over }) as ReachEndpoint;
-const ping = (value: number) => ({ layer: "ping", check: "icmp-reachable", value, ts: ago(5_000) });
-const port = (value: number) => ({ layer: "port", check: "tcp-open", value, ts: ago(5_000) });
+const ping = (up: boolean) => ({ layer: "ping", check: "icmp-reachable", value: up ? "up" : "down", ts: ago(5_000) });
+const port = (open: boolean) => ({ layer: "port", check: "tcp-open", value: open ? "open" : "closed", ts: ago(5_000) });
 
 // A held session reads its state, aged (ADR-0150): a state is stored only on a
 // transition, so an up session from last week is fine while the endpoint
@@ -134,14 +134,14 @@ describe("endpointNotice", () => {
 // responsive is the transport and the gate, authenticated is the login.
 describe("ladder", () => {
   it("reads a ping that failed beside a transport that answered: informational, not the gate", () => {
-    const rungs = ladder(ep({ layers: [ping(0), port(1)], responsive: { value: "up", ts: ago(5_000) } }));
+    const rungs = ladder(ep({ layers: [ping(false), port(true)], responsive: { value: "up", ts: ago(5_000) } }));
     expect(rungs.map((r) => [r.key, r.status, r.role])).toEqual([
       ["reachable", "fail", "informational"],
       ["responsive", "pass", "gate"],
     ]);
   });
   it("falls back to the tcp connect for the transport rung when no protocol answer was recorded", () => {
-    const rungs = ladder(ep({ transport: "tcp", layers: [ping(1), port(0)] }));
+    const rungs = ladder(ep({ transport: "tcp", layers: [ping(true), port(false)] }));
     expect(rungs.map((r) => [r.key, r.status])).toEqual([
       ["reachable", "pass"],
       ["responsive", "fail"],
@@ -154,7 +154,7 @@ describe("ladder", () => {
     ]);
   });
   it("adds the login rung once a login was tried", () => {
-    const rungs = ladder(ep({ layers: [ping(1)], responsive: { value: "up", ts: ago(1) }, authenticated: { value: "yes", ts: ago(1) } }));
+    const rungs = ladder(ep({ layers: [ping(true)], responsive: { value: "up", ts: ago(1) }, authenticated: { value: "yes", ts: ago(1) } }));
     expect(rungs.map((r) => [r.key, r.status, r.role])).toEqual([
       ["reachable", "pass", "informational"],
       ["responsive", "pass", "gate"],
@@ -164,7 +164,7 @@ describe("ladder", () => {
   it("holds the rung an auth refusal gates, the rungs below still observed", () => {
     const rungs = ladder(
       ep({
-        layers: [ping(1)],
+        layers: [ping(true)],
         responsive: { value: "up", ts: ago(1) },
         authenticated: { value: "no", ts: ago(1) },
         rejection: { rung: "authenticated", class: "auth", ts: "2026-10-23T11:58:00.000Z" },
@@ -180,7 +180,7 @@ describe("ladder", () => {
     const rungs = ladder(
       ep({
         transport: "ssh",
-        layers: [ping(1), port(1)],
+        layers: [ping(true), port(true)],
         authenticated: { value: "yes", ts: ago(60_000) },
         rejection: { rung: "responsive", class: "host-key", ts: "2026-10-23T11:58:00.000Z" },
       }),
@@ -198,7 +198,7 @@ describe("ladder", () => {
     const rungs = ladder(
       ep({
         transport: "snmp",
-        layers: [ping(1)],
+        layers: [ping(true)],
         responsive: { value: "down", ts: ago(1) },
         authenticated: { value: "yes", ts: ago(60_000) },
       }),
@@ -215,7 +215,7 @@ describe("ladder", () => {
     const rungs = ladder(
       ep({
         transport: "snmp",
-        layers: [ping(1)],
+        layers: [ping(true)],
         responsive: { value: "down", ts: ago(1) },
         authenticated: { value: "no", ts: ago(1) },
         rejection: { rung: "authenticated", class: "auth", ts: "2026-10-23T11:58:00.000Z" },
@@ -233,17 +233,17 @@ describe("ladder", () => {
     expect(rungs.at(-1)).toMatchObject({ key: "authenticated", status: "held" });
   });
   it("invents no login rung for a session that has no login, whatever its gate", () => {
-    const rungs = ladder(ep({ transport: "tcp", layers: [ping(1), port(1)], session: { state: "rejected", ts: ago(1_000) }, rejection: { rung: "responsive", class: "protocol", ts: "2026-10-23T11:58:00.000Z" } }));
+    const rungs = ladder(ep({ transport: "tcp", layers: [ping(true), port(true)], session: { state: "rejected", ts: ago(1_000) }, rejection: { rung: "responsive", class: "protocol", ts: "2026-10-23T11:58:00.000Z" } }));
     expect(rungs.map((r) => [r.key, r.status])).toEqual([
       ["reachable", "pass"],
       ["responsive", "held"],
     ]);
   });
   it("reads an icmp endpoint's ping as its gate, not as information", () => {
-    expect(ladder(ep({ transport: "icmp", layers: [ping(1)] })).map((r) => [r.key, r.status, r.role])).toEqual([["reachable", "pass", "gate"]]);
+    expect(ladder(ep({ transport: "icmp", layers: [ping(true)] })).map((r) => [r.key, r.status, r.role])).toEqual([["reachable", "pass", "gate"]]);
   });
   it("teaches each rung in its hint, the informational ping included", () => {
-    const [reach, resp] = ladder(ep({ layers: [ping(0), port(1)] }));
+    const [reach, resp] = ladder(ep({ layers: [ping(false), port(true)] }));
     expect(rungHint(reach)).toMatch(/informational/i);
     expect(rungHint(reach)).toMatch(/did not answer/i);
     expect(rungHint(resp)).toMatch(/gate/i);

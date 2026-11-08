@@ -80,7 +80,7 @@ func TestFanoutWriterIsHeldToTheConduitsBindings(t *testing.T) {
 		err  error
 	}{
 		{"an owner the conduit has not bound", f.gw.InsertMetricSamples(f.ctx, w, metric(f.unbound, "participant-count"))},
-		{"a node-probe key", f.gw.InsertMetricSamples(f.ctx, w, metric(f.bound, "tcp-open"))},
+		{"a node-probe key", f.gw.InsertMetricSamples(f.ctx, w, metric(f.bound, "tcp-connect-time"))},
 		{"a calc rule's output", f.gw.InsertMetricSamples(f.ctx, w, metric(f.bound, "avg-uptime"))},
 		{"a platform key", f.gw.InsertPropertySamples(f.ctx, w, []storage.PropertySampleWrite{{OwnerKind: "system", OwnerID: f.bound, Key: "health", Value: "ok"}})},
 		{"another conduit's bound owner", f.gw.InsertMetricSamples(f.ctx, storage.FanoutWriter(f.unbound), metric(f.bound, "participant-count"))},

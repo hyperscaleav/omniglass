@@ -66,7 +66,7 @@ func TestNodeWriterBindsItsComponentAndEndpoint(t *testing.T) {
 			return f.gw.InsertPropertySamples(f.ctx, node, prop(d2, "endpoint-reachable", "ssh", "down"))
 		},
 		"a probe metric on another component": func() error {
-			return f.gw.InsertMetricSamples(f.ctx, node, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: d2, Key: "tcp-open", Instance: "ssh", Value: 0}})
+			return f.gw.InsertMetricSamples(f.ctx, node, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: d2, Key: "tcp-connect-time", Instance: "ssh", Value: 0}})
 		},
 		"collection-failed on another component": func() error {
 			return f.gw.InsertEvents(f.ctx, node, []storage.EventWrite{{OwnerKind: "component", OwnerID: d2, Key: "collection-failed", Instance: "ssh", Message: "forged"}})
@@ -81,7 +81,7 @@ func TestNodeWriterBindsItsComponentAndEndpoint(t *testing.T) {
 			return f.gw.InsertPropertySamples(f.ctx, storage.NodeWriter(d1, ""), prop(d1, "video-input", "", "hdmi4"))
 		},
 		"a node bound to no component": func() error {
-			return f.gw.InsertMetricSamples(f.ctx, storage.NodeWriter("", "ssh"), []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: d1, Key: "tcp-open", Instance: "ssh", Value: 1}})
+			return f.gw.InsertMetricSamples(f.ctx, storage.NodeWriter("", "ssh"), []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: d1, Key: "tcp-connect-time", Instance: "ssh", Value: 1}})
 		},
 	} {
 		if err := write(); !refused(err) {
@@ -222,7 +222,7 @@ func TestContractsRefuseAReservedKey(t *testing.T) {
 			}
 		}
 	}
-	for _, key := range []string{"tcp-open", "icmp-rtt-avg"} {
+	for _, key := range []string{"tcp-connect-time", "icmp-rtt-avg"} {
 		for name, write := range map[string]func() error{
 			"product": func() error {
 				_, err := f.gw.SetProductMetric(f.ctx, "", "acme-widget", storage.ProductMetricSpec{MetricTypeName: key, DefaultValue: num})
@@ -270,7 +270,7 @@ func TestContractsRefuseAReservedKey(t *testing.T) {
 		insert into product_property (product_id, property_type_id, default_value, required)
 		select p.id, t.id, '"up"'::jsonb, false from product p, property_type t where p.name = 'acme-widget' and t.name = 'endpoint-reachable';
 		insert into product_metric (product_id, metric_type_id, default_value, required)
-		select p.id, t.id, '1'::jsonb, false from product p, metric_type t where p.name = 'acme-widget' and t.name = 'tcp-open'`); err != nil {
+		select p.id, t.id, '1'::jsonb, false from product p, metric_type t where p.name = 'acme-widget' and t.name = 'tcp-connect-time'`); err != nil {
 		t.Fatalf("plant legacy contract lines: %v", err)
 	}
 	product := "acme-widget"
@@ -298,15 +298,15 @@ func TestContractsRefuseAReservedKey(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, m := range metrics {
-		if m.MetricTypeName == "tcp-open" && (m.Value != nil || m.DefaultValue != nil) {
-			t.Errorf("a legacy contract default stands in for tcp-open: %+v", m)
+		if m.MetricTypeName == "tcp-connect-time" && (m.Value != nil || m.DefaultValue != nil) {
+			t.Errorf("a legacy contract default stands in for tcp-connect-time: %+v", m)
 		}
 	}
 	vs, err := f.gw.WriterRulingViolations(f.ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, key := range []string{"endpoint-reachable", "tcp-open"} {
+	for _, key := range []string{"endpoint-reachable", "tcp-connect-time"} {
 		if !slices.ContainsFunc(vs, func(v storage.RulingViolation) bool { return v.Key == key && strings.Contains(v.Where, "acme-widget") }) {
 			t.Errorf("the boot audit does not flag the legacy contract on %s: %+v", key, vs)
 		}
@@ -545,7 +545,7 @@ func TestStoredSpecsAndTasksCarryNoReservedEmit(t *testing.T) {
 		if v.Key == "video-input" {
 			t.Errorf("the boot audit flags the honest emit: %+v", v)
 		}
-		if c, _ := writerclass.Reserved(v.Key); v.Key != "avg-uptime" && v.Key != "tcp-open" && !c.Reserved() {
+		if c, _ := writerclass.Reserved(v.Key); v.Key != "avg-uptime" && v.Key != "tcp-connect-time" && !c.Reserved() {
 			t.Errorf("the boot audit flags %s, which no ruling refuses", v.Key)
 		}
 	}

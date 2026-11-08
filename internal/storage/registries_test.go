@@ -45,7 +45,7 @@ func TestRegistrySeed(t *testing.T) {
 			metricUnit[mt.Name] = *mt.Unit
 		}
 	}
-	for _, name := range []string{"icmp-reachable", "icmp-rtt-avg", "tcp-open", "tcp-connect-time"} {
+	for _, name := range []string{"icmp-rtt-avg", "tcp-connect-time"} {
 		if !metricOfficial[name] {
 			t.Errorf("metric type %s: want seeded official=true, got %v", name, metricOfficial)
 		}
@@ -63,14 +63,18 @@ func TestRegistrySeed(t *testing.T) {
 	for _, prop := range props {
 		official[prop.Name] = prop.Official
 	}
-	// The property lane holds the non-numeric canon, no numeric row among it.
-	for _, name := range []string{"endpoint-reachable", "health", "serial-number"} {
+	// The property lane holds the non-numeric canon, the probe results among
+	// it (#1592), and no numeric row.
+	for _, name := range []string{"endpoint-reachable", "health", "serial-number", "icmp-reachable", "tcp-open"} {
 		if !official[name] {
 			t.Errorf("property %s: want seeded official=true, got %v", name, official)
 		}
 	}
-	if _, ok := official["icmp-reachable"]; ok {
-		t.Error("icmp-reachable seeded on the property lane; numbers are metrics")
+	if _, ok := official["icmp-rtt-avg"]; ok {
+		t.Error("icmp-rtt-avg seeded on the property lane; numbers are metrics")
+	}
+	if _, ok := metricOfficial["icmp-reachable"]; ok {
+		t.Error("icmp-reachable seeded on the metric lane; a probe result is state (#1592)")
 	}
 
 }

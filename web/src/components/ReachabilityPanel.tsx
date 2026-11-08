@@ -22,6 +22,7 @@ import {
   segments,
   uptime,
   reason,
+  layerUp,
   layerWord,
   requestRung,
   requestLayer,
@@ -161,7 +162,7 @@ function GateBreakdown(p: { iface: ReachEndpoint }) {
           gate it is, not as a probe layer. */}
       <For each={p.iface.layers.filter((l) => l.layer !== "request")}>
         {(l) => {
-          const up = l.value >= 1;
+          const up = layerUp(l);
           return (
             <div class="flex items-center gap-2">
               <span class={`inline-block size-2 shrink-0 rounded-full ${up ? "bg-success" : "bg-error"}`} />

@@ -645,19 +645,19 @@ func TestRunIdempotent(t *testing.T) {
 		if len(transitions) != tc.transitions {
 			t.Errorf("%s verdict transitions = %d, want %d (idempotent across two Runs)", tc.iface, len(transitions), tc.transitions)
 		}
-		tcpOpen, err := gw.LatestMetricInstance(ctx, "dsp", "tcp-open", tc.iface)
+		tcpOpen, err := gw.LatestProperty(ctx, "dsp", "tcp-open", tc.iface)
 		if err != nil {
 			t.Fatalf("latest tcp-open %s: %v", tc.iface, err)
 		}
-		if tcpOpen == nil || tcpOpen.Value != 1 {
-			t.Errorf("seeded %s tcp-open = %+v, want 1", tc.iface, tcpOpen)
+		if tcpOpen == nil || tcpOpen.Value != "open" {
+			t.Errorf("seeded %s tcp-open = %+v, want open", tc.iface, tcpOpen)
 		}
-		icmpReach, err := gw.LatestMetricInstance(ctx, "dsp", "icmp-reachable", tc.iface)
+		icmpReach, err := gw.LatestProperty(ctx, "dsp", "icmp-reachable", tc.iface)
 		if err != nil {
 			t.Fatalf("latest icmp-reachable %s: %v", tc.iface, err)
 		}
-		if icmpReach == nil || icmpReach.Value != 1 {
-			t.Errorf("seeded %s icmp-reachable = %+v, want 1", tc.iface, icmpReach)
+		if icmpReach == nil || icmpReach.Value != "up" {
+			t.Errorf("seeded %s icmp-reachable = %+v, want up", tc.iface, icmpReach)
 		}
 	}
 

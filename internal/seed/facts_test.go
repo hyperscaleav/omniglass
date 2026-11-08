@@ -52,13 +52,19 @@ func TestSeedFactsGroundTruth(t *testing.T) {
 	for _, m := range doc.MetricTypes {
 		metrics[m.Name] = true
 	}
-	for _, want := range []string{"icmp-reachable", "icmp-rtt-avg", "tcp-open", "tcp-connect-time"} {
+	for _, want := range []string{"icmp-rtt-avg", "tcp-connect-time"} {
 		if !metrics[want] {
 			t.Errorf("metric_types missing %q", want)
 		}
 	}
-	if props["icmp-reachable"] {
-		t.Error("icmp-reachable rendered under property_types; numbers are metric types")
+	// A probe's result is a state, so it renders on the property lane (#1592).
+	for _, want := range []string{"icmp-reachable", "tcp-open"} {
+		if !props[want] {
+			t.Errorf("property_types missing %q (a probe's result is a state, not a number)", want)
+		}
+		if metrics[want] {
+			t.Errorf("%q rendered under metric_types; a probe's result is a property", want)
+		}
 	}
 
 	if len(doc.Roles) == 0 {

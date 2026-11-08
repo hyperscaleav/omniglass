@@ -127,7 +127,7 @@ type Runner struct {
 }
 
 // CollectTCP runs one tcp task and returns its samples. A tcp probe always
-// emits tcp-open (1.0 open, 0.0 closed) carrying the verdict reason as a label,
+// emits tcp-open (open or closed, a property) carrying the verdict reason as a label,
 // and emits tcp-connect-time (ms) ONLY when open (absent when closed). A failed
 // connect is data, not an error; err is returned only when the target could not
 // be attempted (an unresolved host), so the caller skips the task rather than
@@ -147,16 +147,7 @@ func (r *Runner) CollectTCP(ctx context.Context, t TCPTask) ([]Sample, error) {
 	now := time.Now().UTC()
 	open := reach.Up()
 
-	openVal := 0.0
-	if open {
-		openVal = 1.0
-	}
-	out := []Sample{{
-		Name:   SignalTCPOpen,
-		Value:  openVal,
-		TS:     now,
-		Labels: map[string]string{ReasonLabel: string(reach)},
-	}}
+	out := []Sample{ProbeResult(SignalTCPOpen, open, now, reach)}
 	if open {
 		out = append(out, Sample{
 			Name:  SignalTCPConnectTime,
@@ -187,7 +178,7 @@ type Pinger interface {
 }
 
 // CollectICMP runs one icmp (ping) task and returns its samples. A ping probe
-// always emits icmp-reachable (1.0 if any echo returned, 0.0 otherwise) carrying
+// always emits icmp-reachable (up if any echo returned, else down, a property) carrying
 // the verdict reason as a label, and emits icmp-rtt-avg (ms) ONLY when reachable
 // (absent when unreachable). A target that does not answer is data, not an error;
 // err is returned only when the node cannot attempt the probe at all (no ICMP
@@ -212,16 +203,7 @@ func (r *Runner) CollectICMP(ctx context.Context, t ICMPTask) ([]Sample, error) 
 	now := time.Now().UTC()
 	reachable := res.Received > 0
 
-	reachVal := 0.0
-	if reachable {
-		reachVal = 1.0
-	}
-	out := []Sample{{
-		Name:   SignalICMPReachable,
-		Value:  reachVal,
-		TS:     now,
-		Labels: map[string]string{ReasonLabel: string(pingReason(res))},
-	}}
+	out := []Sample{ProbeResult(SignalICMPReachable, reachable, now, pingReason(res))}
 	if reachable {
 		out = append(out, Sample{
 			Name:  SignalICMPRTTAvg,
@@ -277,16 +259,7 @@ func (r *Runner) CollectTelnet(ctx context.Context, t TelnetTask) ([]Sample, err
 		return nil, err
 	}
 	now := time.Now().UTC()
-	openVal := 0.0
-	if res.Dialed {
-		openVal = 1.0
-	}
-	out := []Sample{{
-		Name:   SignalTCPOpen,
-		Value:  openVal,
-		TS:     now,
-		Labels: map[string]string{ReasonLabel: string(res.Reason)},
-	}}
+	out := []Sample{ProbeResult(SignalTCPOpen, res.Dialed, now, res.Reason)}
 	if res.Dialed {
 		out = append(out, Sample{Name: SignalTCPConnectTime, Value: res.DialMS, TS: now})
 	}
@@ -352,16 +325,7 @@ func (r *Runner) CollectHTTPResult(ctx context.Context, t HTTPTask) ([]Sample, H
 		return nil, HTTPResult{}, fmt.Errorf("collection: http probe %s: %w", t.Target, err)
 	}
 	now := time.Now().UTC()
-	openVal := 0.0
-	if res.Dialed {
-		openVal = 1.0
-	}
-	out := []Sample{{
-		Name:   SignalTCPOpen,
-		Value:  openVal,
-		TS:     now,
-		Labels: map[string]string{ReasonLabel: string(res.Reason)},
-	}}
+	out := []Sample{ProbeResult(SignalTCPOpen, res.Dialed, now, res.Reason)}
 	if res.Dialed {
 		out = append(out, Sample{Name: SignalTCPConnectTime, Value: res.DialMS, TS: now})
 	}
@@ -407,16 +371,7 @@ func (r *Runner) CollectSSHResult(ctx context.Context, t SSHTask) ([]Sample, SSH
 		return nil, SSHResult{}, fmt.Errorf("collection: ssh probe %s: %w", t.Target, err)
 	}
 	now := time.Now().UTC()
-	openVal := 0.0
-	if res.Dialed {
-		openVal = 1.0
-	}
-	out := []Sample{{
-		Name:   SignalTCPOpen,
-		Value:  openVal,
-		TS:     now,
-		Labels: map[string]string{ReasonLabel: string(res.Reason)},
-	}}
+	out := []Sample{ProbeResult(SignalTCPOpen, res.Dialed, now, res.Reason)}
 	if res.Dialed {
 		out = append(out, Sample{Name: SignalTCPConnectTime, Value: res.DialMS, TS: now})
 	}

@@ -32,7 +32,7 @@ const rejected = (over: Partial<ReachEndpoint> = {}): ReachEndpoint => ({
   authenticated: { value: "no", ts: ago(30_000) },
   session: { state: "rejected", ts: ago(30_000), reason: "auth: auth rejected" },
   rejection: { rung: "authenticated", class: "auth", ts: "2026-10-23T11:58:00.000Z" },
-  layers: [{ layer: "ping", check: "icmp-reachable", value: 1, ts: ago(2_000) }],
+  layers: [{ layer: "ping", check: "icmp-reachable", value: "up", ts: ago(2_000) }],
   history: [],
   ...over,
 });
@@ -98,7 +98,7 @@ describe("ReachLadder", () => {
           session: { state: "up", ts: ago(1_000) },
           rejection: undefined,
           authenticated: { value: "yes", ts: ago(1_000) },
-          layers: [{ layer: "ping", check: "icmp-reachable", value: 0, ts: ago(1_000) }],
+          layers: [{ layer: "ping", check: "icmp-reachable", value: "down", ts: ago(1_000) }],
         })}
       />
     ));
@@ -227,7 +227,7 @@ describe("SessionNotice for a probe's gate, no session held", () => {
     verdict: { value: "down", ts: ago(60_000) },
     responsive: { value: rung === "responsive" ? "down" : "up", ts: ago(60_000) },
     rejection: { rung, class: cls, ts: ago(40_000), ...(reason ? { reason } : {}) },
-    layers: [{ layer: "ping", check: "icmp-reachable", value: 1, ts: ago(2_000) }],
+    layers: [{ layer: "ping", check: "icmp-reachable", value: "up", ts: ago(2_000) }],
     history: [],
     ...over,
   });

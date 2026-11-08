@@ -14,15 +14,18 @@ import SeededSet from '../../../components/SeededSet.astro';
 The first collection path is live end to end: an edge node runs **reachability probes** against a
 component's endpoints (each an **API named by the protocol it speaks**, typed by its **transport**:
 `tcp`, `ssh`, and `http` reach by opening the tcp port, `icmp` pings), ships a protobuf
-`TelemetryBatch` over a JetStream durable consumer, and `tcp-open` / `tcp-connect-time` and
-`icmp-reachable` / `icmp-rtt-avg` land in `metric` owned by the target component. The owner is bound
+`TelemetryBatch` over a JetStream durable consumer, and each probe lands two samples owned by the
+target component: its **state** as a transition-only property (`tcp-open` is `open` or `closed`,
+`icmp-reachable` is `up` or `down`; a steady fleet writes each once,
+[ADR-1592](/architecture/decisions/#adr-1592-a-probes-state-is-a-transition-only-property-not-a-metric-row))
+and its **timing** as a metric row every tick (`tcp-connect-time`, `icmp-rtt-avg`). The owner is bound
 **server-side** from the task's endpoint (the node stamps no component identity); the ingest
 consumer confines a node to its own tasks (another node's `task_id` is orphan-dropped) and rejects
 unregistered sample names per lane. An orphan drop is never silent and never a flood (#1200): the
 first orphaned batch from a node in a minute is logged as a warning naming the node, the task and
 the samples dropped, the rest of that minute only counted (the next warning says how many), and
 every one is added to the node's `orphaned_batches` (with `last_orphaned_at`) on `GET /nodes/{name}`,
-written once a minute rather than once a batch. A non-answering icmp target is DATA (`icmp-reachable=0` with a reason);
+written once a minute rather than once a batch. A non-answering icmp target is DATA (`icmp-reachable` reads `down`, with a reason);
 an error means the node cannot do ICMP at all (a once-cached loopback self-check tells them apart).
 The node computes the per-endpoint verdict `endpoint-reachable` (the AND of its probe results) as
 a built-in **property**; the wire is **per-lane arrays** (`metrics` / `properties` / `events` /
@@ -310,7 +313,8 @@ bottom up on the existing ladder:
 
 - **reachable**: a ping, **informational only**. An open, answering transport is what counts, so a
   component that blocks ping never reads down for it, and a cloud API is never pinged. The
-  driver's ladder lands `icmp-reachable` beside the endpoint's probe (one observation per probe),
+  driver's ladder lands `icmp-reachable` beside the endpoint's probe (observed on every probe,
+  stored when it flips),
   after the verdict is judged. A layer-2 presence rung below it is #1062.
 - **responsive**, the transport rung and **the gate**: a TCP connect on the transport's port, the
   protocol's handshake (the ssh key exchange, tls), or, where an open port cannot be detected
@@ -450,8 +454,8 @@ the endpoint's `params` JSON, unmarshalled on the node:
 
 | transport | shape | config (`endpoint.params`) | samples |
 |---|---|---|---|
-| `icmp` | inline probe | `target` (host or IP), `count`, `timeout` | `icmp-reachable`, `icmp-rtt-avg` (fixed) |
-| `tcp` | inline probe | `target` (`host:port`), `timeout` | `tcp-open`, `tcp-connect-time` (fixed) |
+| `icmp` | inline probe | `target` (host or IP), `count`, `timeout` | `icmp-reachable` (a property, `up`/`down`), `icmp-rtt-avg` (fixed) |
+| `tcp` | inline probe | `target` (`host:port`), `timeout` | `tcp-open` (a property, `open`/`closed`), `tcp-connect-time` (fixed) |
 | `http` | inline probe | `target` (`host:port`), `timeout` | the tcp pair, `http-response-time`, `endpoint-responsive`; one `GET /` with no credential, any status an answer |
 | `https` | inline probe | `target` (`host:port`), `timeout`, `tls-mode` (as `tls`) | the tcp pair, `tls-handshake-time`, `endpoint-responsive` (the handshake is the rung), `http-response-time` when a response follows, and the certificate facts as `tls` lands them; no credential |
 | `telnet` | inline probe | `target` (`host:port`), `timeout` | the tcp pair, `telnet-response-time` (the first negotiation or banner bytes), `endpoint-responsive`; the login is the held session's auth step, never the probe's |

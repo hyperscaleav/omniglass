@@ -37,7 +37,7 @@ describe("verdictWord", () => {
 describe("an endpoint's freshness is the server's last_seen (#931, #933)", () => {
   const ep = (over: Partial<ReachEndpoint>): ReachEndpoint =>
     ({ endpoint: "tcp", transport: "tcp", verdict: null, layers: [], history: [], ...over }) as ReachEndpoint;
-  const layer = (msAgo: number) => ({ layer: "port", check: "tcp-open", value: 1, ts: ago(msAgo) });
+  const layer = (msAgo: number) => ({ layer: "port", check: "tcp-open", value: "open", ts: ago(msAgo) });
 
   it("ages an old transition by last_seen, not the transition", () => {
     const e = ep({ verdict: { value: "up", ts: ago(21 * 60_000) }, last_seen: ago(5_000) });
@@ -96,8 +96,8 @@ describe("reason", () => {
     const iface: ReachEndpoint = {
       ...base,
       layers: [
-        { layer: "ping", check: "icmp-reachable", value: 1, ts: ago(5_000) },
-        { layer: "port", check: "tcp-open", value: 0, ts: ago(5_000) },
+        { layer: "ping", check: "icmp-reachable", value: "up", ts: ago(5_000) },
+        { layer: "port", check: "tcp-open", value: "closed", ts: ago(5_000) },
       ],
     };
     expect(reason(iface, now)).toMatch(/service down, box up/i);
@@ -105,7 +105,7 @@ describe("reason", () => {
   it("explains ping-down as unreachable", () => {
     const iface: ReachEndpoint = {
       ...base,
-      layers: [{ layer: "ping", check: "icmp-reachable", value: 0, ts: ago(5_000) }],
+      layers: [{ layer: "ping", check: "icmp-reachable", value: "down", ts: ago(5_000) }],
     };
     expect(reason(iface, now)).toMatch(/unreachable/i);
   });
@@ -120,7 +120,7 @@ describe("reason", () => {
       endpoint: "udp",
       transport: "udp",
       responsive: { value: "down", ts: ago(5_000) },
-      layers: [{ layer: "ping", check: "icmp-reachable", value: 1, ts: ago(5_000) }],
+      layers: [{ layer: "ping", check: "icmp-reachable", value: "up", ts: ago(5_000) }],
     };
     expect(reason(iface, now)).toMatch(/request goes unanswered/i);
     expect(reason(iface, now)).toMatch(/cannot be detected/i);
@@ -134,8 +134,8 @@ describe("reason", () => {
       transport: "snmp",
       responsive: { value: "down", ts: ago(5_000) },
       layers: [
-        { layer: "ping", check: "icmp-reachable", value: 1, ts: ago(5_000) },
-        { layer: "request", check: "endpoint-responsive", value: 0, ts: ago(5_000) },
+        { layer: "ping", check: "icmp-reachable", value: "up", ts: ago(5_000) },
+        { layer: "request", check: "endpoint-responsive", value: "down", ts: ago(5_000) },
       ],
     };
     const why = reason(iface, now);
@@ -153,8 +153,8 @@ describe("reason", () => {
       responsive: { value: "down", ts: ago(5_000) },
       rejection: { rung: "authenticated", class: "auth", ts: "2026-10-23T11:58:00.000Z" },
       layers: [
-        { layer: "ping", check: "icmp-reachable", value: 1, ts: ago(5_000) },
-        { layer: "request", check: "endpoint-responsive", value: 0, ts: ago(5_000) },
+        { layer: "ping", check: "icmp-reachable", value: "up", ts: ago(5_000) },
+        { layer: "request", check: "endpoint-responsive", value: "down", ts: ago(5_000) },
       ],
     };
     expect(reason(iface, now)).toMatch(/refused/i);
@@ -170,7 +170,7 @@ describe("reason", () => {
       transport: "udp",
       responsive: { value: "down", ts: ago(5_000) },
       rejection: { rung: "responsive", class: "auth", ts: "2026-10-23T11:58:00.000Z" },
-      layers: [{ layer: "ping", check: "icmp-reachable", value: 1, ts: ago(5_000) }],
+      layers: [{ layer: "ping", check: "icmp-reachable", value: "up", ts: ago(5_000) }],
     };
     expect(reason(iface, now)).not.toMatch(/unanswered/i);
     expect(reason(iface, now)).toMatch(/refused/i);
@@ -180,25 +180,25 @@ describe("reason", () => {
 
 describe("layerWord", () => {
   it("renders open/closed for the port layer", () => {
-    expect(layerWord({ layer: "port", check: "tcp-open", value: 1, ts: ago(0) })).toBe("open");
-    expect(layerWord({ layer: "port", check: "tcp-open", value: 0, ts: ago(0) })).toBe("closed");
+    expect(layerWord({ layer: "port", check: "tcp-open", value: "open", ts: ago(0) })).toBe("open");
+    expect(layerWord({ layer: "port", check: "tcp-open", value: "closed", ts: ago(0) })).toBe("closed");
   });
   it("renders up/down for the ping layer", () => {
-    expect(layerWord({ layer: "ping", check: "icmp-reachable", value: 1, ts: ago(0) })).toBe("up");
-    expect(layerWord({ layer: "ping", check: "icmp-reachable", value: 0, ts: ago(0) })).toBe("down");
+    expect(layerWord({ layer: "ping", check: "icmp-reachable", value: "up", ts: ago(0) })).toBe("up");
+    expect(layerWord({ layer: "ping", check: "icmp-reachable", value: "down", ts: ago(0) })).toBe("down");
   });
 });
 
 describe("requestRung", () => {
-  const ping = { layer: "ping", check: "icmp-reachable", value: 1, ts: ago(0) };
-  const port = { layer: "port", check: "tcp-open", value: 1, ts: ago(0) };
+  const ping = { layer: "ping", check: "icmp-reachable", value: "up", ts: ago(0) };
+  const port = { layer: "port", check: "tcp-open", value: "open", ts: ago(0) };
   const base: ReachEndpoint = { endpoint: "udp", transport: "udp", verdict: { value: "up", ts: ago(0) }, layers: [ping], history: [] };
   it("is the responsive rung where there is no port to open", () => {
     expect(requestRung({ ...base, responsive: { value: "up", ts: ago(0) } })).toBe(true);
     expect(requestRung({ ...base, responsive: { value: "down", ts: ago(0) } })).toBe(false);
   });
   it("reads the request layer the read serves first", () => {
-    const layer = { layer: "request", check: "endpoint-responsive", value: 0, ts: ago(0) };
+    const layer = { layer: "request", check: "endpoint-responsive", value: "down", ts: ago(0) };
     expect(requestRung({ ...base, layers: [ping, layer], responsive: { value: "up", ts: ago(0) } })).toBe(false);
   });
   it("is undefined beside a port, before the rung lands, and for icmp", () => {

@@ -57,8 +57,13 @@ func TestPropertyCRUD(t *testing.T) {
 	if !names["rack-unit"] || !names["serial-number"] || !names["endpoint-reachable"] {
 		t.Fatalf("list missing properties: %v", names)
 	}
-	if names["icmp-reachable"] {
-		t.Fatalf("icmp-reachable listed on the property lane; numbers are metric types")
+	// The probe results are state, so they live here too (#1592); the timing
+	// series stay numbers on the metric lane.
+	if !names["icmp-reachable"] || !names["tcp-open"] {
+		t.Fatalf("probe results missing from the property lane: %v", names)
+	}
+	if names["icmp-rtt-avg"] {
+		t.Fatalf("icmp-rtt-avg listed on the property lane; numbers are metric types")
 	}
 
 	// Update a mutable field.

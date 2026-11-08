@@ -87,7 +87,8 @@ func TestWriterClassOnTheWire(t *testing.T) {
 	ctx := context.Background()
 	_, c, tok := pushHarness(t, ctx)
 	for path, want := range map[string]string{
-		"/metric-types/tcp-open":             "node-probe",
+		"/metric-types/tcp-connect-time":     "node-probe",
+		"/property-types/tcp-open":           "node-probe",
 		"/property-types/session-state":      "node-probe",
 		"/event-types/collection-failed":     "node-probe",
 		"/property-types/health":             "platform",

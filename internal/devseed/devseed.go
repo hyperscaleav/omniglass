@@ -1091,8 +1091,9 @@ func seedReachability(ctx context.Context, gw storage.Gateway, actorID string, l
 
 // seedReachSamples writes one endpoint's reachability samples: the
 // endpoint-reachable state (a fresh "up"; when flapped, an up baseline then a brief
-// outage then the recovery, so the strip reads mostly up with a thin blip) and the
-// probe-layer metrics (ping + port). Owner = the component, instance = the endpoint
+// outage then the recovery, so the strip reads mostly up with a thin blip), the
+// probe-layer results (ping + port, states) and their timings (metrics). Owner =
+// the component, instance = the endpoint
 // name. Only canonical property_type names are used (reject-not-project).
 func seedReachSamples(ctx context.Context, gw storage.Gateway, iface string, flapped bool, rttMs, connMs float64, now time.Time) error {
 	recovered := now.Add(-30 * time.Second)
@@ -1103,7 +1104,12 @@ func seedReachSamples(ctx context.Context, gw storage.Gateway, iface string, fla
 			storage.PropertySampleWrite{OwnerKind: "component", OwnerID: reachComponent, Key: "endpoint-reachable", Instance: iface, Value: "down", Source: "reachability", TS: now.Add(-6 * time.Minute)},
 		)
 	}
-	states = append(states, storage.PropertySampleWrite{OwnerKind: "component", OwnerID: reachComponent, Key: "endpoint-reachable", Instance: iface, Value: "up", Source: "reachability", TS: recovered})
+	states = append(states,
+		storage.PropertySampleWrite{OwnerKind: "component", OwnerID: reachComponent, Key: "endpoint-reachable", Instance: iface, Value: "up", Source: "reachability", TS: recovered},
+		// The probe results beside the verdict: states, not numbers (#1592).
+		storage.PropertySampleWrite{OwnerKind: "component", OwnerID: reachComponent, Key: "icmp-reachable", Instance: iface, Value: "up", Source: "icmp", TS: recovered},
+		storage.PropertySampleWrite{OwnerKind: "component", OwnerID: reachComponent, Key: "tcp-open", Instance: iface, Value: "open", Source: "tcp", TS: recovered},
+	)
 	// Native probe keys: written as the node that holds the endpoint would,
 	// under that endpoint alone (ADR-0161).
 	node := storage.NodeWriter(reachComponent, iface)
@@ -1111,9 +1117,7 @@ func seedReachSamples(ctx context.Context, gw storage.Gateway, iface string, fla
 		return fmt.Errorf("devseed: insert %s property samples: %w", iface, err)
 	}
 	if err := gw.InsertMetricSamples(ctx, node, []storage.MetricSampleWrite{
-		{OwnerKind: "component", OwnerID: reachComponent, Key: "icmp-reachable", Instance: iface, Value: 1, Source: "icmp", TS: recovered},
 		{OwnerKind: "component", OwnerID: reachComponent, Key: "icmp-rtt-avg", Instance: iface, Value: rttMs, Source: "icmp", TS: recovered},
-		{OwnerKind: "component", OwnerID: reachComponent, Key: "tcp-open", Instance: iface, Value: 1, Source: "tcp", TS: recovered},
 		{OwnerKind: "component", OwnerID: reachComponent, Key: "tcp-connect-time", Instance: iface, Value: connMs, Source: "tcp", TS: recovered},
 	}); err != nil {
 		return fmt.Errorf("devseed: insert %s metric samples: %w", iface, err)

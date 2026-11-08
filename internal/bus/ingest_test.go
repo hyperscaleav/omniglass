@@ -113,11 +113,11 @@ func TestTelemetryRoundTrip(t *testing.T) {
 
 	// HAPPY PATH: run node-a once with the REAL dialer. It pulls t-a, probes the
 	// live listener, and publishes the Event; the consumer binds owner disp-1 and
-	// writes tcp-open=1.
+	// writes tcp-open=open (a property since #1592).
 	if _, err := node.Run(ctx, node.Config{ServerURL: apiSrv.URL, Name: "node-a", Token: tokenA, Once: true}); err != nil {
 		t.Fatalf("node run: %v", err)
 	}
-	dp := waitMetric(t, ctx, gw, "disp-1", "tcp-open", func(d *storage.MetricSample) bool { return d != nil && d.Value == 1 })
+	dp := waitProperty(t, ctx, gw, "disp-1", "tcp-open", "disp-1-tcp", func(d *storage.PropertySample) bool { return d != nil && d.Value == "open" })
 	if dp.OwnerKind != "component" || dp.Provenance != "observed" || dp.Source != "tcp" {
 		t.Fatalf("tcp-open row = %+v, want component/observed/tcp", dp)
 	}
@@ -141,7 +141,7 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
 		TaskId:  "t-b",
 		NodeId:  "node-a",
-		Metrics: []*ogv1.MetricSample{{Name: "tcp-open", Value: 1}},
+		Metrics: []*ogv1.MetricSample{{Name: "tcp-connect-time", Value: 1}},
 	})
 
 	// NEGATIVE (a) REJECT-NOT-PROJECT: node-a publishes for its own t-a but with an
@@ -179,7 +179,7 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	})
 
 	// Confinement held: disp-2 (node-b's component) has NO sample from node-a.
-	if got, err := gw.LatestMetric(ctx, "disp-2", "tcp-open"); err != nil {
+	if got, err := gw.LatestMetric(ctx, "disp-2", "tcp-connect-time"); err != nil {
 		t.Fatalf("latest disp-2: %v", err)
 	} else if got != nil {
 		t.Fatalf("confinement breached: node-a landed a sample on disp-2: %+v", got)
@@ -257,10 +257,10 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	} else if got == nil || got.Value != "down" {
 		t.Fatalf("latest endpoint-reachable series row = %+v, want value down", got)
 	}
-	if dp, err := gw.LatestMetricInstance(ctx, "disp-1", "tcp-open", "disp-1-tcp"); err != nil {
+	if dp, err := gw.LatestProperty(ctx, "disp-1", "tcp-open", "disp-1-tcp"); err != nil {
 		t.Fatalf("latest tcp-open series row: %v", err)
-	} else if dp == nil || dp.Value != 1 {
-		t.Fatalf("latest tcp-open series row = %+v, want value 1", dp)
+	} else if dp == nil || dp.Value != "open" {
+		t.Fatalf("latest tcp-open series row = %+v, want value open", dp)
 	}
 
 	// Confinement held for the state path: disp-2 (node-b's component) got no verdict.
@@ -277,14 +277,14 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	// reject-not-project as the other lanes. Raw logs are a separate lane, not this.
 	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
 		TaskId: "t-a", NodeId: "node-a",
-		Metrics:    []*ogv1.MetricSample{{Name: "tcp-open", Value: 0}},
+		Metrics:    []*ogv1.MetricSample{{Name: "tcp-connect-time", Value: 0.5}},
 		Properties: []*ogv1.PropertySample{{Name: "endpoint-reachable", ValueJson: `"up"`}},
 		Events:     []*ogv1.EventSample{{Name: "call-started", Message: "call started"}},
 	})
 	waitEvent(t, ctx, gw, "disp-1", func(e storage.Event) bool {
 		return e.Message == "call started" && e.Origin == "caught" && e.Key == "call-started"
 	})
-	waitMetric(t, ctx, gw, "disp-1", "tcp-open", func(d *storage.MetricSample) bool { return d != nil && d.Value == 0 })
+	waitMetric(t, ctx, gw, "disp-1", "tcp-connect-time", func(d *storage.MetricSample) bool { return d != nil && d.Value == 0.5 })
 	waitProperty(t, ctx, gw, "disp-1", "endpoint-reachable", "disp-1-tcp", func(d *storage.PropertySample) bool { return d != nil && d.Value == "up" })
 
 	// RAW LOG LANE (ADR-0066): node-a ships its own self-log as a LogLine on the
@@ -325,7 +325,7 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
 		TaskId: "t-a", NodeId: "node-a",
 		Owner:   &ogv1.Owner{Kind: "component", Ref: "disp-2"},
-		Metrics: []*ogv1.MetricSample{{Name: "tcp-open", Value: 1}},
+		Metrics: []*ogv1.MetricSample{{Name: "tcp-connect-time", Value: 1}},
 	})
 	// Watermark: a later valid publish proves the forged one was processed and
 	// dropped rather than merely still in flight.
@@ -336,8 +336,8 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	waitMetric(t, ctx, gw, "disp-1", "tcp-connect-time", func(d *storage.MetricSample) bool {
 		return d != nil && d.Value == 42
 	})
-	if dp, err := gw.LatestMetric(ctx, "disp-2", "tcp-open"); err != nil {
-		t.Fatalf("latest disp-2 tcp-open: %v", err)
+	if dp, err := gw.LatestMetric(ctx, "disp-2", "tcp-connect-time"); err != nil {
+		t.Fatalf("latest disp-2 tcp-connect-time: %v", err)
 	} else if dp != nil {
 		t.Fatalf("a node forged ownership of disp-2 via the owner field: %+v", dp)
 	}

@@ -116,7 +116,7 @@ func TestCommandTypeRefusesANodeProbeTarget(t *testing.T) {
 		{TargetPropertyType: "ssh-host-key"},
 		{TargetPropertyType: "endpoint-rejection"},
 		{TargetPropertyType: "health"},
-		{TargetMetricType: "tcp-open"},
+		{TargetMetricType: "tcp-connect-time"},
 		{TargetMetricType: "icmp-rtt-avg"},
 	} {
 		key := target.TargetPropertyType + target.TargetMetricType
@@ -223,7 +223,7 @@ func nodeProbeReadsServeOnlyObserved(t *testing.T, f writerFixture) {
 	}
 	if _, err := f.conn.Exec(f.ctx, storagetest.WideMetricInsert(`ts, owner_kind, component_id, metric_type_id, instance, value, provenance, source`, `
 		select $1, 'component', c.id, mt.id, 'ssh', 0, 'observed', 'tcp'
-		from component c, metric_type mt where c.name = 'disp-1' and mt.name = 'tcp-open'`), observedAt); err != nil {
+		from component c, metric_type mt where c.name = 'disp-1' and mt.name = 'tcp-connect-time'`), observedAt); err != nil {
 		t.Fatalf("observed metric: %v", err)
 	}
 	// The planted rows, an hour newer than the node's.
@@ -236,7 +236,7 @@ func nodeProbeReadsServeOnlyObserved(t *testing.T, f writerFixture) {
 	}
 	if _, err := f.conn.Exec(f.ctx, storagetest.WideMetricInsert(`ts, owner_kind, component_id, metric_type_id, instance, value, provenance, source, source_rule`, `
 		select now(), 'component', c.id, mt.id, 'ssh', 1, 'calculated', 'calc', 'forged'
-		from component c, metric_type mt where c.name = 'disp-1' and mt.name = 'tcp-open'`)); err != nil {
+		from component c, metric_type mt where c.name = 'disp-1' and mt.name = 'tcp-connect-time'`)); err != nil {
 		t.Fatalf("calculated metric: %v", err)
 	}
 
@@ -253,13 +253,13 @@ func nodeProbeReadsServeOnlyObserved(t *testing.T, f writerFixture) {
 	if len(rows) != 1 || rows[0].Value != "down" || rows[0].Provenance != "observed" {
 		t.Fatalf("PropertyTransitions = %+v, want only the observed down", rows)
 	}
-	m, err := f.gw.LatestMetricInstance(f.ctx, "disp-1", "tcp-open", "ssh")
+	m, err := f.gw.LatestMetricInstance(f.ctx, "disp-1", "tcp-connect-time", "ssh")
 	if err != nil || m == nil || m.Value != 0 || m.Provenance != "observed" {
-		t.Fatalf("LatestMetricInstance(tcp-open) = %+v (%v), want the observed 0", m, err)
+		t.Fatalf("LatestMetricInstance(tcp-connect-time) = %+v (%v), want the observed 0", m, err)
 	}
-	m, err = f.gw.LatestMetric(f.ctx, "disp-1", "tcp-open")
+	m, err = f.gw.LatestMetric(f.ctx, "disp-1", "tcp-connect-time")
 	if err != nil || m == nil || m.Value != 0 || m.Provenance != "observed" {
-		t.Fatalf("LatestMetric(tcp-open) = %+v (%v), want the observed 0", m, err)
+		t.Fatalf("LatestMetric(tcp-connect-time) = %+v (%v), want the observed 0", m, err)
 	}
 }
 
@@ -319,9 +319,11 @@ func TestWriterMismatchRefused(t *testing.T) {
 	}
 	refusals := map[string][]writeCase{
 		"writeMetricSamples": {
-			{"a push of a probe metric", func() error { return f.gw.InsertMetricSamples(f.ctx, storage.PushWriter(), metric("tcp-open", "ssh")) }},
+			{"a push of a probe metric", func() error {
+				return f.gw.InsertMetricSamples(f.ctx, storage.PushWriter(), metric("tcp-connect-time", "ssh"))
+			}},
 			{"a node on another endpoint", func() error {
-				return f.gw.InsertMetricSamples(f.ctx, storage.NodeWriter(comp.ID, "ssh"), metric("tcp-open", "panel"))
+				return f.gw.InsertMetricSamples(f.ctx, storage.NodeWriter(comp.ID, "ssh"), metric("tcp-connect-time", "panel"))
 			}},
 			{"a node bound to no endpoint", func() error {
 				return f.gw.InsertMetricSamples(f.ctx, storage.NodeWriter(comp.ID, ""), metric("icmp-rtt-avg", ""))
@@ -443,7 +445,7 @@ func TestWriterMismatchRefused(t *testing.T) {
 	// The admitted writers, through the same paths.
 	for name, write := range map[string]func() error{
 		"a node on its endpoint": func() error {
-			return f.gw.InsertMetricSamples(f.ctx, storage.NodeWriter(comp.ID, "ssh"), metric("tcp-open", "ssh"))
+			return f.gw.InsertMetricSamples(f.ctx, storage.NodeWriter(comp.ID, "ssh"), metric("tcp-connect-time", "ssh"))
 		},
 		"a push of a collected": func() error { return f.gw.InsertMetricSamples(f.ctx, storage.PushWriter(), metric("uptime", "")) },
 		"the rule's own output": func() error { return f.gw.WriteMetricAsRule(f.ctx, rule.ID, metric("avg-uptime", "")) },
@@ -678,7 +680,7 @@ func TestNodeProbeSampleCannotOutliveItsTime(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := f.gw.InsertMetricSamples(f.ctx, node, []storage.MetricSampleWrite{
-		{OwnerKind: "component", OwnerID: comp.ID, Key: "tcp-open", Instance: "ssh", Value: 1, TS: far}}); err != nil {
+		{OwnerKind: "component", OwnerID: comp.ID, Key: "tcp-connect-time", Instance: "ssh", Value: 1, TS: far}}); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.gw.InsertEvents(f.ctx, node, []storage.EventWrite{

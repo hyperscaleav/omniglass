@@ -54,7 +54,7 @@ func TestTelnetProbeNegotiationResponds(t *testing.T) {
 		_ = c.Close()
 	})
 	dps := telnetSamples(t, addr)
-	if dps["tcp-open"].Value != 1 || dps["endpoint-responsive"].Text != "up" {
+	if dps["tcp-open"].Text != collection.PortOpen || dps["endpoint-responsive"].Text != "up" {
 		t.Fatalf("samples = %+v, want open and responsive", dps)
 	}
 	if _, ok := dps["telnet-response-time"]; !ok {
@@ -68,7 +68,7 @@ func TestTelnetProbeSilentPortIsReachedButNotResponsive(t *testing.T) {
 		_ = c.Close()
 	})
 	dps := telnetSamples(t, addr)
-	if dps["tcp-open"].Value != 1 || dps["endpoint-responsive"].Text != "down" {
+	if dps["tcp-open"].Text != collection.PortOpen || dps["endpoint-responsive"].Text != "down" {
 		t.Fatalf("samples = %+v, want open and not responsive", dps)
 	}
 	if _, ok := dps["telnet-response-time"]; ok {
@@ -78,7 +78,7 @@ func TestTelnetProbeSilentPortIsReachedButNotResponsive(t *testing.T) {
 
 func TestTelnetProbeClosedPortIsNotReached(t *testing.T) {
 	dps := telnetSamples(t, nettest.RefusedAddr(t))
-	if dps["tcp-open"].Value != 0 || dps["endpoint-responsive"].Text != "down" {
+	if dps["tcp-open"].Text != collection.PortClosed || dps["endpoint-responsive"].Text != "down" {
 		t.Fatalf("samples = %+v, want closed and not responsive", dps)
 	}
 }

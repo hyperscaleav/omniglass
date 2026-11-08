@@ -236,7 +236,7 @@ describe("endpoint blade, held session", () => {
       verdict: { value: "up", ts: now }, responsive: { value: "up", ts: now }, authenticated: { value: "no", ts: now },
       session: { state: "rejected", ts: now, reason: "auth: auth rejected" },
       rejection: { rung: "authenticated", class: "auth", ts: "2026-10-23T11:58:00.000Z" },
-      layers: [{ layer: "ping", check: "icmp-reachable", value: 1, ts: now }], history: [],
+      layers: [{ layer: "ping", check: "icmp-reachable", value: "up", ts: now }], history: [],
     }],
   };
   const operator: Me = { principal: { id: "op", kind: "human" }, permissions: ["*:read", "endpoint:update", "endpoint:retry"], grants: [] };
@@ -312,7 +312,7 @@ describe("endpoint blade, a probe's gate with no held session", () => {
       id: row.id, endpoint: "snmp", transport: "snmp", node: "edge-hq", last_seen: now,
       verdict: { value: "down", ts: now }, responsive: { value: "down", ts: now }, authenticated: { value: "no", ts: now },
       rejection: { rung: "authenticated", class: "auth", ts: now, reason: "auth: the agent answered authorizationError for the community" },
-      layers: [{ layer: "ping", check: "icmp-reachable", value: 1, ts: now }], history: [],
+      layers: [{ layer: "ping", check: "icmp-reachable", value: "up", ts: now }], history: [],
     }],
   };
   const operator: Me = { principal: { id: "op", kind: "human" }, permissions: ["*:read", "endpoint:update", "endpoint:retry"], grants: [] };
