@@ -18,8 +18,8 @@ import (
 
 // The reachability read BFF: a per-component, per-endpoint composition of the
 // verdict property (endpoint-reachable), the layer signals (the raw icmp/tcp probe
-// results, properties since #1592, each timed by its metric), and the recent transition history the availability strip reads. It is
-// a plain typed Huma GET (no ViewResult framework exists), gated by component:read
+// results, properties since #1592, each timed by its metric), and the recent
+// transition history the availability strip reads. It is a plain typed Huma GET (no ViewResult framework exists), gated by component:read
 // and scope-injected through GetComponent: an out-of-scope component is a
 // non-disclosing 404, so the sample reads below only ever run on a verified,
 // in-scope component. Read-only: no engine, bus, or write-path is touched.

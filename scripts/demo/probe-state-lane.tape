@@ -14,7 +14,7 @@ Enter
 Wait
 
 Hide
-Type `demo_until 150 'omniglass component metric sample list "$panel" tcp-connect-time | jq -e ".samples | length >= 3"'`
+Type `demo_until 150 'omniglass component metric sample list "$panel" tcp-connect-time | jq -e "[.samples[] | select(.instance == \"tcp\")] | length >= 3"'`
 Enter
 Wait@180s
 Type "clear"
@@ -32,14 +32,14 @@ Wait
 Type "# The connect time is a metric: one row per probe, a trend to read"
 Enter
 Wait
-Type `omniglass component metric sample list "$panel" tcp-connect-time | jq -c '{key: "tcp-connect-time", rows: (.samples | length), latest_ms: ((.samples[0].value * 100 | round) / 100)}'`
+Type `omniglass component metric sample list "$panel" tcp-connect-time | jq -c '[.samples[] | select(.instance == "tcp")] | {key: "tcp-connect-time", instance: "tcp", rows: length, latest_ms: ((.[0].value * 100 | round) / 100)}'`
 Enter
 Wait
 
 Type "# The port's state is a property: the same probes wrote it once, and it stays one row until the port closes"
 Enter
 Wait
-Type `omniglass component property sample list "$panel" tcp-open | jq -c '{key: "tcp-open", rows: (.samples | length), value: .samples[0].value, since: .samples[0].ts}'`
+Type `omniglass component property sample list "$panel" tcp-open | jq -c '[.samples[] | select(.instance == "tcp")] | {key: "tcp-open", instance: "tcp", rows: length, value: .[0].value, since: .[0].ts}'`
 Enter
 Wait
 

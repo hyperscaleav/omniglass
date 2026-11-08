@@ -559,8 +559,9 @@ func (p *PG) LatestMetric(ctx context.Context, componentRef, key string) (*Metri
 // probe timings (icmp-rtt-avg, tcp-connect-time) are per-interface instance, so
 // a layer's detail must resolve one interface's latest value, not the newest
 // across every interface as LatestMetric does; the probe states themselves
-// live in the property lane (LatestProperty, #1592). Observed only (ADR-0161): the panel reads each as the
-// node's own observation, so no other provenance stands in for it.
+// live in the property lane (LatestProperty, #1592). Observed only (ADR-0161):
+// the panel reads each as the node's own observation, so no other provenance
+// stands in for it.
 func (p *PG) LatestMetricInstance(ctx context.Context, componentRef, key, instance string) (*MetricSample, error) {
 	// See LatestMetric: an unknown component folds into nil-no-error, matching
 	// the old inline subquery's silent no-match.
