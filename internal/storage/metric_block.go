@@ -19,8 +19,10 @@ import (
 // and a sparse one waits for its ISO week, whose leftover days fold into one
 // week block. Every block crosses Postgres's 2 KB compression threshold or is
 // the only row its sparse week costs. The blocks are written beside the raw
-// rows, which stay authoritative: nothing reads a block yet but the trend's
-// recompute of a dirtied hour, and no prune waits on one. A late sample for
+// rows, which stay in place: the series read (metricReadSQL, #1572,
+// ADR-1530) takes a covered day from its blocks and the rest from raw rows,
+// the trend's recompute of a dirtied hour reads them, and no prune waits on
+// one. A late sample for
 // a folded day lands raw and merges into the block that covers it, in its
 // own batch's transaction (#1529, ADR-1529). Properties and declared rows are
 // other tables.
@@ -101,10 +103,17 @@ func blockSamplesOf(b string) string {
 // would be only part of it, and it goes with the next prune. It is also the
 // one test of whether a block covers a late sample: the late merge folds a
 // sample into a day's block only while the day is intact, and the trend
-// recompute reads an hour from a day's blocks only while it is, so the two
-// never disagree about a sample (#1546, ADR-1529).
+// recompute and the series read (metricReadSQL) read a day from its blocks
+// only while it is, so none of them disagree about a sample (#1546,
+// ADR-1529, ADR-1530).
 func blockIntact(day, lane string) string {
-	return day + ` >= now() - make_interval(days => coalesce(t.retention_days, ` + lane + `::int))`
+	return day + ` >= ` + blockIntactFrom(lane)
+}
+
+// blockIntactFrom is the start of a series' window (t its metric type, lane
+// the metric lane's days): a day is intact when it starts at or after it.
+func blockIntactFrom(lane string) string {
+	return `now() - make_interval(days => coalesce(t.retention_days, ` + lane + `::int))`
 }
 
 // blockDaysSQL folds series-days into hour and day blocks: pairs yields

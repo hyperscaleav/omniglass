@@ -117,7 +117,12 @@ func TestMetricDayPartitionsKeepEveryRow(t *testing.T) {
 	gw, conn, dsn := standMonthLayout(t)
 	ctx := context.Background()
 	want := snapshotRows(t, conn, `select * from metric`, true)
+	// The readers read the blocks too (#1572), whose table comes after the
+	// swap: below it they read an empty stand-in, dropped before migrating.
+	mustExec(t, conn, `create table metric_block (series_id bigint, span_start timestamptz, span text, offset_ms int4[],
+		value float8[], source_rule text, source_rule_version bigint, source_rule_id uuid)`)
 	reads := metricReads(t, gw)
+	mustExec(t, conn, `drop table metric_block`)
 	for name, v := range reads {
 		if v == "null" || v == "[]" || strings.Contains(v, `"Buckets":null`) {
 			t.Fatalf("%s reads nothing over the planted series: %s", name, v)

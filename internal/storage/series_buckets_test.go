@@ -369,7 +369,7 @@ func TestMetricBucketsBoundTheSampleScan(t *testing.T) {
 	// in the current bucket can never reach the third of them.
 	now := time.Now().UTC()
 	ahead := fmt.Sprintf("metric_p%s", time.Date(now.Year(), now.Month(), now.Day()+3, 0, 0, 0, 0, time.UTC).Format("20060102"))
-	for _, marker := range []string{"select s.instance from metric_series s", "join metric m on m.series_id = s.id"} {
+	for _, marker := range []string{"select s.instance from metric_series s", "as lst"} {
 		t.Run(marker, func(t *testing.T) {
 			call := oneCall(t, counter, marker)
 			plan, err := accesspath.Explain(ctx, conn, call.SQL, call.Args...)

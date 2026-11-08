@@ -588,8 +588,9 @@ func (p *PG) LatestMetricInstance(ctx context.Context, componentRef, key, instan
 	return &dp, nil
 }
 
-// ListMetricSeries returns one series' raw samples newest first: the rows
-// behind the latest value the effective read serves (#794). Raw with a hard
+// ListMetricSeries returns one series' raw samples newest first: the samples
+// behind the latest value the effective read serves (#794), whether a day's
+// raw rows or its blocks hold them (the series read, #1572). Raw with a hard
 // cap; downsampling waits for a measured need, not a speculative one. The
 // caller resolves the owner in scope first (the same non-disclosing pattern
 // every lane read shares) and passes the resolved reference.
@@ -601,21 +602,29 @@ func (p *PG) ListMetricSeries(ctx context.Context, ownerKind, ownerRef, key stri
 	if err != nil {
 		return nil, err
 	}
+	settings, err := p.platformSettings(ctx, p.pool)
+	if err != nil {
+		return nil, err
+	}
 	// Every provenance, as the series view shows it: the hot tier's observed
-	// and calculated samples and the declared tier's intended rows.
-	bound, args := tsSince("x.ts", window, arc, key, limit, ownerKind)
-	rows, err := p.pool.Query(ctx, fmt.Sprintf(`
+	// and calculated samples, through the series read, and the declared
+	// tier's intended rows. Newest first, an instant's samples of one series
+	// in reverse lineage and landing order.
+	from, args := "'-infinity'::timestamptz", []any{arc, key, limit, ownerKind, settings.Retention.MetricDays}
+	if window > 0 {
+		from, args = "now() - make_interval(secs => $6)", append(args, window.Seconds())
+	}
+	rows, err := p.pool.Query(ctx, `
 		select x.ts, s.owner_kind, mt.name, s.instance, x.value, s.provenance, `+sourceRendered("s")+`
 		from metric_series s
 		join metric_type_in_effect() mt on mt.id = s.metric_type_id
 		cross join lateral (
-			select m.ts, m.id, m.value from metric m where m.series_id = s.id
+			`+metricReadSQL("s.id", from, "'infinity'::timestamptz", "$5")+`
 			union all
-			select d.ts, d.id, d.value from metric_declared d where d.series_id = s.id) x
+			select d.ts, d.value, null, null, null, d.id from metric_declared d where d.series_id = s.id and d.ts >= `+from+`) x
 		where s.owner_id = $1::uuid and s.owner_kind = $4 and mt.name = $2
-		  and %s
-		order by x.ts desc
-		limit $3`, bound), args...)
+		order by x.ts desc, s.id desc, `+metricLineageOrder("x", true)+`
+		limit $3`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list metric series %s/%s: %w", ownerRef, key, err)
 	}
