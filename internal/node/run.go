@@ -145,12 +145,14 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	logger.Info("connected to bus", "facility", "enrollment", "url", creds.NatsURL)
 	// Every telemetry publish goes through the spool (#453, #454): a JetStream
 	// publish that waits for the stream's ack, a batch it has not acked held
-	// and shipped on the next tick under the id it was minted with.
+	// and shipped on the next tick under the id it was minted with. A tick's
+	// task groups ride one batch (#1582), flushed on the spool's own timer, at
+	// its byte threshold, and by every drain below.
 	js, err := newNodeJetStream(nc)
 	if err != nil {
 		return collection.WorklistReply{}, fmt.Errorf("node: jetstream: %w", err)
 	}
-	spool := newTelemetrySpool(collection.TelemetrySubject(cfg.Name), jetStreamPublish(js))
+	spool := newTelemetrySpool(collection.TelemetrySubject(cfg.Name), cfg.Name, jetStreamPublish(js))
 
 	dialer := cfg.Dialer
 	if dialer == nil {
@@ -294,7 +296,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 			}
 		},
 		samples: func(taskID string, dps []collection.Sample) {
-			if err := publishBatch(spool, cfg.Name, taskID, dps); err != nil {
+			if err := publishPushed(spool, taskID, dps); err != nil {
 				logger.Warn("pushed samples not published", "facility", "session", "task", taskID, "error", err.Error())
 			}
 		},
@@ -367,7 +369,8 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 
 	if cfg.Once {
 		// A one-shot run ends only once the stream has acked what it
-		// collected: a batch still held is an error, never a quiet exit.
+		// collected (the drain flushes the groups still pending first): a
+		// batch still held is an error, never a quiet exit.
 		dctx, cancel := context.WithTimeout(ctx, onceDrainTimeout)
 		defer cancel()
 		if err := spool.drain(dctx); err != nil {
@@ -403,9 +406,9 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	for {
 		select {
 		case <-ctx.Done():
-			// Ship what the spool still holds before the connection closes,
-			// within a bound: the spool is memory, so a batch left in it at
-			// exit is gone.
+			// Ship what the spool still holds, its pending groups flushed
+			// first, before the connection closes, within a bound: the spool
+			// is memory, so a batch left in it at exit is gone.
 			dctx, cancel := context.WithTimeout(context.Background(), shutdownDrainTimeout)
 			if err := spool.drain(dctx); err != nil {
 				logger.Warn("telemetry left unshipped at shutdown", "facility", "delivery", "error", err.Error())

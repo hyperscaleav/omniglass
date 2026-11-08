@@ -13,6 +13,7 @@ import (
 	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -38,6 +39,26 @@ const (
 	spoolWindow         = 32
 	spoolPublishTimeout = 5 * time.Second
 )
+
+// A node's tick lands as one batch (#1582): the spool gathers the task groups
+// added within defaultFlushEvery and flushes them as one TelemetryBatch, or
+// sooner once the groups pending reach defaultFlushBytes, so a node with many
+// tasks pays one publish, one ack and one consumer turn per tick, not one per
+// task. The threshold stays well under the bus's default max payload (1 MiB).
+const (
+	defaultFlushEvery = time.Second
+	defaultFlushBytes = 512 << 10
+)
+
+// groupsField is the TelemetryBatch field the task groups ride, read from
+// the generated descriptor so the hand-built encoding cannot drift from it.
+var groupsField = protowire.Number((&ogv1.TelemetryBatch{}).ProtoReflect().Descriptor().Fields().ByName("groups").Number())
+
+// stopper is a pending flush timer: Stop cancels it.
+type stopper interface{ Stop() bool }
+
+// timeAfterFunc is the spool's default flush timer.
+func timeAfterFunc(d time.Duration, f func()) stopper { return time.AfterFunc(d, f) }
 
 // ackWait blocks until the stream has answered one batch: nil is its word
 // that it stored the batch, or already held a copy under its id.
@@ -104,14 +125,24 @@ type spooledBatch struct {
 // from its head. The batches that were with the stream behind the failure are
 // sent again under their ids, so any copy the stream already stored is a
 // duplicate.
+//
+// A task's samples arrive as a group (add), held until the flush: on the
+// timer flushEvery after the first group, once the groups pending reach
+// flushBytes, ahead of a whole batch sent, and at a drain. The flush mints the
+// batch's id and encodes its bytes once, so every retry ships the same bytes
+// under the same id.
 type telemetrySpool struct {
 	subject    string
+	node       string
 	publish    publishFunc
 	maxBatches int
 	maxBytes   int
 	maxAge     time.Duration
 	window     int
 	now        func() time.Time
+	flushEvery time.Duration                       // the longest a group waits for its batch
+	flushBytes int                                 // the pending group bytes that flush at once
+	afterFunc  func(time.Duration, func()) stopper // the flush timer, a test's to fake
 
 	mu         sync.Mutex
 	queue      []spooledBatch // queue[:sent] are with the stream: never dropped
@@ -124,18 +155,139 @@ type telemetrySpool struct {
 	dropped    int           // batches dropped since the last notice
 	dropping   bool          // the current overflow has been told at its start
 	overflowed bool          // batches dropped since the run loop last asked
+	groups     [][]byte      // the pending groups, each encoded as its batch field
+	groupBytes int           // the encoded bytes of groups
+	timer      stopper       // the armed flush timer, nil while nothing is pending
+	timerGen   int           // the flush count, so a timer that lost a race is a no-op
 }
 
-// newTelemetrySpool is a spool shipping to subject through publish, at the
-// default caps.
-func newTelemetrySpool(subject string, publish publishFunc) *telemetrySpool {
-	return &telemetrySpool{subject: subject, publish: publish, maxBatches: maxSpoolBatches, maxBytes: maxSpoolBytes,
-		maxAge: maxSpoolAge, window: spoolWindow, now: time.Now}
+// newTelemetrySpool is node's spool shipping to subject through publish, at
+// the default caps and flush.
+func newTelemetrySpool(subject, node string, publish publishFunc) *telemetrySpool {
+	return &telemetrySpool{subject: subject, node: node, publish: publish, maxBatches: maxSpoolBatches, maxBytes: maxSpoolBytes,
+		maxAge: maxSpoolAge, window: spoolWindow, now: time.Now,
+		flushEvery: defaultFlushEvery, flushBytes: defaultFlushBytes, afterFunc: timeAfterFunc}
 }
 
-// send mints the batch's id, queues it, and starts the shipper unless the
-// spool is holding. It never waits on the stream; it fails only on a batch it
+// add holds a task's group for the next batch. A group with nothing in it is
+// skipped. A group that would take the pending bytes past flushBytes flushes
+// what is pending first, so a group larger than flushBytes rides alone; the
+// pending bytes reaching flushBytes flush at once; otherwise the first group
+// arms the timer. It never waits on the stream; it fails only on a group it
 // cannot encode.
+func (s *telemetrySpool) add(g *ogv1.TaskGroup) error {
+	if groupEmpty(g) {
+		return nil
+	}
+	stampGroupMillis(g)
+	b, err := proto.Marshal(g)
+	if err != nil {
+		return fmt.Errorf("node: marshal task group: %w", err)
+	}
+	field := protowire.AppendBytes(protowire.AppendTag(nil, groupsField, protowire.BytesType), b)
+	s.mu.Lock()
+	started := false
+	if len(s.groups) > 0 && s.groupBytes+len(field) > s.flushBytes {
+		started = s.flushLocked()
+	}
+	s.groups = append(s.groups, field)
+	s.groupBytes += len(field)
+	if s.groupBytes >= s.flushBytes {
+		if s.flushLocked() {
+			started = true
+		}
+	} else if s.timer == nil {
+		s.armLocked()
+	}
+	s.mu.Unlock()
+	if started {
+		s.tellOverflowStart()
+	}
+	return nil
+}
+
+// groupEmpty reports whether g carries no sample on any lane.
+func groupEmpty(g *ogv1.TaskGroup) bool {
+	return len(g.GetMetrics()) == 0 && len(g.GetProperties()) == 0 && len(g.GetEvents()) == 0 && len(g.GetTaskLogs()) == 0
+}
+
+// armLocked starts the flush timer for the groups now pending. The timer
+// carries the flush count it was armed under, so one that fires after its
+// groups already flushed does nothing.
+func (s *telemetrySpool) armLocked() {
+	every := s.flushEvery
+	if every <= 0 {
+		every = defaultFlushEvery
+	}
+	gen := s.timerGen
+	s.timer = s.afterFunc(every, func() { s.timerFlush(gen) })
+}
+
+// timerFlush is the flush timer firing: it flushes unless the groups it was
+// armed for already went.
+func (s *telemetrySpool) timerFlush(gen int) {
+	s.mu.Lock()
+	started := false
+	if gen == s.timerGen && len(s.groups) > 0 {
+		started = s.flushLocked()
+	}
+	s.mu.Unlock()
+	if started {
+		s.tellOverflowStart()
+	}
+}
+
+// flush ships the pending groups now, as one batch.
+func (s *telemetrySpool) flush() {
+	s.mu.Lock()
+	started := s.flushLocked()
+	s.mu.Unlock()
+	if started {
+		s.tellOverflowStart()
+	}
+}
+
+// flushLocked turns the pending groups into one batch: the node's id, the
+// flush time, and the groups in the order added, encoded once and minted
+// one id, then queued and shipped as any batch. It reports whether queueing
+// began an overflow.
+func (s *telemetrySpool) flushLocked() bool {
+	if s.timer != nil {
+		s.timer.Stop()
+		s.timer = nil
+	}
+	s.timerGen++
+	if len(s.groups) == 0 {
+		return false
+	}
+	groups, size := s.groups, s.groupBytes
+	s.groups, s.groupBytes = nil, 0
+	head, err := proto.Marshal(&ogv1.TelemetryBatch{NodeId: s.node, Ts: timestamppb.New(s.now().UTC())})
+	if err != nil {
+		// Only a node id that is not UTF-8 fails here; config refuses one.
+		slog.Warn("telemetry batch header did not encode, groups dropped", "facility", "delivery", "groups", len(groups), "error", err.Error())
+		return false
+	}
+	b := make([]byte, 0, len(head)+size)
+	b = append(b, head...)
+	for _, g := range groups {
+		b = append(b, g...)
+	}
+	started := s.expireLocked()
+	if s.enqueueLocked(spooledBatch{id: collection.NewBatchID(), data: b, queued: s.now()}) {
+		started = true
+	}
+	if !s.held {
+		s.shipLocked()
+	}
+	return started
+}
+
+// send queues a whole batch (the node's own logs) behind the groups pending,
+// which flush first so the stream keeps the order things happened in: it
+// mints the batch's id, queues it, and starts the shipper unless the spool is
+// holding. It never waits on the stream; it fails only on a batch it cannot
+// encode.
 func (s *telemetrySpool) send(ev *ogv1.TelemetryBatch) error {
 	stampMetricMillis(ev)
 	b, err := proto.Marshal(ev)
@@ -143,7 +295,10 @@ func (s *telemetrySpool) send(ev *ogv1.TelemetryBatch) error {
 		return fmt.Errorf("node: marshal telemetry batch: %w", err)
 	}
 	s.mu.Lock()
-	started := s.expireLocked()
+	started := s.flushLocked()
+	if s.expireLocked() {
+		started = true
+	}
 	if s.enqueueLocked(spooledBatch{id: collection.NewBatchID(), data: b, queued: s.now()}) {
 		started = true
 	}
@@ -167,6 +322,20 @@ func stampMetricMillis(ev *ogv1.TelemetryBatch) {
 		ts := m.GetTs()
 		if ts == nil {
 			ts = ev.GetTs()
+		}
+		if ts != nil {
+			m.Ts = timestamppb.New(storage.MetricTime(ts.AsTime()))
+		}
+	}
+}
+
+// stampGroupMillis is stampMetricMillis for a task group: a metric with no
+// ts takes the group's, and every metric ts is whole milliseconds.
+func stampGroupMillis(g *ogv1.TaskGroup) {
+	for _, m := range g.GetMetrics() {
+		ts := m.GetTs()
+		if ts == nil {
+			ts = g.GetTs()
 		}
 		if ts != nil {
 			m.Ts = timestamppb.New(storage.MetricTime(ts.AsTime()))
@@ -344,10 +513,11 @@ func (s *telemetrySpool) retry() {
 	}
 }
 
-// drain ships the queue and waits until it is empty, the one-shot run's last
-// word and a stopping node's: a batch still held when the stream will not
-// take it, or when ctx ends, is an error.
+// drain flushes the pending groups, ships the queue and waits until it is
+// empty, the one-shot run's last word and a stopping node's: a batch still
+// held when the stream will not take it, or when ctx ends, is an error.
 func (s *telemetrySpool) drain(ctx context.Context) error {
+	s.flush()
 	for {
 		s.mu.Lock()
 		if len(s.queue) == 0 && !s.shipping {

@@ -49,10 +49,10 @@ func (f fakeStore) NodeWorklist(context.Context, string) (storage.Worklist, erro
 	return storage.Worklist{}, nil
 }
 func (f fakeStore) RecordHeartbeat(context.Context, string) error { return nil }
-func (f fakeStore) ResolveTaskOwner(context.Context, string, string) (storage.TaskOwner, bool, error) {
-	return storage.TaskOwner{}, false, nil
+func (f fakeStore) ResolveTaskOwners(context.Context, string, []string) (map[string]storage.TaskOwner, error) {
+	return map[string]storage.TaskOwner{}, nil
 }
-func (f fakeStore) ResolveIdentityBindings(context.Context, string, []storage.IdentityKey) (*storage.IdentityResolution, error) {
+func (f fakeStore) ResolveIdentityBindings(context.Context, map[string][]storage.IdentityKey) (map[string]*storage.IdentityResolution, error) {
 	return nil, nil
 }
 func (f fakeStore) ListMetricTypes(context.Context) ([]storage.MetricType, error) {
@@ -66,8 +66,8 @@ func (f fakeStore) RecordOrphanedBatches(context.Context, string, int64, time.Ti
 	return nil
 }
 
-func (f fakeStore) LandBatch(context.Context, storage.IngestBatch) (bool, error) {
-	return true, nil
+func (f fakeStore) LandBatch(context.Context, storage.IngestBatch) (storage.LandResult, error) {
+	return storage.LandResult{Landed: true}, nil
 }
 func (f fakeStore) RetentionWindows(context.Context) (settings.RetentionSettings, error) {
 	return settings.RetentionSettings{MetricDays: 14, PropertyDays: 90, TrendDays: 730,

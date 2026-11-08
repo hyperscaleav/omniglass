@@ -305,7 +305,7 @@ func TestSessionSamplesCarryTheReason(t *testing.T) {
 	t.Parallel()
 	at := time.Date(2026, 10, 23, 12, 0, 0, 0, time.UTC)
 	dps := sessionSamples(collection.SessionTransition{State: collection.SessionRejected, Reason: "auth: auth rejected", At: at})
-	ev := buildBatch("p1", "edge-1", dps)
+	ev := groupFor("p1", dps)
 	byName := map[string]string{}
 	for _, p := range ev.Properties {
 		byName[p.Name] = p.ValueJson
@@ -319,7 +319,7 @@ func TestSessionSamplesCarryTheReason(t *testing.T) {
 func TestAuthSample(t *testing.T) {
 	t.Parallel()
 	at := time.Date(2026, 10, 23, 12, 0, 0, 0, time.UTC)
-	ev := buildBatch("p1", "edge-1", []collection.Sample{authSample(collection.AuthVerdict{Authenticated: false, Reason: "auth: auth rejected", At: at})})
+	ev := groupFor("p1", []collection.Sample{authSample(collection.AuthVerdict{Authenticated: false, Reason: "auth: auth rejected", At: at})})
 	if len(ev.Properties) != 1 || ev.Properties[0].Name != "endpoint-authenticated" || ev.Properties[0].ValueJson != `"no"` {
 		t.Fatalf("properties = %+v", ev.Properties)
 	}
