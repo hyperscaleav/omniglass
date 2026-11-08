@@ -127,20 +127,32 @@ func (p *PG) InsertLogLines(ctx context.Context, lines []LogLineWrite) error {
 }
 
 // writeLogLines is the component log-line write path, in the caller's
-// transaction: InsertLogLines' own, or an ingest batch's (LandBatch).
+// transaction: InsertLogLines' own, or an ingest batch's (LandBatch). The
+// lines land in one statement, in their order (#1582).
 func (p *PG) writeLogLines(ctx context.Context, tx pgx.Tx, lines []LogLineWrite) error {
-	for _, l := range lines {
+	if len(lines) == 0 {
+		return nil
+	}
+	n := len(lines)
+	ts := make([]time.Time, n)
+	arcs := make([]string, n)
+	instances := make([]string, n)
+	sources := make([]string, n)
+	messages := make([]string, n)
+	sevs, facs, attrs, labels, corrs := make([]*string, n), make([]*string, n), make([]*string, n), make([]*string, n), make([]*string, n)
+	for i, l := range lines {
 		if l.OwnerKind != "component" {
 			return fmt.Errorf("storage: log line %s: log_line is component-owned (#589), refusing owner_kind %q (a node's self-logs land in node_log)", l.OwnerID, l.OwnerKind)
 		}
-		ts := l.TS
-		if ts.IsZero() {
-			ts = time.Now().UTC()
+		ts[i] = l.TS
+		if ts[i].IsZero() {
+			ts[i] = time.Now().UTC()
 		}
 		arc, err := p.ownerArcValue(ctx, tx, "component", l.OwnerID)
 		if err != nil {
 			return fmt.Errorf("storage: log line %s: %w", l.OwnerID, err)
 		}
+		arcs[i] = arc
 		// Every writer's line is held here to what the lane shares (#1145):
 		// the severity on RFC 5424's canonical set (a word the table does not
 		// know kept as severity_raw), the message and attributes within
@@ -150,14 +162,43 @@ func (p *PG) writeLogLines(ctx context.Context, tx pgx.Tx, lines []LogLineWrite)
 		// and one refused line would fail the batch it rode in.
 		severity, attributes := logline.Normalize(logline.Clean(l.Severity), logline.CleanAttributes(l.Attributes))
 		message, attributes := logline.Cap(logline.Clean(l.Message), attributes)
-		sev, fac, corr, attrs, labels := nullableLogFields(severity, logline.Clean(l.Facility), logline.Clean(l.CorrelationID), attributes, logline.CleanAttributes(l.Labels))
-		if _, err := tx.Exec(ctx, `insert into log_line (ts, component_id, instance, source, severity, facility, message, attributes, labels, correlation_id)
-			values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-			ts, arc, logline.Clean(l.Instance), logline.Clean(l.Source), sev, fac, message, attrs, labels, corr); err != nil {
-			return fmt.Errorf("storage: insert log line %s: %w", l.OwnerID, err)
-		}
+		sev, fac, corr, attr, label := nullableLogFields(severity, logline.Clean(l.Facility), logline.Clean(l.CorrelationID), attributes, logline.CleanAttributes(l.Labels))
+		sevs[i], facs[i], corrs[i], attrs[i], labels[i] = textOrNull(sev), textOrNull(fac), textOrNull(corr), textOrNull(attr), textOrNull(label)
+		instances[i], sources[i], messages[i] = logline.Clean(l.Instance), logline.Clean(l.Source), message
+	}
+	if _, err := tx.Exec(ctx, `insert into log_line (ts, component_id, instance, source, severity, facility, message, attributes, labels, correlation_id)
+		select u.ts, u.arc::uuid, u.instance, u.source, u.severity, u.facility, u.message, u.attributes::jsonb, u.labels::jsonb, u.correlation_id
+		from unnest($1::timestamptz[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[], $9::text[], $10::text[])
+			with ordinality as u(ts, arc, instance, source, severity, facility, message, attributes, labels, correlation_id, ord)
+		order by u.ord`,
+		ts, arcs, instances, sources, sevs, facs, messages, attrs, labels, corrs); err != nil {
+		return fmt.Errorf("storage: insert log lines %s: %w", logOwners(lines), err)
 	}
 	return nil
+}
+
+// logOwners names the distinct owners of lines, in their order, for an
+// error.
+func logOwners(lines []LogLineWrite) string {
+	seen := map[string]bool{}
+	var out []string
+	for _, l := range lines {
+		if !seen[l.OwnerID] {
+			seen[l.OwnerID] = true
+			out = append(out, l.OwnerID)
+		}
+	}
+	return strings.Join(out, ", ")
+}
+
+// textOrNull is a nullableLogFields value as a text array element: nil is
+// SQL NULL.
+func textOrNull(v any) *string {
+	s, ok := v.(string)
+	if !ok {
+		return nil
+	}
+	return &s
 }
 
 // InsertNodeLogs writes a node's own log rows in one transaction: the self-log
@@ -172,27 +213,48 @@ func (p *PG) InsertNodeLogs(ctx context.Context, lines []NodeLogWrite) error {
 }
 
 // writeNodeLogs is the node self-log write path, in the caller's
-// transaction: InsertNodeLogs' own, or an ingest batch's (LandBatch).
+// transaction: InsertNodeLogs' own, or an ingest batch's (LandBatch). The
+// lines land in one statement, in their order.
 func (p *PG) writeNodeLogs(ctx context.Context, tx pgx.Tx, lines []NodeLogWrite) error {
-	for _, l := range cleanNodeLogWrites(lines) {
-		ts := l.TS
-		if ts.IsZero() {
-			ts = time.Now().UTC()
+	lines = cleanNodeLogWrites(lines)
+	if len(lines) == 0 {
+		return nil
+	}
+	n := len(lines)
+	ts := make([]time.Time, n)
+	pids := make([]string, n)
+	sources := make([]string, n)
+	messages := make([]string, n)
+	sevs, facs, attrs, labels, corrs := make([]*string, n), make([]*string, n), make([]*string, n), make([]*string, n), make([]*string, n)
+	var nodes []string
+	for i, l := range lines {
+		ts[i] = l.TS
+		if ts[i].IsZero() {
+			ts[i] = time.Now().UTC()
 		}
 		pid, err := p.ownerArcValue(ctx, tx, "node", l.Node)
 		if err != nil {
 			return fmt.Errorf("storage: node log %s: %w", l.Node, err)
 		}
+		pids[i] = pid
+		if len(nodes) == 0 || nodes[len(nodes)-1] != l.Node {
+			nodes = append(nodes, l.Node)
+		}
 		// The severity on the canonical set, as a component's line is (#417): a
 		// word the table does not know is kept as severity_raw, so a retention
 		// window by severity never meets a stray word.
 		severity, attributes := logline.Normalize(l.Severity, l.Attributes)
-		sev, fac, corr, attrs, labels := nullableLogFields(severity, l.Facility, l.CorrelationID, attributes, l.Labels)
-		if _, err := tx.Exec(ctx, `insert into node_log (ts, node_id, source, severity, facility, message, attributes, labels, correlation_id)
-			values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-			ts, pid, l.Source, sev, fac, l.Message, attrs, labels, corr); err != nil {
-			return fmt.Errorf("storage: insert node log %s: %w", l.Node, err)
-		}
+		sev, fac, corr, attr, label := nullableLogFields(severity, l.Facility, l.CorrelationID, attributes, l.Labels)
+		sevs[i], facs[i], corrs[i], attrs[i], labels[i] = textOrNull(sev), textOrNull(fac), textOrNull(corr), textOrNull(attr), textOrNull(label)
+		sources[i], messages[i] = l.Source, l.Message
+	}
+	if _, err := tx.Exec(ctx, `insert into node_log (ts, node_id, source, severity, facility, message, attributes, labels, correlation_id)
+		select u.ts, u.node_id::uuid, u.source, u.severity, u.facility, u.message, u.attributes::jsonb, u.labels::jsonb, u.correlation_id
+		from unnest($1::timestamptz[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[], $9::text[])
+			with ordinality as u(ts, node_id, source, severity, facility, message, attributes, labels, correlation_id, ord)
+		order by u.ord`,
+		ts, pids, sources, sevs, facs, messages, attrs, labels, corrs); err != nil {
+		return fmt.Errorf("storage: insert node logs %s: %w", strings.Join(nodes, ", "), err)
 	}
 	return nil
 }

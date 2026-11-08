@@ -188,38 +188,61 @@ func (l *sampleLineage) rule() string {
 	return l.ruleID
 }
 
-// writeMetricSamples is the metric lane's sample-write path, in the caller's
-// transaction: the ingest's observed batch, or a calc rule's calculated
-// output (a calc rule's writer, its lineage set). Every row is held to its
-// key's writer class first (ADR-0161). The event rules reading the batch's
-// keys judge every sample, in the batch's order (#919), after it lands: a
-// series the batch carries once lands with the others in one statement, a
-// series it carries more than once one row at a time (ADR-1274). The calc
-// rules reading the keys are marked pending on each owner (#996), never the
-// rule that produced the batch.
+// metricSet is one writer's metric samples in a multi-set write: a task
+// group's, in an ingest batch of many (#1582).
+type metricSet struct {
+	w   KeyWriter
+	evs []MetricSampleWrite
+}
+
+// writeMetricSamples is the metric lane's sample-write path for one writer,
+// in the caller's transaction (writeMetricSets).
 func (p *PG) writeMetricSamples(ctx context.Context, tx pgx.Tx, w KeyWriter, evs []MetricSampleWrite) error {
-	evs = cleanMetricWrites(evs)
-	arcs := make([]string, len(evs))
-	rows := make([]keyedWrite, len(evs))
-	marks := newCalcMarks()
-	for i, ev := range evs {
-		if _, err := ownerColumn(ev.OwnerKind); err != nil {
-			return fmt.Errorf("storage: sample %s/%s: %w", ev.OwnerID, ev.Key, err)
-		}
-		// The arc stores the owner's primary key. Resolving here rather than in the
-		// insert means an unknown owner is a named error instead of a NULL that
-		// trips the arc CHECK opaquely, and the writer check holds the row to
-		// the owner it will land on.
-		arc, err := p.ownerArcValue(ctx, tx, ev.OwnerKind, ev.OwnerID)
-		if err != nil {
-			return fmt.Errorf("storage: sample %s/%s: %w", ev.OwnerID, ev.Key, err)
-		}
-		arcs[i] = arc
-		rows[i] = keyedWrite{key: ev.Key, instance: ev.Instance, ownerKind: ev.OwnerKind, owner: arc}
-		marks.add(ev.OwnerKind, arc, rules.LaneMetric, ev.Key)
-	}
-	if err := admitWrites(ctx, tx, writeMetric, w, rows); err != nil {
+	return p.writeMetricSets(ctx, tx, []metricSet{{w: w, evs: evs}})
+}
+
+// writeMetricSets is the metric lane's sample-write path, in the caller's
+// transaction: the ingest's observed batch, or a calc rule's calculated
+// output (a calc rule's writer, its lineage set). Every set's rows are held to
+// their keys' writer class under that set's writer (ADR-0161); the sets share
+// one row identity (writeIdentity), so all of them land as one batch: a tick
+// of many task groups costs the statements of one (#1582). The event rules
+// reading the batch's keys judge every sample, in the batch's order (#919),
+// after it lands: a series the batch carries once lands with the others in
+// one statement, a series it carries more than once one row at a time
+// (ADR-1274). The calc rules reading the keys are marked pending on each
+// owner (#996), never the rule that produced the batch.
+func (p *PG) writeMetricSets(ctx context.Context, tx pgx.Tx, sets []metricSet) error {
+	w, err := sharedWriter(writeMetric, sets, func(s metricSet) KeyWriter { return s.w })
+	if err != nil {
 		return err
+	}
+	var evs []MetricSampleWrite
+	var arcs []string
+	marks := newCalcMarks()
+	for _, set := range sets {
+		setEvs := cleanMetricWrites(set.evs)
+		rows := make([]keyedWrite, len(setEvs))
+		for i, ev := range setEvs {
+			if _, err := ownerColumn(ev.OwnerKind); err != nil {
+				return fmt.Errorf("storage: sample %s/%s: %w", ev.OwnerID, ev.Key, err)
+			}
+			// The arc stores the owner's primary key. Resolving here rather than in the
+			// insert means an unknown owner is a named error instead of a NULL that
+			// trips the arc CHECK opaquely, and the writer check holds the row to
+			// the owner it will land on.
+			arc, err := p.ownerArcValue(ctx, tx, ev.OwnerKind, ev.OwnerID)
+			if err != nil {
+				return fmt.Errorf("storage: sample %s/%s: %w", ev.OwnerID, ev.Key, err)
+			}
+			arcs = append(arcs, arc)
+			rows[i] = keyedWrite{key: ev.Key, instance: ev.Instance, ownerKind: ev.OwnerKind, owner: arc}
+			marks.add(ev.OwnerKind, arc, rules.LaneMetric, ev.Key)
+		}
+		if err := admitWrites(ctx, tx, writeMetric, set.w, rows); err != nil {
+			return err
+		}
+		evs = append(evs, setEvs...)
 	}
 	keys := sampleKeys(evs, func(e MetricSampleWrite) string { return e.Key })
 	eval, err := p.newRuleEvaluator(ctx, tx, keys)

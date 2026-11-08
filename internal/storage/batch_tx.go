@@ -22,12 +22,28 @@ type batchTx struct {
 	arcs map[string]string
 	now  time.Time
 	// targeted is the batch's command-targeted property names when its caller
-	// carried them (#1299); nil reads them in the transaction.
+	// carried them (#1299), else as the batch first read them; nil reads them
+	// in the transaction.
 	targeted map[string]bool
+	// writers is each key's resolved writer class, per lane, once the batch
+	// has read it (keyWriters), so a tick of many task groups reads a key's
+	// calc claims once however many groups carry it (#1582).
+	writers map[writeLane]map[string]keyWriterOf
+	// bindings is each node writer's component, by the name it named, once
+	// resolved (nodeBinding).
+	bindings map[string]string
 }
 
 func newBatchTx(tx pgx.Tx) *batchTx {
-	return &batchTx{Tx: tx, arcs: map[string]string{}}
+	return &batchTx{Tx: tx, arcs: map[string]string{}, writers: map[writeLane]map[string]keyWriterOf{}, bindings: map[string]string{}}
+}
+
+// savepoint is sp, a savepoint opened in b, answering from b's memos: what
+// the batch resolved holds inside it, and what the savepoint resolves holds
+// for the batch (a read a rolled-back savepoint made is still the
+// transaction's answer).
+func (b *batchTx) savepoint(sp pgx.Tx) *batchTx {
+	return &batchTx{Tx: sp, arcs: b.arcs, now: b.now, targeted: b.targeted, writers: b.writers, bindings: b.bindings}
 }
 
 // arc resolves an owner's primary key once per batch.
