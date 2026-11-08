@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -54,6 +55,7 @@ func newLabRunCmd(version string) *cobra.Command {
 		systems  int
 		plan     bool
 		script   labScript
+		scale    labScale
 	)
 	cmd := &cobra.Command{
 		Use:   "run",
@@ -87,7 +89,7 @@ func newLabRunCmd(version string) *cobra.Command {
 			go func() { <-ctx.Done(); stop() }()
 			return runLab(ctx, cmd.OutOrStdout(), version, labFlags{
 				port: port, listen: listen, fresh: fresh, scenario: scenario, image: image, project: project,
-				systems: systems, plan: plan, script: script,
+				systems: systems, plan: plan, script: script, scale: scale,
 			})
 		},
 	}
@@ -95,8 +97,8 @@ func newLabRunCmd(version string) *cobra.Command {
 	cmd.Flags().StringVar(&listen, "listen", lab.DefaultListen, "the address the console is published on; anything but loopback exposes the lab, and its well-known login, to your network")
 	cmd.Flags().BoolVar(&fresh, "fresh", false, "remove the lab's data first and start over from the seed")
 	cmd.Flags().StringVar(&scenario, "scenario", lab.DefaultScenario, "the fleet the lab seeds on its first run (the seed-dev command lists them), or a scale lab scenario ("+strings.Join(labscenario.Names(), ", ")+") sized by --systems")
-	// The scale lab (#1357): a scenario manifest resolved at a size. Bring-up
-	// lands with #1554; until then --plan prints what it would build.
+	// The scale lab (#1357): a scenario manifest resolved at a size, brought
+	// up as one node per site (#1554), or printed with --plan.
 	cmd.Flags().IntVar(&systems, "systems", 0, "how many systems a scale lab scenario resolves to")
 	cmd.Flags().BoolVar(&plan, "plan", false, "print the scale lab scenario's resolved plan (sites, systems per standard, components per product) and exit, starting nothing")
 	cmd.Flags().StringVar(&image, "image", "", "run this omniglass image instead of the one this binary was built with (env OMNIGLASS_LAB_IMAGE); one that is not this binary's own build is warned about")
@@ -113,16 +115,21 @@ func newLabRunCmd(version string) *cobra.Command {
 	cmd.Flags().BoolVar(&script.noNode, "no-node", false, "run no node: seed the fleet without the simulated wiring, so nothing collects (needs --ephemeral)")
 	// The lab footprint (#1277) measures a lab at a chosen cadence profile.
 	cmd.Flags().StringVar(&script.cadence, "cadence", "", "the node's cadence profile ("+lab.CadenceNames()+"); empty is lab, or walkthrough for a throwaway lab")
-	for _, name := range []string{"ephemeral", "ready-file", "while-pid", "no-node", "cadence"} {
+	// The scale lab's knobs for proving it: a forced low memory limit shows
+	// the refusal without a small machine, and the bring-up's bound.
+	cmd.Flags().StringVar(&scale.hostMemory, "host-memory", "", "a scale lab: plan against this much host memory (e.g. 4g) instead of what Docker reports")
+	cmd.Flags().DurationVar(&scale.timeout, "ready-timeout", defaultScaleTimeout, "a scale lab: how long its bring-up may take before it is removed, naming what is not up")
+	for _, name := range []string{"ephemeral", "ready-file", "while-pid", "no-node", "cadence", "host-memory", "ready-timeout"} {
 		_ = cmd.Flags().MarkHidden(name)
 	}
 	return cmd
 }
 
 // runLabScenario resolves a scale lab scenario manifest at --systems and,
-// with --plan, prints the plan. Without --plan it refuses: bringing a
-// scenario up is #1554's.
-func runLabScenario(out io.Writer, m *labscenario.Manifest, f labFlags) error {
+// with --plan, prints the plan and starts nothing. Without --plan it brings
+// the plan up (#1554): Postgres, the server, and one node per site, each
+// simulating its site's components, after a check that the host can fit it.
+func runLabScenario(ctx context.Context, out io.Writer, m *labscenario.Manifest, f labFlags) error {
 	if f.systems == 0 {
 		return fmt.Errorf("scenario %s is a scale lab scenario: say how many systems with --systems N (%d to %d)", m.Name, labscenario.MinSystems(m), labscenario.MaxSystems)
 	}
@@ -134,11 +141,148 @@ func runLabScenario(out io.Writer, m *labscenario.Manifest, f labFlags) error {
 	if err != nil {
 		return err
 	}
-	if !f.plan {
-		return fmt.Errorf("bringing up scale lab scenario %s is not built yet (#1554); add --plan to print the %d systems it would build",
-			m.Name, plan.Totals.Systems)
+	hostMemory, err := parseByteSize(f.scale.hostMemory)
+	if err != nil {
+		return fmt.Errorf("--host-memory: %w", err)
 	}
-	return labscenario.WritePlan(out, plan)
+	scale := &lab.ScaleRun{
+		Shape: func(n int) (int, int, error) {
+			p, err := labscenario.Resolve(m, cat, n)
+			if err != nil {
+				return 0, 0, err
+			}
+			return len(p.Sites), p.Totals.Components, nil
+		},
+		MinSystems: labscenario.MinSystems(m), MaxSystems: labscenario.MaxSystems,
+		Cost: lab.MeasuredCost, HostMemory: hostMemory, Timeout: f.scale.timeout,
+	}
+	if f.plan {
+		if err := labscenario.WritePlan(out, plan); err != nil {
+			return err
+		}
+		readHost := f.readHost
+		if readHost == nil {
+			readHost = scaleHost
+		}
+		return writeScaleCapacity(ctx, out, scale, plan, readHost)
+	}
+	nodes := make([]lab.SiteNode, len(plan.Sites))
+	for i, site := range plan.Sites {
+		token, hash, _, err := auth.NewBearerToken()
+		if err != nil {
+			return err
+		}
+		nodes[i] = lab.SiteNode{Name: labscenario.SiteNode(site.Name), Token: token, TokenHash: hex.EncodeToString(hash),
+			Components: site.Totals.Components}
+	}
+	project := f.project
+	if project == lab.DefaultProject {
+		project = lab.ScaleProject
+	}
+	cadence := f.script.cadence
+	if cadence == "" {
+		cadence = lab.CadenceLab
+	}
+	fmt.Fprintf(out, "Starting a scale lab: scenario %s at %d systems, %d sites (a node each), %d simulated components.\n",
+		m.Name, plan.Totals.Systems, len(plan.Sites), plan.Totals.Components)
+	fmt.Fprintln(out)
+	eng, daemon, err := labEngine(ctx, out)
+	if err != nil {
+		return err
+	}
+	choice := lab.SelectImage(f.version, labImage(f))
+	r := labRunner(eng, daemon, out)
+	r.Poll, r.ReadyTimeout = 3*time.Second, f.scale.timeout
+	host, _ := os.Hostname()
+	wd, _ := os.Getwd()
+	_, err = r.Run(ctx, lab.Config{
+		Options: lab.Options{
+			Project: project, Listen: f.listen, Port: f.port, Image: choice.Ref, Scenario: m.Name,
+			Systems: plan.Totals.Systems, SiteNodes: nodes,
+			Owner: lab.Owner{Host: host, PID: os.Getpid(), PIDNS: lab.CurrentPIDNS()}, WorkDir: wd,
+			Ephemeral: true, Cadence: cadence,
+		},
+		Image: choice, Hold: true, ReadyFile: f.script.readyFile, WhilePID: f.script.whilePID,
+		ScaleRun: scale,
+	})
+	return err
+}
+
+// writeScaleCapacity follows a plan with its preflight: the estimate from
+// the measured costs and, when the Docker host can be read, the decision
+// bring-up would make on it. It starts nothing, and a refusal is printed, not
+// returned: the plan was asked for, not the lab.
+func writeScaleCapacity(ctx context.Context, out io.Writer, scale *lab.ScaleRun, plan *labscenario.Plan, readHost hostReader) error {
+	need := scale.Cost.Estimate(len(plan.Sites), plan.Totals.Components)
+	fmt.Fprintf(out, "\nPreflight: about %s of memory and %.1f cores (the server and Postgres, a node for each of %d sites, %d simulated components).\n",
+		lab.FormatMiB(need.MemMiB), need.CPU, len(plan.Sites), plan.Totals.Components)
+	host, err := readHost(ctx, scale.HostMemory)
+	if err != nil {
+		fmt.Fprintf(out, "No decision: %v\n", err)
+		return nil
+	}
+	c, err := lab.AssessCapacity(*scale, host, plan.Totals.Systems, len(plan.Sites), plan.Totals.Components)
+	if err != nil {
+		return err
+	}
+	use := host.Usable()
+	fmt.Fprintf(out, "This Docker host can spare %s and %.1f cores (%.0f%% of its %s and %d cores).\n",
+		lab.FormatMiB(use.MemMiB), use.CPU, (1-lab.Headroom)*100, lab.FormatMiB(float64(host.MemBytes)/(1<<20)), host.CPUs)
+	if err := c.Err(); err != nil {
+		fmt.Fprintf(out, "Decision: refused. %v\n", err)
+		return nil
+	}
+	fmt.Fprintln(out, "Decision: fits.")
+	return nil
+}
+
+// hostReader reads the host a scale lab plans against, with its memory
+// forced when forcedMem is set.
+type hostReader func(ctx context.Context, forcedMem int64) (lab.HostResources, error)
+
+// scaleHost reads this machine's Docker host for a plan's preflight,
+// quietly; a Docker that does not answer is the error.
+func scaleHost(ctx context.Context, forcedMem int64) (lab.HostResources, error) {
+	eng, _, err := labEngine(ctx, io.Discard)
+	if err != nil {
+		return lab.HostResources{}, err
+	}
+	return lab.ScaleHost(ctx, eng, forcedMem)
+}
+
+// defaultScaleTimeout bounds a scale lab's bring-up, the seed included.
+const defaultScaleTimeout = 20 * time.Minute
+
+// labScale are a scale lab's proving knobs.
+type labScale struct {
+	hostMemory string
+	timeout    time.Duration
+}
+
+// parseByteSize reads a size like 512m or 4g (binary units; a bare number is
+// bytes). Empty is zero.
+func parseByteSize(in string) (int64, error) {
+	s := strings.ToLower(strings.TrimSpace(in))
+	if s == "" {
+		return 0, nil
+	}
+	mult := int64(1)
+	switch {
+	case strings.HasSuffix(s, "k"):
+		mult = 1 << 10
+	case strings.HasSuffix(s, "m"):
+		mult = 1 << 20
+	case strings.HasSuffix(s, "g"):
+		mult = 1 << 30
+	}
+	if mult > 1 {
+		s = s[:len(s)-1]
+	}
+	n, err := strconv.ParseInt(s, 10, 64)
+	if err != nil || n <= 0 {
+		return 0, fmt.Errorf("%q is not a size like 512m or 4g", in)
+	}
+	return n * mult, nil
 }
 
 // labScript are lab run's script-only settings.
@@ -157,11 +301,17 @@ type labFlags struct {
 	systems                          int
 	plan                             bool
 	script                           labScript
+	scale                            labScale
+	version                          string
+	// readHost, when set, stands in for this machine's Docker host in a
+	// plan's preflight.
+	readHost hostReader
 }
 
 func runLab(ctx context.Context, out io.Writer, version string, f labFlags) error {
+	f.version = version
 	if m, err := labscenario.Shipped(f.scenario); err == nil {
-		return runLabScenario(out, m, f)
+		return runLabScenario(ctx, out, m, f)
 	}
 	sc, err := devseed.LookupScenario(f.scenario)
 	if err != nil {
@@ -178,35 +328,11 @@ func runLab(ctx context.Context, out io.Writer, version string, f labFlags) erro
 	fmt.Fprintln(out, "Starting your omniglass lab. The first run takes a few minutes; later ones, under one.")
 	fmt.Fprintln(out)
 
-	home, _ := os.UserHomeDir()
-	daemon, err := lab.ResolveDaemon(lab.Env{Getenv: config.Get, ReadFile: os.ReadFile, Home: home, GOOS: runtime.GOOS})
+	eng, daemon, err := labEngine(ctx, out)
 	if err != nil {
-		return &lab.PreflightError{Cause: "Could not tell which Docker to use: " + err.Error(),
-			Fix: "check DOCKER_HOST, DOCKER_CONTEXT and `docker context ls`.", Err: err}
+		return err
 	}
-	if !lab.IsLocal(daemon.Host) {
-		return lab.RemoteDaemon(daemon)
-	}
-	if err := dialDaemon(daemon.Host); err != nil {
-		return lab.ClassifyPing(daemon, err)
-	}
-	eng, err := lab.NewDockerEngine(daemon.Host)
-	if err != nil {
-		return lab.ClassifyPing(daemon, err)
-	}
-	pctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	info, err := eng.Ping(pctx)
-	cancel()
-	if err != nil {
-		return lab.ClassifyPing(daemon, err)
-	}
-	fmt.Fprintf(out, "  %-10s %s\n", "docker", fmt.Sprintf("running (Engine API %s, %s, from %s)", info.APIVersion, daemon.Host, daemon.Source))
-
-	image := f.image
-	if image == "" {
-		image = config.Get("OMNIGLASS_LAB_IMAGE")
-	}
-	choice := lab.SelectImage(version, image)
+	choice := lab.SelectImage(version, labImage(f))
 	token, hash, _, err := auth.NewBearerToken()
 	if err != nil {
 		return err
@@ -218,11 +344,7 @@ func runLab(ctx context.Context, out io.Writer, version string, f labFlags) erro
 	}
 	host, _ := os.Hostname()
 	wd, _ := os.Getwd()
-	r := &lab.Runner{
-		Engine: eng, Daemon: daemon, Out: out, Host: host,
-		Alive: lab.ProcessAlive, PIDNS: lab.CurrentPIDNS(), PortFree: lab.PortFree,
-		HTTP: &http.Client{Timeout: 10 * time.Second}, Poll: time.Second, ReadyTimeout: 4 * time.Minute,
-	}
+	r := labRunner(eng, daemon, out)
 	_, err = r.Run(ctx, lab.Config{
 		Options: lab.Options{
 			Project: f.project, Listen: f.listen, Port: f.port, Image: choice.Ref, Scenario: sc.Name,
@@ -235,6 +357,54 @@ func runLab(ctx context.Context, out io.Writer, version string, f labFlags) erro
 		ReadyFile: f.script.readyFile, WhilePID: f.script.whilePID,
 	})
 	return err
+}
+
+// labEngine finds this machine's Docker and connects to it, refusing one on
+// another machine, with the cause and the fix for each failure.
+func labEngine(ctx context.Context, out io.Writer) (lab.Engine, lab.Daemon, error) {
+	home, _ := os.UserHomeDir()
+	daemon, err := lab.ResolveDaemon(lab.Env{Getenv: config.Get, ReadFile: os.ReadFile, Home: home, GOOS: runtime.GOOS})
+	if err != nil {
+		return nil, daemon, &lab.PreflightError{Cause: "Could not tell which Docker to use: " + err.Error(),
+			Fix: "check DOCKER_HOST, DOCKER_CONTEXT and `docker context ls`.", Err: err}
+	}
+	if !lab.IsLocal(daemon.Host) {
+		return nil, daemon, lab.RemoteDaemon(daemon)
+	}
+	if err := dialDaemon(daemon.Host); err != nil {
+		return nil, daemon, lab.ClassifyPing(daemon, err)
+	}
+	eng, err := lab.NewDockerEngine(daemon.Host)
+	if err != nil {
+		return nil, daemon, lab.ClassifyPing(daemon, err)
+	}
+	pctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	info, err := eng.Ping(pctx)
+	cancel()
+	if err != nil {
+		return nil, daemon, lab.ClassifyPing(daemon, err)
+	}
+	fmt.Fprintf(out, "  %-10s %s\n", "docker", fmt.Sprintf("running (Engine API %s, %s, from %s)", info.APIVersion, daemon.Host, daemon.Source))
+	return eng, daemon, nil
+}
+
+// labImage is the image the flags or the environment ask for, empty for
+// this binary's own.
+func labImage(f labFlags) string {
+	if f.image != "" {
+		return f.image
+	}
+	return config.Get("OMNIGLASS_LAB_IMAGE")
+}
+
+// labRunner is the runner over this machine's Docker.
+func labRunner(eng lab.Engine, daemon lab.Daemon, out io.Writer) *lab.Runner {
+	host, _ := os.Hostname()
+	return &lab.Runner{
+		Engine: eng, Daemon: daemon, Out: out, Host: host,
+		Alive: lab.ProcessAlive, PIDNS: lab.CurrentPIDNS(), PortFree: lab.PortFree,
+		HTTP: &http.Client{Timeout: 10 * time.Second}, Poll: time.Second, ReadyTimeout: 4 * time.Minute,
+	}
 }
 
 // dialDaemon reaches a socket daemon directly, so a missing socket, a
@@ -259,12 +429,16 @@ func dialDaemon(host string) error {
 func newLabSeedCmd() *cobra.Command {
 	var scenario, node, user, password string
 	var noNode bool
+	var systems int
 	cmd := &cobra.Command{
 		Use:    "seed",
 		Short:  "The lab's one-off: migrate, mark the database as a lab's, seed it on the first run, and enroll the node",
 		Hidden: true,
 		Args:   cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if systems > 0 {
+				return runLabScaleSeed(cmd.Context(), cmd.OutOrStdout(), scenario, systems, user, password, config.Get(lab.SiteNodeTokenHashesEnv))
+			}
 			return runLabSeed(cmd.Context(), cmd.OutOrStdout(), scenario, node, user, password, config.Get("OMNIGLASS_LAB_NODE_TOKEN_HASH"), noNode,
 				pushCredential{Hash: config.Get("OMNIGLASS_LAB_PUSH_TOKEN_HASH"), Prefix: config.Get("OMNIGLASS_LAB_PUSH_TOKEN_PREFIX")})
 		},
@@ -274,6 +448,7 @@ func newLabSeedCmd() *cobra.Command {
 	cmd.Flags().StringVar(&user, "user", lab.LoginUser, "the owner's username")
 	cmd.Flags().StringVar(&password, "password", lab.LoginPassword, "the owner's password")
 	cmd.Flags().BoolVar(&noNode, "no-node", false, "seed the fleet without the simulated wiring and enroll no node, so the lab runs none")
+	cmd.Flags().IntVar(&systems, "systems", 0, "seed the scale lab scenario --scenario resolved at this many systems, with a node per site")
 	return cmd
 }
 
@@ -294,50 +469,18 @@ func runLabSeed(ctx context.Context, out io.Writer, scenario, node, user, passwo
 	if err != nil {
 		return err
 	}
-	c := cfg()
-	// Judge the database before migrating it: a real database is refused as
-	// it is, never first moved to the lab's schema.
-	if err := labSeedGate(ctx, c.DSN); err != nil {
-		return err
-	}
-	if err := migrate.Run(c.DSN); err != nil {
-		return err
-	}
-	kek, _, err := secret.LoadKEK(config.Get, c.DataDir, func(msg string) { fmt.Fprintln(os.Stderr, "warning: "+msg) })
-	if err != nil {
-		return err
-	}
-	gw, err := storage.NewPG(ctx, c.DSN, storage.WithSecretProvider(secret.NewStaticProvider(kek)))
+	gw, st, err := openLabDB(ctx)
 	if err != nil {
 		return err
 	}
 	defer gw.Close()
-	st, err := gw.LabState(ctx)
-	if err != nil {
-		return err
-	}
-	if err := storage.CheckLabMark(true, st.Marked, st.HoldsData); err != nil {
-		return err
-	}
-	if err := gw.MarkLab(ctx); err != nil {
-		return err
-	}
-	if err := seed.Run(ctx, gw); err != nil {
-		return err
-	}
 	pwHash, err := auth.HashPassword(password)
 	if err != nil {
 		return err
 	}
 	summary := "kept this lab's fleet from its last run"
 	if !st.HoldsData {
-		_, tokHash, prefix, err := auth.NewBearerToken()
-		if err != nil {
-			return err
-		}
-		if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{
-			Username: user, SecretHash: tokHash, Prefix: prefix, PasswordHash: pwHash,
-		}); err != nil {
+		if err := bootstrapLabOwner(ctx, gw, user, pwHash); err != nil {
 			return err
 		}
 		if err := devseed.RunScenario(ctx, gw, "", sc, devseed.Options{SimFleet: !noNode}); err != nil {
@@ -373,6 +516,137 @@ func runLabSeed(ctx context.Context, out io.Writer, scenario, node, user, passwo
 	}
 	fmt.Fprintln(out, lab.FormatSeedResult(lab.SeedResult{Node: present, Summary: summary}))
 	return nil
+}
+
+// openLabDB is the lab seed's way into its database: it refuses one that
+// holds data and no lab mark (before migrating it), migrates, opens the
+// Gateway, marks the database as a lab's and seeds the reference data. It
+// reports the state found, so a first run is told from a later one.
+func openLabDB(ctx context.Context) (*storage.PG, storage.LabState, error) {
+	c := cfg()
+	// Judge the database before migrating it: a real database is refused as
+	// it is, never first moved to the lab's schema.
+	if err := labSeedGate(ctx, c.DSN); err != nil {
+		return nil, storage.LabState{}, err
+	}
+	if err := migrate.Run(c.DSN); err != nil {
+		return nil, storage.LabState{}, err
+	}
+	kek, _, err := secret.LoadKEK(config.Get, c.DataDir, func(msg string) { fmt.Fprintln(os.Stderr, "warning: "+msg) })
+	if err != nil {
+		return nil, storage.LabState{}, err
+	}
+	gw, err := storage.NewPG(ctx, c.DSN, storage.WithSecretProvider(secret.NewStaticProvider(kek)))
+	if err != nil {
+		return nil, storage.LabState{}, err
+	}
+	st, err := gw.LabState(ctx)
+	if err == nil {
+		err = storage.CheckLabMark(true, st.Marked, st.HoldsData)
+	}
+	if err == nil {
+		err = gw.MarkLab(ctx)
+	}
+	if err == nil {
+		err = seed.Run(ctx, gw)
+	}
+	if err != nil {
+		gw.Close()
+		return nil, storage.LabState{}, err
+	}
+	return gw, st, nil
+}
+
+// bootstrapLabOwner creates the lab's owner, whose password is the lab's
+// login.
+func bootstrapLabOwner(ctx context.Context, gw storage.Gateway, user string, pwHash string) error {
+	_, tokHash, prefix, err := auth.NewBearerToken()
+	if err != nil {
+		return err
+	}
+	_, err = gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: user, SecretHash: tokHash, Prefix: prefix, PasswordHash: pwHash})
+	return err
+}
+
+// runLabScaleSeed is a scale lab's seed (#1554): the scale lab scenario
+// resolved at systems, laid down by devseed.SeedPlan (the one function the
+// bulk seed, #1555, replaces) on a throwaway lab's empty database, and each
+// site's node enrolled with the hash of the token the lab minted for it.
+func runLabScaleSeed(ctx context.Context, out io.Writer, scenario string, systems int, user, password, tokenHashes string) error {
+	m, err := labscenario.Shipped(scenario)
+	if err != nil {
+		return err
+	}
+	cat, err := labscenario.ShippedCatalog()
+	if err != nil {
+		return err
+	}
+	plan, err := labscenario.Resolve(m, cat, systems)
+	if err != nil {
+		return err
+	}
+	hashes, err := lab.ParseSiteNodeTokenHashes(tokenHashes)
+	if err != nil {
+		return err
+	}
+	// Every site's node needs its hash, checked before the database is touched.
+	for _, site := range plan.Sites {
+		if node := labscenario.SiteNode(site.Name); hashes[node] == "" {
+			return fmt.Errorf("lab seed: %s carries no token hash for the node %s", lab.SiteNodeTokenHashesEnv, node)
+		}
+	}
+	gw, st, err := openLabDB(ctx)
+	if err != nil {
+		return err
+	}
+	defer gw.Close()
+	if st.HoldsData {
+		return errors.New("lab seed: a scale lab seeds an empty database, and this one holds data; a scale lab is a throwaway lab, so start it again")
+	}
+	pwHash, err := auth.HashPassword(password)
+	if err != nil {
+		return err
+	}
+	if err := bootstrapLabOwner(ctx, gw, user, pwHash); err != nil {
+		return err
+	}
+	start := time.Now()
+	all := scope.Set{All: true}
+	// A site's node must exist before its endpoints name it, and the site it
+	// sits at does not until the plan is seeded: create each node first, place
+	// it at its site after.
+	for _, site := range plan.Sites {
+		node := labscenario.SiteNode(site.Name)
+		if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{
+			Name: node, Label: siteNodeLabel(site) + " Edge Node", Description: "the scale lab's node for " + site.Name,
+		}, all, all); err != nil {
+			return fmt.Errorf("lab seed: create site node %s: %w", node, err)
+		}
+	}
+	if _, err := devseed.SeedPlan(ctx, gw, "", plan, devseed.PlanOptions{Endpoints: true, NodeFor: labscenario.SiteNode}); err != nil {
+		return err
+	}
+	for _, site := range plan.Sites {
+		node, at := labscenario.SiteNode(site.Name), site.Name
+		if _, err := gw.UpdateNode(ctx, "", node, storage.NodePatch{LocationName: &at}, all, all, all); err != nil {
+			return fmt.Errorf("lab seed: place %s at %s: %w", node, site.Name, err)
+		}
+		if _, err := gw.SetEnrollmentToken(ctx, "", node, hashes[node], all); err != nil {
+			return err
+		}
+	}
+	fmt.Fprintln(out, lab.FormatSeedResult(lab.SeedResult{Node: true, Summary: fmt.Sprintf(
+		"scenario %s at %d systems: %d sites, %d components, seeded in %s",
+		m.Name, plan.Totals.Systems, len(plan.Sites), plan.Totals.Components, time.Since(start).Round(time.Second))}))
+	return nil
+}
+
+// siteNodeLabel is what a site is called on its node: its label, else its name.
+func siteNodeLabel(site labscenario.SitePlan) string {
+	if site.Label != "" {
+		return site.Label
+	}
+	return site.Name
 }
 
 func plantedLabels(fs []devseed.PlantedFault) []string {

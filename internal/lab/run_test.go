@@ -28,6 +28,9 @@ type fakeEngine struct {
 	seedLog    string
 	published  string
 	nextID     int
+	host       HostResources
+	// seedHangs makes the seed run until its context ends.
+	seedHangs bool
 }
 
 func newFakeEngine(published string) *fakeEngine {
@@ -40,6 +43,7 @@ func newFakeEngine(published string) *fakeEngine {
 		},
 		seedLog:   FormatSeedResult(SeedResult{Node: true, Summary: "the dev fleet, seeded on this lab's first run"}),
 		published: published,
+		host:      HostResources{MemBytes: 32 << 30, CPUs: 12},
 	}
 }
 
@@ -54,6 +58,9 @@ func matches(l, want map[string]string) bool {
 
 func (f *fakeEngine) Ping(context.Context) (EngineInfo, error) {
 	return EngineInfo{APIVersion: "1.56"}, nil
+}
+func (f *fakeEngine) Resources(context.Context) (HostResources, error) {
+	return f.host, nil
 }
 func (f *fakeEngine) ImageLabels(_ context.Context, ref string) (map[string]string, bool, error) {
 	l, ok := f.images[ref]
@@ -135,7 +142,11 @@ func (f *fakeEngine) Inspect(_ context.Context, id string) (ContainerState, erro
 	}
 	return st, nil
 }
-func (f *fakeEngine) Wait(_ context.Context, id string) (int, error) {
+func (f *fakeEngine) Wait(ctx context.Context, id string) (int, error) {
+	if f.seedHangs {
+		<-ctx.Done()
+		return 0, ctx.Err()
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.states[id].ExitCode, nil

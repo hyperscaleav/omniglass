@@ -84,6 +84,10 @@ type SystemPlan struct {
 	Roles      []RoleFill
 }
 
+// SiteNode is the name of the edge node a site's components are placed on:
+// the scale lab runs one node per site (#1554), named for the site.
+func SiteNode(site string) string { return "edge-" + site }
+
 // Totals counts systems and components, systems per standard (in manifest
 // order) and components per product (by name).
 type Totals struct {

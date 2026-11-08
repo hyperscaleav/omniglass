@@ -41,33 +41,54 @@ func readProgress(ctx context.Context, c *http.Client, base string, planted map[
 			continue
 		}
 		p.Running++
-		var reach struct {
-			Endpoints []struct {
-				Label   string          `json:"label"`
-				Webhook json.RawMessage `json:"webhook"`
-				Verdict *struct {
-					Value string `json:"value"`
-				} `json:"verdict"`
-			} `json:"endpoints"`
-		}
-		if err := getJSON(ctx, c, base+"/api/v1/components/"+d.ComponentID+"/reachability", &reach); err != nil {
+		n, err := readReach(ctx, c, base, d.ComponentID, planted)
+		if err != nil {
 			return Progress{}, err
 		}
-		for _, e := range reach.Endpoints {
-			if len(e.Webhook) > 0 && string(e.Webhook) != "null" {
-				continue
-			}
-			if planted[e.Label] {
-				p.Planted++
-				continue
-			}
-			p.Endpoints++
-			if e.Verdict != nil && e.Verdict.Value == "up" {
-				p.Up++
-			}
-		}
+		p.Endpoints += n.Endpoints
+		p.Up += n.Up
+		p.Planted += n.Planted
 	}
 	return p, nil
+}
+
+// reachCount is a component's simulated endpoints as readiness counts them:
+// those the node dials but the planted faults, those of them up, and the
+// planted ones.
+type reachCount struct {
+	Endpoints, Up, Planted int
+}
+
+// readReach reads one component's reachability and counts its endpoints. A
+// pushed endpoint (a webhook) carries no verdict by design and is not counted.
+func readReach(ctx context.Context, c *http.Client, base, componentID string, planted map[string]bool) (reachCount, error) {
+	var reach struct {
+		Endpoints []struct {
+			Label   string          `json:"label"`
+			Webhook json.RawMessage `json:"webhook"`
+			Verdict *struct {
+				Value string `json:"value"`
+			} `json:"verdict"`
+		} `json:"endpoints"`
+	}
+	if err := getJSON(ctx, c, base+"/api/v1/components/"+componentID+"/reachability", &reach); err != nil {
+		return reachCount{}, err
+	}
+	var n reachCount
+	for _, e := range reach.Endpoints {
+		if len(e.Webhook) > 0 && string(e.Webhook) != "null" {
+			continue
+		}
+		if planted[e.Label] {
+			n.Planted++
+			continue
+		}
+		n.Endpoints++
+		if e.Verdict != nil && e.Verdict.Value == "up" {
+			n.Up++
+		}
+	}
+	return n, nil
 }
 
 func getJSON(ctx context.Context, c *http.Client, url string, into any) error {

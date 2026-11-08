@@ -27,6 +27,10 @@ type PlanOptions struct {
 	Endpoints bool
 	// Node, when set, places the endpoints on that node (which must exist).
 	Node string
+	// NodeFor, when set, places each site's endpoints on the node it names
+	// for that site (a plan site's name), and takes precedence over Node. A
+	// site it names "" for falls back to Node. Each node must exist.
+	NodeFor func(site string) string
 	// PortOffset is the simulator's lift for ports below 1024 (see Options).
 	PortOffset int
 }
@@ -50,9 +54,9 @@ type locationRow struct{ Key, Name, Label, Type, Parent string }
 // systemRow is one system of a plan, placed in the room Room (a location key).
 type systemRow struct{ Key, Name, Label, Standard, SystemType, Room string }
 
-// componentRow is one component of a plan: a product placed in a room, filling
-// Role of System. Its name is the platform's to mint.
-type componentRow struct{ Key, Product, Room, System, Role string }
+// componentRow is one component of a plan: a product placed in a room of Site,
+// filling Role of System. Its name is the platform's to mint.
+type componentRow struct{ Key, Product, Site, Room, System, Role string }
 
 // planRows is a plan flattened to the rows a seed creates, in creation order.
 // Creation order is part of the contract: a platform-minted name is the stem
@@ -92,7 +96,7 @@ func rowsOf(p *scenario.Plan) planRows {
 				for n := 1; n <= fill.Count; n++ {
 					r.Components = append(r.Components, componentRow{
 						Key: fmt.Sprintf("%s/%s/%d", s.Name, fill.Role, n), Product: fill.Product,
-						Room: s.Room, System: s.Name, Role: fill.Role,
+						Site: site.Name, Room: s.Room, System: s.Name, Role: fill.Role,
 					})
 				}
 			}

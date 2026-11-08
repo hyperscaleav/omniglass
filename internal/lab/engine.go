@@ -25,6 +25,9 @@ import (
 // (NewDockerEngine), proven against a real daemon by the integration test.
 type Engine interface {
 	Ping(ctx context.Context) (EngineInfo, error)
+	// Resources is the memory and CPUs the daemon's host has, for the
+	// scale lab's capacity check.
+	Resources(ctx context.Context) (HostResources, error)
 	ImageLabels(ctx context.Context, ref string) (labels map[string]string, found bool, err error)
 	PullImage(ctx context.Context, ref string) error
 	CreateNetwork(ctx context.Context, name string, labels map[string]string) error
@@ -101,6 +104,14 @@ func (d *dockerEngine) Ping(ctx context.Context) (EngineInfo, error) {
 		return EngineInfo{}, err
 	}
 	return EngineInfo{APIVersion: r.APIVersion, OSType: r.OSType}, nil
+}
+
+func (d *dockerEngine) Resources(ctx context.Context) (HostResources, error) {
+	r, err := d.c.Info(ctx, client.InfoOptions{})
+	if err != nil {
+		return HostResources{}, err
+	}
+	return HostResources{MemBytes: r.Info.MemTotal, CPUs: r.Info.NCPU}, nil
 }
 
 func (d *dockerEngine) ImageLabels(ctx context.Context, ref string) (map[string]string, bool, error) {

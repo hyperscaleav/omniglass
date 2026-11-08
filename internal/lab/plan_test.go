@@ -332,3 +332,112 @@ func TestPlanCadenceProfiles(t *testing.T) {
 		t.Fatalf("an unknown cadence: %v, want a refusal listing the profiles", err)
 	}
 }
+
+func scaleOptions() Options {
+	o := testOptions()
+	o.Project, o.Ephemeral, o.Scenario, o.Systems = "omniglass-scale", true, "corporate", 100
+	o.SiteNodes = []SiteNode{
+		{Name: "edge-hq", Token: "t-hq", TokenHash: "h-hq", Components: 230},
+		{Name: "edge-regional-01", Token: "t-r1", TokenHash: "h-r1", Components: 68},
+		{Name: "edge-branch-01", Token: "t-b1", TokenHash: "h-b1", Components: 24},
+	}
+	return o
+}
+
+// A scale lab runs one node container per site, in place of the dev node,
+// each enrolled as its site's node with its own token, and each with the
+// privilege the dev node has and nothing more.
+func TestPlanScaleLabRunsOneNodePerSite(t *testing.T) {
+	o := scaleOptions()
+	s, err := Plan(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Node.Name != "" {
+		t.Fatalf("a scale lab planned the dev node %s", s.Node.Name)
+	}
+	if len(s.Nodes) != len(o.SiteNodes) {
+		t.Fatalf("%d node containers for %d sites", len(s.Nodes), len(o.SiteNodes))
+	}
+	containers := map[string]bool{}
+	for i, n := range s.Nodes {
+		site := o.SiteNodes[i]
+		if !slices.Contains(n.Env, "OMNIGLASS_NODE_NAME="+site.Name) || !slices.Contains(n.Env, "OMNIGLASS_NODE_TOKEN="+site.Token) {
+			t.Errorf("node %s env %v does not enroll it as %s with its own token", n.Name, n.Env, site.Name)
+		}
+		if containers[n.Container] {
+			t.Errorf("container %s planned twice", n.Container)
+		}
+		containers[n.Container] = true
+		if n.Labels[LabelComposeService] != n.Name || n.Labels[LabelComposeHash] == "" {
+			t.Errorf("node %s labels %v", n.Name, n.Labels)
+		}
+		if !slices.Equal(n.CapAdd, []string{"NET_ADMIN"}) || n.Publish != nil {
+			t.Errorf("node %s caps %v publish %v", n.Name, n.CapAdd, n.Publish)
+		}
+	}
+	var names []string
+	for _, svc := range s.Services() {
+		names = append(names, svc.Name)
+	}
+	want := []string{"db", "seed", "server", "edge-hq", "edge-regional-01", "edge-branch-01"}
+	if !slices.Equal(names, want) {
+		t.Fatalf("services %v, want %v", names, want)
+	}
+}
+
+// The scale lab's seed resolves the scenario at the size and enrolls every
+// site's node from the hashes it is handed, never the tokens.
+func TestPlanScaleLabSeedEnrollsEverySiteNode(t *testing.T) {
+	o := scaleOptions()
+	s, err := Plan(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := strings.Join(s.Seed.Cmd, " ")
+	if cmd != "lab seed --scenario corporate --systems 100 --user dev --password dev" {
+		t.Fatalf("seed command %q", cmd)
+	}
+	var hashes string
+	for _, e := range s.Seed.Env {
+		if v, ok := strings.CutPrefix(e, SiteNodeTokenHashesEnv+"="); ok {
+			hashes = v
+		}
+		for _, n := range o.SiteNodes {
+			if strings.Contains(e, n.Token) {
+				t.Errorf("the seed's env %q carries %s's token", e, n.Name)
+			}
+		}
+	}
+	got, err := ParseSiteNodeTokenHashes(hashes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 3 || got["edge-hq"] != "h-hq" || got["edge-branch-01"] != "h-b1" {
+		t.Fatalf("token hashes %v", got)
+	}
+}
+
+func TestPlanScaleLabNeedsASize(t *testing.T) {
+	o := scaleOptions()
+	o.Systems = 0
+	if _, err := Plan(o); err == nil {
+		t.Fatal("a scale lab with no size planned")
+	}
+	o = scaleOptions()
+	o.NoNode = true
+	if _, err := Plan(o); err == nil {
+		t.Fatal("a scale lab with no node planned")
+	}
+}
+
+func TestParseSiteNodeTokenHashesRefusesAMalformedPair(t *testing.T) {
+	for _, s := range []string{"edge-hq", "=h", "edge-hq=", "a=b,c"} {
+		if _, err := ParseSiteNodeTokenHashes(s); err == nil {
+			t.Errorf("%q parsed", s)
+		}
+	}
+	if got, err := ParseSiteNodeTokenHashes(""); err != nil || len(got) != 0 {
+		t.Errorf("empty: %v %v", got, err)
+	}
+}

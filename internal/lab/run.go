@@ -55,6 +55,9 @@ type Config struct {
 	// WhilePID, when set, ends the hold once that process is gone, so a
 	// script killed too hard to stop its lab leaves none behind.
 	WhilePID int
+	// ScaleRun is a scale lab's capacity check and bring-up bound; it is
+	// set exactly when the options plan one (Options.Scale).
+	ScaleRun *ScaleRun
 }
 
 // Lab is a lab that is up.
@@ -72,6 +75,8 @@ type Lab struct {
 	// Took is how long the lab took to come up.
 	Took time.Duration
 	ids  map[string]string
+	// guarded is the long-lived services the hold keeps an eye on.
+	guarded []string
 	// client carries the login's session, for the readiness reads and the
 	// ready file's token.
 	client *http.Client
@@ -93,6 +98,9 @@ func (r *Runner) Run(ctx context.Context, cfg Config) (*Lab, error) {
 	spec, err := Plan(cfg.Options)
 	if err != nil {
 		return nil, err
+	}
+	if cfg.Scale() != (cfg.ScaleRun != nil) {
+		return nil, errors.New("a scale lab's run needs its scale settings, and only a scale lab's does")
 	}
 	if cfg.Image, err = r.preflight(ctx, spec, cfg); err != nil {
 		return nil, err
@@ -154,6 +162,11 @@ func (e *heldForGone) Error() string {
 // that is the binary's own build is no override worth a warning.
 func (r *Runner) preflight(ctx context.Context, spec Spec, cfg Config) (ImageChoice, error) {
 	c := cfg.Image
+	if cfg.ScaleRun != nil {
+		if err := r.checkCapacity(ctx, cfg); err != nil {
+			return c, err
+		}
+	}
 	if err := r.Reap(ctx, spec.Project); err != nil {
 		return c, err
 	}
@@ -176,9 +189,33 @@ func (r *Runner) preflight(ctx context.Context, spec Spec, cfg Config) (ImageCho
 	return c, nil
 }
 
-// up creates the project and waits until it is ready.
+// up creates the project and waits until it is ready. A scale lab's whole
+// bring-up is bounded by its timeout; past it, the error names what is not up.
 func (r *Runner) up(ctx context.Context, spec Spec, cfg Config) (*Lab, error) {
-	lab := &Lab{Spec: spec, ids: map[string]string{}}
+	if cfg.ScaleRun == nil || cfg.ScaleRun.Timeout <= 0 {
+		return r.upStages(ctx, spec, cfg, new(string))
+	}
+	bounded, cancel := context.WithTimeout(ctx, cfg.ScaleRun.Timeout)
+	defer cancel()
+	stage := new(string)
+	lab, err := r.upStages(bounded, spec, cfg, stage)
+	var notUp *SitesNotUpError
+	if err != nil && !errors.As(err, &notUp) && ctx.Err() == nil &&
+		(errors.Is(err, errTimedOut) || errors.Is(bounded.Err(), context.DeadlineExceeded)) {
+		states := make([]SiteState, len(cfg.SiteNodes))
+		for i, n := range cfg.SiteNodes {
+			states[i] = SiteState{Node: n.Name, Want: n.Components}
+		}
+		return nil, &SitesNotUpError{Timeout: cfg.ScaleRun.Timeout, Stage: *stage, States: states}
+	}
+	return lab, err
+}
+
+// upStages is the bring-up, stage by stage, recording in stage the one it
+// is in.
+func (r *Runner) upStages(ctx context.Context, spec Spec, cfg Config, stage *string) (*Lab, error) {
+	lab := &Lab{Spec: spec, ids: map[string]string{}, guarded: []string{"db", "server"}}
+	*stage = "pulling the images"
 	for _, ref := range []struct{ ref string }{{cfg.Image.Ref}, {PostgresImage}} {
 		_, found, err := r.Engine.ImageLabels(ctx, ref.ref)
 		if err != nil {
@@ -219,6 +256,7 @@ func (r *Runner) up(ctx context.Context, spec Spec, cfg Config) (*Lab, error) {
 	}
 	r.step("network", spec.Network+" (a private bridge; only the console is published)")
 
+	*stage = "waiting for the database"
 	id, err := r.Engine.RunContainer(ctx, spec.DB, spec.Network)
 	lab.ids["db"] = id
 	if err != nil {
@@ -238,6 +276,7 @@ func (r *Runner) up(ctx context.Context, spec Spec, cfg Config) (*Lab, error) {
 	}
 	r.step("database", "Postgres is ready")
 
+	*stage = "seeding the fleet"
 	seedID, err := r.Engine.RunContainer(ctx, spec.Seed, spec.Network)
 	lab.ids["seed"] = seedID
 	if err != nil {
@@ -256,6 +295,7 @@ func (r *Runner) up(ctx context.Context, spec Spec, cfg Config) (*Lab, error) {
 	_ = r.Engine.StopAndRemove(ctx, seedID)
 	delete(lab.ids, "seed")
 
+	*stage = "waiting for the server"
 	id, err = r.Engine.RunContainer(ctx, spec.Server, spec.Network)
 	lab.ids["server"] = id
 	if err != nil {
@@ -299,6 +339,25 @@ func (r *Runner) up(ctx context.Context, spec Spec, cfg Config) (*Lab, error) {
 	lab.client = client
 	r.step("sign in", fmt.Sprintf("the login %s / %s works", LoginUser, LoginPassword))
 
+	if cfg.ScaleRun != nil {
+		*stage = "starting the sites' nodes"
+		for _, n := range spec.Nodes {
+			id, err := r.Engine.RunContainer(ctx, n, spec.Network)
+			lab.ids[n.Name] = id
+			if err != nil {
+				return nil, fmt.Errorf("start the node %s: %w", n.Name, err)
+			}
+			lab.guarded = append(lab.guarded, n.Name)
+		}
+		lab.NodeRunning = true
+		r.step("nodes", fmt.Sprintf("%d, one per site", len(spec.Nodes)))
+		*stage = "waiting for the sites"
+		if err := r.waitSites(ctx, lab, client, cfg); err != nil {
+			return nil, err
+		}
+		return lab, nil
+	}
+
 	if !res.Node {
 		if cfg.NoNode {
 			r.step("node", "none runs (--no-node): the fleet holds still, with nothing collecting from it")
@@ -313,6 +372,7 @@ func (r *Runner) up(ctx context.Context, spec Spec, cfg Config) (*Lab, error) {
 		return nil, fmt.Errorf("start the node: %w", err)
 	}
 	lab.NodeRunning = true
+	lab.guarded = append(lab.guarded, "node")
 	last, err := r.waitCollecting(ctx, lab, client, cfg.PlantedFaults)
 	switch {
 	case errors.Is(err, errTimedOut) && last.Running == last.Components && last.Components > 0:
@@ -457,10 +517,7 @@ func (r *Runner) waitFor(ctx context.Context, what string, cond func() (bool, er
 // containers stay up: one stopped or removed from outside ends the hold,
 // saying which.
 func (r *Runner) hold(ctx context.Context, lab *Lab, whilePID int) error {
-	services := []string{"db", "server"}
-	if lab.NodeRunning {
-		services = append(services, "node")
-	}
+	services := lab.guarded
 	t := time.NewTicker(2 * time.Second)
 	defer t.Stop()
 	for {
@@ -653,13 +710,19 @@ func (r *Runner) readyBanner(lab *Lab, cfg Config) {
 	r.say("  Console    %s", lab.ConsoleURL)
 	r.say("  Sign in    user %s, password %s", LoginUser, LoginPassword)
 	r.say("")
-	r.say("  Stop it    press Ctrl-C here. Your lab's data is kept for next time;")
-	r.say("             omniglass lab run --fresh starts over from the seed.")
+	if lab.Spec.Ephemeral {
+		r.say("  Stop it    press Ctrl-C here. The lab is removed with its data.")
+	} else {
+		r.say("  Stop it    press Ctrl-C here. Your lab's data is kept for next time;")
+		r.say("             omniglass lab run --fresh starts over from the seed.")
+	}
 	r.say("")
-	r.say("Where to go next: the guided walkthroughs, each recorded on this same lab,")
-	r.say("so every screen matches yours:")
-	r.say("  %s", WalkthroughsURL)
-	r.say("")
+	if cfg.ScaleRun == nil {
+		r.say("Where to go next: the guided walkthroughs, each recorded on this same lab,")
+		r.say("so every screen matches yours:")
+		r.say("  %s", WalkthroughsURL)
+		r.say("")
+	}
 	r.say("The lab is one Docker project; see it with: docker compose -p %s ps", lab.Spec.Project)
 	if cfg.Listen != DefaultListen {
 		r.say("")
