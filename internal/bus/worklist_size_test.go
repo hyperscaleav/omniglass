@@ -37,7 +37,10 @@ func TestWorklistReplySizeMeasure(t *testing.T) {
 	}
 }
 
-func measureWorklists(t *testing.T, systems int) {
+// corporateFleet is the corporate plan at systems seeded on a fresh database,
+// a node per site (named by nodeOf), with the headquarters' archetype name.
+func corporateFleet(t *testing.T, systems int) (gw *storage.PG, plan *scenario.Plan, hq string, nodeOf func(site string) string) {
+	t.Helper()
 	m, err := scenario.Shipped("corporate")
 	if err != nil {
 		t.Fatal(err)
@@ -46,18 +49,17 @@ func measureWorklists(t *testing.T, systems int) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err := scenario.Resolve(m, cat, systems)
+	plan, err = scenario.Resolve(m, cat, systems)
 	if err != nil {
 		t.Fatal(err)
 	}
-	hq := ""
 	for _, a := range m.Archetypes {
 		if a.Headquarters {
 			hq = a.Name.Name
 		}
 	}
 	ctx := context.Background()
-	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t),
+	gw, err = storage.NewPG(ctx, storagetest.NewDSN(t),
 		storage.WithSecretProvider(secret.NewStaticProvider(bytes.Repeat([]byte{0x7}, 32))))
 	if err != nil {
 		t.Fatal(err)
@@ -67,7 +69,7 @@ func measureWorklists(t *testing.T, systems int) {
 		t.Fatal(err)
 	}
 	all := scope.Set{All: true}
-	nodeOf := func(site string) string { return "edge-" + site }
+	nodeOf = func(site string) string { return "edge-" + site }
 	for _, s := range plan.Sites {
 		if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: nodeOf(s.Name), Label: s.Name}, all, all); err != nil {
 			t.Fatal(err)
@@ -76,10 +78,15 @@ func measureWorklists(t *testing.T, systems int) {
 	if _, err := devseed.SeedPlan(ctx, gw, "", plan, devseed.PlanOptions{Endpoints: true, NodeFor: nodeOf}); err != nil {
 		t.Fatal(err)
 	}
+	return gw, plan, hq, nodeOf
+}
+
+func measureWorklists(t *testing.T, systems int) {
+	gw, plan, hq, nodeOf := corporateFleet(t, systems)
 	srv := &Server{store: gw}
 	worst, worstNode := 0, ""
 	for _, s := range plan.Sites {
-		reply, err := srv.buildWorklistReply(nodeOf(s.Name))
+		reply, err := srv.buildWorklistReply(context.Background(), nodeOf(s.Name))
 		if err != nil {
 			t.Fatal(err)
 		}

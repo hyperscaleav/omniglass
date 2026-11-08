@@ -90,9 +90,10 @@ materialized, resolved task and command instances.
 
 ### Config propagation (declared change to running node)
 
-:::note[Built: a declared change reaches a running node on its next tick]
-The node keeps no endpoint config apart from its worklist: it **re-pulls the whole worklist every
-tick** and runs what that pull carries (a failed pull keeps the last one and retries next tick), so a change the server has written is running within one heartbeat, with
+:::note[Built: a declared change reaches a running node on its next pull]
+The node keeps no endpoint config apart from its worklist: it **re-pulls the whole worklist on its
+own interval** (`--worklist-every`, [below](#pulling-the-worklist)) and runs what the latest pull
+carried, so a change the server has written is running within one pull interval, with
 no restart and nothing to apply. The server side is the re-derive: an endpoint edit
 (`PATCH /endpoints/{endpoint}`, its driver inputs included) and a driver spec change (#823) rewrite
 the affected tasks in the same transaction, and a held session whose
@@ -105,6 +106,42 @@ gate on it today, since a full pull each tick leaves nothing to invalidate. An e
 endpoint config on the node and added a `:apply` custom method to re-render it from declared config;
 neither was built, and `:apply` retired with the template authoring model
 ([ADR-0827](/architecture/decisions/#adr-0827-the-template-layer-owns-the-clone-model-and-the-componenttemplate-authoring-model-is-superseded-by-the-driver-spec)).
+:::
+
+### Pulling the worklist
+
+:::note[Built (#1577): a pull that fails never stops the node]
+The pull runs on its own goroutine and interval, apart from the heartbeat: `node run
+--worklist-every` (default 30 s, each wait jittered within 10% so a fleet started together drifts
+apart), so a short heartbeat is not a worklist rebuild as often. The lab pulls every 5 s and a
+walkthrough every 2 s ([the lab's cadences](/guides/lab/)).
+
+- **A missed pull is retried, never fatal.** The first pull and every later one retry with
+  jittered exponential backoff, 1 s doubling to a 30 s cap, each logged at WARN with its attempt,
+  its wait and the error. Until the first pull lands the node does not heartbeat, so it reads as
+  not up rather than as up with nothing to do. After it, a failed pull keeps the last good
+  worklist, every task and every session of it.
+- **The server fails a pull whole, and says why.** A worklist the server cannot read in full (a
+  transient storage error), or that is still over the bus's `max_payload` compressed, is answered
+  with an `Omniglass-Error` header naming the reason and no body. The node treats it as a failed
+  pull, so a database blip never reaches the node as a short worklist (which would tear down the
+  sessions of the tasks it dropped).
+- **A large reply is compressed.** A reply past 64 KB is gzipped and marked
+  `Content-Encoding: gzip`, and the node inflates it. The headquarters node of the 1,000-system
+  corporate lab (4,434 tasks) is 3.3 MB of JSON and about 463 KB on the wire, against the bus's
+  1 MB limit.
+- **The server answers pulls from a bounded pool.** The node states how long it will wait in an
+  `Omniglass-Timeout` header (a duration, so the clocks need not agree), and the server's deadline
+  for that pull is its arrival plus that budget. One subscription stamps each pull's arrival and
+  queues it, and a pool of workers (`bus.Config.WorklistWorkers`, default 8, held under the
+  database pool's size less one connection kept for ingest) builds and answers it. A pull that
+  waited past its deadline is dropped unread, and one whose deadline passes mid-build is
+  abandoned unsent. The server counts every outcome (`Server.WorklistCounts`: served, read
+  failed, oversize, respond failed, expired, abandoned) and logs every one but a served pull at
+  WARN, or ERROR for an oversize reply.
+
+Why it is shaped this way, and what it defers (paging, set-based reads, the materialized
+worklist): [ADR-1577](/architecture/decisions/#adr-1577-a-nodes-worklist-is-compressed-served-by-a-bounded-responder-and-retried-without-exiting).
 :::
 ## The node-server protocol
 

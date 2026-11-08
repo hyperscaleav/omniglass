@@ -3750,6 +3750,7 @@ Runs the edge node: claims its NATS credential with the enrollment token, pulls 
 | `--server` | string | (none) | Omniglass server base URL (env OMNIGLASS_SERVER) |
 | `--simulate` | bool | `false` | also run the simulator in this process, serving the simulated components placed on this node on its own loopback |
 | `--token` | string | (none) | enrollment token from POST /nodes/{name}:enroll (env OMNIGLASS_NODE_TOKEN) |
+| `--worklist-every` | duration | `30s` | how often the node pulls its worklist, apart from the heartbeat; a change made on the server reaches the node at its next pull |
 
 ### `omniglass node setTag`
 

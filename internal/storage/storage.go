@@ -1268,6 +1268,11 @@ func NewPG(ctx context.Context, dsn string, opts ...Option) (*PG, error) {
 	return p, nil
 }
 
+// PoolSize is the most connections the gateway's pool opens: the DSN's
+// pool_max_conns, or pgx's default. The bus holds its worklist workers under
+// it (#1577).
+func (p *PG) PoolSize() int { return int(p.pool.Config().MaxConns) }
+
 // settingLevel reads the override rows at a scope and adapts them into a
 // settings level. The querier is a parameter because a gateway path resolving a
 // setting inside its own transaction must read it there.

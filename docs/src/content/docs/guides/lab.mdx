@@ -201,10 +201,11 @@ server's bus and the node publish nothing; the node reaches the server across th
 impairments and truthful ping, and they reach only that container's own network namespace, never
 your machine's. The `server` and `db` containers carry no added capability.
 
-How often the node checks in and probes is its **cadence profile**. Your lab runs at `lab`: it
-checks in often, so a change you make in the console reaches it within seconds, and probes
-reachability less often (`--probe-every`), because a lab may run for days and a probe on every
-check-in wrote most of its rows. The throwaway lab each walkthrough is recorded on runs at
+How often the node checks in, pulls its worklist and probes is its **cadence profile**. Your lab
+runs at `lab`: it checks in often and pulls its worklist every few seconds (`--worklist-every`), so
+a change you make in the console reaches it within seconds, and probes reachability less often
+(`--probe-every`), because a lab may run for days and a probe on every check-in wrote most of its
+rows. The throwaway lab each walkthrough is recorded on runs at
 `walkthrough` and probes on every check-in, since a recording is held to a time budget, so in your
 lab a walkthrough that waits on a probe's verdict (watching a rule raise an alarm, say) waits a few
 seconds longer than its recording. `default` is the product's own cadence, what a deployment's

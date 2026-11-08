@@ -97,6 +97,10 @@ type Cadence struct {
 	// ProbeEvery is the reachability probe interval; empty probes on every
 	// check-in.
 	ProbeEvery string
+	// WorklistEvery is how often the node pulls its worklist (#1577), apart
+	// from its check-in, so a short check-in does not rebuild every
+	// worklist as often.
+	WorklistEvery string
 	// SimPoll is how often the node's simulator re-pulls its component
 	// list: a lab's profiles every 2s, so a component added in the console
 	// answers within seconds; `default` at the simulator's own default, so a
@@ -120,14 +124,17 @@ func CadenceProfiles() []Cadence {
 	return []Cadence{
 		// A learner's lab may run for days, and a probe on every 2s check-in
 		// wrote most of its rows (#1273), so it probes every 10s.
-		{Name: CadenceLab, Heartbeat: "2s", ProbeEvery: "10s", SimPoll: "2s",
+		// A change in the console reaches the node at its next pull, so the
+		// lab pulls every 5s: within seconds, without a 1,000-system lab
+		// rebuilding every site's worklist every 2s (#1577).
+		{Name: CadenceLab, Heartbeat: "2s", ProbeEvery: "10s", WorklistEvery: "5s", SimPoll: "2s",
 			For: "a learner's lab: a change in the console shows within seconds"},
 		// A script's throwaway lab lives for minutes and probes on every
 		// check-in, so a walkthrough waiting on a probe's verdict keeps its
 		// recorded budget.
-		{Name: CadenceWalkthrough, Heartbeat: "2s", SimPoll: "2s",
+		{Name: CadenceWalkthrough, Heartbeat: "2s", WorklistEvery: "2s", SimPoll: "2s",
 			For: "a script's throwaway lab: a walkthrough waiting on a probe's verdict sees it within seconds"},
-		{Name: CadenceDefault, Heartbeat: node.DefaultHeartbeat.String(), SimPoll: simnode.DefaultPoll.String(),
+		{Name: CadenceDefault, Heartbeat: node.DefaultHeartbeat.String(), WorklistEvery: node.DefaultWorklistEvery.String(), SimPoll: simnode.DefaultPoll.String(),
 			For: "the product's own defaults: what a deployment's node runs at"},
 	}
 }
@@ -460,7 +467,7 @@ func Plan(o Options) (Spec, error) {
 	if cadence.ProbeEvery != "" {
 		nodeCmd = append(nodeCmd, "--probe-every", cadence.ProbeEvery)
 	}
-	nodeCmd = append(nodeCmd, "--poll", cadence.SimPoll)
+	nodeCmd = append(nodeCmd, "--worklist-every", cadence.WorklistEvery, "--poll", cadence.SimPoll)
 	nodeService := func(service, name, token, pushToken, role string) Service {
 		return Service{
 			Name: service, Container: o.Project + "-" + service + "-1", Image: o.Image,

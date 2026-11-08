@@ -1,34 +1,79 @@
 ---
-title: "A node's worklist reaches it in pages, from a bounded responder, retried without exiting"
+title: "A node's worklist is compressed, served by a bounded responder, and retried without exiting"
 date: 2026-11-08
-status: Proposed
-summary: "Proposed: the node pulls its worklist in pages of whole endpoints, each page under the bus's payload limit, from a server responder that serves pulls in parallel up to a bound and stops work on a pull its node has abandoned; a node that misses a pull retries with jittered backoff and never exits on it. The target, a follow-up, is a materialized worklist: the server writes each node's pages to a JetStream key-value bucket when its configuration changes, answers pulls from the bucket, and nudges the node on the reserved worklist-changed subject."
-refs: [1577, 1571, 1556, 529]
+status: Accepted
+summary: "Accepted, narrowed from the proposal: tunes, not a rebuild. The node pulls on its own jittered interval apart from the heartbeat, retries a missed pull with jittered backoff and never exits on one, and keeps its last worklist; the server gzips a reply past 64 KB and answers pulls from a pool of 8 workers held under the database pool, dropping a pull whose node's deadline has passed. Paging, the set-based reads and the materialized worklist are their own tickets; raising max_payload stays rejected."
+refs: [1577, 1571, 1556, 529, 1583, 1581, 1584, 1586, 1250]
 ---
 
-- **Date:** 2026-11-08 | **Status:** Proposed | **Pages:** [nodes](/architecture/nodes/), [messaging](/architecture/messaging/), [scaling](/architecture/scaling/)
-- **Decision (proposed, for the architect's choice):**
-  1. **Now: (a) a bounded concurrent pull, plus (b) pages.** The worklist pull carries a cursor
-     and returns one page of whole endpoints (every task of an endpoint on the same page), each
-     page under a byte budget well inside the bus's `max_payload`, and the cursor of the next.
-     The server serves pulls from a worker pool bounded by the database pool's size, takes the
-     node's remaining budget from the request, and abandons a pull whose budget has run out,
-     queued or computing. The node assembles every page before it swaps its worklist, retries a
-     failed page with jittered exponential backoff, and never exits on a missed pull; a
-     failed reply, on either side, is logged.
-  2. **Target: (c) a materialized worklist, served by the server.** A write that changes what a
-     node's worklist holds marks the node; a tick materializes each marked node once, in one
-     snapshot, into a JetStream key-value bucket keyed by node and page, and publishes on
-     `og.v1.worklist-changed.<node>`. A pull is answered from the bucket, with no database
-     read, and a pull that names the revision it holds is answered "unchanged". The wire from
-     step 1 is kept. Its own issue, after this one.
-  3. **Rejected:** a node that watches the bucket itself (it needs JetStream API grants on the
-     node credential), raising `max_payload`, and compressing the reply (each moves the ceiling
-     and does not remove it).
+- **Date:** 2026-11-08 | **Status:** Accepted | **Pages:** [nodes](/architecture/nodes/), [messaging](/architecture/messaging/), [scaling](/architecture/scaling/)
+- **Decision:** (the architect's option 1, narrowed: the 1,000-system lab is reached with tunes,
+  so this is tunes, not a rebuild.)
+  1. **The node never exits on a pull.** The first pull and every later one retry with jittered
+     exponential backoff, 1 s doubling to a 30 s cap (each wait drawn from the upper half of its
+     step). A failed pull keeps the last good worklist and is logged at WARN with its attempt and
+     wait; the server counts how each pull ended. The node heartbeats only once it holds a
+     worklist, so a node still waiting for its first one reads as not up. The pull runs on its
+     own goroutine and interval (`node run --worklist-every`, default 30 s, each wait jittered
+     within 10%), apart from the heartbeat, so a short heartbeat is not a worklist rebuild as
+     often. A transient storage error fails the whole pull, never single tasks: the server
+     answers with the reason and no body, and the node keeps every task and session it has
+     (a dropped task would make the session reconcile tear down a live session).
+  2. **The reply is compressed.** A reply past 64 KB is gzipped and marked
+     `Content-Encoding: gzip`, and the node inflates on that header (capped at 256 MB inflated).
+     `bus.DefaultMaxPayload` stays explicit at 1 MB. A reply still over it, compressed, is
+     refused to the node by name and logged at ERROR; a failed `Respond` is logged and counted.
+     HQ at 1,000 systems is 3,273,096 B raw and about 463 KB on the wire.
+  3. **A bounded responder.** Pulls are served by a pool of `bus.Config.WorklistWorkers`
+     workers (default 8), held under the database pool's size less one connection kept for
+     ingest. The node states its budget in an `Omniglass-Timeout` header (a duration, so clocks
+     need not agree); the server's deadline for a pull is its arrival plus that budget. A pull
+     that waited past its deadline is dropped unread, and one whose deadline passes while its
+     worklist is read is abandoned unsent, each logged and counted.
+  4. **Deferred to their own tickets.** Paging and the normalized wire (per-endpoint grouping,
+     driver and spec dictionaries) are
+     [#1583](https://github.com/hyperscaleav/omniglass/issues/1583), conditional on HQ at 3,000
+     systems still being over 512 KB gzipped. The set-based secret, pin and rejection reads that
+     take `NodeWorklist` from about 1,106 statements to a flat handful are
+     [#1581](https://github.com/hyperscaleav/omniglass/issues/1581). An "unchanged" answer from a
+     generation over the worklist's full input closure is
+     [#1584](https://github.com/hyperscaleav/omniglass/issues/1584).
+  5. **Target: (c), the materialized worklist**
+     ([#1586](https://github.com/hyperscaleav/omniglass/issues/1586)), built when one of its
+     triggers holds: a second server (HA), a change that must reach its node in under a second,
+     or more than one worklist-affecting change a second fleet-wide. Its precondition is
+     [#1250](https://github.com/hyperscaleav/omniglass/issues/1250) (secrets decrypted on use),
+     since a materialized worklist holds the node's secrets at rest in JetStream.
+  6. **Rejected:** raising `max_payload` (it moves the ceiling and does not remove it), and a
+     node that watches the bucket itself (it needs JetStream API grants on the node credential).
+     Compressing the reply, rejected in the proposal, is accepted (point 2).
+- **Divergences from the decision as written.**
+  - *One subscription and a queue, not a NATS queue group.* The pool is one subscription that
+    stamps each pull's arrival and hands it to a bounded queue (256 deep) that the workers drain.
+    A queue group would leave the arrival time to each worker's callback, after the pull had
+    already waited in the subscription's pending buffer, so the deadline would be counted late;
+    and a queue group's members each run their callbacks serially, so a pull assigned behind
+    HQ's waits out HQ's build while another member sits idle. One server holds the subscription,
+    as before, so the control-plane consumers stay singletons by construction
+    ([scaling](/architecture/scaling/)).
+  - *A zero interval pulls at the heartbeat's.* `node.Config.WorklistEvery` left at zero pulls
+    as often as the node heartbeats, the behavior before this decision, as a zero `ProbeEvery`
+    probes on every tick. `node run` always sets it (default 30 s). The lab's cadence pulls every
+    5 s (its heartbeat is 2 s), and a walkthrough's every 2 s.
+- **Measured after (2026-11-08, the worker, 12 cores).** `make scale-lab SYSTEMS=1000`: all 18
+  sites up (every node pulled and heartbeated) 199 s after the command, against 17 of 18 after
+  10 minutes before, and no node container restarted. 18 nodes pulling the 1,000-system
+  corporate fleet at once over the real bus with 8 workers
+  (`TestAFleetOfNodesPullingAtOnceIsServedByTheBoundedResponder`, a fresh test database):
+  every pull served, none expired, in 1.64 to 1.72 s. That is over the 1.4 s target, and the
+  floor is HQ's own build (about 1.2 s, on one worker) rather than the queue (the 17 others'
+  builds share the other seven workers), so the set-based reads (#1578, #1581) are what take it
+  under.
+- **The proposal, as weighed (kept for the record; the decision above narrows it).**
 - **Context:** [#1577](https://github.com/hyperscaleav/omniglass/issues/1577), found by the scale
   lab at 1,000 systems ([#1571](https://github.com/hyperscaleav/omniglass/issues/1571)): the
   headquarters node (806 endpoints, 4,434 tasks) never gets its worklist and crash-loops.
-- **The bus today, from the code.** One embedded `nats-server` (v2.15.2) runs in the server
+- **The bus before #1577, from the code.** One embedded `nats-server` (v2.15.2) runs in the server
   process with JetStream on; JetStream carries only the telemetry stream (`OG_TELEMETRY`) and
   its durable consumer, and no key-value bucket exists yet (#529). The worklist is **core NATS
   request-reply**. The node calls `nc.Request(og.v1.worklist.<node>, nil, 5s)`
@@ -139,14 +184,9 @@ refs: [1577, 1571, 1556, 529]
     pins and rejections, and platform settings, about 15 storage files); the materializer
     tick; the bucket; the nudge; the reconcile; and revision handling on the node. Two or
     three PRs, and a missed mark is silent staleness, so the reconcile is not optional.
-- **Why this order:** (b) is needed in every design, since the payload ceiling stops
-  headquarters before any timing question, and a key-value value has the same ceiling. (a) is
-  needed in every design: a node must survive a missed pull, and a responder must not compute
-  for a node that has gone. Together they bring the 1,000-system lab up and stop the silent
-  regional drops in one PR with no schema change. Only (c) makes a start's wait independent of
-  the fleet and removes the per-tick recompute, and its cost is the mark fan-out across every
-  writer, which deserves its own slice. Building (c) on (b)'s wire means the node's protocol
-  changes once.
-- **Open for the architect:** take (a) and (b) now with (c) as the target (recommended); or
-  build (c) under this issue as well (two or three PRs); or (a) and (b) only, with no target
-  named.
+- **Why tunes, not the rebuild:** the proposal held (b) necessary because the payload ceiling
+  stopped HQ before any timing question. Gzip brings HQ at 1,000 systems to about 463 KB, under
+  half the limit, so the ceiling is not reached at this size and paging waits on the 3,000-system
+  measurement (#1583). (a) is needed in every design and is built. (c) remains the only option
+  whose start-up wait does not grow with the fleet, and its cost (a mark in every writer that
+  feeds a worklist, and secrets at rest) is paid when one of its triggers makes it worth paying.

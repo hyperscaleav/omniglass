@@ -39,6 +39,13 @@ type Config struct {
 	// MaxPayload is the largest message the server accepts, in bytes; zero
 	// means DefaultMaxPayload.
 	MaxPayload int32
+	// WorklistWorkers is how many worklist pulls the server builds at once
+	// (#1577); zero means DefaultWorklistWorkers. It is held under DBPoolSize
+	// less one, the connection kept for ingest.
+	WorklistWorkers int
+	// DBPoolSize is the database pool's size, the cap on WorklistWorkers;
+	// zero means no cap.
+	DBPoolSize int
 }
 
 // Server is the embedded NATS server plus the server-side control-plane handlers.
@@ -63,8 +70,14 @@ type Server struct {
 	stopOrphanFlush context.CancelFunc // ends the orphan count's flush
 	sweepStop       sync.Once
 	sweepDone       sync.WaitGroup
-	worklistSizes   worklistSizes // each node's latest worklist reply size, warned near the limit (#1579)
-	ownStoreDir     string        // non-empty when the Server created (and must clean) it
+	worklistSizes   worklistSizes      // each node's latest worklist reply size, warned near the limit (#1579)
+	worklistCounts  worklistCounts     // how worklist pulls ended (#1577)
+	worklistWorkers int                // how many pulls the pool builds at once (#1577)
+	worklistQueue   chan worklistPull  // pulls waiting for a worker
+	worklistCtx     context.Context    // the pool's life; a pull's build runs under it
+	stopWorklist    context.CancelFunc // ends the pool and cancels builds in flight
+	worklistDone    sync.WaitGroup     // the pool's workers
+	ownStoreDir     string             // non-empty when the Server created (and must clean) it
 }
 
 // New starts an in-process NATS server (JetStream on) with the per-node auth
@@ -75,7 +88,8 @@ func New(cfg Config, store Store) (*Server, error) {
 	if _, err := rand.Read(tok); err != nil {
 		return nil, fmt.Errorf("bus: internal token: %w", err)
 	}
-	s := &Server{store: store, internalToken: hex.EncodeToString(tok), sims: simhub.New(), orphans: newOrphanTally(orphanWindow)}
+	s := &Server{store: store, internalToken: hex.EncodeToString(tok), sims: simhub.New(), orphans: newOrphanTally(orphanWindow),
+		worklistWorkers: worklistWorkers(cfg.WorklistWorkers, cfg.DBPoolSize)}
 
 	storeDir := cfg.StoreDir
 	if storeDir == "" {
@@ -131,6 +145,9 @@ func (s *Server) subscribe() error {
 	}
 	s.nc = nc
 
+	// The worklist pull (#1577): the subscription stamps each pull's
+	// deadline on arrival and queues it; a bounded pool builds and answers.
+	s.startWorklistPool(s.worklistWorkers)
 	wl, err := nc.Subscribe(collection.WorklistWildcard, func(msg *nats.Msg) {
 		node := collection.NodeFromSubject(msg.Subject)
 		// Confused-deputy guard: the responder answers with the FULL-PERMISSION
@@ -143,7 +160,8 @@ func (s *Server) subscribe() error {
 		if msg.Reply == "" || !strings.HasPrefix(msg.Reply, collection.InboxPrefix(node)+".") {
 			return
 		}
-		s.answerWorklist(node, msg.Subject, nc.MaxPayload(), msg.Respond, time.Now())
+		now := time.Now()
+		s.queueWorklistPull(worklistPull{node: node, msg: msg, deadline: worklistDeadline(msg.Header, now)})
 	})
 	if err != nil {
 		return fmt.Errorf("bus: subscribe worklist: %w", err)
@@ -243,8 +261,8 @@ func (s *Server) subscribe() error {
 }
 
 // buildWorklistReply maps a node's stored worklist to the JSON wire reply.
-func (s *Server) buildWorklistReply(node string) (collection.WorklistReply, error) {
-	wl, err := s.store.NodeWorklist(context.Background(), node)
+func (s *Server) buildWorklistReply(ctx context.Context, node string) (collection.WorklistReply, error) {
+	wl, err := s.store.NodeWorklist(ctx, node)
 	if err != nil {
 		return collection.WorklistReply{}, err
 	}
@@ -306,6 +324,12 @@ func (s *Server) Shutdown() {
 	}
 	for _, sub := range s.subs {
 		_ = sub.Unsubscribe()
+	}
+	// No pull is queued after the unsubscribe; end the pool and the builds
+	// in flight before closing the client they answer on.
+	if s.stopWorklist != nil {
+		s.stopWorklist()
+		s.worklistDone.Wait()
 	}
 	// Stop the telemetry consumer's pull loop before closing the client it runs on.
 	if s.consumeCtx != nil {

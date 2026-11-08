@@ -50,7 +50,7 @@ func (s *Server) RunPreview(ctx context.Context, node string, tasks []storage.Wo
 // it reads as a scheduled run does. The task travels as the node's worklist
 // delivers it (its secrets, its fingerprint, its gate), read fresh.
 func (s *Server) RunTaskNow(ctx context.Context, node, taskID string, timeout time.Duration) (collection.RunReply, error) {
-	wl, err := s.buildWorklistReply(node)
+	wl, err := s.buildWorklistReply(ctx, node)
 	if err != nil {
 		return collection.RunReply{}, fmt.Errorf("bus: worklist for run: %w", err)
 	}
