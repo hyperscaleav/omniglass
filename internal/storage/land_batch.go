@@ -111,7 +111,7 @@ func (p *PG) LandBatch(ctx context.Context, b IngestBatch) (bool, error) {
 
 func (p *PG) landBatch(ctx context.Context, b IngestBatch) (bool, error) {
 	landed := false
-	err := p.sampleWrite(ctx, "land batch", func(attempt pgx.Tx) error {
+	err := p.sampleWrite(ctx, "land batch", func(ctx context.Context, attempt pgx.Tx) error {
 		landed = false
 		// Each attempt (a deadlock retries the whole batch) resolves its owners
 		// and reads its clock afresh, once, for every lane (#1274).

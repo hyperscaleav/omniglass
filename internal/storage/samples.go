@@ -78,7 +78,7 @@ func (p *PG) InsertMetricSamples(ctx context.Context, w KeyWriter, evs []MetricS
 		return nil
 	}
 	write := func() error {
-		return p.sampleWrite(ctx, "insert samples", func(tx pgx.Tx) error { return p.writeMetricSamples(ctx, tx, w, evs) })
+		return p.sampleWrite(ctx, "insert samples", func(ctx context.Context, tx pgx.Tx) error { return p.writeMetricSamples(ctx, tx, w, evs) })
 	}
 	err := write()
 	if isPartitionRoutingMiss(err) {
@@ -98,8 +98,9 @@ func (p *PG) InsertMetricSamples(ctx context.Context, w KeyWriter, evs []MetricS
 const sampleWriteAttempts = 4
 
 // sampleWrite runs one sample-write transaction, retrying it whole on a
-// deadlock abort.
-func (p *PG) sampleWrite(ctx context.Context, what string, write func(pgx.Tx) error) error {
+// deadlock abort. The write reads the ctx it is handed, which carries the
+// attempt's onCommit hooks.
+func (p *PG) sampleWrite(ctx context.Context, what string, write func(context.Context, pgx.Tx) error) error {
 	var err error
 	for attempt := 1; ; attempt++ {
 		err = p.sampleWriteOnce(ctx, what, write)
@@ -118,19 +119,41 @@ func (p *PG) sampleWrite(ctx context.Context, what string, write func(pgx.Tx) er
 // (trendTxOptions): the metric insert reads the trend's announced mark after
 // taking the trend lock, and must see the mark a compaction moved before the
 // lock was granted.
-func (p *PG) sampleWriteOnce(ctx context.Context, what string, write func(pgx.Tx) error) error {
+func (p *PG) sampleWriteOnce(ctx context.Context, what string, write func(context.Context, pgx.Tx) error) error {
 	tx, err := p.pool.BeginTx(ctx, trendTxOptions)
 	if err != nil {
 		return fmt.Errorf("storage: begin %s: %w", what, err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if err := write(tx); err != nil {
+	hooks := &commitHooks{}
+	if err := write(context.WithValue(ctx, commitHooksKey{}, hooks), tx); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("storage: commit %s: %w", what, err)
 	}
+	for _, fn := range hooks.fns {
+		fn()
+	}
 	return nil
+}
+
+// commitHooks is what one sample-write attempt does only once it commits
+// (#1567): a log line about what the attempt wrote or dropped. An attempt a
+// deadlock or a missing partition aborts is run again whole, and a line it
+// logged before the abort would be logged again by the attempt that lands.
+type commitHooks struct{ fns []func() }
+
+type commitHooksKey struct{}
+
+// onCommit runs fn once the sample-write attempt ctx belongs to commits, and
+// never if it does not; outside a sampleWrite it runs fn at once.
+func onCommit(ctx context.Context, fn func()) {
+	if h, ok := ctx.Value(commitHooksKey{}).(*commitHooks); ok {
+		h.fns = append(h.fns, fn)
+		return
+	}
+	fn()
 }
 
 // isDeadlock reports a transaction Postgres aborted to break a deadlock.
@@ -410,13 +433,18 @@ const tooOldSlack = 23 * time.Hour
 // dropTooOldSamples drops each sample of evs (arcs and stamps beside it)
 // older than its series' window (its type's retention_days, else laneDays(),
 // the metric lane's), logging one line a series with how many it dropped and
-// the oldest's age, and returns the rest in their order. The window is the
-// prune's, so the prune would take the row at once.
+// the oldest's age once the batch commits (onCommit), and returns the rest
+// in their order. The window is the prune's, so the prune would take the row
+// at once.
 func dropTooOldSamples(ctx context.Context, tx pgx.Tx, evs []MetricSampleWrite, arcs []string, stamps []time.Time, laneDays func() (int, error)) ([]MetricSampleWrite, []string, []time.Time, error) {
 	var cand []int
 	var ts []time.Time
 	var keys []string
-	horizon := time.Now().Add(-tooOldSlack)
+	now, err := dbNow(ctx, tx)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	horizon := now.Add(-tooOldSlack)
 	for i, at := range stamps {
 		if at.Before(horizon) {
 			cand, ts, keys = append(cand, i), append(ts, at), append(keys, evs[i].Key)
@@ -481,9 +509,11 @@ func dropTooOldSamples(ctx context.Context, tx pgx.Tx, evs []MetricSampleWrite, 
 		}
 		logged[k] = true
 		d := bySeries[k]
-		slog.Warn("metric samples older than their series' window were dropped; the rest of the batch lands",
-			"facility", "ingest", "owner_kind", ev.OwnerKind, "owner", ev.OwnerID, "key", ev.Key, "instance", ev.Instance,
-			"samples", d.n, "age", d.oldest.Truncate(time.Second).String())
+		onCommit(ctx, func() {
+			slog.Warn("metric samples older than their series' window were dropped; the rest of the batch lands",
+				"facility", "ingest", "owner_kind", ev.OwnerKind, "owner", ev.OwnerID, "key", ev.Key, "instance", ev.Instance,
+				"samples", d.n, "age", d.oldest.Truncate(time.Second).String())
+		})
 	}
 	return keptEvs, keptArcs, keptStamps, nil
 }

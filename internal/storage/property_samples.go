@@ -52,7 +52,7 @@ func (p *PG) InsertPropertySamples(ctx context.Context, w KeyWriter, evs []Prope
 	if len(evs) == 0 {
 		return nil
 	}
-	return p.sampleWrite(ctx, "insert property samples", func(tx pgx.Tx) error { return p.writePropertySamples(ctx, tx, w, evs, false) })
+	return p.sampleWrite(ctx, "insert property samples", func(ctx context.Context, tx pgx.Tx) error { return p.writePropertySamples(ctx, tx, w, evs, false) })
 }
 
 // writePropertySamples is the property lane's sample-write path, in the

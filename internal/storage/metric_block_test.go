@@ -34,9 +34,16 @@ type blockRig struct {
 
 func newBlockRig(t *testing.T) *blockRig {
 	t.Helper()
-	f := newPruneFixture(t)
+	return newBlockRigAt(t, time.Time{})
+}
+
+// newBlockRigAt is newBlockRig over a database whose clock is pinned to at
+// (#1567); a zero at leaves the real clock.
+func newBlockRigAt(t *testing.T, at time.Time) *blockRig {
+	t.Helper()
+	f := newPruneFixtureAt(t, at)
 	mustExec(t, f.conn, `update metric_type set retention_days = $1 where name = 'prune-rtt'`, blockLaneDays)
-	from := time.Now().UTC().Add(-(blockLaneDays - 3) * 24 * time.Hour).Truncate(24 * time.Hour)
+	from := f.now().UTC().Add(-(blockLaneDays - 3) * 24 * time.Hour).Truncate(24 * time.Hour)
 	week := from.AddDate(0, 0, (8-int(from.Weekday()))%7)
 	if err := f.gw.SetMetricBlockMarks(f.ctx, week); err != nil {
 		t.Fatal(err)
@@ -252,6 +259,82 @@ func TestTheFirstBlockMarksAreSeededAtAMonday(t *testing.T) {
 	if c = r.fold(storage.BlockFold{MaxDays: 2}); len(r.blocksOf(a)) != 1 {
 		t.Errorf("after Wednesday %+v the blocks are %v, want its day block", c, r.blocksOf(a))
 	}
+}
+
+// TestMidnightAloneLeavesNoFoldBehind is the rule for Behind across a UTC
+// midnight (#1567): Behind reports closed days a pass left unfolded, and a day
+// closes only once the trend compaction has passed its every hour, which is
+// MetricTrendHorizon after the day ends. So a midnight closes one day, the one
+// before the day that just ended, and a pass that folds a day at a time
+// folds it with nothing left behind. Behind across a midnight is a backlog
+// the fold had before it: a fold already a day short stays a day short, and
+// marks seeded at a week's Monday on a Sunday start five days back, behind
+// until the passes catch up.
+func TestMidnightAloneLeavesNoFoldBehind(t *testing.T) {
+	t.Parallel()
+	before, after := storagetest.Midnights[0].At, storagetest.Midnights[1].At
+	d := func(day int) time.Time { return time.Date(2026, 11, day, 0, 0, 0, 0, time.UTC) }
+	fold := func(r *blockRig, maxDays int) storage.BlockCompaction {
+		t.Helper()
+		c := r.fold(storage.BlockFold{MaxDays: maxDays})
+		t.Logf("at %s: %+v", r.now().Format(time.RFC3339), c)
+		return c
+	}
+
+	t.Run("caught up", func(t *testing.T) {
+		t.Parallel()
+		r := newBlockRigAt(t, before)
+		a := r.series("", "observed")
+		r.spaced(a, d(5), 170)
+		r.spaced(a, d(6), 170)
+		r.spaced(a, d(7), 170)
+		if err := r.gw.SetMetricBlockMarks(r.ctx, d(6)); err != nil {
+			t.Fatal(err)
+		}
+		// Seconds before midnight the 6th's last hour is under a day old: the
+		// 6th is open, and the fold has nothing to do.
+		if c := fold(r, 1); c.Days != 0 || !c.Through.Equal(d(6)) || c.Behind {
+			t.Fatalf("before midnight the pass %+v, want nothing folded and nothing behind", c)
+		}
+		r.now = storagetest.PinClock(t, r.dsn, after)
+		// Seconds after, the 6th has closed and the 7th, which just ended, is
+		// open: one day to fold, folded.
+		if c := fold(r, 1); c.Days != 1 || !c.Through.Equal(d(7)) || c.Behind {
+			t.Fatalf("after midnight the pass %+v, want the 6th folded and nothing behind", c)
+		}
+		if c := fold(r, 1); c.Days != 0 || c.Behind {
+			t.Fatalf("a second pass after midnight %+v, want nothing to fold", c)
+		}
+	})
+
+	t.Run("a day short", func(t *testing.T) {
+		t.Parallel()
+		r := newBlockRigAt(t, before)
+		if err := r.gw.SetMetricBlockMarks(r.ctx, d(5)); err != nil {
+			t.Fatal(err)
+		}
+		r.now = storagetest.PinClock(t, r.dsn, after)
+		if c := fold(r, 1); c.Days != 1 || !c.Through.Equal(d(6)) || !c.Behind {
+			t.Fatalf("a pass a day short after midnight %+v, want the 5th folded and the 6th behind", c)
+		}
+		if c := fold(r, 1); c.Days != 1 || !c.Through.Equal(d(7)) || c.Behind {
+			t.Fatalf("the next pass %+v, want the 6th folded and nothing behind", c)
+		}
+	})
+
+	t.Run("seeded on a Sunday", func(t *testing.T) {
+		t.Parallel()
+		r := newBlockRigAt(t, after)
+		mustExec(t, r.conn, `delete from metric_block_mark`)
+		for i, want := range []struct {
+			through time.Time
+			behind  bool
+		}{{d(4), true}, {d(6), true}, {d(7), false}} {
+			if c := fold(r, 2); !c.Through.Equal(want.through) || c.Behind != want.behind {
+				t.Fatalf("pass %d from Monday the 2nd: %+v, want through %s, behind %v", i+1, c, want.through.Format(time.DateOnly), want.behind)
+			}
+		}
+	})
 }
 
 // recordedSample is one sample of the recorded scenario, in the order it

@@ -279,7 +279,27 @@ func buildTemplate(ctx context.Context) error {
 	if err := migrate.Run(withDBName(adminDSN, templateName)); err != nil {
 		return fmt.Errorf("migrate template %s: %w", templateName, err)
 	}
+	if err := rollTemplate(ctx, templateName); err != nil {
+		return err
+	}
 	return sealDatabase(ctx, templateName)
+}
+
+// rollTemplate rolls the template's metric days as a server's boot does
+// (#1567). The migration makes today and the days ahead of the moment it runs;
+// the roll adds yesterday, so a test that plants a row straight into metric
+// an hour back (no on-demand day, as a gateway write has) still finds its day
+// when the binary built its template minutes after a UTC midnight.
+func rollTemplate(ctx context.Context, name string) error {
+	gw, err := storage.NewPG(ctx, withDBName(adminDSN, name))
+	if err != nil {
+		return fmt.Errorf("open template %s: %w", name, err)
+	}
+	defer gw.Close()
+	if _, err := gw.EnsureMetricPartitions(ctx); err != nil {
+		return fmt.Errorf("roll template %s: %w", name, err)
+	}
+	return nil
 }
 
 // sealDatabase closes a template database (the base template, or a derived one,

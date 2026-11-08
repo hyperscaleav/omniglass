@@ -20,24 +20,42 @@ import (
 
 // writerFixture is a seeded gateway with one component (disp-1) carrying one
 // ssh endpoint (ssh) on node-a, and a raw connection for planting the legacy
-// rows a write path no longer produces.
+// rows a write path no longer produces. The gateway is stood as a server
+// boots one: seeded, and its metric days rolled at the database's clock, so a
+// row planted straight into metric within the roll's days has a partition.
 type writerFixture struct {
 	ctx   context.Context
 	gw    *storage.PG
 	conn  *pgx.Conn
 	actor string
 	dsn   string
+	// now is the database's clock, as Go reads it.
+	now func() time.Time
 }
 
 func newWriterFixture(t *testing.T) writerFixture {
 	t.Helper()
+	return newWriterFixtureAt(t, time.Time{})
+}
+
+// newWriterFixtureAt is newWriterFixture over a database whose clock is
+// pinned to at (#1567); a zero at leaves the real clock.
+func newWriterFixtureAt(t *testing.T, at time.Time) writerFixture {
+	t.Helper()
 	ctx := context.Background()
 	dsn := storagetest.NewDSN(t)
+	now := time.Now
+	if !at.IsZero() {
+		now = storagetest.PinClock(t, dsn, at)
+	}
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	t.Cleanup(gw.Close)
+	if _, err := gw.EnsureMetricPartitions(ctx); err != nil {
+		t.Fatalf("roll the metric days: %v", err)
+	}
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
@@ -65,7 +83,7 @@ func newWriterFixture(t *testing.T) writerFixture {
 	if err := conn.QueryRow(ctx, `select principal_id from human where username = 'root'`).Scan(&actor); err != nil {
 		t.Fatalf("resolve actor: %v", err)
 	}
-	return writerFixture{ctx: ctx, gw: gw, conn: conn, actor: actor, dsn: dsn}
+	return writerFixture{ctx: ctx, gw: gw, conn: conn, actor: actor, dsn: dsn, now: now}
 }
 
 func (f writerFixture) count(t *testing.T, sql string, args ...any) int {
@@ -181,14 +199,21 @@ func TestDeclaredWriteRefusesAReservedKey(t *testing.T) {
 // panel and the session pill compose over serve a node-probe key's observed
 // series only. A declared or calculated row planted beside it (newer than the
 // node's own observation, as a write before the gateway's refusal could leave
-// one) never reads as the node's.
+// one) never reads as the node's. It runs at the real clock and either side
+// of a UTC midnight, where the observation an hour back is yesterday's (#1567).
 func TestNodeProbeReadsServeOnlyObserved(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
-	f := newWriterFixture(t)
-	observedAt := time.Now().UTC().Add(-time.Hour).Truncate(time.Millisecond)
+	storagetest.AtEachMidnight(t, func(t *testing.T, at time.Time) {
+		t.Parallel()
+		nodeProbeReadsServeOnlyObserved(t, newWriterFixtureAt(t, at))
+	})
+}
+
+func nodeProbeReadsServeOnlyObserved(t *testing.T, f writerFixture) {
+	observedAt := f.now().UTC().Add(-time.Hour).Truncate(time.Millisecond)
 	if _, err := f.conn.Exec(f.ctx, `
 		insert into property (ts, owner_kind, component_id, property_type_id, instance, value, provenance, source)
 		select $1, 'component', c.id, pt.id, 'ssh', to_jsonb(v.value), 'observed', 'ssh'
