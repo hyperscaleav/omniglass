@@ -58,6 +58,10 @@ func ExportMetricCoverageGap(parts []MetricPartition, from, to time.Time) (time.
 	return metricCoverageGap(parts, from, to)
 }
 
+// ExportMetricRollDays is the days the roll keeps a partition for at a
+// given now (#1567).
+func ExportMetricRollDays(now time.Time) []time.Time { return metricRollDays(now) }
+
 // ExportIsPartitionRoutingMiss is the classifier the ingest retries a write by
 // when no metric partition covers a row (#420).
 func ExportIsPartitionRoutingMiss(err error) bool { return isPartitionRoutingMiss(err) }

@@ -255,11 +255,14 @@ newest sample is an index probe of each day's series index, newest day first, st
 the first that holds one. The `make footprint` harness measures the row at about 60 bytes of
 heap and 40 of index after `REINDEX` (126 and 91 before).
 
-**Partitions roll by the server.** The server keeps a partition for today and the next three days
-([ADR-1527](/architecture/decisions/#adr-1527-the-metric-lane-is-partitioned-by-utc-day)), at boot
-before its ingest starts and again on every retention pass. After making any day that is missing,
-it reads the partitions back and refuses unless they cover every instant from the start of today
-through the end of the third day ahead, naming the first one uncovered; the boot starts no consumer
+**Partitions roll by the server.** The server keeps a partition for yesterday, today and the next
+three days
+([ADR-1527](/architecture/decisions/#adr-1527-the-metric-lane-is-partitioned-by-utc-day),
+[ADR-1567](/architecture/decisions/#adr-1567-the-metric-roll-keeps-yesterday-and-a-retried-batch-logs-its-drop-once)),
+at boot before its ingest starts and again on every retention pass. Yesterday is kept so a sample
+stamped a minute before midnight still has its day when a server boots a minute after it. After making
+any day that is missing, it reads the partitions back and refuses unless they cover every instant from
+the start of yesterday through the end of the third day ahead, naming the first one uncovered; the boot starts no consumer
 over a refusal. A partition is created detached and then attached, so the parent is held only at
 `SHARE UPDATE EXCLUSIVE`, under a five-second lock timeout. A sample whose day has no partition (a
 late roll, a batch across midnight, a node clock far out) is not a refused write: the batch's days
@@ -351,6 +354,14 @@ where b.series_id = $1 order by b.span_start, b.span;
   The same transaction advances `metric_block_mark`, so a pass cancelled anywhere leaves no series-day
   half folded and the next pass folds from the mark. The week fold has a mark of its own, behind the
   day mark. Properties and declared rows never block.
+- **Behind means a backlog, not a midnight.** A pass reports `Behind` when closed days remain
+  unfolded after it has folded its two. A day closes only once the trends have closed its last hour,
+  a day after the day ends, so one UTC midnight closes exactly one day, and a pass that folds at least
+  one day folds it: a midnight alone never leaves a pass behind. A pass behind across a midnight had
+  a backlog before it. The marks are first seeded at the ISO Monday of the oldest closed day, so a
+  fold first seeded on a Sunday or a Monday starts five or six days back and stays behind for the
+  passes that catch it up
+  ([ADR-1567](/architecture/decisions/#adr-1567-the-metric-roll-keeps-yesterday-and-a-retried-batch-logs-its-drop-once)).
 - **A late sample merges into its block.** A sample landing in an announced hour of a day the fold
   has passed merges into the block that covers it, in its own batch's transaction
   ([ADR-1529](/architecture/decisions/#adr-1529-a-late-metric-sample-merges-into-the-block-that-covers-it)):
@@ -366,7 +377,8 @@ where b.series_id = $1 order by b.span_start, b.span;
   the day is intact (the merge's own test), else from its raw rows.
 - **Too old is dropped.** An observed sample older than its series' window is dropped before it lands,
   with one warning line a series naming the series, the count and the oldest's age, and the rest of
-  its batch lands and is acknowledged.
+  its batch lands and is acknowledged. The warning goes out when the batch commits, so a batch
+  retried whole (a day made on a routing miss) logs its drop once.
 - **Raw rows still lead.** The blocks are written beside the raw rows, which stay authoritative, and
   a late sample lands raw as well as merging. Every reader but the trend recompute still reads raw
   rows. `VerifyMetricBlocks` pairs every block still inside its window with its raw rows, sample by

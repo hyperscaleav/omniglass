@@ -123,7 +123,7 @@ func (p *PG) InsertLogLines(ctx context.Context, lines []LogLineWrite) error {
 	if len(lines) == 0 {
 		return nil
 	}
-	return p.sampleWrite(ctx, "insert log lines", func(tx pgx.Tx) error { return p.writeLogLines(ctx, tx, lines) })
+	return p.sampleWrite(ctx, "insert log lines", func(ctx context.Context, tx pgx.Tx) error { return p.writeLogLines(ctx, tx, lines) })
 }
 
 // writeLogLines is the component log-line write path, in the caller's
@@ -168,7 +168,7 @@ func (p *PG) InsertNodeLogs(ctx context.Context, lines []NodeLogWrite) error {
 	if len(lines) == 0 {
 		return nil
 	}
-	return p.sampleWrite(ctx, "insert node logs", func(tx pgx.Tx) error { return p.writeNodeLogs(ctx, tx, lines) })
+	return p.sampleWrite(ctx, "insert node logs", func(ctx context.Context, tx pgx.Tx) error { return p.writeNodeLogs(ctx, tx, lines) })
 }
 
 // writeNodeLogs is the node self-log write path, in the caller's

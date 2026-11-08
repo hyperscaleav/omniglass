@@ -18,13 +18,22 @@ import (
 // admin sets node_log_debug_days to 1, the pass removes the node's debug lines
 // past a day, across more than one chunk, and leaves the component's lines and
 // the node's newer and info lines alone. A re-run removes nothing, and
-// restoring the override puts node_log back on the shared window.
+// restoring the override puts node_log back on the shared window. It runs at
+// the real clock and either side of a UTC midnight (#1567).
 func TestANodeLogOverridePrunesNodeLogsAndOnlyThem(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
+	storagetest.AtEachMidnight(t, nodeLogOverridePrunesNodeLogsAndOnlyThem)
+}
+
+func nodeLogOverridePrunesNodeLogsAndOnlyThem(t *testing.T, at time.Time) {
 	ctx := context.Background()
 	dsn := storagetest.NewDSN(t)
+	clock := time.Now
+	if !at.IsZero() {
+		clock = storagetest.PinClock(t, dsn, at)
+	}
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
 		t.Fatalf("connect: %v", err)
@@ -45,15 +54,26 @@ func TestANodeLogOverridePrunesNodeLogsAndOnlyThem(t *testing.T) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "display-1"}, all, all, all, all); err != nil {
 		t.Fatalf("component: %v", err)
 	}
-	now := time.Now().UTC()
-	// This test is about node_log, not trend compaction: stand the trend marks
-	// at the compaction's target, so no pass has an hour to fold and none
-	// reports Behind. Left to seed itself, a fresh database starts at its
-	// oldest partition (the 1st of the month), and the test's passes at 48
-	// hours each fall behind from about the 5th on.
+	now := clock().UTC()
+	// This test is about node_log, not the metric compactions: stand their
+	// marks at their targets, so no pass has an hour or a day to fold and
+	// none reports Behind. Left to seed itself, a fresh database's trend marks
+	// start at its oldest partition (the 1st of the month), and the test's
+	// passes at 48 hours each fall behind from about the 5th on; its block
+	// marks start at the Monday of the last closed day's week, and its two
+	// passes at two days each fall behind whenever that day is a Saturday or a
+	// Sunday (#1567). The block target is the trend mark's UTC day: the last
+	// day before it is the newest whose every hour is compacted.
+	trendMark := now.Add(-storage.MetricTrendHorizon).Truncate(time.Hour)
 	if _, err := conn.Exec(ctx, `insert into metric_trend_mark (id, announced_through, compacted_through)
-		values (true, $1, $1)`, now.Add(-storage.MetricTrendHorizon).Truncate(time.Hour)); err != nil {
+		values (true, $1, $1)`, trendMark); err != nil {
 		t.Fatalf("stand the trend marks at the target: %v", err)
+	}
+	blockTarget := trendMark.Truncate(24 * time.Hour)
+	blockWeek := blockTarget.AddDate(0, 0, -((int(blockTarget.Weekday()) + 6) % 7))
+	if _, err := conn.Exec(ctx, `insert into metric_block_mark (id, blocked_through, week_through)
+		values (true, $1, $2)`, blockTarget, blockWeek); err != nil {
+		t.Fatalf("stand the block marks at the target: %v", err)
 	}
 	line := func(table, severity string, age time.Duration, msg string) {
 		t.Helper()
@@ -89,7 +109,7 @@ func TestANodeLogOverridePrunesNodeLogsAndOnlyThem(t *testing.T) {
 	}
 	pass := func() retentionReport {
 		t.Helper()
-		rep, err := retentionPass(ctx, gw, time.Now(), 2, 10, 0)
+		rep, err := retentionPass(ctx, gw, clock(), 2, 10, 0)
 		if err != nil {
 			t.Fatalf("pass: %v", err)
 		}

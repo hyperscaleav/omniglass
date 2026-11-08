@@ -76,7 +76,7 @@ func (p *PG) InsertEvents(ctx context.Context, w KeyWriter, evs []EventWrite) er
 	if len(evs) == 0 {
 		return nil
 	}
-	return p.sampleWrite(ctx, "insert events", func(tx pgx.Tx) error { return p.writeEvents(ctx, tx, w, evs) })
+	return p.sampleWrite(ctx, "insert events", func(ctx context.Context, tx pgx.Tx) error { return p.writeEvents(ctx, tx, w, evs) })
 }
 
 // writeEvents is the caught-occurrence write path, in the caller's

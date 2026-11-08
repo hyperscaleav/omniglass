@@ -33,14 +33,14 @@ var SampleWritePaths = map[string][]writerclass.Writer{
 // WriteMetricAsRule writes evs through the metric sample path as the calc rule
 // ruleID's tick would, in its own transaction.
 func (p *PG) WriteMetricAsRule(ctx context.Context, ruleID string, evs []MetricSampleWrite) error {
-	return p.sampleWrite(ctx, "write as rule", func(tx pgx.Tx) error {
+	return p.sampleWrite(ctx, "write as rule", func(ctx context.Context, tx pgx.Tx) error {
 		return p.writeMetricSamples(ctx, tx, calcWriter(&sampleLineage{ruleID: ruleID, ruleName: "test", version: 1}), evs)
 	})
 }
 
 // WritePropertyAsRule is WriteMetricAsRule on the property lane.
 func (p *PG) WritePropertyAsRule(ctx context.Context, ruleID string, evs []PropertySampleWrite) error {
-	return p.sampleWrite(ctx, "write as rule", func(tx pgx.Tx) error {
+	return p.sampleWrite(ctx, "write as rule", func(ctx context.Context, tx pgx.Tx) error {
 		return p.writePropertySamples(ctx, tx, calcWriter(&sampleLineage{ruleID: ruleID, ruleName: "test", version: 1}), evs, false)
 	})
 }
