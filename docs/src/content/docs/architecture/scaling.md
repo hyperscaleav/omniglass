@@ -152,8 +152,11 @@ binary.nats -- ext: "swap embedded for BYO" { style.stroke-dash: 4 }
 - **the control-plane consumers** (worklist, heartbeat) are today **singletons by construction**:
   one server holds each per-verb wildcard subscription
   ([ADR-0081](/architecture/decisions/#adr-0081-the-control-plane-wire-is-one-subject-grammar-node-anchored-and-batch-granular)).
+  The worklist subscription feeds a bounded pool of workers on that server, so pulls are built in
+  parallel without a second subscriber
+  ([ADR-1577](/architecture/decisions/#adr-1577-a-nodes-worklist-is-compressed-served-by-a-bounded-responder-and-retried-without-exiting)).
   The HA fork, queue groups versus worklist reassignment, is named and deferred to the day a
-  second server exists.
+  second server exists; a second server is also a trigger for the materialized worklist (#1586).
 
 :::
 

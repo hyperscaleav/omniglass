@@ -37,7 +37,7 @@
     {
       "name": "node",
       "image": "omniglass",
-      "command": "node run --simulate --impairments --heartbeat 2s --probe-every 10s --poll 2s",
+      "command": "node run --simulate --impairments --heartbeat 2s --probe-every 10s --worklist-every 5s --poll 2s",
       "user": "0:0",
       "caps": [
         "NET_ADMIN"
@@ -198,18 +198,21 @@
       "name": "lab",
       "heartbeat": "2s",
       "probe_every": "10s",
+      "worklist_every": "5s",
       "for": "a learner's lab: a change in the console shows within seconds"
     },
     {
       "name": "walkthrough",
       "heartbeat": "2s",
       "probe_every": "every check-in",
+      "worklist_every": "2s",
       "for": "a script's throwaway lab: a walkthrough waiting on a probe's verdict sees it within seconds"
     },
     {
       "name": "default",
       "heartbeat": "30s",
       "probe_every": "every check-in",
+      "worklist_every": "30s",
       "for": "the product's own defaults: what a deployment's node runs at"
     }
   ]

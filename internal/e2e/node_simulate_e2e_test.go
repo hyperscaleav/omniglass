@@ -99,7 +99,7 @@ func TestNodeRunSimulateCollectsItsOwnFleet(t *testing.T) {
 	// The one process: the node, its simulator inside it.
 	pctx, stop := context.WithCancel(ctx)
 	p := exec.CommandContext(pctx, binPath, "node", "run", "--simulate",
-		"--port-offset", fmt.Sprint(nodeSimulatePortShift), "--poll", "300ms", "--heartbeat", "1s")
+		"--port-offset", fmt.Sprint(nodeSimulatePortShift), "--poll", "300ms", "--heartbeat", "1s", "--worklist-every", "1s")
 	p.Env = append(os.Environ(), "OMNIGLASS_SERVER="+server, "OMNIGLASS_NODE_NAME=edge-s", "OMNIGLASS_NODE_TOKEN="+nodeTok)
 	p.Stdout, p.Stderr = os.Stderr, os.Stderr
 	// Stopped the way an operator stops it, so the graceful path is the one

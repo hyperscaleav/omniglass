@@ -21,7 +21,7 @@ func (s reportWindowStore) NodeWorklist(context.Context, string) (storage.Workli
 // one the node reports its collection telemetry over.
 func TestTheWorklistReplyCarriesTheReportWindow(t *testing.T) {
 	s := &Server{store: reportWindowStore{seconds: 45}}
-	reply, err := s.buildWorklistReply("edge-1")
+	reply, err := s.buildWorklistReply(context.Background(), "edge-1")
 	if err != nil {
 		t.Fatal(err)
 	}

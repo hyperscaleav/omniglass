@@ -30,7 +30,9 @@ func newNodeRunCmd() *cobra.Command {
 		token      string
 		heartbeat  time.Duration
 		probeEvery time.Duration
-		once       bool
+		// worklistEvery is the pull interval (#1577), apart from the heartbeat.
+		worklistEvery time.Duration
+		once          bool
 		// The simulator in process (--simulate) and its own settings, which
 		// mean nothing without it.
 		simulate    bool
@@ -72,7 +74,7 @@ func newNodeRunCmd() *cobra.Command {
 			}
 			nodeCfg := node.Config{
 				ServerURL: serverURL, Name: name, Token: token,
-				HeartbeatEvery: heartbeat, ProbeEvery: probeEvery, Once: once,
+				HeartbeatEvery: heartbeat, ProbeEvery: probeEvery, WorklistEvery: worklistEvery, Once: once,
 			}
 			if simulate {
 				// A signal stops both halves gracefully, so the simulator
@@ -98,6 +100,7 @@ func newNodeRunCmd() *cobra.Command {
 	cmd.Flags().StringVar(&token, "token", "", "enrollment token from POST /nodes/{name}:enroll (env OMNIGLASS_NODE_TOKEN)")
 	cmd.Flags().DurationVar(&heartbeat, "heartbeat", node.DefaultHeartbeat, "heartbeat interval")
 	cmd.Flags().DurationVar(&probeEvery, "probe-every", 0, "how often each reachability probe runs; 0 probes on every heartbeat. Keep it under the console's 150s staleness window, past which a probe-only endpoint reads stale between probes")
+	cmd.Flags().DurationVar(&worklistEvery, "worklist-every", node.DefaultWorklistEvery, "how often the node pulls its worklist, apart from the heartbeat; a change made on the server reaches the node at its next pull")
 	cmd.Flags().BoolVar(&once, "once", false, "run a single claim + pull + heartbeat cycle and exit")
 	cmd.Flags().BoolVar(&simulate, "simulate", false, "also run the simulator in this process, serving the simulated components placed on this node on its own loopback")
 	cmd.Flags().BoolVar(&impairments, "impairments", false, "with --simulate: apply impairments (unplug, latency, loss) and truthful ping by rewriting the firewall and traffic shaping of this network namespace; needs NET_ADMIN, and is meant for a namespace of the node's own (a container)")
