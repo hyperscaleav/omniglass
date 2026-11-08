@@ -68,8 +68,8 @@ func Millicores(a, b Usage) (float64, error) {
 // DBCountersQuery reads, in one row, the database counters a window
 // differences: rows inserted into each telemetry lane (the cumulative
 // statistics, so nothing is counted by a scan), the total size of each lane
-// and of the receipts with their indexes, the database's size, and the WAL
-// position. A lane's figures sum over its partitions, so a partitioned table
+// and of the receipts with their indexes, the database's size, the WAL
+// position, and the receipts inserted (one per batch landed). A lane's figures sum over its partitions, so a partitioned table
 // reads the same way as a plain one (the union keeps the table itself in
 // its lane whatever pg_partition_tree lists).
 const DBCountersQuery = `with lane(name, relid) as (
@@ -82,7 +82,8 @@ select extract(epoch from clock_timestamp()),
   (select coalesce(sum(pg_total_relation_size(relid)), 0) from lane where name = 'property'),
   pg_database_size(current_database()),
   coalesce(pg_total_relation_size(to_regclass('telemetry_receipt')), 0),
-  pg_wal_lsn_diff(pg_current_wal_lsn(), '0/0')::bigint`
+  pg_wal_lsn_diff(pg_current_wal_lsn(), '0/0')::bigint,
+  coalesce((select s.n_tup_ins from pg_stat_user_tables s where s.relid = to_regclass('telemetry_receipt')), 0)`
 
 // DBCounters is one reading of DBCountersQuery.
 type DBCounters struct {
@@ -91,20 +92,24 @@ type DBCounters struct {
 	MetricBytes, PropertyBytes  int64
 	DatabaseBytes, ReceiptBytes int64
 	WALBytes                    int64
+	// ReceiptsInserted is the cumulative count of telemetry_receipt rows
+	// inserted: one per batch landed, so its delta is the batches a window
+	// landed.
+	ReceiptsInserted int64
 }
 
 // ParseDBCounters reads DBCountersQuery's row as psql prints it unaligned
 // (-At): pipe-separated, in the query's order.
 func ParseDBCounters(out string) (DBCounters, error) {
 	f := strings.Split(strings.TrimSpace(out), "|")
-	if len(f) != 8 {
-		return DBCounters{}, fmt.Errorf("database counters: %d fields in %q, want 8", len(f), out)
+	if len(f) != 9 {
+		return DBCounters{}, fmt.Errorf("database counters: %d fields in %q, want 9", len(f), out)
 	}
 	epoch, err := strconv.ParseFloat(f[0], 64)
 	if err != nil {
 		return DBCounters{}, fmt.Errorf("database counters: the time %q: %w", f[0], err)
 	}
-	n := make([]int64, 7)
+	n := make([]int64, 8)
 	for i := range n {
 		if n[i], err = strconv.ParseInt(f[i+1], 10, 64); err != nil {
 			return DBCounters{}, fmt.Errorf("database counters: field %d %q: %w", i+2, f[i+1], err)
@@ -114,7 +119,7 @@ func ParseDBCounters(out string) (DBCounters, error) {
 	at := time.Unix(sec, int64((epoch-float64(sec))*1e9+0.5)).UTC()
 	return DBCounters{
 		At: at, MetricRows: n[0], PropertyRows: n[1], MetricBytes: n[2], PropertyBytes: n[3],
-		DatabaseBytes: n[4], ReceiptBytes: n[5], WALBytes: n[6],
+		DatabaseBytes: n[4], ReceiptBytes: n[5], WALBytes: n[6], ReceiptsInserted: n[7],
 	}, nil
 }
 
@@ -126,14 +131,35 @@ type ContainerWindow struct {
 
 // Window is one measured window's rates.
 type Window struct {
-	MetricRowsPerMinute   float64                    `json:"metric_rows_per_minute"`
-	PropertyRowsPerMinute float64                    `json:"property_rows_per_minute"`
-	MetricBytesPerDay     float64                    `json:"metric_bytes_per_day"`
-	PropertyBytesPerDay   float64                    `json:"property_bytes_per_day"`
-	ReceiptBytesPerDay    float64                    `json:"receipt_bytes_per_day"`
-	DatabaseBytesPerDay   float64                    `json:"database_bytes_per_day"`
-	WALBytesPerDay        float64                    `json:"wal_bytes_per_day"`
-	Containers            map[string]ContainerWindow `json:"containers"`
+	MetricRowsPerMinute   float64 `json:"metric_rows_per_minute"`
+	PropertyRowsPerMinute float64 `json:"property_rows_per_minute"`
+	MetricBytesPerDay     float64 `json:"metric_bytes_per_day"`
+	PropertyBytesPerDay   float64 `json:"property_bytes_per_day"`
+	ReceiptBytesPerDay    float64 `json:"receipt_bytes_per_day"`
+	DatabaseBytesPerDay   float64 `json:"database_bytes_per_day"`
+	WALBytesPerDay        float64 `json:"wal_bytes_per_day"`
+	// BatchesLanded is the receipts the window inserted, SamplesLanded the
+	// metric and property rows it inserted; SamplesPerBatch is their mean and
+	// BatchesPerSecond the batch rate (BatchRates).
+	BatchesLanded    int64                      `json:"batches_landed"`
+	SamplesLanded    int64                      `json:"samples_landed"`
+	SamplesPerBatch  float64                    `json:"samples_per_batch"`
+	BatchesPerSecond float64                    `json:"batches_per_second"`
+	Containers       map[string]ContainerWindow `json:"containers"`
+}
+
+// BatchRates is the mean samples a batch carried and the batches landed a
+// second, over a window of dt. No batches reads as 0 samples a batch, and a
+// window with no length as 0 batches a second, so neither figure divides by
+// zero.
+func BatchRates(batches, samples int64, dt time.Duration) (samplesPerBatch, batchesPerSecond float64) {
+	if batches > 0 {
+		samplesPerBatch = float64(samples) / float64(batches)
+	}
+	if dt > 0 {
+		batchesPerSecond = float64(batches) / dt.Seconds()
+	}
+	return samplesPerBatch, batchesPerSecond
 }
 
 // WindowOf turns the readings at a window's start and end into its rates.
@@ -145,12 +171,17 @@ func WindowOf(db0, db1 DBCounters, use0, use1 map[string]Usage) (Window, error) 
 	}
 	// The statistics counters only grow while Postgres runs; one that went
 	// backwards means it restarted and reset them.
-	if db1.MetricRows < db0.MetricRows || db1.PropertyRows < db0.PropertyRows || db1.WALBytes < db0.WALBytes {
+	if db1.MetricRows < db0.MetricRows || db1.PropertyRows < db0.PropertyRows || db1.ReceiptsInserted < db0.ReceiptsInserted || db1.WALBytes < db0.WALBytes {
 		return Window{}, fmt.Errorf("the database's counters went backwards between %s and %s (Postgres restarted?)", db0.At.Format(time.TimeOnly), db1.At.Format(time.TimeOnly))
 	}
 	perMin := func(a, b int64) float64 { return float64(b-a) / dt.Minutes() }
 	perDay := func(a, b int64) float64 { return float64(b-a) / dt.Hours() * 24 }
+	batches := db1.ReceiptsInserted - db0.ReceiptsInserted
+	samples := (db1.MetricRows - db0.MetricRows) + (db1.PropertyRows - db0.PropertyRows)
+	perBatch, perSecond := BatchRates(batches, samples, dt)
 	w := Window{
+		BatchesLanded: batches, SamplesLanded: samples,
+		SamplesPerBatch: perBatch, BatchesPerSecond: perSecond,
 		MetricRowsPerMinute:   perMin(db0.MetricRows, db1.MetricRows),
 		PropertyRowsPerMinute: perMin(db0.PropertyRows, db1.PropertyRows),
 		MetricBytesPerDay:     perDay(db0.MetricBytes, db1.MetricBytes),

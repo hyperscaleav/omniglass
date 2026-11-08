@@ -222,6 +222,11 @@ type ScaleReport struct {
 	DatabaseBytesPerDay   float64 `json:"database_bytes_per_day"`
 	WALBytesPerDay        float64 `json:"wal_bytes_per_day"`
 
+	BatchesLanded    int64   `json:"batches_landed"`
+	SamplesLanded    int64   `json:"samples_landed"`
+	SamplesPerBatch  float64 `json:"samples_per_batch"`
+	BatchesPerSecond float64 `json:"batches_per_second"`
+
 	Containers   []ScaleContainer `json:"containers"`
 	IngestLag    Quantiles        `json:"ingest_lag_ms"`
 	Redeliveries Redeliveries     `json:"redeliveries"`
@@ -245,6 +250,10 @@ func SummarizeScale(r ScaleRun) ScaleReport {
 		ReceiptBytesPerDay:    w.ReceiptBytesPerDay,
 		DatabaseBytesPerDay:   w.DatabaseBytesPerDay,
 		WALBytesPerDay:        w.WALBytesPerDay,
+		BatchesLanded:         w.BatchesLanded,
+		SamplesLanded:         w.SamplesLanded,
+		SamplesPerBatch:       w.SamplesPerBatch,
+		BatchesPerSecond:      w.BatchesPerSecond,
 		Redeliveries:          r.Redeliveries,
 		FleetView:             DurationQuantiles(r.FleetView),
 		Drain:                 r.Drain,
@@ -302,6 +311,10 @@ func (r ScaleReport) Table() string {
 	line("receipts a day", size(r.ReceiptBytesPerDay))
 	line("database a day", size(r.DatabaseBytesPerDay))
 	line("WAL a day", size(r.WALBytesPerDay))
+	line("batches landed", count(float64(r.BatchesLanded)))
+	line("samples landed", count(float64(r.SamplesLanded)))
+	line("samples per batch", fmt.Sprintf("%.1f", r.SamplesPerBatch))
+	line("batches a second", fmt.Sprintf("%.2f", r.BatchesPerSecond))
 	for _, c := range r.Containers {
 		line(c.Name+" cpu", fmt.Sprintf("%.0f m", c.Millicores))
 	}
