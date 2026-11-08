@@ -22,15 +22,29 @@ type pruneFixture struct {
 	gw   *storage.PG
 	conn *pgx.Conn
 	dsn  string
+	// now is the database's clock, as Go reads it: the real one, or the
+	// pinned one of newPruneFixtureAt.
+	now func() time.Time
 }
 
 func newPruneFixture(t *testing.T) *pruneFixture {
+	t.Helper()
+	return newPruneFixtureAt(t, time.Time{})
+}
+
+// newPruneFixtureAt is newPruneFixture over a database whose clock is pinned
+// to at (#1567); a zero at leaves the real clock.
+func newPruneFixtureAt(t *testing.T, at time.Time) *pruneFixture {
 	t.Helper()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
 	ctx := context.Background()
 	dsn := storagetest.NewDSN(t)
+	now := time.Now
+	if !at.IsZero() {
+		now = storagetest.PinClock(t, dsn, at)
+	}
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
@@ -43,10 +57,10 @@ func newPruneFixture(t *testing.T) *pruneFixture {
 	mustExec(t, conn, `insert into metric_type (name, data_type) values ('prune-rtt', 'float')`)
 	// The metric prune never passes the trend compaction's mark (#1276);
 	// these tests are about the prune, so every hour reads as closed.
-	if err := gw.SetMetricTrendMark(ctx, time.Now().Add(time.Hour)); err != nil {
+	if err := gw.SetMetricTrendMark(ctx, now().Add(time.Hour)); err != nil {
 		t.Fatal(err)
 	}
-	return &pruneFixture{t: t, ctx: ctx, gw: gw, conn: conn, dsn: dsn}
+	return &pruneFixture{t: t, ctx: ctx, gw: gw, conn: conn, dsn: dsn, now: now}
 }
 
 // row inserts one sample: lane is metric or property, owner is component or

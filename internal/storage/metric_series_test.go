@@ -14,7 +14,7 @@ import (
 )
 
 // The narrow metric lane's partitions (#1275, #420, #1527, ADR-1527): a UTC
-// day per partition, three ahead of today, a missing day made on demand
+// day per partition, yesterday through three ahead of today, a missing day made on demand
 // rather than a batch dropped, and a day past every window dropped whole.
 
 func dayName(t time.Time) string { return "metric_p" + t.UTC().Format("20060102") }
@@ -24,34 +24,100 @@ func dayStart(t time.Time) time.Time {
 	return time.Date(u.Year(), u.Month(), u.Day(), 0, 0, 0, 0, time.UTC)
 }
 
-// TestMetricPartitionsRollAhead: the roll keeps today and the next three
-// days, creates nothing it already has, and a dropped day ahead comes back.
+// TestMetricPartitionsRollAhead: the roll keeps yesterday, today and the
+// next three days, creates nothing it already has, and a dropped day ahead
+// comes back; at the real clock and either side of a UTC midnight (#1567).
 func TestMetricPartitionsRollAhead(t *testing.T) {
 	t.Parallel()
-	f := newPruneFixture(t)
-	today := dayStart(time.Now())
-	var want []string
-	for i := 0; i <= 3; i++ {
-		want = append(want, dayName(today.AddDate(0, 0, i)))
-	}
-	if created, err := f.gw.EnsureMetricPartitions(f.ctx); err != nil || len(created) != 0 {
-		t.Fatalf("a roll over a fresh install created %v (%v), want nothing: the migration made them", created, err)
-	}
-	mustExec(t, f.conn, `drop table `+want[3])
-	created, err := f.gw.EnsureMetricPartitions(f.ctx)
-	if err != nil || len(created) != 1 || created[0] != want[3] {
-		t.Fatalf("the roll created %v (%v), want %s back", created, err, want[3])
-	}
-	parts := partitionsOf(t, f.conn, "metric")
-	for _, w := range want {
-		if !strings.Contains(strings.Join(parts, ","), w) {
-			t.Errorf("partitions %v, want %s", parts, w)
+	storagetest.AtEachMidnight(t, func(t *testing.T, at time.Time) {
+		t.Parallel()
+		f := newPruneFixtureAt(t, at)
+		if _, err := f.gw.EnsureMetricPartitions(f.ctx); err != nil {
+			t.Fatal(err)
+		}
+		today := dayStart(f.now())
+		var want []string
+		for i := -1; i <= 3; i++ {
+			want = append(want, dayName(today.AddDate(0, 0, i)))
+		}
+		if created, err := f.gw.EnsureMetricPartitions(f.ctx); err != nil || len(created) != 0 {
+			t.Fatalf("a second roll created %v (%v), want nothing", created, err)
+		}
+		last := want[len(want)-1]
+		mustExec(t, f.conn, `drop table `+last)
+		created, err := f.gw.EnsureMetricPartitions(f.ctx)
+		if err != nil || len(created) != 1 || created[0] != last {
+			t.Fatalf("the roll created %v (%v), want %s back", created, err, last)
+		}
+		parts := partitionsOf(t, f.conn, "metric")
+		for _, w := range want {
+			if !strings.Contains(strings.Join(parts, ","), w) {
+				t.Errorf("partitions %v, want %s", parts, w)
+			}
+		}
+		// A partition made by the roll carries the parent's indexes.
+		var idx int
+		if err := f.conn.QueryRow(f.ctx, `select count(*) from pg_indexes where tablename = $1`, last).Scan(&idx); err != nil || idx != 3 {
+			t.Errorf("%s has %d indexes (%v), want the parent's 3", last, idx, err)
+		}
+	})
+}
+
+// TestTheRollKeepsYesterday: the days the roll keeps run from the day before
+// now's through three after it, the same set whichever second of the day now
+// is, and a second past midnight moves them all by one (#1567).
+func TestTheRollKeepsYesterday(t *testing.T) {
+	t.Parallel()
+	d := func(day int) time.Time { return time.Date(2026, 11, day, 0, 0, 0, 0, time.UTC) }
+	for _, tc := range []struct {
+		now   time.Time
+		first time.Time
+	}{
+		{d(7), d(6)},
+		{d(7).Add(12 * time.Hour), d(6)},
+		{d(8).Add(-time.Nanosecond), d(6)},
+		{d(8), d(7)},
+		{d(8).Add(30 * time.Second), d(7)},
+		// An hour into the 8th east of Greenwich is still the 7th in UTC.
+		{time.Date(2026, 11, 8, 1, 0, 0, 0, time.FixedZone("UTC+2", 2*3600)), d(6)},
+	} {
+		days := storage.ExportMetricRollDays(tc.now)
+		if len(days) != 5 {
+			t.Fatalf("at %s the roll keeps %v, want 5 days", tc.now, days)
+		}
+		for i, day := range days {
+			if want := tc.first.AddDate(0, 0, i); !day.Equal(want) {
+				t.Errorf("at %s the roll keeps %v, want day %d to be %s", tc.now, days, i, want)
+			}
 		}
 	}
-	// A partition made by the roll carries the parent's indexes.
-	var idx int
-	if err := f.conn.QueryRow(f.ctx, `select count(*) from pg_indexes where tablename = $1`, want[3]).Scan(&idx); err != nil || idx != 3 {
-		t.Errorf("%s has %d indexes (%v), want the parent's 3", want[3], idx, err)
+}
+
+// TestAWriteAtMidnightLands: on a database whose clock reads exactly 00:00:00Z
+// of a new UTC day and whose roll has just run (the boot roll of a server, or
+// a template, first rolled after midnight), a row stamped at that instant, one
+// stamped the last microsecond of the day before (a sample landed late across
+// midnight) and one stamped at now() all route to a partition with no 23514,
+// written straight to the table so no on-demand retry can hide a gap (#1567).
+func TestAWriteAtMidnightLands(t *testing.T) {
+	t.Parallel()
+	midnight := time.Date(2026, 11, 8, 0, 0, 0, 0, time.UTC)
+	f := newPruneFixtureAt(t, midnight)
+	if _, err := f.gw.EnsureMetricPartitions(f.ctx); err != nil {
+		t.Fatal(err)
+	}
+	insert := storagetest.WideMetricInsert(`ts, owner_kind, component_id, metric_type_id, instance, provenance, value`,
+		`values (coalesce($1, now()), 'component', (select id from component where name = 'prune-c1'), (select id from metric_type where name = 'prune-rtt'), '', 'observed', 1)`)
+	late := midnight.Add(-time.Microsecond)
+	for _, ts := range []*time.Time{&midnight, &late, nil} {
+		if _, err := f.conn.Exec(f.ctx, insert, ts); err != nil {
+			t.Fatalf("a metric row at %v on a new day: %v", ts, err)
+		}
+	}
+	var n int
+	if err := f.conn.QueryRow(f.ctx, `select count(*) from metric where ts >= $1 and ts < $2`,
+		midnight.Add(-time.Hour), midnight.Add(time.Hour)).Scan(&n); err != nil || n != 3 {
+		t.Fatalf("%d rows either side of midnight (%v), want 3", n, err)
 	}
 }
 
@@ -61,14 +127,20 @@ func TestMetricPartitionsRollAhead(t *testing.T) {
 // first uncovered instant rather than answering as if the days were whole.
 func TestTheRollRefusesAnUncoveredDay(t *testing.T) {
 	t.Parallel()
-	f := newPruneFixture(t)
-	ahead := dayStart(time.Now()).AddDate(0, 0, 2)
-	half := ahead.Add(12 * time.Hour)
-	mustExec(t, f.conn, `drop table `+dayName(ahead))
-	mustExec(t, f.conn, `create table metric_half partition of metric for values from ('`+ahead.Format(time.RFC3339)+`') to ('`+half.Format(time.RFC3339)+`')`)
-	if _, err := f.gw.EnsureMetricPartitions(f.ctx); err == nil || !strings.Contains(err.Error(), half.Format(time.RFC3339)) {
-		t.Fatalf("a roll over a half-covered day: err %v, want a refusal naming %s", err, half.Format(time.RFC3339))
-	}
+	storagetest.AtEachMidnight(t, func(t *testing.T, at time.Time) {
+		t.Parallel()
+		f := newPruneFixtureAt(t, at)
+		if _, err := f.gw.EnsureMetricPartitions(f.ctx); err != nil {
+			t.Fatal(err)
+		}
+		ahead := dayStart(f.now()).AddDate(0, 0, 2)
+		half := ahead.Add(12 * time.Hour)
+		mustExec(t, f.conn, `drop table `+dayName(ahead))
+		mustExec(t, f.conn, `create table metric_half partition of metric for values from ('`+ahead.Format(time.RFC3339)+`') to ('`+half.Format(time.RFC3339)+`')`)
+		if _, err := f.gw.EnsureMetricPartitions(f.ctx); err == nil || !strings.Contains(err.Error(), half.Format(time.RFC3339)) {
+			t.Fatalf("a roll over a half-covered day: err %v, want a refusal naming %s", err, half.Format(time.RFC3339))
+		}
+	})
 }
 
 // TestMetricCoverageGap: the coverage check walks the partitions in order
@@ -211,7 +283,10 @@ func TestMetricNewestReadsTheNewestDayFirst(t *testing.T) {
 	if strings.Contains(text, "Merge Append") || strings.Contains(text, "Sort") || !strings.Contains(text, "Append") {
 		t.Fatalf("the newest read is not an ordered Append:\n%s", text)
 	}
-	newest := dayName(dayStart(time.Now()).AddDate(0, 0, 3))
+	// The newest day the table has, read rather than counted from today: the
+	// template's days are its binary's, which can be a midnight behind (#1567).
+	parts := partitionsOf(t, f.conn, "metric")
+	newest := parts[len(parts)-1]
 	for _, line := range plan {
 		if strings.Contains(line, "Index Scan") {
 			if !strings.Contains(line, newest) {

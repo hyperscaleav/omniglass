@@ -46,6 +46,25 @@ func metricHeldSQL(owner, typeMatch string) string {
 // starts while the roll is late, always has somewhere to land.
 const metricPartitionsAhead = 3
 
+// metricPartitionsBehind is how many days before the current one the roll
+// keeps a partition for (#1567): a sample stamped seconds before midnight
+// and landed seconds after needs yesterday's day. A server that ran
+// yesterday made it as that day's today; a database first rolled after
+// midnight (a fresh install, every test binary's template) has none until
+// this makes it. An older day is made on demand (landMetricDays).
+const metricPartitionsBehind = 1
+
+// metricRollDays is the days the roll keeps a partition for at now: from
+// metricPartitionsBehind before now's day through metricPartitionsAhead
+// after it, oldest first.
+func metricRollDays(now time.Time) []time.Time {
+	days := make([]time.Time, 0, metricPartitionsBehind+1+metricPartitionsAhead)
+	for i := -metricPartitionsBehind; i <= metricPartitionsAhead; i++ {
+		days = append(days, metricDay(now).AddDate(0, 0, i))
+	}
+	return days
+}
+
 // partitionLockTimeout bounds how long a partition's attach or detach waits
 // for its lock on metric, so it never queues long in front of the readers
 // and writers behind it; a roll that times out is tried again by the next.
@@ -117,11 +136,12 @@ func metricCoverageGap(parts []MetricPartition, from, to time.Time) (time.Time, 
 	return time.Time{}, false
 }
 
-// EnsureMetricPartitions makes sure the metric table has a partition for the
-// current day and the metricPartitionsAhead after it, creating any that is
-// missing, and returns the names it created. It then reads the partitions
-// back and refuses, naming the first instant uncovered, unless they cover
-// every instant from the start of today through the end of the last day
+// EnsureMetricPartitions makes sure the metric table has a partition for
+// every day of metricRollDays at the database's now (yesterday, today and
+// the metricPartitionsAhead after it), creating any that is missing, and
+// returns the names it created. It then reads the partitions back and
+// refuses, naming the first instant uncovered, unless they cover every
+// instant from the start of yesterday through the end of the last day
 // ahead: the server calls it at boot and starts no ingest over a refusal,
 // and on every retention pass after (#420's roll).
 func (p *PG) EnsureMetricPartitions(ctx context.Context) ([]string, error) {
@@ -129,10 +149,7 @@ func (p *PG) EnsureMetricPartitions(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	days := make([]time.Time, 0, metricPartitionsAhead+1)
-	for i := 0; i <= metricPartitionsAhead; i++ {
-		days = append(days, metricDay(now).AddDate(0, 0, i))
-	}
+	days := metricRollDays(now)
 	created, err := p.ensureMetricDays(ctx, days)
 	if err != nil {
 		return created, err
@@ -141,10 +158,10 @@ func (p *PG) EnsureMetricPartitions(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return created, err
 	}
-	through := metricDay(now).AddDate(0, 0, metricPartitionsAhead+1)
-	if gap, ok := metricCoverageGap(parts, metricDay(now), through); ok {
+	from, through := days[0], days[len(days)-1].AddDate(0, 0, 1)
+	if gap, ok := metricCoverageGap(parts, from, through); ok {
 		return created, fmt.Errorf("storage: metric partitions do not cover %s (want every instant from %s to %s)",
-			gap.Format(time.RFC3339), metricDay(now).Format(time.RFC3339), through.Format(time.RFC3339))
+			gap.Format(time.RFC3339), from.Format(time.RFC3339), through.Format(time.RFC3339))
 	}
 	return created, nil
 }

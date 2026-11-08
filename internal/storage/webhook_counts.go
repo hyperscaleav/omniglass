@@ -55,7 +55,7 @@ func (p *PG) RecordWebhookCounts(ctx context.Context, counts []WebhookCount) err
 	var errs []error
 	for _, id := range order {
 		rows := byComponent[id]
-		err := p.sampleWrite(ctx, "record webhook counts", func(tx pgx.Tx) error {
+		err := p.sampleWrite(ctx, "record webhook counts", func(ctx context.Context, tx pgx.Tx) error {
 			return p.writeMetricSamples(ctx, tx, gatewayWriter(writerclass.Process), rows)
 		})
 		if err != nil && !errors.Is(err, ErrComponentNotFound) {

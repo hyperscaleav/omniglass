@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest/querycount"
 )
 
@@ -236,52 +237,58 @@ func TestAReplayedSpoolLandsWhole(t *testing.T) {
 
 // TestATooOldSampleIsDroppedAndCounted: a late sample older than its series'
 // window is dropped, with one log line naming its series and its age, and
-// the rest of its batch lands, the batch acked once.
+// the rest of its batch lands, the batch acked once. The batch's newest
+// sample has no day partition, so its first attempt misses and the batch is
+// retried with the day made: the line is still logged once, on the commit,
+// at the real clock and either side of a UTC midnight (#1567).
 func TestATooOldSampleIsDroppedAndCounted(t *testing.T) {
 	// Serial: it swaps the process-wide slog default to read the line.
-	r := newBlockRig(t)
-	a := r.series("", "observed")
-	r.spaced(a, r.day(1), 170)
-	r.fold(storage.BlockFold{MaxDays: blockLaneDays})
-	var mu sync.Mutex
-	var buf bytes.Buffer
-	prev := slog.Default()
-	slog.SetDefault(slog.New(slog.NewTextHandler(&lockedWriter{mu: &mu, w: &buf}, nil)))
-	t.Cleanup(func() { slog.SetDefault(prev) })
-	now := time.Now().UTC()
-	b := storage.IngestBatch{BatchID: "too-old", Writer: storage.PushWriter(), Metrics: []storage.MetricSampleWrite{
-		sampleOf("old", now.Add(-(blockLaneDays+10)*24*time.Hour), 1),
-		sampleOf("", r.day(1).Add(5*time.Hour+time.Millisecond), 2),
-		sampleOf("", now.Add(-time.Minute), 3),
-	}}
-	if landed, err := r.gw.LandBatch(r.ctx, b); err != nil || !landed {
-		t.Fatalf("the batch landed %v, %v; want it landed", landed, err)
-	}
-	if landed, err := r.gw.LandBatch(r.ctx, b); err != nil || landed {
-		t.Fatalf("the batch again landed %v, %v; want nothing", landed, err)
-	}
-	if n := r.count(`select count(*) from metric m join metric_series s on s.id = m.series_id where s.instance = 'old'`); n != 0 {
-		t.Errorf("%d rows of the too-old sample landed, want none", n)
-	}
-	if n := r.count(`select count(*) from metric where series_id = $1`, a); n != 172 {
-		t.Errorf("series a holds %d rows, want its 170 and the batch's other two", n)
-	}
-	if got := r.blocksOf(a); !slices.Equal(got, []string{"day 1+00:00 171"}) {
-		t.Errorf("the blocks are %v, want the late sample in its day block", got)
-	}
-	mu.Lock()
-	logged := buf.String()
-	mu.Unlock()
-	var lines []string
-	for _, l := range strings.Split(logged, "\n") {
-		if strings.Contains(l, "older than their series' window") {
-			lines = append(lines, l)
+	storagetest.AtEachMidnight(t, func(t *testing.T, at time.Time) {
+		r := newBlockRigAt(t, at)
+		a := r.series("", "observed")
+		r.spaced(a, r.day(1), 170)
+		r.fold(storage.BlockFold{MaxDays: blockLaneDays})
+		now := r.now().UTC()
+		mustExec(t, r.conn, `drop table if exists `+dayName(now.Add(-time.Minute)))
+		var mu sync.Mutex
+		var buf bytes.Buffer
+		prev := slog.Default()
+		slog.SetDefault(slog.New(slog.NewTextHandler(&lockedWriter{mu: &mu, w: &buf}, nil)))
+		t.Cleanup(func() { slog.SetDefault(prev) })
+		b := storage.IngestBatch{BatchID: "too-old", Writer: storage.PushWriter(), Metrics: []storage.MetricSampleWrite{
+			sampleOf("old", now.Add(-(blockLaneDays+10)*24*time.Hour), 1),
+			sampleOf("", r.day(1).Add(5*time.Hour+time.Millisecond), 2),
+			sampleOf("", now.Add(-time.Minute), 3),
+		}}
+		if landed, err := r.gw.LandBatch(r.ctx, b); err != nil || !landed {
+			t.Fatalf("the batch landed %v, %v; want it landed", landed, err)
 		}
-	}
-	if len(lines) != 1 || !strings.Contains(lines[0], "instance=old") || !strings.Contains(lines[0], "samples=1") ||
-		!strings.Contains(lines[0], "key=prune-rtt") || !strings.Contains(lines[0], "age=") {
-		t.Errorf("the drop logged %q, want one line naming the series, its count and its age", lines)
-	}
+		if landed, err := r.gw.LandBatch(r.ctx, b); err != nil || landed {
+			t.Fatalf("the batch again landed %v, %v; want nothing", landed, err)
+		}
+		if n := r.count(`select count(*) from metric m join metric_series s on s.id = m.series_id where s.instance = 'old'`); n != 0 {
+			t.Errorf("%d rows of the too-old sample landed, want none", n)
+		}
+		if n := r.count(`select count(*) from metric where series_id = $1`, a); n != 172 {
+			t.Errorf("series a holds %d rows, want its 170 and the batch's other two", n)
+		}
+		if got := r.blocksOf(a); !slices.Equal(got, []string{"day 1+00:00 171"}) {
+			t.Errorf("the blocks are %v, want the late sample in its day block", got)
+		}
+		mu.Lock()
+		logged := buf.String()
+		mu.Unlock()
+		var lines []string
+		for _, l := range strings.Split(logged, "\n") {
+			if strings.Contains(l, "older than their series' window") {
+				lines = append(lines, l)
+			}
+		}
+		if len(lines) != 1 || !strings.Contains(lines[0], "instance=old") || !strings.Contains(lines[0], "samples=1") ||
+			!strings.Contains(lines[0], "key=prune-rtt") || !strings.Contains(lines[0], "age=") {
+			t.Errorf("the drop logged %q, want one line naming the series, its count and its age", lines)
+		}
+	})
 }
 
 // TestADirtiedHourRecomputesFromItsBlocks: a late sample's hour is
