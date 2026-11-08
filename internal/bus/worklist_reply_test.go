@@ -9,7 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/nats-io/nats.go"
 )
 
 // worklistOf is a store whose worklist holds n tasks, or fails with err.
@@ -40,19 +42,45 @@ func capture(t *testing.T, level slog.Level) *bytes.Buffer {
 	return &logged
 }
 
-// A reply over max payload is refused by NATS, so the node would see a
-// timeout; the server says so at ERROR, with the node, the size and the limit.
+// sent is what one answerWorklist call sent: its body and header.
+type sent struct {
+	calls int
+	body  []byte
+	hdr   nats.Header
+}
+
+func (r *sent) respond(data []byte, hdr nats.Header) error {
+	r.calls++
+	r.body, r.hdr = data, hdr
+	return nil
+}
+
+// refused fails t unless r is one refusal: no body, and a reason naming want.
+func (r *sent) refused(t *testing.T, want string) {
+	t.Helper()
+	if r.calls != 1 || len(r.body) != 0 {
+		t.Fatalf("sent %d replies, the last %d bytes, want one refusal with no body", r.calls, len(r.body))
+	}
+	if _, err := collection.DecodeWorklistReply(r.hdr, r.body); !errors.Is(err, collection.ErrWorklistRefused) || !strings.Contains(err.Error(), want) {
+		t.Fatalf("the node reads %v, want a refusal naming %q", err, want)
+	}
+}
+
+// A reply over max payload cannot be sent; the server says so at ERROR, with
+// the node, the size and the limit, and tells the node, which keeps its
+// worklist.
 func TestAnOversizedWorklistReplyIsLoggedAsAnError(t *testing.T) {
 	logged := capture(t, slog.LevelDebug)
 	s := &Server{store: worklistOf{n: 50}}
-	responded := false
-	s.answerWorklist("edge-1", "og.worklist.edge-1", 1000, func([]byte) error { responded = true; return nil }, time.Now())
+	var r sent
+	s.answerWorklist(context.Background(), "edge-1", "og.worklist.edge-1", 1000, r.respond, time.Now())
 
-	if responded {
-		t.Error("an oversized reply was sent")
+	r.refused(t, "over max payload 1000")
+	if got := s.WorklistCounts().Oversize; got != 1 {
+		t.Errorf("oversize count %d, want 1", got)
 	}
 	line := logged.String()
-	for _, want := range []string{"level=ERROR", "node=edge-1", "subject=og.worklist.edge-1", "max_payload=1000", "reply_bytes=", "timeout"} {
+	for _, want := range []string{"level=ERROR", "node=edge-1", "subject=og.worklist.edge-1", "max_payload=1000", "reply_bytes=", "keeps its last worklist"} {
 		if !strings.Contains(line, want) {
 			t.Errorf("log line lacks %q: %s", want, line)
 		}
@@ -67,7 +95,7 @@ func TestAnOversizedWorklistReplyIsLoggedAsAnError(t *testing.T) {
 func TestAWorklistReplyThatFailsToSendIsWarned(t *testing.T) {
 	logged := capture(t, slog.LevelDebug)
 	s := &Server{store: worklistOf{n: 2}}
-	s.answerWorklist("edge-1", "og.worklist.edge-1", 1<<20, func([]byte) error { return errors.New("connection closed") }, time.Now())
+	s.answerWorklist(context.Background(), "edge-1", "og.worklist.edge-1", 1<<20, func([]byte, nats.Header) error { return errors.New("connection closed") }, time.Now())
 
 	line := logged.String()
 	for _, want := range []string{"level=WARN", "node=edge-1", "reply_bytes=", "max_payload=1048576", "connection closed"} {
@@ -78,13 +106,23 @@ func TestAWorklistReplyThatFailsToSendIsWarned(t *testing.T) {
 	if strings.Count(line, "level=") != 1 {
 		t.Errorf("want one log line: %s", line)
 	}
+	if got := s.WorklistCounts().RespondFailed; got != 1 {
+		t.Errorf("respond-failed count %d, want 1", got)
+	}
 }
 
-// A failed read is warned about once, naming the node and the error.
+// A failed read is warned about once, naming the node and the error, and the
+// node is told, so it keeps its worklist rather than reading an empty one.
 func TestAFailedWorklistReadIsWarned(t *testing.T) {
 	logged := capture(t, slog.LevelDebug)
 	s := &Server{store: worklistOf{err: errors.New("db down")}}
-	s.answerWorklist("edge-1", "og.worklist.edge-1", 1<<20, func([]byte) error { t.Error("sent a reply"); return nil }, time.Now())
+	var r sent
+	s.answerWorklist(context.Background(), "edge-1", "og.worklist.edge-1", 1<<20, r.respond, time.Now())
+
+	r.refused(t, "worklist read failed")
+	if got := s.WorklistCounts().ReadFailed; got != 1 {
+		t.Errorf("read-failed count %d, want 1", got)
+	}
 
 	line := logged.String()
 	for _, want := range []string{"level=WARN", "node=edge-1", "db down"} {
@@ -103,10 +141,10 @@ func TestASuccessfulWorklistReplyRecordsItsSize(t *testing.T) {
 	logged := capture(t, slog.LevelDebug)
 	s := &Server{store: worklistOf{n: 3}}
 	var got []byte
-	s.answerWorklist("edge-1", "og.worklist.edge-1", 1<<20, func(b []byte) error { got = b; return nil }, time.Now())
+	s.answerWorklist(context.Background(), "edge-1", "og.worklist.edge-1", 1<<20, func(b []byte, _ nats.Header) error { got = b; return nil }, time.Now())
 	s.store = worklistOf{n: 6}
 	var other []byte
-	s.answerWorklist("edge-2", "og.worklist.edge-2", 1<<20, func(b []byte) error { other = b; return nil }, time.Now())
+	s.answerWorklist(context.Background(), "edge-2", "og.worklist.edge-2", 1<<20, func(b []byte, _ nats.Header) error { other = b; return nil }, time.Now())
 
 	sizes := s.WorklistReplyBytes()
 	if sizes["edge-1"] != len(got) || sizes["edge-2"] != len(other) || len(got) == 0 || len(other) <= len(got) {
@@ -125,22 +163,23 @@ func TestASuccessfulWorklistReplyRecordsItsSize(t *testing.T) {
 // has its own hour.
 func TestANearLimitWorklistReplyIsWarnedOncePerNodePerHour(t *testing.T) {
 	s := &Server{store: worklistOf{n: 10}}
-	ok := func([]byte) error { return nil }
-	s.answerWorklist("probe", "s", 1<<20, ok, time.Now())
+	ok := func([]byte, nats.Header) error { return nil }
+	bg := context.Background()
+	s.answerWorklist(bg, "probe", "s", 1<<20, ok, time.Now())
 	limit := int64(s.WorklistReplyBytes()["probe"]) * 100 / 80 // the reply is 80% of the limit
 	logged := capture(t, slog.LevelWarn)
 
 	t0 := time.Now()
-	s.answerWorklist("edge-1", "s", limit, ok, t0)
-	s.answerWorklist("edge-1", "s", limit, ok, t0.Add(59*time.Minute))
+	s.answerWorklist(bg, "edge-1", "s", limit, ok, t0)
+	s.answerWorklist(bg, "edge-1", "s", limit, ok, t0.Add(59*time.Minute))
 	if n := strings.Count(logged.String(), "near max payload"); n != 1 {
 		t.Fatalf("%d warnings inside the hour, want 1: %s", n, logged.String())
 	}
-	s.answerWorklist("edge-2", "s", limit, ok, t0.Add(time.Minute))
+	s.answerWorklist(bg, "edge-2", "s", limit, ok, t0.Add(time.Minute))
 	if n := strings.Count(logged.String(), "near max payload"); n != 2 {
 		t.Fatalf("%d warnings after another node's, want 2", n)
 	}
-	s.answerWorklist("edge-1", "s", limit, ok, t0.Add(time.Hour))
+	s.answerWorklist(bg, "edge-1", "s", limit, ok, t0.Add(time.Hour))
 	if n := strings.Count(logged.String(), "near max payload"); n != 3 {
 		t.Fatalf("%d warnings after the hour, want 3", n)
 	}

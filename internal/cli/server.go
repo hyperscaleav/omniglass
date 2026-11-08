@@ -195,7 +195,7 @@ func runServer(ctx context.Context, version string, lab bool) error {
 // startBus parses the configured NATS listen address and starts the embedded
 // server. A "host:" or bare port resolves through net.SplitHostPort; a parse
 // failure is a config error surfaced at boot.
-func startBus(c config.Config, gw storage.Gateway) (*bus.Server, error) {
+func startBus(c config.Config, gw *storage.PG) (*bus.Server, error) {
 	host, portStr, err := net.SplitHostPort(c.NatsAddr)
 	if err != nil {
 		return nil, err
@@ -204,7 +204,9 @@ func startBus(c config.Config, gw storage.Gateway) (*bus.Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	return bus.New(bus.Config{Host: host, Port: port, StoreDir: c.NatsStoreDir}, gw)
+	// The worklist pool is held under the database pool, keeping one
+	// connection for ingest (#1577).
+	return bus.New(bus.Config{Host: host, Port: port, StoreDir: c.NatsStoreDir, DBPoolSize: gw.PoolSize()}, gw)
 }
 
 // auditWriterRuling holds, once at boot, what was stored before the

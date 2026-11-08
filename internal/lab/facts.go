@@ -40,10 +40,11 @@ type FactService struct {
 
 // FactCadence is one cadence profile the lab's node runs at.
 type FactCadence struct {
-	Name       string `json:"name"`
-	Heartbeat  string `json:"heartbeat"`
-	ProbeEvery string `json:"probe_every"`
-	For        string `json:"for"`
+	Name          string `json:"name"`
+	Heartbeat     string `json:"heartbeat"`
+	ProbeEvery    string `json:"probe_every"`
+	WorklistEvery string `json:"worklist_every"`
+	For           string `json:"for"`
 }
 
 // FactVolume is one named volume the lab keeps.
@@ -139,7 +140,7 @@ func FactsJSON(walkthroughs fs.FS) ([]byte, error) {
 		if probe == "" {
 			probe = "every check-in"
 		}
-		f.Cadences = append(f.Cadences, FactCadence{Name: c.Name, Heartbeat: c.Heartbeat, ProbeEvery: probe, For: c.For})
+		f.Cadences = append(f.Cadences, FactCadence{Name: c.Name, Heartbeat: c.Heartbeat, ProbeEvery: probe, WorklistEvery: c.WorklistEvery, For: c.For})
 	}
 	names, err := fs.Glob(walkthroughs, "*.yaml")
 	if err != nil {

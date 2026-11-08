@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math/rand/v2"
 	"os"
 	"sync"
 	"time"
@@ -20,8 +21,21 @@ import (
 // own cadence (the lab's `default` cadence profile runs at it).
 const DefaultHeartbeat = 30 * time.Second
 
-// worklistTimeout bounds a single worklist request-reply.
-const worklistTimeout = 5 * time.Second
+// DefaultWorklistEvery is how often a node pulls its worklist when it is not
+// told otherwise (#1577): on its own interval, not the heartbeat's, so a
+// short heartbeat does not mean a worklist rebuild as often.
+const DefaultWorklistEvery = 30 * time.Second
+
+// worklistTimeout bounds a single worklist request-reply; a var so a test can
+// shorten it.
+var worklistTimeout = 5 * time.Second
+
+// pullBackoffBase and pullBackoffCap bound the wait after a failed worklist
+// pull (#1577); vars so a test can shorten them.
+var (
+	pullBackoffBase = time.Second
+	pullBackoffCap  = 30 * time.Second
+)
 
 // onceDrainTimeout bounds how long a one-shot run waits for the stream to ack
 // what it collected; shutdownDrainTimeout bounds the same wait when a running
@@ -40,6 +54,10 @@ type Config struct {
 	// ProbeEvery is how often each reachability probe runs (#1273). Zero
 	// probes every heartbeat tick, the behavior before it existed.
 	ProbeEvery time.Duration
+	// WorklistEvery is how often the node pulls its worklist, on a goroutine
+	// of its own, so a pull never holds the heartbeat (#1577). Zero pulls at
+	// the heartbeat's interval; `node run` defaults it to DefaultWorklistEvery.
+	WorklistEvery time.Duration
 	// ReportEvery is the node's own collection report window (#1369),
 	// overriding the platform's the worklist carries: a test's, or a lab's.
 	// Zero takes the worklist's.
@@ -316,9 +334,13 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	sched := newPollSchedule(heartbeat)
 	sched.probeEvery = cfg.ProbeEvery
 
-	wl, err := pullWorklist(nc, cfg.Name)
+	wl, ok, err := firstWorklist(ctx, nc, cfg.Name, cfg.Once, logger)
 	if err != nil {
 		return collection.WorklistReply{}, err
+	}
+	if !ok {
+		// Stopped before the server answered: there is nothing to run.
+		return collection.WorklistReply{}, nil
 	}
 	logger.Info("worklist pulled", "facility", "collection", "tasks", len(wl.Tasks))
 	sessions.reconcile(wl.Tasks)
@@ -363,11 +385,19 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	}
 	defer func() { _ = runSub.Unsubscribe() }()
 
-	every := cfg.HeartbeatEvery
-	if every <= 0 {
-		every = 30 * time.Second
+	// The worklist is pulled on its own goroutine and interval (#1577); the
+	// loop takes the latest one pulled and runs the one it has until then.
+	pullEvery := cfg.WorklistEvery
+	if pullEvery <= 0 {
+		pullEvery = heartbeat
 	}
-	ticker := time.NewTicker(every)
+	worklists := make(chan collection.WorklistReply, 1)
+	pctx, stopPulls := context.WithCancel(ctx)
+	var pulls sync.WaitGroup
+	pulls.Go(func() { pullWorklists(pctx, nc, cfg.Name, pullEvery, logger, worklists) })
+	defer func() { stopPulls(); pulls.Wait() }()
+
+	ticker := time.NewTicker(heartbeat)
 	defer ticker.Stop()
 	for {
 		select {
@@ -387,6 +417,9 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 				job.respond(runNowTask(ctx, spool, cfg.Name, runner, sessions, sched, report, job.task, job.deadline))
 			}
 			publishSelfLogs(spool, cfg.Name, sink)
+		case next := <-worklists:
+			// The next tick reconciles sessions and runs tasks against it.
+			wl = next
 		case <-ticker.C:
 			_ = publishHeartbeat(nc, cfg.Name)
 			// Ship what the spool held since the last tick before this tick's
@@ -401,13 +434,8 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 				clear(faultseen)
 				sched.forgetOccurrences()
 			}
-			// Re-pull the whole worklist each tick, so a change the server wrote
-			// runs on this tick with nothing cached to invalidate. A pull failure
-			// is non-fatal: the last worklist runs and the pull retries next tick.
-			if next, err := pullWorklist(nc, cfg.Name); err == nil {
-				wl = next
-			}
-			// Hold, recycle, or tear down sessions to match the worklist.
+			// Hold, recycle, or tear down sessions to match the latest
+			// worklist pulled; a failed pull left the last good one in place.
 			sessions.reconcile(wl.Tasks)
 			// Run the worklist's tcp tasks and publish their telemetry. A publish
 			// failure is non-fatal (retry next tick).
@@ -475,17 +503,110 @@ func newNodeJetStream(nc *nats.Conn) (jetstream.JetStream, error) {
 		jetstream.WithPublishAsyncMaxPending(2*spoolWindow))
 }
 
-// pullWorklist runs the worklist request-reply and decodes the reply.
-func pullWorklist(nc *nats.Conn, name string) (collection.WorklistReply, error) {
-	msg, err := nc.Request(collection.WorklistSubject(name), nil, worklistTimeout)
+// pullWorklist runs the worklist request-reply and decodes the reply. The
+// request states the node's budget, so the server drops a pull it reaches only
+// after the node stopped waiting (#1577); a reply the server refused is an
+// error, never an empty worklist.
+func pullWorklist(ctx context.Context, nc *nats.Conn, name string) (collection.WorklistReply, error) {
+	rctx, cancel := context.WithTimeout(ctx, worklistTimeout)
+	defer cancel()
+	req := nats.NewMsg(collection.WorklistSubject(name))
+	req.Header.Set(collection.WorklistTimeoutHeader, worklistTimeout.String())
+	msg, err := nc.RequestMsgWithContext(rctx, req)
 	if err != nil {
 		return collection.WorklistReply{}, fmt.Errorf("node: pull worklist: %w", err)
 	}
-	var reply collection.WorklistReply
-	if err := json.Unmarshal(msg.Data, &reply); err != nil {
-		return collection.WorklistReply{}, fmt.Errorf("node: decode worklist: %w", err)
+	reply, err := collection.DecodeWorklistReply(msg.Header, msg.Data)
+	if err != nil {
+		return collection.WorklistReply{}, fmt.Errorf("node: pull worklist: %w", err)
 	}
 	return reply, nil
+}
+
+// pullBackoff is the wait before the attempt-th retry of a failed pull: the
+// base doubled each attempt up to the cap, jittered by rnd (in [0, 1)) over
+// its upper half, so a fleet that failed together does not retry together.
+func pullBackoff(attempt int, rnd float64) time.Duration {
+	d := pullBackoffCap
+	if attempt >= 1 && attempt <= 32 {
+		d = min(pullBackoffBase<<(attempt-1), pullBackoffCap)
+	}
+	return d/2 + time.Duration(rnd*float64(d/2))
+}
+
+// jitterInterval is every spread by rnd (in [0, 1)) across ten percent either
+// side, so nodes started together do not pull together.
+func jitterInterval(every time.Duration, rnd float64) time.Duration {
+	return time.Duration(float64(every) * (0.9 + 0.2*rnd))
+}
+
+// firstWorklist pulls the node's first worklist, retrying a failure on
+// backoff until one arrives or ctx ends (false, nil), so a server that is
+// still starting, or busy with the rest of the fleet, never ends the node
+// (#1577). once tries one pull and returns its error: a one-shot run reports
+// its failure rather than waiting on it.
+func firstWorklist(ctx context.Context, nc *nats.Conn, name string, once bool, logger *slog.Logger) (collection.WorklistReply, bool, error) {
+	for attempt := 1; ; attempt++ {
+		wl, err := pullWorklist(ctx, nc, name)
+		if err == nil {
+			return wl, true, nil
+		}
+		if once {
+			return collection.WorklistReply{}, false, err
+		}
+		if ctx.Err() != nil {
+			return collection.WorklistReply{}, false, nil
+		}
+		wait := pullBackoff(attempt, rand.Float64())
+		logger.Warn("first worklist pull failed, retrying", "facility", "collection",
+			"attempt", attempt, "retry_in", wait.String(), "error", err.Error())
+		if !sleepCtx(ctx, wait) {
+			return collection.WorklistReply{}, false, nil
+		}
+	}
+}
+
+// pullWorklists pulls the node's worklist every interval, jittered, until ctx
+// ends, handing each one to out in place of any the loop has not taken. A
+// failed pull is logged with the running count and retried on backoff; the
+// node runs the worklist it has meanwhile (#1577).
+func pullWorklists(ctx context.Context, nc *nats.Conn, name string, every time.Duration, logger *slog.Logger, out chan collection.WorklistReply) {
+	attempt, failures := 0, 0
+	for wait := jitterInterval(every, rand.Float64()); sleepCtx(ctx, wait); {
+		next, err := pullWorklist(ctx, nc, name)
+		if err != nil {
+			if ctx.Err() != nil {
+				return
+			}
+			attempt++
+			failures++
+			wait = pullBackoff(attempt, rand.Float64())
+			logger.Warn("worklist pull failed, the node keeps its last worklist", "facility", "collection",
+				"attempt", attempt, "retry_in", wait.String(), "failures", failures, "error", err.Error())
+			continue
+		}
+		attempt = 0
+		wait = jitterInterval(every, rand.Float64())
+		// Only this goroutine sends, so once a stale worklist is taken back
+		// the send cannot block.
+		select {
+		case <-out:
+		default:
+		}
+		out <- next
+	}
+}
+
+// sleepCtx waits d, or until ctx ends, and reports whether d elapsed.
+func sleepCtx(ctx context.Context, d time.Duration) bool {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-t.C:
+		return true
+	}
 }
 
 // publishSelfLogs drains the node's captured log records and hands them to the
