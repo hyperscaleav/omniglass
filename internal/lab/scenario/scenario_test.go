@@ -693,3 +693,60 @@ func TestWithin(t *testing.T) {
 		}
 	}
 }
+
+// Every planned system says which role each of its components fills, as the
+// manifest names the product for the role, and the staffing is exactly the
+// components it takes: the seed staffs each role from it.
+func TestResolveStaffsEveryRoleWithItsProduct(t *testing.T) {
+	m, cat := corporate(t)
+	p, err := Resolve(m, cat, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fills := map[string]map[string]string{}
+	for _, st := range m.Standards {
+		fills[st.Name.Name] = map[string]string{}
+		for role, ref := range st.Products {
+			fills[st.Name.Name][role] = ref.Name
+		}
+	}
+	for _, s := range p.allSystems() {
+		perProduct := map[string]int{}
+		for _, f := range s.Roles {
+			if want := fills[s.Standard][f.Role]; f.Product != want || f.Count < 1 {
+				t.Fatalf("system %s staffs %s with %d %s, want the manifest's %s", s.Name, f.Role, f.Count, f.Product, want)
+			}
+			perProduct[f.Product] += f.Count
+		}
+		for _, c := range s.Components {
+			if perProduct[c.Name] != c.Count {
+				t.Fatalf("system %s takes %d %s but staffs %d", s.Name, c.Count, c.Name, perProduct[c.Name])
+			}
+			delete(perProduct, c.Name)
+		}
+		if len(perProduct) > 0 {
+			t.Fatalf("system %s staffs products it does not take: %v", s.Name, perProduct)
+		}
+	}
+}
+
+// Each site's node is named for the site, so the plan's every site has a
+// node of its own and two sites never share one.
+func TestSiteNodeIsNamedForItsSite(t *testing.T) {
+	m, cat := corporate(t)
+	p, err := Resolve(m, cat, 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]string{}
+	for _, s := range p.Sites {
+		n := SiteNode(s.Name)
+		if prev, ok := seen[n]; ok {
+			t.Fatalf("sites %s and %s share the node %s", prev, s.Name, n)
+		}
+		seen[n] = s.Name
+	}
+	if got := SiteNode("regional-01"); got != "edge-regional-01" {
+		t.Fatalf("SiteNode(regional-01) = %q, want edge-regional-01", got)
+	}
+}

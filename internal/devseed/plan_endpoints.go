@@ -83,13 +83,9 @@ func seedPlanEndpoints(ctx context.Context, gw storage.Gateway, actorID string, 
 		return 0, err
 	}
 	run.done("endpoint plan")
-	var node *string
-	if opts.Node != "" {
-		n := opts.Node
-		node = &n
-	}
 	for _, e := range planned {
 		comp := compIDs[e.Comp]
+		node := opts.nodeOf(rows.Components[e.Comp].Site)
 		spec := storage.EndpointSpec{Component: &comp, Node: node, SecretRead: all, CanAdmin: true}
 		if e.Driver != "" {
 			drv := e.Driver
@@ -103,6 +99,21 @@ func seedPlanEndpoints(ctx context.Context, gw storage.Gateway, actorID string, 
 	}
 	run.done("endpoints")
 	return len(planned), nil
+}
+
+// nodeOf is the node a site's endpoints are placed on, nil for none: NodeFor's
+// answer for the site, else Node.
+func (o PlanOptions) nodeOf(site string) *string {
+	n := o.Node
+	if o.NodeFor != nil {
+		if f := o.NodeFor(site); f != "" {
+			n = f
+		}
+	}
+	if n == "" {
+		return nil
+	}
+	return &n
 }
 
 func isSecretExists(err error) bool { return errors.Is(err, storage.ErrSecretExists) }

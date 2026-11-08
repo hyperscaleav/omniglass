@@ -133,6 +133,11 @@
    "doc": "set by omniglass lab run for its seed one-off: the hash of the node token it minted for this run, never set by hand"
   },
   {
+   "key": "OMNIGLASS_LAB_SITE_NODE_TOKEN_HASHES",
+   "scope": "cli",
+   "doc": "set by omniglass lab run for a scale lab's seed one-off: each site node's name and the hash of the token it minted for it this run (node=hash, comma-separated), never set by hand"
+  },
+  {
    "key": "OMNIGLASS_LAB_PUSH_TOKEN_HASH",
    "scope": "cli",
    "doc": "set by omniglass lab run for its seed one-off: the hash of the simulated pusher's token it minted for this run, never set by hand"

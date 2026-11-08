@@ -1,7 +1,10 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -104,15 +107,32 @@ func TestLabRunScenarioPlan(t *testing.T) {
 	}
 }
 
-// Until bring-up lands (#1554), a scale lab scenario without --plan, or
-// without a size, refuses with what to do; the size knob on a seeded fleet
-// is refused too.
+// The forced host memory a scale lab plans against reads as binary sizes.
+func TestParseByteSizeReadsBinarySuffixes(t *testing.T) {
+	for in, want := range map[string]int64{
+		"": 0, "1024": 1024, "2k": 2 << 10, "512m": 512 << 20, "2g": 2 << 30, "12G": 12 << 30,
+	} {
+		got, err := parseByteSize(in)
+		if err != nil || got != want {
+			t.Errorf("parseByteSize(%q) = %d, %v; want %d", in, got, err, want)
+		}
+	}
+	for _, in := range []string{"banana", "-1g", "g", "2t"} {
+		if _, err := parseByteSize(in); err == nil {
+			t.Errorf("parseByteSize(%q) read as a size", in)
+		}
+	}
+}
+
+// A scale lab scenario without a size, or with a forced host memory that is
+// no size, refuses with what to do before it starts anything; the size knob
+// on a seeded fleet is refused too.
 func TestLabRunScenarioRefusals(t *testing.T) {
 	for _, tc := range []struct {
 		args []string
 		want string
 	}{
-		{[]string{"--scenario", "corporate", "--systems", "100"}, "not built yet (#1554); add --plan"},
+		{[]string{"--scenario", "corporate", "--systems", "100", "--host-memory", "banana"}, "--host-memory"},
 		{[]string{"--scenario", "corporate", "--plan"}, "--systems N (3 to 10000)"},
 		{[]string{"--scenario", "corporate", "--systems", "0", "--plan"}, "--systems N"},
 		{[]string{"--scenario", "corporate", "--systems", "-3", "--plan"}, "out of range"},
@@ -129,5 +149,69 @@ func TestLabRunScenarioRefusals(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("lab run %v = %v, want an error containing %q", tc.args, err, tc.want)
 		}
+	}
+}
+
+// A scale lab's --plan ends with its preflight (#1554): the estimate, what
+// the Docker host can spare, and the decision bring-up would make, a refusal
+// naming the largest size that fits; without a Docker host, the estimate
+// alone. It starts nothing either way.
+func TestLabRunScenarioPlanPreflight(t *testing.T) {
+	host := func(_ context.Context, forced int64) (lab.HostResources, error) {
+		mem := int64(32 << 30)
+		if forced > 0 {
+			mem = forced
+		}
+		return lab.HostResources{MemBytes: mem, CPUs: 12}, nil
+	}
+	plan := func(t *testing.T, systems int, mem string, readHost hostReader) string {
+		t.Helper()
+		var out strings.Builder
+		if err := runLab(context.Background(), &out, "test", labFlags{scenario: "corporate", systems: systems, plan: true,
+			scale: labScale{hostMemory: mem}, readHost: readHost}); err != nil {
+			t.Fatal(err)
+		}
+		return out.String()[strings.Index(out.String(), "\nPreflight"):]
+	}
+	need := lab.MeasuredCost.Estimate(18, 3016)
+	for name, tc := range map[string]struct {
+		systems  int
+		mem      string
+		readHost hostReader
+		want     []string
+	}{
+		"fits": {1000, "", host, []string{
+			fmt.Sprintf("Preflight: about %s of memory and %.1f cores (the server and Postgres, a node for each of 18 sites, 3016 simulated components)",
+				lab.FormatMiB(need.MemMiB), need.CPU),
+			"This Docker host can spare 25.6 GiB and 9.6 cores (80% of its 32.0 GiB and 12 cores)", "Decision: fits."}},
+		"refused": {3000, "4g", host, []string{"Decision: refused. A scale lab of 3000 systems (30 sites, 8950 simulated components)",
+			"this Docker host has 4.0 GiB and 12 cores", ", the largest that fits"}},
+		"none fits": {100, "64m", host, []string{"Decision: refused.", "Not even the smallest size fits", "the smallest scale lab, --systems 3"}},
+		"no docker": {100, "", func(context.Context, int64) (lab.HostResources, error) {
+			return lab.HostResources{}, errors.New("no daemon")
+		},
+			[]string{"Preflight: about ", "No decision: no daemon"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			out := plan(t, tc.systems, tc.mem, tc.readHost)
+			for _, want := range tc.want {
+				if !strings.Contains(out, want) {
+					t.Errorf("the plan lacks %q:\n%s", want, out)
+				}
+			}
+		})
+	}
+	// The size a refusal names is the largest that fits: it fits, and the
+	// next does not.
+	refusal := plan(t, 3000, "4g", host)
+	var largest int
+	if _, err := fmt.Sscanf(refusal[strings.Index(refusal, "run --systems "):], "run --systems %d,", &largest); err != nil {
+		t.Fatalf("no size named: %v\n%s", err, refusal)
+	}
+	if out := plan(t, largest, "4g", host); !strings.Contains(out, "Decision: fits.") {
+		t.Errorf("the named --systems %d does not fit:\n%s", largest, out)
+	}
+	if out := plan(t, largest+1, "4g", host); !strings.Contains(out, "Decision: refused.") {
+		t.Errorf("--systems %d, one past the named size, fits:\n%s", largest+1, out)
 	}
 }

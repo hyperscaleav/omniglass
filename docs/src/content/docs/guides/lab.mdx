@@ -257,8 +257,8 @@ command itself; here is when you would reach for each:
 - `--image` runs an omniglass image of your choosing, with a warning: a lab whose server and binary
   disagree is yours to debug.
 
-- `--systems` and `--plan` size and preview a [scale lab scenario](#scale-lab-scenarios) instead of
-  a seeded fleet.
+- `--systems` and `--plan` size a [scale lab scenario](#scale-lab-scenarios) instead of a seeded
+  fleet, and preview it with its preflight.
 
 A few more flags are hidden from the help because they are for scripts, not for you: the repo's
 own browser tests, docs screenshots, demo recorders and probe each bring up a throwaway lab of their
@@ -285,21 +285,75 @@ systems, so a bigger plan is more nodes rather than bigger ones. One manifest sh
 rooms and lobby signage), in
 [`internal/lab/scenario/manifests/`](https://github.com/hyperscaleav/omniglass/tree/main/internal/lab/scenario/manifests).
 
-Bringing a scenario up is still to come ([#1554](https://github.com/hyperscaleav/omniglass/issues/1554)). What works now is the plan: resolve the manifest at a
-size and print what it would build, without starting anything or needing Docker.
+Run a scenario at a size, and the lab brings it up as a distributed deployment: Postgres, the
+server, and **one node container per site**, each enrolled with its own token and running the
+simulator in its own process for that site's components. Every simulated component answers on its
+own loopback address, so a site looks like many devices rather than many ports on one address. The
+lab is up once every site's node is collecting from every component (the planted faults aside).
 
 ```sh
-omniglass lab run --scenario corporate --systems 1000 --plan
+omniglass lab run --scenario corporate --systems 100
 ```
 
-The plan has three tables: each archetype's sites, floors per site, systems of each standard and
-totals; each site's systems and components; and the components of each product the systems take.
-Without `--plan`, a scenario says bring-up is not built yet; without `--systems`, it asks for a size
-(one system per site at the fewest sites, up to 10,000).
+A scale lab is its own Docker project, `omniglass-scale`, so it runs beside your learning lab, and
+it is throwaway: Ctrl-C removes every container, network and volume it started. Add `--plan` to
+print what a size would build without starting anything: three tables (each archetype's sites,
+floors per site, systems of each standard and totals; each site's systems and components; the
+components of each product) and the [preflight](#how-big-a-lab-your-machine-can-run). Without
+`--systems`, a scenario asks for a size (one system per site at the fewest sites, up to 10,000).
+
+### How big a lab your machine can run
+
+The scale lab is meant for a developer machine, and it assumes no particular size: before it starts
+anything it estimates what the size needs, compares it with what the Docker host reports, and
+refuses a size that does not fit, naming the largest that does. It plans on at most 80% of the
+host's memory and CPUs, leaving the rest to your desktop and the daemon. The estimate is three costs,
+measured with `docker stats` at 20 and 100 systems and kept in `lab.MeasuredCost`:
+
+- **the server and Postgres**, paid once: about 170 MiB and a twentieth of a core;
+- **a node container**, paid once per site (up to 30 times): about 36 MiB and a hundredth of a core;
+- **a simulated component**, its simulator's share and the collection from it: about 0.9 MiB and a
+  thousandth of a core.
+
+So `corporate` at 1,000 systems (18 sites, 3,016 components) needs about 3.4 GiB and 3.2 cores, and at
+3,000 (30 sites, 8,950 components) about 9.1 GiB and 9.3 cores. CPU, not memory, is what runs out
+first on most machines: the reference WSL setup of 12 GB on a 12-core host fits 3,000 systems only
+just. `--plan` ends with the decision for this machine:
+
+```text
+Preflight: about 3.4 GiB of memory and 3.2 cores (the server and Postgres, a node for each of 18 sites, 3016 simulated components).
+This Docker host can spare 25.1 GiB and 9.6 cores (80% of its 31.3 GiB and 12 cores).
+Decision: fits.
+```
+
+A size that does not fit exits non-zero before it creates a container, saying why and what does:
+
+```text
+error: A scale lab of 1000 systems (18 sites, 3016 simulated components) needs about 3.4 GiB of memory and 3.2 cores; this Docker host has 2.0 GiB and 12 cores, of which the lab plans to use at most 80%.
+  To fix it: run --systems 447, the largest that fits, or give Docker more memory or CPUs.
+```
+
+That one was forced with the hidden `--host-memory 2g`, which plans against a memory limit of your
+choosing, so you can see where a smaller machine's ceiling sits without one. The estimate is a
+model, not a promise: it was measured at small sizes, and the scale harness
+([#1556](https://github.com/hyperscaleav/omniglass/issues/1556)) measures a running lab at 1,000
+and more.
+
+**A bring-up never hangs.** It is bounded by a timeout (20 minutes, or the hidden `--ready-timeout`),
+the seed included. Past it the lab removes everything it started and names what was not up: each
+site whose simulator never connected, and each site's components not up yet, by name and loopback
+address.
+
+`make scale-lab` (with `SYSTEMS=100` and `SCENARIO=corporate` by default) runs the check the scale
+lab is proven by: it brings a size up through `bin/omniglass lab run`, asserts one node container per
+site and every component at its own loopback address, prints the containers' memory and CPU, and
+stops the lab, asserting it left no container or network. It builds the image and stands up real
+containers, so it is not part of `make test` or CI.
 
 A plan seeds as configuration rows through `devseed.SeedPlan` (`internal/devseed/plan.go`), the one
 entry point the scale lab's bring-up calls: the sites, buildings, floors and rooms, the systems in the
-rooms, the components filling each system's roles, and the simulated endpoints on them. It drives the
+rooms, the components filling each system's roles, and the simulated endpoints on them, each site's on
+that site's node (`PlanOptions.NodeFor`; `Node` alone puts them all on one). It drives the
 Gateway's own create methods, one row per transaction, so names, labels, audit rows and derived health
 come out as they do for an operator's writes, and the same plan always lands the same names and
 addresses. It seeds no metric history. Measured on a shared worker, the corporate plan takes about 12

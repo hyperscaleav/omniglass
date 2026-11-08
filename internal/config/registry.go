@@ -90,6 +90,8 @@ var Registry = []Var{
 		Doc: "the omniglass image omniglass lab run runs when --image is omitted; one that is not the binary's own build is warned about"},
 	{Key: "OMNIGLASS_LAB_NODE_TOKEN_HASH", Scope: "cli",
 		Doc: "set by omniglass lab run for its seed one-off: the hash of the node token it minted for this run, never set by hand"},
+	{Key: "OMNIGLASS_LAB_SITE_NODE_TOKEN_HASHES", Scope: "cli",
+		Doc: "set by omniglass lab run for a scale lab's seed one-off: each site node's name and the hash of the token it minted for it this run (node=hash, comma-separated), never set by hand"},
 	{Key: "OMNIGLASS_LAB_PUSH_TOKEN_HASH", Scope: "cli",
 		Doc: "set by omniglass lab run for its seed one-off: the hash of the simulated pusher's token it minted for this run, never set by hand"},
 	{Key: "OMNIGLASS_LAB_PUSH_TOKEN_PREFIX", Scope: "cli",

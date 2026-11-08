@@ -1,11 +1,16 @@
 package devseed_test
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"testing"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/hyperscaleav/omniglass/internal/devseed"
+	"github.com/hyperscaleav/omniglass/internal/scope"
+	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
 // SeedPlan lands everything the plan planned: the systems in their rooms, the
@@ -173,4 +178,109 @@ func sortedPairs(m map[string]string) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// planNodes creates one node per name, the nodes a seed's endpoints are placed
+// on (a node must exist before an endpoint names it).
+func planNodes(t *testing.T, ctx context.Context, gw storage.Gateway, names ...string) {
+	t.Helper()
+	all := scope.Set{All: true}
+	for _, n := range names {
+		if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: n, Label: n}, all, all); err != nil {
+			t.Fatalf("create node %s: %v", n, err)
+		}
+	}
+}
+
+// endpointNodes reads the node every endpoint of a seeded plan is on, by the
+// site its component is in (the root of the component's location chain).
+func endpointNodes(t *testing.T, ctx context.Context, conn *pgx.Conn) map[string]map[string]int {
+	t.Helper()
+	rows, err := conn.Query(ctx, `
+		with recursive up as (
+			select id as start_id, id, name, parent_id from location
+			union all
+			select up.start_id, l.id, l.name, l.parent_id from location l join up on up.parent_id = l.id
+		)
+		select site.name, coalesce(n.name, ''), count(*)
+		from endpoint e
+		join component c on c.id = e.component
+		join up site on site.start_id = c.location_id and site.parent_id is null
+		left join node n on n.principal_id = e.node_name
+		group by 1, 2`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	out := map[string]map[string]int{}
+	for rows.Next() {
+		var site, node string
+		var n int
+		if err := rows.Scan(&site, &node, &n); err != nil {
+			t.Fatal(err)
+		}
+		if out[site] == nil {
+			out[site] = map[string]int{}
+		}
+		out[site][node] = n
+	}
+	return out
+}
+
+// NodeFor places each site's endpoints on that site's node, and takes
+// precedence over the single Node, which a caller that sets only it still gets.
+func TestSeedPlanPlacesEachSitesEndpointsOnItsNode(t *testing.T) {
+	t.Parallel()
+	p := corporatePlan(t, 20)
+	if len(p.Sites) < 2 {
+		t.Fatalf("plan has %d sites, want at least two", len(p.Sites))
+	}
+	nodeOf := func(site string) string { return "edge-" + site }
+
+	t.Run("NodeFor wins over Node", func(t *testing.T) {
+		t.Parallel()
+		ctx, gw, conn := openSeededGateway(t)
+		names := []string{"fallback"}
+		for _, s := range p.Sites {
+			names = append(names, nodeOf(s.Name))
+		}
+		planNodes(t, ctx, gw, names...)
+		res, err := devseed.SeedPlan(ctx, gw, "", p, devseed.PlanOptions{Endpoints: true, Node: "fallback", NodeFor: nodeOf})
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, total := endpointNodes(t, ctx, conn), 0
+		if len(got) != len(p.Sites) {
+			t.Fatalf("endpoints in %d sites, want %d: %v", len(got), len(p.Sites), got)
+		}
+		for site, byNode := range got {
+			if len(byNode) != 1 || byNode[nodeOf(site)] == 0 {
+				t.Errorf("site %s endpoints by node = %v, want all on %s", site, byNode, nodeOf(site))
+			}
+			total += byNode[nodeOf(site)]
+		}
+		if total != res.Endpoints {
+			t.Errorf("%d endpoints on their site's node, result says %d", total, res.Endpoints)
+		}
+	})
+
+	t.Run("a caller that sets only Node keeps it", func(t *testing.T) {
+		t.Parallel()
+		ctx, gw, conn := openSeededGateway(t)
+		planNodes(t, ctx, gw, "only")
+		res, err := devseed.SeedPlan(ctx, gw, "", p, devseed.PlanOptions{Endpoints: true, Node: "only"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		total := 0
+		for site, byNode := range endpointNodes(t, ctx, conn) {
+			if len(byNode) != 1 {
+				t.Errorf("site %s endpoints by node = %v, want all on only", site, byNode)
+			}
+			total += byNode["only"]
+		}
+		if total == 0 || total != res.Endpoints {
+			t.Errorf("%d endpoints on the one node, result says %d", total, res.Endpoints)
+		}
+	})
 }
