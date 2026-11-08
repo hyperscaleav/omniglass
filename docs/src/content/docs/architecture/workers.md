@@ -10,8 +10,8 @@ sidebar:
 :::note[Implementation status]
 Built today: one durable JetStream work-queue consumer, `og-telemetry-worker`
 (`internal/bus/consumer.go`: explicit double ack, MaxDeliver 5, a growing nak delay, one batch in flight),
-which does owner confinement and persistence inline, each batch landing once, in one transaction under
-its receipt
+which does owner confinement and persistence inline, each batch (a tick of a node's task groups) landing once, in one transaction under
+its receipt, a refused group skipped and its siblings landed
 ([ADR-0311](/architecture/decisions/#adr-0311-a-telemetry-batch-lands-once-in-one-transaction-under-its-receipt)).
 :::
 

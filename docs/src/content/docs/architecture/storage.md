@@ -47,6 +47,25 @@ redelivery lands each row once, raw log lines included, though a log line has no
 Receipts are pruned past a day by the server
 ([ADR-0311](/architecture/decisions/#adr-0311-a-telemetry-batch-lands-once-in-one-transaction-under-its-receipt)).
 
+A node's batch is one tick of **task groups**, each with its own writer
+([ADR-0161](/architecture/decisions/#adr-0161-every-key-has-one-writer-class-held-at-the-storage-gateway)),
+and the transaction's statement count does not grow with the groups. The gateway preloads every
+owner's arcs in one query, admits each group's writes against its writer in Go (a group it refuses
+is dropped before any write), takes the event-rule and calc-mark locks once over the union, then
+takes every property series' advisory lock in one sorted statement. Each lane (property, metric,
+event, log, node log) is then written as set inserts, one per distinct writer in the batch (a node's
+own rows share one, plus one per conduit that fans rows). So the cost of a batch is a fixed
+count, about twenty statements, plus a term for each repeated series row, each judged sample that
+fires a rule, each settled targeted property and each conduit group that carries identified
+samples; a batch of one group and a batch of fifty cost the same when those terms are zero. A
+series a batch carries twice keeps the transition guard: its second and later rows run in order
+after the set insert. A value only Postgres refuses (a numeric overflow, a CHECK) cannot be found
+in Go, so the batch reruns in a fresh transaction in **isolate mode**, one savepoint per group, only
+to learn which groups Postgres refuses; that pass is rolled back whole. The batch then lands a third
+time without them, in the same statements and lock order as any batch, so a refused group leaves
+nothing behind (no row, and no calc rule's pending mark on its owner). A refused batch costs three
+transactions and still writes one receipt.
+
 :::design[Target design, tracked in #430]
 **The sample tables are an async SINK**: the NATS **persistence consumer** batch-writes samples off
 the data lane into `metric` / `property`, idempotent per batch as the built consumer is, so the
@@ -614,7 +633,8 @@ Like scope, it is structural rather than remembered per route: a source guard fa
 writes a sample or event row without being a registered write path that runs the check, and a table
 drives every registered path with a writer its key does not admit. The node lane's writer binds both
 halves of what a node holds: the component its task collects for and the endpoint it ran against, so
-every row of a batch lands on that component, and a node-probe row under that endpoint.
+every row of a group lands on that component, and a node-probe row under that endpoint; a node batch
+carries one such writer per task group.
 
 What was written or declared before the ruling is held to it as well
 ([ADR-1100](/architecture/decisions/#adr-1100-legacy-rows-and-stored-declarations-honor-the-one-writer-ruling)).
