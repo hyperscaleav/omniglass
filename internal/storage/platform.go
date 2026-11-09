@@ -4,13 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 )
 
 // The platform system (#1094, first built by #1625) is the one system that
-// holds Omniglass's own parts: a component per node today, the server's in a
-// later slice. The boot seed creates it, of the reserved og system type
+// holds Omniglass's own parts: a component per node, and one per server
+// (#1627). The boot seed creates it, of the reserved og system type
 // `platform`, unplaced, so it resolves through the unplaced-root path and only
 // an all-scope read sees it. Node registration owns each node's component in
 // it. An operator may relabel either, and reshape neither: the Gateway refuses
@@ -24,6 +25,9 @@ const (
 	platformTypeName = "platform"
 	// NodeProductName is the og product every node's platform component is.
 	NodeProductName = "omniglass-node"
+	// ServerProductName is the og product every server's platform component
+	// is.
+	ServerProductName = "omniglass-server"
 	// platformLockKey names the advisory lock the boot's platform step
 	// serializes on.
 	platformLockKey = "platform boot"
@@ -36,13 +40,17 @@ var (
 	// ErrPlatformTypeReserved refuses giving the platform system type to any
 	// other system.
 	ErrPlatformTypeReserved = errors.New("storage: the platform system type is reserved to the platform system")
-	// ErrPlatformComponentReserved refuses an operator reshaping a node's
-	// platform component: a rename, reclassify, move, delete, a child, or a
-	// membership in an operator system.
-	ErrPlatformComponentReserved = errors.New("storage: a node's platform component is reserved to its node")
+	// ErrPlatformComponentReserved refuses an operator reshaping a node's or
+	// a server's platform component: a rename, reclassify, move, delete, a
+	// child, or a membership in an operator system.
+	ErrPlatformComponentReserved = errors.New("storage: a platform component is reserved to the node or server it reports")
 	// ErrPlatformMemberReserved refuses an operator changing the platform
-	// system's membership: it holds node platform components and nothing else.
-	ErrPlatformMemberReserved = errors.New("storage: the platform system holds only node platform components")
+	// system's membership: it holds node and server platform components and
+	// nothing else.
+	ErrPlatformMemberReserved = errors.New("storage: the platform system holds only node and server platform components")
+	// ErrPlatformSystemMissing is a server's boot finding no platform system
+	// to put its component in: the boot seed has not run on the database.
+	ErrPlatformSystemMissing = errors.New("storage: the platform system is not seeded")
 	// ErrPlatformComponentNameTaken refuses registering a node whose name an
 	// operator's unplaced component already holds: the node's platform
 	// component takes the node's name in the same unplaced bucket.
@@ -87,11 +95,19 @@ func isPlatformType(ctx context.Context, q querier, typeID string) (bool, error)
 	return ok, nil
 }
 
-// isPlatformComponent reports whether componentID is a node's platform
-// component: the node row names it, so nothing matches on names.
+// platformComponentExists is the SQL predicate that the component $n is a
+// node's or a server's platform component: the node or platform_server row
+// names it, so nothing matches on names.
+func platformComponentExists(n string) string {
+	return `(exists(select 1 from node where platform_component_id = ` + n + `::uuid)
+		or exists(select 1 from platform_server where platform_component_id = ` + n + `::uuid))`
+}
+
+// isPlatformComponent reports whether componentID is a node's or a server's
+// platform component.
 func isPlatformComponent(ctx context.Context, q querier, componentID string) (bool, error) {
 	var ok bool
-	if err := q.QueryRow(ctx, `select exists(select 1 from node where platform_component_id = $1)`, componentID).Scan(&ok); err != nil {
+	if err := q.QueryRow(ctx, `select `+platformComponentExists("$1"), componentID).Scan(&ok); err != nil {
 		return false, fmt.Errorf("storage: platform component check: %w", err)
 	}
 	return ok, nil
@@ -121,8 +137,8 @@ func refusePlatformType(ctx context.Context, q querier, typeID string) error {
 	return nil
 }
 
-// refusePlatformComponent is ErrPlatformComponentReserved for a node's
-// platform component.
+// refusePlatformComponent is ErrPlatformComponentReserved for a node's or a
+// server's platform component.
 func refusePlatformComponent(ctx context.Context, q querier, componentID string) error {
 	ok, err := isPlatformComponent(ctx, q, componentID)
 	if err != nil {
@@ -147,10 +163,6 @@ func refusePlatformComponent(ctx context.Context, q querier, componentID string)
 // the next free name (`<node>-2`). The node row names its component, so
 // nothing reads the name back to find it.
 func (p *PG) createPlatformComponent(ctx context.Context, tx pgx.Tx, actorID, nodeName, systemID string, adopt bool) (string, error) {
-	var productID string
-	if err := tx.QueryRow(ctx, `select id from product where namespace = 'og' and name = $1`, NodeProductName).Scan(&productID); err != nil {
-		return "", fmt.Errorf("storage: resolve the %s product: %w", NodeProductName, err)
-	}
 	name := nodeName
 	if adopt {
 		minted, _, err := generateName(ctx, tx, nameMint{stem: nodeName, bareFirst: true}, componentNameScope(nil, nil), nil)
@@ -158,6 +170,27 @@ func (p *PG) createPlatformComponent(ctx context.Context, tx pgx.Tx, actorID, no
 			return "", fmt.Errorf("storage: name node %q's platform component: %w", nodeName, err)
 		}
 		name = minted
+	}
+	id, err := p.insertPlatformComponent(ctx, tx, actorID, name, NodeProductName, systemID)
+	if err != nil {
+		return "", err
+	}
+	if _, err := tx.Exec(ctx, `update node set platform_component_id = $2 where name = $1`, nodeName, id); err != nil {
+		return "", fmt.Errorf("storage: name node %q's platform component: %w", nodeName, err)
+	}
+	return id, nil
+}
+
+// insertPlatformComponent creates a platform component named name, an og
+// product, unplaced, in the platform system systemID, inside tx, with a
+// generated label and its audit row. Its membership is written directly,
+// past addMemberTx's refusal of the platform system, because the platform's
+// own boot and registration are the one writer that system admits. A name an
+// unplaced component already holds is ErrPlatformComponentNameTaken.
+func (p *PG) insertPlatformComponent(ctx context.Context, tx pgx.Tx, actorID, name, product, systemID string) (string, error) {
+	var productID string
+	if err := tx.QueryRow(ctx, `select id from product where namespace = 'og' and name = $1`, product).Scan(&productID); err != nil {
+		return "", fmt.Errorf("storage: resolve the %s product: %w", product, err)
 	}
 	c, err := scanComponent(tx.QueryRow(ctx, `
 		insert into component (name, label, parent_id, location_id, product_id, name_generated, ordinal, label_generated)
@@ -167,10 +200,10 @@ func (p *PG) createPlatformComponent(ctx context.Context, tx pgx.Tx, actorID, no
 		if errors.Is(mapComponentWriteErr(err), ErrComponentExists) {
 			return "", ErrPlatformComponentNameTaken
 		}
-		return "", fmt.Errorf("storage: create platform component for node %q: %w", nodeName, err)
+		return "", fmt.Errorf("storage: create platform component %q: %w", name, err)
 	}
 	if _, err := tx.Exec(ctx, `insert into system_member (system_id, component_id, is_primary) values ($1, $2, true)`, systemID, c.ID); err != nil {
-		return "", fmt.Errorf("storage: join node %q's component to the platform system: %w", nodeName, err)
+		return "", fmt.Errorf("storage: join component %q to the platform system: %w", name, err)
 	}
 	if c, err = scanComponent(tx.QueryRow(ctx, `select `+componentCols+` from component where id = $1`, c.ID)); err != nil {
 		return "", fmt.Errorf("storage: re-read platform component: %w", err)
@@ -181,10 +214,95 @@ func (p *PG) createPlatformComponent(ctx context.Context, tx pgx.Tx, actorID, no
 	if err := writeAuditRes(ctx, tx, actorID, "create", "component", c.ID, nil, c); err != nil {
 		return "", err
 	}
-	if _, err := tx.Exec(ctx, `update node set platform_component_id = $2 where name = $1`, nodeName, c.ID); err != nil {
-		return "", fmt.Errorf("storage: name node %q's platform component: %w", nodeName, err)
-	}
 	return c.ID, nil
+}
+
+// serverStemMax bounds a server component's stem so the ordinal a second
+// server under the same stem mints ("-<n>") still fits the name rule.
+const serverStemMax = MaxEntityNameLen - 10
+
+// ServerComponentStem is the name stem a server booting under identity gives
+// its platform component: the identity lowercased, every run of characters
+// the name rule does not admit one hyphen, trimmed and bounded, or "server"
+// when nothing is left. A stem that reads as a uuid (a name the rule refuses)
+// is prefixed "server-".
+func ServerComponentStem(identity string) string {
+	var b strings.Builder
+	hyphen := false
+	for _, r := range strings.ToLower(identity) {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+			hyphen = false
+			continue
+		}
+		if !hyphen && b.Len() > 0 {
+			b.WriteByte('-')
+			hyphen = true
+		}
+	}
+	stem := strings.Trim(b.String(), "-")
+	if stem == "" {
+		return "server"
+	}
+	if isUUID(stem) {
+		stem = "server-" + stem
+	}
+	if len(stem) > serverStemMax {
+		stem = strings.TrimRight(stem[:serverStemMax], "-")
+	}
+	return stem
+}
+
+// EnsureServerComponent is a server's boot step (#1627): it returns the
+// platform component of the server booting under identity, creating it the
+// first time that identity boots. The component is an og omniglass-server in
+// the platform system, named for the identity's stem, minted past an
+// unplaced name already held (`<stem>-2`). The platform_server row keys the
+// identity to its component, so a restart finds its own and two servers
+// whose identities share a stem get one each. It holds the boot's platform
+// lock, so concurrent boots under one identity make one component. A
+// database with no platform system is ErrPlatformSystemMissing: the boot
+// seed runs first.
+func (p *PG) EnsureServerComponent(ctx context.Context, identity string) (string, error) {
+	if strings.TrimSpace(identity) == "" {
+		return "", fmt.Errorf("storage: a server needs an identity to report under")
+	}
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return "", fmt.Errorf("storage: begin ensure server component: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(hashtextextended($1, 0))`, platformLockKey); err != nil {
+		return "", fmt.Errorf("storage: lock the platform step: %w", err)
+	}
+	var id string
+	err = tx.QueryRow(ctx, `select platform_component_id::text from platform_server where name = $1`, identity).Scan(&id)
+	if err == nil {
+		return id, nil
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return "", fmt.Errorf("storage: read server %q: %w", identity, err)
+	}
+	sysID, err := platformSystemID(ctx, tx)
+	if err != nil {
+		return "", err
+	}
+	if sysID == nil {
+		return "", ErrPlatformSystemMissing
+	}
+	name, _, err := generateName(ctx, tx, nameMint{stem: ServerComponentStem(identity), bareFirst: true}, componentNameScope(nil, nil), nil)
+	if err != nil {
+		return "", fmt.Errorf("storage: name server %q's platform component: %w", identity, err)
+	}
+	if id, err = p.insertPlatformComponent(ctx, tx, "", name, ServerProductName, *sysID); err != nil {
+		return "", err
+	}
+	if _, err := tx.Exec(ctx, `insert into platform_server (name, platform_component_id) values ($1, $2)`, identity, id); err != nil {
+		return "", fmt.Errorf("storage: record server %q: %w", identity, err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return "", fmt.Errorf("storage: commit ensure server component: %w", err)
+	}
+	return id, nil
 }
 
 // EnsurePlatform is the boot seed's platform step: it creates the platform
@@ -261,9 +379,9 @@ func (p *PG) EnsurePlatform(ctx context.Context) error {
 }
 
 // refusePlatformMembership guards every operator membership write: the
-// platform system admits no member through it (node registration writes its
-// own membership directly), and a node's platform component joins no other
-// system.
+// platform system admits no member through it (node registration and a
+// server's boot write their own membership directly), and a platform
+// component joins no other system.
 func refusePlatformMembership(ctx context.Context, q querier, systemID, componentID string) error {
 	if ok, err := isPlatformSystem(ctx, q, systemID); err != nil {
 		return err

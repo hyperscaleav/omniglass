@@ -168,6 +168,11 @@ var IdentityShapes = map[string]TableIdentity{
 		"long as its horizon keeps it",
 		NoLabel: "no operator surface of its own: only the ingest's conflict check reads a receipt, and " +
 			"nothing renders a receipt row for a label to appear on"},
+	"platform_server": {Shape: ShapeHumanNotAKey, Reason: "the identity a server boots under " +
+		"(OMNIGLASS_SERVER_NAME, else its hostname), not an operator's name: a hostname need not be a " +
+		"kebab token, and the server's component carries the operator-facing name (#1627)",
+		NoLabel: "no operator surface of its own: the server is shown through its platform component, " +
+			"which carries the label"},
 
 	// Id only.
 	"alarm":        {Shape: ShapeIDOnly},

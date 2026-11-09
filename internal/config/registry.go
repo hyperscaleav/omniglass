@@ -70,6 +70,8 @@ var Registry = []Var{
 		Doc: "the encryption key's old name, read only when neither OMNIGLASS_ENCRYPTION_KEY nor OMNIGLASS_ENCRYPTION_KEY_FILE is set; warns on every boot, removed in a later release"},
 	{Key: "OMNIGLASS_SECRET_KEY_FILE", Scope: "server", Deprecated: "OMNIGLASS_ENCRYPTION_KEY_FILE",
 		Doc: "the encryption key file's old name, read only when neither OMNIGLASS_ENCRYPTION_KEY nor OMNIGLASS_ENCRYPTION_KEY_FILE is set; warns on every boot, removed in a later release"},
+	{Key: "OMNIGLASS_SERVER_NAME", Default: "the hostname", Scope: "server",
+		Doc: "the server's identity: the name its own platform component, which carries its request and query timing, is ensured under at boot; set it when servers share a hostname or a server moves hosts"},
 	{Key: "OMNIGLASS_SERVER", Scope: "cli",
 		Doc: "server base URL the CLI and the node use when --server is omitted, read when the command runs"},
 	{Key: "OMNIGLASS_TOKEN", Scope: "cli",

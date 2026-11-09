@@ -272,6 +272,12 @@ component_types:
     stem: node
     abbrev: node
     icon: cpu
+  - id: omniglass-server
+    label: Omniglass Server
+    parent_id: platform
+    stem: server
+    abbrev: srv
+    icon: server
   # ── The generic floor (outside the OAVC tree by design) ─────────────────
   - id: generic-device
     label: Generic Device

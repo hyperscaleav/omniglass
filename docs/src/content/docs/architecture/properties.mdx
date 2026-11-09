@@ -275,7 +275,9 @@ account of an endpoint, declared in `internal/collection/probekeys`), `platform`
 Omniglass process writes: the health rollup's `health`, and the webhook receiver's counts of the posts
 it accepted and refused, #1369; and each node's account of itself on its platform component, the
 server's `checkin-age` and the node's schedule, spool, session and process figures, #1625, listed in
-[collection](/architecture/collection/#self-monitoring-every-nodes-account-of-itself)) and
+[collection](/architecture/collection/#self-monitoring-every-nodes-account-of-itself); and the server's
+account of itself on its own, its request and database figures, #1627, listed in
+[collection](/architecture/collection/#self-monitoring-the-servers-account-of-itself)) and
 `command-lifecycle` (`command-issued`, the event a command's issue puts on its owner's timeline, and
 `command-settled`, `command-failed` and `command-timed-out`, the one its terminal status puts there). Their
 names are declared in code and closed to an operator-created type on every lane, and no product,

@@ -28,6 +28,8 @@ const (
 	// Bound to loopback by default: a node reaches it through the same host
 	// the API is on.
 	DefaultNatsAddr = "127.0.0.1:4222"
+	// DefaultServerName is the server's identity on a host with no hostname.
+	DefaultServerName = "omniglass-server"
 	// DefaultDataDir holds local server state that is not in Postgres, notably
 	// the fallback encryption key when no KEK is provided. Override with
 	// OMNIGLASS_DATA_DIR; a real deployment sets OMNIGLASS_ENCRYPTION_KEY_FILE
@@ -73,6 +75,11 @@ type Config struct {
 	// serves, for a supervisor or a test that asked for port 0. Empty means no
 	// file. Set OMNIGLASS_READY_FILE.
 	ReadyFile string
+	// ServerName is the server's identity: the name its own platform
+	// component is ensured under at boot (#1627), so each server of several
+	// on one database reports its request and query timing as itself.
+	// Defaults to the hostname. Set OMNIGLASS_SERVER_NAME.
+	ServerName string
 }
 
 // Load resolves the configuration from the environment, applying defaults for
@@ -95,7 +102,17 @@ func Load() Config {
 		DataDir:        firstNonEmpty(Get("OMNIGLASS_DATA_DIR"), DefaultDataDir),
 		SettingsFile:   firstNonEmpty(Get("OMNIGLASS_SETTINGS_FILE"), DefaultSettingsFile),
 		ReadyFile:      Get("OMNIGLASS_READY_FILE"),
+		ServerName:     firstNonEmpty(Get("OMNIGLASS_SERVER_NAME"), hostname()),
 	}
+}
+
+// hostname is the host's name, or DefaultServerName when it has none.
+func hostname() string {
+	h, err := os.Hostname()
+	if err != nil || h == "" {
+		return DefaultServerName
+	}
+	return h
 }
 
 func resolveDSN() string {
