@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -224,5 +225,23 @@ func TestPickPageSystem(t *testing.T) {
 	}
 	if _, err := PickPageSystem([]byte(`{"systems":[]}`), ""); err == nil {
 		t.Error("a fleet with no systems picked one")
+	}
+}
+
+// A window that fails partway leaves no page client loading after it
+// returns: in a sampling run the next sample's window would otherwise share
+// the server with the failed one's leftover loads.
+func TestLoadWindowStopsThePageClientsOnAFailedRead(t *testing.T) {
+	srv, asked := pageServer(t, "/api/v1/views/fleet")
+	h := &harness{cfg: Config{Out: io.Discard}, http: srv.Client(), env: map[string]string{"LAB_TOKEN": "tok", "LAB_HOST_URL": srv.URL}}
+	cfg := ScaleConfig{Window: 600 * time.Millisecond, FleetReads: 30, PageClients: 3, PageLoads: 6}
+	var run ScaleRun
+	if err := h.loadWindow(context.Background(), cfg, "sys-1", &run); err == nil || !strings.Contains(err.Error(), "fleet view") {
+		t.Fatalf("err = %v, want the failed fleet view read", err)
+	}
+	at := len(asked())
+	time.Sleep(300 * time.Millisecond)
+	if after := len(asked()); after != at {
+		t.Errorf("%d reads arrived after the failed window returned, want none", after-at)
 	}
 }

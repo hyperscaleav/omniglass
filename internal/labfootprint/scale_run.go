@@ -351,19 +351,9 @@ func (h *harness) measureWindow(ctx context.Context, cfg ScaleConfig, s scaleSes
 	}
 	h.say("measuring for %s, with %d fleet-view reads", cfg.Window, cfg.FleetReads)
 	end := time.Now().Add(cfg.Window)
-	pages := h.loadPages(ctx, cfg, s.pageSystem)
-	gap := cfg.Window / time.Duration(max(cfg.FleetReads, 1))
-	for i := 0; i < cfg.FleetReads; i++ {
-		if err := sleep(ctx, gap); err != nil {
-			return time.Time{}, err
-		}
-		start := time.Now()
-		if err := h.readFleetView(ctx); err != nil {
-			return time.Time{}, err
-		}
-		run.FleetView = append(run.FleetView, time.Since(start))
+	if err := h.loadWindow(ctx, cfg, s.pageSystem, run); err != nil {
+		return time.Time{}, err
 	}
-	run.Page = pages()
 	if err := sleep(ctx, time.Until(end)); err != nil {
 		return time.Time{}, err
 	}
@@ -393,6 +383,32 @@ func (h *harness) measureWindow(ctx context.Context, cfg ScaleConfig, s scaleSes
 		return time.Time{}, err
 	}
 	return db1.At, nil
+}
+
+// loadWindow reads the fleet view cfg.FleetReads times across the window
+// while the page clients load the system page, into run. A read that fails
+// stops the page clients before it returns, so none loads into the next
+// window.
+func (h *harness) loadWindow(ctx context.Context, cfg ScaleConfig, system string, run *ScaleRun) error {
+	pageCtx, stopPages := context.WithCancel(ctx)
+	pages := h.loadPages(pageCtx, cfg, system)
+	defer func() {
+		stopPages()
+		pages()
+	}()
+	gap := cfg.Window / time.Duration(max(cfg.FleetReads, 1))
+	for i := 0; i < cfg.FleetReads; i++ {
+		if err := sleep(ctx, gap); err != nil {
+			return err
+		}
+		start := time.Now()
+		if err := h.readFleetView(ctx); err != nil {
+			return err
+		}
+		run.FleetView = append(run.FleetView, time.Since(start))
+	}
+	run.Page = pages()
+	return nil
 }
 
 // loadPages starts cfg.PageClients clients loading the system page across
