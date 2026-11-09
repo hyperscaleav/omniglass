@@ -165,6 +165,14 @@ func (d *Device) SetSNMPRefusedCommunity(c string) { d.snmpRefused = c }
 // It reads the observation.
 func (d *Device) SNMPRequests() int64 { return d.Observed("snmp").Received }
 
+// SNMPAddr is the address the SNMP face bound, nil before it starts.
+func (d *Device) SNMPAddr() net.Addr {
+	if l, ok := d.snmpServer.(*snmpLoop); ok {
+		return l.conn.LocalAddr()
+	}
+	return nil
+}
+
 // Shutdown closes the socket, which ends the read loop.
 func (l *snmpLoop) Shutdown() { _ = l.conn.Close() }
 
