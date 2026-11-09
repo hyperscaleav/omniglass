@@ -96,7 +96,8 @@ func (r pipelineRig) enrollNode(t *testing.T, srv *bus.Server) *nats.Conn {
 
 // TestTelemetryBatchLandsPipelineMetricsOverNATS: a batch a node publishes
 // lands, and the window it landed in reports its lag, its samples and the
-// consumer's backlog on the server's platform component.
+// consumer's backlog on the server's platform component. A group the fence
+// drops landed nothing, so it counts toward neither.
 func TestTelemetryBatchLandsPipelineMetricsOverNATS(t *testing.T) {
 	r := newPipelineRig(t)
 	srv := r.start(t, r.gw)
@@ -110,8 +111,11 @@ func TestTelemetryBatchLandsPipelineMetricsOverNATS(t *testing.T) {
 	}
 
 	sampled := time.Now().UTC().Add(-3 * time.Second)
+	// t-ghost is no task of node-a's: the fence drops its group, so its
+	// sample, an hour late, is no landing and moves no figure.
 	publishEvent(t, nc, "node-a", &ogv1.TelemetryBatch{NodeId: "node-a", Groups: []*ogv1.TaskGroup{
 		{TaskId: "t-a", Ts: timestamppb.New(sampled), Metrics: []*ogv1.MetricSample{{Name: "tcp-connect-time", Value: 11}, {Name: "tcp-open", Value: 1}}},
+		{TaskId: "t-ghost", Ts: timestamppb.New(sampled.Add(-time.Hour)), Metrics: []*ogv1.MetricSample{{Name: "tcp-open", Value: 0}}},
 	}})
 	waitMetric(t, r.ctx, r.gw, "bar-1", "tcp-connect-time", func(d *storage.MetricSample) bool { return d != nil && d.Value == 11 })
 	r.waitDrained(t, srv)
@@ -124,7 +128,7 @@ func TestTelemetryBatchLandsPipelineMetricsOverNATS(t *testing.T) {
 		t.Fatalf("ingest-lag-max = %v s, want about 3", lag)
 	}
 	if n := r.latest(t, writerclass.IngestSampleCount, ""); n != 2 {
-		t.Fatalf("ingest-sample-count = %v, want the batch's 2", n)
+		t.Fatalf("ingest-sample-count = %v, want the 2 the batch landed", n)
 	}
 	if n := r.latest(t, writerclass.IngestBatchCount, ""); n != 1 {
 		t.Fatalf("ingest-batch-count = %v, want 1", n)
@@ -186,6 +190,58 @@ func TestMaxDeliverCountsOneDrop(t *testing.T) {
 	}
 }
 
+// alreadyLanded answers a batch carrying a property of value as LandBatch
+// answers one whose receipt exists (a redelivery after a lost ack, or a
+// replay past the stream's duplicate window): landed nothing, no error.
+type alreadyLanded struct {
+	*storage.PG
+	value string
+	held  atomic.Int32
+}
+
+func (s *alreadyLanded) LandBatch(ctx context.Context, b storage.IngestBatch) (storage.LandResult, error) {
+	for _, p := range b.Properties {
+		if p.Value == s.value {
+			s.held.Add(1)
+			return storage.LandResult{}, nil
+		}
+	}
+	return s.PG.LandBatch(ctx, b)
+}
+
+// TestAHeldRedeliveryCountsNoLanding: a batch its receipt holds to a no-op
+// landed nothing, so it adds no batch, no samples and no lag; only the batch
+// that landed counts.
+func TestAHeldRedeliveryCountsNoLanding(t *testing.T) {
+	r := newPipelineRig(t)
+	store := &alreadyLanded{PG: r.gw, value: "held"}
+	srv := r.start(t, store)
+	held := pushBatch("held")
+	held.Ts = timestamppb.New(time.Now().UTC().Add(-time.Hour))
+	if err := srv.PublishTelemetry(r.ctx, held); err != nil {
+		t.Fatalf("publish the held batch: %v", err)
+	}
+	if err := srv.PublishTelemetry(r.ctx, pushBatch("landed")); err != nil {
+		t.Fatalf("publish the batch behind it: %v", err)
+	}
+	r.waitLanded(t, "landed")
+	r.waitDrained(t, srv)
+	if n := store.held.Load(); n != 1 {
+		t.Fatalf("the receipt held %d deliveries, want the 1", n)
+	}
+	r.report(t, srv)
+
+	if n := r.latest(t, writerclass.IngestBatchCount, ""); n != 1 {
+		t.Fatalf("ingest-batch-count = %v, want the 1 batch that landed", n)
+	}
+	if n := r.latest(t, writerclass.IngestSampleCount, ""); n != 3 {
+		t.Fatalf("ingest-sample-count = %v, want the landed batch's 3", n)
+	}
+	if lag := r.latest(t, writerclass.IngestLagMax, ""); lag > 30*60 {
+		t.Fatalf("ingest-lag-max = %v s, want the landed batch's minute, not the held batch's hour", lag)
+	}
+}
+
 // TestCalcPendingDepthMatchesTheQueue: calc marks left pending (waiting out
 // a backoff, so no pass serves them) read as the window's calc-pending-depth.
 func TestCalcPendingDepthMatchesTheQueue(t *testing.T) {
@@ -222,10 +278,13 @@ func TestCalcPendingDepthMatchesTheQueue(t *testing.T) {
 }
 
 // failRequests fails the command pull read and the heartbeat write, counting
-// each.
+// each. Every heartbeat past the second is held until hold closes: the
+// heartbeats land one at a time, so the bus taking the third is the proof it
+// is done with the second, and the held third adds nothing to the window.
 type failRequests struct {
 	*storage.PG
 	pulls, beats atomic.Int32
+	hold         chan struct{}
 }
 
 func (s *failRequests) PendingNodeCommands(context.Context, string) ([]storage.CommandDelivery, error) {
@@ -234,7 +293,9 @@ func (s *failRequests) PendingNodeCommands(context.Context, string) ([]storage.C
 }
 
 func (s *failRequests) RecordHeartbeat(context.Context, string) error {
-	s.beats.Add(1)
+	if s.beats.Add(1) > 2 {
+		<-s.hold
+	}
 	return errors.New("the database blinked")
 }
 
@@ -243,8 +304,9 @@ func (s *failRequests) RecordHeartbeat(context.Context, string) error {
 // each one, and log one WARN for the run, not one a beat.
 func TestRequestFailuresAreCounted(t *testing.T) {
 	r := newPipelineRig(t)
-	store := &failRequests{PG: r.gw}
+	store := &failRequests{PG: r.gw, hold: make(chan struct{})}
 	srv := r.start(t, store)
+	t.Cleanup(func() { close(store.hold) }) // before the bus shuts down
 	nc := r.enrollNode(t, srv)
 
 	logs := &syncBuffer{}
@@ -255,12 +317,13 @@ func TestRequestFailuresAreCounted(t *testing.T) {
 	if _, err := nc.Request(collection.CommandSubject("node-a"), nil, 500*time.Millisecond); err == nil {
 		t.Fatal("a command pull whose read failed was answered")
 	}
-	publishHeartbeat(t, nc, "node-a")
-	publishHeartbeat(t, nc, "node-a")
+	for range 3 {
+		publishHeartbeat(t, nc, "node-a")
+	}
 	deadline := time.Now().Add(5 * time.Second)
-	for store.beats.Load() < 2 {
+	for store.beats.Load() < 3 {
 		if time.Now().After(deadline) {
-			t.Fatalf("the bus took %d of 2 heartbeats", store.beats.Load())
+			t.Fatalf("the bus took %d of 3 heartbeats", store.beats.Load())
 		}
 		time.Sleep(20 * time.Millisecond)
 	}

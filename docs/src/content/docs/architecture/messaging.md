@@ -238,16 +238,18 @@ failure count has its attempts beside it, so each loss reads as a ratio where 0 
   clock is the fix ([time](/architecture/time/), #419). Read a lag that jumps on one node's batches
   and not the rest as a clock before a pipeline.
 - **`ingest-batch-count`, `ingest-sample-count`**: the batches the consumer committed in the window
-  and the samples they carried, the throughput. Their ratio is samples per batch.
+  and the samples they landed, the throughput. Their ratio is samples per batch. A redelivery its
+  receipt held to a no-op landed nothing, so it adds no batch, no sample and no lag; nor does a
+  node's group the fence or the gateway dropped.
 - **`bus-telemetry-drop-count`**, per reason: the batches the consumer gave up on. `refused` is a
   batch the gateway refused whole (a refused group alone drops nothing:
   [above](#delivery-a-batch-lands-once)); `metadata` a delivery whose count could not be read;
   `max-deliver` a batch that failed its fifth delivery; `malformed` one that will never land as sent
   (undecodable, or naming an owner or a task it may not). The drop ratio is the drops over
   themselves plus `ingest-batch-count`; healthy is 0.
-- **`bus-telemetry-ack-failure-count`**: committed batches whose double ack the stream did not
-  confirm. The receipt holds the redelivery to a no-op, so this costs work, not rows; as a share of
-  `ingest-batch-count`, healthy is 0.
+- **`bus-telemetry-ack-failure-count`**: deliveries whose double ack the stream did not confirm,
+  a redelivery its receipt held included. The receipt holds the redelivery to a no-op, so this costs
+  work, not rows; as a share of `ingest-batch-count`, healthy is 0.
 - **`bus-consumer-pending`, `bus-consumer-ack-pending`, `bus-consumer-redelivered`**: the
   `og-telemetry-worker` durable at the window's close: batches stored and not yet delivered, delivered
   and not yet acked (at most one, the batch in flight), and redelivered. Healthy is a pending count

@@ -662,7 +662,7 @@
    "data_type": "float",
    "unit": "s",
    "label": "CPU Time",
-   "description": "CPU time the Omniglass process spent since its previous sample (each tick on a node, each report window on the server); divided by that interval it is the cores the process kept busy."
+   "description": "CPU time the Omniglass process spent since its previous sample (each tick on a node, each report window on the server), as the Go runtime estimates it rather than the kernel's account; divided by that interval it is the cores the process kept busy."
   },
   {
    "name": "process-fd-count",
@@ -751,13 +751,13 @@
    "name": "ingest-batch-count",
    "data_type": "int",
    "label": "Batches Landed",
-   "description": "Telemetry batches the server committed over the report window."
+   "description": "Telemetry batches the server committed over the report window; a redelivery its receipt held to a no-op landed nothing and counts none."
   },
   {
    "name": "ingest-sample-count",
    "data_type": "int",
    "label": "Samples Landed",
-   "description": "Samples in the telemetry batches the server committed over the report window."
+   "description": "Samples the server's committed telemetry batches landed over the report window; a node group the fence or the gateway dropped counts none."
   },
   {
    "name": "ingest-lane-busy",
@@ -788,7 +788,7 @@
    "name": "bus-telemetry-ack-failure-count",
    "data_type": "int",
    "label": "Telemetry Ack Failures",
-   "description": "Landed batches whose acknowledgement the bus did not confirm over the report window, so they may land again; a share of ingest-batch-count."
+   "description": "Batch deliveries whose acknowledgement the bus did not confirm over the report window, a redelivery its receipt held included; each is redelivered and its receipt keeps it from landing twice, so this costs work, not rows. As a share of ingest-batch-count, healthy is 0."
   },
   {
    "name": "bus-telemetry-drop-count",

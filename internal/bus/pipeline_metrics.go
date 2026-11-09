@@ -71,24 +71,28 @@ func (l *landing) observe(ts time.Time) {
 	}
 }
 
-// batchLanding reads a batch's landing under the same ts rule its rows land
-// by (sampleTime, groupView). Pure.
+// lanes observes the typed samples b carries under the same ts rule its
+// rows land by (sampleTime): b is a batch, or one group's view of its tick
+// (groupView).
+func (l *landing) lanes(b *ogv1.TelemetryBatch) {
+	for _, s := range b.GetMetrics() {
+		l.observe(sampleTime(b, s.GetTs()))
+	}
+	for _, s := range b.GetProperties() {
+		l.observe(sampleTime(b, s.GetTs()))
+	}
+	for _, s := range b.GetEvents() {
+		l.observe(sampleTime(b, s.GetTs()))
+	}
+}
+
+// batchLanding reads a batch's landing: its own lanes and every group's.
+// Pure.
 func batchLanding(ev *ogv1.TelemetryBatch) landing {
 	var l landing
-	lanes := func(b *ogv1.TelemetryBatch) {
-		for _, s := range b.GetMetrics() {
-			l.observe(sampleTime(b, s.GetTs()))
-		}
-		for _, s := range b.GetProperties() {
-			l.observe(sampleTime(b, s.GetTs()))
-		}
-		for _, s := range b.GetEvents() {
-			l.observe(sampleTime(b, s.GetTs()))
-		}
-	}
-	lanes(ev)
+	l.lanes(ev)
 	for _, g := range ev.GetGroups() {
-		lanes(groupView(ev, g))
+		l.lanes(groupView(ev, g))
 	}
 	return l
 }
@@ -113,11 +117,14 @@ func observeLanding(m pipelineMetrics, now time.Time, l landing) {
 	m.max(writerclass.IngestLagMax, "", now.Sub(l.oldest).Seconds())
 }
 
-// committed records a batch that landed: one more batch, its samples and its
-// lag, at the moment it committed.
-func (s *Server) committed(ev *ogv1.TelemetryBatch) {
+// committed records a batch whose transaction has just landed it: one more
+// batch, the samples it landed and their lag, at the moment it committed. A
+// batch its receipt held to a no-op (LandResult.Landed false: a redelivery or
+// a replay) landed nothing and is never recorded, and a node tick's landing
+// is only its groups that landed, never one the fence or the gateway dropped.
+func (s *Server) committed(l landing) {
 	s.metrics.count(writerclass.IngestBatchCount, "", 1)
-	observeLanding(s.metrics, time.Now(), batchLanding(ev))
+	observeLanding(s.metrics, time.Now(), l)
 }
 
 // The drop reasons, bus-telemetry-drop-count's instances: a write the gateway

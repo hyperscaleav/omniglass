@@ -181,7 +181,6 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 			s.failed(msg, err)
 			return
 		}
-		s.committed(&ev)
 		s.ack(msg)
 		return
 	}
@@ -216,7 +215,6 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 		s.failed(msg, err) // a refused write is dropped; a transient failure redelivered (bounded)
 		return
 	}
-	s.committed(&ev)
 	s.ack(msg)
 	// Each landed group's endpoint delivered this tick, whatever the sinks
 	// kept of it (#933), stamped in one write after the ack so it holds
@@ -369,6 +367,15 @@ func (s *Server) landNode(ctx context.Context, id, node string, ev *ogv1.Telemet
 			continue
 		}
 		slog.Warn(refusedGroupLog, "facility", "ingest", "node", node, "task", r.TaskID, "error", cause)
+	}
+	if res.Landed {
+		var l landing // the groups that landed, parallel to batch.Groups
+		for i, r := range resolved {
+			if !refused[i] {
+				l.lanes(r.view)
+			}
+		}
+		s.committed(l)
 	}
 	return seenEndpoints(endpoints, refused), nil
 }
@@ -588,8 +595,12 @@ func (s *Server) land(ctx context.Context, id string, ev *ogv1.TelemetryBatch, b
 		batch.Metrics, batch.Properties, batch.Events = rows.Metrics, rows.Properties, rows.Events
 		batch.Fanned, batch.Unbound = rows.Fanned, rows.Unbound
 	}
-	if _, err := s.store.LandBatch(ctx, batch); err != nil {
+	res, err := s.store.LandBatch(ctx, batch)
+	if err != nil {
 		return err
+	}
+	if res.Landed {
+		s.committed(batchLanding(ev))
 	}
 	// The endpoint delivered this batch, whatever the sinks kept of it: an
 	// instanced series, an unchanged property the guard skipped, a sample a

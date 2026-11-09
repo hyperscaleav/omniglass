@@ -523,8 +523,9 @@ window (`collection.report_seconds`, the same window collection telemetry uses):
   healthy; a nonzero one beside `db-pool-acquired` at `db-pool-max` says requests queue on the cap.
 - **The `process-*` figures**: the goroutines, heap, garbage-collection pause, CPU time and open
   files of the server process, read by the one runtime sampler a node reports its own through. The
-  server's `process-cpu-seconds` is the CPU time since the previous window, so over the window's
-  length it is the cores the server kept busy.
+  server's `process-cpu-seconds` is the CPU time since the previous window, as the Go runtime
+  estimates it rather than the kernel's account, so over the window's length it is the cores the
+  server kept busy.
 - **The pipeline**: ingest lag and throughput, the telemetry consumer's backlog and drops, the bus
   request-reply paths' failures ([messaging](/architecture/messaging/#measuring-the-pipeline)), and
   the calc, notification and settlement ticks' depth, pace and failures

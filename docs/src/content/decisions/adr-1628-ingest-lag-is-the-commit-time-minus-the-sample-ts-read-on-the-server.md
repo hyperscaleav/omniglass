@@ -18,7 +18,10 @@ refs: [1628, 1094, 1625, 1627, 419, 1517, 1577, 1630, 1641]
      and its oldest sample to the window mean `ingest-lag`, and its oldest to the window max
      `ingest-lag-max`; no per-sample observation, so a batch of fifty costs what a batch of one does.
      A sample with no `ts` anywhere is stamped at ingest and was never late: it counts into
-     `ingest-sample-count` and not toward lag. A batch with no samples observes nothing.
+     `ingest-sample-count` and not toward lag. A batch with no samples observes nothing. Only what
+     landed counts: a redelivery or replay its receipt held to a no-op (`Landed` false) adds no
+     batch, sample or lag, or every lost ack would read as a batch 30 s late, and a node tick's
+     landing is only its groups that landed, never one the fence or the gateway dropped.
   3. **A negative lag is kept.** Lag subtracts two clocks, the node's and the server's. A node clock
      ahead reads short or negative, one behind reads long. Clamping at 0 would hide the one signal a
      skew gives, so the value is kept as read; the clock is #419's.
@@ -41,7 +44,8 @@ refs: [1628, 1094, 1625, 1627, 419, 1517, 1577, 1630, 1641]
      The command pull failure counts and does not log; its log line is #1630's.
   8. **One runtime sampler, two processes.** The `process-*` reading moved into
      `internal/platformmetric` and the node and the server both call it. `process-cpu-seconds` is the
-     CPU time since the previous read, so on a node it is per tick and on the server per report
+     CPU time since the previous read, as `runtime/metrics` estimates it (the runtime's busy time,
+     not the kernel's account), so on a node it is per tick and on the server per report
      window; divided by its interval it is cores kept busy. `process-fd-count` reads nothing where
      the platform does not expose it.
   9. **Queues read as the tick and the store see them.** `calc-pending-depth` is the window max of
