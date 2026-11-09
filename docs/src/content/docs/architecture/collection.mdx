@@ -458,7 +458,9 @@ Every platform metric key, rendered from the writer-class ruling and the seed:
 
 <PlatformKeys />
 
-**Who writes them.** A node reports all but three of itself, in the **node-self block** of the batch
+**Who writes them.** A node reports its own keys (every node key but `checkin-age` and the two
+webhook counts, and none of the [server's](#self-monitoring-the-servers-account-of-itself)), in the
+**node-self block** of the batch
 its tick already publishes (`TelemetryBatch.node_self`, field 15). The block names no owner and no
 task: the server takes the node from the subject it published on, lands the rows on that node's
 platform component as the process, and holds every row to the node-self keys, so a node writes no
@@ -485,6 +487,44 @@ today's serial loop; #1634 redefines them when the loop changes. Every count is 
 healthy: the schedule's drops are the schedule hop of the delivery loss ratio #1641 defines, and a
 later slice folds them into it. The `process-*` figures come from one runtime sampler
 (`internal/platformmetric`), which the server reuses for its own component.
+
+### Self-monitoring: the server's account of itself
+
+A server reports its request and database timing on its own platform component, an
+`omniglass-server` in the platform system (#1627). Each boot ensures the component of the server's
+**identity**, `OMNIGLASS_SERVER_NAME` (the hostname when unset): a `platform_server` row names the
+identity's component, so a restart under one identity reports on one component and two servers
+report on two. Boots take the platform step's lock, so two starting at once under one identity still
+make one. Set the name wherever the hostname is not stable: a container's and a pod's change on every
+start, and each new name is a new component. The lab sets `server`. The component is reserved as a
+node's is: an operator may relabel it and never reshape it.
+
+The server folds what it sees into the window recorder in `internal/platformmetric`, the primitive
+any Omniglass process records itself through, and lands one sample per key and instance each report
+window (`collection.report_seconds`, the same window collection telemetry uses):
+
+- **`http-request-count`, `http-request-duration`, `http-request-duration-max`**, per instance: the
+  window's requests, their mean milliseconds and the slowest. The instance is the request's method,
+  the **route template** the router matched and the status class, as
+  `GET /api/v1/components/{name} 2xx`, never the path asked for, so a scan of a thousand component
+  names is one series. A method outside HTTP's standard set reads `OTHER`, and every request no route
+  matched is the one instance `unmatched`, so a client inventing paths or verbs cannot grow the
+  series. A route's error ratio is its `5xx` count over the sum of its instances' counts; 0 is
+  healthy.
+- **`db-slow-query-count`**: the window's queries that ran past the **`database.slow_query_ms`**
+  platform setting (500 by default; 0 turns it off; re-read each window). Each one also logs a WARN,
+  `slow query`, with its duration and its statement's **fingerprint** (its text with the whitespace
+  collapsed, bounded at 200 characters) and never its arguments, which carry operator data and
+  secrets. The count says how often; the log line says which statement. 0 is healthy.
+- **`db-pool-acquired`, `db-pool-idle`, `db-pool-total`, `db-pool-max`**: the database pool's
+  connections in use, idle and open and its cap, as they stand at the window's close.
+  **`db-pool-wait-count`** and **`db-pool-wait-duration`** are the window's acquires that found the
+  pool exhausted and waited, and how long they waited in all. A wait count is a loss count, 0
+  healthy; a nonzero one beside `db-pool-acquired` at `db-pool-max` says requests queue on the cap.
+
+The boot seeds the platform system before it ensures the component, and a window whose component is
+gone by the write is dropped rather than failed, as a node's is. The decisions are
+[ADR-1627](/architecture/decisions/#adr-1627-a-server-reports-its-request-and-query-timing-by-route-template-and-statement-fingerprint).
 
 ## Endpoint types and their config
 
