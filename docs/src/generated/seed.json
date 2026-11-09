@@ -568,6 +568,96 @@
    "description": "Webhook posts to the endpoint the server refused (a bad signature, a missing credential) in the report window; reported only when nonzero."
   },
   {
+   "name": "checkin-age",
+   "data_type": "float",
+   "unit": "s",
+   "label": "Check-in Age",
+   "description": "Seconds since the node's last heartbeat reached the server, written by the server every platform tick; keeps growing while the node is silent."
+  },
+  {
+   "name": "worklist-task-count",
+   "data_type": "int",
+   "label": "Worklist Tasks",
+   "description": "Tasks in the worklist the node installed, sampled on each install."
+  },
+  {
+   "name": "tick-duration",
+   "data_type": "float",
+   "unit": "ms",
+   "label": "Tick Duration",
+   "description": "Time one pass of the node's heartbeat loop took, sampled each pass; describes today's serial loop and is redefined when the loop changes (#1634)."
+  },
+  {
+   "name": "tick-overrun-count",
+   "data_type": "int",
+   "label": "Tick Overruns",
+   "description": "Passes that ran past the heartbeat plus the ticks the ticker dropped meanwhile, over the report window; reported only when nonzero."
+  },
+  {
+   "name": "schedule-lateness",
+   "data_type": "float",
+   "unit": "ms",
+   "label": "Schedule Lateness",
+   "description": "The worst gap between a task's due time and its actual start over one tick's due runs."
+  },
+  {
+   "name": "schedule-gap-excess",
+   "data_type": "float",
+   "unit": "ms",
+   "label": "Schedule Gap Excess",
+   "description": "The worst deviation between a task's actual gap since its previous run and its configured interval over one tick; a 45 s poll on a 30 s heartbeat reads 15 s every run."
+  },
+  {
+   "name": "schedule-skip-count",
+   "data_type": "int",
+   "label": "Schedule Skips",
+   "description": "Whole task intervals the schedule skipped because a run came late, over the report window; reported only when nonzero."
+  },
+  {
+   "name": "spool-batch-count",
+   "data_type": "int",
+   "label": "Spool Depth",
+   "description": "Batches waiting in the node's spool for the bus, sampled each tick."
+  },
+  {
+   "name": "spool-drop-count",
+   "data_type": "int",
+   "label": "Spool Drops",
+   "description": "Batches the spool dropped as full or overflowed, over the report window; reported only when nonzero."
+  },
+  {
+   "name": "publish-failure-count",
+   "data_type": "int",
+   "label": "Publish Failures",
+   "description": "Batches the bus refused, never acknowledged, or the node failed to encode, over the report window; reported only when nonzero."
+  },
+  {
+   "name": "session-held-count",
+   "data_type": "int",
+   "label": "Sessions Held",
+   "description": "Device sessions the node holds, one sample per session state as the instance, sampled each tick."
+  },
+  {
+   "name": "process-goroutine-count",
+   "data_type": "int",
+   "label": "Goroutines",
+   "description": "Goroutines the Omniglass process runs, sampled each tick."
+  },
+  {
+   "name": "process-heap-size",
+   "data_type": "int",
+   "unit": "bytes",
+   "label": "Heap Size",
+   "description": "Bytes of heap the Omniglass process holds in live and unswept objects, sampled each tick."
+  },
+  {
+   "name": "process-gc-pause",
+   "data_type": "float",
+   "unit": "ms",
+   "label": "GC Pause",
+   "description": "The most recent garbage collection pause of the Omniglass process; absent until the first collection."
+  },
+  {
    "name": "room-temperature",
    "data_type": "float",
    "unit": "C",
@@ -1419,6 +1509,21 @@
    "icon": "network"
   },
   {
+   "id": "platform",
+   "label": "Platform",
+   "stem": "platform",
+   "abbrev": "plat",
+   "icon": "server"
+  },
+  {
+   "id": "omniglass-node",
+   "label": "Omniglass Node",
+   "parent_id": "platform",
+   "stem": "node",
+   "abbrev": "node",
+   "icon": "cpu"
+  },
+  {
    "id": "generic-device",
    "label": "Generic Device",
    "stem": "device",
@@ -1528,6 +1633,13 @@
    "stem": "interactive-sign",
    "abbrev": "isgn",
    "icon": "touchpad"
+  },
+  {
+   "id": "platform",
+   "label": "Platform",
+   "stem": "platform",
+   "abbrev": "plat",
+   "icon": "server"
   }
  ],
  "templates": [
@@ -2800,6 +2912,12 @@
    "website": "https://newtron.example"
   },
   {
+   "id": "omniglass",
+   "label": "Omniglass",
+   "kind": "developer",
+   "website": "https://omniglass.hyperscaleav.com"
+  },
+  {
    "id": "polaris",
    "label": "Polaris",
    "kind": "manufacturer",
@@ -3312,6 +3430,13 @@
    "driver_id": "recording-service-api",
    "component_type": "generic-service",
    "kind": "service"
+  },
+  {
+   "id": "omniglass-node",
+   "label": "Omniglass Node",
+   "vendor_id": "omniglass",
+   "component_type": "omniglass-node",
+   "kind": "app"
   },
   {
    "id": "generic-device",

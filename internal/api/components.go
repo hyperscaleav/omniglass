@@ -402,6 +402,9 @@ func componentMoverName(ctx context.Context, gw storage.Gateway, a *authenticato
 }
 
 func mapComponentErr(err error) error {
+	if platErr, ok := mapPlatformErr(err); ok {
+		return platErr
+	}
 	if refErr, ok := mapRefErr(err); ok {
 		return refErr
 	}

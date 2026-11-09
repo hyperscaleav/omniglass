@@ -234,6 +234,9 @@ func registerNodeRoutes(api huma.API, a *authenticator, gw storage.Gateway, nats
 }
 
 func mapNodeErr(err error) error {
+	if platErr, ok := mapPlatformErr(err); ok {
+		return platErr
+	}
 	if refErr, ok := mapRefErr(err); ok {
 		return refErr
 	}

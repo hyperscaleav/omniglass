@@ -271,7 +271,15 @@ func Run(ctx context.Context, gw storage.Gateway) error {
 	}
 	// No standards: a standard is example content an operator forks from
 	// the template catalog (ADR-0827), never planted by a boot.
-	return seedProducts(ctx, gw)
+	if err := seedProducts(ctx, gw); err != nil {
+		return err
+	}
+	// The platform system last: it is of a seeded system type, and the node
+	// components it adopts are of a seeded product (#1625).
+	if err := gw.EnsurePlatform(ctx); err != nil {
+		return fmt.Errorf("seed: platform system: %w", err)
+	}
+	return nil
 }
 
 // seedLabelRules writes the rule this release ships for each labelled entity

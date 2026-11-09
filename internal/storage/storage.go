@@ -724,6 +724,10 @@ type Gateway interface {
 	CreateNode(ctx context.Context, actorID string, spec NodeSpec, create, locationRead scope.Set) (*Node, error)
 	UpdateNode(ctx context.Context, actorID, name string, patch NodePatch, read, action, locationRead scope.Set) (*Node, error)
 	DeleteNode(ctx context.Context, actorID, name string, read, action scope.Set) error
+	// EnsurePlatform is the boot seed's platform step (#1625): it creates the
+	// reserved platform system if absent and gives every node without one its
+	// platform component. Idempotent.
+	EnsurePlatform(ctx context.Context) error
 	SetEnrollmentToken(ctx context.Context, actorID, name, tokenHashHex string, action scope.Set) (*Node, error)
 	ClaimNode(ctx context.Context, name, tokenHashHex string) (*Node, error)
 	AuthenticateNode(ctx context.Context, name, tokenHashHex string) (bool, error)

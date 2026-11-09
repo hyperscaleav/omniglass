@@ -567,6 +567,10 @@ var systemConfig = scopedConfig[System]{
 	notFound: ErrSystemNotFound, forbidden: ErrSystemForbidden, occupied: ErrSystemOccupied,
 	attachPaths: attachSystemPaths,
 	beforeDelete: func(ctx context.Context, p *PG, tx pgx.Tx, before *System) error {
+		// The platform system outlives every operator act (#1625).
+		if err := refusePlatformSystem(ctx, tx, before.ID); err != nil {
+			return err
+		}
 		return p.releaseSystemMembers(ctx, tx, before.ID)
 	},
 	afterDelete: func(ctx context.Context, p *PG, q txQuerier, before *System) error {
@@ -664,6 +668,10 @@ func (p *PG) createSystemTx(ctx context.Context, tx pgx.Tx, actorID string, spec
 		} else if err != nil {
 			return nil, err
 		}
+		// The platform system takes no child system (#1625).
+		if err := refusePlatformSystem(ctx, tx, parent.ID); err != nil {
+			return nil, err
+		}
 		parentID = &parent.ID
 	}
 
@@ -709,6 +717,10 @@ func (p *PG) createSystemTx(ctx context.Context, tx pgx.Tx, actorID string, spec
 			return nil, ErrUnknownSystemType
 		} else if err != nil {
 			return nil, fmt.Errorf("storage: resolve system_type %q: %w", *spec.SystemTypeID, err)
+		}
+		// The platform type names one system, the boot seed's (#1625).
+		if err := refusePlatformType(ctx, tx, tid); err != nil {
+			return nil, err
 		}
 		systemTypeID = &tid
 	}
@@ -881,6 +893,19 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 			return nil, ErrUnknownSystemType
 		}
 		systemTypePatchID = &tid
+	}
+	// The platform system keeps its type and takes no standard; no other
+	// system takes the platform type (#1625). Its label stays the operator's.
+	if platform, err := isPlatformSystem(ctx, tx, before.ID); err != nil {
+		return nil, err
+	} else if platform {
+		if patch.StandardID != nil || (patch.SystemTypeID != nil && !sameOptional(before.SystemTypeID, systemTypePatchID)) {
+			return nil, ErrPlatformSystemReserved
+		}
+	} else if systemTypePatchID != nil {
+		if err := refusePlatformType(ctx, tx, *systemTypePatchID); err != nil {
+			return nil, err
+		}
 	}
 	// A reclassify that leaves the system still platform-named (#686) may no
 	// longer fit its old stem: a "boardroom" reclassified as a classroom needs
@@ -1069,6 +1094,10 @@ func (p *PG) RenameSystem(ctx context.Context, actorID, name, newName string, re
 	if err != nil {
 		return nil, err
 	}
+	// The platform system keeps its reserved name and stays unplaced (#1625).
+	if err := refusePlatformSystem(ctx, tx, before.ID); err != nil {
+		return nil, err
+	}
 	if err := ValidateName("system", newName); err != nil {
 		return nil, err
 	}
@@ -1119,6 +1148,10 @@ func (p *PG) ResetSystemName(ctx context.Context, actorID, name string, read, ac
 
 	before, err := p.resolveSystemForAction(ctx, tx, name, read, action)
 	if err != nil {
+		return nil, err
+	}
+	// The platform system keeps its reserved name and stays unplaced (#1625).
+	if err := refusePlatformSystem(ctx, tx, before.ID); err != nil {
 		return nil, err
 	}
 	newName, newOrdinal, err := generateNameForSystemType(ctx, tx, before.SystemTypeID, before.ParentID, before.LocationID, &before.ID)
@@ -1179,6 +1212,10 @@ func (p *PG) MoveSystem(ctx context.Context, actorID, name string, move SystemMo
 	if err != nil {
 		return nil, err
 	}
+	// The platform system keeps its reserved name and stays unplaced (#1625).
+	if err := refusePlatformSystem(ctx, tx, before.ID); err != nil {
+		return nil, err
+	}
 	// The location arrives as a name and the column holds an id, so the three-state
 	// value is resolved before the statement: nil stays nil (unchanged), "" stays ""
 	// (clear), and a named location becomes its id.
@@ -1217,6 +1254,9 @@ func (p *PG) MoveSystem(ctx context.Context, actorID, name string, move SystemMo
 			if errors.Is(err, ErrSystemNotFound) {
 				return nil, ErrParentSystemNotFound
 			} else if err != nil {
+				return nil, err
+			}
+			if err := refusePlatformSystem(ctx, tx, parent.ID); err != nil {
 				return nil, err
 			}
 			descendant, err := p.systemIsDescendant(ctx, tx, before.ID, parent.ID)

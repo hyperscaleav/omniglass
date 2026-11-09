@@ -465,6 +465,7 @@ collection: {
     shape: sql_table
     principal_id: uuid {constraint: primary_key}
     location_id: uuid {constraint: foreign_key}
+    platform_component_id: uuid {constraint: foreign_key}
   }
   node_log: {
     shape: sql_table
@@ -596,6 +597,7 @@ collection.identity_binding.conduit_id -> fleet.component.id
 collection.identity_binding.property_type_id -> telemetry.property_type.id
 collection.identity_binding.system_id -> fleet.system.id
 collection.node.location_id -> fleet.location.id
+collection.node.platform_component_id -> fleet.component.id
 collection.node.principal_id -> identity.principal.id
 collection.node_log.node_id -> collection.node.principal_id
 collection.sim_impairment.component_id -> fleet.component.id

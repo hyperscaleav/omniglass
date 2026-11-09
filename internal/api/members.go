@@ -192,6 +192,9 @@ func registerMemberRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 }
 
 func mapMemberErr(err error) error {
+	if platErr, ok := mapPlatformErr(err); ok {
+		return platErr
+	}
 	if refErr, ok := mapRefErr(err); ok {
 		return refErr
 	}

@@ -224,6 +224,13 @@ products:
     driver_id: recording-service-api
     kind: service
     component_type: generic-service
+  # The platform's own parts (#1094). Every node's platform component is one
+  # of these; node registration creates it, never an operator.
+  - id: omniglass-node
+    label: Omniglass Node
+    vendor_id: omniglass
+    kind: app
+    component_type: omniglass-node
   # The generic floor.
   - id: generic-device
     label: Generic Device

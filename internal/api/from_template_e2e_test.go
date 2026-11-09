@@ -210,7 +210,10 @@ func TestCreateSystemFromTemplateAPI(t *testing.T) {
 	// system, is refused at the first component, and still nothing lands.
 	annexComp := f.split("annex-comp", "annex")
 	f.c.do(annexComp, http.MethodPost, "/systems:createFromTemplate", map[string]any{"template": "mr55-system", "location": "hq"}, http.StatusForbidden)
-	if n := f.count(`select count(*) from system`) + f.count(`select count(*) from standard`) + f.count(`select count(*) from component`); n != 0 {
+	// A fresh fleet holds the boot seed's platform system and edge-1's platform
+	// component (#1625), and nothing else.
+	if n := f.count(`select count(*) from system where name <> 'platform'`) + f.count(`select count(*) from standard`) +
+		f.count(`select count(*) from component where id not in (select platform_component_id from node where platform_component_id is not null)`); n != 0 {
 		t.Fatalf("a refused instantiate left %d rows", n)
 	}
 

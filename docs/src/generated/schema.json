@@ -1074,12 +1074,23 @@
       "name": "last_orphaned_at",
       "type": "timestamp with time zone",
       "nullable": true
+     },
+     {
+      "name": "platform_component_id",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "component.id"
      }
     ],
     "uniques": [
      {
       "name": "node_name_key",
       "definition": "CREATE UNIQUE INDEX node_name_key ON public.node USING btree (name)"
+     },
+     {
+      "name": "node_platform_component_id_key",
+      "definition": "CREATE UNIQUE INDEX node_platform_component_id_key ON public.node USING btree (platform_component_id)"
      }
     ]
    },

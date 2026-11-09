@@ -391,13 +391,13 @@ func TestRunIdempotent(t *testing.T) {
 		t.Errorf("locations = %d, want %d (seed not idempotent or incomplete)", locs, len(fixtures.Locations))
 	}
 	var comps, systems, alarms int
-	if err := conn.QueryRow(ctx, `select count(*) from component`).Scan(&comps); err != nil {
+	if err := conn.QueryRow(ctx, fleetComponentCount).Scan(&comps); err != nil {
 		t.Fatalf("count components: %v", err)
 	}
 	if want := len(fixtures.Components) + len(fixtures.SimComponents) + 1; comps != want {
 		t.Errorf("components = %d, want %d (the fixture devices and the simulator's own, all platform-named, plus the operator-named DSP)", comps, want)
 	}
-	if err := conn.QueryRow(ctx, `select count(*) from system`).Scan(&systems); err != nil {
+	if err := conn.QueryRow(ctx, fleetSystemCount).Scan(&systems); err != nil {
 		t.Fatalf("count systems: %v", err)
 	}
 	if systems != len(fixtures.Systems) {
@@ -432,7 +432,7 @@ func TestRunIdempotent(t *testing.T) {
 		pairs[ra.System+"\x00"+ra.Component] = true
 	}
 	var members, assignments int
-	if err := conn.QueryRow(ctx, `select count(*) from system_member`).Scan(&members); err != nil {
+	if err := conn.QueryRow(ctx, fleetMemberCount).Scan(&members); err != nil {
 		t.Fatalf("count members: %v", err)
 	}
 	if members != len(pairs) {
