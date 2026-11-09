@@ -72,11 +72,15 @@ type CommandDelivery struct {
 // is skipped with its execution error recorded, so it stops being redelivered
 // and the fault is visible on the row.
 func (p *PG) PendingNodeCommands(ctx context.Context, node string) ([]CommandDelivery, error) {
-	// Read only this node's commands (#1631): a command is a candidate only
+	// Read only this node's components' commands (#1631): a command is a candidate only
 	// when its component has a driver-attached endpoint placed on this node,
 	// and the scan of command is searched by those components through
 	// command_deliverable_idx, so a pull costs the node's own backlog, never
 	// the fleet's.
+	//
+	// TODO(#1630): when the predicate below gains c.status = 'issued', a new
+	// migration narrows command_deliverable_idx to status = 'issued' too, so
+	// the index stops holding every unexecuted terminal command ever issued.
 	//
 	// Then pick ONE actuating endpoint per command over ALL of its component's
 	// endpoints, not only this node's: only an endpoint whose driver spec binds

@@ -56,12 +56,13 @@ The issue records; the **wire actuates** (#815). The moving parts:
   TTL it stops being deliverable at all (settlement's `timed-out` covers a command no node picked
   up). The node remembers each command's outcome per id, so a redelivery repeats the **report**,
   never the actuation.
-- **A pull reads only its own node's commands.** Every node pulls once a heartbeat, so the pull
-  starts from the components that carry an attached endpoint on this node and finds their
+- **A pull reads only its own components' commands.** Every node pulls once a heartbeat, so the
+  pull starts from the components that carry an attached endpoint on this node and finds their
   deliverable commands (owned by a component, not yet executed) through
-  `command_deliverable_idx`, keyed `(component_id, ts)`; another node's pending commands are
-  never read (#1631). The actuating-endpoint choice is still made over all of the component's
-  endpoints, so a component with endpoints on two nodes is delivered by exactly one. Every row a
+  `command_deliverable_idx`, keyed `(component_id, ts)`; a command on a component with no attached
+  endpoint on this node is never read (#1631). The actuating-endpoint choice is still made over
+  all of the component's endpoints, so a component with endpoints on two nodes is read by both
+  pulls and delivered by exactly one. Every row a
   pull delivers is stamped `dispatched_at` in one statement, so a pull's round trips do not grow
   with its deliveries. The command table is not yet pruned: a terminal command stays until
   retention gains a command lane (#1684).

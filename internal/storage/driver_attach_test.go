@@ -767,6 +767,19 @@ func TestCommandWireDelivery(t *testing.T) {
 	if byID[dual].EndpointID != dualTCP || byID[dual].Transport != "tcp" {
 		t.Fatalf("switcher-dual's command rides %+v, want its first endpoint by name (tcp %s)", byID[dual], dualTCP)
 	}
+	// The one batched stamp pairs each command with the endpoint it was
+	// delivered over: two commands on two endpoints of one node, so a stamp
+	// that crossed the pairs would still pass the node confinement and leave
+	// each row naming the other's endpoint.
+	for _, d := range gotB {
+		var ep *string
+		if err := conn.QueryRow(ctx, `select dispatched_endpoint_id::text from command where id = $1`, d.ID).Scan(&ep); err != nil {
+			t.Fatalf("read dispatched_endpoint_id of %d: %v", d.ID, err)
+		}
+		if ep == nil || *ep != d.EndpointID {
+			t.Fatalf("command %d stamped dispatched over %v, want the endpoint it was delivered over %s", d.ID, deref(ep), d.EndpointID)
+		}
+	}
 	if again, err := gw.PendingNodeCommands(ctx, "edge-9"); err != nil || len(again) != 0 {
 		t.Fatalf("edge-9 re-pull = %+v (err %v), want nothing: switcher-dual's command is edge-b's", again, err)
 	}
