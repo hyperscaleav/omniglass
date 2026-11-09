@@ -37,8 +37,10 @@ type runJob struct {
 }
 
 // subscribeRuns takes the server's run requests for this node. A preview runs
-// at once on its own goroutine; a run now is queued to the run loop (and
-// refused, not waited on, when the loop already holds a run's worth).
+// at once on its own goroutine; a run now is handed through the run loop to
+// its endpoint's lane (and refused, not waited on, when the loop has not yet
+// taken the last one handed), unless a reason holds its endpoint, which
+// answers it at once.
 func subscribeRuns(ctx context.Context, nc *nats.Conn, node string, runner *collection.Runner, g *gates, jobs chan<- runJob) (*nats.Subscription, error) {
 	return nc.Subscribe(collection.RunSubject(node), func(m *nats.Msg) {
 		respond := func(r collection.RunReply) {
@@ -53,27 +55,41 @@ func subscribeRuns(ctx context.Context, nc *nats.Conn, node string, runner *coll
 			respond(collection.RunReply{Error: "the node could not read the run request"})
 			return
 		}
-		timeout := time.Duration(req.TimeoutMs) * time.Millisecond
-		if timeout <= 0 {
-			timeout = defaultRunTimeout
-		}
-		switch req.Kind {
-		case collection.RunPreview:
-			go func() { respond(previewRun(ctx, runner, g, req.Tasks, req.Mask, timeout)) }()
-		case collection.RunNow:
-			if len(req.Tasks) != 1 {
-				respond(collection.RunReply{Error: "a run now runs exactly one task"})
-				return
-			}
-			select {
-			case jobs <- runJob{task: req.Tasks[0], deadline: time.Now().Add(timeout), respond: respond}:
-			default:
-				respond(collection.RunReply{Error: "the node is already running a run now; retry in a moment"})
-			}
-		default:
-			respond(collection.RunReply{Error: fmt.Sprintf("the node does not know a run of kind %q", req.Kind)})
-		}
+		takeRun(ctx, runner, g, jobs, req, respond)
 	})
+}
+
+// takeRun routes one run request: a preview to its own goroutine, a run now
+// through the run loop to its lane.
+func takeRun(ctx context.Context, runner *collection.Runner, g *gates, jobs chan<- runJob, req collection.RunRequest, respond func(collection.RunReply)) {
+	timeout := time.Duration(req.TimeoutMs) * time.Millisecond
+	if timeout <= 0 {
+		timeout = defaultRunTimeout
+	}
+	switch req.Kind {
+	case collection.RunPreview:
+		go func() { respond(previewRun(ctx, runner, g, req.Tasks, req.Mask, timeout)) }()
+	case collection.RunNow:
+		if len(req.Tasks) != 1 {
+			respond(collection.RunReply{Error: "a run now runs exactly one task"})
+			return
+		}
+		// A reason that holds the whole endpoint answers here, as the
+		// request arrives (#1650): queued, it would wait out whatever its
+		// lane is in the middle of, and a run spent timing out against a
+		// gone device can outlast the caller's budget.
+		if r, held := g.holding(req.Tasks[0].EndpointID); held {
+			respond(heldRun(r))
+			return
+		}
+		select {
+		case jobs <- runJob{task: req.Tasks[0], deadline: time.Now().Add(timeout), respond: respond}:
+		default:
+			respond(collection.RunReply{Error: "the node is already running a run now; retry in a moment"})
+		}
+	default:
+		respond(collection.RunReply{Error: fmt.Sprintf("the node does not know a run of kind %q", req.Kind)})
+	}
 }
 
 // previewRun runs each preview task once, within the budget, and answers with
@@ -186,6 +202,15 @@ func landableRun(sched *pollSchedule, taskID string, dps []collection.Sample) []
 	return sched.changed(taskID, dps)
 }
 
+// heldRun is the answer to a run now on an endpoint a reason holds whole
+// (unreachable, today): gated, naming the reason and what releases it. A
+// refusal is rung-scoped, so runNowTask asks it on the endpoint's lane, where
+// the endpoint's held session is known.
+func heldRun(r reason) collection.RunReply {
+	return collection.RunReply{Gated: true, GateReason: string(r.kind),
+		Error: "node: the endpoint is " + r.text + "; " + reasonRules[r.kind].release}
+}
+
 // runNowTask runs one of the node's poll tasks now, on its lane, exactly
 // as a scheduled run would, its schedule untouched: the endpoint's held
 // session borrowed where it has one, its gate honored (a gated stateless
@@ -209,10 +234,11 @@ func runNowTask(ctx context.Context, out *telemetrySpool, node string, runner *c
 	if gt, gated := sessions.refusedAt(task.EndpointID, statelessRung(task)); gated && ownRequest {
 		return collection.RunReply{Gated: true, GateReason: string(reasonRefused), Error: gt.refusal().Error()}
 	}
-	// Any other reason holds the whole endpoint (#1650): the run is answered
-	// at once with it, and nothing is sent.
+	// Any other reason holds the whole endpoint (#1650): takeRun answered
+	// one held when the request arrived; one that closed since is answered
+	// here, and nothing is sent.
 	if r, held := sessions.holding(task.EndpointID); held {
-		return collection.RunReply{Gated: true, GateReason: string(r.kind), Error: "node: the endpoint is " + r.text + "; " + reasonRules[r.kind].release}
+		return heldRun(r)
 	}
 	ctx, cancel := context.WithDeadline(ctx, deadline)
 	defer cancel()
