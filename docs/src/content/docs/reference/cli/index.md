@@ -2702,7 +2702,7 @@ A working omniglass on Docker, to learn on
 
 ### `omniglass lab measure`
 
-Measure a running scale lab: rows a minute, growth, WAL a sample, CPU and memory, ingest lag, redeliveries, the consumer lane's busy fraction, fleet view times and the retention drain
+Measure a running scale lab: rows a minute, growth, WAL a sample, CPU and memory, ingest lag, redeliveries, the consumer lane's busy fraction, fleet view and system page times and the retention drain, once or sampled on an interval
 
 ```
 omniglass lab measure [flags]
@@ -2716,15 +2716,25 @@ When no sample probed in the window had landed by its end, the ingest lag cell r
 
 The retention probe plants a backlog of aged property rows and restarts the server to run its pass; --backlog 0 skips it and leaves the server alone. A lab started before this build's `lab run` does not record commit timestamps, which the ingest lag reads: bring it up again.
 
+--page-clients N times the console's system page as an operator feels it: N clients each load the page --page-loads times across the window, making every read a cold open of the page makes, timed from the first request to the last answer. A load with any read that does not answer 200 counts as an error and stays out of the times.
+
+--every samples the lab already running on an interval instead of measuring it once. The lab is found and warmed up once; then every --every one window is measured and written as one JSON line holding the same fields at the same paths as --json, plus the sample's sequence, end time and the server's uptime. Lines go to --append (opened for append, so a series resumes into the same file) or to standard output. --samples stops after that many; 0 samples until interrupted, finishing the sample in flight. A sample that fails writes a line with its error and no figures, and the run goes on. Sampling skips the retention probe, which restarts the server.
+
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--backlog` | int64 | `150000` | aged property rows the retention probe plants; 0 skips the probe and its server restart |
+| `--append` | string | (none) | append each sample's line to this file, created if missing; empty writes to standard output |
+| `--backlog` | int64 | `150000` | aged property rows the retention probe plants; 0 skips the probe and its server restart (0 when sampling) |
 | `--drain-timeout` | duration | `3m0s` | how long the retention probe waits for the pass to clear the backlog |
+| `--every` | duration | `0s` | sample the running lab on this interval, one JSON line a sample; 0 measures once |
 | `--fleet-reads` | int | `20` | how many timed fleet view reads, spread over the window |
 | `--json` | string | `lab-measure.json` | also write the figures here as JSON; empty writes none |
+| `--page-clients` | int | `0` | how many clients load the console's system page at once across the window; 0 skips the load |
+| `--page-loads` | int | `20` | how many timed system page loads each client makes, spread over the window |
+| `--page-system` | string | (none) | the system whose page the clients load, by name; empty loads the fleet view's first |
+| `--samples` | int | `0` | stop after this many samples; 0 samples until interrupted |
 | `--scenario` | string | `corporate` | the scale scenario a --systems lab runs |
 | `--systems` | int | `0` | bring up a throwaway scale lab of this many systems, measure it and remove it; 0 measures the one already running |
-| `--warmup` | duration | `2m0s` | how long the lab runs before the window starts |
+| `--warmup` | duration | `2m0s` | how long the lab runs before the window starts (once, before the first sample) |
 | `--window` | duration | `5m0s` | the window the rates, growth and usage are read over |
 
 ### `omniglass lab run`
