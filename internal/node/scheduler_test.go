@@ -294,8 +294,17 @@ func TestAnOperatorRunWaitsForItsLaneAndGoesFirst(t *testing.T) {
 	p := newLanePool(4)
 	t.Cleanup(p.wait)
 	gate := make(chan struct{})
+	release := sync.OnceFunc(func() { close(gate) })
+	// Cleanups run last first: a failed check still frees the lane, so the
+	// test fails rather than hanging in p.wait.
+	t.Cleanup(release)
 	var mu sync.Mutex
 	var order []string
+	ranSoFar := func() []string {
+		mu.Lock()
+		defer mu.Unlock()
+		return slices.Clone(order)
+	}
 	ran := func(name string, wait bool) func() {
 		return func() {
 			mu.Lock()
@@ -313,17 +322,17 @@ func TestAnOperatorRunWaitsForItsLaneAndGoesFirst(t *testing.T) {
 		p.do("ep-1", laneOperator, ran("operator", false))
 		close(done)
 	}()
-	waitFor(t, func() bool { return p.queued() == 2 }, "the operator run queued")
-	mu.Lock()
-	if !slices.Equal(order, []string{"running"}) {
-		t.Fatalf("ran %v while the lane was busy", order)
+	// The first job's goroutine may start after the operator run queues, so
+	// wait for both: the lane busy with it, and the other two waiting.
+	waitFor(t, func() bool { return len(ranSoFar()) > 0 && p.queued() == 2 }, "the first run started and the operator run queued")
+	if got := ranSoFar(); !slices.Equal(got, []string{"running"}) {
+		t.Fatalf("ran %v while the lane was busy", got)
 	}
-	mu.Unlock()
-	close(gate)
+	release()
 	<-done
 	p.wait()
-	if !slices.Equal(order, []string{"running", "operator", "queued"}) {
-		t.Fatalf("lane order %v, want the operator run ahead of the queued scheduled one", order)
+	if got := ranSoFar(); !slices.Equal(got, []string{"running", "operator", "queued"}) {
+		t.Fatalf("lane order %v, want the operator run ahead of the queued scheduled one", got)
 	}
 }
 
