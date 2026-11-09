@@ -150,6 +150,29 @@ func TestCLIEndToEnd(t *testing.T) {
 		t.Fatalf("healthz exit %d:\n%s", code, out)
 	}
 
+	// Component dependencies (#1648): the generated commands record a codec
+	// fed from a PDU's outlet, list it from the codec's side, and remove it.
+	for _, name := range []string{"pdu-1", "codec-1"} {
+		if out, code := cli("component", "create", "--name", name, "--product", "boreal-edge-55"); code != 0 {
+			t.Fatalf("component create %s exit %d:\n%s", name, code, out)
+		}
+	}
+	if out, code := cli("component", "dependency", "create", "codec-1", "--upstream", "pdu-1", "--kind", "power", "--outlet", "3"); code != 0 || !strings.Contains(out, `"outlet": "3"`) {
+		t.Fatalf("component dependency create exit %d:\n%s", code, out)
+	}
+	if out, code := cli("component", "dependency", "create", "codec-1", "--upstream", "pdu-1", "--kind", "power"); code == 0 {
+		t.Fatalf("a power dependency with no outlet should fail, got exit 0:\n%s", out)
+	}
+	if out, code := cli("component", "dependency", "list", "codec-1"); code != 0 || !strings.Contains(out, `"upstream": "pdu-1"`) {
+		t.Fatalf("component dependency list exit %d:\n%s", code, out)
+	}
+	if out, code := cli("component", "dependency", "delete", "codec-1", "power", "pdu-1"); code != 0 {
+		t.Fatalf("component dependency delete exit %d:\n%s", code, out)
+	}
+	if out, code := cli("component", "dependency", "list", "codec-1"); code != 0 || strings.Contains(out, `"upstream": "pdu-1"`) {
+		t.Fatalf("component dependency list after delete exit %d:\n%s", code, out)
+	}
+
 	// Delete the leaf, then it is gone (a second get fails).
 	if _, code := cli("location", "delete", "hq"); code != 0 {
 		t.Fatalf("location delete should succeed")

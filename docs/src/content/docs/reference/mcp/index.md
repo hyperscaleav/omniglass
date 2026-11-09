@@ -21,7 +21,7 @@ Each tool says what a client may assume of it, from one rule over the route's me
 
 A tool that is not read-only and not destructive adds something (a create).
 
-63 tools.
+66 tools.
 
 | Tool | What it does | Gate | Assume |
 |---|---|---|---|
@@ -35,6 +35,9 @@ A tool that is not read-only and not destructive adds something (a create).
 | [`list-component-commands`](#list-component-commands) | List a component's commands | `command:read` | read-only, idempotent |
 | [`get-component-command`](#get-component-command) | Read a command | `command:read` | read-only, idempotent |
 | [`issue-component-command`](#issue-component-command) | Issue a command to a component | `command:issue` | destructive, open-world |
+| [`list-component-dependencies`](#list-component-dependencies) | List what a component depends on and what depends on it | `component:read` | read-only, idempotent |
+| [`create-component-dependency`](#create-component-dependency) | Record that a component depends on another | `component:update` | adds |
+| [`delete-component-dependency`](#delete-component-dependency) | Remove a component's dependency on another | `component:update` | destructive, idempotent |
 | [`list-component-events`](#list-component-events) | List a component's recent events | `component:read` | read-only, idempotent |
 | [`list-identity-bindings`](#list-identity-bindings) | List the identities a conduit component fans out | `component:read` | read-only, idempotent |
 | [`put-identity-binding`](#put-identity-binding) | Bind an identity a conduit reports to its owner | `component:update` | destructive, idempotent |
@@ -239,6 +242,53 @@ Records a command invocation, writes a caused event, and (for a settleable comma
 | `value` | any | no | The intended value for the target property (a settleable command) |
 | `wait` | boolean | no | Block until the command settles, fails or times out, or until wait_timeout passes, and answer with where it stands then. Refused with a 429, before anything is issued, while too many commands are already being waited on |
 | `wait_timeout` | integer | no | How long a wait may block, in seconds (1 to 120). A command still in flight when it passes is answered as it stands, its phase saying where |
+
+## `list-component-dependencies`
+
+List what a component depends on and what depends on it
+
+This component's dependency edges both ways: its upstreams (what it depends on) and its dependents (what depends on it), each of kind power (fed from an outlet of the upstream), host (hosted by it) or path (reached through it). A disruptive command follows host edges down from its target and a power command follows the power edges from its outlet, so these edges are what a reboot or an outlet cycle holds. Containment (a component's parent) is a different fact and never appears here. An edge whose other end is outside the caller's component:read is counted in hidden, never named. Gated by component:read; a component outside it is a non-disclosing 404.
+
+- Route: `GET /api/v1/components/{name}/dependencies`
+- Gate: `component:read`
+- Assume: read-only, idempotent
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes | Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
+
+## `create-component-dependency`
+
+Record that a component depends on another
+
+Records that this component depends on the upstream: power (fed from the named outlet of the upstream; the outlet is required on this kind and refused on the others), host (hosted by the upstream, so a reboot of the upstream holds this component's endpoints too) or path (reached through the upstream; recorded, and not yet followed by a hold). A component never depends on itself, one edge of a kind joins a pair once (a 409 for the second), and an edge whose upstream already depends on this component through edges of the same kind would close a cycle and is a 422. The edge is a fact about the dependent: gated by component:update on it (a dependent the caller reads but cannot write is a 403), with the upstream resolved in the caller's component:read (outside it, a non-disclosing 404).
+
+- Route: `POST /api/v1/components/{name}/dependencies`
+- Gate: `component:update`
+- Assume: adds
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `kind` | string | yes | How it depends: power, host or path |
+| `name` | string | yes | Name of the dependent component, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
+| `outlet` | string | no | The upstream's outlet that feeds this component: required on a power edge, refused on any other |
+| `upstream` | string | yes | Name or uuid of the component this one depends on, or a dotted address |
+
+## `delete-component-dependency`
+
+Remove a component's dependency on another
+
+Removes this component's edge of the kind to the upstream. Gated by component:update on the dependent (read but not writable, a 403). An upstream outside the caller's component:read is a 404, as an edge that does not exist is: the list does not name it either.
+
+- Route: `DELETE /api/v1/components/{name}/dependencies/{kind}/{upstream}`
+- Gate: `component:update`
+- Assume: destructive, idempotent
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `kind` | string | yes | The edge's kind |
+| `name` | string | yes | Name of the dependent component, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
+| `upstream` | string | yes | Name or uuid of the upstream component, or a dotted address |
 
 ## `list-component-events`
 
@@ -551,6 +601,7 @@ Creates an endpoint owned by a component (or a server-hosted one, which needs an
 | `inputs` | object | no | The inputs the driver's spec declares (host, port, credentials as secret reference names); required ones must be supplied, defaults fill the rest |
 | `label` | string | no | What an operator reads in lists (Control processor). Settable here because the name is derived from the transport, so it says how the device is reached and never what the connection is for |
 | `node` | string | no | Node placement, by name or id |
+| `out_of_band` | boolean | no | Mark the endpoint a management path (a BMC, a management port) that answers through a reboot of its device, so a reboot's hold leaves its gate open |
 | `params` | any | no | Address/target settings (jsonb); an attach derives them from the inputs instead |
 | `transport` | string | no | A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set |
 
@@ -572,7 +623,7 @@ Fetches an endpoint by its address (<component>/<endpoint name>) or uuid. An end
 
 Update an endpoint
 
-Patches an endpoint's node placement, params, label, or (driver-attached) its connection inputs in place: the host, port and attached secret references, validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
+Patches an endpoint's node placement, params, label, out-of-band mark, or (driver-attached) its connection inputs in place: the host, port and attached secret references, validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
 
 - Route: `PATCH /api/v1/endpoints/{endpoint}`
 - Gate: `endpoint:update`
@@ -584,6 +635,7 @@ Patches an endpoint's node placement, params, label, or (driver-attached) its co
 | `inputs` | object | no | A driver-attached endpoint's inputs, edited in place (#1061): the host, the port, an attached secret's reference name, any input the driver declares. Merged over the stored inputs and validated against the driver; a value it refuses is a 400 naming the input. Changing where a credential is sent needs the caller to be able to use that credential |
 | `label` | string | no | A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone |
 | `node` | string | no | Reassign the node placement, by name or id |
+| `out_of_band` | boolean | no | Mark the endpoint a management path that answers through a reboot of its device (true), or an ordinary one (false). Omit to leave it alone |
 | `params` | any | no | Replace the address/target settings (jsonb). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs |
 | `transport` | string | no | The transport: a driver-attached endpoint takes only one its driver speaks |
 

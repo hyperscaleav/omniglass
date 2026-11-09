@@ -574,6 +574,15 @@ audit: {
   }
 }
 
+unclustered: {
+  component_dependency: {
+    shape: sql_table
+    id: uuid {constraint: primary_key}
+    component_id: uuid {constraint: foreign_key}
+    upstream_id: uuid {constraint: foreign_key}
+  }
+}
+
 audit.audit_log.actor_principal_id -> identity.principal.id
 audit.audit_log.real_actor_principal_id -> identity.principal.id
 catalog.component_type.parent_id -> catalog.component_type.id
@@ -741,6 +750,8 @@ telemetry.property.location_id -> fleet.location.id
 telemetry.property.node_id -> collection.node.principal_id
 telemetry.property.property_type_id -> telemetry.property_type.id
 telemetry.property.system_id -> fleet.system.id
+unclustered.component_dependency.component_id -> fleet.component.id
+unclustered.component_dependency.upstream_id -> fleet.component.id
 ```
 
 <!-- erd:end -->

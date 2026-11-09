@@ -806,11 +806,12 @@ Registers a custom command type (official=false). The name must be a single keba
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--description` | string | (none) | What the command does |
-| `--disruptive` | bool | `false` | The command takes its device down (reboot): its delivery closes the gates of the component's endpoints on the delivering node until each reads up again |
+| `--disruptive` | bool | `false` | The command takes its device down (reboot): its delivery closes the gates of the hold set (the target and what it hosts) on the delivering node until each reads up again |
 | `--hold-seconds` | int | `0` | A disruptive type's backstop in seconds, greater than quiet_seconds: an endpoint with no up verdict by then reopens anyway, counted. Not the settle window. Only on a disruptive type |
 | `--label` | string | (none) | A human label |
 | `--name` | string | (none) | The command type name (lowercase kebab) |
 | `--params-schema` | string | (none) | A JSON Schema fragment for the params |
+| `--power-outlet-param` | string | (none) | Marks a power command: the name of the param that carries the outlet, so its hold set is what that outlet feeds. Only on a disruptive type |
 | `--quiet-seconds` | int | `0` | A disruptive type's quiet period in seconds: no poll, probe or session dial runs against the held endpoints. Only on a disruptive type |
 | `--settle-window-seconds` | int | `0` | The actuation window in seconds: how long the device is given to actuate before a mismatch is a failed command. 0 means settle immediately (a fire-and-forget command, or a settleable one judged at the moment of issue). A duration has no negative, so the schema floors it at 0 rather than accepting a value that behaves as 0 with no refusal to say so. |
 | `--target-metric-type` | string | (none) | The metric this command sets, for settlement (at most one target arm) |
@@ -878,7 +879,7 @@ Update a command type
 omniglass command-type update <name> [flags]
 ```
 
-Patches a custom command type's label, description, params schema, settle window, disruption (disruptive, quiet_seconds, hold_seconds, checked together on the merged row), or target on either arm (a nil field is unchanged; an empty target clears it; a non-empty arm clears the other). The name is fixed at creation. Official types are read-only. Gated by command_type:update.
+Patches a custom command type's label, description, params schema, settle window, disruption (disruptive, quiet_seconds, hold_seconds, power_outlet_param, checked together on the merged row), or target on either arm (a nil field is unchanged; an empty target clears it; a non-empty arm clears the other). The name is fixed at creation. Official types are read-only. Gated by command_type:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -887,6 +888,7 @@ Patches a custom command type's label, description, params schema, settle window
 | `--hold-seconds` | int | `0` | A disruptive type's backstop in seconds, greater than quiet_seconds; not the settle window |
 | `--label` | string | (none) | A human label |
 | `--params-schema` | string | (none) | A JSON Schema fragment (replaces wholesale) |
+| `--power-outlet-param` | string | (none) | The param that carries a power command's outlet (empty clears it); only on a disruptive type, checked on the merged row |
 | `--quiet-seconds` | int | `0` | A disruptive type's quiet period in seconds |
 | `--settle-window-seconds` | int | `0` | The actuation window in seconds, floored at 0 (a duration has no negative; 0 means settle immediately) |
 | `--target-metric-type` | string | (none) | The metric this command sets (empty clears it; a non-empty arm clears the other) |
@@ -1188,6 +1190,64 @@ Example:
 
 ```sh
 omniglass component delete <name>
+```
+
+### `omniglass component dependency`
+
+Commands for the dependency resource
+
+#### `omniglass component dependency create`
+
+Record that a component depends on another
+
+```
+omniglass component dependency create <name> [flags]
+```
+
+Records that this component depends on the upstream: power (fed from the named outlet of the upstream; the outlet is required on this kind and refused on the others), host (hosted by the upstream, so a reboot of the upstream holds this component's endpoints too) or path (reached through the upstream; recorded, and not yet followed by a hold). A component never depends on itself, one edge of a kind joins a pair once (a 409 for the second), and an edge whose upstream already depends on this component through edges of the same kind would close a cycle and is a 422. The edge is a fact about the dependent: gated by component:update on it (a dependent the caller reads but cannot write is a 403), with the upstream resolved in the caller's component:read (outside it, a non-disclosing 404).
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--kind` | string | (none) | How it depends: power, host or path |
+| `--outlet` | string | (none) | The upstream's outlet that feeds this component: required on a power edge, refused on any other |
+| `--upstream` | string | (none) | Name or uuid of the component this one depends on, or a dotted address |
+
+Example:
+
+```sh
+omniglass component dependency create codec-1 --kind kind --upstream upstream
+```
+
+#### `omniglass component dependency delete`
+
+Remove a component's dependency on another
+
+```
+omniglass component dependency delete <name> <kind> <upstream>
+```
+
+Removes this component's edge of the kind to the upstream. Gated by component:update on the dependent (read but not writable, a 403). An upstream outside the caller's component:read is a 404, as an edge that does not exist is: the list does not name it either.
+
+Example:
+
+```sh
+omniglass component dependency delete codec-1 power pdu-1
+```
+
+#### `omniglass component dependency list`
+
+List what a component depends on and what depends on it
+
+```
+omniglass component dependency list <name>
+```
+
+This component's dependency edges both ways: its upstreams (what it depends on) and its dependents (what depends on it), each of kind power (fed from an outlet of the upstream), host (hosted by it) or path (reached through it). A disruptive command follows host edges down from its target and a power command follows the power edges from its outlet, so these edges are what a reboot or an outlet cycle holds. Containment (a component's parent) is a different fact and never appears here. An edge whose other end is outside the caller's component:read is counted in hidden, never named. Gated by component:read; a component outside it is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass component dependency list codec-1
 ```
 
 ### `omniglass component effective-secret`
@@ -2145,6 +2205,7 @@ Creates an endpoint owned by a component (or a server-hosted one, which needs an
 | `--inputs` | string | (none) | The inputs the driver's spec declares (host, port, credentials as secret reference names); required ones must be supplied, defaults fill the rest |
 | `--label` | string | (none) | What an operator reads in lists (Control processor). Settable here because the name is derived from the transport, so it says how the device is reached and never what the connection is for |
 | `--node` | string | (none) | Node placement, by name or id |
+| `--out-of-band` | bool | `false` | Mark the endpoint a management path (a BMC, a management port) that answers through a reboot of its device, so a reboot's hold leaves its gate open |
 | `--params` | string | (none) | Address/target settings (jsonb); an attach derives them from the inputs instead |
 | `--transport` | string | (none) | A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set |
 
@@ -2271,13 +2332,14 @@ Update an endpoint
 omniglass endpoint update <endpoint> [flags]
 ```
 
-Patches an endpoint's node placement, params, label, or (driver-attached) its connection inputs in place: the host, port and attached secret references, validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
+Patches an endpoint's node placement, params, label, out-of-band mark, or (driver-attached) its connection inputs in place: the host, port and attached secret references, validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--inputs` | string | (none) | A driver-attached endpoint's inputs, edited in place (#1061): the host, the port, an attached secret's reference name, any input the driver declares. Merged over the stored inputs and validated against the driver; a value it refuses is a 400 naming the input. Changing where a credential is sent needs the caller to be able to use that credential |
 | `--label` | string | (none) | A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone |
 | `--node` | string | (none) | Reassign the node placement, by name or id |
+| `--out-of-band` | bool | `false` | Mark the endpoint a management path that answers through a reboot of its device (true), or an ordinary one (false). Omit to leave it alone |
 | `--params` | string | (none) | Replace the address/target settings (jsonb). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs |
 | `--transport` | string | (none) | The transport: a driver-attached endpoint takes only one its driver speaks |
 
