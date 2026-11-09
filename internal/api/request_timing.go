@@ -24,7 +24,7 @@ var standardMethods = map[string]bool{
 
 // recordRequests times every API request into rec (#1627): one count, one
 // mean and one max per instance per window. The instance is the route
-// template chi matched (`GET /api/v1/components/{id} 2xx`), read after the
+// template chi matched (`GET /api/v1/components/{name} 2xx`), read after the
 // router has run, never the raw path, so the series are bounded by the route
 // table however many ids are asked for.
 func recordRequests(rec *platformmetric.Recorder, now func() time.Time) func(http.Handler) http.Handler {
@@ -37,18 +37,30 @@ func recordRequests(rec *platformmetric.Recorder, now func() time.Time) func(htt
 				patterns = len(rctx.RoutePatterns)
 			}
 			sw := &statusWriter{ResponseWriter: w}
-			next.ServeHTTP(sw, r)
-			ms := platformmetric.Millis(now().Sub(start))
-			instance := unmatchedInstance
-			// A route matched below this middleware appends its pattern; a
-			// request no route took (a 404 or 405 from the router itself)
-			// leaves the list as it found it.
-			if rctx != nil && len(rctx.RoutePatterns) > patterns {
-				instance = requestInstance(r.Method, rctx.RoutePattern(), sw.status())
+			record := func(status int) {
+				ms := platformmetric.Millis(now().Sub(start))
+				instance := unmatchedInstance
+				// A route matched below this middleware appends its pattern; a
+				// request no route took (a 404 or 405 from the router itself)
+				// leaves the list as it found it.
+				if rctx != nil && len(rctx.RoutePatterns) > patterns {
+					instance = requestInstance(r.Method, rctx.RoutePattern(), status)
+				}
+				rec.Count(writerclass.HTTPRequestCount, instance, 1)
+				rec.Mean(writerclass.HTTPRequestDuration, instance, ms)
+				rec.Max(writerclass.HTTPRequestDurationMax, instance, ms)
 			}
-			rec.Count(writerclass.HTTPRequestCount, instance, 1)
-			rec.Mean(writerclass.HTTPRequestDuration, instance, ms)
-			rec.Max(writerclass.HTTPRequestDurationMax, instance, ms)
+			// A handler that panics is a failed request the caller sees as a
+			// dropped response: it records as a 5xx, then the panic carries on
+			// to net/http, which logs it and closes the connection.
+			defer func() {
+				if p := recover(); p != nil {
+					record(http.StatusInternalServerError)
+					panic(p)
+				}
+			}()
+			next.ServeHTTP(sw, r)
+			record(sw.status())
 		})
 	}
 }

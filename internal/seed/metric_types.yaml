@@ -113,7 +113,7 @@ metric_types:
   # The server's own request and database figures (#1627), landed on the
   # server's component in the platform system each report window. Only the
   # server writes them. An http-request-* sample's instance is the request's
-  # method, route template and status class ("GET /api/v1/components/{id}
+  # method, route template and status class ("GET /api/v1/components/{name}
   # 2xx"), never its path, so the instance set stays as small as the API.
   - name: http-request-count
     data_type: int

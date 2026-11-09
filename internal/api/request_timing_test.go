@@ -114,6 +114,32 @@ func TestRecordRequestsTimesEachRequest(t *testing.T) {
 	}
 }
 
+// TestRecordRequestsCountsAPanicAsA5xx: a handler that panics is a server
+// failure the caller sees as a dropped response, so it records as its
+// route's 5xx, and the panic still reaches net/http, which logs it and
+// closes the connection as it would without the recorder.
+func TestRecordRequestsCountsAPanicAsA5xx(t *testing.T) {
+	t.Parallel()
+	rec := platformmetric.NewRecorder(time.Now)
+	r := chi.NewRouter()
+	r.Route("/api/v1", func(sub chi.Router) {
+		sub.Use(recordRequests(rec, time.Now))
+		sub.Get("/panics", func(http.ResponseWriter, *http.Request) { panic("boom") })
+	})
+	func() {
+		defer func() {
+			if p := recover(); p != "boom" {
+				t.Errorf("recovered %v, want the handler's own panic", p)
+			}
+		}()
+		r.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/api/v1/panics", nil))
+	}()
+	got := seriesOf(rec.Flush("server-1"))
+	if n := got[writerclass.HTTPRequestCount]["GET /api/v1/panics 5xx"]; n != 1 {
+		t.Errorf("http-request-count = %v, want the panic counted once as a 5xx", got[writerclass.HTTPRequestCount])
+	}
+}
+
 // TestRequestInstanceBoundsTheMethod: a method outside HTTP's standard set
 // reads OTHER, so a caller inventing verbs cannot grow the series.
 func TestRequestInstanceBoundsTheMethod(t *testing.T) {

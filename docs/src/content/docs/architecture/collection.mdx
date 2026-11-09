@@ -486,7 +486,8 @@ between fires past one and a half heartbeats). `tick-duration` and `tick-overrun
 today's serial loop; #1634 redefines them when the loop changes. Every count is a loss count, 0
 healthy: the schedule's drops are the schedule hop of the delivery loss ratio #1641 defines, and a
 later slice folds them into it. The `process-*` figures come from one runtime sampler
-(`internal/platformmetric`), which the server reuses for its own component.
+(`internal/platformmetric`); the server reports none of them yet, and #1628 adds that sampler to its
+own component.
 
 ### Self-monitoring: the server's account of itself
 
@@ -509,8 +510,8 @@ window (`collection.report_seconds`, the same window collection telemetry uses):
   `GET /api/v1/components/{name} 2xx`, never the path asked for, so a scan of a thousand component
   names is one series. A method outside HTTP's standard set reads `OTHER`, and every request no route
   matched is the one instance `unmatched`, so a client inventing paths or verbs cannot grow the
-  series. A route's error ratio is its `5xx` count over the sum of its instances' counts; 0 is
-  healthy.
+  series. A handler that panics counts as its route's `5xx`. A route's error ratio is its `5xx` count
+  over the sum of its instances' counts; 0 is healthy.
 - **`db-slow-query-count`**: the window's queries that ran past the **`database.slow_query_ms`**
   platform setting (500 by default; 0 turns it off; re-read each window). Each one also logs a WARN,
   `slow query`, with its duration and its statement's **fingerprint** (its text with the whitespace
