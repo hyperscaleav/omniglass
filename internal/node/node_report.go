@@ -1,0 +1,205 @@
+package node
+
+import (
+	"time"
+
+	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/platformmetric"
+	"github.com/hyperscaleav/omniglass/internal/writerclass"
+	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
+	"google.golang.org/protobuf/types/known/timestamppb"
+)
+
+// nodeReport is the node's account of itself (#1625): how long each tick's
+// pass takes and whether it keeps up with the heartbeat, how late its tasks
+// run against their intervals, how deep its spool is and what it drops, the
+// sessions it holds, and what its process costs. They are platform metrics
+// on the node's own platform component, sent in the node-self block of the
+// batch the tick publishes; the server lands them under the platform writer.
+//
+// Two shapes, per the key table. The each-tick figures are one observation
+// per sample, taken every tick. The windowed counts (tick overruns, skipped
+// intervals, spool drops, publish failures) are tallied over the node's
+// report window, the collection report's (report.go), and emitted once when
+// it ends, only when nonzero: the poll-failure-count convention, no zero
+// noise. Pure: the run loop feeds it and sends what it takes.
+type nodeReport struct {
+	heartbeat time.Duration
+	every     time.Duration
+	since     time.Time
+	lastFire  time.Time
+
+	overruns int
+	skipped  int
+	drops    int
+	failures int
+
+	samples []*ogv1.MetricSample
+}
+
+// spoolFigures is what the spool reports to one tick: its queue depth now,
+// and the batches it dropped and the publishes that failed since it last
+// reported.
+type spoolFigures struct {
+	batches  int
+	drops    int
+	failures int
+}
+
+func newNodeReport(heartbeat, every time.Duration, now time.Time) *nodeReport {
+	if every <= 0 {
+		every = defaultReportEvery
+	}
+	return &nodeReport{heartbeat: heartbeat, every: every, since: now}
+}
+
+// setEvery applies the report window the worklist carries; none keeps the
+// window the node has.
+func (r *nodeReport) setEvery(every time.Duration) {
+	if r != nil && every > 0 {
+		r.every = every
+	}
+}
+
+func (r *nodeReport) sample(key string, v float64, at time.Time, instance string) {
+	r.samples = append(r.samples, &ogv1.MetricSample{Name: key, Value: v, Ts: timestamppb.New(at.UTC()), Instance: instance})
+}
+
+// fired is the heartbeat ticker firing at at. A gap past one and a half
+// heartbeats since the last fire means the ticker dropped the ticks between
+// (it keeps one while the loop is busy and drops the rest): each is an
+// overrun.
+func (r *nodeReport) fired(at time.Time) {
+	if r == nil {
+		return
+	}
+	if !r.lastFire.IsZero() && r.heartbeat > 0 {
+		if gap := at.Sub(r.lastFire); gap*2 > r.heartbeat*3 {
+			r.overruns += int((gap+r.heartbeat/2)/r.heartbeat) - 1
+		}
+	}
+	r.lastFire = at
+}
+
+// pass records one tick's pass: its duration, and an overrun when it ran
+// past the heartbeat.
+func (r *nodeReport) pass(took time.Duration, at time.Time) {
+	if r == nil {
+		return
+	}
+	r.sample(writerclass.TickDuration, platformmetric.Millis(took), at, "")
+	if r.heartbeat > 0 && took > r.heartbeat {
+		r.overruns++
+	}
+}
+
+// schedule records the tick's schedule figures: the worst lateness and gap
+// excess when a task ran, and the intervals skipped toward the window.
+func (r *nodeReport) schedule(f tickFigures, at time.Time) {
+	if r == nil {
+		return
+	}
+	r.skipped += f.skipped
+	if f.ran {
+		r.sample(writerclass.ScheduleLateness, platformmetric.Millis(f.lateness), at, "")
+		r.sample(writerclass.ScheduleGapExcess, platformmetric.Millis(f.gapExcess), at, "")
+	}
+}
+
+// spool records the spool's depth now and tallies its drops and failures.
+func (r *nodeReport) spool(f spoolFigures, at time.Time) {
+	if r == nil {
+		return
+	}
+	r.sample(writerclass.SpoolBatchCount, float64(f.batches), at, "")
+	r.drops += f.drops
+	r.failures += f.failures
+}
+
+// sessions records the sessions the node holds, one sample per state, a
+// state with none included, so a state that empties reads zero rather than
+// its last count.
+func (r *nodeReport) sessions(held map[collection.SessionState]int, at time.Time) {
+	if r == nil {
+		return
+	}
+	for _, st := range collection.SessionStates {
+		r.sample(writerclass.SessionHeldCount, float64(held[st]), at, string(st))
+	}
+}
+
+// process records what the node's process costs now.
+func (r *nodeReport) process(p platformmetric.Process, at time.Time) {
+	if r == nil {
+		return
+	}
+	for _, rd := range p.Readings() {
+		r.sample(rd.Key, rd.Value, at, "")
+	}
+}
+
+// worklist records the size of a worklist the node just installed.
+func (r *nodeReport) worklist(tasks int, at time.Time) {
+	if r == nil {
+		return
+	}
+	r.sample(writerclass.WorklistTaskCount, float64(tasks), at, "")
+}
+
+// take returns what the report holds: the each-tick samples since the last
+// take, and, once the window has run its length, the window's nonzero counts
+// stamped at now, the window's end, the next window starting there.
+func (r *nodeReport) take(now time.Time) []*ogv1.MetricSample {
+	if r == nil {
+		return nil
+	}
+	if !now.Before(r.since.Add(r.every)) {
+		for _, c := range []struct {
+			key string
+			n   int
+		}{
+			{writerclass.TickOverrunCount, r.overruns},
+			{writerclass.ScheduleSkipCount, r.skipped},
+			{writerclass.SpoolDropCount, r.drops},
+			{writerclass.PublishFailureCount, r.failures},
+		} {
+			if c.n > 0 {
+				r.sample(c.key, float64(c.n), now, "")
+			}
+		}
+		r.overruns, r.skipped, r.drops, r.failures = 0, 0, 0, 0
+		r.since = now
+	}
+	out := r.samples
+	r.samples = nil
+	return out
+}
+
+// sessionCounts is how many sessions the node holds in each state.
+func (m *sessionManager) sessionCounts() map[collection.SessionState]int {
+	out := map[collection.SessionState]int{}
+	if m == nil {
+		return out
+	}
+	for _, h := range m.held {
+		st, _ := h.sess.State()
+		out[st]++
+	}
+	return out
+}
+
+// account closes the tick whose pass began at passStart: it records the pass,
+// the schedule's figures, the spool's, the sessions held and the process, and
+// takes what the report has to send.
+func (r *nodeReport) account(passStart time.Time, sched *pollSchedule, spool *telemetrySpool, sessions *sessionManager) []*ogv1.MetricSample {
+	if r == nil {
+		return nil
+	}
+	now := time.Now()
+	r.pass(now.Sub(passStart), now)
+	r.schedule(sched.takeTick(), now)
+	r.spool(spool.takeFigures(), now)
+	r.sessions(sessions.sessionCounts(), now)
+	r.process(platformmetric.ReadProcess(), now)
+	return r.take(now)
+}

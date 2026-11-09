@@ -159,6 +159,8 @@ type telemetrySpool struct {
 	groupBytes int           // the encoded bytes of groups
 	timer      stopper       // the armed flush timer, nil while nothing is pending
 	timerGen   int           // the flush count, so a timer that lost a race is a no-op
+	drops      int           // batches dropped as full or aged since the last takeFigures
+	failures   int           // publishes refused, not acked, or not encoded since the last takeFigures
 }
 
 // newTelemetrySpool is node's spool shipping to subject through publish, at
@@ -182,6 +184,7 @@ func (s *telemetrySpool) add(g *ogv1.TaskGroup) error {
 	stampGroupMillis(g)
 	b, err := proto.Marshal(g)
 	if err != nil {
+		s.failed()
 		return fmt.Errorf("node: marshal task group: %w", err)
 	}
 	field := protowire.AppendBytes(protowire.AppendTag(nil, groupsField, protowire.BytesType), b)
@@ -266,6 +269,7 @@ func (s *telemetrySpool) flushLocked() bool {
 	if err != nil {
 		// Only a node id that is not UTF-8 fails here; config refuses one.
 		slog.Warn("telemetry batch header did not encode, groups dropped", "facility", "delivery", "groups", len(groups), "error", err.Error())
+		s.failures++
 		return false
 	}
 	b := make([]byte, 0, len(head)+size)
@@ -292,6 +296,7 @@ func (s *telemetrySpool) send(ev *ogv1.TelemetryBatch) error {
 	stampMetricMillis(ev)
 	b, err := proto.Marshal(ev)
 	if err != nil {
+		s.failed()
 		return fmt.Errorf("node: marshal telemetry batch: %w", err)
 	}
 	s.mu.Lock()
@@ -312,19 +317,22 @@ func (s *telemetrySpool) send(ev *ogv1.TelemetryBatch) error {
 	return nil
 }
 
-// stampMetricMillis puts every metric sample of ev on its own ts, whole
-// milliseconds (#1526): a sample with no ts takes the batch's, and a batch with
-// neither is left for the ingest to stamp. Done where every batch leaves the
-// node, so no probe, driver or session has to remember to. The other lanes, and
-// the batch's own ts, are sent as they were.
+// stampMetricMillis puts every metric sample of ev, its node-self samples
+// included, on its own ts, whole milliseconds (#1526): a sample with no ts
+// takes the batch's, and a batch with neither is left for the ingest to
+// stamp. Done where every batch leaves the node, so no probe, driver or
+// session has to remember to. The other lanes, and the batch's own ts, are
+// sent as they were.
 func stampMetricMillis(ev *ogv1.TelemetryBatch) {
-	for _, m := range ev.GetMetrics() {
-		ts := m.GetTs()
-		if ts == nil {
-			ts = ev.GetTs()
-		}
-		if ts != nil {
-			m.Ts = timestamppb.New(storage.MetricTime(ts.AsTime()))
+	for _, lane := range [][]*ogv1.MetricSample{ev.GetMetrics(), ev.GetNodeSelf().GetMetrics()} {
+		for _, m := range lane {
+			ts := m.GetTs()
+			if ts == nil {
+				ts = ev.GetTs()
+			}
+			if ts != nil {
+				m.Ts = timestamppb.New(storage.MetricTime(ts.AsTime()))
+			}
 		}
 	}
 }
@@ -355,6 +363,7 @@ func (s *telemetrySpool) dropLocked(i int) bool {
 	s.bytes -= len(s.queue[i].data)
 	s.queue = append(s.queue[:i], s.queue[i+1:]...)
 	s.dropped++
+	s.drops++
 	s.overflowed = true
 	if !s.dropping {
 		s.dropping = true
@@ -461,6 +470,7 @@ func (s *telemetrySpool) ship() {
 			if err != nil {
 				s.dropped++
 				s.overflowed = true
+				s.failures++
 			}
 			s.mu.Unlock()
 			if err != nil {
@@ -470,6 +480,7 @@ func (s *telemetrySpool) ship() {
 		}
 		wasHeld := s.held
 		s.held = true
+		s.failures++
 		s.lastErr = err
 		n := len(s.queue)
 		s.stopLocked()
@@ -552,6 +563,25 @@ func (s *telemetrySpool) pending() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return len(s.queue)
+}
+
+// failed counts a publish that failed outside the lock.
+func (s *telemetrySpool) failed() {
+	s.mu.Lock()
+	s.failures++
+	s.mu.Unlock()
+}
+
+// takeFigures is the spool's part of the node's self-report (#1625): the
+// batches it holds now, and the batches it dropped (at a cap, or aged out)
+// and the publishes that failed (refused by the bus, not acked, or not
+// encoded) since the last call, each counted once.
+func (s *telemetrySpool) takeFigures() spoolFigures {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	f := spoolFigures{batches: len(s.queue), drops: s.drops, failures: s.failures}
+	s.drops, s.failures = 0, 0
+	return f
 }
 
 // takeOverflow reports, once, that batches were dropped since the last call:
