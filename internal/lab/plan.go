@@ -455,7 +455,10 @@ func Plan(o Options) (Spec, error) {
 			"OMNIGLASS_ADDR=0.0.0.0:"+strconv.Itoa(consolePort),
 			"OMNIGLASS_NATS_ADDR=0.0.0.0:"+strconv.Itoa(busPort),
 			"OMNIGLASS_NATS_URL=nats://server:"+strconv.Itoa(busPort),
-			"OMNIGLASS_NATS_STORE_DIR="+dataDir+"/nats"),
+			"OMNIGLASS_NATS_STORE_DIR="+dataDir+"/nats",
+			// A container's hostname is new each run; a fixed name keeps one
+			// server platform component across restarts on a kept database.
+			"OMNIGLASS_SERVER_NAME=server"),
 		Mounts:  []Mount{{Volume: volData, Target: dataDir}},
 		Publish: &Publish{HostIP: o.Listen, HostPort: o.Port, ContainerPort: consolePort},
 		Restart: "on-failure",

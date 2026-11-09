@@ -87,6 +87,12 @@
    "deprecated": "OMNIGLASS_ENCRYPTION_KEY_FILE"
   },
   {
+   "key": "OMNIGLASS_SERVER_NAME",
+   "default": "the hostname",
+   "scope": "server",
+   "doc": "the server's identity: the name its own platform component, which carries its request and query timing, is ensured under at boot; set it when servers share a hostname or a server moves hosts"
+  },
+  {
    "key": "OMNIGLASS_SERVER",
    "scope": "cli",
    "doc": "server base URL the CLI and the node use when --server is omitted, read when the command runs"
