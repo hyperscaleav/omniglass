@@ -101,6 +101,7 @@ func (s *Server) startTelemetryConsumer() error {
 	if err != nil {
 		return err
 	}
+	s.cons = cons
 	cc, err := cons.Consume(func(msg jetstream.Msg) { s.handleTelemetry(msg) })
 	if err != nil {
 		return err
@@ -139,10 +140,11 @@ func (s *Server) batchID(msg jetstream.Msg) string {
 // ack confirms a batch to the stream and waits for the stream to take it
 // (the double ack): a batch whose ack is lost anyway is redelivered after
 // telemetryAckWait, and its receipt makes the second landing a no-op.
-func ack(msg jetstream.Msg) {
+func (s *Server) ack(msg jetstream.Msg) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := msg.DoubleAck(ctx); err != nil {
+		s.metrics.count(writerclass.BusTelemetryAckFailureCount, "", 1)
 		slog.Warn("telemetry ack not confirmed, the batch will be redelivered and held by its receipt", "subject", msg.Subject(), "error", err)
 	}
 }
@@ -161,7 +163,7 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 
 	var ev ogv1.TelemetryBatch
 	if err := proto.Unmarshal(msg.Data(), &ev); err != nil {
-		_ = msg.Term() // undecodable: it will never succeed, stop redelivery
+		s.drop(msg, dropMalformed) // undecodable: it will never succeed, stop redelivery
 		return
 	}
 	id := s.batchID(msg)
@@ -172,14 +174,15 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 	if msg.Subject() == collection.APITelemetrySubject {
 		bind, ok := apiBinding(&ev)
 		if !ok {
-			_ = msg.Term() // malformed owner: it will never resolve, stop redelivery
+			s.drop(msg, dropMalformed) // malformed owner: it will never resolve, stop redelivery
 			return
 		}
 		if err := s.land(ctx, id, &ev, bind); err != nil {
 			s.failed(msg, err)
 			return
 		}
-		ack(msg)
+		s.committed(&ev)
+		s.ack(msg)
 		return
 	}
 
@@ -193,7 +196,7 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 	// field that looks authoritative and is not, so say so and stop redelivery.
 	if ev.GetOwner() != nil {
 		slog.Warn("node-lane batch asserted an owner, dropped", "node", node)
-		_ = msg.Term()
+		s.drop(msg, dropMalformed)
 		return
 	}
 
@@ -204,7 +207,7 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 	// redelivery. The batch's self-logs are the only top-level rows it carries.
 	if ev.GetTaskId() != "" || taskBound(&ev) > 0 {
 		slog.Warn(topLevelTaskLog, "facility", "ingest", "node", node, "task", ev.GetTaskId())
-		_ = msg.Term()
+		s.drop(msg, dropMalformed)
 		return
 	}
 
@@ -213,7 +216,8 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 		s.failed(msg, err) // a refused write is dropped; a transient failure redelivered (bounded)
 		return
 	}
-	ack(msg)
+	s.committed(&ev)
+	s.ack(msg)
 	// Each landed group's endpoint delivered this tick, whatever the sinks
 	// kept of it (#933), stamped in one write after the ack so it holds
 	// nothing in flight. A failed stamp loses one tick's freshness, which the
@@ -713,7 +717,7 @@ func (s *Server) fanOut(fanned *ogv1.TelemetryBatch, bind ingestBinding, reg col
 // other failure is redelivered, bounded (nakOrTerm).
 func (s *Server) failed(msg jetstream.Msg, err error) {
 	if storage.IsRefusedWrite(err) {
-		_ = msg.Term()
+		s.drop(msg, dropRefused)
 		slog.Warn("telemetry batch refused, dropped", "subject", msg.Subject(), "error", err.Error())
 		return
 	}
@@ -733,12 +737,12 @@ func (s *Server) failed(msg jetstream.Msg, err error) {
 func (s *Server) nakOrTerm(msg jetstream.Msg) {
 	meta, err := msg.Metadata()
 	if err != nil {
-		_ = msg.Term()
+		s.drop(msg, dropMetadata)
 		slog.Warn("telemetry message dropped: could not read delivery metadata", "subject", msg.Subject(), "error", err)
 		return
 	}
 	if meta.NumDelivered >= maxTelemetryDeliveries {
-		_ = msg.Term()
+		s.drop(msg, dropMaxDeliver)
 		slog.Warn("telemetry message dropped after repeated failures", "subject", msg.Subject(), "delivered", meta.NumDelivered)
 		return
 	}

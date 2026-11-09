@@ -22,6 +22,7 @@ type serverMetricsStore interface {
 	CollectionSettings(ctx context.Context) (settings.CollectionSettings, error)
 	DatabaseSettings(ctx context.Context) (settings.DatabaseSettings, error)
 	PoolStat() storage.PoolStat
+	OutboxStatus(ctx context.Context) (storage.OutboxStatus, error)
 }
 
 // serverMetrics is the server's measure of itself (#1627): the recorder the
@@ -67,13 +68,33 @@ func serverReportWindow(ctx context.Context, gw serverMetricsStore) time.Duratio
 }
 
 // reporter lands the recorder's windows on the server's component: each
-// window it gauges the pool and re-reads the slow-query setting, so a change
-// to it takes within a window without a restart.
-func (m *serverMetrics) reporter(gw serverMetricsStore, componentID string, log *slog.Logger) *platformmetric.Reporter {
+// window it gauges the pool, the outbox and the process's runtime, runs the
+// samplers it is handed (the bus's, #1628), and re-reads the slow-query
+// setting, so a change to it takes within a window without a restart.
+func (m *serverMetrics) reporter(gw serverMetricsStore, componentID string, log *slog.Logger, samplers ...platformmetric.Sampler) *platformmetric.Reporter {
+	all := append([]platformmetric.Sampler{
+		platformmetric.PoolSampler(gw.PoolStat),
+		platformmetric.RuntimeSampler(platformmetric.ReadProcess),
+		outboxSampler(gw),
+		func(ctx context.Context, _ *platformmetric.Recorder) { m.applySlowQuery(ctx, gw) },
+	}, samplers...)
 	return platformmetric.NewReporter(m.rec, gw, componentID,
 		func(ctx context.Context) time.Duration { return serverReportWindow(ctx, gw) },
-		log,
-		platformmetric.PoolSampler(gw.PoolStat),
-		func(ctx context.Context, _ *platformmetric.Recorder) { m.applySlowQuery(ctx, gw) },
-	)
+		log, all...)
+}
+
+// outboxSampler gauges the notification outbox each window (#1628): its
+// queued depth and how long its oldest due row has waited. A read that fails
+// says nothing that window.
+func outboxSampler(gw serverMetricsStore) platformmetric.Sampler {
+	return func(ctx context.Context, r *platformmetric.Recorder) {
+		ctx, cancel := context.WithTimeout(ctx, settingsReadTimeout)
+		defer cancel()
+		st, err := gw.OutboxStatus(ctx)
+		if err != nil {
+			return
+		}
+		r.Gauge(writerclass.OutboxQueuedDepth, "", float64(st.Queued))
+		r.Gauge(writerclass.OutboxDueAge, "", st.DueAge.Seconds())
+	}
 }
