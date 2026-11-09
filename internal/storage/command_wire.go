@@ -63,10 +63,13 @@ type CommandDelivery struct {
 	// a credential: the node applies the endpoint's scheme.
 	Request *driver.Request
 	// Disruptive: the command takes its device down (#1651). The node
-	// closes the gate of every endpoint in HoldEndpoints (each endpoint of
-	// the component placed on this node) before it sends, runs nothing
-	// against them for QuietSeconds, then reopens each on its own first up
-	// verdict, with HoldSeconds the backstop. Empty for any other command.
+	// closes the gate of every endpoint in HoldEndpoints before it sends,
+	// runs nothing against them for QuietSeconds, then reopens each on its
+	// own first up verdict, with HoldSeconds the backstop. Empty for any
+	// other command. The hold set follows the dependency graph (#1648,
+	// ResolveHoldSet): the target's in-band endpoints and its host
+	// dependents', or for a power command what the named outlet feeds, each
+	// placed on this node.
 	Disruptive    bool
 	QuietSeconds  int
 	HoldSeconds   int
@@ -95,10 +98,7 @@ func (p *PG) PendingNodeCommands(ctx context.Context, node string) ([]CommandDel
 				c.id, ct.name as command_type, c.params, i.id as endpoint_id, i.transport,
 				i.params as endpoint_params, i.node_name, d.spec,
 				ct.disruptive, ct.quiet_seconds, ct.hold_seconds,
-				case when ct.disruptive then array(
-					select e2.id::text from endpoint e2
-					where e2.component = c.component_id and e2.node_name = i.node_name
-					order by e2.id::text) else '{}'::text[] end as hold_endpoints,
+				c.component_id::text as target_id, coalesce(ct.power_outlet_param, '') as power_outlet_param,
 				(select pr.value from property pr where pr.command_id = c.id and pr.provenance = 'intended' order by pr.ts desc limit 1) as intended_prop,
 				(select m.value from metric_declared m where m.command_id = c.id order by m.ts desc limit 1) as intended_metric
 			from command c
@@ -113,7 +113,7 @@ func (p *PG) PendingNodeCommands(ctx context.Context, node string) ([]CommandDel
 			order by c.id, i.name
 		)
 		select id, command_type, params, endpoint_id, transport, endpoint_params, spec, intended_prop, intended_metric,
-			disruptive, quiet_seconds, hold_seconds, hold_endpoints
+			disruptive, quiet_seconds, hold_seconds, target_id, node_name::text, power_outlet_param
 		from candidate
 		where node_name = (select principal_id from node where name = $1)`, node)
 	if err != nil {
@@ -133,13 +133,15 @@ func (p *PG) PendingNodeCommands(ctx context.Context, node string) ([]CommandDel
 		intendedMetric *float64
 		disruptive     bool
 		quiet, hold    int
-		holdEndpoints  []string
+		targetID       string
+		nodeName       string
+		outletParam    string
 	}
 	var pending []pendingRow
 	for rows.Next() {
 		var r pendingRow
 		if err := rows.Scan(&r.id, &r.commandType, &r.params, &r.endpointID, &r.transport, &r.endpointParams, &r.spec, &r.intendedProp, &r.intendedMetric,
-			&r.disruptive, &r.quiet, &r.hold, &r.holdEndpoints); err != nil {
+			&r.disruptive, &r.quiet, &r.hold, &r.targetID, &r.nodeName, &r.outletParam); err != nil {
 			return nil, fmt.Errorf("storage: scan pending command: %w", err)
 		}
 		pending = append(pending, r)
@@ -192,7 +194,11 @@ func (p *PG) PendingNodeCommands(ctx context.Context, node string) ([]CommandDel
 			Retries:     req.RetriesOr(driver.DefaultCommandRetries),
 		}
 		if r.disruptive {
-			d.Disruptive, d.QuietSeconds, d.HoldSeconds, d.HoldEndpoints = true, r.quiet, r.hold, r.holdEndpoints
+			hold, err := p.holdSet(ctx, r.targetID, r.nodeName, r.outletParam != "", OutletParam(r.params, r.outletParam))
+			if err != nil {
+				return nil, err
+			}
+			d.Disruptive, d.QuietSeconds, d.HoldSeconds, d.HoldEndpoints = true, r.quiet, r.hold, hold
 		}
 		if driver.IsHTTP(r.transport) {
 			// An http command is its own request (#902): no session to ride,
@@ -526,4 +532,57 @@ func targetOf(raw []byte) string {
 		return ""
 	}
 	return p.Target
+}
+
+// holdSet loads what ResolveHoldSet reads for one disruptive delivery: the
+// components reachable from the target over host edges (and, for a power
+// command, the power edges from the target), the power and host edges among
+// them, and their endpoints placed on the delivering node. The walk is a
+// union recursive CTE, so a cycle that got in anyway terminates.
+func (p *PG) holdSet(ctx context.Context, target, nodeName string, power bool, outlet string) ([]string, error) {
+	rows, err := p.pool.Query(ctx, `
+		with recursive reach(id) as (
+			select $1::uuid
+			union
+			select d.component_id from component_dependency d join reach r on d.upstream_id = r.id
+			where d.kind = 'host' or (d.kind = 'power' and $2 and d.upstream_id = $1::uuid)
+		)
+		select d.component_id::text, d.upstream_id::text, d.kind, coalesce(d.outlet, '')
+		from component_dependency d join reach r on d.upstream_id = r.id
+		where d.kind in ('host', 'power')`, target, power)
+	if err != nil {
+		return nil, fmt.Errorf("storage: hold-set edges for %s: %w", target, err)
+	}
+	in := HoldInput{Target: target, Node: nodeName, Power: power, Outlet: outlet}
+	reach := []string{target}
+	for rows.Next() {
+		var e HoldEdge
+		if err := rows.Scan(&e.ComponentID, &e.UpstreamID, &e.Kind, &e.Outlet); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("storage: scan hold-set edge: %w", err)
+		}
+		in.Edges = append(in.Edges, e)
+		reach = append(reach, e.ComponentID)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("storage: hold-set edges for %s: %w", target, err)
+	}
+	rows, err = p.pool.Query(ctx, `select id::text, component::text, node_name::text, out_of_band from endpoint
+		where component = any($1::uuid[]) and node_name = $2`, reach, nodeName)
+	if err != nil {
+		return nil, fmt.Errorf("storage: hold-set endpoints for %s: %w", target, err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var e HoldEndpoint
+		if err := rows.Scan(&e.ID, &e.ComponentID, &e.Node, &e.OutOfBand); err != nil {
+			return nil, fmt.Errorf("storage: scan hold-set endpoint: %w", err)
+		}
+		in.Endpoints = append(in.Endpoints, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("storage: hold-set endpoints for %s: %w", target, err)
+	}
+	return ResolveHoldSet(in), nil
 }
