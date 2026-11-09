@@ -333,7 +333,7 @@ type Device struct {
 	// snmpRefused is the community the SNMP face answers with
 	// authorizationError (#821): one the agent knows and refuses.
 	snmpRefused string
-	sshListener  net.Listener
+	sshListener net.Listener
 	// tlsID is the key and certificate the device's tls line face serves
 	// (#1035), derived from its id so it is the same on every run.
 	tlsID tlsIdentity

@@ -11,7 +11,7 @@ import (
 // answering clients that were already connected.
 type trackedListener struct {
 	net.Listener
-	onAccept func(net.Conn) // nil: accept silently
+	onAccept func(net.Conn)     // nil: accept silently
 	observe  *deviceObservation // nil: connections are not observed
 	protocol obsProtocol
 	mu       sync.Mutex
