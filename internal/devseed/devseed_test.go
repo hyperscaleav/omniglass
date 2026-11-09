@@ -445,6 +445,16 @@ func TestRunIdempotent(t *testing.T) {
 		t.Errorf("role assignments = %d, want %d (the fixture's own, unchanged by the second Run)", assignments, len(fixtures.RoleAssignments))
 	}
 
+	// Dependency edges lean on the gateway's duplicate refusal to be
+	// idempotent (#1648): a second run that re-recorded one would error.
+	var deps int
+	if err := conn.QueryRow(ctx, `select count(*) from component_dependency`).Scan(&deps); err != nil {
+		t.Fatalf("count dependency edges: %v", err)
+	}
+	if deps != len(fixtures.ComponentDependencies) {
+		t.Errorf("dependency edges = %d, want %d (the fixture's own, unchanged by the second Run)", deps, len(fixtures.ComponentDependencies))
+	}
+
 	// A multi-site fleet: three campuses, not one.
 	var campuses int
 	if err := conn.QueryRow(ctx, `select count(*) from location where location_type = (select id from location_type where name = 'campus')`).Scan(&campuses); err != nil {
@@ -1075,6 +1085,43 @@ func TestSeededStaffingLandsOnTheRightDevices(t *testing.T) {
 	}
 	if unstaffed != 1 {
 		t.Errorf("the power conditioner is a member of boardroom filling no role in %d rows, want 1", unstaffed)
+	}
+}
+
+// TestSeededDependenciesTeachPowerAndHost pins the fleet's worked dependency
+// example (#1648): in boardroom A the power conditioner feeds the video bar
+// from outlet 1 and the amplifier from outlet 2, and the touch panel is hosted
+// by the bar. Read by minted name in the room, so an edge landed on the wrong
+// device by a key mix-up fails here.
+func TestSeededDependenciesTeachPowerAndHost(t *testing.T) {
+	t.Parallel()
+	ctx, conn, _ := seededFleet(t)
+	rows, err := conn.Query(ctx, `
+		select c.name, u.name, d.kind, coalesce(d.outlet, '')
+		from component_dependency d
+		join component c on c.id = d.component_id
+		join component u on u.id = d.upstream_id
+		join location l on l.id = c.location_id
+		where l.name = 'boardroom-a' and u.location_id = c.location_id
+		order by d.kind, c.name`)
+	if err != nil {
+		t.Fatalf("read dependency edges: %v", err)
+	}
+	defer rows.Close()
+	var got []string
+	for rows.Next() {
+		var comp, up, kind, outlet string
+		if err := rows.Scan(&comp, &up, &kind, &outlet); err != nil {
+			t.Fatalf("scan dependency edge: %v", err)
+		}
+		got = append(got, comp+" "+kind+" "+up+" "+outlet)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate dependency edges: %v", err)
+	}
+	want := []string{"panel-1 host videobar-1 ", "amp-1 power power-1 2", "videobar-1 power power-1 1"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("seeded dependency edges = %q, want %q", got, want)
 	}
 }
 

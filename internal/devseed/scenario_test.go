@@ -130,6 +130,30 @@ func TestReplicateCopiesWholeRoomsOnly(t *testing.T) {
 			t.Errorf("copied membership %+v reaches another room", m)
 		}
 	}
+	// A dependency edge is copied with its room when both ends sit in it
+	// (#1648), so a replicated fleet's hold sets are the template's, room by
+	// room, and never reach across copies.
+	isRoom := map[string]bool{}
+	for _, r := range rooms {
+		isRoom[r] = true
+	}
+	wantDeps := 0
+	for _, d := range base.ComponentDependencies {
+		if at := compAt[d.Component]; isRoom[at] && at == compAt[d.Upstream] {
+			wantDeps++
+		}
+	}
+	if wantDeps == 0 {
+		t.Fatal("no fixture dependency edge sits in a copied room, so the copy is untested")
+	}
+	if got := len(doc.ComponentDependencies) - len(base.ComponentDependencies); got != wantDeps*p.Sites*p.RoomCopies {
+		t.Errorf("copied dependency edges = %d, want %d", got, wantDeps*p.Sites*p.RoomCopies)
+	}
+	for _, d := range doc.ComponentDependencies[len(base.ComponentDependencies):] {
+		if compAt[d.Component] != compAt[d.Upstream] {
+			t.Errorf("copied dependency %+v reaches another room", d)
+		}
+	}
 	if !reflect.DeepEqual(doc, devseed.Replicate(base, p)) {
 		t.Error("Replicate is not deterministic")
 	}
