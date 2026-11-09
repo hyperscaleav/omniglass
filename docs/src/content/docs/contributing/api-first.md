@@ -21,7 +21,7 @@ failing the PR on any diff in the committed generated artifacts.
 | Generator | Input | Output | Consumer |
 |---|---|---|---|
 | `cmd/openapigen` | Huma Go structs | `api/openapi.json` (+ `.yaml`) | everything below |
-| `cd web && npm run gen:api` | `openapi.json` | `web/src/api/schema.gen.ts` | typed `openapi-fetch` SPA client |
+| `cd web && npm run gen:api` | `openapi.json` | `web/src/api/api.gen.ts` (orval) and `web/src/api/paths.gen.ts` (its route index) | the typed SPA client in `web/src/api/client.ts` |
 | `cmd/cligen` | `openapi.json` | `internal/cli/api_gen.go` (cobra) | the CLI, patched via `api_hooks.go` |
 | `cmd/mcpgen` | `openapi.json` (the operations stamped `x-omniglass-mcp` in Go) | `internal/mcp/catalog_gen.go` and the [MCP tools reference](/reference/mcp/) | the [MCP server](/architecture/api/#also-an-mcp-surface) at `/mcp` and `omniglass mcp` |
 | `cmd/docsgen` | the live cobra tree | `docs/src/content/docs/reference/cli/index.md` | the published CLI reference |

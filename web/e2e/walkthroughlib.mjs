@@ -103,9 +103,15 @@ const MAX_HOLD_MS = 10_000;
 const COMMON = ['caption', 'hold', 'poster'];
 const TOP = ['title', 'description', 'setup', 'steps'];
 
-/** @type {(v: unknown) => v is Record<string, any>} */
+/**
+ * @param {unknown} v
+ * @returns {v is Record<string, any>}
+ */
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
-/** @type {(v: unknown) => v is string} */
+/**
+ * @param {unknown} v
+ * @returns {v is string}
+ */
 const isStr = (v) => typeof v === 'string' && v.trim() !== '';
 
 // A target is a selector string, or { role, name, exact? }, or (for wait only)

@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { components } from "../api/schema.gen";
+import type { SystemMemberBody } from "../api/api.gen";
 
 // The membership data layer: thin typed wrappers over the generated client.
 //
@@ -16,7 +16,7 @@ import type { components } from "../api/schema.gen";
 // a system resolves against that system. A component's first membership takes it
 // automatically, so a component in exactly one system never meets the concept.
 
-export type Member = components["schemas"]["SystemMemberBody"];
+export type Member = SystemMemberBody;
 
 export const componentSystemsKey = (name: string) => ["component-systems", name] as const;
 

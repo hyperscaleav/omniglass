@@ -14,15 +14,15 @@
 // id to offer, and the first dot wins, which is the honest limit until the
 // assignment wire grows one.
 
-import type { components } from "../api/schema.gen";
+import type { EffectiveRoleBody, FleetHealthOutputBody, HealthRoleBody } from "../api/api.gen";
 import type { FleetView } from "./fleet";
 import { entityLabel } from "./entities";
 import { sortAlarms } from "./alarms";
 import type { SeverityLevel } from "./severity";
 
-export type FleetHealth = components["schemas"]["FleetHealthOutputBody"];
-export type HealthRole = components["schemas"]["HealthRoleBody"];
-export type EffectiveRole = components["schemas"]["EffectiveRoleBody"];
+export type FleetHealth = FleetHealthOutputBody;
+export type HealthRole = HealthRoleBody;
+export type EffectiveRole = EffectiveRoleBody;
 
 export type SlotOccupant = {
   name: string;
