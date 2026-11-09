@@ -472,6 +472,11 @@ collection: {
     id: bigint {constraint: primary_key}
     node_id: uuid {constraint: foreign_key}
   }
+  platform_server: {
+    shape: sql_table
+    name: text {constraint: primary_key}
+    platform_component_id: uuid {constraint: foreign_key}
+  }
   sim_impairment: {
     shape: sql_table
     component_id: uuid {constraint: primary_key}
@@ -600,6 +605,7 @@ collection.node.location_id -> fleet.location.id
 collection.node.platform_component_id -> fleet.component.id
 collection.node.principal_id -> identity.principal.id
 collection.node_log.node_id -> collection.node.principal_id
+collection.platform_server.platform_component_id -> fleet.component.id
 collection.sim_impairment.component_id -> fleet.component.id
 collection.task.endpoint_id -> fleet.endpoint.id
 collection.unbound_identity.conduit_id -> fleet.component.id

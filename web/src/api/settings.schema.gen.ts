@@ -9,6 +9,15 @@ export const settingsSchema = {
       "format": "int64"
     }
   },
+  "database": {
+    "slow_query_ms": {
+      "description": "Milliseconds a query may run before the server logs it as slow (its statement's shape and duration, never its values) and counts it; 0 turns the log off",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 600000,
+      "format": "int64"
+    }
+  },
   "keybindings": {
     "close_blade": {
       "description": "Close the top blade",

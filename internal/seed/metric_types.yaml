@@ -110,6 +110,54 @@ metric_types:
     unit: ms
     label: GC Pause
     description: The most recent garbage collection pause of the Omniglass process; absent until the first collection.
+  # The server's own request and database figures (#1627), landed on the
+  # server's component in the platform system each report window. Only the
+  # server writes them. An http-request-* sample's instance is the request's
+  # method, route template and status class ("GET /api/v1/components/{id}
+  # 2xx"), never its path, so the instance set stays as small as the API.
+  - name: http-request-count
+    data_type: int
+    label: HTTP Requests
+    description: Requests the server answered for one method, route template and status class over the report window; one zero follows a window with requests, then none while quiet.
+  - name: http-request-duration
+    data_type: float
+    unit: ms
+    label: HTTP Request Time
+    description: Mean time the server took to answer a request of one method, route template and status class over the report window.
+  - name: http-request-duration-max
+    data_type: float
+    unit: ms
+    label: HTTP Request Time (max)
+    description: The slowest request of one method, route template and status class over the report window.
+  - name: db-slow-query-count
+    data_type: int
+    label: Slow Queries
+    description: Queries that ran past the database slow-query threshold over the report window, each also logged as a warning with its fingerprint; one zero follows a window with slow queries.
+  - name: db-pool-acquired
+    data_type: int
+    label: Pool Connections In Use
+    description: Database connections the server's pool had checked out at the end of the report window.
+  - name: db-pool-idle
+    data_type: int
+    label: Pool Connections Idle
+    description: Open database connections the server's pool held idle at the end of the report window.
+  - name: db-pool-total
+    data_type: int
+    label: Pool Connections Open
+    description: Database connections the server's pool held open, in use or idle, at the end of the report window.
+  - name: db-pool-max
+    data_type: int
+    label: Pool Size
+    description: The most connections the server's pool may open; db-pool-total reaching it means a new query waits.
+  - name: db-pool-wait-count
+    data_type: int
+    label: Pool Waits
+    description: Connection acquires that found the pool exhausted and waited for a connection, over the report window.
+  - name: db-pool-wait-duration
+    data_type: float
+    unit: ms
+    label: Pool Wait Time
+    description: Total time acquires spent waiting on an exhausted pool for a connection to free up or open, over the report window.
   # Room-level series: the first standard-contract metrics (#790). A meeting
   # room's standard declares them, so every conforming system's zoom shows the
   # same KPI tiles; the sensor feeding them is whatever the room's build wires

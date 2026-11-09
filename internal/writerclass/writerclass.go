@@ -126,6 +126,27 @@ const (
 	ProcessGCPause        = "process-gc-pause"
 )
 
+// The server's request and database keys (#1627): what the server's HTTP
+// surface served and how its database pool held up, over a report window,
+// landed by the server on its own platform component. An http-request-* key
+// is per instance, the request's method, route template and status class; the
+// db-* keys have no instance.
+const (
+	HTTPRequestCount       = "http-request-count"
+	HTTPRequestDuration    = "http-request-duration"
+	HTTPRequestDurationMax = "http-request-duration-max"
+	DBSlowQueryCount       = "db-slow-query-count"
+	DBPoolAcquired         = "db-pool-acquired"
+	DBPoolIdle             = "db-pool-idle"
+	DBPoolTotal            = "db-pool-total"
+	DBPoolMax              = "db-pool-max"
+	DBPoolWaitCount        = "db-pool-wait-count"
+	DBPoolWaitDuration     = "db-pool-wait-duration"
+)
+
+// serverSelfWriter is what writes the server's request and database keys.
+const serverSelfWriter = "the server's request and database recorder"
+
 // nodeSelfWriter is what writes a node's self-report: the node, of itself,
 // landed by the process on the node's platform component.
 const nodeSelfWriter = "a node, of itself (its node-self report)"
@@ -151,6 +172,18 @@ var platform = map[string]string{
 	ProcessGoroutineCount: nodeSelfWriter,
 	ProcessHeapSize:       nodeSelfWriter,
 	ProcessGCPause:        nodeSelfWriter,
+
+	// The server, of itself (#1627).
+	HTTPRequestCount:       serverSelfWriter,
+	HTTPRequestDuration:    serverSelfWriter,
+	HTTPRequestDurationMax: serverSelfWriter,
+	DBSlowQueryCount:       serverSelfWriter,
+	DBPoolAcquired:         serverSelfWriter,
+	DBPoolIdle:             serverSelfWriter,
+	DBPoolTotal:            serverSelfWriter,
+	DBPoolMax:              serverSelfWriter,
+	DBPoolWaitCount:        serverSelfWriter,
+	DBPoolWaitDuration:     serverSelfWriter,
 }
 
 // NodeSelf reports a platform key a node may report of itself on the
