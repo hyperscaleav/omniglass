@@ -41,7 +41,7 @@ func TestProbeIntervalGatesReachabilityProbes(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			dialer := &countingDialer{}
 			runner := &collection.Runner{TCP: dialer}
-			spool := newTelemetrySpool("og.v1.telemetry.edge", func(string, []byte, string) (ackWait, error) {
+			spool := newTelemetrySpool("og.v1.telemetry.edge", "edge", func(string, []byte, string) (ackWait, error) {
 				return func(context.Context) error { return nil }, nil
 			})
 			sessions := newSessionManager(nil, sessionHooks{})
@@ -73,7 +73,7 @@ func TestProbeRunsAtOnceWhenItsFingerprintMoves(t *testing.T) {
 	}
 	dialer := &countingDialer{}
 	runner := &collection.Runner{TCP: dialer}
-	spool := newTelemetrySpool("og.v1.telemetry.edge", func(string, []byte, string) (ackWait, error) {
+	spool := newTelemetrySpool("og.v1.telemetry.edge", "edge", func(string, []byte, string) (ackWait, error) {
 		return func(context.Context) error { return nil }, nil
 	})
 	sessions := newSessionManager(nil, sessionHooks{})
@@ -118,7 +118,7 @@ func TestAProbeAtTheHeartbeatRunsEveryJitteredTick(t *testing.T) {
 	}}}
 	dialer := &countingDialer{}
 	runner := &collection.Runner{TCP: dialer}
-	spool := newTelemetrySpool("og.v1.telemetry.edge", func(string, []byte, string) (ackWait, error) {
+	spool := newTelemetrySpool("og.v1.telemetry.edge", "edge", func(string, []byte, string) (ackWait, error) {
 		return func(context.Context) error { return nil }, nil
 	})
 	sessions := newSessionManager(nil, sessionHooks{})

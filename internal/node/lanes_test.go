@@ -16,7 +16,7 @@ import (
 // endpoint's listen task when the spec says unmatched: log, and a plain
 // poll's events and log lines fire only when they change.
 
-func TestBuildBatchCarriesEventsAndTaskLogs(t *testing.T) {
+func TestGroupForCarriesEventsAndTaskLogs(t *testing.T) {
 	t.Parallel()
 	at := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
 	dps := []collection.Sample{
@@ -24,13 +24,12 @@ func TestBuildBatchCarriesEventsAndTaskLogs(t *testing.T) {
 		{Name: "input-changed", Lane: driver.LaneEvent, Text: "Input changed", IsText: true, Attributes: json.RawMessage(`{"input":"hdmi2"}`), TS: at},
 		{Lane: driver.LaneLog, Text: "backlight driver reset", IsText: true, Severity: "warning", Facility: "panel", Source: "nvp", Attributes: json.RawMessage(`{"zone":"front"}`), TS: at},
 	}
-	ev := buildBatch("t1", "node-a", dps)
+	ev := groupFor("t1", dps)
 	if len(ev.GetProperties()) != 1 || len(ev.GetEvents()) != 1 || len(ev.GetTaskLogs()) != 1 {
 		t.Fatalf("lanes = %d properties / %d events / %d task logs, want 1/1/1", len(ev.GetProperties()), len(ev.GetEvents()), len(ev.GetTaskLogs()))
 	}
-	if len(ev.GetLogs()) != 0 {
-		t.Fatalf("a component's line rode the self-log lane: %+v", ev.GetLogs())
-	}
+	// A task group has no self-log lane (#1582), so a component's line
+	// cannot ride it: the check the batch needed is the type's now.
 	e := ev.GetEvents()[0]
 	if e.GetName() != "input-changed" || e.GetMessage() != "Input changed" || string(e.GetPayload()) != `{"input":"hdmi2"}` || !e.GetTs().AsTime().Equal(at) {
 		t.Fatalf("event = %+v", e)

@@ -97,25 +97,52 @@ func TestFanoutWriterIsHeldToTheConduitsBindings(t *testing.T) {
 
 // TestResolveIdentityBindingsInOneRead: the fan-out's read (system mode, the
 // binding is the fence) maps each identity a batch names to its bound owner
-// and leaves an unbound one out, naming the conduit.
+// and leaves an unbound one out, naming the conduit. Every conduit a tick
+// names resolves in the same read, each against its own bindings alone
+// (#1582), and a conduit that is no component resolves to nothing.
 func TestResolveIdentityBindingsInOneRead(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
 	f := newFanFixture(t)
-	res, err := f.gw.ResolveIdentityBindings(f.ctx, f.conduit, []storage.IdentityKey{{Key: "ucc-room-id", Value: "zr-a"}, {Key: "ucc-room-id", Value: "zr-z"}})
+	all := scope.Set{All: true}
+	if _, err := f.gw.CreateComponent(f.ctx, "", storage.ComponentSpec{Name: "disp-9"}, all, all, all, all); err != nil {
+		t.Fatal(err)
+	}
+	sc := storage.IdentityBindingScopes{ComponentRead: all, ComponentUpdate: all, SystemRead: all, SystemUpdate: all}
+	if _, err := f.gw.PutIdentityBinding(f.ctx, f.actor, "disp-9", "ucc-room-id", "zr-a", storage.IdentityBindingOwner{Kind: "system", Name: "room-b"}, sc); err != nil {
+		t.Fatalf("bind on disp-9: %v", err)
+	}
+	var other string
+	if err := f.conn.QueryRow(f.ctx, `select id::text from component where name = 'disp-9'`).Scan(&other); err != nil {
+		t.Fatal(err)
+	}
+	zrA, zrZ := storage.IdentityKey{Key: "ucc-room-id", Value: "zr-a"}, storage.IdentityKey{Key: "ucc-room-id", Value: "zr-z"}
+	got, err := f.gw.ResolveIdentityBindings(f.ctx, map[string][]storage.IdentityKey{
+		f.conduit:                              {zrA, zrZ},
+		other:                                  {zrA},
+		"not-a-uuid":                           {zrA},
+		"00000000-0000-0000-0000-000000000000": {zrA},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.ConduitName != "disp-1" {
-		t.Errorf("conduit name = %q", res.ConduitName)
+	if len(got) != 2 {
+		t.Fatalf("resolved %d conduits, want the two that exist: %+v", len(got), got)
 	}
-	if o, ok := res.Owners[storage.IdentityKey{Key: "ucc-room-id", Value: "zr-a"}]; !ok || o.Kind != "system" || o.ID != f.bound {
-		t.Errorf("zr-a resolves to %+v (%v), want the bound system", o, ok)
+	res := got[f.conduit]
+	if res == nil || res.ConduitName != "disp-1" {
+		t.Fatalf("disp-1 resolves to %+v", res)
 	}
-	if _, ok := res.Owners[storage.IdentityKey{Key: "ucc-room-id", Value: "zr-z"}]; ok {
+	if o, ok := res.Owners[zrA]; !ok || o.Kind != "system" || o.ID != f.bound {
+		t.Errorf("zr-a on disp-1 resolves to %+v (%v), want the bound system", o, ok)
+	}
+	if _, ok := res.Owners[zrZ]; ok {
 		t.Error("an unbound identity resolved to an owner")
+	}
+	if res := got[other]; res == nil || res.ConduitName != "disp-9" || len(res.Owners) != 1 || res.Owners[zrA].ID != f.unbound {
+		t.Errorf("zr-a on disp-9 resolves to %+v, want its own conduit's room-b", res)
 	}
 }
 

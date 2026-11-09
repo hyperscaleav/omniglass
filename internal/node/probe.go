@@ -246,11 +246,24 @@ func clampedCount(dps []collection.Sample) int {
 	return n
 }
 
-// publishBatch maps samples to a per-lane TelemetryBatch and hands it to the
-// spool, which ships it on the node's own telemetry subject once the stream
-// acks it, holding it until then (#453).
-func publishBatch(out *telemetrySpool, node, taskID string, dps []collection.Sample) error {
-	return out.send(buildBatch(taskID, node, dps))
+// publishBatch maps samples to a per-lane task group and adds it to the
+// spool's next batch (#1582), which ships on the node's own telemetry subject
+// once the stream acks it, holding it until then (#453). The batch carries the
+// node's id, so the node argument is the call sites' and goes unused.
+func publishBatch(out *telemetrySpool, _, taskID string, dps []collection.Sample) error {
+	return out.add(groupFor(taskID, dps))
+}
+
+// publishPushed adds a session's pushed samples to the spool and flushes it
+// at once, the groups already pending riding along: a push is a change the
+// endpoint just reported, so it does not wait out the tick's flush timer.
+// Polled groups coalesce on the timer; a push costs the batch it flushes.
+func publishPushed(out *telemetrySpool, taskID string, dps []collection.Sample) error {
+	if err := out.add(groupFor(taskID, dps)); err != nil {
+		return err
+	}
+	out.flush()
+	return nil
 }
 
 // collectDriverTask parses one derived driver poll and runs it: the baked
@@ -664,17 +677,16 @@ func parseICMPTask(task collection.TaskSpec) (collection.ICMPTask, error) {
 	return collection.ICMPTask{Target: p.Target, Count: p.Count, Timeout: timeout}, nil
 }
 
-// buildBatch maps produced samples to a per-lane TelemetryBatch (#594). Pure:
-// no I/O. The probes know their lanes statically: a numeric probe value rides
-// the metric lane, a text verdict rides the property lane as canonical JSON
-// text. A sample the probe did not stamp carries NO per-sample ts (the batch ts
-// governs at ingest); stamping the zero time would read as the year one
-// downstream. The per-sample labels are carried but not persisted in this
-// checkpoint.
-func buildBatch(taskID, node string, dps []collection.Sample) *ogv1.TelemetryBatch {
-	ev := &ogv1.TelemetryBatch{
+// groupFor maps one task's produced samples to a per-lane task group (#594,
+// #1582), one of the groups of the tick's batch. Pure: no I/O. The probes
+// know their lanes statically: a numeric probe value rides the metric lane, a
+// text verdict rides the property lane as canonical JSON text. A sample the
+// probe did not stamp carries NO per-sample ts (the group ts governs at
+// ingest); stamping the zero time would read as the year one downstream. The
+// per-sample labels are carried but not persisted in this checkpoint.
+func groupFor(taskID string, dps []collection.Sample) *ogv1.TaskGroup {
+	ev := &ogv1.TaskGroup{
 		TaskId: taskID,
-		NodeId: node,
 		Ts:     timestamppb.New(time.Now().UTC()),
 	}
 	for _, d := range dps {
@@ -749,11 +761,18 @@ func validLabels(labels map[string]string) map[string]string {
 // whose config or payload could not be used: the event carries the reason as
 // its message and the task identity in its payload, so a failing check is a
 // fact on the component's timeline, never only a line in the node's own logs.
-func publishCollectionFailed(out *telemetrySpool, node, taskID string, cause error) error {
+// It rides the tick's batch as the task's group (#1582); the node argument is
+// the call sites' and goes unused, the batch carrying the node's id.
+func publishCollectionFailed(out *telemetrySpool, _, taskID string, cause error) error {
+	return out.add(collectionFailedGroup(taskID, cause))
+}
+
+// collectionFailedGroup is the task group carrying one collection-failed
+// event for taskID: cause as its message, the task identity in its payload.
+func collectionFailedGroup(taskID string, cause error) *ogv1.TaskGroup {
 	payload, _ := json.Marshal(map[string]string{"task": taskID})
-	ev := &ogv1.TelemetryBatch{
+	return &ogv1.TaskGroup{
 		TaskId: taskID,
-		NodeId: node,
 		Ts:     timestamppb.New(time.Now().UTC()),
 		Events: []*ogv1.EventSample{{
 			Name: collection.EventCollectionFailed,
@@ -763,7 +782,6 @@ func publishCollectionFailed(out *telemetrySpool, node, taskID string, cause err
 			Payload: payload,
 		}},
 	}
-	return out.send(ev)
 }
 
 // parseHTTPTask reads the request target and timeout from a task's endpoint

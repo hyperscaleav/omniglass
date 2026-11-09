@@ -41,14 +41,18 @@ type Store interface {
 	// DrainCalcPending serves up to limit pending calc rule marks (#996),
 	// returning how many it served.
 	DrainCalcPending(ctx context.Context, limit int) (storage.CalcDrain, error)
-	// The telemetry ingest consumer surface: resolve+confine a task's owner,
-	// snapshot the sample registry (reject-not-project), and write the typed
-	// metric rows through cp1's insert path. The catalog is two lanes (#587):
+	// The telemetry ingest consumer surface: resolve+confine a tick's task
+	// owners, snapshot the sample registry (reject-not-project), and write the
+	// typed rows through one LandBatch. The catalog is two lanes (#587):
 	// metric_type names route to the metric sink, property_type names to property.
-	ResolveTaskOwner(ctx context.Context, taskID, nodeName string) (storage.TaskOwner, bool, error)
-	// ResolveIdentityBindings resolves the identities one batch names against
-	// its conduit's bindings in one read (#1282), in system mode.
-	ResolveIdentityBindings(ctx context.Context, conduitID string, ids []storage.IdentityKey) (*storage.IdentityResolution, error)
+	// ResolveTaskOwners resolves every task a node's tick names in one read
+	// (#1582), each confined to the node; a task that is not the node's is
+	// absent from the map, an orphan.
+	ResolveTaskOwners(ctx context.Context, nodeName string, taskIDs []string) (map[string]storage.TaskOwner, error)
+	// ResolveIdentityBindings resolves the identities one batch names on each
+	// conduit against that conduit's bindings, every conduit in one read
+	// (#1282, #1582), in system mode.
+	ResolveIdentityBindings(ctx context.Context, ids map[string][]storage.IdentityKey) (map[string]*storage.IdentityResolution, error)
 	ListMetricTypes(ctx context.Context) ([]storage.MetricType, error)
 	ListPropertyTypes(ctx context.Context) ([]storage.PropertyType, error)
 	// The event-type registry snapshot: with the log kind gone from property_type,
@@ -65,8 +69,9 @@ type Store interface {
 	// #589, and the three typed sample lanes) in one transaction under the
 	// batch's receipt (#311): all or nothing, and an id that already landed
 	// writes nothing. The property lane is transition-only, its guard held in
-	// the insert (#455).
-	LandBatch(ctx context.Context, b storage.IngestBatch) (bool, error)
+	// the insert (#455). A node tick's groups land or drop one by one
+	// (#1582): a refused group is reported in the result, its siblings land.
+	LandBatch(ctx context.Context, b storage.IngestBatch) (storage.LandResult, error)
 	// PruneTelemetryReceipts deletes the receipts of batches landed before
 	// before, past the horizon a copy of the batch could still arrive in.
 	PruneTelemetryReceipts(ctx context.Context, before time.Time, batch int) (int64, error)

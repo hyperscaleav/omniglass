@@ -128,10 +128,10 @@ func TestANodeLogLandsWithACanonicalSeverity(t *testing.T) {
 	if _, err := f.gw.CreateNode(f.ctx, "", storage.NodeSpec{Name: "sev-node"}, all, all); err != nil {
 		t.Fatalf("create node: %v", err)
 	}
-	landed, err := f.gw.LandBatch(f.ctx, storage.IngestBatch{BatchID: "node-sev", NodeLogs: []storage.NodeLogWrite{
+	landed, err := landOf(f.gw.LandBatch(f.ctx, storage.IngestBatch{BatchID: "node-sev", NodeLogs: []storage.NodeLogWrite{
 		{Node: "sev-node", Source: "node", Severity: "WARN", Message: "a"},
 		{Node: "sev-node", Source: "node", Severity: "bogus", Message: "b"},
-	}})
+	}}))
 	if err != nil || !landed {
 		t.Fatalf("land: landed=%v err=%v", landed, err)
 	}

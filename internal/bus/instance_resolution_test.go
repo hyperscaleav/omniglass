@@ -91,11 +91,11 @@ func TestInstanceResolvesTheSameWayInIngestReconciliationAndSettlement(t *testin
 	defer nc.Close()
 
 	// The node's reading names no instance: ingest stamps the endpoint.
-	publishEvent(t, nc, "node-a", &ogv1.TelemetryBatch{
+	publishEvent(t, nc, "node-a", bus.AsTick(&ogv1.TelemetryBatch{
 		TaskId:     "t-panel",
 		NodeId:     "node-a",
 		Properties: []*ogv1.PropertySample{{Name: "video-input", ValueJson: `"hdmi2"`}},
-	})
+	}))
 	waitProperty(t, ctx, gw, "panel-1", "video-input", "panel-ip", func(d *storage.PropertySample) bool { return d != nil && d.Value == "hdmi2" })
 
 	// The properties read's reconciliation reads that row as is, names its

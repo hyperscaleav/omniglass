@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -79,57 +80,102 @@ func (p *PG) InsertEvents(ctx context.Context, w KeyWriter, evs []EventWrite) er
 	return p.sampleWrite(ctx, "insert events", func(ctx context.Context, tx pgx.Tx) error { return p.writeEvents(ctx, tx, w, evs) })
 }
 
-// writeEvents is the caught-occurrence write path, in the caller's
-// transaction: InsertEvents' own, or an ingest batch's (LandBatch), held to
-// each event type's writer class before anything lands.
+// eventSet is one writer's events in a multi-set write (metricSet).
+type eventSet struct {
+	w   KeyWriter
+	evs []EventWrite
+}
+
+// writeEvents is the caught-occurrence write path for one writer, in the
+// caller's transaction (writeEventSets).
 func (p *PG) writeEvents(ctx context.Context, tx pgx.Tx, w KeyWriter, evs []EventWrite) error {
-	evs = cleanEventWrites(evs)
-	// The arc points at the primary key, so each owner reference resolves to a
-	// uuid before it is stored, and before the writer check holds the row to
-	// it. A node still stores its name until the collection tier converts.
-	arcs := make([]string, len(evs))
-	rows := make([]keyedWrite, len(evs))
-	for i, ev := range evs {
-		if _, err := ownerColumn(ev.OwnerKind); err != nil {
-			return fmt.Errorf("storage: event %s/%s: %w", ev.OwnerID, ev.Key, err)
-		}
-		arc, err := p.ownerArcValue(ctx, tx, ev.OwnerKind, ev.OwnerID)
-		if err != nil {
-			return err
-		}
-		arcs[i] = arc
-		rows[i] = keyedWrite{key: ev.Key, instance: ev.Instance, ownerKind: ev.OwnerKind, owner: arc}
-	}
-	if err := admitWrites(ctx, tx, writeEvent, w, rows); err != nil {
+	return p.writeEventSets(ctx, tx, []eventSet{{w: w, evs: evs}})
+}
+
+// writeEventSets is the caught-occurrence write path, in the caller's
+// transaction: InsertEvents' own, or an ingest batch's (LandBatch), each set
+// held to its event types' writer class under its own writer before anything
+// lands, every set sharing one row identity. The rows land in one statement,
+// in their order, however many owners and groups carry them (#1582).
+func (p *PG) writeEventSets(ctx context.Context, tx pgx.Tx, sets []eventSet) error {
+	w, err := sharedWriter(writeEvent, sets, func(s eventSet) KeyWriter { return s.w })
+	if err != nil {
 		return err
 	}
-
-	clock := sampleClock{q: tx}
-	for i, ev := range evs {
-		col, _ := ownerColumn(ev.OwnerKind)
-		ts := ev.TS
-		if ts.IsZero() {
-			ts = time.Now().UTC()
+	// The arc points at the primary key, so each owner reference resolves to a
+	// uuid before it is stored, and before the writer check holds the row to
+	// it.
+	var evs []EventWrite
+	var arcs []string
+	for _, set := range sets {
+		setEvs := cleanEventWrites(set.evs)
+		rows := make([]keyedWrite, len(setEvs))
+		for i, ev := range setEvs {
+			if _, err := ownerColumn(ev.OwnerKind); err != nil {
+				return fmt.Errorf("storage: event %s/%s: %w", ev.OwnerID, ev.Key, err)
+			}
+			arc, err := p.ownerArcValue(ctx, tx, ev.OwnerKind, ev.OwnerID)
+			if err != nil {
+				return err
+			}
+			arcs = append(arcs, arc)
+			rows[i] = keyedWrite{key: ev.Key, instance: ev.Instance, ownerKind: ev.OwnerKind, owner: arc}
 		}
-		ts, err := clock.cap(ctx, ev.Key, ts)
-		if err != nil {
+		if err := admitWrites(ctx, tx, writeEvent, set.w, rows); err != nil {
 			return err
 		}
-		// attributes is jsonb: pass the raw JSON as text (nil stays SQL NULL) so
-		// pgx does not encode a []byte as bytea.
-		var attrs any
+		evs = append(evs, setEvs...)
+	}
+	if len(evs) == 0 {
+		return nil
+	}
+	clock := sampleClock{q: tx}
+	ts := make([]time.Time, len(evs))
+	kinds := make([]string, len(evs))
+	keys := make([]string, len(evs))
+	instances := make([]string, len(evs))
+	origins := make([]string, len(evs))
+	messages := make([]string, len(evs))
+	// attributes is jsonb: the raw JSON travels as text (nil stays SQL NULL)
+	// so pgx does not encode a []byte as bytea, and text that is no JSON
+	// fails the statement as a data exception (IsRefusedWrite).
+	attrs := make([]*string, len(evs))
+	sources := make([]string, len(evs))
+	for i, ev := range evs {
+		at := ev.TS
+		if at.IsZero() {
+			at = time.Now().UTC()
+		}
+		if ts[i], err = clock.cap(ctx, ev.Key, at); err != nil {
+			return err
+		}
 		if len(ev.Attributes) > 0 {
-			attrs = string(ev.Attributes)
+			a := string(ev.Attributes)
+			attrs[i] = &a
 		}
-		origin := ev.Origin
-		if origin == "" {
-			origin = "caught"
+		origins[i] = ev.Origin
+		if origins[i] == "" {
+			origins[i] = "caught"
 		}
-		sql := fmt.Sprintf(`insert into event (ts, owner_kind, %s, event_type_id, instance, origin, message, attributes, provenance, source, source_conduit_id)
-			values ($1, $2, $3, (select id from event_type_in_effect() event_type where name = $4), $5, $6, $7, $8, 'observed', $9, $10::uuid)`, col)
-		if _, err := tx.Exec(ctx, sql, ts, ev.OwnerKind, arcs[i], ev.Key, ev.Instance, origin, ev.Message, attrs, ev.Source, w.sourceConduit()); err != nil {
-			return fmt.Errorf("storage: insert event %s/%s: %w", ev.OwnerID, ev.Key, err)
+		kinds[i], keys[i], instances[i], messages[i], sources[i] = ev.OwnerKind, ev.Key, ev.Instance, ev.Message, ev.Source
+	}
+	if _, err := tx.Exec(ctx, `insert into event (ts, owner_kind, component_id, system_id, location_id, node_id, event_type_id, instance, origin, message, attributes, provenance, source, source_conduit_id)
+		select u.ts, u.kind,
+			case when u.kind = 'component' then u.owner::uuid end,
+			case when u.kind = 'system' then u.owner::uuid end,
+			case when u.kind = 'location' then u.owner::uuid end,
+			case when u.kind = 'node' then u.owner::uuid end,
+			et.id, u.instance, u.origin, u.message, u.attrs::jsonb, 'observed', u.source, $10::uuid
+		from unnest($1::timestamptz[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[], $9::text[])
+			with ordinality as u(ts, kind, owner, key, instance, origin, message, attrs, source, ord)
+		left join event_type_in_effect() et on et.name = u.key
+		order by u.ord`,
+		ts, kinds, arcs, keys, instances, origins, messages, attrs, sources, w.sourceConduit()); err != nil {
+		named := make([]string, 0, len(evs))
+		for _, ev := range evs {
+			named = append(named, ev.OwnerID+"/"+ev.Key)
 		}
+		return fmt.Errorf("storage: insert events %s: %w", strings.Join(named, ", "), err)
 	}
 	return nil
 }

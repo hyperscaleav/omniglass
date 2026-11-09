@@ -148,7 +148,7 @@ type commitThenFailStore struct {
 	calls atomic.Int32
 }
 
-func (s *commitThenFailStore) LandBatch(ctx context.Context, b storage.IngestBatch) (bool, error) {
+func (s *commitThenFailStore) LandBatch(ctx context.Context, b storage.IngestBatch) (storage.LandResult, error) {
 	landed, err := s.PG.LandBatch(ctx, b)
 	if s.calls.Add(1) <= s.n {
 		return landed, errors.New("the ack never reached the stream")
@@ -195,8 +195,8 @@ type blockingStore struct {
 	once    sync.Once
 }
 
-func (s *blockingStore) LandBatch(ctx context.Context, b storage.IngestBatch) (bool, error) {
-	landed := false
+func (s *blockingStore) LandBatch(ctx context.Context, b storage.IngestBatch) (storage.LandResult, error) {
+	var landed storage.LandResult
 	var err error
 	if s.commit {
 		landed, err = s.PG.LandBatch(ctx, b)
@@ -204,7 +204,7 @@ func (s *blockingStore) LandBatch(ctx context.Context, b storage.IngestBatch) (b
 	s.once.Do(func() { close(s.entered) })
 	<-s.release
 	if !s.commit {
-		return false, errors.New("the process died mid-batch")
+		return storage.LandResult{}, errors.New("the process died mid-batch")
 	}
 	return landed, err
 }
@@ -469,7 +469,7 @@ type failOnceOnValue struct {
 	release chan struct{}
 }
 
-func (s *failOnceOnValue) LandBatch(ctx context.Context, b storage.IngestBatch) (bool, error) {
+func (s *failOnceOnValue) LandBatch(ctx context.Context, b storage.IngestBatch) (storage.LandResult, error) {
 	for _, p := range b.Properties {
 		if p.Value != s.value {
 			continue
@@ -479,7 +479,7 @@ func (s *failOnceOnValue) LandBatch(ctx context.Context, b storage.IngestBatch) 
 		if first {
 			close(s.entered)
 			<-s.release
-			return false, errors.New("the database blinked")
+			return storage.LandResult{}, errors.New("the database blinked")
 		}
 	}
 	return s.PG.LandBatch(ctx, b)
@@ -547,11 +547,11 @@ type refuseOnValue struct {
 	attempts atomic.Int32
 }
 
-func (s *refuseOnValue) LandBatch(ctx context.Context, b storage.IngestBatch) (bool, error) {
+func (s *refuseOnValue) LandBatch(ctx context.Context, b storage.IngestBatch) (storage.LandResult, error) {
 	for _, p := range b.Properties {
 		if p.Value == s.value {
 			s.attempts.Add(1)
-			return false, fmt.Errorf("storage: property sample bar-1/firmware-version: %w", storage.ErrKeyWriterRefused)
+			return storage.LandResult{}, fmt.Errorf("storage: property sample bar-1/firmware-version: %w", storage.ErrKeyWriterRefused)
 		}
 	}
 	return s.PG.LandBatch(ctx, b)

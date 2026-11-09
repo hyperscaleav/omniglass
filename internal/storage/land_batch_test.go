@@ -17,6 +17,7 @@ import (
 // landFixture is one database with a component and a node to land batches on,
 // and a connection to count what landed.
 type landFixture struct {
+	dsn  string
 	gw   *storage.PG
 	conn *pgx.Conn
 }
@@ -48,8 +49,11 @@ func newLandFixture(t *testing.T) landFixture {
 		t.Fatalf("connect: %v", err)
 	}
 	t.Cleanup(func() { _ = conn.Close(context.Background()) })
-	return landFixture{gw: gw, conn: conn}
+	return landFixture{dsn: dsn, gw: gw, conn: conn}
 }
+
+// landOf is LandBatch's result as the landed flag the older tests assert.
+func landOf(r storage.LandResult, err error) (bool, error) { return r.Landed, err }
 
 // rows counts what has landed on each sink, so a test can say each row
 // landed exactly once.
@@ -106,7 +110,7 @@ func TestLandBatchLandsEachRowOnce(t *testing.T) {
 	ctx := context.Background()
 	ts := time.Now().UTC().Add(-time.Minute)
 
-	landed, err := f.gw.LandBatch(ctx, fullBatch("og.v1.api.telemetry b-1", "on", ts))
+	landed, err := landOf(f.gw.LandBatch(ctx, fullBatch("og.v1.api.telemetry b-1", "on", ts)))
 	if err != nil || !landed {
 		t.Fatalf("first landing: landed=%v err=%v", landed, err)
 	}
@@ -115,7 +119,7 @@ func TestLandBatchLandsEachRowOnce(t *testing.T) {
 		t.Fatalf("after the first landing: got %+v, want %+v", got, want)
 	}
 
-	landed, err = f.gw.LandBatch(ctx, fullBatch("og.v1.api.telemetry b-1", "on", ts))
+	landed, err = landOf(f.gw.LandBatch(ctx, fullBatch("og.v1.api.telemetry b-1", "on", ts)))
 	if err != nil {
 		t.Fatalf("redelivered landing: %v", err)
 	}
@@ -134,7 +138,7 @@ func TestLandBatchLandsEachRowOnce(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			ok, err := f.gw.LandBatch(ctx, fullBatch("og.v1.api.telemetry b-2", "off", ts.Add(time.Second)))
+			ok, err := landOf(f.gw.LandBatch(ctx, fullBatch("og.v1.api.telemetry b-2", "off", ts.Add(time.Second))))
 			if err != nil {
 				errs <- err
 				return
@@ -165,7 +169,7 @@ func TestLandBatchLandsEachRowOnce(t *testing.T) {
 	// A different batch carrying the same content is a new batch: it lands,
 	// and only the property's unchanged value is held back by the transition
 	// guard.
-	landed, err = f.gw.LandBatch(ctx, fullBatch("og.v1.api.telemetry b-3", "off", ts.Add(2*time.Second)))
+	landed, err = landOf(f.gw.LandBatch(ctx, fullBatch("og.v1.api.telemetry b-3", "off", ts.Add(2*time.Second))))
 	if err != nil || !landed {
 		t.Fatalf("a new batch with repeated content: landed=%v err=%v", landed, err)
 	}
@@ -189,14 +193,14 @@ func TestLandBatchIsAllOrNothing(t *testing.T) {
 	// An event on an owner that does not exist is refused, wherever the
 	// event sink runs in the batch, and every other sink has rows to leave.
 	bad.Events[0].OwnerID = "ghost"
-	if landed, err := f.gw.LandBatch(ctx, bad); err == nil {
+	if landed, err := landOf(f.gw.LandBatch(ctx, bad)); err == nil {
 		t.Fatalf("a batch with a refused row: want an error, got landed=%v", landed)
 	}
 	if got := f.rows(t); got != (landedRows{}) {
 		t.Fatalf("a failed batch left rows behind: %+v, want none", got)
 	}
 
-	landed, err := f.gw.LandBatch(ctx, fullBatch("og.v1.api.telemetry b-9", "on", ts))
+	landed, err := landOf(f.gw.LandBatch(ctx, fullBatch("og.v1.api.telemetry b-9", "on", ts)))
 	if err != nil || !landed {
 		t.Fatalf("the corrected batch under the same id: landed=%v err=%v (the receipt must roll back with the batch)", landed, err)
 	}
@@ -314,10 +318,10 @@ func TestPruneTelemetryReceipts(t *testing.T) {
 	if n != 3 {
 		t.Fatalf("pruned %d receipts, want the 3 past the cut", n)
 	}
-	if landed, err := f.gw.LandBatch(ctx, storage.IngestBatch{BatchID: "r-0"}); err != nil || !landed {
+	if landed, err := landOf(f.gw.LandBatch(ctx, storage.IngestBatch{BatchID: "r-0"})); err != nil || !landed {
 		t.Fatalf("a batch past the horizon: landed=%v err=%v, want it to land again", landed, err)
 	}
-	if landed, err := f.gw.LandBatch(ctx, storage.IngestBatch{BatchID: "r-4"}); err != nil || landed {
+	if landed, err := landOf(f.gw.LandBatch(ctx, storage.IngestBatch{BatchID: "r-4"})); err != nil || landed {
 		t.Fatalf("a batch inside the horizon: landed=%v err=%v, want it held", landed, err)
 	}
 }
@@ -341,7 +345,7 @@ func TestLandBatchCleansNUL(t *testing.T) {
 	b.Metrics[0].Instance = "rx\x001"
 	b.NodeLogs[0].Message = "arm reply\x00"
 	b.LogLines[0].Message = "line\x00"
-	landed, err := f.gw.LandBatch(ctx, b)
+	landed, err := landOf(f.gw.LandBatch(ctx, b))
 	if err != nil || !landed {
 		t.Fatalf("a batch carrying NUL: landed=%v err=%v, want it landed with NUL replaced", landed, err)
 	}

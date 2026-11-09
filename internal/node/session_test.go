@@ -248,7 +248,7 @@ func TestSessionSample(t *testing.T) {
 	t.Parallel()
 	at := time.Date(2026, 10, 23, 12, 0, 0, 0, time.UTC)
 	s := sessionSample(collection.SessionTransition{State: collection.SessionRecovering, Reason: "connection lost: EOF", At: at})
-	ev := buildBatch("l1", "edge-1", []collection.Sample{s})
+	ev := groupFor("l1", []collection.Sample{s})
 	if len(ev.Properties) != 1 || ev.Properties[0].Name != "session-state" || ev.Properties[0].ValueJson != `"recovering"` {
 		t.Fatalf("property lane = %+v", ev.Properties)
 	}

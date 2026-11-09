@@ -182,11 +182,11 @@ func TestAMissingDayDropsNoBatch(t *testing.T) {
 	f := newPruneFixture(t)
 	next := dayStart(time.Now()).AddDate(0, 0, 1)
 	mustExec(t, f.conn, `drop table `+dayName(next))
-	landed, err := f.gw.LandBatch(f.ctx, storage.IngestBatch{BatchID: "missed-day", Writer: storage.PushWriter(),
+	landed, err := landOf(f.gw.LandBatch(f.ctx, storage.IngestBatch{BatchID: "missed-day", Writer: storage.PushWriter(),
 		Metrics: []storage.MetricSampleWrite{
 			{OwnerKind: "component", OwnerID: "prune-c1", Key: "prune-rtt", Value: 7, TS: next.Add(-time.Minute)},
 			{OwnerKind: "component", OwnerID: "prune-c1", Key: "prune-rtt", Value: 8, TS: next.Add(time.Minute)},
-		}})
+		}}))
 	if err != nil || !landed {
 		t.Fatalf("the batch over a missing day: landed %v, err %v; want it landed", landed, err)
 	}
@@ -404,8 +404,8 @@ func TestAHalfDetachedDayStillLands(t *testing.T) {
 	if err := f.conn.QueryRow(f.ctx, `select exists (select 1 from pg_inherits where inhdetachpending)`).Scan(&pending); err != nil || !pending {
 		t.Fatalf("no detach pending (%v)", err)
 	}
-	landed, err := f.gw.LandBatch(f.ctx, storage.IngestBatch{BatchID: "half-detached", Writer: storage.PushWriter(),
-		Metrics: []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: "prune-c1", Key: "prune-rtt", Value: 5, TS: old.Add(time.Hour)}}})
+	landed, err := landOf(f.gw.LandBatch(f.ctx, storage.IngestBatch{BatchID: "half-detached", Writer: storage.PushWriter(),
+		Metrics: []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: "prune-c1", Key: "prune-rtt", Value: 5, TS: old.Add(time.Hour)}}}))
 	if err != nil || !landed {
 		t.Fatalf("a batch into a half-detached day: landed %v, err %v", landed, err)
 	}

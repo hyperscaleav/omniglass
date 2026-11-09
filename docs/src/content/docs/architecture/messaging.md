@@ -74,7 +74,7 @@ Internal traffic splits by what is moving:
 
 Four ingest paths exist today, and this list is the enumeration's one home:
 
-- **The node bus path.** A node publishes a `TelemetryBatch` on its own subject (`og.v1.telemetry.<node>`), and the server binds each sample's owner from the task's endpoint ([collection](/architecture/collection/)).
+- **The node bus path.** A node publishes one `TelemetryBatch` per tick on its own subject (`og.v1.telemetry.<node>`), carrying a `TaskGroup` for each task it ran, and the server binds each group's owner and writer from its task's endpoint ([collection](/architecture/collection/)). The wire shape is the generated proto; the batch's top-level task lanes belong to the API subject, and a node-subject batch that carries them is warned about and terminated rather than redelivered.
 - **The API push path.** `POST /telemetry:push` is the first-party HTTP ingest write: a scoped caller declares the owner and the route's scope check is the fence. The API publishes the batch onto the bus (`og.v1.api.telemetry`, trusted by subject, below) rather than writing Postgres directly, so pushed records are visible to the same stream consumers and land in history the same way ([API](/architecture/api/)).
 - **The webhook path.** A sender posts to `POST /webhooks/{token}`, the server-hosted listener for the webhook transport: the token names one endpoint, its driver's scheme authenticates the post and its listeners map the body, and the server publishes the batch on the same trusted `og.v1.api.telemetry` subject with the endpoint's component as owner, its writer the push lane's, which admits only collected keys ([collection](/architecture/collection/), [ADR-1024](/architecture/decisions/#adr-1024-omniglass-receives-webhooks-on-the-server-and-a-webhook-token-is-a-sealed-secret)).
 - **The raw log path.** A raw log line rides either transport in the same batch but lands on its own untyped lane, `log_line`: no property name, no registry gate ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)).
@@ -116,24 +116,28 @@ The canonical triple is built on `OG_TELEMETRY`
   webhook route) publishes through JetStream and treats a batch as sent only once the stream acks it.
   The push route answers `202` only after the ack, `503` after three attempts; a node holds a batch the
   stream has not acked and ships it on the next tick ([nodes](/architecture/nodes/#delivery-a-batch-lands-once)).
-- **`Nats-Msg-Id` dedup.** Each batch carries an id (a UUIDv7) minted once, when it is built, and
-  kept across every retry; the stream remembers an id for five minutes, so a retry inside the window
+- **`Nats-Msg-Id` dedup.** Each batch carries an id (a UUIDv7) minted once, when the node's spool
+  flushes the tick's groups into it, and kept, with its bytes, across every retry; the stream remembers an id for five minutes, so a retry inside the window
   (an attempt it stored whose ack was lost) is answered with the first copy's ack and stored once.
 - **Double ack and an idempotent sink.** The consumer lands a batch's every sink (its log lines and
   its three sample lanes) in **one transaction** whose first statement inserts the batch's **receipt**
   (`telemetry_receipt`, keyed by the subject and the id), then double-acks. A failure part way writes
   nothing; a batch id that already landed writes nothing at all. So a redelivery after a lost ack, a
   consumer that died between its commit and its ack, and a retry past the stream's window each land
-  every row once. Receipts are kept a day. Because a batch lands all or nothing, every value the
-  database could refuse is cleaned first (a NUL in any lane's text or jsonb becomes U+FFFD), so one
-  stray byte cannot lose the rows that rode with it after a `202`.
+  every row once. Receipts are kept a day. A node's batch is a tick of task groups under **one
+  receipt**, and the unit that fails is the group: a group the gateway refuses (its owner gone, its
+  writer refused, a value Postgres refuses) is skipped, its siblings land, the receipt is written once
+  and the message is acked, while a transient failure or a foreign key or not-null failure still
+  redelivers the whole batch. Every value the database could refuse is cleaned first (a NUL in any
+  lane's text or jsonb becomes U+FFFD), so one stray byte cannot lose the rows that rode with it
+  after a `202`.
 
 The property lane's transition guard is the insert's own condition, held per series by a lock, so two
 batches landing at once never write one value twice. The guard is right only if a series lands in
 order, so the lane keeps order end to end: a node's window stays in publish order
 ([nodes](/architecture/nodes/#delivery-a-batch-lands-once)), and the consumer keeps one batch in
-flight, redelivering a transient failure before anything behind it and dropping at once a batch the
-gateway refuses outright ([workers](/architecture/workers/)).
+flight, redelivering a transient failure before anything behind it and dropping at once a group the
+gateway refuses outright, the rest of its batch landing ([workers](/architecture/workers/)).
 
 :::design[Target design, tracked in #430]
 

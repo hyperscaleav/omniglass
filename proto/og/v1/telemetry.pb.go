@@ -99,7 +99,18 @@ type TelemetryBatch struct {
 	// server-side from the task as every sample is, never to node_log. A field of
 	// its own, beside the node's self-logs in logs, so one batch carries both and
 	// neither lands in the other's table. Set only on a node's lane.
-	TaskLogs      []*LogLine `protobuf:"bytes,13,rep,name=task_logs,json=taskLogs,proto3" json:"task_logs,omitempty"`
+	TaskLogs []*LogLine `protobuf:"bytes,13,rep,name=task_logs,json=taskLogs,proto3" json:"task_logs,omitempty"`
+	// groups is a node's whole tick (#1582): one TaskGroup per task that
+	// reported, so a node publishes one batch per tick instead of one per task.
+	// The batch carries ONE id (the Nats-Msg-Id) and is byte-identical on every
+	// retry, so the receipt is written once however many groups ride it. Writer
+	// identity, the observed ts and the owner are per group, resolved by the
+	// server from each group's task_id (the node asserts a task, never an owner).
+	// Node-level logs (field 7) and node_id (field 2) stay on the batch itself.
+	// Set only on a node's lane: a node batch that carries task samples in the
+	// top-level lanes (task_id, metrics, properties, events, task_logs) instead
+	// of in groups is refused. The API push lane keeps using the top-level fields.
+	Groups        []*TaskGroup `protobuf:"bytes,14,rep,name=groups,proto3" json:"groups,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -218,6 +229,115 @@ func (x *TelemetryBatch) GetTaskLogs() []*LogLine {
 	return nil
 }
 
+func (x *TelemetryBatch) GetGroups() []*TaskGroup {
+	if x != nil {
+		return x.Groups
+	}
+	return nil
+}
+
+// TaskGroup is one task's samples from one node tick (#1582). It is the unit of
+// refusal: a group the gateway refuses (an unknown owner, a value the schema
+// rejects) is dropped alone, its sibling groups in the same batch land, and the
+// batch's receipt is still written once.
+type TaskGroup struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// task_id is the task that produced this group. The server resolves the owner
+	// from it and confines the node to its own tasks; a group naming a task the
+	// node does not own is recorded as an orphan and skipped, not the batch.
+	TaskId string `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
+	// ts is the time this group was observed. A per-sample ts overrides it when
+	// set; when neither is set the server stamps ingest time. It is per group, not
+	// per batch, because the groups of one tick are collected at different moments.
+	Ts *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=ts,proto3" json:"ts,omitempty"`
+	// metrics is the numeric lane for this task; same contract as
+	// TelemetryBatch.metrics.
+	Metrics []*MetricSample `protobuf:"bytes,3,rep,name=metrics,proto3" json:"metrics,omitempty"`
+	// properties is the categorical lane for this task; same contract as
+	// TelemetryBatch.properties.
+	Properties []*PropertySample `protobuf:"bytes,4,rep,name=properties,proto3" json:"properties,omitempty"`
+	// events is the occurrence lane for this task; same contract as
+	// TelemetryBatch.events.
+	Events []*EventSample `protobuf:"bytes,5,rep,name=events,proto3" json:"events,omitempty"`
+	// task_logs is the log lines this task collected from its component; same
+	// contract as TelemetryBatch.task_logs.
+	TaskLogs      []*LogLine `protobuf:"bytes,6,rep,name=task_logs,json=taskLogs,proto3" json:"task_logs,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TaskGroup) Reset() {
+	*x = TaskGroup{}
+	mi := &file_proto_og_v1_telemetry_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TaskGroup) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TaskGroup) ProtoMessage() {}
+
+func (x *TaskGroup) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_og_v1_telemetry_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TaskGroup.ProtoReflect.Descriptor instead.
+func (*TaskGroup) Descriptor() ([]byte, []int) {
+	return file_proto_og_v1_telemetry_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *TaskGroup) GetTaskId() string {
+	if x != nil {
+		return x.TaskId
+	}
+	return ""
+}
+
+func (x *TaskGroup) GetTs() *timestamppb.Timestamp {
+	if x != nil {
+		return x.Ts
+	}
+	return nil
+}
+
+func (x *TaskGroup) GetMetrics() []*MetricSample {
+	if x != nil {
+		return x.Metrics
+	}
+	return nil
+}
+
+func (x *TaskGroup) GetProperties() []*PropertySample {
+	if x != nil {
+		return x.Properties
+	}
+	return nil
+}
+
+func (x *TaskGroup) GetEvents() []*EventSample {
+	if x != nil {
+		return x.Events
+	}
+	return nil
+}
+
+func (x *TaskGroup) GetTaskLogs() []*LogLine {
+	if x != nil {
+		return x.TaskLogs
+	}
+	return nil
+}
+
 // Owner is an exclusive-arc address: which kind of estate entity owns the batch,
 // and which one. Only the API lane sets it (see TelemetryBatch.owner).
 type Owner struct {
@@ -232,7 +352,7 @@ type Owner struct {
 
 func (x *Owner) Reset() {
 	*x = Owner{}
-	mi := &file_proto_og_v1_telemetry_proto_msgTypes[1]
+	mi := &file_proto_og_v1_telemetry_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -244,7 +364,7 @@ func (x *Owner) String() string {
 func (*Owner) ProtoMessage() {}
 
 func (x *Owner) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_og_v1_telemetry_proto_msgTypes[1]
+	mi := &file_proto_og_v1_telemetry_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -257,7 +377,7 @@ func (x *Owner) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Owner.ProtoReflect.Descriptor instead.
 func (*Owner) Descriptor() ([]byte, []int) {
-	return file_proto_og_v1_telemetry_proto_rawDescGZIP(), []int{1}
+	return file_proto_og_v1_telemetry_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *Owner) GetKind() string {
@@ -308,7 +428,7 @@ type MetricSample struct {
 
 func (x *MetricSample) Reset() {
 	*x = MetricSample{}
-	mi := &file_proto_og_v1_telemetry_proto_msgTypes[2]
+	mi := &file_proto_og_v1_telemetry_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -320,7 +440,7 @@ func (x *MetricSample) String() string {
 func (*MetricSample) ProtoMessage() {}
 
 func (x *MetricSample) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_og_v1_telemetry_proto_msgTypes[2]
+	mi := &file_proto_og_v1_telemetry_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -333,7 +453,7 @@ func (x *MetricSample) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MetricSample.ProtoReflect.Descriptor instead.
 func (*MetricSample) Descriptor() ([]byte, []int) {
-	return file_proto_og_v1_telemetry_proto_rawDescGZIP(), []int{2}
+	return file_proto_og_v1_telemetry_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *MetricSample) GetName() string {
@@ -405,7 +525,7 @@ type PropertySample struct {
 
 func (x *PropertySample) Reset() {
 	*x = PropertySample{}
-	mi := &file_proto_og_v1_telemetry_proto_msgTypes[3]
+	mi := &file_proto_og_v1_telemetry_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -417,7 +537,7 @@ func (x *PropertySample) String() string {
 func (*PropertySample) ProtoMessage() {}
 
 func (x *PropertySample) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_og_v1_telemetry_proto_msgTypes[3]
+	mi := &file_proto_og_v1_telemetry_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -430,7 +550,7 @@ func (x *PropertySample) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PropertySample.ProtoReflect.Descriptor instead.
 func (*PropertySample) Descriptor() ([]byte, []int) {
-	return file_proto_og_v1_telemetry_proto_rawDescGZIP(), []int{3}
+	return file_proto_og_v1_telemetry_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *PropertySample) GetName() string {
@@ -500,7 +620,7 @@ type EventSample struct {
 
 func (x *EventSample) Reset() {
 	*x = EventSample{}
-	mi := &file_proto_og_v1_telemetry_proto_msgTypes[4]
+	mi := &file_proto_og_v1_telemetry_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -512,7 +632,7 @@ func (x *EventSample) String() string {
 func (*EventSample) ProtoMessage() {}
 
 func (x *EventSample) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_og_v1_telemetry_proto_msgTypes[4]
+	mi := &file_proto_og_v1_telemetry_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -525,7 +645,7 @@ func (x *EventSample) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EventSample.ProtoReflect.Descriptor instead.
 func (*EventSample) Descriptor() ([]byte, []int) {
-	return file_proto_og_v1_telemetry_proto_rawDescGZIP(), []int{4}
+	return file_proto_og_v1_telemetry_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *EventSample) GetName() string {
@@ -584,7 +704,7 @@ type Identity struct {
 
 func (x *Identity) Reset() {
 	*x = Identity{}
-	mi := &file_proto_og_v1_telemetry_proto_msgTypes[5]
+	mi := &file_proto_og_v1_telemetry_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -596,7 +716,7 @@ func (x *Identity) String() string {
 func (*Identity) ProtoMessage() {}
 
 func (x *Identity) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_og_v1_telemetry_proto_msgTypes[5]
+	mi := &file_proto_og_v1_telemetry_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -609,7 +729,7 @@ func (x *Identity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Identity.ProtoReflect.Descriptor instead.
 func (*Identity) Descriptor() ([]byte, []int) {
-	return file_proto_og_v1_telemetry_proto_rawDescGZIP(), []int{5}
+	return file_proto_og_v1_telemetry_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *Identity) GetKey() string {
@@ -650,7 +770,7 @@ type LogLine struct {
 
 func (x *LogLine) Reset() {
 	*x = LogLine{}
-	mi := &file_proto_og_v1_telemetry_proto_msgTypes[6]
+	mi := &file_proto_og_v1_telemetry_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -662,7 +782,7 @@ func (x *LogLine) String() string {
 func (*LogLine) ProtoMessage() {}
 
 func (x *LogLine) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_og_v1_telemetry_proto_msgTypes[6]
+	mi := &file_proto_og_v1_telemetry_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -675,7 +795,7 @@ func (x *LogLine) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogLine.ProtoReflect.Descriptor instead.
 func (*LogLine) Descriptor() ([]byte, []int) {
-	return file_proto_og_v1_telemetry_proto_rawDescGZIP(), []int{6}
+	return file_proto_og_v1_telemetry_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *LogLine) GetMessage() string {
@@ -745,7 +865,7 @@ var File_proto_og_v1_telemetry_proto protoreflect.FileDescriptor
 
 const file_proto_og_v1_telemetry_proto_rawDesc = "" +
 	"\n" +
-	"\x1bproto/og/v1/telemetry.proto\x12\x05og.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xa4\x04\n" +
+	"\x1bproto/og/v1/telemetry.proto\x12\x05og.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xce\x04\n" +
 	"\x0eTelemetryBatch\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x17\n" +
 	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12*\n" +
@@ -761,10 +881,20 @@ const file_proto_og_v1_telemetry_proto_rawDesc = "" +
 	"properties\x18\v \x03(\v2\x15.og.v1.PropertySampleR\n" +
 	"properties\x12*\n" +
 	"\x06events\x18\f \x03(\v2\x12.og.v1.EventSampleR\x06events\x12+\n" +
-	"\ttask_logs\x18\r \x03(\v2\x0e.og.v1.LogLineR\btaskLogs\x1a9\n" +
+	"\ttask_logs\x18\r \x03(\v2\x0e.og.v1.LogLineR\btaskLogs\x12(\n" +
+	"\x06groups\x18\x0e \x03(\v2\x10.og.v1.TaskGroupR\x06groups\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\b\x05\x10\x06R\asamples\"-\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\b\x05\x10\x06R\asamples\"\x8f\x02\n" +
+	"\tTaskGroup\x12\x17\n" +
+	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12*\n" +
+	"\x02ts\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x02ts\x12-\n" +
+	"\ametrics\x18\x03 \x03(\v2\x13.og.v1.MetricSampleR\ametrics\x125\n" +
+	"\n" +
+	"properties\x18\x04 \x03(\v2\x15.og.v1.PropertySampleR\n" +
+	"properties\x12*\n" +
+	"\x06events\x18\x05 \x03(\v2\x12.og.v1.EventSampleR\x06events\x12+\n" +
+	"\ttask_logs\x18\x06 \x03(\v2\x0e.og.v1.LogLineR\btaskLogs\"-\n" +
 	"\x05Owner\x12\x12\n" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x10\n" +
 	"\x03ref\x18\x02 \x01(\tR\x03ref\"\xa1\x02\n" +
@@ -824,43 +954,50 @@ func file_proto_og_v1_telemetry_proto_rawDescGZIP() []byte {
 	return file_proto_og_v1_telemetry_proto_rawDescData
 }
 
-var file_proto_og_v1_telemetry_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_proto_og_v1_telemetry_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_proto_og_v1_telemetry_proto_goTypes = []any{
 	(*TelemetryBatch)(nil),        // 0: og.v1.TelemetryBatch
-	(*Owner)(nil),                 // 1: og.v1.Owner
-	(*MetricSample)(nil),          // 2: og.v1.MetricSample
-	(*PropertySample)(nil),        // 3: og.v1.PropertySample
-	(*EventSample)(nil),           // 4: og.v1.EventSample
-	(*Identity)(nil),              // 5: og.v1.Identity
-	(*LogLine)(nil),               // 6: og.v1.LogLine
-	nil,                           // 7: og.v1.TelemetryBatch.LabelsEntry
-	nil,                           // 8: og.v1.MetricSample.LabelsEntry
-	nil,                           // 9: og.v1.PropertySample.LabelsEntry
-	(*timestamppb.Timestamp)(nil), // 10: google.protobuf.Timestamp
+	(*TaskGroup)(nil),             // 1: og.v1.TaskGroup
+	(*Owner)(nil),                 // 2: og.v1.Owner
+	(*MetricSample)(nil),          // 3: og.v1.MetricSample
+	(*PropertySample)(nil),        // 4: og.v1.PropertySample
+	(*EventSample)(nil),           // 5: og.v1.EventSample
+	(*Identity)(nil),              // 6: og.v1.Identity
+	(*LogLine)(nil),               // 7: og.v1.LogLine
+	nil,                           // 8: og.v1.TelemetryBatch.LabelsEntry
+	nil,                           // 9: og.v1.MetricSample.LabelsEntry
+	nil,                           // 10: og.v1.PropertySample.LabelsEntry
+	(*timestamppb.Timestamp)(nil), // 11: google.protobuf.Timestamp
 }
 var file_proto_og_v1_telemetry_proto_depIdxs = []int32{
-	10, // 0: og.v1.TelemetryBatch.ts:type_name -> google.protobuf.Timestamp
-	7,  // 1: og.v1.TelemetryBatch.labels:type_name -> og.v1.TelemetryBatch.LabelsEntry
-	6,  // 2: og.v1.TelemetryBatch.logs:type_name -> og.v1.LogLine
-	1,  // 3: og.v1.TelemetryBatch.owner:type_name -> og.v1.Owner
-	2,  // 4: og.v1.TelemetryBatch.metrics:type_name -> og.v1.MetricSample
-	3,  // 5: og.v1.TelemetryBatch.properties:type_name -> og.v1.PropertySample
-	4,  // 6: og.v1.TelemetryBatch.events:type_name -> og.v1.EventSample
-	6,  // 7: og.v1.TelemetryBatch.task_logs:type_name -> og.v1.LogLine
-	10, // 8: og.v1.MetricSample.ts:type_name -> google.protobuf.Timestamp
-	8,  // 9: og.v1.MetricSample.labels:type_name -> og.v1.MetricSample.LabelsEntry
-	5,  // 10: og.v1.MetricSample.identity:type_name -> og.v1.Identity
-	10, // 11: og.v1.PropertySample.ts:type_name -> google.protobuf.Timestamp
-	9,  // 12: og.v1.PropertySample.labels:type_name -> og.v1.PropertySample.LabelsEntry
-	5,  // 13: og.v1.PropertySample.identity:type_name -> og.v1.Identity
-	10, // 14: og.v1.EventSample.ts:type_name -> google.protobuf.Timestamp
-	5,  // 15: og.v1.EventSample.identity:type_name -> og.v1.Identity
-	10, // 16: og.v1.LogLine.ts:type_name -> google.protobuf.Timestamp
-	17, // [17:17] is the sub-list for method output_type
-	17, // [17:17] is the sub-list for method input_type
-	17, // [17:17] is the sub-list for extension type_name
-	17, // [17:17] is the sub-list for extension extendee
-	0,  // [0:17] is the sub-list for field type_name
+	11, // 0: og.v1.TelemetryBatch.ts:type_name -> google.protobuf.Timestamp
+	8,  // 1: og.v1.TelemetryBatch.labels:type_name -> og.v1.TelemetryBatch.LabelsEntry
+	7,  // 2: og.v1.TelemetryBatch.logs:type_name -> og.v1.LogLine
+	2,  // 3: og.v1.TelemetryBatch.owner:type_name -> og.v1.Owner
+	3,  // 4: og.v1.TelemetryBatch.metrics:type_name -> og.v1.MetricSample
+	4,  // 5: og.v1.TelemetryBatch.properties:type_name -> og.v1.PropertySample
+	5,  // 6: og.v1.TelemetryBatch.events:type_name -> og.v1.EventSample
+	7,  // 7: og.v1.TelemetryBatch.task_logs:type_name -> og.v1.LogLine
+	1,  // 8: og.v1.TelemetryBatch.groups:type_name -> og.v1.TaskGroup
+	11, // 9: og.v1.TaskGroup.ts:type_name -> google.protobuf.Timestamp
+	3,  // 10: og.v1.TaskGroup.metrics:type_name -> og.v1.MetricSample
+	4,  // 11: og.v1.TaskGroup.properties:type_name -> og.v1.PropertySample
+	5,  // 12: og.v1.TaskGroup.events:type_name -> og.v1.EventSample
+	7,  // 13: og.v1.TaskGroup.task_logs:type_name -> og.v1.LogLine
+	11, // 14: og.v1.MetricSample.ts:type_name -> google.protobuf.Timestamp
+	9,  // 15: og.v1.MetricSample.labels:type_name -> og.v1.MetricSample.LabelsEntry
+	6,  // 16: og.v1.MetricSample.identity:type_name -> og.v1.Identity
+	11, // 17: og.v1.PropertySample.ts:type_name -> google.protobuf.Timestamp
+	10, // 18: og.v1.PropertySample.labels:type_name -> og.v1.PropertySample.LabelsEntry
+	6,  // 19: og.v1.PropertySample.identity:type_name -> og.v1.Identity
+	11, // 20: og.v1.EventSample.ts:type_name -> google.protobuf.Timestamp
+	6,  // 21: og.v1.EventSample.identity:type_name -> og.v1.Identity
+	11, // 22: og.v1.LogLine.ts:type_name -> google.protobuf.Timestamp
+	23, // [23:23] is the sub-list for method output_type
+	23, // [23:23] is the sub-list for method input_type
+	23, // [23:23] is the sub-list for extension type_name
+	23, // [23:23] is the sub-list for extension extendee
+	0,  // [0:23] is the sub-list for field type_name
 }
 
 func init() { file_proto_og_v1_telemetry_proto_init() }
@@ -874,7 +1011,7 @@ func file_proto_og_v1_telemetry_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_og_v1_telemetry_proto_rawDesc), len(file_proto_og_v1_telemetry_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   10,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

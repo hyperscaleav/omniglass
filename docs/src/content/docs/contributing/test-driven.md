@@ -257,7 +257,7 @@ It seeds the dev scenario's fleet for real and delivers a **standard workload** 
 telemetry handler exactly as JetStream would: the owner binding, the catalog fingerprint read,
 `LandBatch` with its receipt, locks, transition guard and rule evaluation, and the endpoint's
 seen stamp. Only the transport is a double. The workload (`internal/footprint`) is one batch
-per task per check, built deterministically from the task and the tick, so two runs land the
+per node per tick, a group per task, built deterministically from the tasks and the tick, so two runs land the
 same rows and a number that moves is the code moving.
 
 It holds five things and reports the rest:

@@ -117,24 +117,24 @@ func TestNodeLaneLandsEveryNativeKey(t *testing.T) {
 	for _, et := range eventTypes {
 		isEvent[et.Name] = true
 	}
-	batch := &ogv1.TelemetryBatch{TaskId: "t-ssh", NodeId: "node-a"}
+	group := &ogv1.TaskGroup{TaskId: "t-ssh"}
 	native := probekeys.Native()
 	for _, key := range native {
 		if isMetric[key] {
-			batch.Metrics = append(batch.Metrics, &ogv1.MetricSample{Name: key, Value: 7})
+			group.Metrics = append(group.Metrics, &ogv1.MetricSample{Name: key, Value: 7})
 			continue
 		}
 		if isEvent[key] {
-			batch.Events = append(batch.Events, &ogv1.EventSample{Name: key, Message: "from the node"})
+			group.Events = append(group.Events, &ogv1.EventSample{Name: key, Message: "from the node"})
 			continue
 		}
 		v, ok := propertyValue[key]
 		if !ok {
 			t.Fatalf("native key %s is seeded on no lane", key)
 		}
-		batch.Properties = append(batch.Properties, &ogv1.PropertySample{Name: key, ValueJson: v})
+		group.Properties = append(group.Properties, &ogv1.PropertySample{Name: key, ValueJson: v})
 	}
-	publishEvent(t, nc, "node-a", batch)
+	publishEvent(t, nc, "node-a", &ogv1.TelemetryBatch{NodeId: "node-a", Groups: []*ogv1.TaskGroup{group}})
 
 	for _, key := range native {
 		deadline := time.Now().Add(5 * time.Second)
