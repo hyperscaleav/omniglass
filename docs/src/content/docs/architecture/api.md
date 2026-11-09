@@ -1161,6 +1161,14 @@ earns its own tier only when composing the entity reads in the browser would be 
   else. A renderer draws a mark per component across the whole fleet, so a component **row** per
   mark is a fleet-sized payload on every draw; the projection is the shape that avoids it, and
   the wire is pinned by test against being widened back into a component list.
+- `GET /views/platform` (`node:read`) is the read behind
+  [Platform health](/guides/operator/platform-health/): the platform system's verdict, each
+  server's build and start time, the node table's column groups with each key's catalog facts,
+  and one row per node with its latest figure per key, in a fixed number of statements however
+  many nodes there are. Its rows are `/nodes`', so a node read short of all-scope is a **403**, as
+  `/nodes` answers, never an empty table. The figures, the verdicts and the servers need an
+  all-scope `component:read` and the system an all-scope `system:read`; short of either they are
+  omitted, never zeroed, and `figures_read` says which.
 
 Two properties are worth stating because they are easy to lose:
 
