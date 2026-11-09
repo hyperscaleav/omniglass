@@ -560,50 +560,49 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 	if err := p.stripRefusedEmits(ctx, name, wl.Tasks); err != nil {
 		return Worklist{}, fmt.Errorf("storage: node worklist %q: %w", name, err)
 	}
-	// Unseal after the row scan (one connection at a time), caching by the
-	// (reference, component) pair so two tasks on one component sharing a
-	// credential unseal it once. Delivery is confined to a secret that CASCADES
-	// ONTO the endpoint's component (platform, an ancestor location or system,
-	// or the component itself): the attach scoped the reference to the operator,
-	// and this re-check keeps a rename or a name collision from drifting a node
-	// onto a secret its component does not own. A reference that resolves to
+	// Resolve every (reference, component) pair in one statement after the
+	// row scan (one connection at a time, #1581), each pair once however many
+	// tasks share it. Delivery is confined to a secret that CASCADES ONTO the
+	// endpoint's own component (nodeSecrets). A reference that resolves to
 	// nothing deliverable is delivered as absence: the node lands a
 	// collection-failed naming the missing credential.
-	unsealed := map[string]map[string]string{}
-	versionOf := map[string]string{}
+	var secretRefs []nodeSecretRef
+	secretAt := map[nodeSecretRef]int{}
+	for _, refs := range pending {
+		for _, r := range refs {
+			k := nodeSecretRef{r.ref, r.componentID}
+			if _, seen := secretAt[k]; !seen {
+				secretAt[k] = len(secretRefs)
+				secretRefs = append(secretRefs, k)
+			}
+		}
+	}
+	// A REAL failure (no key provider, a DB error, an envelope that will not
+	// open) is NOT absence: swallowing it would mask infra failure as a missing
+	// secret and send operators chasing a credential that exists. Fail the pull
+	// instead; the node keeps its last-good worklist and retries next heartbeat.
+	resolved, err := p.nodeSecrets(ctx, secretRefs)
+	if err != nil {
+		return Worklist{}, fmt.Errorf("storage: node worklist %q unseal: %w", name, err)
+	}
 	for idx, refs := range pending {
 		for _, r := range refs {
-			key := r.ref + "\x00" + r.componentID
-			fields, ok := unsealed[key]
-			if !ok {
-				f, version, err := p.nodeSecretFields(ctx, r.ref, r.componentID)
-				if err != nil {
-					// Absence is deliverable: a reference that resolves to nothing
-					// this component owns (ErrSecretNotFound), or to more than one
-					// candidate (ErrAmbiguousName), rides as an absent credential
-					// and the node lands a collection-failed naming it. A REAL
-					// failure (no key provider, a DB error, an envelope that will
-					// not open) is NOT absence: swallowing it would mask infra
-					// failure as a missing secret and send operators chasing a
-					// credential that exists. Fail the pull instead; the node keeps
-					// its last-good worklist and retries next heartbeat.
-					var amb *ErrAmbiguousName
-					if errors.Is(err, ErrSecretNotFound) || errors.As(err, &amb) {
-						continue
-					}
-					return Worklist{}, fmt.Errorf("storage: node worklist %q unseal %q: %w", name, r.ref, err)
-				}
-				fields, unsealed[key], versionOf[key] = f, f, version
+			// Absence is deliverable: a reference that resolves to nothing this
+			// component owns, or to more than one candidate, rides as an absent
+			// credential and the node lands a collection-failed naming it.
+			got := resolved[secretAt[nodeSecretRef{r.ref, r.componentID}]]
+			if got.err != nil {
+				continue
 			}
 			ep := wl.Tasks[idx].EndpointID
 			if versions[ep] == nil {
 				versions[ep] = map[string]string{}
 			}
-			versions[ep][r.input] = versionOf[key]
+			versions[ep][r.input] = got.version
 			if wl.Tasks[idx].Secrets == nil {
 				wl.Tasks[idx].Secrets = map[string]map[string]string{}
 			}
-			wl.Tasks[idx].Secrets[r.input] = fields
+			wl.Tasks[idx].Secrets[r.input] = got.fields
 		}
 	}
 	// An ssh task's host key pin (#1032), and a tls task's public key pin

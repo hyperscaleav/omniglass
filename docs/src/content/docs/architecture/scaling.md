@@ -160,6 +160,39 @@ binary.nats -- ext: "swap embedded for BYO" { style.stroke-dash: 4 }
 
 :::
 
+## Ingest: one batch per tick
+
+What a node costs the server is set by how many transactions its telemetry makes, not by its sample
+count. Before, a node published one batch per task per tick, and each batch landed in its own
+transaction: about twenty statements (begin, receipt, writer lookup, arcs, locks, the database clock,
+the targeted-property read, rules, marks, a property lock and insert, a metric insert, judged, commit,
+plus the task-owner lookup and the endpoint stamp), at about one sample a batch. That is `20 x G`
+statements a tick for `G` tasks, and one receipt row per sample, so the receipt table grew as fast as
+the metric table.
+
+Now a node publishes one batch per tick, a group per task
+([nodes](/architecture/nodes/#delivery-a-batch-lands-once)), and it lands in one transaction
+([storage](/architecture/storage/)) whose cost is a fixed `C1` (about twenty statements) plus `R`
+(series the batch carries twice), `J` (judged samples that fire a rule), `T` (settled targeted
+properties) and three per conduit group that carries identified samples. With none of those it is
+the same for one group and for fifty. Before the transaction, the identity bindings of every conduit
+in the tick resolve in one read, however many conduits its groups name. A refused group costs its siblings nothing
+([ADR-0311](/architecture/decisions/#adr-0311-a-telemetry-batch-lands-once-in-one-transaction-under-its-receipt)).
+
+| At 1,000 systems, the busiest node (18 nodes, about 3,000 tasks) | Before | After (target) |
+| --- | --- | --- |
+| Samples per batch | about 1 | 40 or more |
+| Statements per sample | about 18 | about 0.5 |
+| Batches a second, all nodes | one per task per tick | 18 or fewer (one flush a second per node) |
+| Receipts a day | grows with the sample count | under 0.5 GiB |
+| Ingest lag p99 | | under 5 s |
+
+The right-hand column is the target this slice is held to, not a measurement. `omniglass lab measure`
+prints the measured figures (batches landed, samples per batch, batches a second, receipts a day and
+the ingest lag) for a scale lab
+([the lab guide](/guides/lab/#measuring-a-scale-lab)); the measured run replaces this column's targets
+when the slice's pull request records it.
+
 ## Platform configuration
 
 Configuration is **two tiers**, and platform settings are deliberately **centralized**:

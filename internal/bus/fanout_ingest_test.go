@@ -29,9 +29,9 @@ type countingStore struct {
 	resolves atomic.Int64
 }
 
-func (c *countingStore) ResolveIdentityBindings(ctx context.Context, conduit string, ids []storage.IdentityKey) (*storage.IdentityResolution, error) {
+func (c *countingStore) ResolveIdentityBindings(ctx context.Context, ids map[string][]storage.IdentityKey) (map[string]*storage.IdentityResolution, error) {
 	c.resolves.Add(1)
-	return c.PG.ResolveIdentityBindings(ctx, conduit, ids)
+	return c.PG.ResolveIdentityBindings(ctx, ids)
 }
 
 // fanIngest is a conduit (meetings-cloud) polled by node-a's task t-rooms
@@ -155,7 +155,7 @@ func rooms(ids ...string) *ogv1.TelemetryBatch {
 
 func (f *fanIngest) nodeLane(ev *ogv1.TelemetryBatch) (string, *ogv1.TelemetryBatch) {
 	ev.TaskId, ev.NodeId = "t-rooms", "node-a"
-	return collection.TelemetrySubject("node-a"), ev
+	return collection.TelemetrySubject("node-a"), asTick(ev)
 }
 
 func (f *fanIngest) webhookLane(ev *ogv1.TelemetryBatch) (string, *ogv1.TelemetryBatch) {
@@ -276,8 +276,9 @@ func TestFanOutFollowsTheBindings(t *testing.T) {
 	if inbox, _ := f.gw.ListUnboundIdentities(f.ctx, "meetings-cloud", scope.Set{All: true}); len(inbox) != 0 {
 		t.Errorf("after binding, the inbox still holds %+v", inbox)
 	}
-	subject, ev = f.nodeLane(rooms("zr-x"))
-	ev.Metrics = append(ev.Metrics, &ogv1.MetricSample{Name: "tcp-connect-time", Value: 1, Identity: room("zr-x")})
+	probed := rooms("zr-x")
+	probed.Metrics = append(probed.Metrics, &ogv1.MetricSample{Name: "tcp-connect-time", Value: 1, Identity: room("zr-x")})
+	subject, ev = f.nodeLane(probed)
 	f.deliver(t, subject, ev, "")
 	if n := f.count(t, `select count(*) from property p join system s on s.id = p.system_id where s.name = 'room-c' and p.provenance = 'observed'`); n != 1 {
 		t.Errorf("after binding, room-c holds %d call-state rows, want one", n)
@@ -310,7 +311,7 @@ func TestConfinementComesBeforeTheFanOut(t *testing.T) {
 	f := newFanIngest(t)
 	ev := rooms("zr-a", "zr-b")
 	ev.TaskId, ev.NodeId = "t-rooms", "node-b"
-	f.deliver(t, collection.TelemetrySubject("node-b"), ev, "")
+	f.deliver(t, collection.TelemetrySubject("node-b"), asTick(ev), "")
 	if n := f.store.resolves.Load(); n != 0 {
 		t.Errorf("an orphan batch's identities were read %d times, want none", n)
 	}
@@ -321,7 +322,7 @@ func TestConfinementComesBeforeTheFanOut(t *testing.T) {
 	// conduit's bindings: its identities resolve on its own conduit.
 	ev = rooms("zr-a")
 	ev.TaskId, ev.NodeId = "t-other", "node-b"
-	f.deliver(t, collection.TelemetrySubject("node-b"), ev, "")
+	f.deliver(t, collection.TelemetrySubject("node-b"), asTick(ev), "")
 	if rows := f.landed(t); len(rows) != 0 {
 		t.Errorf("another conduit's batch landed %v on meetings-cloud's owners", rows)
 	}
@@ -352,11 +353,11 @@ func TestFanOutResolvesOwnersInOneRead(t *testing.T) {
 		for i := range n {
 			ev.Metrics = append(ev.Metrics, &ogv1.MetricSample{Name: "participant-count", Value: float64(i), Identity: room(fmt.Sprintf("zr-%03d", i))})
 		}
-		subject, ev := f.nodeLane(ev)
-		f.deliver(t, subject, ev, "") // warm the registry and the first rows
+		subject, tick := f.nodeLane(ev)
+		f.deliver(t, subject, tick, "") // warm the registry and the first rows
 		counter.Reset()
-		subject, ev = f.nodeLane(ev)
-		f.deliver(t, subject, ev, "")
+		subject, tick = f.nodeLane(ev)
+		f.deliver(t, subject, tick, "")
 		return counter.N()
 	}
 	three, many := statements(3), statements(200)
@@ -431,5 +432,50 @@ func TestAFannedSampleNamesItsConduitAcrossARename(t *testing.T) {
 	metrics, err := f.gw.ListMetricSeries(f.ctx, "system", "room-a", "participant-count", 0, 10)
 	if err != nil || len(metrics) != 1 || metrics[0].Source != "rooms-cloud/http" {
 		t.Errorf("room-a's participant-count = %+v (%v), want one row naming rooms-cloud/http", metrics, err)
+	}
+}
+
+// TestATickResolvesEveryConduitInOneRead: a node tick whose groups poll two
+// conduits, each naming identities bound on its own conduit, resolves them
+// all in one read (#1582), and each value still lands on the owner its own
+// conduit binds: a value fans out only through its group's conduit.
+func TestATickResolvesEveryConduitInOneRead(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	f := newFanIngest(t)
+	all := scope.Set{All: true}
+	if _, err := f.gw.CreateComponent(f.ctx, "", storage.ComponentSpec{Name: "rooms-cloud"}, all, all, all, all); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.conn.Exec(f.ctx, `
+		insert into endpoint (name, transport, component, node_name, params) values
+			('http-r', 'http', (select id from component where name = 'rooms-cloud'), (select principal_id from node where name = 'node-a'), '{"target":"127.0.0.1:443"}'::jsonb);
+		insert into task (id, mode, endpoint_id, enabled) values
+			('t-rooms-2', 'poll', (select id from endpoint where name = 'http-r'), true)`); err != nil {
+		t.Fatalf("second conduit: %v", err)
+	}
+	// zr-b is bound on meetings-cloud to room-b; on rooms-cloud the same id
+	// is another room's, so a mixed-up resolution lands it on the wrong one.
+	if _, err := f.gw.PutIdentityBinding(f.ctx, f.actor, "rooms-cloud", "ucc-room-id", "zr-b", storage.IdentityBindingOwner{Kind: "system", Name: "room-c"}, f.scopes()); err != nil {
+		t.Fatalf("bind on rooms-cloud: %v", err)
+	}
+	meetings, other := rooms("zr-a"), rooms("zr-b")
+	meetings.TaskId, other.TaskId = "t-rooms", "t-rooms-2"
+	tick := asTick(meetings)
+	tick.NodeId = "node-a"
+	tick.Groups = append(tick.Groups, asTick(other).GetGroups()...)
+	f.deliver(t, collection.TelemetrySubject("node-a"), tick, "")
+	if n := f.store.resolves.Load(); n != 1 {
+		t.Errorf("a tick fanning on two conduits read its identities %d times, want once", n)
+	}
+	want := []string{
+		"room-a call-state active [] meetings-cloud/http observed",
+		"room-a participant-count 2 [] meetings-cloud/http observed",
+		"room-c call-state active [] rooms-cloud/http-r observed",
+		"room-c participant-count 2 [] rooms-cloud/http-r observed",
+	}
+	if got := f.landed(t); strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("landed:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
 	}
 }

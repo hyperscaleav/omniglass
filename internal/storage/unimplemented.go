@@ -457,8 +457,8 @@ func (UnimplementedGateway) InsertLogLines(context.Context, []LogLineWrite) erro
 func (UnimplementedGateway) InsertNodeLogs(context.Context, []NodeLogWrite) error {
 	return nil
 }
-func (UnimplementedGateway) LandBatch(context.Context, IngestBatch) (bool, error) {
-	return false, nil
+func (UnimplementedGateway) LandBatch(context.Context, IngestBatch) (LandResult, error) {
+	return LandResult{}, nil
 }
 func (UnimplementedGateway) PruneTelemetryReceipts(context.Context, time.Time, int) (int64, error) {
 	return 0, nil
@@ -534,6 +534,9 @@ func (UnimplementedGateway) NodeSimWebhooks(context.Context, string) (map[string
 }
 func (UnimplementedGateway) ResolveTaskOwner(context.Context, string, string) (TaskOwner, bool, error) {
 	return TaskOwner{}, false, nil
+}
+func (UnimplementedGateway) ResolveTaskOwners(context.Context, string, []string) (map[string]TaskOwner, error) {
+	return nil, nil
 }
 func (UnimplementedGateway) GetNode(context.Context, string, scope.Set) (*Node, error) {
 	return nil, nil
@@ -1086,7 +1089,7 @@ func (UnimplementedGateway) RecordUnclaimedSources(context.Context, []UnclaimedS
 func (UnimplementedGateway) ListUnclaimedSources(context.Context) ([]UnclaimedSource, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) ResolveIdentityBindings(context.Context, string, []IdentityKey) (*IdentityResolution, error) {
+func (UnimplementedGateway) ResolveIdentityBindings(context.Context, map[string][]IdentityKey) (map[string]*IdentityResolution, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) ListUnboundIdentities(context.Context, string, scope.Set) ([]UnboundIdentity, error) {

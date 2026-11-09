@@ -215,11 +215,11 @@ func TestAReplayedSpoolLandsWhole(t *testing.T) {
 		return storage.IngestBatch{BatchID: fmt.Sprintf("spool-%d", k), Writer: storage.PushWriter(), Metrics: spool[k*50 : end]}
 	}
 	for k := range 3 {
-		if landed, err := r.gw.LandBatch(r.ctx, batch(k)); err != nil || !landed {
+		if landed, err := landOf(r.gw.LandBatch(r.ctx, batch(k))); err != nil || !landed {
 			t.Fatalf("spool batch %d: landed %v, %v", k, landed, err)
 		}
 	}
-	if landed, err := r.gw.LandBatch(r.ctx, batch(1)); err != nil || landed {
+	if landed, err := landOf(r.gw.LandBatch(r.ctx, batch(1))); err != nil || landed {
 		t.Fatalf("a redelivered spool batch landed %v, %v; want nothing", landed, err)
 	}
 	if n := r.count(`select count(*) from metric where series_id = $1`, a); n != 3+170+144 {
@@ -260,10 +260,10 @@ func TestATooOldSampleIsDroppedAndCounted(t *testing.T) {
 			sampleOf("", r.day(1).Add(5*time.Hour+time.Millisecond), 2),
 			sampleOf("", now.Add(-time.Minute), 3),
 		}}
-		if landed, err := r.gw.LandBatch(r.ctx, b); err != nil || !landed {
+		if landed, err := landOf(r.gw.LandBatch(r.ctx, b)); err != nil || !landed {
 			t.Fatalf("the batch landed %v, %v; want it landed", landed, err)
 		}
-		if landed, err := r.gw.LandBatch(r.ctx, b); err != nil || landed {
+		if landed, err := landOf(r.gw.LandBatch(r.ctx, b)); err != nil || landed {
 			t.Fatalf("the batch again landed %v, %v; want nothing", landed, err)
 		}
 		if n := r.count(`select count(*) from metric m join metric_series s on s.id = m.series_id where s.instance = 'old'`); n != 0 {
@@ -367,7 +367,7 @@ func TestABatchFailingMidMergeLandsNothing(t *testing.T) {
 		sampleOf("", r.day(2).Add(time.Hour+time.Millisecond), 2),
 		sampleOf("", time.Now().Add(-time.Minute), 3),
 	}}
-	if landed, err := r.gw.LandBatch(r.ctx, b); err == nil {
+	if landed, err := landOf(r.gw.LandBatch(r.ctx, b)); err == nil {
 		t.Fatalf("the batch landed %v with its merge refused, want an error", landed)
 	}
 	if n := r.count(`select count(*) from metric where series_id = $1`, a); n != 340 {
@@ -381,7 +381,7 @@ func TestABatchFailingMidMergeLandsNothing(t *testing.T) {
 	}
 	mustExec(t, r.conn, `drop trigger block_refused on metric_block`)
 	for i, want := range []bool{true, false} {
-		if landed, err := r.gw.LandBatch(r.ctx, b); err != nil || landed != want {
+		if landed, err := landOf(r.gw.LandBatch(r.ctx, b)); err != nil || landed != want {
 			t.Fatalf("delivery %d landed %v, %v; want %v", i+2, landed, err, want)
 		}
 	}
@@ -625,7 +625,7 @@ func TestALateBatchWaitsOutAFoldWithoutBeingGivenUp(t *testing.T) {
 	done := make(chan result, 1)
 	start := time.Now()
 	go func() {
-		landed, err := r.gw.LandBatch(r.ctx, b)
+		landed, err := landOf(r.gw.LandBatch(r.ctx, b))
 		done <- result{landed, err, time.Since(start)}
 	}()
 	select {

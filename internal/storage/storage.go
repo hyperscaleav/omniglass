@@ -629,11 +629,13 @@ type Gateway interface {
 	EndpointKeyPin(ctx context.Context, componentName, endpoint, transport string) (string, error)
 	PropertyTransitions(ctx context.Context, componentName, key, instance string, window time.Duration) ([]PropertySample, error)
 	// LandBatch is the ingest's write (#311, ADR-0311): one batch's every
-	// sink in one transaction under its receipt, all or nothing, an id that
-	// already landed writing nothing, the property lane transition-only (its
-	// guard held in the insert, #455). PruneTelemetryReceipts keeps the
-	// receipts to their horizon.
-	LandBatch(ctx context.Context, b IngestBatch) (bool, error)
+	// group in one transaction under its one receipt, an id that already
+	// landed writing nothing (Landed false), the property lane
+	// transition-only (its guard held in the insert, #455). A group a row of
+	// which is refused (IsRefusedWrite) is dropped alone and reported in
+	// Refused (#1582); any other failure fails the batch, for redelivery.
+	// PruneTelemetryReceipts keeps the receipts to their horizon.
+	LandBatch(ctx context.Context, b IngestBatch) (LandResult, error)
 	PruneTelemetryReceipts(ctx context.Context, before time.Time, batch int) (int64, error)
 	// StampEndpointsSeen records that an ingest batch delivered by each
 	// endpoint landed, by the server's clock, coalesced (#933).
@@ -661,8 +663,9 @@ type Gateway interface {
 	// places (#1282), scoped by component read on the conduit.
 	ListUnboundIdentities(ctx context.Context, conduitRef string, read scope.Set) ([]UnboundIdentity, error)
 	// ResolveIdentityBindings resolves the identities one ingest batch names
-	// against its conduit's bindings in one read (#1282), in system mode.
-	ResolveIdentityBindings(ctx context.Context, conduitID string, ids []IdentityKey) (*IdentityResolution, error)
+	// on each conduit against that conduit's bindings, every conduit in one
+	// read (#1282, #1582), in system mode.
+	ResolveIdentityBindings(ctx context.Context, ids map[string][]IdentityKey) (map[string]*IdentityResolution, error)
 	// ComponentVerdict is one component's own verdict, by its id, from its
 	// active alarms: what a component's view reads without the fleet (#934).
 	ComponentVerdict(ctx context.Context, componentID string) (string, error)
@@ -770,6 +773,9 @@ type Gateway interface {
 	// ResolveTaskOwner binds a task's owner component and confines the node to its
 	// own tasks, for the telemetry ingest consumer.
 	ResolveTaskOwner(ctx context.Context, taskID, nodeName string) (TaskOwner, bool, error)
+	// ResolveTaskOwners is ResolveTaskOwner for every task of one node's
+	// batch in one read (#1582); a task it refuses is absent from the map.
+	ResolveTaskOwners(ctx context.Context, nodeName string, taskIDs []string) (map[string]TaskOwner, error)
 	GetNode(ctx context.Context, name string, read scope.Set) (*Node, error)
 	ListNodes(ctx context.Context, read scope.Set) ([]Node, error)
 

@@ -138,29 +138,29 @@ func TestTelemetryRoundTrip(t *testing.T) {
 
 	// NEGATIVE (b) CONFINEMENT: node-a publishes an Event for t-b, which belongs to
 	// node-b (owner disp-2). The consumer must drop it (orphan): disp-2 gets no row.
-	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
+	publishEvent(t, ncA, "node-a", bus.AsTick(&ogv1.TelemetryBatch{
 		TaskId:  "t-b",
 		NodeId:  "node-a",
 		Metrics: []*ogv1.MetricSample{{Name: "tcp-connect-time", Value: 1}},
-	})
+	}))
 
 	// NEGATIVE (a) REJECT-NOT-PROJECT: node-a publishes for its own t-a but with an
 	// unregistered sample name; that name must not be written.
-	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
+	publishEvent(t, ncA, "node-a", bus.AsTick(&ogv1.TelemetryBatch{
 		TaskId:  "t-a",
 		NodeId:  "node-a",
 		Metrics: []*ogv1.MetricSample{{Name: "bogus.metric", Value: 9}},
-	})
+	}))
 
 	// WATERMARK: a valid sample published AFTER the negatives. JetStream is
 	// ordered per subject and the consumer processes sequentially, so once the
 	// watermark is visible the two negatives have already been handled (and
 	// dropped). connect_time=42 is distinctive from any real dial.
-	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
+	publishEvent(t, ncA, "node-a", bus.AsTick(&ogv1.TelemetryBatch{
 		TaskId:  "t-a",
 		NodeId:  "node-a",
 		Metrics: []*ogv1.MetricSample{{Name: "tcp-connect-time", Value: 42}},
-	})
+	}))
 	waitMetric(t, ctx, gw, "disp-1", "tcp-connect-time", func(d *storage.MetricSample) bool { return d != nil && d.Value == 42 })
 
 	// SUPPLIED TS SURVIVES VERBATIM (#594): a per-sample ts is never overwritten
@@ -169,11 +169,11 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	// latest-row read IS this row and its stored ts is directly assertable.
 	// Hours old, inside the metric window: an older sample is dropped (#1529).
 	suppliedTS := time.Now().UTC().Add(-3 * time.Hour).Truncate(time.Second)
-	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
+	publishEvent(t, ncA, "node-a", bus.AsTick(&ogv1.TelemetryBatch{
 		TaskId:  "t-a",
 		NodeId:  "node-a",
 		Metrics: []*ogv1.MetricSample{{Name: "icmp-rtt-avg", Value: 7.5, Ts: timestamppb.New(suppliedTS)}},
-	})
+	}))
 	waitMetric(t, ctx, gw, "disp-1", "icmp-rtt-avg", func(d *storage.MetricSample) bool {
 		return d != nil && d.Value == 7.5 && d.TS.Equal(suppliedTS)
 	})
@@ -198,45 +198,45 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	// node-a publishes endpoint-reachable=up for its own t-a. The property lane
 	// lands in property (not metric), owned disp-1 and instanced by the interface
 	// (disp-1-tcp).
-	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
+	publishEvent(t, ncA, "node-a", bus.AsTick(&ogv1.TelemetryBatch{
 		TaskId:     "t-a",
 		NodeId:     "node-a",
 		Properties: []*ogv1.PropertySample{{Name: "endpoint-reachable", ValueJson: `"up"`}},
-	})
+	}))
 	waitProperty(t, ctx, gw, "disp-1", "endpoint-reachable", "disp-1-tcp", func(d *storage.PropertySample) bool { return d != nil && d.Value == "up" })
 
 	// CONFINEMENT (property lane): node-a publishes endpoint-reachable=up for t-b,
 	// which belongs to node-b (owner disp-2). The same fence that drops a foreign
 	// metric drops a foreign verdict: disp-2 gets none.
-	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
+	publishEvent(t, ncA, "node-a", bus.AsTick(&ogv1.TelemetryBatch{
 		TaskId:     "t-b",
 		NodeId:     "node-a",
 		Properties: []*ogv1.PropertySample{{Name: "endpoint-reachable", ValueJson: `"up"`}},
-	})
+	}))
 
 	// PER-LANE VALIDATION (#594): a property value violating the type's validation
 	// schema (endpoint-reachable is enum [up, down]) must never land. Refusal is
 	// proven by the watermark pattern: the down flip below lands, so the consumer
 	// drained past this batch, and the series never contains "sideways".
-	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
+	publishEvent(t, ncA, "node-a", bus.AsTick(&ogv1.TelemetryBatch{
 		TaskId:     "t-a",
 		NodeId:     "node-a",
 		Properties: []*ogv1.PropertySample{{Name: "endpoint-reachable", ValueJson: `"sideways"`}},
-	})
+	}))
 
 	// TRANSITION-ONLY (ingest guard): a repeated identical up must NOT add a second
 	// row (the latest-value guard skips it); only a flip to down writes. The first
 	// up is already committed (waitProperty above), so the guard sees it deterministically.
-	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
+	publishEvent(t, ncA, "node-a", bus.AsTick(&ogv1.TelemetryBatch{
 		TaskId:     "t-a",
 		NodeId:     "node-a",
 		Properties: []*ogv1.PropertySample{{Name: "endpoint-reachable", ValueJson: `"up"`}},
-	})
-	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
+	}))
+	publishEvent(t, ncA, "node-a", bus.AsTick(&ogv1.TelemetryBatch{
 		TaskId:     "t-a",
 		NodeId:     "node-a",
 		Properties: []*ogv1.PropertySample{{Name: "endpoint-reachable", ValueJson: `"down"`}},
-	})
+	}))
 	waitProperty(t, ctx, gw, "disp-1", "endpoint-reachable", "disp-1-tcp", func(d *storage.PropertySample) bool { return d != nil && d.Value == "down" })
 
 	// The series is exactly [up, down]: the duplicate up was guarded out, so the
@@ -275,12 +275,12 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	// event is a natively published occurrence (call-started, a seeded event_type)
 	// landing caught on the component, under the same owner confinement and
 	// reject-not-project as the other lanes. Raw logs are a separate lane, not this.
-	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
+	publishEvent(t, ncA, "node-a", bus.AsTick(&ogv1.TelemetryBatch{
 		TaskId: "t-a", NodeId: "node-a",
 		Metrics:    []*ogv1.MetricSample{{Name: "tcp-connect-time", Value: 0.5}},
 		Properties: []*ogv1.PropertySample{{Name: "endpoint-reachable", ValueJson: `"up"`}},
 		Events:     []*ogv1.EventSample{{Name: "call-started", Message: "call started"}},
-	})
+	}))
 	waitEvent(t, ctx, gw, "disp-1", func(e storage.Event) bool {
 		return e.Message == "call started" && e.Origin == "caught" && e.Key == "call-started"
 	})
@@ -329,10 +329,10 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	})
 	// Watermark: a later valid publish proves the forged one was processed and
 	// dropped rather than merely still in flight.
-	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
+	publishEvent(t, ncA, "node-a", bus.AsTick(&ogv1.TelemetryBatch{
 		TaskId:  "t-a",
 		Metrics: []*ogv1.MetricSample{{Name: "tcp-connect-time", Value: 42}},
-	})
+	}))
 	waitMetric(t, ctx, gw, "disp-1", "tcp-connect-time", func(d *storage.MetricSample) bool {
 		return d != nil && d.Value == 42
 	})
@@ -350,6 +350,98 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	_ = ncA.Flush()
 	if !awaitPermissionViolation(permErrs, 3*time.Second) {
 		t.Fatalf("expected a permissions violation publishing to node-b's telemetry subject")
+	}
+}
+
+// TestNodeTickLandsEveryGroupOverNATS drives one node tick through the real
+// bus (#1582): node-a publishes a single batch carrying a group for each of
+// its two tasks and a group for node-b's task. Each of node-a's groups lands on
+// its own task's component, stamped with its group's ts where a sample carries
+// none, and the foreign group is dropped as an orphan without holding its
+// siblings back.
+func TestNodeTickLandsEveryGroupOverNATS(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres + nats-server")
+	}
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	all := scope.Set{All: true}
+	for _, name := range []string{"node-a", "node-b"} {
+		if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: name}, all, all); err != nil {
+			t.Fatalf("create %s: %v", name, err)
+		}
+	}
+	tokenA := "secret-a"
+	if _, err := gw.SetEnrollmentToken(ctx, "", "node-a", hashHex(tokenA), all); err != nil {
+		t.Fatalf("mint a: %v", err)
+	}
+	for _, name := range []string{"disp-1", "disp-2", "disp-3"} {
+		if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: name}, all, all, all, all); err != nil {
+			t.Fatalf("create component %s: %v", name, err)
+		}
+	}
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, node_name, params) values
+		('disp-1-tcp', 'tcp', (select id from component where name = 'disp-1'), (select principal_id from node where name = 'node-a'), '{"target":"127.0.0.1:1"}'::jsonb),
+		('disp-2-tcp', 'tcp', (select id from component where name = 'disp-2'), (select principal_id from node where name = 'node-b'), '{"target":"127.0.0.1:1"}'::jsonb),
+		('disp-3-tcp', 'tcp', (select id from component where name = 'disp-3'), (select principal_id from node where name = 'node-a'), '{"target":"127.0.0.1:1"}'::jsonb)`); err != nil {
+		t.Fatalf("insert endpoints: %v", err)
+	}
+	if _, err := conn.Exec(ctx, `insert into task (id, mode, endpoint_id, enabled) values
+		('t-a', 'poll', (select id from endpoint where name = 'disp-1-tcp'), true),
+		('t-b', 'poll', (select id from endpoint where name = 'disp-2-tcp'), true),
+		('t-c', 'poll', (select id from endpoint where name = 'disp-3-tcp'), true)`); err != nil {
+		t.Fatalf("insert tasks: %v", err)
+	}
+	conn.Close(ctx)
+
+	srv, err := bus.New(bus.Config{Host: "127.0.0.1", Port: -1}, gw)
+	if err != nil {
+		t.Fatalf("start bus: %v", err)
+	}
+	defer srv.Shutdown()
+	ncA, err := nats.Connect(srv.ClientURL(),
+		nats.UserInfo("node-a", tokenA),
+		nats.CustomInboxPrefix(collection.InboxPrefix("node-a")),
+	)
+	if err != nil {
+		t.Fatalf("node-a connect: %v", err)
+	}
+	defer ncA.Close()
+
+	tickTS := time.Now().UTC().Add(-2 * time.Hour).Truncate(time.Second)
+	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
+		NodeId: "node-a",
+		Groups: []*ogv1.TaskGroup{
+			{TaskId: "t-a", Ts: timestamppb.New(tickTS), Metrics: []*ogv1.MetricSample{{Name: "tcp-connect-time", Value: 11}}},
+			{TaskId: "t-b", Ts: timestamppb.New(tickTS), Metrics: []*ogv1.MetricSample{{Name: "tcp-open", Value: 1}}},
+			{TaskId: "t-c", Ts: timestamppb.New(tickTS), Metrics: []*ogv1.MetricSample{{Name: "tcp-connect-time", Value: 33}}},
+		},
+	})
+
+	waitMetric(t, ctx, gw, "disp-1", "tcp-connect-time", func(d *storage.MetricSample) bool {
+		return d != nil && d.Value == 11 && d.TS.Equal(tickTS)
+	})
+	waitMetric(t, ctx, gw, "disp-3", "tcp-connect-time", func(d *storage.MetricSample) bool {
+		return d != nil && d.Value == 33 && d.TS.Equal(tickTS)
+	})
+	// The tick landed in one transaction, so with its siblings visible the
+	// foreign group has been handled: disp-2 holds nothing from node-a.
+	if got, err := gw.LatestMetric(ctx, "disp-2", "tcp-open"); err != nil {
+		t.Fatalf("latest disp-2: %v", err)
+	} else if got != nil {
+		t.Fatalf("confinement breached: node-a's tick landed a sample on disp-2: %+v", got)
 	}
 }
 

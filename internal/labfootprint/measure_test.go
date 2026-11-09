@@ -59,7 +59,7 @@ func TestMillicores(t *testing.T) {
 // The database counters come back from one psql row, pipe-separated, in the
 // order DBCountersQuery selects them.
 func TestParseDBCounters(t *testing.T) {
-	c, err := ParseDBCounters("1798545600.5|1200|30|81920|16384|9000000|4096|123456789\n")
+	c, err := ParseDBCounters("1798545600.5|1200|30|81920|16384|9000000|4096|123456789|77\n")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func TestParseDBCounters(t *testing.T) {
 		At:         time.Unix(1798545600, 500_000_000).UTC(),
 		MetricRows: 1200, PropertyRows: 30,
 		MetricBytes: 81920, PropertyBytes: 16384, DatabaseBytes: 9000000, ReceiptBytes: 4096,
-		WALBytes: 123456789,
+		WALBytes: 123456789, ReceiptsInserted: 77,
 	}
 	if c != want {
 		t.Fatalf("counters %+v, want %+v", c, want)
@@ -75,7 +75,13 @@ func TestParseDBCounters(t *testing.T) {
 	if _, err := ParseDBCounters("1|2|3"); err == nil {
 		t.Fatal("a short row parsed")
 	}
-	if _, err := ParseDBCounters("x|1|2|3|4|5|6|7"); err == nil {
+	if _, err := ParseDBCounters("1798545600.5|1200|30|81920|16384|9000000|4096|123456789"); err == nil {
+		t.Fatal("a row without the receipt count parsed")
+	}
+	if _, err := ParseDBCounters("1798545600.5|1200|30|81920|16384|9000000|4096|123456789|x"); err == nil {
+		t.Fatal("a non-numeric receipt count parsed")
+	}
+	if _, err := ParseDBCounters("x|1|2|3|4|5|6|7|8"); err == nil {
 		t.Fatal("a non-numeric row parsed")
 	}
 }
@@ -124,5 +130,52 @@ func TestWindowOf(t *testing.T) {
 	}
 	if _, err := WindowOf(db0, db1, use0, map[string]Usage{}); err == nil {
 		t.Fatal("a container read at the start and not at the end was accepted")
+	}
+}
+
+// The batch figures come from the receipt counter and the lane row counters:
+// a batch is a receipt, a sample is a metric or property row.
+func TestWindowOfBatchFigures(t *testing.T) {
+	t0 := time.Date(2026, 10, 29, 12, 0, 0, 0, time.UTC)
+	t1 := t0.Add(2 * time.Minute)
+	db0 := DBCounters{At: t0, MetricRows: 1000, PropertyRows: 10, ReceiptsInserted: 40}
+	db1 := DBCounters{At: t1, MetricRows: 1000 + 4800, PropertyRows: 10 + 240, ReceiptsInserted: 40 + 120}
+	w, err := WindowOf(db0, db1, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w.BatchesLanded != 120 || w.SamplesLanded != 5040 {
+		t.Errorf("landed %d batches %d samples, want 120 and 5040", w.BatchesLanded, w.SamplesLanded)
+	}
+	if !near(w.SamplesPerBatch, 42) || !near(w.BatchesPerSecond, 1) {
+		t.Errorf("samples per batch %v batches a second %v, want 42 and 1", w.SamplesPerBatch, w.BatchesPerSecond)
+	}
+	restarted := db1
+	restarted.ReceiptsInserted = 5
+	if _, err := WindowOf(db0, restarted, nil, nil); err == nil {
+		t.Fatal("a receipt counter that went backwards (Postgres restarted) was accepted")
+	}
+}
+
+// The derivation is pure and guards both divisions: no batches reads as zero
+// samples per batch, no time as zero batches a second.
+func TestBatchRates(t *testing.T) {
+	cases := []struct {
+		name              string
+		batches, samples  int64
+		dt                time.Duration
+		wantPer, wantRate float64
+	}{
+		{"steady", 100, 4000, 10 * time.Second, 40, 10},
+		{"no batches", 0, 500, 10 * time.Second, 0, 0},
+		{"no time", 100, 4000, 0, 40, 0},
+		{"negative time", 100, 4000, -time.Second, 40, 0},
+		{"idle", 0, 0, 10 * time.Second, 0, 0},
+	}
+	for _, c := range cases {
+		per, rate := BatchRates(c.batches, c.samples, c.dt)
+		if !near(per, c.wantPer) || !near(rate, c.wantRate) {
+			t.Errorf("%s: %v per batch, %v a second; want %v and %v", c.name, per, rate, c.wantPer, c.wantRate)
+		}
 	}
 }

@@ -318,7 +318,7 @@ func TestWriterMismatchRefused(t *testing.T) {
 		write func() error
 	}
 	refusals := map[string][]writeCase{
-		"writeMetricSamples": {
+		"writeMetricSets": {
 			{"a push of a probe metric", func() error {
 				return f.gw.InsertMetricSamples(f.ctx, storage.PushWriter(), metric("tcp-connect-time", "ssh"))
 			}},
@@ -335,7 +335,7 @@ func TestWriterMismatchRefused(t *testing.T) {
 			{"another rule's output", func() error { return f.gw.WriteMetricAsRule(f.ctx, uuidZero, metric("avg-uptime", "")) }},
 			{"a rule writing a collected key", func() error { return f.gw.WriteMetricAsRule(f.ctx, rule.ID, metric("uptime", "")) }},
 		},
-		"writePropertySamples": {
+		"writePropertySets": {
 			{"a push of the verdict", func() error {
 				return f.gw.InsertPropertySamples(f.ctx, storage.PushWriter(), property("endpoint-reachable", "ssh", "up"))
 			}},
@@ -356,7 +356,7 @@ func TestWriterMismatchRefused(t *testing.T) {
 				return err
 			}},
 		},
-		"writeEvents": {
+		"writeEventSets": {
 			{"a push of collection-failed", func() error { return f.gw.InsertEvents(f.ctx, storage.PushWriter(), event("collection-failed", "ssh")) }},
 			{"a landed push batch carrying collection-failed", func() error {
 				_, err := f.gw.LandBatch(f.ctx, storage.IngestBatch{BatchID: "refused-event", Writer: storage.PushWriter(), Events: event("collection-failed", "ssh")})

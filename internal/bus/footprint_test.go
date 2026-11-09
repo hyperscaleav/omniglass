@@ -17,6 +17,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest/querycount"
+	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
 	"github.com/jackc/pgx/v5"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -61,13 +62,15 @@ const (
 	// registry kept between batches (29); #1274 resolves each owner and reads
 	// the clock once per batch and lands the metric lane in one statement (19);
 	// #1299 carries the command-targeted property names on the kept registry,
-	// so the property lane no longer reads them in the batch's transaction (18);
-	// #1592 moved the probe states (icmp-reachable, tcp-open) from the metric
-	// lane to the property lane, which still costs a lock and a guarded insert
-	// per sample, so the standard mix's two new properties add four (22).
-	// Landing the property lane in one statement, as #1274 did the metric
-	// lane, is #1593.
-	wantStatementsPerBatch = 22
+	// so the property lane no longer reads them in the batch's transaction
+	// (18). Until #1582 a batch was one task's check; since, it is one node
+	// tick, a group for every task the node checked (215 here), resolved in
+	// one read, landed in one transaction and stamped seen in one write, so
+	// 19 statements carry what 215 batches of 18 did. #1592 moved the probe
+	// states (icmp-reachable, tcp-open) from the metric lane to the property
+	// lane, which the tick batch locks and lands set-based too, so the three
+	// properties a task now emits move nothing here.
+	wantStatementsPerBatch = 19
 	// wantMetricRowsPerPage is how many of the window's metric rows fill one
 	// 8 KiB heap page (about 60 bytes a row). Exact on every full page. Density
 	// rather than a page count, so a fleet that grows by a few endpoints moves
@@ -167,31 +170,43 @@ func newFootprintFixture(tb testing.TB) *footprintFixture {
 	}
 }
 
-// deliver hands one task's tick to the handler as JetStream would, and fails
-// unless the batch was acked: a refused or redelivered batch means the
-// workload no longer fits the fleet, and every count after it would lie.
-func (f *footprintFixture) deliver(tb testing.TB, task footprint.Task, tick int) {
+// deliver hands one node tick, a group for each of tasks (#1582), to the
+// handler as JetStream would, and fails unless the batch was acked and every
+// group landed: a refused, orphaned or redelivered group means the workload no
+// longer fits the fleet, and every count after it would lie.
+func (f *footprintFixture) deliver(tb testing.TB, tasks []footprint.Task, tick int) {
 	tb.Helper()
-	data, err := proto.Marshal(f.work.Batch(task, tick))
+	data, err := proto.Marshal(f.tickBatch(tasks, tick))
 	if err != nil {
 		tb.Fatalf("marshal: %v", err)
 	}
 	f.seq++
 	m := &deliveredMsg{
-		subject: collection.TelemetrySubject(task.Node),
+		subject: collection.TelemetrySubject(footprintNode),
 		data:    data,
 		header:  nats.Header{jetstream.MsgIDHeader: []string{fmt.Sprintf("fp-%d", f.seq)}},
 	}
 	f.srv.handleTelemetry(m)
 	if !m.acked || m.termed || m.naked {
-		tb.Fatalf("task %s tick %d: acked=%v termed=%v naked=%v (the batch did not land)", task.ID, tick, m.acked, m.termed, m.naked)
+		tb.Fatalf("tick %d: acked=%v termed=%v naked=%v (the batch did not land)", tick, m.acked, m.termed, m.naked)
+	}
+	if orphans := f.srv.orphans.drain(); len(orphans) > 0 {
+		tb.Fatalf("tick %d: orphaned groups %v (the workload no longer fits the fleet)", tick, orphans)
 	}
 }
 
-func (f *footprintFixture) tick(tb testing.TB, tick int) {
-	for _, task := range f.tasks {
-		f.deliver(tb, task, tick)
+// tickBatch is one node tick of the standard workload: each task's check as
+// its own group, in task order, on the footprint node.
+func (f *footprintFixture) tickBatch(tasks []footprint.Task, tick int) *ogv1.TelemetryBatch {
+	ev := &ogv1.TelemetryBatch{NodeId: footprintNode}
+	for _, task := range tasks {
+		ev.Groups = append(ev.Groups, asTick(f.work.Batch(task, tick)).GetGroups()...)
 	}
+	return ev
+}
+
+func (f *footprintFixture) tick(tb testing.TB, tick int) {
+	f.deliver(tb, f.tasks, tick)
 }
 
 // relationBytes is a relation's heap and its indexes after VACUUM. With
@@ -296,7 +311,10 @@ func TestIngestFootprint(t *testing.T) {
 
 	statements := f.counter.N()
 	lsn1 := f.walLSN(t)
-	batches := footprintTicks * len(f.tasks)
+	// One batch is one node tick (#1582), a group for every task, so the
+	// statements and the receipt are per tick and the rows per check.
+	batches := footprintTicks
+	checks := footprintTicks * len(f.tasks)
 	var metricsPerBatch, propertiesPerBatch int
 	for _, s := range footprint.StandardMix {
 		if s.Lane == footprint.MetricLane {
@@ -305,7 +323,7 @@ func TestIngestFootprint(t *testing.T) {
 			propertiesPerBatch++
 		}
 	}
-	observations := batches * (metricsPerBatch + propertiesPerBatch)
+	observations := checks * (metricsPerBatch + propertiesPerBatch)
 	metricRows := f.count(t, `select count(*) from metric`) - metricRows0
 	propertyRows := f.count(t, `select count(*) from property where provenance = 'observed'`) - propertyRows0
 	_, liveIndex := f.relationBytes(t, "metric", false)
@@ -320,11 +338,11 @@ func TestIngestFootprint(t *testing.T) {
 		t.Fatalf("wal diff: %v", err)
 	}
 
-	t.Logf("ingest footprint, standard mix, dev scenario, %d tasks x %d ticks = %d batches, %d observations",
-		len(f.tasks), footprintTicks, batches, observations)
+	t.Logf("ingest footprint, standard mix, dev scenario, %d tasks x %d ticks = %d batches of %d groups, %d observations",
+		len(f.tasks), footprintTicks, batches, len(f.tasks), observations)
 	t.Logf("  statements per batch     %8.2f", float64(statements)/float64(batches))
-	t.Logf("  metric rows per obs      %8.3f  (%d rows for %d metric observations)", float64(metricRows)/float64(batches*metricsPerBatch), metricRows, batches*metricsPerBatch)
-	t.Logf("  property rows per obs    %8.3f  (%d rows for %d property observations)", float64(propertyRows)/float64(batches*propertiesPerBatch), propertyRows, batches*propertiesPerBatch)
+	t.Logf("  metric rows per obs      %8.3f  (%d rows for %d metric observations)", float64(metricRows)/float64(checks*metricsPerBatch), metricRows, checks*metricsPerBatch)
+	t.Logf("  property rows per obs    %8.3f  (%d rows for %d property observations)", float64(propertyRows)/float64(checks*propertiesPerBatch), propertyRows, checks*propertiesPerBatch)
 	t.Logf("  metric rows per heap page %7d  (%d full pages; %.1f bytes a row)", perPage[0], len(perPage), 8192/float64(perPage[0]))
 	t.Logf("  metric index per row     %8.1f  (after REINDEX; held)", float64(metricIndex)/float64(metricRows))
 	t.Logf("  metric index per row     %8.1f  (live, as this run's splits left it; varies with the fleet's random uuids)", float64(liveIndex)/float64(metricRows))
@@ -339,7 +357,7 @@ func TestIngestFootprint(t *testing.T) {
 			statements, batches, float64(statements)/float64(batches), wantStatementsPerBatch,
 			strings.Join(firstBatchStatements(f.counter, statements/batches), "\n  "))
 	}
-	if want := int64(batches * metricsPerBatch); metricRows != want {
+	if want := int64(checks * metricsPerBatch); metricRows != want {
 		t.Errorf("metric rows: %d for %d metric observations; a quantity stores every observation", metricRows, want)
 	}
 	if propertyRows != 0 {
@@ -363,10 +381,11 @@ func TestIngestFootprint(t *testing.T) {
 }
 
 // BenchmarkIngestFootprint is the timed half (#1272): the wall-clock cost of one
-// node batch through the real handler, at a small fleet and the whole dev
-// fleet, about a factor of ten apart (ADR-0094: two sizes, so a constant reads
-// apart from a linear cost). Diagnostic only: run with make bench before and
-// after a change that claims an effect, compare with benchstat, never assert.
+// node tick through the real handler, one batch of a group per task (#1582),
+// at a small fleet and the whole dev fleet, about a factor of ten apart
+// (ADR-0094: two sizes, so a constant reads apart from a linear cost).
+// Diagnostic only: run with make bench before and after a change that claims
+// an effect, compare with benchstat, never assert.
 func BenchmarkIngestFootprint(b *testing.B) {
 	f := newFootprintFixture(b)
 	f.tick(b, 0) // first values and seen stamps, outside the timed section
@@ -383,11 +402,8 @@ func BenchmarkIngestFootprint(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				task := size.tasks[i%len(size.tasks)]
-				if i%len(size.tasks) == 0 {
-					tick++
-				}
-				f.deliver(b, task, tick)
+				tick++
+				f.deliver(b, size.tasks, tick)
 			}
 		})
 	}

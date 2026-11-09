@@ -29,7 +29,7 @@ import (
 // order), then the series and health locks its samples' judging takes. An
 // ingest batch, which writes several lanes in one transaction, takes every
 // lane's rule rows and then every lane's marks before any lane writes
-// (LandBatch, lockInOrder), so the order holds for the batch as a whole. The
+// (LandBatch, lockGroups), so the order holds for the batch as a whole. The
 // tick takes a mark first (FOR UPDATE SKIP LOCKED, deleting it), then the
 // calc rule's row FOR SHARE SKIP LOCKED, then, in its output write, the
 // order above. A rule write takes its calc_rule row FOR UPDATE, then the

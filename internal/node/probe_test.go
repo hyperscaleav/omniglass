@@ -46,21 +46,21 @@ func TestParseICMPTask(t *testing.T) {
 	}
 }
 
-// TestBuildBatchLanes: the batch carries the task id and node id, no component
-// identity, and each produced sample rides its own lane (#594): a probe's
-// timing on metrics, its result (a state, #1592) and the text verdict on
-// properties as canonical JSON text, the result's reason riding as a label. The
+// TestGroupForLanes: the group carries the task id, no component identity,
+// and each produced sample rides its own lane (#594): a probe's timing on
+// metrics, its result (a state, #1592) and the text verdict on properties as
+// canonical JSON text, the result's reason riding as a label. The
 // probes know their lanes statically, so no registry is consulted node-side.
-func TestBuildBatchLanes(t *testing.T) {
+func TestGroupForLanes(t *testing.T) {
 	t.Parallel()
 	dps := []collection.Sample{
 		collection.ProbeResult(collection.SignalTCPOpen, true, time.Time{}, collection.Responded),
 		{Name: collection.SignalTCPConnectTime, Value: 3.5},
 		{Name: collection.SignalEndpointReachable, Text: collection.VerdictUp, IsText: true},
 	}
-	ev := buildBatch("t1", "node-a", dps)
-	if ev.GetTaskId() != "t1" || ev.GetNodeId() != "node-a" {
-		t.Fatalf("batch ids = %q/%q, want t1/node-a", ev.GetTaskId(), ev.GetNodeId())
+	ev := groupFor("t1", dps)
+	if ev.GetTaskId() != "t1" {
+		t.Fatalf("group task id = %q, want t1", ev.GetTaskId())
 	}
 	if len(ev.GetMetrics()) != 1 || len(ev.GetProperties()) != 2 {
 		t.Fatalf("lanes = %d metrics / %d properties, want 1/2", len(ev.GetMetrics()), len(ev.GetProperties()))
@@ -79,26 +79,26 @@ func TestBuildBatchLanes(t *testing.T) {
 	}
 }
 
-// TestBuildBatchTS: a sample the probe stamped keeps its ts verbatim; an
-// unstamped sample carries NO per-sample ts, so the batch ts governs at ingest.
+// TestGroupForTS: a sample the probe stamped keeps its ts verbatim; an
+// unstamped sample carries NO per-sample ts, so the group ts governs at ingest.
 // The old wire stamped timestamppb.New(zero) on unstamped samples, which reads
 // as the year one downstream, so absence must be encoded as absence.
-func TestBuildBatchTS(t *testing.T) {
+func TestGroupForTS(t *testing.T) {
 	t.Parallel()
 	stamped := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	dps := []collection.Sample{
 		{Name: collection.SignalTCPConnectTime, Value: 1, TS: stamped},
 		{Name: collection.SignalTCPConnectTime, Value: 3.5},
 	}
-	ev := buildBatch("t1", "node-a", dps)
+	ev := groupFor("t1", dps)
 	if ev.GetTs() == nil {
-		t.Fatal("batch ts must be stamped so unstamped samples resolve to it")
+		t.Fatal("group ts must be stamped so unstamped samples resolve to it")
 	}
 	if got := ev.GetMetrics()[0].GetTs(); got == nil || !got.AsTime().Equal(stamped) {
 		t.Fatalf("stamped sample ts = %v, want %v verbatim", got, stamped)
 	}
 	if got := ev.GetMetrics()[1].GetTs(); got != nil {
-		t.Fatalf("unstamped sample ts = %v, want none (the batch ts governs)", got)
+		t.Fatalf("unstamped sample ts = %v, want none (the group ts governs)", got)
 	}
 }
 
@@ -259,7 +259,7 @@ func TestCollectDriverTask(t *testing.T) {
 	if len(faults) != 0 {
 		t.Fatalf("faults: %v", faults)
 	}
-	ev := buildBatch(task.ID, "edge-1", dps)
+	ev := groupFor(task.ID, dps)
 	if len(ev.Metrics) != 1 || ev.Metrics[0].Name != "uptime" || ev.Metrics[0].Value != 81234.56 {
 		t.Fatalf("metric lane = %+v, want the scaled uptime", ev.Metrics)
 	}

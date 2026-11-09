@@ -18,8 +18,9 @@ request-reply (its enabled tasks plus a `config_generation`), and heartbeats on 
 credential is permitted only its own `<node>` subjects. Also built: running tasks (the probes,
 `internal/node/probe.go`), shipping telemetry (the JetStream `TelemetryBatch` ingested by
 `internal/bus/consumer.go`, each publish waiting for the stream's ack under a minted `Nats-Msg-Id`, a
-batch the stream has not acked held in a bounded spool and shipped on the next tick,
-[below](#delivery-a-batch-lands-once); a batch whose task is not placed on the node is dropped by
+batch the stream has not acked held in a bounded spool and shipped on the next tick, one batch per
+tick carrying a group per task,
+[below](#delivery-a-batch-lands-once); a group whose task is not placed on the node is dropped by
 the confinement fence, warned about once per node per minute and counted on the node's
 `orphaned_batches` and `last_orphaned_at`, #1200), and the raw self-log lane (ADR-0066: `internal/node/logs.go`,
 `GET /nodes/{name}/logs`, the console Self-logs panel), the command wire (a per-node pull, actuated
@@ -157,8 +158,8 @@ deduplicates ([below](#delivery-a-batch-lands-once)); the subject it lands on is
 `og.v1.telemetry.<node>`, the stream the ingest consumer reads.
 
 :::design[The full node NATS contract, per ADR-0036; the admission split is #430]
-- **Telemetry up**: the node **publishes** `TelemetryBatch` batches (`{samples, labels}` plus the
-  `(task, ts)` envelope, [below](#shipping-samples)) to a **JetStream raw ingress subject**; the
+- **Telemetry up**: the node **publishes** `TelemetryBatch` batches (one per tick, a `TaskGroup` per
+  task, [below](#shipping-samples)) to a **JetStream raw ingress subject**; the
   admission consumer preserves each batch's `Nats-Msg-Id` when republishing to the trusted stream.
 - **Control down**: a **durable JetStream consumer** on the node's **command queue**, plus
   **worklist-change signals** (the config-generation bump); subjects scoped by placement.
@@ -183,8 +184,16 @@ The node publishes **at-least-once**, and the platform lands each batch **once**
 ([ADR-0453](/architecture/decisions/#adr-0453-telemetry-is-published-through-jetstream-with-an-ack-a-minted-nats-msg-id-and-a-bounded-spool),
 [ADR-0311](/architecture/decisions/#adr-0311-a-telemetry-batch-lands-once-in-one-transaction-under-its-receipt)).
 Every telemetry publish (a task's samples, a collection-failed story, a session transition, the
-self-logs) goes through one **spool** (`internal/node/spool.go`): the batch is minted a `Nats-Msg-Id`
-(a UUIDv7) when it is built and queued, and counted sent only once the stream acks it. A send only
+self-logs) goes through one **spool** (`internal/node/spool.go`). A task's result is added to the
+spool as a **group**, and the spool **coalesces the groups of a tick into one batch**: it flushes what
+is pending after a second, or sooner when the next group would pass the batch's byte budget (512 KiB,
+well under the bus's payload limit); a group too large for a batch on its own rides alone. A
+session's **pushed** samples flush at once, the groups pending riding with them, so a change an
+endpoint reports is not held for the timer. The flush
+decides the batch's contents before anything else: it marshals the batch once and mints its
+`Nats-Msg-Id` (a UUIDv7) then, so the id and the bytes are fixed from the flush and every retry ships
+the same pair. The batch is counted sent only once the stream acks it. The self-logs ride a batch of
+their own, after whatever groups are pending, so order is kept. A send only
 queues: one shipper goroutine publishes through JetStream, keeping a window of up to 32 batches with
 the stream, in order, so no caller (a session's goroutine, the tick) waits on the stream and the node
 ships far faster than one batch per round trip. A batch the stream has not acked stays in the spool,
@@ -493,7 +502,7 @@ extend the stack as rungs a driver's ladder declares, not as toggles.
 
 ## Shipping samples
 
-The node ships a native `TelemetryBatch`: `{ samples, labels }` plus an envelope (`task`, batch `ts`), **published to the JetStream raw ingress subject** (protobuf-encoded, the proto surviving as the NATS message schema).
+The node ships a native `TelemetryBatch` per tick: a `TaskGroup` for each task it ran (the task, its observed `ts`, and its metric, property, event and task-log lanes) plus the node's own log lines, **published to the JetStream raw ingress subject** (protobuf-encoded, the proto surviving as the NATS message schema; the fields are the generated `proto/og/v1/telemetry.proto`). Each group is collected, normalized and bound to its own task on the server, so the batch carries many writers and one node. The task lanes at the top of a batch belong to the API push subject; a node-subject batch that carries them is terminated.
 
 The publish is **held and retried** until the stream acks it ([delivery](#delivery-a-batch-lands-once)).
 

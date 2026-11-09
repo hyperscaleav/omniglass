@@ -1,6 +1,7 @@
 package node
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -25,13 +26,14 @@ import (
 
 // lossyAck is a real JetStream publish whose first n acks are lost: the
 // stream stores the batch, and the node is told it did not. Every attempt is
-// recorded with the id it carried.
+// recorded with the id it carried and the bytes it shipped.
 type lossyAck struct {
 	real publishFunc
 	n    int
 
 	mu       sync.Mutex
 	attempts map[string][]string // a batch's tag -> the ids its attempts carried
+	payloads map[string][][]byte // a batch's id -> the bytes each attempt carried
 	calls    int
 }
 
@@ -41,6 +43,10 @@ func (l *lossyAck) publish(subject string, data []byte, id string) (ackWait, err
 	l.calls++
 	call := l.calls
 	l.attempts[id] = append(l.attempts[id], id)
+	if l.payloads == nil {
+		l.payloads = map[string][][]byte{}
+	}
+	l.payloads[id] = append(l.payloads[id], append([]byte(nil), data...))
 	l.mu.Unlock()
 	if err != nil {
 		return nil, err
@@ -160,14 +166,17 @@ func TestNodePublishMissingItsAckIsRetriedOnce(t *testing.T) {
 	}
 
 	lossy := &lossyAck{real: jetStreamPublish(js), n: 2, attempts: map[string][]string{}}
-	spool := newTelemetrySpool(collection.TelemetrySubject("edge-1"), lossy.publish)
+	spool := newTelemetrySpool(collection.TelemetrySubject("edge-1"), "edge-1", lossy.publish)
 
 	if err := spool.send(&ogv1.TelemetryBatch{NodeId: "edge-1", Logs: []*ogv1.LogLine{{Message: "ack lost twice", Severity: "info", Source: "node"}}}); err != nil {
 		t.Fatalf("send the self-log batch: %v", err)
 	}
-	if err := spool.send(buildBatch("t-1", "edge-1", []collection.Sample{{Name: "tcp-connect-time", Value: 1, TS: time.Now().UTC()}})); err != nil {
-		t.Fatalf("send the sample batch: %v", err)
+	// The task's sample rides a tick batch (#1582): its group added, then
+	// flushed, the batch's id and bytes minted once at the flush.
+	if err := spool.add(groupFor("t-1", []collection.Sample{{Name: "tcp-connect-time", Value: 1, TS: time.Now().UTC()}})); err != nil {
+		t.Fatalf("add the sample group: %v", err)
 	}
+	spool.flush()
 	waitIdle(t, spool)
 	if n := spool.pending(); n != 2 {
 		t.Fatalf("held after the lost ack: %d, want both batches", n)
@@ -227,6 +236,16 @@ func TestNodePublishMissingItsAckIsRetriedOnce(t *testing.T) {
 	lossy.mu.Unlock()
 	if ids != 3 || calls < 5 {
 		t.Fatalf("attempts: %d calls over %d ids, want at least 5 (each of the two lost acks sent again) over the 3 ids the batches were minted with", calls, ids)
+	}
+	// A retry ships the bytes the first attempt did, under the same id.
+	lossy.mu.Lock()
+	defer lossy.mu.Unlock()
+	for id, sent := range lossy.payloads {
+		for _, b := range sent[1:] {
+			if !bytes.Equal(b, sent[0]) {
+				t.Fatalf("batch %s was retried with different bytes", id)
+			}
+		}
 	}
 }
 
@@ -316,7 +335,7 @@ func TestNodeConnectionOutlivesALongOutage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("jetstream: %v", err)
 	}
-	spool := newTelemetrySpool(collection.TelemetrySubject("edge-1"), jetStreamPublish(js))
+	spool := newTelemetrySpool(collection.TelemetrySubject("edge-1"), "edge-1", jetStreamPublish(js))
 
 	relay.setDown(true)
 	time.Sleep(3 * time.Second)
@@ -352,7 +371,7 @@ func TestSpoolDropsABatchTheBusCanNeverTake(t *testing.T) {
 	if err != nil {
 		t.Fatalf("jetstream: %v", err)
 	}
-	spool := newTelemetrySpool(collection.TelemetrySubject("edge-1"), jetStreamPublish(js))
+	spool := newTelemetrySpool(collection.TelemetrySubject("edge-1"), "edge-1", jetStreamPublish(js))
 	big := strings.Repeat("x", int(nc.MaxPayload())+1024)
 	recs := captureLogs(t, func() {
 		if err := spool.send(selfLog(big)); err != nil {

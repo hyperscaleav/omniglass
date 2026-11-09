@@ -1,8 +1,8 @@
 ---
 title: "Every key has one writer class, held at the Storage Gateway"
 date: 2026-10-24
-status: "Accepted"
-summary: "Every metric, property and event type has exactly one **writer class** (`node-probe`, `platform`, `calc`, `collected`), resolved from code and the catalogs, never stored, and the Storage Gateway refuses any sample or event write whose writer the class does not admit: an invariant beside scope injection, not a per-route check. The reserved system family (`node-probe`, `platform`) is declared in code and closed to operator-created types by name; a node-probe key reads only as the node's observed series, its time capped at the database's clock, and health only as the rollup's; fusion reconciles sources within the `collected` class; no reserved prefix (#1094 decides one for its platform keys)"
+status: "Accepted, amended (#1582)"
+summary: "Every metric, property and event type has exactly one **writer class** (`node-probe`, `platform`, `calc`, `collected`), resolved from code and the catalogs, never stored, and the Storage Gateway refuses any sample or event write whose writer the class does not admit: an invariant beside scope injection, not a per-route check. The reserved system family (`node-probe`, `platform`) is declared in code and closed to operator-created types by name; a node-probe key reads only as the node's observed series, its time capped at the database's clock, and health only as the rollup's; fusion reconciles sources within the `collected` class; no reserved prefix (#1094 decides one for its platform keys). **Amended (#1582):** the writer is per task group inside one batch"
 ---
 
 - **Date:** 2026-10-24 | **Status:** Accepted | **Pages:** [storage](/architecture/storage/), [identity and access](/architecture/identity-access/), [metrics and properties](/architecture/properties/), [collection](/architecture/collection/), [calculations](/architecture/calculations/), [api](/architecture/api/), [glossary](/architecture/glossary/)
@@ -70,3 +70,12 @@ summary: "Every metric, property and event type has exactly one **writer class**
   instances. The split follows the code: a driver's emits and a push are one class because the
   shipped drivers emit `video-input` while a push may write it too, a command targets it, and the
   properties page's fusion exists to reconcile exactly that.
+- **Amended (#1582): the writer is per group, inside one batch.** A node now lands one batch per tick
+  carrying a group per task ([ADR-0311](#adr-0311-a-telemetry-batch-lands-once-in-one-transaction-under-its-receipt)),
+  so the writer the gateway holds a row to is no longer one per batch. Each group is bound to its own
+  writer: the component and the endpoint of the task that produced it (point 2, "bound to the endpoint
+  whose task the node ran"), with the node shared by every group of the batch. The gateway admits each
+  group against its own writer before anything lands, and a group whose writer its keys' classes refuse
+  is dropped alone with the rest of the batch landing. Provenance stays per row (`collector_node_id` and
+  `source_conduit_id`), so own and fanned groups in one batch keep theirs. The class a key resolves to,
+  and which writers a class admits, are unchanged.

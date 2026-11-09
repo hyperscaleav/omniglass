@@ -114,11 +114,11 @@ func TestAnOrphanedBatchIsWarnedOnceAndCounted(t *testing.T) {
 	defer ncA.Close()
 
 	for range 5 {
-		publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
+		publishEvent(t, ncA, "node-a", bus.AsTick(&ogv1.TelemetryBatch{
 			TaskId:  "t-b",
 			NodeId:  "node-a",
 			Metrics: []*ogv1.MetricSample{{Name: "icmp-rtt-avg", Value: 1}, {Name: "tcp-connect-time", Value: 3}},
-		})
+		}))
 	}
 
 	deadline := time.Now().Add(10 * time.Second)

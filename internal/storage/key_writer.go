@@ -197,12 +197,24 @@ func classOf(name string, calc *CalcWriter) writerclass.Class {
 func keyWriters(ctx context.Context, q querier, lane writeLane, keys []string) (map[string]keyWriterOf, error) {
 	out := make(map[string]keyWriterOf, len(keys))
 	var lookup []string
+	// An ingest batch reads a key's claims once for all its groups (#1582).
+	var memo map[string]keyWriterOf
+	if b, ok := q.(*batchTx); ok && b.writers != nil {
+		if b.writers[lane] == nil {
+			b.writers[lane] = map[string]keyWriterOf{}
+		}
+		memo = b.writers[lane]
+	}
 	for _, k := range keys {
 		if _, seen := out[k]; seen {
 			continue
 		}
 		if c, ok := writerclass.Reserved(k); ok {
 			out[k] = keyWriterOf{class: c}
+			continue
+		}
+		if kw, ok := memo[k]; ok {
+			out[k] = kw
 			continue
 		}
 		out[k] = keyWriterOf{class: writerclass.Collected}
@@ -237,6 +249,11 @@ func keyWriters(ctx context.Context, q querier, lane writeLane, keys []string) (
 		}
 		kw.rules[c.id] = c.name
 		out[c.key] = kw
+	}
+	if memo != nil {
+		for _, k := range lookup {
+			memo[k] = out[k]
+		}
 	}
 	return out, nil
 }
@@ -298,15 +315,26 @@ func nodeBinding(ctx context.Context, q querier, w KeyWriter) (string, error) {
 	if isUUID(w.Component) {
 		return w.Component, nil
 	}
+	b, _ := q.(*batchTx)
+	if b != nil && b.bindings != nil {
+		if id, ok := b.bindings[w.Component]; ok {
+			return id, nil
+		}
+	}
 	c, err := scopedByName(ctx, q, componentConfig, w.Component)
 	var amb *ErrAmbiguousName
+	id := ""
 	switch {
 	case errors.Is(err, ErrComponentNotFound), errors.As(err, &amb):
-		return "", nil
 	case err != nil:
 		return "", fmt.Errorf("storage: resolve the node's component %q: %w", w.Component, err)
+	default:
+		id = c.ID
 	}
-	return c.ID, nil
+	if b != nil && b.bindings != nil {
+		b.bindings[w.Component] = id
+	}
+	return id, nil
 }
 
 // fanOwnerKey is one owner of a fan-out writer's set: its kind and id.
@@ -442,4 +470,27 @@ func contractKey(name string) error {
 			ErrContractKeyReserved, writerclass.Refusal(c, name, writerclass.Operator, ""))
 	}
 	return nil
+}
+
+// writeIdentity is what a writer stamps on every row it lands beyond the
+// row's own fields: its collecting node, its conduit, its provenance and
+// lineage. Writers of one identity land their rows in one statement (#1582).
+func (w KeyWriter) writeIdentity() string {
+	provenance, rule, version, ruleID := w.provenanceArgs()
+	return fmt.Sprint(w.collector(), "\x00", w.sourceConduit(), "\x00", provenance, "\x00", rule, "\x00", version, "\x00", ruleID)
+}
+
+// sharedWriter is the writer a multi-set write stamps its rows with: the
+// first set's, which every set must share by identity (writeIdentity).
+func sharedWriter[S any](lane writeLane, sets []S, writer func(S) KeyWriter) (KeyWriter, error) {
+	if len(sets) == 0 {
+		return KeyWriter{}, nil
+	}
+	w := writer(sets[0])
+	for _, s := range sets[1:] {
+		if writer(s).writeIdentity() != w.writeIdentity() {
+			return KeyWriter{}, fmt.Errorf("storage: %s write: sets of more than one row identity", lane)
+		}
+	}
+	return w, nil
 }

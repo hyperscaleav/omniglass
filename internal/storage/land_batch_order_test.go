@@ -28,14 +28,14 @@ func TestABatchJudgesEachSampleOfASeriesInOrder(t *testing.T) {
 	r.name = "hot-room"
 
 	ts := time.Now().UTC().Add(-time.Minute).Truncate(time.Millisecond)
-	landed, err := r.f.gw.LandBatch(r.ctx, storage.IngestBatch{
+	landed, err := landOf(r.f.gw.LandBatch(r.ctx, storage.IngestBatch{
 		BatchID: "twice-one-series",
 		Writer:  storage.PushWriter(),
 		Metrics: []storage.MetricSampleWrite{
 			{OwnerKind: "component", OwnerID: "bar-1", Key: "room-temperature", Value: 31, Source: "push", TS: ts},
 			{OwnerKind: "component", OwnerID: "bar-1", Key: "room-temperature", Value: 20, Source: "push", TS: ts.Add(time.Second)},
 		},
-	})
+	}))
 	if err != nil || !landed {
 		t.Fatalf("land: landed=%v err=%v", landed, err)
 	}
@@ -56,14 +56,14 @@ func TestABatchJudgesEachSampleOfASeriesInOrder(t *testing.T) {
 	// naming bar-1 once by name and once by id carries one series twice, and
 	// is judged sample by sample just the same.
 	barID := scalar(t, r.f.conn, `select id::text from component where name = 'bar-1'`)
-	landed, err = r.f.gw.LandBatch(r.ctx, storage.IngestBatch{
+	landed, err = landOf(r.f.gw.LandBatch(r.ctx, storage.IngestBatch{
 		BatchID: "twice-one-series-two-names",
 		Writer:  storage.PushWriter(),
 		Metrics: []storage.MetricSampleWrite{
 			{OwnerKind: "component", OwnerID: "bar-1", Key: "room-temperature", Value: 32, Source: "push", TS: ts.Add(2 * time.Second)},
 			{OwnerKind: "component", OwnerID: barID, Key: "room-temperature", Value: 21, Source: "push", TS: ts.Add(3 * time.Second)},
 		},
-	})
+	}))
 	if err != nil || !landed {
 		t.Fatalf("land by name then id: landed=%v err=%v", landed, err)
 	}
