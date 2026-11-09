@@ -54,7 +54,7 @@ func collectSNMPRung(ctx context.Context, runner *collection.Runner, task collec
 		// unobserved and the endpoint not collectable: the rung reads down,
 		// rejected (as udp's gated rung does), and the verdict follows
 		// rather than freezing at the last answer.
-		return []collection.Sample{responsive("down", "rejected: "+gt.class), authenticated("no", "held: "+gt.class)}, nil
+		return []collection.Sample{responsive("down", rejectedReason+gt.class), authenticated("no", "held: "+gt.class)}, nil
 	}
 	community, ok := task.Secrets["community"]["community"]
 	if !ok || community == "" {

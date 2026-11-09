@@ -458,8 +458,9 @@ Any endpoint with a host address gets reachability for free: the node pings the 
 [ADR-1650](/architecture/decisions/#adr-1650-an-endpoint-gate-holds-a-set-of-reasons)). The
 endpoint's reachability probe feeds its gate: **two consecutive down verdicts** add an
 `unreachable` reason to the gate, dated from the first down, so one lost probe never stops
-collection; an inconclusive probe neither adds nor resets the streak; the next up verdict removes
-it. While the gate holds `unreachable`, a due poll is **held**: nothing is sent, no failure and no
+collection; an inconclusive probe neither adds nor resets the streak, nor does a rung that reads
+down only because a refusal holds it (snmp's held get, udp's gated request), so a refused endpoint
+never also reads unreachable; the next up verdict removes it. While the gate holds `unreachable`, a due poll is **held**: nothing is sent, no failure and no
 backoff are booked, and the window counts it as `poll-held-count`, apart from
 `poll-failure-count`, because a poll the node chose not to send is not a lost sample. The first
 tick after the up verdict runs it. A command or a run now on the held endpoint answers at once

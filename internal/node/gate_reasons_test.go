@@ -603,3 +603,72 @@ func TestTheProbePublishesTheGateWhenItCloses(t *testing.T) {
 		t.Fatalf("published %v, want none once the probe read up", got)
 	}
 }
+
+// A refused community holds snmp's get, and the rung's held reading (down,
+// rejected) is the refusal's echo, not the agent's answer: it never adds
+// unreachable, so once the refusal lifts nothing else holds the endpoint.
+func TestARefusedSNMPEndpointNeverReadsUnreachable(t *testing.T) {
+	t.Parallel()
+	fake := &snmpFake{err: &collection.TerminalError{Class: driver.ClassAuth, Reason: "the agent answered authorizationError for the community"}}
+	l := newReasonLoop(t, &collection.Runner{SNMP: fake})
+	for range 4 {
+		l.tick(snmpProbeTask("fp-1"))
+	}
+	if _, ok := l.sessions.refusedAt("ep-s", rungAuthenticated); !ok {
+		t.Fatal("the authorizationError did not refuse the endpoint")
+	}
+	if r, held := l.sessions.holding("ep-s"); held {
+		t.Fatalf("the refusal's own held reading added %+v", r)
+	}
+	if value, _ := l.sessions.gates.rejectionOf("ep-s"); strings.Contains(value, string(reasonUnreachable)) {
+		t.Fatalf("endpoint-rejection = %q, want the refusal alone", value)
+	}
+}
+
+// The same for a udp endpoint whose component answered a terminal reply: the
+// reply gates the rung, and neither that probe's down reading nor the held
+// ones after it count toward unreachable.
+func TestARefusedUDPEndpointNeverReadsUnreachable(t *testing.T) {
+	t.Parallel()
+	peer := newComponent(t, func(string) []string { return []string{"-ERR locked"} })
+	l := newReasonLoop(t, &collection.Runner{})
+	t.Cleanup(l.sessions.closeAll)
+	task := udpProbeTask("r1", "ep-1", udpParams(peer.addr()))
+	task.Session = &driver.SessionSpec{Terminal: []driver.TerminalRule{{Class: driver.ClassAuth, Match: driver.Match{Prefix: "-ERR locked"}}}}
+	for range 4 {
+		l.tick(task)
+	}
+	if _, ok := l.sessions.refusedAt("ep-1", rungResponsive); !ok {
+		t.Fatal("the terminal reply did not refuse the endpoint")
+	}
+	if r, held := l.sessions.holding("ep-1"); held {
+		t.Fatalf("the refusal's own down readings added %+v", r)
+	}
+}
+
+// probeVerdict drops only a refusal's echo: a responsive rung that reads down,
+// rejected, with no probe result beside it. A port that did not open is the
+// endpoint's own down, and so is a rung that timed out.
+func TestProbeVerdictDropsOnlyARefusalsEcho(t *testing.T) {
+	t.Parallel()
+	responsive := func(verdict, why string) collection.Sample {
+		return collection.Sample{Name: collection.SignalEndpointResponsive, Text: verdict, IsText: true, TS: gateT0,
+			Labels: map[string]string{collection.ReasonLabel: why}}
+	}
+	closedPort := collection.ProbeResult(collection.SignalTCPOpen, false, gateT0, collection.Refused)
+	for _, tc := range []struct {
+		name   string
+		dps    []collection.Sample
+		up, ok bool
+	}{
+		{"a held rung", []collection.Sample{responsive(collection.VerdictDown, rejectedReason+driver.ClassAuth)}, false, false},
+		{"a silent rung", []collection.Sample{responsive(collection.VerdictDown, string(collection.Timedout))}, false, true},
+		{"an answered rung", []collection.Sample{responsive(collection.VerdictUp, string(collection.Responded))}, true, true},
+		{"a closed port beside a held rung", []collection.Sample{closedPort, responsive(collection.VerdictDown, rejectedReason+driver.ClassAuth)}, false, true},
+		{"nothing", nil, false, false},
+	} {
+		if up, ok := probeVerdict(tc.dps); up != tc.up || ok != tc.ok {
+			t.Errorf("%s: probeVerdict = %v, %v; want %v, %v", tc.name, up, ok, tc.up, tc.ok)
+		}
+	}
+}

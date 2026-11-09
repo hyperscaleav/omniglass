@@ -404,6 +404,38 @@ func (g *gates) retain(endpoints, taskIDs map[string]bool) {
 	}
 }
 
+// rejectedReason prefixes the reason a rung's responsive reading carries when
+// a refusal decided it, not the component: a gated rung's held reading (snmp,
+// udp), or the terminal reply that just gated it.
+const rejectedReason = "rejected: "
+
+// probeVerdict is the verdict a probe's samples give the gate (#1650):
+// EndpointVerdict, less a down that is only a refusal's echo. A rung that
+// reads down because a refusal holds it says nothing of whether the endpoint
+// can be reached, so it neither adds to the unreachable streak nor resets it,
+// as an inconclusive probe does not. A probe result (a port opened or not) is
+// always the endpoint's own, refused or not.
+func probeVerdict(dps []collection.Sample) (up, ok bool) {
+	up, ok = collection.EndpointVerdict(dps)
+	if !ok || up {
+		return up, ok
+	}
+	for _, d := range dps {
+		if _, isResult := collection.ProbeReached(d); isResult {
+			return up, ok
+		}
+	}
+	for _, d := range dps {
+		if d.Name == collection.SignalEndpointResponsive && d.IsText {
+			if strings.HasPrefix(d.Labels[collection.ReasonLabel], rejectedReason) {
+				return false, false
+			}
+			break
+		}
+	}
+	return up, ok
+}
+
 // verdict takes the endpoint's probe verdict at a time: the second down in a
 // row adds unreachable, since the first down, and an up removes it and starts
 // the streak over. A probe with no verdict (it could not be attempted) never

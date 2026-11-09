@@ -21,7 +21,10 @@ refs: [1650, 1624, 1651, 1652, 1655, 1249, 1657]
   3. **Two consecutive downs close it.** The nodes page said poller tasks run only if the verdict
      is up; one lost probe would then stop collection for an interval. `unreachable` is added on the
      second consecutive down verdict, dated from the first; an inconclusive probe neither adds nor
-     resets the streak; the next up removes it.
+     resets the streak; the next up removes it. A rung that reads down only because a refusal
+     holds it (snmp's held get, udp's gated request, or the terminal reply that just gated it) is
+     the refusal's echo, not a verdict, and is counted the same as an inconclusive probe, so a
+     refusal never also reads unreachable and an operator's retry is not held behind it.
   4. **Held polls are not loss.** A due poll under `unreachable` is held: nothing is sent, no
      failure and no backoff are booked, and the window counts it as `poll-held-count`, apart from
      `poll-failure-count`. The node chose not to send it, so it is not a lost sample, and a loss

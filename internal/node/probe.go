@@ -181,8 +181,9 @@ func runTasks(ctx context.Context, out *telemetrySpool, node string, wl collecti
 		}
 		// The verdict feeds the endpoint's gate (#1650): the second down in
 		// a row closes it as unreachable, the next up reopens it. A probe
-		// that could not be attempted left above and never reaches here.
-		if up, ok := collection.EndpointVerdict(dps); ok {
+		// that could not be attempted left above and never reaches here,
+		// and a refusal's own down reading is no verdict (probeVerdict).
+		if up, ok := probeVerdict(dps); ok {
 			sessions.verdict(task.EndpointID, task.ID, up, now)
 		}
 		// Compute and, on a transition only, append the endpoint reachability

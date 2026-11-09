@@ -8,7 +8,8 @@ The node's endpoint gate is now a set of reasons rather than one refusal
 ([ADR-1650](/architecture/decisions/#adr-1650-an-endpoint-gate-holds-a-set-of-reasons)). `refused`
 keeps its rung scope and fingerprint release; `unreachable` is added when the endpoint's
 reachability probe reads down twice running, dated from the first down, and removed on the next up
-verdict. While it holds, a due poll is held: nothing is sent, no failure or backoff is booked, and
+verdict; a rung that reads down only because a refusal holds it is no verdict, so a refused
+snmp or udp endpoint never also reads unreachable. While it holds, a due poll is held: nothing is sent, no failure or backoff is booked, and
 the report window counts it as the new `poll-held-count`. A command answers `unreachable since`
 without dialing, and a run now or a preview answers 409 naming the reason instead of a 502.
 `endpoint-rejection` carries every reason, the refusal first, so `rejection.Parse` and every

@@ -332,7 +332,8 @@ the ladder, the ssh and tls pins an operator declared, and the `:retry` counter)
 verification mode is one of its driver's inputs, so editing it moves the fingerprint too. The rungs below keep running, so reachability
 stays observed while auth is rejected, except where the transport rung itself carries the credential:
 an snmp get carries the community, so beneath an snmp auth gate nothing is sent and the rung reads
-down, rejected ([snmp](#snmp)). **The gate is a set of reasons** (#1650,
+down, rejected ([snmp](#snmp)), a reading that is the refusal's echo and so no reachability
+verdict. **The gate is a set of reasons** (#1650,
 [ADR-1650](/architecture/decisions/#adr-1650-an-endpoint-gate-holds-a-set-of-reasons)): the
 refusal above is one kind, `refused`, scoped to its rung and fingerprint; `unreachable`, added when
 the reachability probe reads down twice running and removed on its next up verdict, is another,
