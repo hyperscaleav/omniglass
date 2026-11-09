@@ -184,12 +184,18 @@ func TestSeedFactsSeverityAndRules(t *testing.T) {
 	if len(got) != 5 || got["high"].Rank != 40 || !got["high"].Outage || got["average"].Outage || got["disaster"].Color != "darkred" {
 		t.Errorf("severity_levels = %+v, want the five shipped levels with high and above an outage", doc.SeverityLevels)
 	}
-	if len(doc.EventRules) != 1 {
-		t.Fatalf("event_rules = %+v, want the one official rule", doc.EventRules)
+	if len(doc.EventRules) != 2 {
+		t.Fatalf("event_rules = %+v, want the two official rules", doc.EventRules)
 	}
 	r := doc.EventRules[0]
 	if r.Name != "reachability-lost" || r.SampleKey != "endpoint-reachable" || r.Fire != `value == "down"` || r.Clear != `value == "up"` ||
 		r.FireSustain != "15s" || r.Severity != "high" || r.FireEventType != "condition-started" || r.ClearEventType != "condition-ended" {
 		t.Errorf("event_rules[0] = %+v", r)
+	}
+	// The retention pass's lane behind past its catch-up passes (#1629).
+	r = doc.EventRules[1]
+	if r.Name != "retention-behind" || r.SampleKey != "retention-behind" || r.Fire != "value == 1" || r.Clear != "value == 0" ||
+		r.FireSustain != "5m" || r.Severity != "warning" || r.FireEventType != "condition-started" || r.ClearEventType != "condition-ended" {
+		t.Errorf("event_rules[1] = %+v", r)
 	}
 }
