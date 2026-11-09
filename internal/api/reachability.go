@@ -69,7 +69,7 @@ type reachLayerBody struct {
 	Check  string    `json:"check" doc:"The property_type key of the primary signal"`
 	Value  string    `json:"value" doc:"The latest signal value in the property's own words: up or down for ping, open or closed for port, up or down for request"`
 	Detail string    `json:"detail,omitempty" doc:"A human timing detail (rtt / connect time), when present"`
-	TS     time.Time `json:"ts" doc:"When the signal was observed"`
+	TS     time.Time `json:"ts" doc:"When the signal last changed: one is stored only on a transition, so an endpoint's freshness is last_seen, not this"`
 }
 
 type reachHistoryBody struct {

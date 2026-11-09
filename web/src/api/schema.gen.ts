@@ -10146,7 +10146,7 @@ export interface components {
             layer: string;
             /**
              * Format: date-time
-             * @description When the signal was observed
+             * @description When the signal last changed: one is stored only on a transition, so an endpoint's freshness is last_seen, not this
              */
             ts: string;
             /** @description The latest signal value in the property's own words: up or down for ping, open or closed for port, up or down for request */

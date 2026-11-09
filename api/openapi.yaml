@@ -8127,7 +8127,7 @@ components:
           description: "The probe layer word (ping, port, or request: a udp endpoint's request or an snmp endpoint's get answered)"
           type: string
         ts:
-          description: When the signal was observed
+          description: "When the signal last changed: one is stored only on a transition, so an endpoint's freshness is last_seen, not this"
           format: date-time
           type: string
         value:
