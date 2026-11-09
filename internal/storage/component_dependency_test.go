@@ -363,3 +363,49 @@ func TestComponentDependencyUpstreamOutOfScope(t *testing.T) {
 		t.Errorf("no update on the dependent: create = %v, want ErrComponentForbidden", err)
 	}
 }
+
+// TestComponentDependencySchemaRefusesBadEdges pins the table's own
+// constraints, beneath the gateway's checks: a write that skips the gateway
+// still cannot record a self edge, a power edge with no outlet, a host edge
+// with one, an unknown kind or a duplicate.
+func TestComponentDependencySchemaRefusesBadEdges(t *testing.T) {
+	t.Parallel()
+	f := newDepFixture(t)
+	ctx := context.Background()
+	for _, c := range []string{"pdu-s", "codec-s"} {
+		f.component(t, c)
+	}
+	conn, err := pgx.Connect(ctx, f.dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer conn.Close(ctx)
+	insert := func(comp, upstream, kind string, outlet *string) error {
+		_, err := conn.Exec(ctx, `insert into component_dependency (component_id, upstream_id, kind, outlet)
+			select c.id, u.id, $3, $4 from component c, component u where c.name = $1 and u.name = $2`,
+			comp, upstream, kind, outlet)
+		return err
+	}
+	three := "3"
+	refused := []struct {
+		name, comp, upstream, kind string
+		outlet                     *string
+		constraint                 string
+	}{
+		{"self edge", "codec-s", "codec-s", "host", nil, "component_dependency_self_check"},
+		{"power with no outlet", "codec-s", "pdu-s", "power", nil, "component_dependency_outlet_check"},
+		{"host with an outlet", "codec-s", "pdu-s", "host", &three, "component_dependency_outlet_check"},
+		{"unknown kind", "codec-s", "pdu-s", "cooling", nil, "component_dependency_kind_check"},
+	}
+	for _, r := range refused {
+		if err := insert(r.comp, r.upstream, r.kind, r.outlet); err == nil || !strings.Contains(err.Error(), r.constraint) {
+			t.Errorf("%s = %v, want refused by %s", r.name, err, r.constraint)
+		}
+	}
+	if err := insert("codec-s", "pdu-s", "power", &three); err != nil {
+		t.Fatalf("valid power edge: %v", err)
+	}
+	if err := insert("codec-s", "pdu-s", "power", &three); err == nil || !strings.Contains(err.Error(), "component_dependency_edge_key") {
+		t.Errorf("duplicate edge = %v, want refused by component_dependency_edge_key", err)
+	}
+}

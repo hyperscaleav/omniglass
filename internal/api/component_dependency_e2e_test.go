@@ -184,6 +184,10 @@ func TestDependencyMarkersOverHTTP(t *testing.T) {
 	if ep.OutOfBand {
 		t.Fatalf("endpoint patch = %+v, want out_of_band cleared", ep)
 	}
+	json.Unmarshal(f.c.do(f.owner, http.MethodPatch, "/endpoints/"+ep.ID, map[string]any{"out_of_band": true}, http.StatusOK), &ep)
+	if !ep.OutOfBand {
+		t.Fatalf("endpoint patch = %+v, want out_of_band set again", ep)
+	}
 
 	var ct struct {
 		PowerOutletParam string `json:"power_outlet_param"`
