@@ -9,8 +9,9 @@ import (
 )
 
 // TestCommandQueueMetricsWritesTheGaugesAndTheWindowsCounts maps one health
-// read: the gauges every read, the pending age only where something waits,
-// and the window's counts only when nonzero and only for a read with a window.
+// read: the gauges every read, an idle queue's age at zero (never absent, so
+// a drained queue's last age is not left standing as its latest sample), and
+// the window's counts only when nonzero and only for a read with a window.
 func TestCommandQueueMetricsWritesTheGaugesAndTheWindowsCounts(t *testing.T) {
 	t.Parallel()
 	now := time.Date(2026, 11, 9, 12, 0, 0, 0, time.UTC)
@@ -30,6 +31,7 @@ func TestCommandQueueMetricsWritesTheGaugesAndTheWindowsCounts(t *testing.T) {
 	idle := []PlatformMetric{
 		at("pb", writerclass.CommandPendingCount, "", 0),
 		at("pb", writerclass.CommandStuckCount, "", 0),
+		at("pb", writerclass.CommandPendingAge, "", 0),
 	}
 
 	first := CommandQueueMetrics(read, time.Time{})

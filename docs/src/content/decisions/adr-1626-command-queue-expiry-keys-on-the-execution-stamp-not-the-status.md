@@ -2,7 +2,7 @@
 title: "Command queue expiry keys on the execution stamp, not the status"
 date: 2026-11-09
 status: Accepted
-summary: "Accepted: #1626 measures every node's command queue on its platform component. A command keeps its first delivery and its delivery count beside the last delivery. The server reads the whole fleet's queues on a 15 s timer through the pull's own candidate fragment, and counts a command as expired when it ages past the delivery TTL with no execution report, whatever its recorded status, split into undelivered and unexecuted. The wire writes one dispatch and one execution latency sample per command in the stamp's transaction. Two partial indexes serve the read. The loss ratios derive from the counts and the samples and take no key."
+summary: "Accepted: #1626 measures every node's command queue on its platform component. A command keeps its first delivery and its delivery count beside the last delivery. The server reads the whole fleet's queues on a 15 s timer through the pull's own candidate fragment, and counts a command as expired when it ages past the delivery TTL with no execution report, whatever its recorded status, split into undelivered and unexecuted. The wire writes one dispatch and one execution latency sample per command in the stamp's transaction. Two partial indexes serve the read. The loss ratios derive from the counts and the samples and take no key. An idle queue's pending age is written as zero, not left absent as the ticket had it."
 refs: [1626, 1625, 1630, 1631, 1641, 1094]
 ---
 
@@ -31,7 +31,11 @@ refs: [1626, 1625, 1630, 1631, 1641, 1094]
   5. **The window is the previous read's database time.** The timer holds the last good read's
      `now()` and passes it as the next window's start. The first read writes the gauges and no counts,
      since it cannot know what crossed before it. A failed read keeps the window open; a failed write
-     after a good read moves it on, so a count is never written twice.
+     after a good read moves it on, so a count is never written twice. The redelivery count reads
+     the same window shifted 5 s back: a take is stamped at its transaction's start, so a read that
+     runs before it commits cannot see it, and a window ending at the read's own time would have
+     passed the stamp by the next read. The shifted windows still tile, so a take is counted once,
+     up to 5 s late.
   6. **Latencies are written by the wire.** `command-dispatch-latency` lands in the dispatch's
      transaction on the first take only, and `command-execution-latency` in the execution report's,
      each a nested savepoint, so a refused platform write never loses the stamp. A command no node
@@ -39,6 +43,11 @@ refs: [1626, 1625, 1630, 1631, 1641, 1094]
   7. **Loss ratios derive, not stored.** Delivery loss is undelivered over (dispatch samples plus
      undelivered); execution loss is unexecuted over (execution samples plus unexecuted). Both are 0
      healthy and need no key, in line with #1641's uniform loss reading.
+  8. **An idle queue's pending age is zero, not absent.** The ticket's table had `command-pending-age`
+     absent when nothing waits. A gauge written only while something waits leaves a drained queue's
+     last age standing as its latest sample beside a pending count of 0, and a rule raised on the
+     age never sees the sample that clears it. The timer writes 0 instead, as the check-in age is
+     written every tick: 0 is healthy.
 - **Context:** A redelivery overwrote the only dispatch stamp, a failed pull went uncounted, and a
   fire-and-forget command no node took read `settled` forever, so the command lane had no baseline
   for #1249's separate node queues. The queue figures are platform metrics on the node's component

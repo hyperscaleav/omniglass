@@ -18,12 +18,13 @@ type CommandQueue struct {
 	// Pending is every live command the node actuates: due on its next pull,
 	// or taken and awaiting its report.
 	Pending int
-	// Oldest is when the oldest pending command was issued; nil when none.
+	// Oldest is when the oldest pending command was issued; nil when none,
+	// which CommandQueueMetrics writes as an age of zero.
 	Oldest *time.Time
 	// Stuck is the pending commands taken and silent past redeliverAfter.
 	Stuck int
-	// Redelivered is the commands taken again in the window, executed since
-	// or not.
+	// Redelivered is the commands taken again in the window shifted back by
+	// redeliveryCountLag, executed since or not.
 	Redelivered int
 	// ExpiredUndelivered and ExpiredUnexecuted are the commands that crossed
 	// deliveryTTL unexecuted in the window, never taken and taken but never
@@ -40,6 +41,15 @@ type CommandQueueRead struct {
 	Nodes []CommandQueue
 }
 
+// redeliveryCountLag shifts the redelivery window back from the read. A
+// redelivery's stamp is its dispatch transaction's start, so a read that runs
+// before that transaction commits cannot see it, and a window ending at the
+// read's own time would have moved past the stamp by the next read: the
+// redelivery would fall between two windows. The shifted windows still tile
+// (each starts where the last ended), and a dispatch that commits within the
+// lag of its stamp is counted exactly once, up to the lag late.
+const redeliveryCountLag = "5 seconds"
+
 // commandHealthSQL is the fleet's queue health in one statement ($1 the
 // window's start, null for none). The candidates are the pull's own resolution
 // (commandCandidates), widened to the commands live at the window's start so
@@ -47,7 +57,8 @@ type CommandQueueRead struct {
 // command is attributed to the node its chosen endpoint is placed on.
 // Redeliveries are read apart: a command redelivered and then executed has
 // left the candidates, and the redelivered rows are few
-// (command_redelivered_idx).
+// (command_redelivered_idx). Their window is the same one shifted back by
+// redeliveryCountLag.
 var commandHealthSQL = `
 	with candidate as (` + commandCandidates("coalesce($1::timestamptz, now()) - interval '"+deliveryTTL+"'") + `),
 	queue as (
@@ -64,7 +75,9 @@ var commandHealthSQL = `
 	redelivered as (
 		select i.node_name, count(*) as n
 		from command c join endpoint i on i.id = c.dispatched_endpoint_id
-		where c.delivery_count > 1 and c.dispatched_at > coalesce($1::timestamptz, now()) and c.dispatched_at <= now()
+		where c.delivery_count > 1
+		  and c.dispatched_at > coalesce($1::timestamptz, now()) - interval '` + redeliveryCountLag + `'
+		  and c.dispatched_at <= now() - interval '` + redeliveryCountLag + `'
 		group by i.node_name
 	)
 	select now(), n.name, n.platform_component_id::text,
@@ -111,7 +124,9 @@ func (p *PG) CommandQueueHealth(ctx context.Context, since time.Time) (CommandQu
 
 // CommandQueueMetrics is a health read as the platform metrics it lands as,
 // each at the read's time on the node's platform component. The gauges are
-// written every read, the pending age only where something waits. The window
+// written every read, an idle queue's pending age as zero: an age written
+// only while something waits would leave a drained queue's last age standing
+// as its latest sample, and a rule on it would never clear. The window
 // counts are written only when nonzero, and never for a read with no window
 // (a zero since): a first read cannot know what crossed before it.
 func CommandQueueMetrics(read CommandQueueRead, since time.Time) []PlatformMetric {
@@ -122,9 +137,11 @@ func CommandQueueMetrics(read CommandQueueRead, since time.Time) []PlatformMetri
 		}
 		add(writerclass.CommandPendingCount, "", float64(q.Pending))
 		add(writerclass.CommandStuckCount, "", float64(q.Stuck))
+		age := 0.0
 		if q.Oldest != nil {
-			add(writerclass.CommandPendingAge, "", max(read.Now.Sub(*q.Oldest).Seconds(), 0))
+			age = max(read.Now.Sub(*q.Oldest).Seconds(), 0)
 		}
+		add(writerclass.CommandPendingAge, "", age)
 		if since.IsZero() {
 			continue
 		}

@@ -254,8 +254,8 @@ func TestCommandPendingCountAgreesWithThePull(t *testing.T) {
 		t.Errorf("edge-c has an oldest %v with nothing pending", after["edge-c"].Oldest)
 	}
 
-	// The read maps to the gauges on each node's platform component: the
-	// age only where something waits, no windowed count on the first pass.
+	// The read maps to the gauges on each node's platform component: an
+	// idle queue's age at zero, no windowed count on the first pass.
 	metrics := storage.CommandQueueMetrics(read, time.Time{})
 	got := map[string]map[string]float64{}
 	for _, m := range metrics {
@@ -273,8 +273,8 @@ func TestCommandPendingCountAgreesWithThePull(t *testing.T) {
 	if _, ok := got[f.platform["edge-a"]][writerclass.CommandPendingAge+"/"]; !ok {
 		t.Errorf("edge-a carries no pending age: %v", got[f.platform["edge-a"]])
 	}
-	if _, ok := got[f.platform["edge-c"]][writerclass.CommandPendingAge+"/"]; ok {
-		t.Errorf("edge-c carries a pending age with nothing pending")
+	if age, ok := got[f.platform["edge-c"]][writerclass.CommandPendingAge+"/"]; !ok || age != 0 {
+		t.Errorf("edge-c pending age = %v (written %v), want 0 with nothing pending", age, ok)
 	}
 	for _, m := range metrics {
 		if m.Key == writerclass.CommandRedeliveryCount || m.Key == writerclass.CommandExpiredCount {
@@ -377,9 +377,31 @@ func TestCommandStuckAndExpiredCounts(t *testing.T) {
 	}
 }
 
-// TestCommandRedeliveryCountsInItsWindow (#1626): a command taken again in
-// the window counts as redelivered, executed since or not; one taken once
-// does not.
+// redeliveredOver reads node's windows back to back from start until their
+// redeliveries sum to want or the deadline passes, then reads one window more,
+// which must count none: each redelivery is counted in exactly one window.
+func (f commandQueueFixture) redeliveredOver(t *testing.T, node string, start storage.CommandQueueRead, want int) {
+	t.Helper()
+	prev, total := start, 0
+	deadline := time.Now().Add(20 * time.Second)
+	for total < want && time.Now().Before(deadline) {
+		time.Sleep(200 * time.Millisecond)
+		read, q := f.health(t, prev.Now)
+		total += q[node].Redelivered
+		prev = read
+	}
+	if total != want {
+		t.Fatalf("%s's windows counted %d redeliveries, want %d", node, total, want)
+	}
+	time.Sleep(200 * time.Millisecond)
+	if _, q := f.health(t, prev.Now); q[node].Redelivered != 0 {
+		t.Errorf("a later window counted %d redeliveries again", q[node].Redelivered)
+	}
+}
+
+// TestCommandRedeliveryCountsInItsWindow (#1626): a command taken again
+// counts as redelivered in exactly one window, executed since or not; one
+// taken once does not.
 func TestCommandRedeliveryCountsInItsWindow(t *testing.T) {
 	t.Parallel()
 	f := newCommandQueueFixture(t, "edge-w")
@@ -392,10 +414,38 @@ func TestCommandRedeliveryCountsInItsWindow(t *testing.T) {
 	if err := f.gw.RecordCommandExecution(f.ctx, "edge-w", again, "", "INPUT hdmi-2"); err != nil {
 		t.Fatalf("record execution: %v", err)
 	}
-	_, q := f.health(t, start.Now)
-	if q["edge-w"].Redelivered != 1 {
-		t.Errorf("redelivered = %d, want the one command taken twice", q["edge-w"].Redelivered)
+	f.redeliveredOver(t, "edge-w", start, 1)
+}
+
+// TestCommandRedeliveryCommittedAfterAReadIsCounted (#1626): a redelivery's
+// stamp is its transaction's start, so a health read that runs while that
+// transaction is still open cannot see it. Its count must land in a later
+// window, not fall between two.
+func TestCommandRedeliveryCommittedAfterAReadIsCounted(t *testing.T) {
+	t.Parallel()
+	f := newCommandQueueFixture(t, "edge-r")
+	id := f.issue(t, "edge-r", "set-input")
+	f.pull(t, "edge-r")
+	start, _ := f.health(t, time.Time{})
+
+	tx, err := f.conn.Begin(f.ctx)
+	if err != nil {
+		t.Fatal(err)
 	}
+	defer tx.Rollback(context.Background())
+	// The pull's own stamp, held open across a read.
+	if _, err := tx.Exec(f.ctx, `update command set dispatched_at = now(), delivery_count = delivery_count + 1 where id = $1`, id); err != nil {
+		t.Fatalf("stamp the redelivery: %v", err)
+	}
+	time.Sleep(50 * time.Millisecond)
+	during, q := f.health(t, start.Now)
+	if q["edge-r"].Redelivered != 0 {
+		t.Fatalf("a read saw the uncommitted redelivery: %+v", q["edge-r"])
+	}
+	if err := tx.Commit(f.ctx); err != nil {
+		t.Fatalf("commit the redelivery: %v", err)
+	}
+	f.redeliveredOver(t, "edge-r", during, 1)
 }
 
 // TestCommandQueueKeysRefuseOtherWriters (#1626): the command queue keys are

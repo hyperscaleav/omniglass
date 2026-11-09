@@ -65,6 +65,7 @@ func TestCommandHealthCarriesTheWindowBetweenPasses(t *testing.T) {
 	gauges := []storage.PlatformMetric{
 		{ComponentID: "pa", Key: writerclass.CommandPendingCount, Value: 2, TS: t0},
 		{ComponentID: "pa", Key: writerclass.CommandStuckCount, Value: 1, TS: t0},
+		{ComponentID: "pa", Key: writerclass.CommandPendingAge, Value: 0, TS: t0},
 	}
 	if len(landed) != 2 || !slices.Equal(landed[0], gauges) {
 		t.Fatalf("writes = %+v, want the first pass's gauges %+v and one more", landed, gauges)

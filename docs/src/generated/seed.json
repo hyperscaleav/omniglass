@@ -668,7 +668,7 @@
    "data_type": "float",
    "unit": "s",
    "label": "Oldest Pending Command",
-   "description": "Seconds the oldest command waiting for the node has waited since its issue, sampled each platform tick; absent while none waits."
+   "description": "Seconds the oldest command waiting for the node has waited since its issue, sampled each platform tick; zero while none waits."
   },
   {
    "name": "command-dispatch-latency",
@@ -688,7 +688,7 @@
    "name": "command-redelivery-count",
    "data_type": "int",
    "label": "Command Redeliveries",
-   "description": "Commands a pull redelivered (taken again after no report came) over the platform tick's window; reported only when nonzero."
+   "description": "Commands a pull redelivered (taken again after no report came) over the platform tick's window, read 5 s behind the tick so a take still committing is not missed; reported only when nonzero."
   },
   {
    "name": "command-stuck-count",

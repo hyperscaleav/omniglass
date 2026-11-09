@@ -86,14 +86,16 @@ reports cannot disagree with what a pull delivers), and attributes each command 
 chosen endpoint is placed on. Every node with a platform component gets, at each read:
 
 - `command-pending-count`: the commands its next pull would take plus the ones it took that still
-  await their report, and `command-pending-age`, how long the oldest has waited (absent while none
-  waits);
+  await their report, and `command-pending-age`, how long the oldest has waited (zero while none
+  waits, so a drained queue's last age never stands as its latest);
 - `command-stuck-count`: the ones it took and has been silent on past the redelivery wait, still
   inside the delivery TTL.
 
 Over the window since the previous read, and only when nonzero (a first read has no window):
 
-- `command-redelivery-count`: commands taken again in the window;
+- `command-redelivery-count`: commands taken again in the window, read 5 s behind it: a take is
+  stamped at its transaction's start, so a read that runs before it commits cannot see it, and a
+  window ending at the read would pass it by;
 - `command-expired-count`: commands that aged past the delivery TTL unexecuted, as instance
   `undelivered` (no node ever took it) or `unexecuted` (taken, never reported).
 

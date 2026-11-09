@@ -570,7 +570,7 @@ below. The keys, their units and how each is sampled are in
 [collection](/architecture/collection/#self-monitoring-every-nodes-account-of-itself).
 
 The node's **command queue** reports on the same component (#1626). The server reads every node's
-queue every 15 s and writes `command-pending-count`, `command-pending-age` (absent while nothing
+queue every 15 s and writes `command-pending-count`, `command-pending-age` (zero while nothing
 waits) and `command-stuck-count`, and, over the window since its last read and only when nonzero,
 `command-redelivery-count` and `command-expired-count` (instance `undelivered` or `unexecuted`). The
 command wire writes `command-dispatch-latency` at a command's first take and
