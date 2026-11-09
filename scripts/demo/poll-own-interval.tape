@@ -32,7 +32,7 @@ Type "clear"
 Enter
 Wait
 Show
-Type "# Its last four voltage readings: thirty seconds apart to the millisecond, at the poll's own phase"
+Type "# Its last four voltage readings: thirty seconds apart, at a phase of the poll's own, not the 2s check-in's"
 Enter
 Wait
 Type `omniglass component metric sample list "$pdu" voltage | jq -c 'def secs: (.[0:19] + "Z" | fromdate) + (.[19:-1] as $f | if $f == "" then 0 else ("0" + $f | tonumber) end); .samples[:4] | map(.ts) as $t | {ts: $t, seconds_apart: [range(1; $t | length) as $i | (($t[$i-1] | secs) - ($t[$i] | secs)) * 1000 | round / 1000]}'`
