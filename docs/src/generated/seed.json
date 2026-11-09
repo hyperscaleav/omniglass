@@ -572,7 +572,7 @@
    "data_type": "float",
    "unit": "s",
    "label": "Check-in Age",
-   "description": "Seconds since the node's last heartbeat reached the server, written by the server every platform tick; keeps growing while the node is silent."
+   "description": "Seconds since the node's last heartbeat reached the server (since its enrollment, before its first), written by the server every platform tick; keeps growing while the node is silent."
   },
   {
    "name": "worklist-task-count",
