@@ -125,17 +125,15 @@ func runServer(ctx context.Context, version string, lab bool) error {
 	self.applySlowQuery(ctx, gw)
 
 	// The server's own platform component, named by its identity, carries
-	// its request, query and pool figures; a restart finds the one it had.
-	serverComponentID, err := gw.EnsureServerComponent(ctx, c.ServerName)
-	if err != nil {
-		return err
-	}
-	log.Info("server platform component", "server", c.ServerName, "component", serverComponentID)
+	// its request, query and pool figures and its retention pass's; a restart
+	// finds the one it had. It is ensured before the bus starts, so the pass
+	// the bus runs at boot already reports (#1671).
+	serverComponentID := serverComponent(ctx, gw, c.ServerName, log)
 
 	// The embedded NATS server carries the node-server protocol (worklist,
 	// heartbeat, and the checkpoint-3 telemetry stream). It is hosted in-process
 	// and shut down with the server.
-	busSrv, err := startBus(c, gw)
+	busSrv, err := startBus(c, gw, serverComponentID)
 	if err != nil {
 		return err
 	}
@@ -187,8 +185,10 @@ func runServer(ctx context.Context, version string, lab bool) error {
 	defer stopNotify()
 	go notifier.New(gw, egress.Options{}).Run(notifyCtx)
 	// The server's self-report, once a collection report window, until
-	// shutdown cancels it.
-	go self.reporter(gw, serverComponentID, log).Run(notifyCtx)
+	// shutdown cancels it; a server with no component reports nothing.
+	if serverComponentID != "" {
+		go self.reporter(gw, serverComponentID, log).Run(notifyCtx)
+	}
 
 	errc := make(chan error, 1)
 	go func() {
@@ -205,13 +205,39 @@ func runServer(ctx context.Context, version string, lab bool) error {
 		sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		return srv.Shutdown(sctx)
+	case <-ctx.Done():
+		log.Info("shutting down")
+		sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return srv.Shutdown(sctx)
 	}
 }
 
+// serverComponenter ensures the platform component a server reports on.
+type serverComponenter interface {
+	EnsureServerComponent(ctx context.Context, identity string) (string, error)
+}
+
+// serverComponent is the platform component the server booting under
+// identity reports on. A failed ensure is a warning, never a refused boot:
+// the server serves and prunes as before and lands no platform figure until a
+// boot whose ensure succeeds (#1671).
+func serverComponent(ctx context.Context, gw serverComponenter, identity string, log *slog.Logger) string {
+	id, err := gw.EnsureServerComponent(ctx, identity)
+	if err != nil {
+		log.Warn("server platform component not ensured; the server reports no platform metrics",
+			"server", identity, "error", err.Error())
+		return ""
+	}
+	log.Info("server platform component", "server", identity, "component", id)
+	return id
+}
+
 // startBus parses the configured NATS listen address and starts the embedded
-// server. A "host:" or bare port resolves through net.SplitHostPort; a parse
-// failure is a config error surfaced at boot.
-func startBus(c config.Config, gw *storage.PG) (*bus.Server, error) {
+// server, its retention pass reporting on componentID (empty, it reports
+// nothing). A "host:" or bare port resolves through net.SplitHostPort; a
+// parse failure is a config error surfaced at boot.
+func startBus(c config.Config, gw *storage.PG, componentID string) (*bus.Server, error) {
 	host, portStr, err := net.SplitHostPort(c.NatsAddr)
 	if err != nil {
 		return nil, err
@@ -222,7 +248,7 @@ func startBus(c config.Config, gw *storage.PG) (*bus.Server, error) {
 	}
 	// The worklist pool is held under the database pool, keeping one
 	// connection for ingest (#1577).
-	return bus.New(bus.Config{Host: host, Port: port, StoreDir: c.NatsStoreDir, DBPoolSize: gw.PoolSize()}, gw)
+	return bus.New(bus.Config{Host: host, Port: port, StoreDir: c.NatsStoreDir, DBPoolSize: gw.PoolSize(), PlatformComponentID: componentID}, gw)
 }
 
 // auditWriterRuling holds, once at boot, what was stored before the
