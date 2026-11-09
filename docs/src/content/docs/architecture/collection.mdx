@@ -525,8 +525,13 @@ window (`collection.report_seconds`, the same window collection telemetry uses):
   healthy; a nonzero one beside `db-pool-acquired` at `db-pool-max` says requests queue on the cap.
 
 The boot seeds the platform system before it ensures the component, and a window whose component is
-gone by the write is dropped rather than failed, as a node's is. The decisions are
-[ADR-1627](/architecture/decisions/#adr-1627-a-server-reports-its-request-and-query-timing-by-route-template-and-statement-fingerprint).
+gone by the write is dropped rather than failed, as a node's is. The same component carries the
+server's retention pass figures ([storage](/architecture/storage/#what-a-retention-pass-reports)). A
+boot whose ensure fails (an identity of only spaces, a database refusing the write) logs a WARN with
+the identity and the cause and serves anyway, reporting none of these until a boot whose ensure
+succeeds: self-monitoring never keeps the server down. The decisions are
+[ADR-1627](/architecture/decisions/#adr-1627-a-server-reports-its-request-and-query-timing-by-route-template-and-statement-fingerprint)
+and [ADR-1671](/architecture/decisions/#adr-1671-a-server-whose-platform-component-cannot-be-ensured-boots-and-reports-nothing).
 
 ## Endpoint types and their config
 
