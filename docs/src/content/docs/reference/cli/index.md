@@ -289,7 +289,7 @@ omniglass auth logout
 The authenticated principal, its permissions, and grants
 
 ```
-omniglass auth me [flags]
+omniglass auth me
 ```
 
 Returns the caller's principal, flattened permissions (a UI hint and the fast-reject set), the permissions held on an all-scope grant (fleet_permissions), and grants. Requires authentication.
@@ -3395,7 +3395,7 @@ omniglass location-type update room
 Serve the omniglass MCP tools over stdio, for a local agent
 
 ```
-omniglass mcp [flags]
+omniglass mcp
 ```
 
 Serves the omniglass MCP server over stdio by relaying to the server's /mcp endpoint with your token, so a local agent (Claude Code, or any MCP client that launches a command) drives omniglass through the same generated tools, with your permissions and scope, audited as you via MCP. Configure the agent to run `omniglass mcp` with OMNIGLASS_SERVER and OMNIGLASS_TOKEN in its environment. Standard output carries only the MCP protocol; anything else goes to standard error.
@@ -3780,7 +3780,7 @@ omniglass node setTag <name> --key key --value value
 Get a node's simulator
 
 ```
-omniglass node simulation [flags]
+omniglass node simulation <name>
 ```
 
 The devices a simulator beside the node serves (each component with an endpoint placed on the node, within the caller's component read scope), joined to the hits the server has seen and the simulator's capabilities. Hits are live and per server process, not stored. Requires an all-scope node read. Gated by node:read.
@@ -6178,7 +6178,7 @@ omniglass system get <name>
 Read every system's health verdict
 
 ```
-omniglass system health [flags]
+omniglass system health
 ```
 
 The current verdict for every system in the caller's read scope, in one call: the bulk counterpart of the per-system health read, carrying the one fact a list's health column renders and none of the explanation. A console painting a page of systems reads this once instead of resolving every role, occupant, alarm and transition per row. A system that has never been recomputed reads healthy. Gated by system:read; an empty scope is an empty list, not a 403.
