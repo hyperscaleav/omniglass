@@ -93,8 +93,9 @@ type DBCounters struct {
 	DatabaseBytes, ReceiptBytes int64
 	WALBytes                    int64
 	// ReceiptsInserted is the cumulative count of telemetry_receipt rows
-	// inserted: one per batch landed, so its delta is the batches a window
-	// landed.
+	// inserted (n_tup_ins), so its delta approximates the batches a window
+	// landed. It counts the receipt of a rolled-back pass too, so a batch the
+	// consumer landed in three passes after a Postgres refusal counts three.
 	ReceiptsInserted int64
 }
 
