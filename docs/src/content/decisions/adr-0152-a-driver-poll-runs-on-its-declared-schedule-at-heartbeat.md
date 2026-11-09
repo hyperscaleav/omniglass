@@ -1,11 +1,11 @@
 ---
 title: "A driver poll runs on its declared schedule, at heartbeat granularity"
 date: 2026-10-23
-status: "Accepted"
+status: "Accepted, amended by ADR-1634"
 summary: "A driver poll runs on its declared `schedule.every` at heartbeat granularity (#822): a per-task next-due time kept for the run, the first tick at or after it runs the poll, a new task runs at once, a late tick never bursts; probes stay per tick and pushes are never gated. Settles the nodes page's open question for driver polls"
 ---
 
-- **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [nodes](/architecture/nodes/), [collection](/architecture/collection/), [drivers](/guides/admin/drivers/)
+- **Date:** 2026-10-23 | **Status:** Accepted, amended by ADR-1634 | **Pages:** [nodes](/architecture/nodes/), [collection](/architecture/collection/), [drivers](/guides/admin/drivers/)
 - **Decision:** The node honors a driver poll's `schedule.every` (#822). It keeps, per task id and for
   the life of the run, when each poll is next due, and runs the poll on the first heartbeat tick at or
   after that time. The next run is booked from the due time, so tick jitter does not drift the cadence;
@@ -23,6 +23,11 @@ summary: "A driver poll runs on its declared `schedule.every` at heartbeat granu
   schedule (every tick when it is unset), and a task is due on the tick within half a heartbeat of its
   due time rather than the first tick at or after it, so an interval equal to the heartbeat never skips
   a jittered tick ([ADR-1273](/architecture/decisions/#adr-1273-a-reachability-probe-runs-on-the-nodes-probe-interval-not-every-heartbeat)).
+  **Amended (#1634):** polls no longer run on the heartbeat tick: a dispatcher with its own timer runs
+  each on a stable phase of its interval, skips and counts a due whose run is still in flight, retries
+  a failed fetch on a backoff from one second rather than the heartbeat, and runs a poll with no
+  schedule at the heartbeat interval
+  ([ADR-1634](/architecture/decisions/#adr-1634-each-poll-and-probe-runs-on-its-own-interval-from-a-dispatcher-of-its-own)).
 - **Context:** The schedule was validated and baked but unread, so `snmp-generic`'s `every: 60s` polled
   every 30s heartbeat and a `24h` poll would have asked a device 2880 times a day. The nodes page left
   per-task cadence within a tick as an open question; a per-task gate settles it for driver polls

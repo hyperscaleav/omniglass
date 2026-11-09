@@ -204,9 +204,10 @@ your machine's. The `server` and `db` containers carry no added capability.
 How often the node checks in, pulls its worklist and probes is its **cadence profile**. Your lab
 runs at `lab`: it checks in often and pulls its worklist every few seconds (`--worklist-every`), so
 a change you make in the console reaches it within seconds, and probes reachability less often
-(`--probe-every`), because a lab may run for days and a probe on every check-in wrote most of its
-rows. The throwaway lab each walkthrough is recorded on runs at
-`walkthrough` and probes on every check-in, since a recording is held to a time budget, so in your
+(`--probe-every`), because a lab may run for days and a probe every 2s wrote most of its rows.
+Each probe and each poll runs on its own interval, on the node's own timer, not on the check-in.
+The throwaway lab each walkthrough is recorded on runs at
+`walkthrough` and probes every 2s, since a recording is held to a time budget, so in your
 lab a walkthrough that waits on a probe's verdict (watching a rule raise an alarm, say) waits a few
 seconds longer than its recording. `default` is the product's own cadence, what a deployment's
 node runs at; the [lab footprint](/contributing/test-driven/#measuring-a-running-lab) measures a lab

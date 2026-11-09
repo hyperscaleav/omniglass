@@ -18,7 +18,7 @@ component's endpoints (each an **API named by the protocol it speaks**, typed by
 target component: its **state** as a transition-only property (`tcp-open` is `open` or `closed`,
 `icmp-reachable` is `up` or `down`; a steady fleet writes each once,
 [ADR-1592](/architecture/decisions/#adr-1592-a-probes-state-is-a-transition-only-property-not-a-metric-row))
-and its **timing** as a metric row every tick (`tcp-connect-time`, `icmp-rtt-avg`). The owner is bound
+and its **timing** as a metric row each probe (`tcp-connect-time`, `icmp-rtt-avg`). The owner is bound
 **server-side** from the task's endpoint (the node stamps no component identity); the ingest
 consumer confines a node to its own tasks (another node's `task_id` is orphan-dropped) and rejects
 unregistered sample names per lane. An orphan drop is never silent and never a flood (#1200): the
@@ -418,6 +418,8 @@ of its own:
 | `poll-duration` | the node | the mean time of the endpoint's driver poll runs, scheduled or run now, answered or failed, in ms | when a poll ran |
 | `poll-failure-count` | the node | the polls that failed: a run that faulted and landed nothing, or a due poll a refusal on the endpoint's gate stopped | when nonzero |
 | `poll-held-count` | the node | the due polls held, not sent, while the endpoint's gate held `unreachable` (its probe read down twice running): not loss, so never a failure, and no backoff booked | when nonzero |
+| `poll-due-count` | the node | the polls that fell due, each on its own interval, held, refused and skipped ones included | when nonzero |
+| `poll-skipped-count` | the node | the due polls skipped because the poll's last run was still in flight: counted, never queued behind it, so skipped over due is the endpoint's schedule loss | when nonzero |
 | `push-message-count` | the node | the messages its held session or udp socket delivered that a listener claimed | every window while held, zero included |
 | `push-unclaimed-count` | the node | the messages no listener claimed | when nonzero |
 | `webhook-post-count` | the server | the webhook posts it accepted for the endpoint | when nonzero, then one zero after a stream stops |
@@ -1447,11 +1449,15 @@ create offers both moves (a bare probe endpoint, or attach a driver and fill its
 Drivers page renders each spec as the menu it is.
 
 **The interpreter runs the poll functions** (#814) **on their declared schedule** (#822): a poll's
-`schedule.every` is honored at heartbeat granularity, the node running it on the first tick within
-half a heartbeat of its due time (a new task at once, and a run whose fetch failed retried on a backoff from the
-heartbeat, doubling, capped at the interval), while reachability probes run on the node's probe interval
-(`--probe-every`, every tick when unset, [ADR-1273](/architecture/decisions/#adr-1273-a-reachability-probe-runs-on-the-nodes-probe-interval-not-every-heartbeat))
-and a listener's pushes ride the held session as they arrive, never gated ([ADR-0152](/architecture/decisions/#adr-0152-a-driver-poll-runs-on-its-declared-schedule-at-heartbeat-granularity)).
+`schedule.every` is its interval, on the node's own dispatcher rather than the heartbeat (#1634), the
+node running a new task at once and each later run on a stable phase of its interval, skipping a due
+whose last run is still in flight, and retrying a run whose fetch failed on a backoff from one second,
+doubling, capped at the interval; a poll that declares no schedule runs at the heartbeat interval.
+Reachability probes run on the node's probe interval
+(`--probe-every`, default 30s, [ADR-1273](/architecture/decisions/#adr-1273-a-reachability-probe-runs-on-the-nodes-probe-interval-not-every-heartbeat))
+and a listener's pushes ride the held session as they arrive, never gated ([ADR-0152](/architecture/decisions/#adr-0152-a-driver-poll-runs-on-its-declared-schedule-at-heartbeat-granularity),
+[ADR-1634](/architecture/decisions/#adr-1634-each-poll-and-probe-runs-on-its-own-interval-from-a-dispatcher-of-its-own); the
+[nodes page](/architecture/nodes/#scheduling-concurrency-and-self-observability) has the dispatcher).
 The node tells a baked driver task from a probe task by its spec, fetches over the transport (an http request rides the node's http fetcher with the endpoint's credential, [above](#http-and-https); the v2c scalar GET rides `gosnmp`, proven
 against a from-the-spec BER agent; a line poll runs one stateless ask over a throwaway
 connection, or borrows the endpoint's [held session](#sessions) when the node holds one), and interprets the payload against the baked
