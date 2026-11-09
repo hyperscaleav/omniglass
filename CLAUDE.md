@@ -114,8 +114,12 @@ keep a TODO doc in the tree and do not write a bare `// TODO`; reference an issu
 
 Kind of work is a native **Issue Type** (`Task`/`Bug`/`Feature`/`Epic`) and priority is a
 field on the Project board, neither one a label. Labels are a fixed set: `area:<subsystem>`
-(describes) and `run:<task>` (triggers CI, e.g. `run:preview`). Any label that runs
-automation is `run:<task>`. The full taxonomy is
+(describes), `tier:{jr,mid,sr}` and `risk:{low,high}` (exactly one of each, read by the
+dispatcher that launches agent sessions), and `run:<task>` (triggers CI, e.g. `run:preview`).
+Any label that runs automation is `run:<task>`. A ticket's body is the five-section contract
+the dispatcher launches on (`### Goal`, `### Spec`, `### Acceptance criteria` with checkboxes,
+`### Out of scope`, `### Files likely touched`); the issue forms emit it, and the labels page
+has the shape. The full taxonomy is
 [docs/contributing/labels.md](docs/src/content/docs/contributing/labels.md).
 
 The Project board (org project #1, "Omniglass") is the live status of the work. Agents move

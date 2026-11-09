@@ -1,6 +1,7 @@
 name: Epic
 description: A body of work composed of multiple issues toward one outcome.
 title: "[Epic] "
+type: Epic
 labels: ["epic"]
 body:
   - type: textarea

@@ -1,8 +1,13 @@
 name: Docs / learning page
-description: A documentation or interactive learning-surface change.
+description: A documentation or interactive learning-surface change. One ticket, one PR, one fresh agent session.
 title: "docs: "
-labels: ["docs"]
+type: Task
 body:
+  - type: markdown
+    attributes:
+      value: >-
+        The five sections below are the ticket contract the dispatcher launches on
+        (docs/contributing/labels.md#the-ticket-contract).
   - type: input
     id: epic
     attributes:
@@ -10,28 +15,68 @@ body:
       description: The epic this belongs to, if any (e.g. #12).
     validations:
       required: false
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What a reader should understand after, and which kind of page this is (architecture, concept or learning page, contributor doctrine).
+    validations:
+      required: true
+  - type: textarea
+    id: spec
+    attributes:
+      label: Spec
+      description: >-
+        The page(s) to add or update and what changes on each. If this teaches a concept, the
+        interactive learning surface that renders the real engine against real or lab data, or
+        why there is none.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: A checkbox list, one testable criterion per line (the docs lint suite green, the page's status badge, the build-log fragment, the screenshot ids).
+      value: |
+        - [ ] the docs lint suite is green
+        - [ ]
+    validations:
+      required: true
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: Out of scope
+      description: What this ticket must not touch.
+    validations:
+      required: true
+  - type: textarea
+    id: files
+    attributes:
+      label: Files likely touched
+      description: Paths, one per line, as they are in the tree.
+      placeholder: "- docs/src/content/docs/..."
+    validations:
+      required: true
   - type: dropdown
-    id: kind
+    id: tier
     attributes:
-      label: Docs kind
+      label: Tier
+      description: "The agent seniority the dispatcher assigns, applied as the label. jr: a page edit. mid: a new page or a learning surface. sr: an architecture page that settles a design."
       options:
-        - Architecture (docs/architecture/)
-        - Concept / learning page
-        - Contributor doctrine (docs/contributing/)
-        - Other
+        - tier:jr
+        - tier:mid
+        - tier:sr
+      default: 1
     validations:
       required: true
-  - type: textarea
-    id: change
+  - type: dropdown
+    id: risk
     attributes:
-      label: What changes
-      description: The page(s) to add or update, and what a reader should understand after.
+      label: Risk
+      description: "Applied as the label. Docs are low unless the page states an authorization, scope or retention guarantee."
+      options:
+        - risk:low
+        - risk:high
+      default: 0
     validations:
       required: true
-  - type: textarea
-    id: learning
-    attributes:
-      label: Interactive learning surface
-      description: If this teaches a concept, does it ship a surface that renders the real engine against real or lab data? If not, why not.
-    validations:
-      required: false

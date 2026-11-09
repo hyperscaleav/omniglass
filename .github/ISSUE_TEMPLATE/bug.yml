@@ -1,25 +1,84 @@
 name: Bug
-description: Something behaves incorrectly.
+description: Something behaves incorrectly. One ticket, one PR, one fresh agent session.
 title: "fix: "
-labels: ["bug"]
+type: Bug
 body:
-  - type: textarea
-    id: expected
+  - type: markdown
     attributes:
-      label: Expected vs actual
-      description: What should happen, and what happens instead.
-    validations:
-      required: true
-  - type: textarea
-    id: repro
-    attributes:
-      label: Reproduction
-      description: Steps, config, or a failing command. A bug fix starts with a failing regression test.
-    validations:
-      required: true
+      value: >-
+        The five sections below are the ticket contract the dispatcher launches on
+        (docs/contributing/labels.md#the-ticket-contract). Write for a fresh session that
+        has only this body: a bug fix starts with a failing regression test.
   - type: input
-    id: version
+    id: epic
     attributes:
-      label: Version / commit
+      label: Parent epic
+      description: The epic this belongs to, if any (e.g. #12). Also set it as the sub-issue's parent.
     validations:
       required: false
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: The symptom in one user-observable sentence, then what should happen instead and why it matters.
+    validations:
+      required: true
+  - type: textarea
+    id: spec
+    attributes:
+      label: Spec
+      description: >-
+        The reproduction (exact steps or commands, from a fresh `make lab LAB_ARGS=--fresh` or a
+        named test), the evidence (the failing output, a code permalink at a commit SHA, or a
+        committed screenshot), the version or commit, the suspected cause, and the fix if known.
+        End with "Found during #<issue or PR>".
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: A checkbox list, one testable criterion per line. The first is the regression test that fails before the fix.
+      value: |
+        - [ ] a regression test fails before the fix and passes after
+        - [ ]
+    validations:
+      required: true
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: Out of scope
+      description: What this ticket must not touch (neighbouring defects get their own ticket, named here).
+    validations:
+      required: true
+  - type: textarea
+    id: files
+    attributes:
+      label: Files likely touched
+      description: Paths, one per line, as they are in the tree.
+      placeholder: "- internal/..."
+    validations:
+      required: true
+  - type: dropdown
+    id: tier
+    attributes:
+      label: Tier
+      description: "The agent seniority the dispatcher assigns, applied as the label. jr: mechanical, one or two files. mid: a slice with its own tests and docs. sr: cross-cutting, a migration, an invariant."
+      options:
+        - tier:jr
+        - tier:mid
+        - tier:sr
+      default: 1
+    validations:
+      required: true
+  - type: dropdown
+    id: risk
+    attributes:
+      label: Risk
+      description: "Applied as the label. high: authorization, scope, secrets, the edge, a migration, a delete, anything an operator cannot undo."
+      options:
+        - risk:low
+        - risk:high
+      default: 0
+    validations:
+      required: true
