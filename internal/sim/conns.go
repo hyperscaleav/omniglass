@@ -12,9 +12,18 @@ import (
 type trackedListener struct {
 	net.Listener
 	onAccept func(net.Conn) // nil: accept silently
+	observe  *deviceObservation // nil: connections are not observed
+	protocol obsProtocol
 	mu       sync.Mutex
 	conns    map[net.Conn]struct{}
 	closed   bool
+}
+
+// observedAs counts each accepted connection, and its end, on a protocol of
+// the device's observation.
+func (l *trackedListener) observedAs(d *deviceObservation, p obsProtocol) *trackedListener {
+	l.observe, l.protocol = d, p
+	return l
 }
 
 func trackConns(l net.Listener, onAccept func(net.Conn)) *trackedListener {
@@ -34,6 +43,7 @@ func (l *trackedListener) Accept() (net.Conn, error) {
 	}
 	tc := &trackedConn{Conn: c, owner: l}
 	l.conns[tc] = struct{}{}
+	l.observe.connected(l.protocol)
 	if l.onAccept != nil {
 		l.onAccept(c)
 	}
@@ -49,7 +59,9 @@ func (l *trackedListener) Close() error {
 	l.mu.Unlock()
 	err := l.Listener.Close()
 	for c := range conns {
-		_ = c.(*trackedConn).Conn.Close()
+		tc := c.(*trackedConn)
+		tc.release()
+		_ = tc.Conn.Close()
 	}
 	return err
 }
@@ -61,12 +73,19 @@ type trackedConn struct {
 }
 
 func (c *trackedConn) Close() error {
+	c.release()
+	return c.Conn.Close()
+}
+
+// release forgets the connection and lowers the open gauge, once, whether
+// the server or the listener's Close ends it first.
+func (c *trackedConn) release() {
 	c.once.Do(func() {
 		c.owner.mu.Lock()
 		delete(c.owner.conns, c)
 		c.owner.mu.Unlock()
+		c.owner.observe.disconnected(c.owner.protocol)
 	})
-	return c.Conn.Close()
 }
 
 // logConnect reports an accepted connection as a hit: a reachability probe

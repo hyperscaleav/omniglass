@@ -88,6 +88,15 @@ func outcomeForStatus(status int) Outcome {
 	return OutcomeAnswered
 }
 
+// outcomeForLine maps a line protocol's status to its outcome: the device
+// answered (200), or its answer said the command failed (unknown or broken).
+func outcomeForLine(status int) Outcome {
+	if status == 200 {
+		return OutcomeAnswered
+	}
+	return OutcomeError
+}
+
 // protocolRow is one device's counters for one protocol.
 type protocolRow struct {
 	accepted        atomic.Int64
