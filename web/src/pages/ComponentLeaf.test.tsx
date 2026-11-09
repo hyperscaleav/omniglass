@@ -486,6 +486,32 @@ describe("acknowledging from Why (#872)", () => {
   });
 });
 
+// Two alarms on one component each carry a Snooze control (#1404): a screen
+// reader's list of buttons, and a script's locator, must tell them apart by the
+// alarm each acts on, not by a bare "Snooze" twice over.
+describe("snoozing from Why (#1404)", () => {
+  const twoAlarms = [
+    { id: "al-1", component: "videobar-1", component_id: uuidFor("cf-c-bar"), severity: "high", message: "No route to host", raised_at: iso(9600), active: true, acknowledged: false },
+    { id: "al-2", component: "videobar-1", component_id: uuidFor("cf-c-bar"), severity: "high", message: "Touch input lost", raised_at: iso(600), active: true, acknowledged: false },
+  ];
+
+  it("names each alarm's Snooze button for the alarm, so two are never both plainly Snooze", () => {
+    mount(undefined, undefined, bar, me, twoAlarms);
+    const why = screen.getByTestId("leaf-alarms");
+    const names = within(why).getAllByRole("button", { name: /^Snooze/ }).map((b) => b.getAttribute("aria-label")).sort();
+    expect(names).toEqual(["Snooze No route to host", "Snooze Touch input lost"]);
+    expect(within(why).getByRole("button", { name: "Snooze Touch input lost" })).toBeTruthy();
+  });
+
+  it("names a snoozed alarm's Unsnooze button for the alarm too", () => {
+    const snoozed = twoAlarms.map((a, i) => (i === 1 ? { ...a, snoozed_until: new Date(now + 3600_000).toISOString() } : a));
+    mount(undefined, undefined, bar, me, snoozed);
+    const why = screen.getByTestId("leaf-alarms");
+    expect(within(why).getByRole("button", { name: "Unsnooze Touch input lost" })).toBeTruthy();
+    expect(within(why).getByRole("button", { name: "Snooze No route to host" })).toBeTruthy();
+  });
+});
+
 // A monitoring console's component view moves as collection arrives (#934):
 // its own reads poll, so a fresh sample, a vital and an alarm land without a
 // reload, each read one request however many endpoints the component has.

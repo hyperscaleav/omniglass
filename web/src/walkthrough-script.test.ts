@@ -14,6 +14,7 @@ import {
   idProblem,
   parseWalkthrough,
   runSetup,
+  setupCollisions,
   stepFailure,
   stillName,
   validateWalkthrough,
@@ -314,4 +315,42 @@ describe("the shipped walkthroughs", () => {
       expect(idProblem(f.slice(f.lastIndexOf("/") + 1, -".yaml".length))).toBeNull();
     });
   }
+});
+
+// The probe replays every walkthrough on one stack, in order (#1404), while the
+// recorder gives each a lab of its own, so two walkthroughs whose setups claim
+// the same component or alarm and whose steps change it pass recorded and fail
+// probed. The lint holds that line at validation.
+describe("setup collisions", () => {
+  const act = { click: "button", caption: "c" };
+  const look = { wait: { text: "x" }, caption: "c" };
+  const component = (name: string) => ({ post: "/components", body: { name, product: "p", location: "l" } });
+  const alarm = (on: string, dedup_key: string) => ({ post: `/components/${on}/alarms`, body: { severity: "high", message: "m", dedup_key } });
+  const w = (id: string, setup: unknown[], steps: unknown[]) => ({ id, ...ok(steps, { setup }) });
+
+  it("flags two walkthroughs that set up the same component when one changes it", () => {
+    const found = setupCollisions([w("a", [component("bay-2-display")], [act, look]), w("b", [component("bay-2-display")], [look])]);
+    expect(found).toEqual(['walkthroughs a, b both set up component "bay-2-display" and a changes it: give each its own']);
+  });
+  it("flags the same alarm dedup key on one component, and names who changes it", () => {
+    const found = setupCollisions([w("a", [alarm("panel-2", "k")], [act, look]), w("b", [alarm("panel-2", "k")], [act, look])]);
+    expect(found).toEqual(['walkthroughs a, b both set up alarm "k" on panel-2 and a, b change it: give each its own']);
+  });
+  it("lets walkthroughs share what none of them changes, and tell different alarms on one component apart", () => {
+    expect(setupCollisions([w("a", [component("c")], [look]), w("b", [component("c")], [look])])).toEqual([]);
+    expect(setupCollisions([w("a", [alarm("panel-2", "k1")], [act, look]), w("b", [alarm("panel-2", "k2")], [act, look])])).toEqual([]);
+    expect(setupCollisions([w("a", [alarm("panel-2", "k")], [act, look]), w("b", [alarm("panel-3", "k")], [act, look])])).toEqual([]);
+  });
+  it("ignores setup it does not understand, such as other creates", () => {
+    const other = { post: "/notification-types", body: { name: "n" } };
+    expect(setupCollisions([w("a", [other], [act, look]), w("b", [other], [act, look])])).toEqual([]);
+  });
+  it("finds none in the shipped walkthroughs", () => {
+    const dir = join(__dirname, "../e2e/walkthroughs");
+    const all = readdirSync(dir)
+      .filter((f) => f.endsWith(".yaml"))
+      .sort()
+      .map((f) => ({ id: f.slice(0, -".yaml".length), ...parseWalkthrough(readFileSync(join(dir, f), "utf8"), f) }));
+    expect(setupCollisions(all)).toEqual([]);
+  });
 });
