@@ -50,15 +50,18 @@ func newLabMeasureCmd() *cobra.Command {
 	o := labMeasureOpts{}
 	cmd := &cobra.Command{
 		Use:   "measure",
-		Short: "Measure a running scale lab: rows a minute, growth, CPU and memory, ingest lag, redeliveries, fleet view times and the retention drain",
+		Short: "Measure a running scale lab: rows a minute, growth, WAL a sample, CPU and memory, ingest lag, redeliveries, the consumer lane's busy fraction, fleet view times and the retention drain",
 		Long: "Measures a scale lab (`omniglass lab run --scenario corporate --systems N`) over a stated window and prints " +
 			"one table: rows a minute per lane, table and WAL growth a day extrapolated from the window, CPU and memory " +
-			"per container, ingest lag from probe to row, consumer redeliveries, the console's fleet view response " +
+			"per container, WAL bytes a sample, ingest lag from probe to row (p50, p95, p99), consumer redeliveries, the " +
+			"ingest consumer lane's busy fraction and service time a batch, the console's fleet view response " +
 			"times, and the retention pass's drain rate. It writes the same figures as JSON so two runs compare.\n\n" +
 			"With no --systems it measures the scale lab already running. With --systems it brings up a throwaway scale " +
 			"lab of that size, measures it, and removes it, so the one command is the whole run.\n\n" +
 			"When no sample probed in the window had landed by its end, the ingest lag cell reads not measured, with the " +
-			"reason and the age of the newest landed sample under the table, and every other figure still prints.\n\n" +
+			"reason and the age of the newest landed sample under the table, and every other figure still prints. The " +
+			"consumer lane row is read from the server's periodic `ingest lane` log line and needs two tallies inside " +
+			"the window; a window shorter than a minute reads not measured, with the reason under the table.\n\n" +
 			"The retention probe plants a backlog of aged property rows and restarts the server to run its pass; " +
 			"--backlog 0 skips it and leaves the server alone. A lab started before this build's `lab run` does not " +
 			"record commit timestamps, which the ingest lag reads: bring it up again.",

@@ -139,6 +139,8 @@ type Window struct {
 	ReceiptBytesPerDay    float64 `json:"receipt_bytes_per_day"`
 	DatabaseBytesPerDay   float64 `json:"database_bytes_per_day"`
 	WALBytesPerDay        float64 `json:"wal_bytes_per_day"`
+	// WALBytes is the WAL the window itself wrote, before extrapolation.
+	WALBytes int64 `json:"wal_bytes"`
 	// BatchesLanded is the receipts the window inserted, SamplesLanded the
 	// metric and property rows it inserted; SamplesPerBatch is their mean and
 	// BatchesPerSecond the batch rate (BatchRates).
@@ -190,6 +192,7 @@ func WindowOf(db0, db1 DBCounters, use0, use1 map[string]Usage) (Window, error) 
 		ReceiptBytesPerDay:    perDay(db0.ReceiptBytes, db1.ReceiptBytes),
 		DatabaseBytesPerDay:   perDay(db0.DatabaseBytes, db1.DatabaseBytes),
 		WALBytesPerDay:        perDay(db0.WALBytes, db1.WALBytes),
+		WALBytes:              db1.WALBytes - db0.WALBytes,
 		Containers:            map[string]ContainerWindow{},
 	}
 	for name, a := range use0 {

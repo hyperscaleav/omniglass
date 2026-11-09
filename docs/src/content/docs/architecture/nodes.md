@@ -144,7 +144,12 @@ walkthrough every 2 s ([the lab's cadences](/guides/lab/)).
   blocks, so every pull is stamped on arrival. The server counts every outcome
   (`Server.WorklistCounts`: served, read failed, oversize, respond failed, expired, abandoned,
   busy) and logs every one but a served pull at
-  WARN, or ERROR for an oversize reply.
+  WARN, or ERROR for an oversize reply. The telemetry consumer is counted the same way: every
+  batch's handler time goes into one tally (`Server.LaneTally`: batches landed, busy time), and the
+  server logs the cumulative figures every 30 s at INFO (`msg="ingest lane"`, only when a batch
+  landed since the last line). The stream is a work queue with one message in flight, so busy time
+  over wall time is the lane's utilisation; `omniglass lab measure` reads it
+  ([the lab guide](/guides/lab/#measuring-a-scale-lab)). The server has no metrics endpoint.
 
 Why it is shaped this way, and what it defers (paging, set-based reads, the materialized
 worklist): [ADR-1577](/architecture/decisions/#adr-1577-a-nodes-worklist-is-compressed-served-by-a-bounded-responder-and-retried-without-exiting).

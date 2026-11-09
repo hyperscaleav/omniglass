@@ -320,6 +320,9 @@ func (h *harness) measureScale(ctx context.Context, cfg ScaleConfig) (ScaleRepor
 	if run.Redeliveries, err = h.redeliveries(ctx, l.server, db0.At); err != nil {
 		return ScaleReport{}, err
 	}
+	if run.Lane, err = h.consumerLane(ctx, l.server, db0.At, db1.At); err != nil {
+		return ScaleReport{}, err
+	}
 	if cfg.Backlog > 0 {
 		if run.Drain, err = h.drainProbe(ctx, l.server, cfg); err != nil {
 			return ScaleReport{}, err
@@ -459,4 +462,18 @@ func (h *harness) redeliveries(ctx context.Context, server string, since time.Ti
 		return Redeliveries{}, err
 	}
 	return CountRedeliveries(strings.NewReader(log))
+}
+
+// consumerLane reads the lane tallies the server logged since the window
+// began and measures the lane between the first and last of them inside it.
+func (h *harness) consumerLane(ctx context.Context, server string, from, to time.Time) (Lane, error) {
+	log, err := h.serverLog(ctx, server, from)
+	if err != nil {
+		return Lane{}, err
+	}
+	samples, err := ParseLaneLog(strings.NewReader(log))
+	if err != nil {
+		return Lane{}, err
+	}
+	return LaneOf(samples, from, to), nil
 }

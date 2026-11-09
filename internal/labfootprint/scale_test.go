@@ -42,8 +42,17 @@ func TestPercentile(t *testing.T) {
 
 func TestQuantilesOf(t *testing.T) {
 	q := QuantilesOf([]float64{10, 20, 30, 40})
-	if q.P50 != 20 || q.P95 != 40 || q.N != 4 {
-		t.Fatalf("quantiles %+v, want p50 20, p95 40 of 4", q)
+	if q.P50 != 20 || q.P95 != 40 || q.P99 != 40 || q.N != 4 {
+		t.Fatalf("quantiles %+v, want p50 20, p95 40, p99 40 of 4", q)
+	}
+	// The p99 is the scaling target's figure (under 5 s): of 1..200 it is 198,
+	// where the p95 is 190.
+	twoHundred := make([]float64, 200)
+	for i := range twoHundred {
+		twoHundred[i] = float64(i + 1)
+	}
+	if q := QuantilesOf(twoHundred); q.P95 != 190 || q.P99 != 198 {
+		t.Fatalf("quantiles of 1..200 %+v, want p95 190, p99 198", q)
 	}
 	ms := DurationQuantiles([]time.Duration{4 * time.Millisecond, 2 * time.Millisecond, 250 * time.Microsecond})
 	if !near(ms.P50, 2) || !near(ms.P95, 4) || ms.N != 3 {
@@ -206,8 +215,12 @@ func TestScaleRunExtrapolates(t *testing.T) {
 	if !near(last.Millicores, 350) || !near(last.WorkingSetMiB, 100+4+200+56+50) {
 		t.Errorf("total %+v, want 350 millicores and 410 MiB", last)
 	}
-	if !near(rep.IngestLag.P50, 300) || !near(rep.IngestLag.P95, 2000) {
-		t.Errorf("lag %+v, want p50 300 ms, p95 2000 ms (the lag is read in seconds, reported in milliseconds)", rep.IngestLag)
+	if !near(rep.IngestLag.P50, 300) || !near(rep.IngestLag.P95, 2000) || !near(rep.IngestLag.P99, 2000) {
+		t.Errorf("lag %+v, want p50 300 ms, p95 and p99 2000 ms (the lag is read in seconds, reported in milliseconds)", rep.IngestLag)
+	}
+	// 30 MiB of WAL for 27,480 samples is 1,144.7 bytes a sample.
+	if !near(rep.WALBytesPerSample, float64(30<<20)/27_480) {
+		t.Errorf("WAL a sample %v, want %v", rep.WALBytesPerSample, float64(30<<20)/27_480)
 	}
 	if rep.FleetView.P50 != 20 || rep.FleetView.P95 != 90 {
 		t.Errorf("fleet view %+v, want p50 20 ms, p95 90 ms", rep.FleetView)
@@ -226,14 +239,15 @@ func TestScaleReportTableAndJSON(t *testing.T) {
 		Build: "abc123", Scenario: "corporate", Systems: 100, Sites: 3, Components: 900, Tasks: 3000,
 		Started: at(0), Window: 10 * time.Minute, Measured: w,
 		Lag: []float64{0.5}, FleetView: []time.Duration{time.Millisecond},
+		Lane:  LaneOf([]LaneSample{{At: at(30), Batches: 100, Busy: 10 * time.Second}, {At: at(90), Batches: 160, Busy: 25 * time.Second}}, at(0), at(600)),
 		Drain: DrainOf(100, []DrainSample{{At: at(0), Remaining: 100}, {At: at(6), Remaining: 0}}),
 	})
 	table := rep.Table()
 	for _, row := range []string{
-		"metric rows a minute", "property rows a minute", "metric table a day", "WAL a day",
+		"metric rows a minute", "property rows a minute", "metric table a day", "WAL a day", "WAL a sample",
 		"server cpu", "db cpu", "edge-hq cpu", "total cpu", "server memory", "edge-hq memory",
 		"batches landed", "samples landed", "samples per batch", "batches a second",
-		"ingest lag p50", "ingest lag p95", "consumer redeliveries",
+		"ingest lag p50", "ingest lag p95", "ingest lag p99", "consumer redeliveries", "consumer lane busy",
 		"fleet view p50", "fleet view p95", "retention drain",
 	} {
 		if !strings.Contains(table, row) {
@@ -248,13 +262,21 @@ func TestScaleReportTableAndJSON(t *testing.T) {
 		t.Fatal(err)
 	}
 	// 600 receipts carried 27,480 rows over 600 s: 45.8 samples a batch, 1 batch a second.
-	for _, key := range []string{`"batches_landed":600`, `"samples_landed":27480`, `"samples_per_batch":45.8`, `"batches_per_second":1`} {
+	// The lane: 60 batches took 15 s of a 60 s span, 25 % busy at 250 ms a batch.
+	for _, key := range []string{`"batches_landed":600`, `"samples_landed":27480`, `"samples_per_batch":45.8`, `"batches_per_second":1`,
+		`"wal_bytes_per_sample":1144.73`, `"p99":500`, `"consumer_lane":{"measured":true,"batches":60,"busy_fraction":0.25,"service_ms":250,"span_seconds":60}`} {
 		if !strings.Contains(string(b), key) {
 			t.Errorf("the JSON has no %s:\n%s", key, b)
 		}
 	}
 	if !strings.Contains(table, "600") || !strings.Contains(table, "45.8") {
 		t.Errorf("the table does not print the batch figures:\n%s", table)
+	}
+	if !strings.Contains(table, "25.0 %   (250.0 ms a batch, 60 batches over 60 s)") {
+		t.Errorf("the table does not print the lane's busy fraction with its service time:\n%s", table)
+	}
+	if !strings.Contains(table, "1,145 B") {
+		t.Errorf("the table does not print the WAL a sample:\n%s", table)
 	}
 	var back ScaleReport
 	if err := json.Unmarshal(b, &back); err != nil {
@@ -388,5 +410,73 @@ func TestScaleTableLagPastTheWindow(t *testing.T) {
 	got := SummarizeScale(run).Table()
 	if none.ExceedsWindow || strings.Contains(got, "exceeds the window") || !strings.Contains(got, "holds no observed sample") {
 		t.Errorf("an empty metric table:\n%s", got)
+	}
+}
+
+// The server logs its ingest lane's tally as a text line every so often; the
+// harness reads the cumulative batches and busy time from each.
+func TestParseLaneLog(t *testing.T) {
+	log := `time=2026-11-08T12:00:30.250Z level=INFO msg="worklist served" node=edge-hq
+time=2026-11-08T12:00:30.500Z level=INFO msg="ingest lane" facility=ingest batches=100 busy_ms=10000
+time=2026-11-08T12:01:00.500Z level=INFO msg="telemetry ack not confirmed, the batch will be redelivered and held by its receipt" id=x
+time=2026-11-08T12:01:00.750-07:00 level=INFO msg="ingest lane" facility=ingest batches=160 busy_ms=25000
+`
+	got, err := ParseLaneLog(strings.NewReader(log))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []LaneSample{
+		{At: time.Date(2026, 11, 8, 12, 0, 30, 500_000_000, time.UTC), Batches: 100, Busy: 10 * time.Second},
+		{At: time.Date(2026, 11, 8, 19, 1, 0, 750_000_000, time.UTC), Batches: 160, Busy: 25 * time.Second},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("parsed %d samples, want %d: %+v", len(got), len(want), got)
+	}
+	for i := range want {
+		if !got[i].At.Equal(want[i].At) || got[i].Batches != want[i].Batches || got[i].Busy != want[i].Busy {
+			t.Errorf("sample %d: %+v, want %+v", i, got[i], want[i])
+		}
+	}
+	if _, err := ParseLaneLog(strings.NewReader(`time=2026-11-08T12:00:30Z level=INFO msg="ingest lane" facility=ingest batches=x busy_ms=1`)); err == nil {
+		t.Error("a tally line with an unreadable count parsed")
+	}
+	if got, err := ParseLaneLog(strings.NewReader("")); err != nil || len(got) != 0 {
+		t.Errorf("an empty log: %v, %v", got, err)
+	}
+}
+
+// The lane's busy fraction is the busy time between the first and last tally
+// inside the window over the time between them, so the tallies before the
+// window (the warm-up) and the partial intervals at its edges do not count.
+func TestLaneOf(t *testing.T) {
+	samples := []LaneSample{
+		{At: at(-30), Batches: 50, Busy: 5 * time.Second},
+		{At: at(30), Batches: 100, Busy: 10 * time.Second},
+		{At: at(60), Batches: 130, Busy: 17 * time.Second},
+		{At: at(90), Batches: 160, Busy: 25 * time.Second},
+		{At: at(630), Batches: 400, Busy: 90 * time.Second},
+	}
+	l := LaneOf(samples, at(0), at(600))
+	if !l.Measured || l.Batches != 60 || !near(l.BusyFraction, 0.25) || !near(l.ServiceMs, 250) || !near(l.SpanSeconds, 60) {
+		t.Errorf("lane %+v, want 60 batches, 25 %% busy, 250 ms a batch over 60 s", l)
+	}
+	if l := LaneOf(samples[:2], at(0), at(600)); l.Measured || l.Reason == "" {
+		t.Errorf("one tally in the window measured a lane: %+v", l)
+	}
+	if l := LaneOf(nil, at(0), at(600)); l.Measured || l.Reason == "" {
+		t.Errorf("no tallies measured a lane: %+v", l)
+	}
+	// Counters that went backwards mean the server restarted inside the window.
+	restarted := []LaneSample{{At: at(30), Batches: 100, Busy: 10 * time.Second}, {At: at(90), Batches: 20, Busy: time.Second}}
+	if l := LaneOf(restarted, at(0), at(600)); l.Measured || !strings.Contains(l.Reason, "restart") {
+		t.Errorf("a restarted server's tallies measured a lane: %+v", l)
+	}
+	// An idle lane is measured, at nothing.
+	idle := []LaneSample{{At: at(30), Batches: 100, Busy: 10 * time.Second}, {At: at(90), Batches: 100, Busy: 10 * time.Second}}
+	if l := LaneOf(idle, at(0), at(600)); !l.Measured || l.BusyFraction != 0 || l.ServiceMs != 0 {
+		t.Errorf("an idle lane: %+v, want measured at 0", l)
+	}
+	if got := SummarizeScale(ScaleRun{Lane: LaneOf(nil, at(0), at(600))}).Table(); !regexp.MustCompile(`consumer lane busy +not measured\n`).MatchString(got) || !strings.Contains(got, "consumer lane not measured: the server logged 0 lane tallies") {
+		t.Errorf("an unmeasured lane does not say so in the table:\n%s", got)
 	}
 }

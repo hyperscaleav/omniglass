@@ -68,6 +68,8 @@ type Server struct {
 	unboundWarn     unboundWarner      // a conduit's unbound identities, warned once per window (#1282)
 	registry        registryCache      // the ingest sample registry, kept until a catalog changes (#1279)
 	stopOrphanFlush context.CancelFunc // ends the orphan count's flush
+	lane            laneTally          // the consumer lane's batches and busy time (#1517)
+	stopLaneLog     context.CancelFunc // ends the lane tally's log line
 	sweepStop       sync.Once
 	sweepDone       sync.WaitGroup
 	worklistSizes   worklistSizes      // each node's latest worklist reply size, warned near the limit (#1579)
@@ -257,6 +259,7 @@ func (s *Server) subscribe() error {
 	s.startReceiptPrune()
 	s.startSampleRetention()
 	s.startOrphanFlush()
+	s.startLaneLog()
 	return nil
 }
 
@@ -314,6 +317,9 @@ func (s *Server) Shutdown() {
 	}
 	if s.stopRetention != nil {
 		s.stopRetention()
+	}
+	if s.stopLaneLog != nil {
+		s.stopLaneLog()
 	}
 	if s.stopOrphanFlush != nil {
 		s.stopOrphanFlush()
