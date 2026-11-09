@@ -40,6 +40,7 @@ func assertHold(t *testing.T, got []string, want ...string) {
 // A reboot holds the target's in-band endpoints only: the BMC answers through
 // the reboot, so closing its gate would hide a live device.
 func TestHoldSetRebootSkipsOutOfBand(t *testing.T) {
+	t.Parallel()
 	got := storage.ResolveHoldSet(storage.HoldInput{
 		Target: "codec", Node: holdNode,
 		Endpoints: []storage.HoldEndpoint{ep("codec-api", "codec", false), ep("codec-bmc", "codec", true)},
@@ -50,6 +51,7 @@ func TestHoldSetRebootSkipsOutOfBand(t *testing.T) {
 // host propagates transitively: a codec, the touch panel it hosts and the
 // panel's own hosted peripheral all go down with the codec.
 func TestHoldSetRebootFollowsHostChain(t *testing.T) {
+	t.Parallel()
 	got := storage.ResolveHoldSet(storage.HoldInput{
 		Target: "codec", Node: holdNode,
 		Edges: []storage.HoldEdge{
@@ -68,6 +70,7 @@ func TestHoldSetRebootFollowsHostChain(t *testing.T) {
 // Containment is not dependency, and a path dependent is #1652's: a reboot
 // on a parent holds the parent alone.
 func TestHoldSetRebootIgnoresContainmentAndPath(t *testing.T) {
+	t.Parallel()
 	got := storage.ResolveHoldSet(storage.HoldInput{
 		Target: "chassis", Node: holdNode,
 		Edges: []storage.HoldEdge{edge("behind-gw", "chassis", "path", "")},
@@ -84,6 +87,7 @@ func TestHoldSetRebootIgnoresContainmentAndPath(t *testing.T) {
 // power too) and its host dependents' in-band endpoints; the PDU itself and
 // the component on another outlet keep running.
 func TestHoldSetPowerFollowsOutlet(t *testing.T) {
+	t.Parallel()
 	got := storage.ResolveHoldSet(storage.HoldInput{
 		Target: "pdu", Node: holdNode, Power: true, Outlet: "2",
 		Edges: []storage.HoldEdge{
@@ -105,6 +109,7 @@ func TestHoldSetPowerFollowsOutlet(t *testing.T) {
 // terminates with each endpoint held once, and an endpoint placed on another
 // node is that node's to gate.
 func TestHoldSetHostCycleTerminatesAndStaysOnNode(t *testing.T) {
+	t.Parallel()
 	far := ep("b-far", "b", false)
 	far.Node = "node-b"
 	got := storage.ResolveHoldSet(storage.HoldInput{
@@ -121,6 +126,7 @@ func TestHoldSetHostCycleTerminatesAndStaysOnNode(t *testing.T) {
 // A power command whose outlet param is missing feeds nothing, so it holds
 // nothing: the PDU's own endpoints are never in a power hold.
 func TestHoldSetPowerWithoutOutletHoldsNothing(t *testing.T) {
+	t.Parallel()
 	got := storage.ResolveHoldSet(storage.HoldInput{
 		Target: "pdu", Node: holdNode, Power: true,
 		Edges:     []storage.HoldEdge{edge("amp", "pdu", "power", "2")},
@@ -133,6 +139,7 @@ func TestHoldSetPowerWithoutOutletHoldsNothing(t *testing.T) {
 // power_outlet_param, as a string whether the schema typed it a string or a
 // number; anything else is no outlet.
 func TestOutletParamReadsStringOrNumber(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		params, name, want string
 	}{
@@ -153,6 +160,7 @@ func TestOutletParamReadsStringOrNumber(t *testing.T) {
 // outlet (1 to 64 characters), host and path edges name none, and no other
 // kind exists.
 func TestValidateDependencyEdge(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		kind, outlet string
 		ok           bool
