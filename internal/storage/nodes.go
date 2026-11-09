@@ -192,7 +192,7 @@ func (p *PG) CreateNode(ctx context.Context, actorID string, spec NodeSpec, crea
 		return nil, err
 	}
 	if sysID != nil {
-		cid, err := p.createPlatformComponent(ctx, tx, actorID, n.Name, *sysID)
+		cid, err := p.createPlatformComponent(ctx, tx, actorID, n.Name, *sysID, false)
 		if err != nil {
 			return nil, err
 		}

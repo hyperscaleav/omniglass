@@ -137,15 +137,29 @@ func refusePlatformComponent(ctx context.Context, q querier, componentID string)
 // classified as the og omniglass-node product with a generated label. Its
 // membership is written directly, past addMemberTx's refusal of the platform
 // system, because this is the one writer that system admits.
-func (p *PG) createPlatformComponent(ctx context.Context, tx pgx.Tx, actorID, nodeName, systemID string) (string, error) {
+//
+// adopt is the boot's adoption of a node registered before the platform: an
+// operator's unplaced component that already holds the node's name cannot
+// refuse a boot the way it refuses a registration, so the component takes
+// the next free name (`<node>-2`). The node row names its component, so
+// nothing reads the name back to find it.
+func (p *PG) createPlatformComponent(ctx context.Context, tx pgx.Tx, actorID, nodeName, systemID string, adopt bool) (string, error) {
 	var productID string
 	if err := tx.QueryRow(ctx, `select id from product where namespace = 'og' and name = $1`, NodeProductName).Scan(&productID); err != nil {
 		return "", fmt.Errorf("storage: resolve the %s product: %w", NodeProductName, err)
 	}
+	name := nodeName
+	if adopt {
+		minted, _, err := generateName(ctx, tx, nameMint{stem: nodeName, bareFirst: true}, componentNameScope(nil, nil), nil)
+		if err != nil {
+			return "", fmt.Errorf("storage: name node %q's platform component: %w", nodeName, err)
+		}
+		name = minted
+	}
 	c, err := scanComponent(tx.QueryRow(ctx, `
 		insert into component (name, label, parent_id, location_id, product_id, name_generated, ordinal, label_generated)
 		values ($1, null, null, null, $2, false, null, true)
-		returning `+componentCols, nodeName, productID))
+		returning `+componentCols, name, productID))
 	if err != nil {
 		if errors.Is(mapComponentWriteErr(err), ErrComponentExists) {
 			return "", ErrPlatformComponentNameTaken
@@ -175,8 +189,9 @@ func (p *PG) createPlatformComponent(ctx context.Context, tx pgx.Tx, actorID, no
 // types put in place first), then gives every node that has no platform
 // component its component. Idempotent, so it runs on every boot; the second
 // half adopts a node registered while the database had no platform system.
-// A system an operator already named `platform` in the unplaced bucket stops
-// the boot with that name, rather than the platform taking it over.
+// A system an operator already named `platform` in the unplaced bucket keeps
+// its name: the platform system takes the next free one (`platform-2`), found
+// by its reserved type, never by its name.
 func (p *PG) EnsurePlatform(ctx context.Context) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -193,14 +208,18 @@ func (p *PG) EnsurePlatform(ctx context.Context) error {
 		if err := tx.QueryRow(ctx, `select id from system_type where namespace = 'og' and name = $1`, platformTypeName).Scan(&typeID); err != nil {
 			return fmt.Errorf("storage: the %s system type is not seeded: %w", platformTypeName, err)
 		}
+		// The name is minted in the unplaced bucket, bare first: `platform`,
+		// or the next free `platform-<n>` when an operator's own system
+		// already holds it, so a release meeting that system still boots.
+		name, _, err := generateName(ctx, tx, systemMint(PlatformSystemName), systemNameScope(nil, nil), nil)
+		if err != nil {
+			return fmt.Errorf("storage: name the platform system: %w", err)
+		}
 		s, err := scanSystem(tx.QueryRow(ctx, `
 			insert into system (name, label, system_type_id, name_generated, label_generated)
 			values ($1, null, $2, false, true)
-			returning `+systemCols, PlatformSystemName, typeID))
+			returning `+systemCols, name, typeID))
 		if err != nil {
-			if errors.Is(mapSystemWriteErr(err), ErrSystemExists) {
-				return fmt.Errorf("storage: an unplaced system already holds the reserved name %q: %w", PlatformSystemName, ErrPlatformSystemReserved)
-			}
 			return fmt.Errorf("storage: create the platform system: %w", err)
 		}
 		if s, err = p.stampSystemLabel(ctx, tx, s); err != nil {
@@ -221,7 +240,7 @@ func (p *PG) EnsurePlatform(ctx context.Context) error {
 		return fmt.Errorf("storage: list nodes without a platform component: %w", err)
 	}
 	for _, name := range names {
-		if _, err := p.createPlatformComponent(ctx, tx, "", name, *sysID); err != nil {
+		if _, err := p.createPlatformComponent(ctx, tx, "", name, *sysID, true); err != nil {
 			return err
 		}
 	}

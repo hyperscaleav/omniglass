@@ -22,9 +22,10 @@ refs: [1625, 1094, 161, 1641, 1634, 1626, 1627, 1628, 1659]
   3. **Node registration owns the node's component.** `CreateNode` creates the component in its own
      transaction and names it in `node.platform_component_id`; `DeleteNode` removes it. A node
      registered on a database the boot seed has not run on gets no component, and the next boot's
-     `EnsurePlatform` adopts it. An operator's unplaced system already named `platform` stops the boot
-     rather than being taken over, and a node whose name an operator's unplaced component already holds
-     is refused at registration.
+     `EnsurePlatform` adopts it. A node whose name an operator's unplaced component already holds is
+     refused at registration. A boot never refuses: a release meeting an operator's unplaced system
+     already named `platform` names the platform system `platform-2` (it is found by its reserved type,
+     never its name), and a node adopted beside an operator's component of its name gets `<node>-2`.
   4. **The node never names an owner.** The node-self block (`TelemetryBatch.node_self`, field 15)
      lands on the publishing node's platform component, resolved from the node row. A batch that sets
      an owner is refused as every node batch with an owner is; a node-self sample that names an
