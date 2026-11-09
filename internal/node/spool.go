@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/delivery"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
 	"github.com/nats-io/nats.go"
@@ -53,6 +54,10 @@ const (
 // groupsField is the TelemetryBatch field the task groups ride, read from
 // the generated descriptor so the hand-built encoding cannot drift from it.
 var groupsField = protowire.Number((&ogv1.TelemetryBatch{}).ProtoReflect().Descriptor().Fields().ByName("groups").Number())
+
+// ledgerField is the TelemetryBatch field the delivery ledger rides (#1641),
+// appended to a batch's bytes as they are queued.
+var ledgerField = protowire.Number((&ogv1.TelemetryBatch{}).ProtoReflect().Descriptor().Fields().ByName("ledger").Number())
 
 // stopper is a pending flush timer: Stop cancels it.
 type stopper interface{ Stop() bool }
@@ -99,10 +104,11 @@ func refused(err error) bool {
 	return errors.Is(err, nats.ErrMaxPayload) || errors.Is(err, nats.ErrBadSubject)
 }
 
-// spooledBatch is one encoded batch, the Nats-Msg-Id it was minted with, and
-// when it was queued.
+// spooledBatch is one encoded batch, the Nats-Msg-Id it was minted with, its
+// delivery seq, and when it was queued.
 type spooledBatch struct {
 	id     string
+	seq    uint64
 	data   []byte
 	queued time.Time
 }
@@ -131,6 +137,12 @@ type spooledBatch struct {
 // flushBytes, ahead of a whole batch sent, and at a drain. The flush mints the
 // batch's id and encodes its bytes once, so every retry ships the same bytes
 // under the same id.
+//
+// Every batch is stamped, as it is queued, with the boot's delivery ledger
+// (#1641): a dense seq, its items per kind and the boot's running offsets,
+// and resolved, the highest seq below which nothing is still queued. All of
+// it is minted under mu, so seq and the offsets are dense in queue order, and
+// encoded into the batch's bytes once, so every retry carries it unchanged.
 type telemetrySpool struct {
 	subject    string
 	node       string
@@ -148,19 +160,21 @@ type telemetrySpool struct {
 	queue      []spooledBatch // queue[:sent] are with the stream: never dropped
 	sent       int
 	bytes      int
-	shipping   bool          // a shipper goroutine is running
-	idle       chan struct{} // closed when the running shipper stops
-	held       bool          // a publish failed since the last tick: sends only queue
-	lastErr    error         // the publish error that held the spool
-	dropped    int           // batches dropped since the last notice
-	dropping   bool          // the current overflow has been told at its start
-	overflowed bool          // batches dropped since the run loop last asked
-	groups     [][]byte      // the pending groups, each encoded as its batch field
-	groupBytes int           // the encoded bytes of groups
-	timer      stopper       // the armed flush timer, nil while nothing is pending
-	timerGen   int           // the flush count, so a timer that lost a race is a no-op
-	drops      int           // batches dropped as full or aged since the last takeFigures
-	failures   int           // publishes refused, not acked, or not encoded since the last takeFigures
+	shipping   bool                  // a shipper goroutine is running
+	idle       chan struct{}         // closed when the running shipper stops
+	held       bool                  // a publish failed since the last tick: sends only queue
+	lastErr    error                 // the publish error that held the spool
+	dropped    int                   // batches dropped since the last notice
+	dropping   bool                  // the current overflow has been told at its start
+	overflowed bool                  // batches dropped since the run loop last asked
+	groups     [][]byte              // the pending groups, each encoded as its batch field
+	kinds      map[delivery.Kind]int // the pending groups' items per kind
+	ledger     *delivery.Ledger      // this boot's delivery count
+	groupBytes int                   // the encoded bytes of groups
+	timer      stopper               // the armed flush timer, nil while nothing is pending
+	timerGen   int                   // the flush count, so a timer that lost a race is a no-op
+	drops      int                   // batches dropped as full or aged since the last takeFigures
+	failures   int                   // publishes refused, not acked, or not encoded since the last takeFigures
 }
 
 // newTelemetrySpool is node's spool shipping to subject through publish, at
@@ -168,7 +182,8 @@ type telemetrySpool struct {
 func newTelemetrySpool(subject, node string, publish publishFunc) *telemetrySpool {
 	return &telemetrySpool{subject: subject, node: node, publish: publish, maxBatches: maxSpoolBatches, maxBytes: maxSpoolBytes,
 		maxAge: maxSpoolAge, window: spoolWindow, now: time.Now,
-		flushEvery: defaultFlushEvery, flushBytes: defaultFlushBytes, afterFunc: timeAfterFunc}
+		flushEvery: defaultFlushEvery, flushBytes: defaultFlushBytes, afterFunc: timeAfterFunc,
+		ledger: delivery.NewLedger(collection.NewBatchID())}
 }
 
 // add holds a task's group for the next batch. A group with nothing in it is
@@ -195,6 +210,10 @@ func (s *telemetrySpool) add(g *ogv1.TaskGroup) error {
 	}
 	s.groups = append(s.groups, field)
 	s.groupBytes += len(field)
+	if s.kinds == nil {
+		s.kinds = map[delivery.Kind]int{}
+	}
+	addGroupKinds(s.kinds, g)
 	if s.groupBytes >= s.flushBytes {
 		if s.flushLocked() {
 			started = true
@@ -207,6 +226,61 @@ func (s *telemetrySpool) add(g *ogv1.TaskGroup) error {
 		s.tellOverflowStart()
 	}
 	return nil
+}
+
+// addGroupKinds counts g's items per kind into into: its task log lines are
+// the log kind.
+func addGroupKinds(into map[delivery.Kind]int, g *ogv1.TaskGroup) {
+	into[delivery.Metric] += len(g.GetMetrics())
+	into[delivery.Property] += len(g.GetProperties())
+	into[delivery.Event] += len(g.GetEvents())
+	into[delivery.Log] += len(g.GetTaskLogs())
+}
+
+// batchKinds is ev's items per kind, what a whole batch sent declares: its
+// node-self samples are metrics, its self-logs and task log lines logs, and
+// any group rides as a flushed one would.
+func batchKinds(ev *ogv1.TelemetryBatch) map[delivery.Kind]int {
+	k := map[delivery.Kind]int{
+		delivery.Metric:   len(ev.GetMetrics()) + len(ev.GetNodeSelf().GetMetrics()),
+		delivery.Property: len(ev.GetProperties()),
+		delivery.Event:    len(ev.GetEvents()),
+		delivery.Log:      len(ev.GetLogs()) + len(ev.GetTaskLogs()),
+	}
+	for _, g := range ev.GetGroups() {
+		addGroupKinds(k, g)
+	}
+	return k
+}
+
+// queueLocked stamps the batch data with the boot's next ledger and queues
+// it under a fresh id, after dropping what has aged out: resolved is read
+// once the aged batches are gone and before this one joins the queue, so it
+// names exactly what had left the spool. It reports whether a drop began an
+// overflow.
+func (s *telemetrySpool) queueLocked(data []byte, kinds map[delivery.Kind]int) bool {
+	started := s.expireLocked()
+	if s.ledger == nil {
+		s.ledger = delivery.NewLedger(collection.NewBatchID())
+	}
+	resolved := s.ledger.Last()
+	if len(s.queue) > 0 {
+		resolved = s.queue[0].seq - 1
+	}
+	stamp := s.ledger.Mint(kinds, s.now().UTC(), resolved)
+	l, err := proto.Marshal(stamp.Proto())
+	if err != nil {
+		// A ledger is numbers and a UUID; it cannot fail to encode. Should
+		// it, the batch still ships: its items read as missing, not lost
+		// silently.
+		slog.Warn("telemetry batch ledger did not encode", "facility", "delivery", "seq", stamp.Seq, "error", err.Error())
+	} else {
+		data = protowire.AppendBytes(protowire.AppendTag(data, ledgerField, protowire.BytesType), l)
+	}
+	if s.enqueueLocked(spooledBatch{id: collection.NewBatchID(), seq: stamp.Seq, data: data, queued: s.now()}) {
+		started = true
+	}
+	return started
 }
 
 // groupEmpty reports whether g carries no sample on any lane.
@@ -263,8 +337,8 @@ func (s *telemetrySpool) flushLocked() bool {
 	if len(s.groups) == 0 {
 		return false
 	}
-	groups, size := s.groups, s.groupBytes
-	s.groups, s.groupBytes = nil, 0
+	groups, size, kinds := s.groups, s.groupBytes, s.kinds
+	s.groups, s.groupBytes, s.kinds = nil, 0, nil
 	head, err := proto.Marshal(&ogv1.TelemetryBatch{NodeId: s.node, Ts: timestamppb.New(s.now().UTC())})
 	if err != nil {
 		// Only a node id that is not UTF-8 fails here; config refuses one.
@@ -272,15 +346,12 @@ func (s *telemetrySpool) flushLocked() bool {
 		s.failures++
 		return false
 	}
-	b := make([]byte, 0, len(head)+size)
+	b := make([]byte, 0, len(head)+size+64)
 	b = append(b, head...)
 	for _, g := range groups {
 		b = append(b, g...)
 	}
-	started := s.expireLocked()
-	if s.enqueueLocked(spooledBatch{id: collection.NewBatchID(), data: b, queued: s.now()}) {
-		started = true
-	}
+	started := s.queueLocked(b, kinds)
 	if !s.held {
 		s.shipLocked()
 	}
@@ -299,12 +370,10 @@ func (s *telemetrySpool) send(ev *ogv1.TelemetryBatch) error {
 		s.failed()
 		return fmt.Errorf("node: marshal telemetry batch: %w", err)
 	}
+	kinds := batchKinds(ev)
 	s.mu.Lock()
 	started := s.flushLocked()
-	if s.expireLocked() {
-		started = true
-	}
-	if s.enqueueLocked(spooledBatch{id: collection.NewBatchID(), data: b, queued: s.now()}) {
+	if s.queueLocked(b, kinds) {
 		started = true
 	}
 	if !s.held {
