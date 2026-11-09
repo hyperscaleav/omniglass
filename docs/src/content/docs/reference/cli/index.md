@@ -3780,7 +3780,7 @@ omniglass node setTag <name> --key key --value value
 Get a node's simulator
 
 ```
-omniglass node simulation <name>
+omniglass node simulation [flags]
 ```
 
 The devices a simulator beside the node serves (each component with an endpoint placed on the node, within the caller's component read scope), joined to the hits the server has seen and the simulator's capabilities. Hits are live and per server process, not stored. Requires an all-scope node read. Gated by node:read.
@@ -3789,6 +3789,26 @@ Example:
 
 ```sh
 omniglass node simulation <name>
+```
+
+#### `omniglass node simulation observation`
+
+Commands for the observation resource
+
+##### `omniglass node simulation observation list`
+
+Get a node's endpoint observation
+
+```
+omniglass node simulation observation list <name>
+```
+
+What the simulated endpoints beside a node saw arrive and how each request settled, and what the node tallied sending, read in that order: the simulator, then the node, then the simulator again, so a request in transit between reads is never a false gap. A scale lab reconciles the three. Totals are per protocol with a capped sample of device ids, bounded at any fleet size, and count since each process started. Gated by simulation:read, and only for a caller whose component read scope is all, since the totals span every component the node simulates. A node that does not exist is a 404; no simulator answering, or the node not answering, a 503.
+
+Example:
+
+```sh
+omniglass node simulation observation list <name>
 ```
 
 ### `omniglass node update`

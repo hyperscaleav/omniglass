@@ -2804,6 +2804,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/nodes/{name}/simulation/observation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a node's endpoint observation
+         * @description What the simulated endpoints beside a node saw arrive and how each request settled, and what the node tallied sending, read in that order: the simulator, then the node, then the simulator again, so a request in transit between reads is never a false gap. A scale lab reconciles the three. Totals are per protocol with a capped sample of device ids, bounded at any fleet size, and count since each process started. Gated by simulation:read, and only for a caller whose component read scope is all, since the totals span every component the node simulates. A node that does not exist is a 404; no simulator answering, or the node not answering, a 503.
+         */
+        get: operations["get-node-simulation-observation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/nodes/{name}/simulation/systems": {
         parameters: {
             query?: never;
@@ -7677,6 +7697,17 @@ export interface components {
             /** @description A webhook endpoint's own block (#1024): where a sender posts, the scheme that checks it, and what the scheme has refused; absent on every other transport, and on a list */
             webhook?: components["schemas"]["EndpointWebhookBody"];
         };
+        EndpointObservation: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/EndpointObservation.json
+             */
+            readonly $schema?: string;
+            node: components["schemas"]["RequestTallySnapshot"];
+            sim_after: components["schemas"]["SimObservation"];
+            sim_before: components["schemas"]["SimObservation"];
+        };
         EndpointWebhookBody: {
             /**
              * Format: date-time
@@ -7735,6 +7766,12 @@ export interface components {
              */
             readonly $schema?: string;
             tags: components["schemas"]["TagBindingBody"][] | null;
+        };
+        EpochHigh: {
+            /** Format: int64 */
+            e: number;
+            /** Format: int64 */
+            m: number;
         };
         ErrorDetail: {
             /** @description Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id' */
@@ -8127,6 +8164,11 @@ export interface components {
             locations: components["schemas"]["FleetLocationBody"][] | null;
             /** @description Every system the caller may read, each carrying its dots */
             systems: components["schemas"]["FleetSystemBody"][] | null;
+        };
+        GaugeReading: {
+            /** Format: int64 */
+            current: number;
+            high_water?: components["schemas"]["EpochHigh"][] | null;
         };
         GrantBody: {
             /**
@@ -10364,6 +10406,20 @@ export interface components {
             /** @description The system_type this system is classified by, by name or uuid. Required to render a generated name's label: the stem lives on that registry row. */
             system_type_id?: string;
         };
+        RequestTallySnapshot: {
+            /** Format: date-time */
+            at: string;
+            /** Format: int64 */
+            batches_acknowledged: number;
+            /** Format: int64 */
+            batches_dropped: number;
+            busy_workers?: components["schemas"]["GaugeReading"];
+            node: string;
+            queue_depth?: components["schemas"]["GaugeReading"];
+            /** Format: date-time */
+            started: string;
+            transports?: components["schemas"]["TallyCounters"][] | null;
+        };
         ResetPasswordInputBody: {
             /**
              * Format: uri
@@ -11091,6 +11147,15 @@ export interface components {
              */
             status: "running" | "starting" | "failed" | "offline";
         };
+        SimFaceOverlap: {
+            device_id: string;
+            face: string;
+            /** Format: int64 */
+            overlapped: number;
+            protocol: string;
+            /** Format: int64 */
+            received: number;
+        };
         SimFleetOutputBody: {
             /**
              * Format: uri
@@ -11123,6 +11188,21 @@ export interface components {
             oid: string;
             /** @description The state path the OID reads. */
             path: string;
+        };
+        SimObservation: {
+            /** Format: date-time */
+            at: string;
+            /** Format: int64 */
+            devices: number;
+            faces?: components["schemas"]["SimFaceOverlap"][] | null;
+            /** Format: int64 */
+            faces_overlapped?: number;
+            /** Format: int64 */
+            impaired: number;
+            node: string;
+            protocols: components["schemas"]["SimProtocolObservation"][] | null;
+            /** Format: date-time */
+            started: string;
         };
         SimOperationResult: {
             /**
@@ -11158,6 +11238,40 @@ export interface components {
              */
             readonly $schema?: string;
             profiles: components["schemas"]["SimProfileBody"][] | null;
+        };
+        SimProtocolObservation: {
+            /** Format: int64 */
+            accepted?: number;
+            /** Format: int64 */
+            answered?: number;
+            /** Format: int64 */
+            dropped?: number;
+            /** Format: int64 */
+            error?: number;
+            /** Format: int64 */
+            in_flight?: number;
+            in_flight_high?: components["schemas"]["EpochHigh"][] | null;
+            latency?: number[] | null;
+            /** Format: int64 */
+            open_connections?: number;
+            /** Format: int64 */
+            open_streams?: number;
+            /** Format: int64 */
+            overlapped?: number;
+            protocol: string;
+            /** Format: int64 */
+            received?: number;
+            /** Format: int64 */
+            refused?: number;
+            /** Format: int64 */
+            served?: number;
+            /** Format: int64 */
+            streams_opened?: number;
+            /** Format: int64 */
+            unhit?: number;
+            unhit_sample?: string[] | null;
+            /** Format: int64 */
+            withheld?: number;
         };
         SimRoleFillBody: {
             /** @description The choice alternate the role belongs to, choice/alternate; empty when unconditional. */
@@ -11653,6 +11767,23 @@ export interface components {
              */
             readonly $schema?: string;
             values: string[] | null;
+        };
+        TallyCounters: {
+            /** Format: int64 */
+            answered: number;
+            /** Format: int64 */
+            connections: number;
+            /** Format: int64 */
+            error: number;
+            /** Format: int64 */
+            in_flight: number;
+            /** Format: int64 */
+            refused: number;
+            /** Format: int64 */
+            sent: number;
+            /** Format: int64 */
+            timed_out: number;
+            transport: string;
         };
         TaskBody: {
             /**
@@ -18589,6 +18720,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AddSimComponentOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-node-simulation-observation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The node's unique name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EndpointObservation"];
                 };
             };
             /** @description Error */
