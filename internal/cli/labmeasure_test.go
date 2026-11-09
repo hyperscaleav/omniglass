@@ -7,7 +7,7 @@ import (
 )
 
 func TestLabMeasureOptsCheck(t *testing.T) {
-	ok := labMeasureOpts{systems: 100, window: time.Minute, fleetReads: 5, backlog: 1000, drainWait: time.Minute}
+	ok := labMeasureOpts{systems: 100, window: time.Minute, fleetReads: 5, backlog: 1000, drainWait: time.Minute, settleWait: time.Minute}
 	if err := ok.check(); err != nil {
 		t.Fatalf("a valid set of flags: %v", err)
 	}
@@ -19,12 +19,16 @@ func TestLabMeasureOptsCheck(t *testing.T) {
 		t.Fatalf("attaching with the probe skipped needs no drain timeout: %v", err)
 	}
 	cases := map[string]func(*labMeasureOpts){
-		"--systems":       func(o *labMeasureOpts) { o.systems = -1 },
-		"--window":        func(o *labMeasureOpts) { o.window = 0 },
-		"--warmup":        func(o *labMeasureOpts) { o.warmup = -time.Second },
-		"--fleet-reads":   func(o *labMeasureOpts) { o.fleetReads = 0 },
-		"--backlog":       func(o *labMeasureOpts) { o.backlog = -1 },
-		"--drain-timeout": func(o *labMeasureOpts) { o.drainWait = 0 },
+		"--systems":        func(o *labMeasureOpts) { o.systems = -1 },
+		"--window":         func(o *labMeasureOpts) { o.window = 0 },
+		"--warmup":         func(o *labMeasureOpts) { o.warmup = -time.Second },
+		"--fleet-reads":    func(o *labMeasureOpts) { o.fleetReads = 0 },
+		"--backlog":        func(o *labMeasureOpts) { o.backlog = -1 },
+		"--drain-timeout":  func(o *labMeasureOpts) { o.drainWait = 0 },
+		"--settle-timeout": func(o *labMeasureOpts) { o.settleWait = 0 },
+		// Receipts are pruned at a day: a longer window would read pruned
+		// batches as lost.
+		"--window over 23h": func(o *labMeasureOpts) { o.window = 23*time.Hour + time.Second },
 	}
 	for flag, mutate := range cases {
 		o := ok
