@@ -121,7 +121,7 @@ metric_types:
   - name: retention-behind
     data_type: int
     label: Retention Behind
-    description: 1 when the pass stopped at its chunk cap with rows (or compaction work) still past the window, 0 when it caught up; a lane that stays at 1 is falling behind.
+    description: 1 when the pass stopped at its chunk cap with rows (or compaction work) still past the window, or its prune or compaction failed, 0 when it caught up; a lane that stays at 1 is falling behind.
   - name: retention-pass-duration
     data_type: float
     unit: s

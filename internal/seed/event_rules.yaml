@@ -25,8 +25,9 @@ rules:
   # after pass opens a warning on the server's platform component (#1629):
   # one alarm per lane, once the flag has read 1 for the sustain. A pass left
   # behind runs again a minute later, so 5m is several catch-up passes that
-  # did not catch up. It clears on the first pass that does. A pass that
-  # errors counts in retention-pass-failure-count; it is not behind.
+  # did not catch up. It clears on the first pass that does. A lane whose
+  # prune or compaction errors is flagged behind too, since it did not reach
+  # its window, and the error counts in retention-pass-failure-count.
   - name: retention-behind
     label: Retention behind
     description: A retention lane or compaction stopped short of its window and stayed behind.

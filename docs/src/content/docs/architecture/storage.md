@@ -617,15 +617,18 @@ code). One pass writes one sample per key and instance, at the pass's end:
 
 **Behind and failed read differently.** A lane is *behind* when the pass stopped at its chunk budget
 with rows still past the window, which is normal after a long outage or a window shortened: the next
-pass comes a minute later and catches up. A *failure* is an error (a statement that failed, a
-window out of range), counted in `retention-pass-failure-count`; a lane whose prune failed is also
-flagged behind, since it did not reach its window. So a failure count above zero is a fault to read in
-the server log, and a behind flag that holds is a lane the budget cannot keep up with. The seeded
+pass comes a minute later and catches up. A *failure* is an error (a statement that failed, a window
+out of range), counted in `retention-pass-failure-count`; a lane whose prune failed is also flagged
+behind, since it did not reach its window. So a failure count above zero is a fault to read in the
+server log, and a behind flag that holds is a lane the budget cannot keep up with. The seeded
 **`retention-behind`** rule reads the second: a lane flagged 1 for five minutes, several catch-up
 passes, opens a warning alarm on the server's component naming the lane, and the first pass that
-reads it 0 clears it. The four INFO lines a pass logs stay. Every figure is a loss reading, 0 healthy,
-except the sizes, ages and window, which are levels to read against each other. Until the server
-registers its platform component (#1627, wired in #1671), the server writes none of these.
+reads it 0 clears it (a lane that leaves the report while flagged keeps its alarm open, #1673). The
+four INFO lines a pass logs stay. Only the behind flag and the failure count are loss readings, 0
+healthy. The rest are counts and levels with no zero to aim at: the deleted counts, the duration and
+the partition roll measure the work a pass did, the mark lags sit at their healthy trail (above)
+rather than at 0, and the sizes, ages and window are levels to read against each other. Until the
+server registers its platform component (#1627, wired in #1671), the server writes none of these.
 
 ::::design[Target design: the metric lane is partitioned (#1275); the other append-only tables are tracked in #1417, and the `raw_sample` buffer in #430]
 
