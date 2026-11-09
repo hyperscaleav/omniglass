@@ -655,6 +655,15 @@ call argument cannot see them. It is where an OpenTelemetry pgx tracer attaches,
 the test harness counts round trips through, which is how a LIST is held to a constant number of
 queries rather than an N+1 ([counting round trips](/contributing/test-driven/#counting-round-trips-not-timing-them)).
 
+A node's **worklist pull** is held to the same rule: it costs a flat handful of statements however many
+endpoints the node carries (eight, today). Every read it makes beyond the task scan is set-based and
+keyed by what each endpoint needs: the key pins and the latest rejections take one statement each,
+keyed by (component, endpoint), and the secrets one, over every (secret reference, component) pair
+the tasks name. The secret read walks the component and location chains once for the whole batch, and
+each chain row carries the component it was walked up from, so a candidate secret covers only the
+component of its own reference, never a sibling's: the confinement a per-component resolve gave, kept
+in one statement. A shared credential (a location's, the platform's) unseals once per pull.
+
 :::design[Embedded Postgres, tracked in #19]
 Embedded Postgres in the single binary replaces BYO for the all-in-one run mode; the data lane's
 persistence consumer and the record lane's CDC publisher (#430) target this one backend through the
