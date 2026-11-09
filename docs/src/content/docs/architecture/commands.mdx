@@ -40,7 +40,9 @@ The issue records; the **wire actuates** (#815). The moving parts:
   the worklist, the same reply-inbox confinement) and receives the commands whose owning
   component has a **driver-attached endpoint placed on it**, where that driver's spec **binds the
   command's type**. A command no driver binds is never delivered; its lifecycle is settlement's
-  business alone.
+  business alone. Today the node pulls on each heartbeat; the target is a server wake with a
+  fallback pull, the command run on a bounded command pool through its endpoint's lane, ahead of
+  scheduled work (#1635, [ADR-1637](/architecture/decisions/#adr-1637-a-node-runs-each-kind-of-work-on-its-own-timer-and-pool-one-request-per-endpoint-at-a-time)).
 - **Rendered at dispatch.** The server resolves the binding's request template against the
   command at delivery time: `${value}` is the intended value, `${arg.key}` an issue param
   (template references are validated at spec write). A substituted value carrying a control

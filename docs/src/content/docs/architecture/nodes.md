@@ -312,7 +312,33 @@ stamps labels (cascading union + override), keeping the wire bytes as `raw` only
 validation failure (for `collection.failed`) or under dev raw-mode.
 :::
 
-The built endpoint types, their per-task params, and the fixed samples each emits are the collection **type catalog** ([endpoint types and their config](/architecture/collection/#endpoint-types-and-their-config)); this page covers how the node *executes* them: reachability gating, sessions, the task queue, tick scheduling.
+Today one loop does a node's work on each heartbeat: it publishes liveness, runs the whole worklist
+one task after another, pulls and runs its commands, then reports the sessions' unclaimed lines. A
+slow poll therefore delays the heartbeat, every other poll and every command, and a poll's interval
+rounds to the heartbeat. Only the worklist pull already runs on its own interval
+([ADR-1577](/architecture/decisions/#adr-1577-a-nodes-worklist-is-compressed-served-by-a-bounded-responder-and-retried-without-exiting)).
+
+:::design[Target design: per-kind queues on their own timers, tracked in #1624 (ADR-1637); polls and probes are #1634, the heartbeat and commands #1635, held sessions #1636]
+The tick is replaced by a queue per kind of work, each on its own timer with its own bounded pool,
+and **no work waits on the heartbeat**
+([ADR-1637](/architecture/decisions/#adr-1637-a-node-runs-each-kind-of-work-on-its-own-timer-and-pool-one-request-per-endpoint-at-a-time)):
+
+| Kind | When it runs | Where it runs |
+|---|---|---|
+| heartbeat | its own timer | publishes liveness, nothing else |
+| worklist pull | its own interval (ADR-1577) | the pull goroutine |
+| polls and probes | each task's own interval, from one scheduler keyed on it | the bounded poll pool, through the endpoint's lane |
+| commands | a server wake, with a fallback pull | the bounded command pool, through the endpoint's lane |
+| held sessions | for as long as the worklist holds them | one supervised goroutine each, establish bounded at a fleet-wide start |
+| housekeeping | its own timer | the spool's retry, the collection report window, self-logs |
+
+Every discrete request rides its endpoint's lane ([the component task queue](#the-component-task-queue)),
+and every lane consults the endpoint's gate before it dispatches ([implicit reachability](#implicit-reachability)).
+How a task's timer fires, skips and reports lateness is under
+[scheduling](#scheduling-concurrency-and-self-observability).
+:::
+
+The built endpoint types, their per-task params, and the fixed samples each emits are the collection **type catalog** ([endpoint types and their config](/architecture/collection/#endpoint-types-and-their-config)); this page covers how the node *executes* them: reachability gating, sessions, the task queue, scheduling.
 
 ## Sessions
 
@@ -419,48 +445,62 @@ and lands as a log line only where the spec asks (`unmatched: log`).
 ## The component task queue
 
 Built: a standing listen task shares its endpoint's held session with the endpoint's polls and
-commands, demuxed by one reader (#817); the per-component lanes and the smart-wait gate below remain
-design.
+commands, demuxed by one reader (#817). Today the node runs its whole worklist serially, one task
+after another, then its commands; the endpoint lanes below remain design.
 
-::::design[Target design: the component task queue, tracked in #1249; commands ride the per-node pull of ADR-0136]
+::::design[Target design: endpoint lanes, tracked in #1249 under #1624 (ADR-1637); component-wide exclusion is #1649, the per-endpoint pool size #1254; commands ride the per-node pull of ADR-0136]
 The node's work is the **component task queue** (distinct from the central **rule engine**;
 [workers](/architecture/workers/)): **poll tasks** (produce samples) and **command tasks** (from
 `run` actions, producing a caused `event` + `action`-row status), split by shape:
 
-- **discrete tasks** (pollers, commands): request/response, **serialized into per-component lanes**.
-  Component, not host, is the contention key: a server with two IPs is one component, and a reboot
-  takes out both endpoints. A shared poller runs once on its parent and fans out at binding.
-- **standing receivers** (listen tasks): always-on, event-driven, **not lane-serialized**, sharing a
-  held session with pollers (demuxed) or owning their connection.
+- **discrete tasks** (scheduled polls, probes that open a connection, commands, an operator's run
+  now, and a driver preview whose transport and target match an inventoried endpoint):
+  request/response, **serialized into per-endpoint lanes**. The endpoint is the one exclusion key
+  across every kind: one endpoint never sees two of our requests at once, while endpoints run in
+  parallel, two endpoints of one component included. A shared poller runs once on its parent and
+  fans out at binding.
+- **standing receivers** (listen tasks): always-on, event-driven, **not lane-serialized**
+  ([ADR-0151](/architecture/decisions/#adr-0151-a-held-line-session-routes-every-inbound-line-listeners-first-answers-by-reply-shape)),
+  sharing a held session with pollers (demuxed) or owning their connection.
 
-**Smart-wait gate.** After a disruptive command the lane blocks until reachability reports the host
-back up, read from the node's **local** copy, not the sample store; a fixed timeout backstops.
+**Operator work goes first.** Each lane's queue has two classes: operator-initiated work (a
+preview, a run now, an operator-issued command) is dispatched ahead of scheduled work, FIFO within
+a class, and nothing preempts a request already in flight.
 
-Today the node runs its whole worklist serially, one task after another, then its commands; the
-lanes above are what make distinct components run concurrently.
+**One request in flight per endpoint, unless declared.** More than one request in flight to one
+endpoint comes only from the held session's explicit per-endpoint pool size (#1254, default 1),
+since connection and order semantics differ per protocol. A driver whose device cannot take two
+endpoints' requests at once opts its component into component-wide exclusion, which keys that
+component's lane on the component (#1649).
 
-:::caution[Open question]
-Whether to add intra-endpoint concurrency, given that connection and order semantics differ per
-protocol.
-:::
+**The lane holds nothing itself.** It consults the endpoint's gate at dispatch
+([below](#implicit-reachability)): a closed gate skips a due scheduled poll and counts it, and
+answers operator work at once with the gate's reason instead of queueing it.
 
-The node-side queue is **not** durable: durability lives **server-side** (the JetStream command
-queue, the cascade-configurable telemetry buffer). On reconnect the node re-pulls its worklist,
-resumes its durable consumer on the command queue, and replays unacked telemetry publishes
-(each landed once by its batch receipt).
+The node-side queue is **not** durable: durability lives **server-side** (the command rows the
+per-node pull serves, the cascade-configurable telemetry buffer). On reconnect the node re-pulls
+its worklist and its pending commands, and replays unacked telemetry publishes (each landed once by
+its batch receipt).
 ::::
 
 ## Implicit reachability
 
 Any endpoint with a host address gets reachability for free: the node pings the host and checks the declared port(s), continuously and out of band; a smart default, **bypassable per endpoint** (for endpoints that drop ICMP or have no port).
 
-:::design[Target design: the layered availability gate's per-host ping, concurrent pre-pass and verdict-gated polls, tracked in #1249; the ping's rtt and loss are #1063]
-The results come back as `reachable` / `port_open` **samples** usable in rules and dashboards, and
-feed the smart-wait gate from the node's local copy: the connection detector and the dashboard
-signal are one always-on probe.
+Built: the layered gate holds an endpoint's terminal refusal (auth, host key, certificate,
+protocol) on the ladder its driver declares, until the connection fingerprint changes, an operator
+retries, or the rung passes
+([ADR-0158](/architecture/decisions/#adr-0158-one-connection-fingerprint-gates-every-connection-on-a-ladder-the-driver-declares)).
+The reason set, its other triggers and the per-host ping below remain design.
 
-**The layered availability gate** is an **OSI-layered** set of cheap checks run as a **concurrent
-pre-pass** (high concurrency, short timeouts) before a connection-endpoint's poll tasks. All
+:::design[Target design: the endpoint gate's reason set and its triggers, tracked in the gate track under #1624 (#1650, #1651, #1652, the edges #1648; ADR-1637); the per-host ping is #1249, the ping's rtt and loss #1063]
+The results come back as `reachable` / `port_open` **samples** usable in rules and dashboards, and
+feed the endpoint's gate from the node's **local** copy, not the sample store: the connection
+detector and the dashboard signal are one always-on probe.
+
+**The layered availability gate** is an **OSI-layered** set of cheap checks run as each
+endpoint's **probe**, on its own interval (#1634) with short timeouts, not as a pre-pass in front
+of each poll; its verdict feeds the gate the polls consult. All
 applicable checks run, each shipping a built-in sample, instanced (the ping by host, the rest by
 endpoint) and owned by the queried component; the endpoint's **`endpoint-reachable`** verdict is
 their AND.
@@ -499,7 +539,29 @@ with ICMP fully blocked even that is lost. The ssh probe still tries a params cr
 reads the first negotiation or banner bytes; the login is the held session's auth step, so a probe
 cannot retry a bad credential on every run, [ADR-0157](/architecture/decisions/#adr-0157-telnet-and-ssh-are-held-line-transports-their-login-is-the-drivers-and-the-ssh-host-key-is-pinned-on-first-use)). A driver's `ladder.transport.request.get` overrides the probe OID.
 
-**Poller** tasks run only if the verdict is up; **listener** (`mode=listen`) tasks run ungated,
+**One gate, a set of reasons.** Every endpoint has one gate, today's layered gate generalized
+([ADR-1637](/architecture/decisions/#adr-1637-a-node-runs-each-kind-of-work-on-its-own-timer-and-pool-one-request-per-endpoint-at-a-time)).
+It holds a set of reasons, each with a kind, a since time, a source and its own release rule, and
+it is **open only when the set is empty**. Several triggers, one gate:
+
+| Reason | Added by | Released by | Tracked in |
+|---|---|---|---|
+| `refused` | a terminal refusal on a rung (today's gate, moved into the set with no change in behavior) | a fingerprint change, an operator's `:retry`, or the rung passing | #1650 |
+| `unreachable` | two consecutive failed probe verdicts | the next up verdict | #1650 |
+| `disrupted` | a disruptive command, at delivery, on every endpoint of its hold set | after a quiet period with no connectivity attempts (probes included), each endpoint's first up verdict; a backstop releases the rest and counts the expiry | #1651 |
+| `upstream` | a closed gate on the component the endpoint is reached through (a path edge, transitive and cycle-guarded) | the upstream opening, then the dependent's own first up verdict | #1652, edges #1648 |
+
+A disruptive command no longer blocks a lane until the host comes back: the `disrupted` reason
+closes the gate, and the lane, consulting it, sends nothing. While the gate is closed, a due
+scheduled poll is skipped and counted in `poll-held-count` (held, not loss), and a command, a run
+now or a preview answers at once with the reason ("unreachable since", "disrupted by", "upstream",
+or today's refusal) instead of queueing. Only the probe runs, and not while a reason suppresses it
+(the quiet period, an upstream hold). **Lanes are separate from the gate:** a lane consults it at
+dispatch and holds nothing itself. The gate is published as `endpoint-rejection`, one row per
+endpoint carrying every active reason, and adopted back from the worklist as today. An endpoint with
+no probe task never gains `unreachable` and keeps today's per-task backoff.
+
+**Poller** tasks run only while the gate is open; **listener** (`mode=listen`) tasks run ungated,
 never pinged; **inline probes** (`icmp`/`tcp` with the host on the task) *are* the check, ungated. A
 down endpoint's gate samples ship in **one** batched call. L5 (socket) and further L7 handshakes
 extend the stack as rungs a driver's ladder declares, not as toggles.
@@ -542,16 +604,10 @@ not at the durable write. The server never re-derives observed samples; the node
 ship.
 :::
 
-## Tick scheduling, concurrency, and self-observability
+## Scheduling, concurrency, and self-observability
 
-::::design[Target design: the tick scheduler, `node.self`, and the node-down sweep, tracked in #430 (per-task driver poll schedules are built, #822); the seeded node rules are the `event_rule` (ADR-0050)]
-A tick groups the worklist **by endpoint** and runs three phases: the L3 ping pre-pass (batched per
-host), the gate-verdict pre-pass, the poll phase. The gate pre-passes run at a **high fixed
-concurrency** (`gateConcurrency`), the poll phase across the **bounded poll pool** (default 16,
-`--workers`), so the cheap gate is never throttled by a small `--workers` and a node facing many
-dead targets is bounded by concurrency, not the serial sum of probe timeouts (a dead SNMP get costs
-`timeout * (retries+1)`, via `--snmp-timeout` / `--snmp-retries`, default 3s x2). Each poll task gets
-a per-task deadline (`--task-deadline`, default 30s).
+Built today: one loop runs a node's work on each heartbeat, serially, and a poll or probe honors
+its own interval only at heartbeat granularity.
 
 :::note[Settled for driver polls (#822) and probes (#1273)]
 A driver poll runs on its declared `schedule.every`, at heartbeat granularity: the node keeps each
@@ -571,12 +627,30 @@ pushes are never gated
 [ADR-1273](/architecture/decisions/#adr-1273-a-reachability-probe-runs-on-the-nodes-probe-interval-not-every-heartbeat)).
 :::
 
-The loop is **overrun-aware**: it reschedules relative to each tick's finish, not a fixed ticker; a
-tick exceeding its interval is flagged and the next fires immediately, so falling behind
-**surfaces** rather than silently dropping ticks.
+:::design[Target design: the poll and probe scheduler, the pools and their bounds, tracked in #1634 under #1624 (ADR-1637); the command pool is #1635, held-session establish #1636]
+Each poll and probe runs on its **own interval at a stable phase**, with no rounding to the
+heartbeat and no half-heartbeat slack, from one scheduler keyed on each task's next due time. A due
+task is dispatched to the **bounded poll pool** (`--workers`, an env var too, and a node-leaf
+cascade value once #1351 lands; the default is set from the scale lab's measurements) through its
+endpoint's lane, so the pool runs many endpoints at once and one endpoint one request at a time. The
+probes run at a **high fixed concurrency** (`gateConcurrency`) with short timeouts, so the cheap
+gate is never throttled by a small `--workers`, and a node facing many dead targets is bounded by
+concurrency, not the serial sum of probe timeouts (a dead SNMP get costs `timeout * (retries+1)`,
+via `--snmp-timeout` / `--snmp-retries`, default 3s x2). Each poll task gets a per-task deadline
+(`--task-deadline`, default 30s).
 
-Each tick the node publishes a `node.self` envelope: tick duration, task
-attempted/ran/skipped/failed counts, endpoint probed/up/down counts, the `node.overrun` state. Not
+**Skip, not burst.** A task still in flight at its next due is **skipped and counted**, never
+queued a second time, so falling behind surfaces without adding load to a device already slow to
+answer. A run's **lateness** (its start minus its due time) is measured and published (#1625), the
+signal a node's capacity and later its share of a site's load (#1638) are read from. This replaces
+the overrun-aware loop, whose late tick fired the next at once
+([ADR-1637](/architecture/decisions/#adr-1637-a-node-runs-each-kind-of-work-on-its-own-timer-and-pool-one-request-per-endpoint-at-a-time)).
+:::
+
+:::design[Target design: `node.self` and the node-down sweep, tracked in #430 and #1094; the seeded node rules are the `event_rule` (ADR-0050)]
+On its housekeeping timer the node publishes a `node.self` envelope: task
+attempted/ran/skipped/failed counts, endpoint probed/up/down counts, the `node.overrun` state (a run
+skipped at its due). Not
 special-cased: `node.self` is node-owned samples (the seeded `node.*` types) riding the **same
 raw-ingress -> admission -> trusted** path; the self shape is **built into the binary** (no
 operator-authored template), the admission consumer binds it to the **reporting node**
@@ -594,6 +668,6 @@ node owner)` for idempotency across sweeps; this is why the node owner arc reach
 A degraded-but-alive node alarms through the ordinary **event_rule** path: a rule on a `node.*` key
 opens a node-owned alarm. Two are seeded, `node-overrun` (while `node.overrun` is true) and
 `node-tasks-failing` (while `node.tasks.failed > 0`), both resolving implicitly on the next clean
-tick, because `Evaluate` is owner-general (component, system, location, or node), which also unlocks
+report, because `Evaluate` is owner-general (component, system, location, or node), which also unlocks
 system- and location-owned alarms.
-::::
+:::

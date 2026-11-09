@@ -440,7 +440,7 @@ an operator overrides them down the cascade.
 
 ## Endpoint types and their config
 
-The poll types and listeners in the `transport` registry and the operator config they read. How the node *executes* these (tick scheduling, reachability gating, the task queue) is [nodes](/architecture/nodes/).
+The poll types and listeners in the `transport` registry and the operator config they read. How the node *executes* these (scheduling, reachability gating, the task queue) is [nodes](/architecture/nodes/).
 
 ### Poll protocols and their config
 
@@ -1438,6 +1438,9 @@ half a heartbeat of its due time (a new task at once, and a run whose fetch fail
 heartbeat, doubling, capped at the interval), while reachability probes run on the node's probe interval
 (`--probe-every`, every tick when unset, [ADR-1273](/architecture/decisions/#adr-1273-a-reachability-probe-runs-on-the-nodes-probe-interval-not-every-heartbeat))
 and a listener's pushes ride the held session as they arrive, never gated ([ADR-0152](/architecture/decisions/#adr-0152-a-driver-poll-runs-on-its-declared-schedule-at-heartbeat-granularity)).
+Heartbeat granularity is the built step: the target is each poll and probe on its own timer at a
+stable phase, with no heartbeat rounding and a run still in flight at its next due skipped, never
+burst (#1634, [ADR-1637](/architecture/decisions/#adr-1637-a-node-runs-each-kind-of-work-on-its-own-timer-and-pool-one-request-per-endpoint-at-a-time)).
 The node tells a baked driver task from a probe task by its spec, fetches over the transport (an http request rides the node's http fetcher with the endpoint's credential, [above](#http-and-https); the v2c scalar GET rides `gosnmp`, proven
 against a from-the-spec BER agent; a line poll runs one stateless ask over a throwaway
 connection, or borrows the endpoint's [held session](#sessions) when the node holds one), and interprets the payload against the baked
