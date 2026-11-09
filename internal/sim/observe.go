@@ -1,10 +1,11 @@
 package sim
 
 import (
-	"math/bits"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/hyperscaleav/omniglass/internal/obsstat"
 )
 
 // What an endpoint observed (#1639): every simulated endpoint counts what it
@@ -114,8 +115,8 @@ type protocolRow struct {
 // engine's devices.
 type engineProtocol struct {
 	inFlight  atomic.Int64
-	highWater highWaterRing
-	latency   latencyHistogram
+	highWater obsstat.HighWaterRing
+	latency   obsstat.LatencyHistogram
 }
 
 // faceObservation is one face's discrete in-flight count and the overlaps it
@@ -200,7 +201,7 @@ func (d *deviceObservation) begin(p obsProtocol, f *faceObservation) obsToken {
 	now := time.Now()
 	row, eng := &d.rows[p], &d.engine.protocols[p]
 	row.inFlight.Add(1)
-	eng.highWater.observe(now.Unix()/highWaterEpochSeconds, eng.inFlight.Add(1))
+	eng.highWater.Observe(obsstat.EpochOf(now), eng.inFlight.Add(1))
 	if f != nil {
 		if f.inFlight.Add(1) > 1 {
 			f.overlapped.Add(1)
@@ -218,7 +219,7 @@ func (t obsToken) end(out Outcome) {
 		return
 	}
 	t.row.outcomes[out].Add(1)
-	t.eng.latency.record(time.Since(t.start))
+	t.eng.latency.Record(time.Since(t.start))
 	if t.face != nil {
 		t.face.inFlight.Add(-1)
 	}
@@ -349,27 +350,13 @@ type ProtocolObservation struct {
 	Latency []uint64
 	// InFlightHigh is the in-flight high water per 10 s epoch, the last ten
 	// minutes of them.
-	InFlightHigh []EpochHigh
+	InFlightHigh []obsstat.EpochHigh
 }
 
 // HighWater is the largest in-flight count in any epoch overlapping
 // [from, to].
 func (p ProtocolObservation) HighWater(from, to time.Time) int64 {
-	lo, hi := from.Unix()/highWaterEpochSeconds, to.Unix()/highWaterEpochSeconds
-	var m int64
-	for _, e := range p.InFlightHigh {
-		if e.Epoch >= lo && e.Epoch <= hi && e.Max > m {
-			m = e.Max
-		}
-	}
-	return m
-}
-
-// EpochHigh is one epoch's in-flight high water. Epoch is unix seconds over
-// ten.
-type EpochHigh struct {
-	Epoch int64
-	Max   int64
+	return obsstat.HighWater(p.InFlightHigh, from, to)
 }
 
 // DeviceObservation is one device's rows, only the protocols it serves or
@@ -412,7 +399,7 @@ func (o *endpointObservation) snapshot(at time.Time) ObservationSnapshot {
 	for p := range obsProtocolCount {
 		eng := &o.protocols[p]
 		s.Protocols = append(s.Protocols, ProtocolObservation{
-			Protocol: obsProtocolNames[p], Latency: eng.latency.counts(), InFlightHigh: eng.highWater.epochs(),
+			Protocol: obsProtocolNames[p], Latency: eng.latency.Counts(), InFlightHigh: eng.highWater.Epochs(),
 		})
 	}
 	for _, d := range devices {
@@ -435,182 +422,6 @@ func (o *endpointObservation) snapshot(at time.Time) ObservationSnapshot {
 		d.faceMu.Unlock()
 	}
 	return s
-}
-
-// The latency histogram: fixed log-linear buckets, eight per power of two of
-// microseconds, from 1 us to about 67 s, so a quantile read from it is
-// within one bucket width (an eighth of its power of two) of the truth, and
-// two histograms merge by summing buckets. A sketch that cannot be summed
-// across nodes (a t-digest) is refused for that reason.
-const (
-	latencySubBuckets = 8
-	latencyOctaves    = 26
-	latencyBuckets    = latencySubBuckets * latencyOctaves
-)
-
-type latencyHistogram struct {
-	buckets [latencyBuckets]atomic.Uint64
-}
-
-// latencyBucket is the bucket a duration in microseconds falls in: octave e
-// is the value's highest set bit, the sub-bucket its next three bits.
-func latencyBucket(us uint64) int {
-	if us == 0 {
-		return 0
-	}
-	e := bits.Len64(us) - 1
-	if e >= latencyOctaves {
-		return latencyBuckets - 1
-	}
-	var sub uint64
-	if e >= 3 {
-		sub = (us >> (e - 3)) & 7
-	} else {
-		sub = (us << (3 - e)) & 7
-	}
-	return e*latencySubBuckets + int(sub)
-}
-
-// latencyBucketBounds is a bucket's range in microseconds, [lo, hi).
-func latencyBucketBounds(i int) (lo, hi float64) {
-	e, sub := i/latencySubBuckets, i%latencySubBuckets
-	base := float64(uint64(1) << e)
-	return base * (1 + float64(sub)/latencySubBuckets), base * (1 + float64(sub+1)/latencySubBuckets)
-}
-
-func (h *latencyHistogram) record(d time.Duration) {
-	us := d.Microseconds()
-	if us < 0 {
-		us = 0
-	}
-	h.buckets[latencyBucket(uint64(us))].Add(1)
-}
-
-// counts reads the buckets, trailing empty ones trimmed.
-func (h *latencyHistogram) counts() []uint64 {
-	last := -1
-	var out [latencyBuckets]uint64
-	for i := range out {
-		out[i] = h.buckets[i].Load()
-		if out[i] != 0 {
-			last = i
-		}
-	}
-	return append([]uint64(nil), out[:last+1]...)
-}
-
-// MergeLatency sums histograms bucket by bucket.
-func MergeLatency(hs ...[]uint64) []uint64 {
-	var out []uint64
-	for _, h := range hs {
-		for len(out) < len(h) {
-			out = append(out, 0)
-		}
-		for i, n := range h {
-			out[i] += n
-		}
-	}
-	return out
-}
-
-// SubtractLatency is end minus start, bucket by bucket, for a window; a
-// bucket that went backwards (a restart) reads zero.
-func SubtractLatency(end, start []uint64) []uint64 {
-	out := append([]uint64(nil), end...)
-	for i := range out {
-		if i < len(start) {
-			if start[i] > out[i] {
-				out[i] = 0
-			} else {
-				out[i] -= start[i]
-			}
-		}
-	}
-	return out
-}
-
-// LatencyQuantile reads quantile q (0 to 1) from bucket counts, in
-// microseconds: the midpoint of the bucket the q-th observation falls in.
-func LatencyQuantile(counts []uint64, q float64) float64 {
-	var total uint64
-	for _, n := range counts {
-		total += n
-	}
-	if total == 0 {
-		return 0
-	}
-	rank := uint64(q * float64(total))
-	if float64(rank) < q*float64(total) || rank == 0 {
-		rank++
-	}
-	var seen uint64
-	for i, n := range counts {
-		seen += n
-		if seen >= rank {
-			lo, hi := latencyBucketBounds(i)
-			if i == 0 {
-				lo = 0
-			}
-			return (lo + hi) / 2
-		}
-	}
-	lo, hi := latencyBucketBounds(len(counts) - 1)
-	return (lo + hi) / 2
-}
-
-// The in-flight high-water ring: one slot per 10 s epoch over the last ten
-// minutes, each holding its epoch and the largest in-flight count seen in
-// it, packed into one word so a reading is one compare-and-swap. A reader
-// takes the max over the epochs its own window covers.
-const (
-	highWaterEpochSeconds = 10
-	highWaterSlots        = 60
-)
-
-type highWaterRing struct {
-	slots [highWaterSlots]atomic.Uint64
-}
-
-func (r *highWaterRing) observe(epoch, n int64) {
-	if n < 0 {
-		n = 0
-	}
-	if n > 1<<32-1 {
-		n = 1<<32 - 1
-	}
-	slot := &r.slots[epoch%highWaterSlots]
-	want := uint64(uint32(epoch))<<32 | uint64(n)
-	for {
-		cur := slot.Load()
-		curEpoch := uint32(cur >> 32)
-		if curEpoch > uint32(epoch) || (curEpoch == uint32(epoch) && int64(uint32(cur)) >= n) {
-			return
-		}
-		if slot.CompareAndSwap(cur, want) {
-			return
-		}
-	}
-}
-
-// epochs reads the ring, the newest epoch's last ten minutes only.
-func (r *highWaterRing) epochs() []EpochHigh {
-	var raw [highWaterSlots]uint64
-	var newest uint32
-	for i := range raw {
-		raw[i] = r.slots[i].Load()
-		if raw[i] != 0 && uint32(raw[i]>>32) > newest {
-			newest = uint32(raw[i] >> 32)
-		}
-	}
-	var out []EpochHigh
-	for _, v := range raw {
-		ep := uint32(v >> 32)
-		if v == 0 || newest-ep >= highWaterSlots {
-			continue
-		}
-		out = append(out, EpochHigh{Epoch: int64(ep), Max: int64(uint32(v))})
-	}
-	return out
 }
 
 // obsProtocolOf names a protocol back to its index.
