@@ -2732,7 +2732,7 @@ export interface paths {
         post?: never;
         /**
          * Delete a node
-         * @description Decommissions a node: a hard delete that cascades its endpoints, their derived tasks, its node-owned tags and self-telemetry, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by node:delete.
+         * @description Decommissions a node: a hard delete that cascades its endpoints, their derived tasks, its node-owned tags and self-telemetry, its platform component, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by node:delete.
          */
         delete: operations["delete-node"];
         options?: never;

@@ -654,7 +654,7 @@ Both are gated `command:read`, resolved on the component tier with the read and 
 :::note[Thin cuts today]
 The operationally useful slice, not the full CRUD matrix. A **node** carries the full set (create,
 list, get, update, delete, plus `:enroll` and `:claim`); its delete **cascades** its endpoints, their
-derived tasks, its node-owned tags and self-telemetry, and its enrollment credential. An **endpoint**
+derived tasks, its node-owned tags and self-telemetry, its platform component, and its enrollment credential. An **endpoint**
 `PATCH` changes only its node placement and its params (target); the type (and the name it derives)
 and the owning component are fixed at creation, and a delete is refused while a task still references
 it (a **409**). The four built endpoint types are `icmp`, `tcp`, `ssh`, and `http`; there is no
