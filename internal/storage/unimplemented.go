@@ -790,6 +790,9 @@ func (UnimplementedGateway) RecordPlatformMetrics(context.Context, []PlatformMet
 func (UnimplementedGateway) NodeCheckins(context.Context) ([]NodeCheckin, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) CommandQueueHealth(context.Context, time.Time) (CommandQueueRead, error) {
+	return CommandQueueRead{}, nil
+}
 func (UnimplementedGateway) ListTags(context.Context) ([]Tag, error) {
 	return nil, nil
 }

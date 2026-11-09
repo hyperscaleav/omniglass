@@ -50,37 +50,38 @@ type Config struct {
 
 // Server is the embedded NATS server plus the server-side control-plane handlers.
 type Server struct {
-	ns              *server.Server
-	nc              *nats.Conn
-	store           Store
-	subs            []*nats.Subscription
-	consumeCtx      jetstream.ConsumeContext // the telemetry durable consumer's pull loop
-	js              jetstream.JetStream      // the internal client's JetStream, the push lane's publisher
-	streamEpoch     string                   // OG_TELEMETRY's creation time, keying a batch with no id (batchID)
-	internalToken   string
-	sims            *simhub.Registry   // the simulators beside this server's nodes
-	stopSweep       chan struct{}      // ends the settlement sweep
-	stopReconcile   context.CancelFunc // ends the rule reconcile loop
-	stopCalc        context.CancelFunc // ends the calc tick
-	stopPrune       context.CancelFunc // ends the receipt retention pass
-	stopCheckinAge  context.CancelFunc // ends the check-in age timer (#1625)
-	stopRetention   context.CancelFunc // ends the sample retention pass (#417)
-	orphans         *orphanTally       // the node lane's orphaned batches, warned and counted (#1200)
-	unboundWarn     unboundWarner      // a conduit's unbound identities, warned once per window (#1282)
-	registry        registryCache      // the ingest sample registry, kept until a catalog changes (#1279)
-	stopOrphanFlush context.CancelFunc // ends the orphan count's flush
-	lane            laneTally          // the consumer lane's batches and busy time (#1517)
-	stopLaneLog     context.CancelFunc // ends the lane tally's log line
-	sweepStop       sync.Once
-	sweepDone       sync.WaitGroup
-	worklistSizes   worklistSizes      // each node's latest worklist reply size, warned near the limit (#1579)
-	worklistCounts  worklistCounts     // how worklist pulls ended (#1577)
-	worklistWorkers int                // how many pulls the pool builds at once (#1577)
-	worklistQueue   chan worklistPull  // pulls waiting for a worker
-	worklistCtx     context.Context    // the pool's life; a pull's build runs under it
-	stopWorklist    context.CancelFunc // ends the pool and cancels builds in flight
-	worklistDone    sync.WaitGroup     // the pool's workers
-	ownStoreDir     string             // non-empty when the Server created (and must clean) it
+	ns                *server.Server
+	nc                *nats.Conn
+	store             Store
+	subs              []*nats.Subscription
+	consumeCtx        jetstream.ConsumeContext // the telemetry durable consumer's pull loop
+	js                jetstream.JetStream      // the internal client's JetStream, the push lane's publisher
+	streamEpoch       string                   // OG_TELEMETRY's creation time, keying a batch with no id (batchID)
+	internalToken     string
+	sims              *simhub.Registry   // the simulators beside this server's nodes
+	stopSweep         chan struct{}      // ends the settlement sweep
+	stopReconcile     context.CancelFunc // ends the rule reconcile loop
+	stopCalc          context.CancelFunc // ends the calc tick
+	stopPrune         context.CancelFunc // ends the receipt retention pass
+	stopCheckinAge    context.CancelFunc // ends the check-in age timer (#1625)
+	stopCommandHealth context.CancelFunc // ends the command queue health timer (#1626)
+	stopRetention     context.CancelFunc // ends the sample retention pass (#417)
+	orphans           *orphanTally       // the node lane's orphaned batches, warned and counted (#1200)
+	unboundWarn       unboundWarner      // a conduit's unbound identities, warned once per window (#1282)
+	registry          registryCache      // the ingest sample registry, kept until a catalog changes (#1279)
+	stopOrphanFlush   context.CancelFunc // ends the orphan count's flush
+	lane              laneTally          // the consumer lane's batches and busy time (#1517)
+	stopLaneLog       context.CancelFunc // ends the lane tally's log line
+	sweepStop         sync.Once
+	sweepDone         sync.WaitGroup
+	worklistSizes     worklistSizes      // each node's latest worklist reply size, warned near the limit (#1579)
+	worklistCounts    worklistCounts     // how worklist pulls ended (#1577)
+	worklistWorkers   int                // how many pulls the pool builds at once (#1577)
+	worklistQueue     chan worklistPull  // pulls waiting for a worker
+	worklistCtx       context.Context    // the pool's life; a pull's build runs under it
+	stopWorklist      context.CancelFunc // ends the pool and cancels builds in flight
+	worklistDone      sync.WaitGroup     // the pool's workers
+	ownStoreDir       string             // non-empty when the Server created (and must clean) it
 }
 
 // New starts an in-process NATS server (JetStream on) with the per-node auth
@@ -235,6 +236,7 @@ func (s *Server) subscribe() error {
 	}
 	s.startSettlementSweep()
 	s.startCheckinAge()
+	s.startCommandHealth()
 	s.startRuleReconcile()
 	s.startCalcTick()
 
@@ -319,6 +321,9 @@ func (s *Server) Shutdown() {
 	}
 	if s.stopCheckinAge != nil {
 		s.stopCheckinAge()
+	}
+	if s.stopCommandHealth != nil {
+		s.stopCommandHealth()
 	}
 	if s.stopRetention != nil {
 		s.stopRetention()
