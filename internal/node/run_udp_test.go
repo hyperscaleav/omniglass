@@ -32,6 +32,32 @@ func (s *gateStack) attachUDP(comp, nodeName string, inputs map[string]string) *
 	return ep
 }
 
+// commandExecuted waits for the node's execution report of cmd to land. The
+// command's status is not the wait: a push can settle it by observation while
+// the exchange is still retrying, and the late reply then lands as an
+// observation of its own. The report is written with that observation, after
+// the exchange, retries included, has returned, so nothing of it is in flight.
+func (s *gateStack) commandExecuted(cmd *storage.Command) {
+	s.t.Helper()
+	comp, err := s.gw.GetComponent(s.ctx, cmd.OwnerID, s.all)
+	if err != nil {
+		s.t.Fatalf("read component %s: %v", cmd.OwnerID, err)
+	}
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		rec, err := s.gw.GetComponentCommand(s.ctx, comp.ID, cmd.ID)
+		if err != nil {
+			s.t.Fatalf("read command %d: %v", cmd.ID, err)
+		}
+		if rec.ExecutedAt != nil {
+			s.t.Logf("command %d executed, %s by %s: %s", cmd.ID, rec.Status, rec.SettledBy, rec.Reason)
+			return
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	s.t.Fatalf("command %d has no execution report after 20s", cmd.ID)
+}
+
 func (s *gateStack) owner() string {
 	s.t.Helper()
 	_, hash, prefix, err := auth.NewBearerToken()
@@ -82,13 +108,19 @@ func TestNodeUDPEndpointExchangesAndListensInDatagrams(t *testing.T) {
 	// A command actuates through the loss: the binding declares retries,
 	// since SET INPUT names the input.
 	owner := s.owner()
-	if _, err := s.gw.IssueCommand(s.ctx, owner, "component", "panel-1", "set-input", "", json.RawMessage(`"hdmi3"`), nil); err != nil {
+	cmd, err := s.gw.IssueCommand(s.ctx, owner, "component", "panel-1", "set-input", "", json.RawMessage(`"hdmi3"`), nil)
+	if err != nil {
 		t.Fatalf("issue set-input: %v", err)
 	}
 	s.waitFor("panel-1", ep.Name, "video-input", is("hdmi3"), "hdmi3, actuated over udp")
 	if v := s.panel.ReadPath("status.video.input"); v != "hdmi3" {
 		t.Fatalf("the panel shows %v, want hdmi3", v)
 	}
+	// hdmi3 can land from the panel's push while the exchange is still
+	// retrying through the loss; a retried SET reaching the panel after the
+	// next push, or the late reply landing as an observation, would put hdmi3
+	// back over it. Wait for the exchange to be over before anything follows.
+	s.commandExecuted(cmd)
 
 	// Nothing connection-shaped lands for a datagram endpoint.
 	if _, ok := s.metric("panel-1", ep.Name, "tcp-open"); ok {
@@ -134,9 +166,16 @@ func TestNodeUDPEndpointExchangesAndListensInDatagrams(t *testing.T) {
 	if _, err := other.WriteToUDP([]byte("EVT INPUT usbc\r\n"), node); err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(1500 * time.Millisecond)
-	if v := s.latest("panel-1", ep.Name, "video-input"); v != "dp1" {
-		t.Fatalf("video-input = %q after a stranger's datagram, want dp1 still", v)
+	// The node reads the datagram at once and a claim would ship on the next
+	// tick; the window is read through, not sampled once at its end.
+	for end := time.Now().Add(1500 * time.Millisecond); time.Now().Before(end); time.Sleep(25 * time.Millisecond) {
+		switch v := s.latest("panel-1", ep.Name, "video-input"); v {
+		case "dp1":
+		case "usbc":
+			t.Fatal("video-input = \"usbc\": the stranger's datagram was claimed")
+		default:
+			t.Fatalf("video-input = %q after a stranger's datagram, want dp1 still", v)
+		}
 	}
 
 	// The face falls silent: not responsive, and the verdict is down.
