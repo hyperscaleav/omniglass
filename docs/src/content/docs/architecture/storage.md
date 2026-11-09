@@ -34,6 +34,9 @@ and the server prunes `metric` and `property` samples to their retention windows
 provenance-aware floor, and `log_line` and `node_log` by severity band
 ([ADR-0080](/architecture/decisions/#adr-0080-retention-is-provenance-aware-never-declared-never-the-latest-row-per-series),
 [ADR-0417](/architecture/decisions/#adr-0417-the-server-prunes-each-sample-lane-to-a-window-in-bounded-chunks)).
+Each pass's figures (per lane removed and behind, the mark lags, the table sizes) are built as
+platform metrics with a seeded `retention-behind` rule, and land once the server has its platform
+component ([below](#what-a-retention-pass-reports), #1671).
 See [implementation status](/architecture/status/).
 :::
 
