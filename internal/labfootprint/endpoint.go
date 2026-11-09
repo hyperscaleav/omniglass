@@ -232,7 +232,8 @@ func Reconcile(b NodeBracket) []ClosedLoopGap {
 // unhit names each poll target the window should have drawn at least twice
 // that the sim's last read names as having seen nothing. The sim names a
 // capped sample, so devices past it are a masking term. An icmp target is
-// never seen by the sim; a push transport is never polled.
+// never seen by the sim; a push transport is never polled. TODO(#1663): check
+// every target against what the sim saw inside the window, not since start.
 func unhit(b NodeBracket, reading string) []ClosedLoopGap {
 	var out []ClosedLoopGap
 	var icmp int64
@@ -291,7 +292,7 @@ func tallyRow(s collection.RequestTallySnapshot, transport string) collection.Ta
 }
 
 // impaired is whether any of the node's sim reads carried an applied
-// impairment. TODO(#1639): attribute an impairment to the protocol it
+// impairment. TODO(#1662): attribute an impairment to the protocol it
 // impairs, and count the changes, so an unimpaired protocol on an impaired
 // node still reads loss.
 func impaired(b NodeBracket) bool {

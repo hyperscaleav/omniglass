@@ -20,6 +20,9 @@ import (
 // is up, an snmp datagram once the socket took it. A tally is plain counters,
 // injected through the node's config, never a package global, and never
 // published as metric rows: the lab pulls it on a subject the node answers.
+// TODO(#1661): tally the session and stream exchanges (ssh, telnet, tcp
+// session lines, udp, websocket, the http session and stream transports),
+// which reach the sim untallied today.
 
 // TallyTransport names a transport the tally counts. The names match the
 // simulator's protocols, so the two sides reconcile row for row.
