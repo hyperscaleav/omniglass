@@ -108,7 +108,7 @@ func TestARetentionPassReportsOnItsPlatformComponent(t *testing.T) {
 		if err != nil {
 			t.Fatalf("pass: %v", err)
 		}
-		if err := recordRetention(ctx, gw, comp, rep, now); err != nil {
+		if err := recordRetention(ctx, gw, comp, rep, now, 0); err != nil {
 			t.Fatalf("record the pass: %v", err)
 		}
 		return rep

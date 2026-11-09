@@ -258,7 +258,7 @@ func (s *Server) startSampleRetention() {
 			}
 			// The pass's figures land on the server's platform component
 			// (#1629); a failed write loses one pass's points, logged.
-			if err := recordRetention(ctx, s.store, s.platformComponentID, rep, time.Now()); err != nil && ctx.Err() == nil {
+			if err := recordRetention(ctx, s.store, s.platformComponentID, rep, time.Now(), sampleRetentionTimeout); err != nil && ctx.Err() == nil {
 				slog.Warn("retention figures not recorded", "facility", "retention", "error", err.Error())
 			}
 			var total int64

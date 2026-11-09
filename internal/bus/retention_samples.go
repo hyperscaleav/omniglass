@@ -77,9 +77,16 @@ type retentionRecorder interface {
 // recordRetention reads the storage status after a pass and lands the pass's
 // figures on component as the process (#1629). A failed status read loses
 // only the status rows; the pass's own still land. No component, no write.
-func recordRetention(ctx context.Context, store retentionRecorder, component string, rep retentionReport, now time.Time) error {
+// The read and the write share one deadline of timeout (none when zero), as
+// a lane does, so a hung store costs the loop one record, not the loop.
+func recordRetention(ctx context.Context, store retentionRecorder, component string, rep retentionReport, now time.Time, timeout time.Duration) error {
 	if component == "" {
 		return nil
+	}
+	if timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
 	}
 	var errs []error
 	var status *storage.RetentionStatus

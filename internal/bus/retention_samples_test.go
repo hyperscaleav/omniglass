@@ -1,6 +1,8 @@
 package bus
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -186,5 +188,37 @@ func TestRetentionPassCountsItsFailuresAndCompactions(t *testing.T) {
 	}
 	if rep.Failures != 1 {
 		t.Errorf("failures = %d, want 1: the out-of-range metric lane", rep.Failures)
+	}
+}
+
+// stuckRecorder is a store whose status read and write hang until their
+// context ends, as a wedged connection would.
+type stuckRecorder struct{}
+
+func (stuckRecorder) RetentionStatus(ctx context.Context) (storage.RetentionStatus, error) {
+	<-ctx.Done()
+	return storage.RetentionStatus{}, ctx.Err()
+}
+
+func (stuckRecorder) RecordPlatformMetrics(ctx context.Context, _ []storage.PlatformMetric) error {
+	<-ctx.Done()
+	return ctx.Err()
+}
+
+// Recording a pass runs under its own deadline: a store that hangs costs the
+// loop the deadline and an error, never the loop itself (the retention loop
+// passes a context that only ends at shutdown).
+func TestRecordRetentionGivesUpAtItsDeadline(t *testing.T) {
+	done := make(chan error, 1)
+	go func() {
+		done <- recordRetention(context.Background(), stuckRecorder{}, "srv", retentionReport{}, time.Now(), 50*time.Millisecond)
+	}()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("a hung store returned %v, want the deadline", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("recording a pass against a hung store never returned")
 	}
 }
