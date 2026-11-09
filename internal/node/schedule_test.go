@@ -17,7 +17,7 @@ func TestPollScheduleRunsOncePerInterval(t *testing.T) {
 	t0 := time.Date(2026, 10, 23, 12, 0, 0, 0, time.UTC)
 	var runs []int
 	for i := 0; i < 180; i++ {
-		if s.due("p60", time.Minute, t0.Add(time.Duration(i)*time.Second)) {
+		if s.due("p60", time.Minute, t0.Add(time.Duration(i)*time.Second)).run {
 			runs = append(runs, i)
 		}
 	}
@@ -26,24 +26,24 @@ func TestPollScheduleRunsOncePerInterval(t *testing.T) {
 	}
 
 	// A task that appears mid-run runs at its first tick.
-	if !s.due("new", time.Minute, t0.Add(30*time.Second)) {
+	if !s.due("new", time.Minute, t0.Add(30*time.Second)).run {
 		t.Fatal("a new task waited for its interval instead of running at once")
 	}
 	// No declared interval: every tick, as before.
 	for i := 0; i < 3; i++ {
-		if !s.due("unscheduled", 0, t0.Add(time.Duration(i)*time.Second)) {
+		if !s.due("unscheduled", 0, t0.Add(time.Duration(i)*time.Second)).run {
 			t.Fatal("a task with no interval was gated")
 		}
 	}
 	// A slow tick never bunches: one run however late, then the interval.
 	late := newPollSchedule(time.Second)
 	late.due("p", time.Minute, t0)
-	if !late.due("p", time.Minute, t0.Add(150*time.Second)) || late.due("p", time.Minute, t0.Add(151*time.Second)) {
+	if !late.due("p", time.Minute, t0.Add(150*time.Second)).run || late.due("p", time.Minute, t0.Add(151*time.Second)).run {
 		t.Fatal("a late tick ran a catch-up burst")
 	}
 
 	s.retain(map[string]bool{"new": true})
-	if !s.due("p60", time.Minute, t0.Add(130*time.Second)) {
+	if !s.due("p60", time.Minute, t0.Add(130*time.Second)).run {
 		t.Fatal("a task that left the worklist kept its schedule")
 	}
 }
@@ -58,7 +58,7 @@ func TestPollScheduleRetriesAFailureOnABackoff(t *testing.T) {
 	s := newPollSchedule(hb)
 	t0 := time.Date(2026, 10, 23, 12, 0, 0, 0, time.UTC)
 	every := 24 * time.Hour
-	if !s.due("p", every, t0) {
+	if !s.due("p", every, t0).run {
 		t.Fatal("a new poll did not run at once")
 	}
 	s.failed("p", every, t0)
@@ -66,7 +66,7 @@ func TestPollScheduleRetriesAFailureOnABackoff(t *testing.T) {
 	now := t0
 	for i := 0; i < 400000 && len(retries) < 20; i++ {
 		now = now.Add(hb)
-		if s.due("p", every, now) {
+		if s.due("p", every, now).run {
 			retries = append(retries, now.Sub(t0))
 			s.failed("p", every, now)
 		}
@@ -91,7 +91,7 @@ func TestPollScheduleRetriesAFailureOnABackoff(t *testing.T) {
 	for i := 0; i < 6; i++ {
 		short.failed("q", 4*time.Second, at)
 		next := at
-		for !short.due("q", 4*time.Second, next) {
+		for !short.due("q", 4*time.Second, next).run {
 			next = next.Add(hb)
 		}
 		if gap := next.Sub(at); gap > 4*time.Second {
@@ -102,7 +102,7 @@ func TestPollScheduleRetriesAFailureOnABackoff(t *testing.T) {
 	// A success books from the due time, and the backoff resets.
 	s.succeeded("p")
 	at, _ = s.nextOf("p")
-	if !s.due("p", every, at) {
+	if !s.due("p", every, at).run {
 		t.Fatal("not due at its booked time")
 	}
 	if next, _ := s.nextOf("p"); next != at.Add(every) {
@@ -117,10 +117,10 @@ func TestPollScheduleDoesNotDrift(t *testing.T) {
 	s := newPollSchedule(time.Second)
 	t0 := time.Date(2026, 10, 23, 12, 0, 0, 0, time.UTC)
 	s.due("p", time.Minute, t0)
-	if !s.due("p", time.Minute, t0.Add(60*time.Second+700*time.Millisecond)) {
+	if !s.due("p", time.Minute, t0.Add(60*time.Second+700*time.Millisecond)).run {
 		t.Fatal("a slightly late tick did not run the poll")
 	}
-	if !s.due("p", time.Minute, t0.Add(120*time.Second)) {
+	if !s.due("p", time.Minute, t0.Add(120*time.Second)).run {
 		t.Fatal("the run after a late tick drifted: it is not due at t0+120s")
 	}
 }
@@ -136,20 +136,20 @@ func TestPollScheduleRunsAtOnceWhenTheFingerprintMoves(t *testing.T) {
 	every := time.Minute
 	s.rebook("p1", "fp-wrong-port")
 	for i := 0; i < 5; i++ {
-		if s.due("p1", every, now) {
+		if s.due("p1", every, now).run {
 			s.failed("p1", every, now)
 		}
 		now = now.Add(2 * time.Second)
 	}
-	if s.due("p1", every, now) {
+	if s.due("p1", every, now).run {
 		t.Fatal("a failing poll ran inside its backoff")
 	}
 	s.rebook("p1", "fp-wrong-port")
-	if s.due("p1", every, now) {
+	if s.due("p1", every, now).run {
 		t.Fatal("an unchanged fingerprint released the backoff")
 	}
 	s.rebook("p1", "fp-fixed-port")
-	if !s.due("p1", every, now) {
+	if !s.due("p1", every, now).run {
 		t.Fatal("a moved fingerprint did not run the poll at the next tick")
 	}
 }

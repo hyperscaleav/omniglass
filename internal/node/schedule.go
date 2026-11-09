@@ -32,12 +32,43 @@ type pollSchedule struct {
 	// content changes, not on every run. Node memory alone, so a restart may
 	// fire one again.
 	occurred map[string]map[string]string
+	// last is each task's previous actual start (#1625), what its next run's
+	// gap is measured from. Node memory alone, like next.
+	last map[string]time.Time
+	// tick is the current tick's schedule figures (#1625), taken once the
+	// tick's tasks ran; tickStart is when that tick fired, the due time of a
+	// run with no booking of its own.
+	tick      tickFigures
+	tickStart time.Time
+}
+
+// dueRun is due's answer (#1625): whether the task runs, the time it was
+// booked to run (zero for a task new to the schedule or with no interval,
+// which is due on the tick), and the whole intervals it skipped past that
+// time, rebooked from now rather than run as a catch-up burst.
+type dueRun struct {
+	run     bool
+	at      time.Time
+	skipped int
+}
+
+// tickFigures is one tick's account of its schedule (#1625): the worst
+// lateness (a run's actual start after its due time) and the worst gap
+// excess (how far a run's gap since the task's previous run strayed from
+// its interval, early or late) over the tick's runs, and the whole intervals
+// skipped. ran is whether any task ran, since a tick with none has no
+// lateness or gap to report rather than a zero one.
+type tickFigures struct {
+	ran       bool
+	lateness  time.Duration
+	gapExcess time.Duration
+	skipped   int
 }
 
 // newPollSchedule keeps the schedule for a node ticking every heartbeat,
 // which is also where a failed poll's retry backoff starts.
 func newPollSchedule(heartbeat time.Duration) *pollSchedule {
-	return &pollSchedule{heartbeat: heartbeat, next: map[string]time.Time{}, backoff: map[string]time.Duration{}, refused: map[string]bool{}, fingerprint: map[string]string{}, occurred: map[string]map[string]string{}}
+	return &pollSchedule{heartbeat: heartbeat, next: map[string]time.Time{}, backoff: map[string]time.Duration{}, refused: map[string]bool{}, fingerprint: map[string]string{}, occurred: map[string]map[string]string{}, last: map[string]time.Time{}}
 }
 
 // failed rebooks a poll that ran at now and landed nothing (its fetch
@@ -131,25 +162,77 @@ func (s *pollSchedule) nextOf(taskID string) (time.Time, bool) {
 // task with no interval runs every tick. A task new to the schedule runs at
 // once. The next run is booked from the due time, not from now, so a tick's
 // jitter does not drift the cadence; a tick so late it missed whole
-// intervals runs once and books from now, never a catch-up burst. A task is
-// due on the tick within half a heartbeat of its due time (#1273): ticks are
-// a heartbeat apart but judged after variable work, so a tick that reached
-// the task a few milliseconds sooner than the one that booked it would
-// otherwise skip it, and an interval equal to the heartbeat would double.
-func (s *pollSchedule) due(taskID string, every time.Duration, now time.Time) bool {
+// intervals runs once and books from now, never a catch-up burst, and says
+// how many it skipped (#1625). A task is due on the tick within half a
+// heartbeat of its due time (#1273): ticks are a heartbeat apart but judged
+// after variable work, so a tick that reached the task a few milliseconds
+// sooner than the one that booked it would otherwise skip it, and an
+// interval equal to the heartbeat would double.
+func (s *pollSchedule) due(taskID string, every time.Duration, now time.Time) dueRun {
 	if every <= 0 {
-		return true
+		return dueRun{run: true}
 	}
 	at, booked := s.next[taskID]
 	if booked && now.Add(s.heartbeat/2).Before(at) {
-		return false
+		return dueRun{}
 	}
+	d := dueRun{run: true}
 	next := now.Add(every)
-	if booked && now.Sub(at) < every {
-		next = at.Add(every)
+	if booked {
+		d.at = at
+		if late := now.Sub(at); late < every {
+			next = at.Add(every)
+		} else {
+			d.skipped = int(late / every)
+		}
 	}
 	s.next[taskID] = next
-	return true
+	return d
+}
+
+// beginTick starts a tick's schedule account (#1625): the tick fired at
+// tick, the due time of every run booked on no time of its own.
+func (s *pollSchedule) beginTick(tick time.Time) {
+	s.tick = tickFigures{}
+	s.tickStart = tick
+}
+
+// ran accounts a run due reported, started at start (#1625): its lateness
+// against its due time (the tick, for a run with no booking), its gap since
+// the task's previous start against its interval (the heartbeat, for a task
+// with none, which runs every tick), and the intervals it skipped. A run
+// early inside the half-heartbeat window is not late.
+func (s *pollSchedule) ran(taskID string, every time.Duration, d dueRun, start time.Time) {
+	due := d.at
+	if due.IsZero() {
+		due = s.tickStart
+	}
+	s.tick.ran = true
+	if late := start.Sub(due); late > s.tick.lateness {
+		s.tick.lateness = late
+	}
+	if every <= 0 {
+		every = s.heartbeat
+	}
+	if prev, ok := s.last[taskID]; ok {
+		excess := start.Sub(prev) - every
+		if excess < 0 {
+			excess = -excess
+		}
+		if excess > s.tick.gapExcess {
+			s.tick.gapExcess = excess
+		}
+	}
+	s.last[taskID] = start
+	s.tick.skipped += d.skipped
+}
+
+// takeTick hands over the tick's schedule figures and starts the next from
+// zero.
+func (s *pollSchedule) takeTick() tickFigures {
+	f := s.tick
+	s.tick = tickFigures{}
+	return f
 }
 
 // retain forgets tasks that left the worklist, so no map grows for the life
@@ -162,6 +245,7 @@ func (s *pollSchedule) retain(ids map[string]bool) {
 	forget(s.refused, ids)
 	forget(s.fingerprint, ids)
 	forget(s.occurred, ids)
+	forget(s.last, ids)
 }
 
 // forget drops every task of m not in ids.

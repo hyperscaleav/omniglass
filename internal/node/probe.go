@@ -45,6 +45,12 @@ func runTasks(ctx context.Context, out *telemetrySpool, node string, wl collecti
 		present[task.ID] = true
 	}
 	sched.retain(present)
+	// Each task's start is stamped as it is reached (#1625): the tick's now
+	// hides how late a task deep in a slow pass actually ran. It is the
+	// tick's now plus the pass's elapsed time, so a test's clock still rules.
+	sched.beginTick(now)
+	passStart := time.Now()
+	startOf := func() time.Time { return now.Add(time.Since(passStart)) }
 	for _, task := range wl.Tasks {
 		// A standing listen task runs no tick of its own: it is what holds
 		// its endpoint's session (the session manager reconciles it, #816),
@@ -76,9 +82,12 @@ func runTasks(ctx context.Context, out *telemetrySpool, node string, wl collecti
 			// up; an http poll is its own request, and an up stream beside it
 			// says nothing of what refused it (#1038).
 			sched.releaseRefused(task.ID, sessions.isUp(task.EndpointID) && !driver.IsHTTP(task.Transport))
-			if !sched.due(task.ID, interval, now) {
+			start := startOf()
+			d := sched.due(task.ID, interval, start)
+			if !d.run {
 				continue
 			}
+			sched.ran(task.ID, interval, d, start)
 			var dps []collection.Sample
 			var faults []error
 			// An http poll is its own request even beside a held stream
@@ -140,9 +149,12 @@ func runTasks(ctx context.Context, out *telemetrySpool, node string, wl collecti
 		if sched.probeEvery > 0 {
 			sched.rebook(task.ID, task.Fingerprint)
 		}
-		if !sched.due(task.ID, sched.probeEvery, now) {
+		start := startOf()
+		d := sched.due(task.ID, sched.probeEvery, start)
+		if !d.run {
 			continue
 		}
+		sched.ran(task.ID, sched.probeEvery, d, start)
 		// The ladder's informational ping runs beside the probe, bounded,
 		// so gear that drops ICMP costs the tick nothing extra.
 		pinged := make(chan []collection.Sample, 1)
