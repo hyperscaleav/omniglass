@@ -944,10 +944,12 @@ func (m *sessionManager) expireHolds(now time.Time) []string {
 	if m == nil {
 		return nil
 	}
-	expired := m.gates.expire(now)
-	for _, ep := range expired {
-		m.syncRejection(ep)
-		slog.Warn("disrupted endpoint released at its hold backstop with no up verdict", "facility", "command", "endpoint", ep)
+	var expired []string
+	for _, x := range m.gates.expire(now) {
+		m.syncRejection(x.endpoint)
+		slog.Warn("disrupted endpoint released at its hold backstop with no up verdict", "facility", "command",
+			"command", x.source, "endpoint", x.endpoint)
+		expired = append(expired, x.endpoint)
 	}
 	return expired
 }

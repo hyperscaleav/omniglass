@@ -472,14 +472,18 @@ func probeVerdict(dps []collection.Sample) (up, ok bool) {
 // verdict takes the endpoint's probe verdict, at the time its probe began:
 // the second down in a row adds unreachable, since the first down, and an up
 // removes it and starts the streak over. An up from a probe that began at or
-// after a disruption's quiet period ended removes disrupted too; one that
-// began before (a probe in flight across the delivery, the stale-up race)
-// read the device before it went down and removes nothing of it. A probe with
-// no verdict (it could not be attempted) never gets here, so it neither adds
-// to the streak nor resets it. true when the gate's set changed.
+// after a disruption's quiet period ended removes disrupted too. A verdict
+// from a probe that began before it ended (a probe in flight across the
+// delivery, the stale-up race) read the device before or as it went down: it
+// neither releases the reason nor feeds or resets the streak, so only downs
+// read after quiet add unreachable. A probe with no verdict (it could not be
+// attempted) never gets here either. true when the gate's set changed.
 func (g *gates) verdict(endpointID, taskID string, up bool, at time.Time) bool {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	if q, ok := g.quiet[endpointID]; ok && at.Before(q.quietUntil) {
+		return false
+	}
 	if up {
 		delete(g.streak, endpointID)
 		changed := false
@@ -487,7 +491,7 @@ func (g *gates) verdict(endpointID, taskID string, up bool, at time.Time) bool {
 			delete(g.others[endpointID], reasonUnreachable)
 			changed = true
 		}
-		if q, ok := g.quiet[endpointID]; ok && !at.Before(q.quietUntil) {
+		if _, ok := g.quiet[endpointID]; ok {
 			delete(g.quiet, endpointID)
 			delete(g.others[endpointID], reasonDisrupted)
 			changed = true
@@ -519,8 +523,10 @@ func (g *gates) verdict(endpointID, taskID string, up bool, at time.Time) bool {
 
 // disrupt adds disrupted to each endpoint's gate (#1651), since the delivery,
 // naming the command: quiet is how long nothing runs against it, hold the
-// backstop that removes the reason when no up verdict does. A second
-// disruptive command restarts the clock and names itself.
+// backstop that removes the reason when no up verdict does. The probe
+// streak starts over: a down read before the reboot says nothing of the
+// device after it. A second disruptive command restarts the clock and names
+// itself.
 func (g *gates) disrupt(endpoints []string, commandType string, commandID int64, since time.Time, quiet, hold time.Duration) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -535,6 +541,7 @@ func (g *gates) disrupt(endpoints []string, commandType string, commandID int64,
 		g.others[ep][reasonDisrupted] = reason{kind: reasonDisrupted, since: since,
 			source: "command-" + strconv.FormatInt(commandID, 10), text: disruptedText(commandType, commandID, since)}
 		g.quiet[ep] = disruption{quietUntil: since.Add(quiet), holdUntil: since.Add(hold)}
+		delete(g.streak, ep)
 	}
 }
 
@@ -553,24 +560,32 @@ func (g *gates) quietUntil(endpointID string, now time.Time) (time.Time, bool) {
 	return q.quietUntil, true
 }
 
+// expiredHold is a disruption the hold backstop ended: the endpoint and the
+// command that disrupted it (command-<id>), for the self-log line.
+type expiredHold struct {
+	endpoint string
+	source   string
+}
+
 // expire removes disrupted from every endpoint whose hold backstop has come
-// with no up verdict, and returns them, sorted.
-func (g *gates) expire(now time.Time) []string {
+// with no up verdict, and returns them with the command each named, sorted
+// by endpoint.
+func (g *gates) expire(now time.Time) []expiredHold {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	var out []string
+	var out []expiredHold
 	for ep, q := range g.quiet {
 		if now.Before(q.holdUntil) {
 			continue
 		}
+		out = append(out, expiredHold{endpoint: ep, source: g.others[ep][reasonDisrupted].source})
 		delete(g.quiet, ep)
 		delete(g.others[ep], reasonDisrupted)
 		if len(g.others[ep]) == 0 {
 			delete(g.others, ep)
 		}
-		out = append(out, ep)
 	}
-	sort.Strings(out)
+	sort.Slice(out, func(i, j int) bool { return out[i].endpoint < out[j].endpoint })
 	return out
 }
 

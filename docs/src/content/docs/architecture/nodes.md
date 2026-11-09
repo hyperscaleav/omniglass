@@ -483,6 +483,8 @@ probe does not run; a held session does not dial; a command, a run now or a prev
 naming the reason. After quiet each endpoint reopens on **its own** first up verdict, and only a
 probe that **began** after quiet counts, so an answer already in flight when the command went out
 cannot release it; a down verdict releases nothing, and a sibling that has not answered stays held.
+The delivery starts the probe's down streak over, and a verdict read before quiet ends neither feeds
+nor resets it, so `unreachable` takes two downs read after quiet, dated from the first of them.
 The type's hold is the backstop: an endpoint still held then reopens anyway and the window counts
 it as `hold-expiry-count`, so a device that never comes back is seen rather than silently resumed.
 The lane is never blocked: work on other endpoints runs throughout. A failed send leaves the

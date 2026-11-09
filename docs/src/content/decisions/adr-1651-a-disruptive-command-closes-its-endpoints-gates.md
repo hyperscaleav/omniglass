@@ -25,7 +25,9 @@ refs: [1651, 1650, 1624, 1648, 1652, 1655]
      dial, so a rebooting device is neither read as down nor hammered with reconnects. After quiet,
      an endpoint reopens on its own first up verdict, and only a probe that **began** after quiet
      counts, so an answer in flight at the delivery (the stale-up race) cannot release it. A down
-     verdict releases nothing, and siblings release independently.
+     verdict releases nothing, and siblings release independently. The delivery starts the probe
+     streak over and a verdict read before quiet ends neither feeds nor resets it, so `unreachable`
+     takes two downs read after quiet and is never dated before the reboot.
   5. **A counted backstop apart from the settle window.** An endpoint with no up verdict by
      `hold_seconds` reopens anyway and the window counts it as `hold-expiry-count`, a device that
      did not come back in time. The hold is not `settle_window_seconds`: settlement watches a value

@@ -395,3 +395,57 @@ func TestADisruptionLeavesWithItsEndpoint(t *testing.T) {
 		t.Fatal("a gone endpoint's backstop is still pending")
 	}
 }
+
+// The probe streak is neither fed nor reset by a verdict read during quiet,
+// and the delivery starts it over (#1651): a down read as the device dropped
+// (or one read before the reboot went out) would otherwise let a single
+// down after quiet add unreachable, dated before the reboot.
+func TestADownReadBeforeQuietEndsDoesNotCountTowardUnreachable(t *testing.T) {
+	t.Parallel()
+	for name, before := range map[string]time.Time{
+		"before the delivery": gateT0.Add(-time.Second),
+		"during quiet":        gateT0.Add(5 * time.Second),
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			g := newGates()
+			if before.Before(gateT0) {
+				g.verdict("ep-1", "t-1", false, before)
+			}
+			g.disrupt([]string{"ep-1"}, "reboot", 42, gateT0, 15*time.Second, 300*time.Second)
+			if !before.Before(gateT0) {
+				if g.verdict("ep-1", "t-1", false, before) {
+					t.Fatal("a down read during quiet moved the gate")
+				}
+			}
+			g.verdict("ep-1", "t-1", false, gateT0.Add(20*time.Second))
+			if _, ok := g.others["ep-1"][reasonUnreachable]; ok {
+				t.Fatalf("one down after quiet added unreachable: %+v", g.others["ep-1"])
+			}
+			g.verdict("ep-1", "t-1", false, gateT0.Add(30*time.Second))
+			r, ok := g.others["ep-1"][reasonUnreachable]
+			if !ok {
+				t.Fatal("two downs after quiet did not add unreachable")
+			}
+			if want := gateT0.Add(20 * time.Second); !r.since.Equal(want) {
+				t.Fatalf("unreachable since %v, want the first down after quiet %v", r.since, want)
+			}
+		})
+	}
+}
+
+// The backstop names the command whose disruption it ended, for the
+// self-log line the spec asks for.
+func TestTheHoldBackstopNamesTheCommand(t *testing.T) {
+	t.Parallel()
+	g := newGates()
+	g.disrupt([]string{"ep-2", "ep-1"}, "reboot", 42, gateT0, 15*time.Second, 300*time.Second)
+	if got := g.expire(gateT0.Add(299 * time.Second)); len(got) != 0 {
+		t.Fatalf("expired before the backstop: %+v", got)
+	}
+	got := g.expire(gateT0.Add(300 * time.Second))
+	want := []expiredHold{{endpoint: "ep-1", source: "command-42"}, {endpoint: "ep-2", source: "command-42"}}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("expire = %+v, want %+v", got, want)
+	}
+}
