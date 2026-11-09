@@ -658,6 +658,19 @@
    "description": "The most recent garbage collection pause of the Omniglass process; absent until the first collection."
   },
   {
+   "name": "process-cpu-seconds",
+   "data_type": "float",
+   "unit": "s",
+   "label": "CPU Time",
+   "description": "CPU time the Omniglass process spent since its previous sample (each tick on a node, each report window on the server); divided by that interval it is the cores the process kept busy."
+  },
+  {
+   "name": "process-fd-count",
+   "data_type": "int",
+   "label": "Open Files",
+   "description": "File descriptors the Omniglass process holds open, sockets included; absent where the platform does not expose them."
+  },
+  {
    "name": "http-request-count",
    "data_type": "int",
    "label": "HTTP Requests",
@@ -719,6 +732,145 @@
    "unit": "ms",
    "label": "Pool Wait Time",
    "description": "Total time acquires spent waiting on an exhausted pool for a connection to free up or open, over the report window."
+  },
+  {
+   "name": "ingest-lag",
+   "data_type": "float",
+   "unit": "s",
+   "label": "Ingest Lag",
+   "description": "Mean time from a sample's timestamp to its batch's commit on the server, over the newest and oldest sample of each batch landed in the report window; the node's clock stamps the sample, so a skewed node clock reads as lag."
+  },
+  {
+   "name": "ingest-lag-max",
+   "data_type": "float",
+   "unit": "s",
+   "label": "Ingest Lag (max)",
+   "description": "The oldest sample's lag at commit across every batch landed in the report window."
+  },
+  {
+   "name": "ingest-batch-count",
+   "data_type": "int",
+   "label": "Batches Landed",
+   "description": "Telemetry batches the server committed over the report window."
+  },
+  {
+   "name": "ingest-sample-count",
+   "data_type": "int",
+   "label": "Samples Landed",
+   "description": "Samples in the telemetry batches the server committed over the report window."
+  },
+  {
+   "name": "ingest-lane-busy",
+   "data_type": "float",
+   "unit": "ratio",
+   "label": "Ingest Lane Busy",
+   "description": "Share of the report window the telemetry lane spent handling batches; near 1 the lane is saturated and the consumer backlog grows."
+  },
+  {
+   "name": "bus-consumer-pending",
+   "data_type": "int",
+   "label": "Telemetry Backlog",
+   "description": "Batches on the telemetry stream not yet delivered to the server's consumer, at the end of the report window."
+  },
+  {
+   "name": "bus-consumer-ack-pending",
+   "data_type": "int",
+   "label": "Telemetry In Flight",
+   "description": "Batches delivered to the server's telemetry consumer and not yet acknowledged, at the end of the report window."
+  },
+  {
+   "name": "bus-consumer-redelivered",
+   "data_type": "int",
+   "label": "Telemetry Redelivering",
+   "description": "Batches the telemetry consumer holds that were delivered more than once, at the end of the report window."
+  },
+  {
+   "name": "bus-telemetry-ack-failure-count",
+   "data_type": "int",
+   "label": "Telemetry Ack Failures",
+   "description": "Landed batches whose acknowledgement the bus did not confirm over the report window, so they may land again; a share of ingest-batch-count."
+  },
+  {
+   "name": "bus-telemetry-drop-count",
+   "data_type": "int",
+   "label": "Telemetry Drops",
+   "description": "Batches the server gave up on over the report window, one sample per reason as the instance (refused, metadata, max-deliver, malformed); over itself plus ingest-batch-count it is the drop ratio."
+  },
+  {
+   "name": "bus-worklist-pull-count",
+   "data_type": "int",
+   "label": "Worklist Pulls",
+   "description": "Node worklist pulls the server answered over the report window, one sample per outcome as the instance (served, read-failed, oversize, respond-failed, expired, abandoned, busy)."
+  },
+  {
+   "name": "bus-worklist-reply-bytes-max",
+   "data_type": "int",
+   "unit": "bytes",
+   "label": "Worklist Reply Size (max)",
+   "description": "The largest worklist reply the server holds sized for any node, at the end of the report window; nearing the bus payload limit means a reply will be refused as oversize."
+  },
+  {
+   "name": "bus-request-count",
+   "data_type": "int",
+   "label": "Bus Requests",
+   "description": "Node requests the server handled on the bus over the report window, one sample per path as the instance (heartbeat, command-pull, command-report)."
+  },
+  {
+   "name": "bus-request-failure-count",
+   "data_type": "int",
+   "label": "Bus Request Failures",
+   "description": "Node requests on the bus the server failed to serve over the report window, one sample per path as the instance; a share of bus-request-count."
+  },
+  {
+   "name": "calc-pending-depth",
+   "data_type": "int",
+   "label": "Calc Backlog",
+   "description": "The deepest the queue of calculated metrics waiting to be computed stood over the report window."
+  },
+  {
+   "name": "calc-served-count",
+   "data_type": "int",
+   "label": "Calcs Served",
+   "description": "Calculated metric rows the server computed over the report window."
+  },
+  {
+   "name": "calc-pass-duration",
+   "data_type": "float",
+   "unit": "ms",
+   "label": "Calc Pass Time",
+   "description": "Mean time one pass over the calc queue took over the report window."
+  },
+  {
+   "name": "outbox-queued-depth",
+   "data_type": "int",
+   "label": "Outbox Depth",
+   "description": "Notifications queued to send, due or waiting out a retry backoff, at the end of the report window."
+  },
+  {
+   "name": "outbox-due-age",
+   "data_type": "float",
+   "unit": "s",
+   "label": "Outbox Due Age",
+   "description": "How long the oldest due notification has waited past its send time, at the end of the report window; zero when nothing is due."
+  },
+  {
+   "name": "sweep-duration",
+   "data_type": "float",
+   "unit": "ms",
+   "label": "Sweep Time",
+   "description": "Mean time one pass of a server sweep took over the report window, one sample per sweep as the instance (command-settlement, event-rule)."
+  },
+  {
+   "name": "sweep-count",
+   "data_type": "int",
+   "label": "Sweeps",
+   "description": "Passes of a server sweep over the report window, one sample per sweep as the instance."
+  },
+  {
+   "name": "sweep-failure-count",
+   "data_type": "int",
+   "label": "Sweep Failures",
+   "description": "Passes of a server sweep that failed over the report window, one sample per sweep as the instance; a share of sweep-count."
   },
   {
    "name": "room-temperature",
@@ -3597,6 +3749,18 @@
    "clear": "value == \"up\"",
    "fire_sustain": "15s",
    "severity": "high",
+   "fire_event_type": "condition-started",
+   "clear_event_type": "condition-ended"
+  },
+  {
+   "name": "ingest-lag-high",
+   "label": "Ingest lag high",
+   "description": "The server is landing telemetry more than 30 seconds behind its sample timestamps.",
+   "sample_key": "ingest-lag-max",
+   "fire": "value \u003e 30",
+   "clear": "value \u003c= 30",
+   "fire_sustain": "2m",
+   "severity": "warning",
    "fire_event_type": "condition-started",
    "clear_event_type": "condition-ended"
   }
