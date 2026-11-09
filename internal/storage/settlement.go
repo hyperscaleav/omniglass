@@ -420,7 +420,14 @@ func commandTargetedProperties(ctx context.Context, q querier) (map[string]bool,
 		}
 		out[n] = true
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	// An ingest batch reads them once for all its property writes (#1582).
+	if b, ok := q.(*batchTx); ok {
+		b.targeted = out
+	}
+	return out, nil
 }
 
 // commandIntendedValue reads the intended row one command opened, by its

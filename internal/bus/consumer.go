@@ -195,52 +195,184 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 		return
 	}
 
-	// The node lane's binding. Log lines are the publishing node's SELF-LOGS
-	// (ADR-0066: untyped, no task, no registry gate) and land on node_log, while
-	// samples are owned by the task's COMPONENT, so one batch carries two
-	// destinations and the binding states both.
-	bind := ingestBinding{LogNode: node}
-
-	// Samples, and a task's collected log lines (#1145), are owner-bound to the
-	// task's component, resolved only when there is something to bind: a
-	// logs-only batch (a node's self-log tick) carries no task_id, and asking
-	// the resolver about an empty task would read as an orphan.
-	if taskBound(&ev) > 0 {
-		// Owner + confinement: the owner is the task's interface component, and the
-		// task must belong to THIS node. A task on another node, an unknown task, or
-		// a shared interface resolves to !ok: the samples are orphans, never written
-		// for a component the node was not placed on. The batch's log lines still
-		// land, since they were never the task's to begin with.
-		owner, ok, err := s.store.ResolveTaskOwner(ctx, ev.GetTaskId(), node)
-		if err != nil {
-			s.nakOrTerm(msg) // transient DB failure: redeliver (bounded)
-			return
-		}
-		if ok {
-			// The node's writer is bound to the task's endpoint: the only
-			// instance a node-probe key lands under (ADR-0161).
-			bind.SampleOwner = &owner
-			bind.Arc = componentArc(owner)
-			bind.Writer = storage.NodeWriter(owner.ComponentID, owner.EndpointName)
-			bind.Writer.Node = owner.NodeID
-			// The task's component is the conduit a fanned sample's identity
-			// resolves against, and only it (#1282): the node is already
-			// confined to it.
-			bind.Conduit, bind.ConduitEndpoint = owner.ComponentID, owner.EndpointName
-		} else {
-			// The fence drops these by design, but never silently (#1200): a
-			// warning per node per window and a count on the node, so a node
-			// stuck on a task it no longer holds reads as that, not as a
-			// broken pipeline, and a flood of orphans is not a flood of logs.
-			s.recordOrphan(node, ev.GetTaskId(), sampleCount(&ev), len(ev.GetTaskLogs()))
-		}
+	// A node's tick is its groups (#1582): every task-bound row rides in a
+	// TaskGroup, so the batch's own task_id and sample lanes are the shape a
+	// node no longer sends. Landing them would bind them to no task, and
+	// ignoring them would drop data that looks delivered, so say so and stop
+	// redelivery. The batch's self-logs are the only top-level rows it carries.
+	if ev.GetTaskId() != "" || taskBound(&ev) > 0 {
+		slog.Warn(topLevelTaskLog, "facility", "ingest", "node", node, "task", ev.GetTaskId())
+		_ = msg.Term()
+		return
 	}
 
-	if err := s.land(ctx, id, &ev, bind); err != nil {
+	stamp, err := s.landNode(ctx, id, node, &ev)
+	if err != nil {
 		s.failed(msg, err) // a refused write is dropped; a transient failure redelivered (bounded)
 		return
 	}
 	ack(msg)
+	// Each landed group's endpoint delivered this tick, whatever the sinks
+	// kept of it (#933), stamped in one write after the ack so it holds
+	// nothing in flight. A failed stamp loses one tick's freshness, which the
+	// next tick restamps; it is not worth a redelivery of the whole tick.
+	if len(stamp) > 0 {
+		if err := s.store.StampEndpointsSeen(ctx, stamp); err != nil {
+			slog.Warn("endpoint seen stamp failed", "facility", "ingest", "node", node, "endpoints", len(stamp), "error", err.Error())
+		}
+	}
+}
+
+// topLevelTaskLog is the warning for a node-lane batch that carries a task or
+// samples outside its groups (#1582), which is Term'd.
+const topLevelTaskLog = "node-lane batch carried task rows outside its groups, dropped"
+
+// refusedGroupLog is the warning for one group of a node's tick the Storage
+// Gateway refused (#1582): that group is dropped and its siblings land.
+const refusedGroupLog = "task group refused, dropped; its siblings landed"
+
+// landNode lands one node tick (#1582): the node's self-logs and each task
+// group under its own writer, in ONE LandBatch under the tick's receipt.
+// Every group's task resolves in one read; a group whose task the node does
+// not hold (another node's, unknown, a shared interface) is an orphan the
+// fence drops (#1200) while its siblings land. A group the gateway refuses is
+// warned and dropped, never the tick. It returns the endpoints to stamp seen:
+// every resolved group's that was not refused. A returned error is the
+// resolve's, the registry's or the batch's (failed decides what it means).
+func (s *Server) landNode(ctx context.Context, id, node string, ev *ogv1.TelemetryBatch) ([]string, error) {
+	batch := storage.IngestBatch{BatchID: id, NodeLogs: nodeLogWrites(ev, node)}
+
+	views := make([]*ogv1.TelemetryBatch, 0, len(ev.GetGroups()))
+	var tasks []string
+	for _, g := range ev.GetGroups() {
+		v := groupView(ev, g)
+		if taskBound(v) == 0 {
+			continue // nothing the group's task owns: no owner to resolve
+		}
+		views = append(views, v)
+		tasks = append(tasks, g.GetTaskId())
+	}
+	var owners map[string]storage.TaskOwner
+	if len(tasks) > 0 {
+		var err error
+		if owners, err = s.store.ResolveTaskOwners(ctx, node, tasks); err != nil {
+			return nil, err
+		}
+	}
+
+	// The tick's resolved groups, and every identity they name on each
+	// group's conduit, so the fan-out reads once for the whole tick (#1582).
+	type resolvedGroup struct {
+		view  *ogv1.TelemetryBatch
+		owner storage.TaskOwner
+		bind  ingestBinding
+	}
+	resolved := make([]resolvedGroup, 0, len(views))
+	wants := map[string][]storage.IdentityKey{}
+	sampled := false
+	for _, v := range views {
+		owner, ok := owners[v.GetTaskId()]
+		if !ok {
+			// The fence drops an orphan group by design, but never silently
+			// (#1200), and only that group: its siblings are the node's own.
+			s.recordOrphan(node, v.GetTaskId(), sampleCount(v), len(v.GetTaskLogs()))
+			continue
+		}
+		bind := nodeBinding(node, owner)
+		if sampleCount(v) > 0 {
+			sampled = true
+			identityWants(wants, v, bind.Conduit)
+		}
+		resolved = append(resolved, resolvedGroup{view: v, owner: owner, bind: bind})
+	}
+	var reg collection.Registry
+	var identities map[string]*storage.IdentityResolution
+	if sampled {
+		var err error
+		if reg, batch.CommandTargeted, err = s.registry.get(ctx, s.store); err != nil {
+			return nil, err
+		}
+		if identities, err = s.resolveIdentities(ctx, wants); err != nil {
+			return nil, err
+		}
+	}
+
+	endpoints := make([]string, 0, len(resolved)) // parallel to batch.Groups
+	for _, r := range resolved {
+		v := r.view
+		group := storage.IngestGroup{TaskID: v.GetTaskId(), Writer: r.bind.Writer, LogLines: taskLogWrites(v, r.owner)}
+		if sampleCount(v) > 0 {
+			rows := s.deriveSamples(v, r.bind, reg, identities)
+			group.Metrics, group.Properties, group.Events = rows.Metrics, rows.Properties, rows.Events
+			group.Fanned, group.Unbound = rows.Fanned, rows.Unbound
+		}
+		batch.Groups = append(batch.Groups, group)
+		endpoints = append(endpoints, r.owner.EndpointID)
+	}
+
+	res, err := s.store.LandBatch(ctx, batch)
+	if err != nil {
+		return nil, err
+	}
+	refused := make(map[int]bool, len(res.Refused))
+	for _, r := range res.Refused {
+		refused[r.Index] = true
+		cause := ""
+		if r.Err != nil {
+			cause = r.Err.Error()
+		}
+		slog.Warn(refusedGroupLog, "facility", "ingest", "node", node, "task", r.TaskID, "error", cause)
+	}
+	return seenEndpoints(endpoints, refused), nil
+}
+
+// seenEndpoints is the endpoints a tick stamps seen: each landed group's,
+// once, in group order, skipping the refused groups (by index) and a group
+// with no endpoint.
+func seenEndpoints(endpoints []string, refused map[int]bool) []string {
+	var out []string
+	seen := make(map[string]bool, len(endpoints))
+	for i, e := range endpoints {
+		if refused[i] || e == "" || seen[e] {
+			continue
+		}
+		seen[e] = true
+		out = append(out, e)
+	}
+	return out
+}
+
+// groupView is one task group read as the single-task batch every derivation
+// already takes: the group's task, rows and ts (its observation time, so a
+// sample naming no ts of its own takes the group's), on the tick's node.
+func groupView(ev *ogv1.TelemetryBatch, g *ogv1.TaskGroup) *ogv1.TelemetryBatch {
+	return &ogv1.TelemetryBatch{
+		TaskId:     g.GetTaskId(),
+		NodeId:     ev.GetNodeId(),
+		Ts:         g.GetTs(),
+		Metrics:    g.GetMetrics(),
+		Properties: g.GetProperties(),
+		Events:     g.GetEvents(),
+		TaskLogs:   g.GetTaskLogs(),
+	}
+}
+
+// nodeBinding is a resolved task group's binding on the node lane. The node's
+// writer is bound to the task's endpoint: the only instance a node-probe key
+// lands under (ADR-0161). The task's component is the conduit a fanned
+// sample's identity resolves against, and only it (#1282): the node is
+// already confined to it.
+func nodeBinding(node string, owner storage.TaskOwner) ingestBinding {
+	w := storage.NodeWriter(owner.ComponentID, owner.EndpointName)
+	w.Node = owner.NodeID
+	return ingestBinding{
+		LogNode:         node,
+		SampleOwner:     &owner,
+		Arc:             componentArc(owner),
+		Writer:          w,
+		Conduit:         owner.ComponentID,
+		ConduitEndpoint: owner.EndpointName,
+	}
 }
 
 // apiBinding builds the binding for a batch that arrived on the API push lane. The
@@ -355,11 +487,12 @@ func taskBound(ev *ogv1.TelemetryBatch) int {
 	return sampleCount(ev) + len(ev.GetTaskLogs())
 }
 
-// land writes one batch to its sinks: the raw log lines and the three typed
-// lanes (#594: the lane is the array, so each validates against its own
-// catalog). It is the ONE write path, and both ingest lanes call it, so a new
-// lane cannot drift from the node lane's semantics (reject-not-project,
-// per-lane validation, the transition-only state guard).
+// land writes one single-owner batch to its sinks: the raw log lines and the
+// three typed lanes (#594: the lane is the array, so each validates against
+// its own catalog). The push lane calls it; a node's tick lands its groups
+// through landNode (#1582). Both derive through deriveSamples, so neither
+// lane can drift from the other's semantics (reject-not-project, per-lane
+// validation, the transition-only state guard).
 //
 // It deliberately knows nothing about JetStream: no message, no ack, no nak. The
 // caller owns delivery semantics and decides what a returned error means, which is
@@ -398,26 +531,15 @@ func (s *Server) land(ctx context.Context, id string, ev *ogv1.TelemetryBatch, b
 			return err
 		}
 		batch.CommandTargeted = targeted
-		// Each lane derives against its own catalog (#594): the array the sample rode
-		// says which table it lands in, and the catalog row says what a valid value
-		// looks like. All three survive the SAME owner binding and reject-not-project;
-		// the split is only the sink, not a second trust decision. The property lane
-		// is transition-only: a value equal to its series' latest is not written, the
-		// guard held in the insert itself (LandBatch), so a restart that re-emits an
-		// unchanged verdict adds no row, under any dispatch (#455).
-		//
-		// An identified sample is the conduit's report about another owner
-		// (#1282): it is split off here and lands only through the fan-out,
-		// never on the conduit.
-		own, fanned := splitIdentified(ev)
-		batch.Metrics = deriveMetrics(own, bind.Arc, *bind.SampleOwner, reg, bind.Writer)
-		batch.Properties = deriveProperties(own, bind.Arc, *bind.SampleOwner, reg, bind.Writer)
-		batch.Events = deriveEvents(own, bind.Arc, *bind.SampleOwner, reg, bind.Writer)
-		if fanned != nil {
-			if err := s.fanOut(ctx, &batch, fanned, bind, reg); err != nil {
-				return err
-			}
+		wants := map[string][]storage.IdentityKey{}
+		identityWants(wants, ev, bind.Conduit)
+		identities, err := s.resolveIdentities(ctx, wants)
+		if err != nil {
+			return err
 		}
+		rows := s.deriveSamples(ev, bind, reg, identities)
+		batch.Metrics, batch.Properties, batch.Events = rows.Metrics, rows.Properties, rows.Events
+		batch.Fanned, batch.Unbound = rows.Fanned, rows.Unbound
 	}
 	if _, err := s.store.LandBatch(ctx, batch); err != nil {
 		return err
@@ -436,38 +558,98 @@ func (s *Server) land(ctx context.Context, id string, ev *ogv1.TelemetryBatch, b
 	return nil
 }
 
-// fanOut resolves a batch's identified samples against its conduit's
-// bindings in one read and adds what they derive to the batch: the rows that
-// land on their bound owners, and what the conduit heard that no binding
-// places, for its inbox. A batch with no conduit to resolve against (a
-// system push, which never carries an identity) lands none of them. A
-// returned error is the read's, transient.
-func (s *Server) fanOut(ctx context.Context, batch *storage.IngestBatch, fanned *ogv1.TelemetryBatch, bind ingestBinding, reg collection.Registry) error {
+// sampleRows is what one task's (or one push's) samples derive to: its own
+// rows on its arc, and the fan-out's.
+type sampleRows struct {
+	Metrics    []storage.MetricSampleWrite
+	Properties []storage.PropertySampleWrite
+	Events     []storage.EventWrite
+	Fanned     *storage.FannedRows
+	Unbound    []storage.UnboundIdentityWrite
+}
+
+// deriveSamples derives one batch's samples under bind. Each lane derives
+// against its own catalog (#594): the array the sample rode says which table
+// it lands in, and the catalog row says what a valid value looks like. All
+// three survive the SAME owner binding and reject-not-project; the split is
+// only the sink, not a second trust decision. The property lane is
+// transition-only: a value equal to its series' latest is not written, the
+// guard held in the insert itself (LandBatch), so a restart that re-emits an
+// unchanged verdict adds no row, under any dispatch (#455).
+//
+// An identified sample is the conduit's report about another owner (#1282):
+// it is split off here and lands only through the fan-out, never on the
+// conduit, placed by identities, the batch's (or its tick's) one read.
+func (s *Server) deriveSamples(ev *ogv1.TelemetryBatch, bind ingestBinding, reg collection.Registry, identities map[string]*storage.IdentityResolution) sampleRows {
+	own, fanned := splitIdentified(ev)
+	rows := sampleRows{
+		Metrics:    deriveMetrics(own, bind.Arc, *bind.SampleOwner, reg, bind.Writer),
+		Properties: deriveProperties(own, bind.Arc, *bind.SampleOwner, reg, bind.Writer),
+		Events:     deriveEvents(own, bind.Arc, *bind.SampleOwner, reg, bind.Writer),
+	}
+	if fanned != nil {
+		rows.Fanned, rows.Unbound = s.fanOut(fanned, bind, reg, identities[bind.Conduit])
+	}
+	return rows
+}
+
+// identityWants adds what one batch's identified samples name to wants,
+// under the conduit they resolve on, once each: a tick gathers every group's
+// so its fan-out reads once (#1582). A batch with no conduit, or no
+// identified sample, adds nothing.
+func identityWants(wants map[string][]storage.IdentityKey, ev *ogv1.TelemetryBatch, conduit string) {
+	if conduit == "" {
+		return
+	}
+	_, fanned := splitIdentified(ev)
+	if fanned == nil {
+		return
+	}
+	have := make(map[storage.IdentityKey]bool, len(wants[conduit]))
+	for _, k := range wants[conduit] {
+		have[k] = true
+	}
+	for _, k := range identityKeys(fanned) {
+		if !have[k] {
+			have[k] = true
+			wants[conduit] = append(wants[conduit], k)
+		}
+	}
+}
+
+// resolveIdentities is the fan-out's one read: every identity wanted,
+// resolved against its own conduit's bindings (#1282). Nothing wanted reads
+// nothing. A returned error is the read's, transient.
+func (s *Server) resolveIdentities(ctx context.Context, wants map[string][]storage.IdentityKey) (map[string]*storage.IdentityResolution, error) {
+	if len(wants) == 0 {
+		return nil, nil
+	}
+	return s.store.ResolveIdentityBindings(ctx, wants)
+}
+
+// fanOut derives a batch's identified samples from res, their conduit's
+// resolution: the rows that land on their bound owners (nil when none), and
+// what the conduit heard that no binding places, for its inbox. A batch with
+// no conduit to resolve against (a system push, which never carries an
+// identity) lands none of them, nor does one whose conduit resolved nothing.
+func (s *Server) fanOut(fanned *ogv1.TelemetryBatch, bind ingestBinding, reg collection.Registry, res *storage.IdentityResolution) (*storage.FannedRows, []storage.UnboundIdentityWrite) {
 	n := sampleCount(fanned)
 	if bind.Conduit == "" {
 		slog.Warn("identified samples on a batch with no conduit, dropped", "facility", "ingest", "samples", n)
-		return nil
-	}
-	ids := identityKeys(fanned)
-	var res *storage.IdentityResolution
-	if len(ids) > 0 {
-		var err error
-		if res, err = s.store.ResolveIdentityBindings(ctx, bind.Conduit, ids); err != nil {
-			return err
-		}
+		return nil, nil
 	}
 	if res == nil {
 		// The conduit is no component any longer, or nothing the batch named
 		// is a valid identity: nothing to land and nothing to keep.
 		slog.Warn("identified samples dropped: no conduit to resolve them on, or no valid identity",
 			"facility", "ingest", "conduit", bind.Conduit, "samples", n)
-		return nil
+		return nil, nil
 	}
 	plan := planFanOut(fanned, bind.Conduit, res.ConduitName, bind.ConduitEndpoint, res.Owners, reg, time.Now().UTC())
+	var rows *storage.FannedRows
 	if len(plan.rows.Metrics)+len(plan.rows.Properties)+len(plan.rows.Events) > 0 {
-		batch.Fanned = &plan.rows
+		rows = &plan.rows
 	}
-	batch.Unbound = plan.unbound
 	if len(plan.unbound) > 0 {
 		heard := 0
 		for _, u := range plan.unbound {
@@ -478,7 +660,7 @@ func (s *Server) fanOut(ctx context.Context, batch *storage.IngestBatch, fanned 
 	if plan.invalid > 0 {
 		slog.Warn("samples naming no valid identity dropped", "facility", "ingest", "conduit", res.ConduitName, "samples", plan.invalid)
 	}
-	return nil
+	return rows, plan.unbound
 }
 
 // failed answers a batch whose landing failed. A write the gateway refuses

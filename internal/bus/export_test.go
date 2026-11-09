@@ -95,3 +95,7 @@ func SetTelemetryNakDelay(d time.Duration) (restore func()) {
 // MaxPayload is the largest message the bus accepts, as the server's own
 // client reads it from the server.
 func (s *Server) MaxPayload() int64 { return s.nc.MaxPayload() }
+
+// AsTick is a one-task batch as the node tick that carries it (#1582): its
+// task's rows in the tick's one group.
+func AsTick(ev *ogv1.TelemetryBatch) *ogv1.TelemetryBatch { return asTick(ev) }

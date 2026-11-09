@@ -156,7 +156,7 @@ func TestBookPollRunForHTTPAnswers(t *testing.T) {
 func TestABatchCarryingAComponentsBytesStillMarshals(t *testing.T) {
 	t.Parallel()
 	bad := string([]byte{0xe9, 'x', 0xff})
-	ev := buildBatch("t1", "n1", []collection.Sample{
+	ev := groupFor("t1", []collection.Sample{
 		{Name: collection.SignalEndpointAuthenticated, Text: "no", IsText: true, Labels: map[string]string{collection.ReasonLabel: bad}},
 		{Name: "volume", Value: 1, Labels: map[string]string{collection.ReasonLabel: bad}},
 	})

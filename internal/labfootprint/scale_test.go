@@ -155,9 +155,9 @@ func scaleWindowFixture() (DBCounters, DBCounters, map[string]Usage, map[string]
 	t0 := at(0)
 	t1 := t0.Add(10 * time.Minute)
 	db0 := DBCounters{At: t0, MetricRows: 1000, PropertyRows: 50, MetricBytes: 1 << 20, PropertyBytes: 1 << 10,
-		DatabaseBytes: 100 << 20, ReceiptBytes: 1 << 20, WALBytes: 10 << 20}
+		DatabaseBytes: 100 << 20, ReceiptBytes: 1 << 20, WALBytes: 10 << 20, ReceiptsInserted: 500}
 	db1 := DBCounters{At: t1, MetricRows: 1000 + 27_330, PropertyRows: 50 + 150, MetricBytes: 1<<20 + 10<<20, PropertyBytes: 1<<10 + 100<<10,
-		DatabaseBytes: 100<<20 + 12<<20, ReceiptBytes: 1<<20 + 1<<20, WALBytes: 10<<20 + 30<<20}
+		DatabaseBytes: 100<<20 + 12<<20, ReceiptBytes: 1<<20 + 1<<20, WALBytes: 10<<20 + 30<<20, ReceiptsInserted: 500 + 600}
 	use0 := map[string]Usage{
 		"server":  {At: t0, CPUNanos: 0, Anon: 10 << 20},
 		"db":      {At: t0, CPUNanos: 0, Anon: 10 << 20},
@@ -232,6 +232,7 @@ func TestScaleReportTableAndJSON(t *testing.T) {
 	for _, row := range []string{
 		"metric rows a minute", "property rows a minute", "metric table a day", "WAL a day",
 		"server cpu", "db cpu", "edge-hq cpu", "total cpu", "server memory", "edge-hq memory",
+		"batches landed", "samples landed", "samples per batch", "batches a second",
 		"ingest lag p50", "ingest lag p95", "consumer redeliveries",
 		"fleet view p50", "fleet view p95", "retention drain",
 	} {
@@ -245,6 +246,15 @@ func TestScaleReportTableAndJSON(t *testing.T) {
 	b, err := json.Marshal(rep)
 	if err != nil {
 		t.Fatal(err)
+	}
+	// 600 receipts carried 27,480 rows over 600 s: 45.8 samples a batch, 1 batch a second.
+	for _, key := range []string{`"batches_landed":600`, `"samples_landed":27480`, `"samples_per_batch":45.8`, `"batches_per_second":1`} {
+		if !strings.Contains(string(b), key) {
+			t.Errorf("the JSON has no %s:\n%s", key, b)
+		}
+	}
+	if !strings.Contains(table, "600") || !strings.Contains(table, "45.8") {
+		t.Errorf("the table does not print the batch figures:\n%s", table)
 	}
 	var back ScaleReport
 	if err := json.Unmarshal(b, &back); err != nil {

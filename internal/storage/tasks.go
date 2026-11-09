@@ -243,3 +243,43 @@ func (p *PG) ResolveTaskOwner(ctx context.Context, taskID, nodeName string) (Tas
 	owner.ComponentID = *componentID
 	return owner, true, nil
 }
+
+// ResolveTaskOwners is ResolveTaskOwner for every task of one node's batch in
+// one statement (#1582): a node's tick carries many tasks, and binding each
+// with a read of its own would grow the ingest's reads with the tick. Each
+// task id the node may land for maps to the owner ResolveTaskOwner gives it;
+// a task ResolveTaskOwner refuses (unknown, another node's endpoint, a shared
+// endpoint with no component) is absent, never an error. err is reserved for
+// a real DB failure, so the caller can leave the message unacked for
+// redelivery.
+func (p *PG) ResolveTaskOwners(ctx context.Context, nodeName string, taskIDs []string) (map[string]TaskOwner, error) {
+	out := make(map[string]TaskOwner, len(taskIDs))
+	if len(taskIDs) == 0 {
+		return out, nil
+	}
+	// The single read's confinement and its no-component rule, held in the
+	// statement's own condition: a row it returns is one ResolveTaskOwner
+	// would have bound.
+	rows, err := p.pool.Query(ctx, `
+		select t.id, i.component::text, i.id, i.name, i.transport, i.node_name::text
+		from task t
+		join endpoint i on i.id = t.endpoint_id
+		join node n on n.principal_id = i.node_name
+		where t.id = any($1::text[]) and n.name = $2 and i.component is not null`, taskIDs, nodeName)
+	if err != nil {
+		return nil, fmt.Errorf("storage: resolve task owners for %s: %w", nodeName, err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		var o TaskOwner
+		if err := rows.Scan(&id, &o.ComponentID, &o.EndpointID, &o.EndpointName, &o.Transport, &o.NodeID); err != nil {
+			return nil, fmt.Errorf("storage: resolve task owners for %s: %w", nodeName, err)
+		}
+		out[id] = o
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("storage: resolve task owners for %s: %w", nodeName, err)
+	}
+	return out, nil
+}

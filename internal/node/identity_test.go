@@ -14,7 +14,7 @@ import (
 // log line; and a plain poll's change memory tells two records' occurrences
 // apart, so each room's event lands when that room's changes.
 
-func TestBuildBatchCarriesIdentity(t *testing.T) {
+func TestGroupForCarriesIdentity(t *testing.T) {
 	t.Parallel()
 	at := time.Date(2026, 10, 29, 12, 0, 0, 0, time.UTC)
 	r1 := &driver.Identity{Key: "ucc-room-id", Value: "r1"}
@@ -25,7 +25,7 @@ func TestBuildBatchCarriesIdentity(t *testing.T) {
 		{Lane: driver.LaneLog, Text: "raw", IsText: true, TS: at},
 		{Name: "uptime", Value: 9, TS: at},
 	}
-	b := buildBatch("t1", "node-a", dps)
+	b := groupFor("t1", dps)
 	if p := b.GetProperties()[0]; p.GetIdentity().GetKey() != "ucc-room-id" || p.GetIdentity().GetValue() != "r1" || p.GetInstance() != "" {
 		t.Fatalf("property %v, want identity ucc-room-id=r1 and the instance left to the server", p)
 	}

@@ -1,8 +1,8 @@
 ---
 title: "A telemetry batch lands once, in one transaction under its receipt"
 date: 2026-10-26
-status: "Accepted"
-summary: "The ingest consumer lands each batch (its log lines and its three sample lanes) in ONE transaction that first inserts the batch's receipt, keyed by its subject and Nats-Msg-Id (`telemetry_receipt`): all or nothing, and an id that already landed writes nothing, so a redelivery after a lost ack, a consumer that died after its commit, or a publisher's retry past the stream's duplicate window lands each row once, log lines included. The property lane's transition guard moves into the insert as a conditional write held per series by a transaction lock (the #455 ruling, ratified with the lock it needs under READ COMMITTED), so concurrent batches never write a consecutive duplicate; the guard still needs each publisher's batches to land in order, which the consumer holds with one batch in flight (a refused batch dropped at once, a transient failure redelivered before anything behind it). Receipts are kept 24 hours. The `(series, ts)` natural key is not the mechanism"
+status: "Accepted, amended (#1582)"
+summary: "The ingest consumer lands each batch (its log lines and its three sample lanes) in ONE transaction that first inserts the batch's receipt, keyed by its subject and Nats-Msg-Id (`telemetry_receipt`): all or nothing, and an id that already landed writes nothing, so a redelivery after a lost ack, a consumer that died after its commit, or a publisher's retry past the stream's duplicate window lands each row once, log lines included. The property lane's transition guard moves into the insert as a conditional write held per series by a transaction lock (the #455 ruling, ratified with the lock it needs under READ COMMITTED), so concurrent batches never write a consecutive duplicate; the guard still needs each publisher's batches to land in order, which the consumer holds with one batch in flight (a refused batch dropped at once, a transient failure redelivered before anything behind it). Receipts are kept 24 hours. The `(series, ts)` natural key is not the mechanism. **Amended (#1582):** a node lands one batch per tick carrying a group per task, under one receipt; a refused group drops only itself and its siblings land"
 refs: [311, 455, 457, 430]
 ---
 
@@ -64,3 +64,22 @@ refs: [311, 455, 457, 430]
   per row, which covers every sink at once and keeps the sample tables free of a uniqueness index the
   partitioning work (#420) would have to carry. The pages' earlier "idempotent on `(series, ts)`" is
   superseded by the per-batch receipt.
+- **Amended (#1582): a node lands one batch per tick, not one per task, and a refused group drops only
+  itself.** The node's spool coalesces the groups of a tick (a `TaskGroup` per task, each with its own
+  observed time and its metric, property, event and task-log lanes) into one `TelemetryBatch`, flushed
+  on a timer, at a byte budget, or at once for a session's pushed samples, so one id, one message and one receipt cover every task a node ran in
+  the tick, and the consumer lands the whole batch in one transaction with a statement count that does
+  not grow with its groups. Point 1 changes from a refused row failing the batch to a refused **group**
+  being skipped: a group the gateway refuses (its owner gone, its key's writer class refusing its
+  writer, a value Postgres refuses as data or by a CHECK) is dropped, the other groups land, the
+  receipt is written once, and the message is acked, so a persistent refusal in one task never costs
+  its siblings their samples or forces a redelivery. The gateway refuses the cases it can decide in Go
+  before any write; a value only Postgres refuses reruns the batch with one savepoint per group to
+  learn which groups it refuses, rolls that pass back, and lands the batch without them, still under
+  one receipt. A foreign key or not-null failure, or a deadlock, still fails and redelivers the
+  whole batch. Writer identity (ADR-0161) is per group: each group carries its own component and
+  endpoint, and the node is shared. The batch's id and bytes are fixed when the spool flushes, so a
+  retry ships the same `Nats-Msg-Id` and payload. The receipt horizon stays 24 hours (point 4): it
+  outlives the spool's 12 hour drop age plus the redelivery window, so the larger batch adds no new
+  residual. The node subject carries groups only; the task lanes at the top of a batch stay on the API
+  push subject, and a node-subject batch that carries them is terminated.

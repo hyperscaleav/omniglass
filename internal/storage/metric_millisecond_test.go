@@ -30,7 +30,7 @@ func TestIngestTruncatesAMetricSampleToTheMillisecond(t *testing.T) {
 	ctx := context.Background()
 	ts := time.Now().UTC().Add(-time.Minute).Truncate(time.Second).Add(123456 * time.Microsecond)
 
-	landed, err := f.gw.LandBatch(ctx, fullBatch("og.v1.api.telemetry ms-1", "on", ts))
+	landed, err := landOf(f.gw.LandBatch(ctx, fullBatch("og.v1.api.telemetry ms-1", "on", ts)))
 	if err != nil || !landed {
 		t.Fatalf("a batch carrying a microsecond ts: landed %v, err %v; want it landed", landed, err)
 	}
@@ -64,8 +64,8 @@ func TestSamplesOfOneMillisecondBothLandInOrder(t *testing.T) {
 		return storage.MetricSampleWrite{OwnerKind: "component", OwnerID: "disp-1", Key: "room-temperature",
 			Value: v, Source: "push", TS: base.Add(time.Duration(us) * time.Microsecond)}
 	}
-	landed, err := f.gw.LandBatch(ctx, storage.IngestBatch{BatchID: "ms-pair", Writer: storage.PushWriter(),
-		Metrics: []storage.MetricSampleWrite{sample(1, 1200), sample(2, 1900)}})
+	landed, err := landOf(f.gw.LandBatch(ctx, storage.IngestBatch{BatchID: "ms-pair", Writer: storage.PushWriter(),
+		Metrics: []storage.MetricSampleWrite{sample(1, 1200), sample(2, 1900)}}))
 	if err != nil || !landed {
 		t.Fatalf("landed %v, err %v; want the batch landed", landed, err)
 	}

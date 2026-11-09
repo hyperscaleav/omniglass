@@ -404,6 +404,14 @@ How to read each row:
   the database line is the whole database, so it also carries the logs and anything else that grew. A daily-partitioned lane
   is one relation per day, so its growth is the sum across them. Extrapolation assumes the window is
   steady: a window that includes a burst reads high.
+- **batches landed, samples landed, samples per batch, batches a second**: the receipts the window
+  inserted (one per batch the ingest consumer landed), the metric and property rows it inserted, their
+  ratio, and the receipts over the window's seconds. A node sends one batch per tick with a group per
+  task, so samples per batch grows with the tasks a node runs; a figure near one means batches are not
+  being coalesced. The rows count every writer, as the per-minute rows do, so the ratio reads a little
+  high in a lab that calculates metrics. The receipt count is Postgres's inserted-tuples counter, which
+  also counts a receipt whose transaction rolled back, so a batch the consumer landed in three passes
+  after a Postgres refusal counts three, and samples per batch reads low under a refusal storm.
 - **WAL a day**: the write-ahead log written during the window (the difference between two log
   positions), multiplied up to a day. It is what replication and backups would carry, and is usually
   more than the tables, since every change is logged and indexes are logged with it.

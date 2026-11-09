@@ -34,37 +34,40 @@ func (c *capturePublisher) publish(_ string, data []byte, _ string) (ackWait, er
 }
 
 // TestSpoolShipsMetricTimestampsOnTheMillisecond: a probe's sample stamped in
-// microseconds, one with no ts of its own under a microsecond batch ts, and
-// the property, event and log lanes of the same batch. The metric ts reach
+// microseconds, one with no ts of its own under a microsecond group ts, and
+// the property, event and log lanes of the same group. The metric ts reach
 // the stream on their millisecond; the others are sent as they were.
+// (Adapted for #1582: the samples ride a task group added to the spool and
+// flushed, where they rode a whole batch sent; the group ts is the fallback.)
 func TestSpoolShipsMetricTimestampsOnTheMillisecond(t *testing.T) {
 	t.Parallel()
 	at := time.Date(2026, 11, 5, 12, 0, 0, 123456789, time.UTC)
-	batchTS := at.Add(time.Second)
+	groupTS := at.Add(time.Second)
 	dps := []collection.Sample{
 		{Name: "tcp-open", Value: 1, TS: at},
 		{Name: "tcp-connect-time", Value: 4},
 		{Name: "power-state", Text: "on", IsText: true, TS: at},
 	}
-	ev := buildBatch("task-1", "edge", dps)
-	ev.Ts = timestamppb.New(batchTS)
-	ev.Events = []*ogv1.EventSample{{Name: "input-changed", Message: "hdmi-2", Ts: timestamppb.New(at)}}
-	ev.TaskLogs = []*ogv1.LogLine{{Message: "line", Ts: timestamppb.New(at)}}
+	g := groupFor("task-1", dps)
+	g.Ts = timestamppb.New(groupTS)
+	g.Events = []*ogv1.EventSample{{Name: "input-changed", Message: "hdmi-2", Ts: timestamppb.New(at)}}
+	g.TaskLogs = []*ogv1.LogLine{{Message: "line", Ts: timestamppb.New(at)}}
 
 	pub := &capturePublisher{}
-	s := newTelemetrySpool("og.v1.node.telemetry", pub.publish)
-	if err := s.send(ev); err != nil {
+	s := newTelemetrySpool("og.v1.node.telemetry", "edge", pub.publish)
+	if err := s.add(g); err != nil {
 		t.Fatal(err)
 	}
+	s.flush()
 	waitIdle(t, s)
 
-	if len(pub.sent) != 1 {
-		t.Fatalf("%d batches shipped, want 1", len(pub.sent))
+	if len(pub.sent) != 1 || len(pub.sent[0].GetGroups()) != 1 {
+		t.Fatalf("%d batches shipped, want 1 of one group", len(pub.sent))
 	}
-	got := pub.sent[0]
+	got := pub.sent[0].GetGroups()[0]
 	wantMS := map[string]time.Time{
 		"tcp-open":         at.Truncate(time.Millisecond),
-		"tcp-connect-time": batchTS.Truncate(time.Millisecond),
+		"tcp-connect-time": groupTS.Truncate(time.Millisecond),
 	}
 	for _, m := range got.GetMetrics() {
 		want, ok := wantMS[m.GetName()]
@@ -87,7 +90,7 @@ func TestSpoolShipsMetricTimestampsOnTheMillisecond(t *testing.T) {
 	if gotTS := got.GetTaskLogs()[0].GetTs().AsTime(); !gotTS.Equal(at) {
 		t.Errorf("log ts %s, want %s unchanged", gotTS.Format(time.RFC3339Nano), at.Format(time.RFC3339Nano))
 	}
-	if gotTS := got.GetTs().AsTime(); !gotTS.Equal(batchTS) {
-		t.Errorf("batch ts %s, want %s unchanged", gotTS.Format(time.RFC3339Nano), batchTS.Format(time.RFC3339Nano))
+	if gotTS := got.GetTs().AsTime(); !gotTS.Equal(groupTS) {
+		t.Errorf("group ts %s, want %s unchanged", gotTS.Format(time.RFC3339Nano), groupTS.Format(time.RFC3339Nano))
 	}
 }

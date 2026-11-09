@@ -22,14 +22,14 @@ import (
 const wantStatementsPerReportBatch = 13
 
 // reportBatch is one endpoint's collection report for a window, as the node
-// publishes it: an endpoint that polls and holds a listening session, at
+// publishes it, its one task group (#1582): an endpoint that polls and holds a listening session, at
 // its healthiest, two rows (a failure or an unclaimed count adds one each).
 func reportBatch(task footprint.Task, window int, end time.Time) *ogv1.TelemetryBatch {
 	ts := timestamppb.New(end)
-	return &ogv1.TelemetryBatch{TaskId: task.ID, NodeId: task.Node, Ts: ts, Metrics: []*ogv1.MetricSample{
+	return &ogv1.TelemetryBatch{NodeId: task.Node, Groups: []*ogv1.TaskGroup{{TaskId: task.ID, Ts: ts, Metrics: []*ogv1.MetricSample{
 		{Name: probekeys.PollDuration, Value: 40 + float64(window%7), Ts: ts},
 		{Name: probekeys.PushMessageCount, Value: float64(window % 3), Ts: ts},
-	}}
+	}}}}
 }
 
 // TestCollectionReportFootprint holds what the collection telemetry costs
