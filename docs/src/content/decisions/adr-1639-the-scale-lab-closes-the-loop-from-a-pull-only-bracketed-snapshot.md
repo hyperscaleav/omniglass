@@ -39,8 +39,12 @@ refs: [1639, 1640, 1661, 1662, 1663, 1664, 1632]
      nodes; the end mark reads the nodes and then the clock, so the receipts that clock bounds fall
      inside the reads. A node's receipts are counted by `starts_with` on its subject prefix (a node
      name's own characters stay literal) from 30 s before the window (the bus's acknowledgement
-     wait), and the receipts in that margin or after the end are the mask. The window is refused
-     past 23 hours, inside the server's 24-hour receipt prune.
+     wait). Each mark then waits, up to three minutes, for the ingest lane to land a sample a node
+     probed after its reads: the lane is serial and in stream order, so every batch acknowledged
+     before the reads has landed by then. The receipts in the margin, in the backlog the lane
+     landed before it drained past the start, or after the end are the mask; a fixed wait in place
+     of the drain was refused, since a lane further behind than the wait reads as a lost batch.
+     The window is refused past 23 hours, inside the server's 24-hour receipt prune.
   6. **Poll targets from the worklist's own rule.** The enabled poll targets are read in SQL with
      `driver.IsBaked`'s test, each at the interval its node actually runs it (a driver poll at its
      function's schedule, a reachability probe at the node's probe interval, both read off the node

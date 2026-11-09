@@ -67,17 +67,21 @@ const (
 	maskedByBacklog      = "connections still in the kernel backlog at the end read"
 	maskedByNodeInFlight = "requests in flight at the node's end read"
 	maskedByReturn       = "answers in flight, answers late past the node's timeout, and untallied traffic on the protocol"
-	maskedByReceiptEdges = "receipts landed in the margin before the window or after its end"
+	maskedByReceiptEdges = "receipts landed in the margin before the window, in the lane's backlog at its start, or after its end"
 	maskedByUnhitSample  = "unhit devices past the sample, not checked against the targets"
 )
 
 // ReceiptCount is one node's telemetry receipts around the window [T0, T1].
 // Landed counts every receipt landed after T0 minus the acknowledgement wait
-// (the generous superset); Margin how many of those landed before T0, and
-// AfterEnd how many after T1. Margin and AfterEnd are the masking term.
+// (the generous superset); Margin how many of those landed before T0,
+// Backlog how many from T0 until the ingest lane drained past the start read
+// (batches the bus acknowledged before the window can land there), and
+// AfterEnd how many after T1. Margin, Backlog and AfterEnd are the masking
+// term.
 type ReceiptCount struct {
 	Landed   int64 `json:"landed"`
 	Margin   int64 `json:"margin"`
+	Backlog  int64 `json:"backlog"`
 	AfterEnd int64 `json:"after_end"`
 }
 
@@ -222,7 +226,7 @@ func Reconcile(b NodeBracket) []ClosedLoopGap {
 	// The telemetry hops.
 	add(ClosedLoopGap{Gap: GapPublishedNotLanded, MaskedBy: maskedByReceiptEdges,
 		Count:  (b.End.Node.BatchesAcknowledged - b.Start.Node.BatchesAcknowledged) - b.Receipts.Landed,
-		Masked: b.Receipts.Margin + b.Receipts.AfterEnd})
+		Masked: b.Receipts.Margin + b.Receipts.Backlog + b.Receipts.AfterEnd})
 	add(ClosedLoopGap{Gap: GapSpoolDropped, Count: b.End.Node.BatchesDropped - b.Start.Node.BatchesDropped})
 
 	out = append(out, unhit(b, reading)...)

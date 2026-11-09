@@ -12,8 +12,10 @@ import (
 )
 
 // The receipt statement counts only the named node's receipts, from the
-// window's start minus the margin, splits off the margin and the receipts
-// after the end, and reads the same after the server's 24 h prune.
+// window's start minus the margin, splits off the margin, the backlog the
+// lane landed before it drained past the start, and the receipts after the
+// end, and reads the same after the server's 24 h prune. A backlog that
+// outlasts the window stops at its end, so no receipt is masked twice.
 func TestIntegrationReceiptCountReadsOneNodesWindow(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -53,22 +55,26 @@ func TestIntegrationReceiptCountReadsOneNodesWindow(t *testing.T) {
 	land("og.v1.telemetry.edge 1", t0.Add(time.Minute))    // a node a LIKE pattern would match
 	land("og.v1.telemetry.e_ge", t0.Add(time.Minute))      // no message id
 
-	count := func() ReceiptCount {
+	count := func(drained time.Time) ReceiptCount {
 		t.Helper()
 		var c ReceiptCount
-		if err := conn.QueryRow(ctx, receiptCountQuery("e_ge", t0, t1)).Scan(&c.Landed, &c.Margin, &c.AfterEnd); err != nil {
+		if err := conn.QueryRow(ctx, receiptCountQuery("e_ge", t0, drained, t1)).Scan(&c.Landed, &c.Margin, &c.Backlog, &c.AfterEnd); err != nil {
 			t.Fatal(err)
 		}
 		return c
 	}
-	want := ReceiptCount{Landed: 4, Margin: 1, AfterEnd: 1}
-	if got := count(); got != want {
+	drained := t0.Add(2 * time.Minute)
+	want := ReceiptCount{Landed: 4, Margin: 1, Backlog: 1, AfterEnd: 1}
+	if got := count(drained); got != want {
 		t.Fatalf("count = %+v, want %+v", got, want)
+	}
+	if got, want := count(t1.Add(2*time.Minute)), (ReceiptCount{Landed: 4, Margin: 1, Backlog: 2, AfterEnd: 1}); got != want {
+		t.Fatalf("drained past the end, count = %+v, want %+v", got, want)
 	}
 	if n, err := gw.PruneTelemetryReceipts(ctx, now.Add(-24*time.Hour), 0); err != nil || n != 1 {
 		t.Fatalf("prune removed %d, %v; want the one past the horizon", n, err)
 	}
-	if got := count(); got != want {
+	if got := count(drained); got != want {
 		t.Fatalf("after the prune, count = %+v, want %+v", got, want)
 	}
 }

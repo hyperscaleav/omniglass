@@ -19,33 +19,84 @@ import (
 // endpointReads bounds how many nodes' observations are read at once.
 const endpointReads = 8
 
+// drainPoll is how often the marks ask whether the ingest lane has drained,
+// and drainBound how long they wait for it: a lane further behind than the
+// bound leaves the closed loop unmeasured rather than read short.
+const (
+	drainPoll  = time.Second
+	drainBound = 3 * time.Minute
+)
+
 // endpointMark is one end of the closed loop's window: the database's clock
 // and every node's bracketed observation, read after it at the start and
 // before it at the end, so the receipts the clock bounds fall inside the
-// reads.
+// reads; and Drained, the database's clock once the ingest lane has landed
+// every batch the bus acknowledged before the mark's reads.
 type endpointMark struct {
-	At  time.Time
-	Obs map[string]collection.EndpointObservation
+	At      time.Time
+	Drained time.Time
+	Obs     map[string]collection.EndpointObservation
 }
 
-// markStart reads the database's clock, then every node's observation.
+// markStart reads the database's clock, then every node's observation, then
+// waits for the lane to drain past the reads: what it landed until then can
+// be batches from before the window.
 func (h *harness) markStart(ctx context.Context, l scaleLab) (endpointMark, error) {
 	at, err := h.dbClock(ctx)
 	if err != nil {
 		return endpointMark{}, err
 	}
 	obs, err := h.readEndpoints(ctx, l)
-	return endpointMark{At: at, Obs: obs}, err
+	if err != nil {
+		return endpointMark{}, err
+	}
+	read, err := h.dbClock(ctx)
+	if err != nil {
+		return endpointMark{}, err
+	}
+	drained, err := h.drainedPast(ctx, read)
+	return endpointMark{At: at, Drained: drained, Obs: obs}, err
 }
 
-// markEnd reads every node's observation, then the database's clock.
+// markEnd reads every node's observation, then the database's clock, then
+// waits for the lane to drain past it, so every batch acknowledged inside
+// the window has landed before its receipts are counted.
 func (h *harness) markEnd(ctx context.Context, l scaleLab) (endpointMark, error) {
 	obs, err := h.readEndpoints(ctx, l)
 	if err != nil {
 		return endpointMark{}, err
 	}
 	at, err := h.dbClock(ctx)
-	return endpointMark{At: at, Obs: obs}, err
+	if err != nil {
+		return endpointMark{}, err
+	}
+	drained, err := h.drainedPast(ctx, at)
+	return endpointMark{At: at, Drained: drained, Obs: obs}, err
+}
+
+// drainedPast waits for the ingest lane to drain past at (drainedQuery) and
+// returns the database's clock when it had.
+func (h *harness) drainedPast(ctx context.Context, at time.Time) (time.Time, error) {
+	deadline := time.Now().Add(drainBound)
+	for {
+		out, err := h.psql(ctx, drainedQuery(at))
+		if err != nil {
+			return time.Time{}, fmt.Errorf("read the ingest lane's drain: %w", err)
+		}
+		drained, clock, err := parseDrained(out)
+		if err != nil {
+			return time.Time{}, err
+		}
+		if drained {
+			return clock, nil
+		}
+		if time.Now().After(deadline) {
+			return time.Time{}, fmt.Errorf("the ingest lane landed no sample a node probed after %s within %s", at.Format(time.RFC3339), drainBound)
+		}
+		if err := sleep(ctx, drainPoll); err != nil {
+			return time.Time{}, err
+		}
+	}
 }
 
 // dbClock is the database's clock now, the clock a receipt lands on.
@@ -164,7 +215,7 @@ func (h *harness) endpointBrackets(ctx context.Context, l scaleLab, start, end e
 	}
 	var brackets []NodeBracket
 	for node := range l.nodes {
-		out, err := h.psql(ctx, receiptCountQuery(node, start.At, end.At))
+		out, err := h.psql(ctx, receiptCountQuery(node, start.At, start.Drained, end.At))
 		if err != nil {
 			return nil, fmt.Errorf("count %s's receipts: %w", node, err)
 		}

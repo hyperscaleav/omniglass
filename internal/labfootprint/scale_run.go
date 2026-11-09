@@ -316,9 +316,6 @@ func (h *harness) measureScale(ctx context.Context, cfg ScaleConfig) (ScaleRepor
 	if endpointErr == nil {
 		stop, endpointErr = h.markEnd(ctx, l)
 	}
-	// A batch the bus acknowledged before the end mark has landed within
-	// the ack wait.
-	landed := time.Now().Add(receiptMargin)
 	if run.Measured, err = WindowOf(db0, db1, use0, use1); err != nil {
 		return ScaleReport{}, err
 	}
@@ -334,9 +331,6 @@ func (h *harness) measureScale(ctx context.Context, cfg ScaleConfig) (ScaleRepor
 		return ScaleReport{}, err
 	}
 	if endpointErr == nil {
-		if err := sleep(ctx, time.Until(landed)); err != nil {
-			return ScaleReport{}, err
-		}
 		run.Endpoints, endpointErr = h.endpointBrackets(ctx, l, start, stop)
 	}
 	if endpointErr != nil {

@@ -503,7 +503,7 @@ Then one line per gap, in the order a request travels:
 | `sent-not-received` | a request whose bytes left the node and never arrived | requests in flight at the node's end read |
 | `received-not-settled` | a request a simulator received and never settled | |
 | `answered-not-returned` | an answer a simulator gave that the node never got | answers in flight, answers late past the node's timeout (shown as `answered late`), and traffic on the protocol the node does not tally yet (#1661) |
-| `published-not-landed` | a batch the bus acknowledged with no receipt in the database | receipts landed in the 30 s before the window (the bus's acknowledgement wait) or after its end |
+| `published-not-landed` | a batch the bus acknowledged with no receipt in the database | receipts landed in the 30 s before the window (the bus's acknowledgement wait), before the ingest lane drained past the start read (batches from before the window), or after its end |
 | `spool-dropped` | a batch the node's spool gave up on | |
 | `unhit-endpoint` | a poll target due at least twice whose device saw nothing on its protocol | devices past the simulator's sample of twenty, not checked against the targets (#1663) |
 
@@ -514,8 +514,10 @@ component. An icmp target reads `not observed by the sim`, since the kernel answ
 whose simulator carries an applied impairment reads `impaired` instead of lost on every gap (an
 impairment loses traffic on purpose; telling it apart per protocol is #1662), and a node or
 simulator that restarted inside the window reads `restarted`, since none of its figures compare.
-The window is refused past 23 hours, since the server prunes receipts at a day. When the block
-cannot be read (a simulator or node not answering) the table ends with
+The window is refused past 23 hours, since the server prunes receipts at a day. Each mark waits for
+the ingest lane to land a sample a node probed after it, so a lagging lane delays the count rather
+than reading as a lost batch. When the block cannot be read (a simulator or node not answering, or
+a lane still behind three minutes after a mark) the table ends with
 `endpoints not measured` and why, and the JSON carries it as `endpoints_not_measured`; every other
 figure is still reported.
 

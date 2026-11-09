@@ -130,8 +130,8 @@ func TestReconcileNamesEachHopsGap(t *testing.T) {
 			transportRow(&b.End.Node, "http").Answered = 157
 		}, ClosedLoopGap{Gap: GapAnsweredNotReturned, Protocol: "http", Count: 3, MaskedBy: maskedByReturn}},
 		{"a batch acknowledged that never landed", func(b *NodeBracket) {
-			b.Receipts = ReceiptCount{Landed: 4, Margin: 1, AfterEnd: 1}
-		}, ClosedLoopGap{Gap: GapPublishedNotLanded, Count: 2, Masked: 2, MaskedBy: maskedByReceiptEdges}},
+			b.Receipts = ReceiptCount{Landed: 4, Margin: 1, Backlog: 3, AfterEnd: 1}
+		}, ClosedLoopGap{Gap: GapPublishedNotLanded, Count: 2, Masked: 5, MaskedBy: maskedByReceiptEdges}},
 		{"a batch the spool dropped", func(b *NodeBracket) {
 			b.End.Node.BatchesDropped = 2
 		}, ClosedLoopGap{Gap: GapSpoolDropped, Count: 2}},
