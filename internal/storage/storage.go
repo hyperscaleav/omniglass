@@ -920,6 +920,12 @@ type Gateway interface {
 	RecordWebhookCounts(ctx context.Context, counts []WebhookCount) error
 	// CollectionSettings is the effective collection namespace (#1369).
 	CollectionSettings(ctx context.Context) (settings.CollectionSettings, error)
+	// RecordPlatformMetrics lands the process's own observations on the
+	// platform components, written by the process (#1625).
+	RecordPlatformMetrics(ctx context.Context, rows []PlatformMetric) error
+	// NodeCheckins reads every claimed node's platform component and the time
+	// it last spoke, the check-in age's input (#1625).
+	NodeCheckins(ctx context.Context) ([]NodeCheckin, error)
 
 	// Membership: the binding a role attaches to. Many-valued on purpose, since a
 	// shared device belongs to every system it serves, which a single pointer on

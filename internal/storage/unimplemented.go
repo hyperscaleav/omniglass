@@ -784,6 +784,12 @@ func (UnimplementedGateway) RecordWebhookCounts(context.Context, []WebhookCount)
 func (UnimplementedGateway) CollectionSettings(context.Context) (settings.CollectionSettings, error) {
 	return settings.CollectionSettings{}, nil
 }
+func (UnimplementedGateway) RecordPlatformMetrics(context.Context, []PlatformMetric) error {
+	return nil
+}
+func (UnimplementedGateway) NodeCheckins(context.Context) ([]NodeCheckin, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) ListTags(context.Context) ([]Tag, error) {
 	return nil, nil
 }

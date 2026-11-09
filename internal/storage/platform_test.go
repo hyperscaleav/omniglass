@@ -15,6 +15,14 @@ import (
 // once.
 func platformGateway(t *testing.T) (*storage.PG, context.Context) {
 	t.Helper()
+	gw, ctx, _ := platformGatewayDSN(t)
+	return gw, ctx
+}
+
+// platformGatewayDSN is platformGateway with its database's dsn, for a test
+// that reads or arranges rows past the gateway.
+func platformGatewayDSN(t *testing.T) (*storage.PG, context.Context, string) {
+	t.Helper()
 	dsn := storagetest.NewDSNFrom(t, "platform_seed", func(ctx context.Context, dsn string) error {
 		gw, err := storage.NewPG(ctx, dsn)
 		if err != nil {
@@ -29,7 +37,7 @@ func platformGateway(t *testing.T) (*storage.PG, context.Context) {
 		t.Fatalf("open gateway: %v", err)
 	}
 	t.Cleanup(gw.Close)
-	return gw, ctx
+	return gw, ctx, dsn
 }
 
 // platformNode registers a node and returns its platform component.
