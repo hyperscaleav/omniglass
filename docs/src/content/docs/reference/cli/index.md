@@ -3747,8 +3747,9 @@ Runs the edge node: claims its NATS credential with the enrollment token, pulls 
 | `--name` | string | (none) | this node's registered name (env OMNIGLASS_NODE_NAME) |
 | `--once` | bool | `false` | run a single claim + pull + heartbeat cycle and exit |
 | `--poll` | duration | `10s` | with --simulate: how often the simulator re-pulls its component list |
+| `--poll-workers` | int | `16` | how many collection tasks run at once, one at a time per endpoint (env OMNIGLASS_POLL_WORKERS) |
 | `--port-offset` | int | `0` | with --simulate: lift the simulated ports below 1024 by this much, to serve without the privilege to bind them |
-| `--probe-every` | duration | `0s` | how often each reachability probe runs; 0 probes on every heartbeat. Keep it under the console's 150s staleness window, past which a probe-only endpoint reads stale between probes |
+| `--probe-every` | duration | `30s` | how often each reachability probe runs, on the node's own timer, apart from the heartbeat. Keep it under the console's 150s staleness window, past which a probe-only endpoint reads stale between probes |
 | `--server` | string | (none) | Omniglass server base URL (env OMNIGLASS_SERVER) |
 | `--simulate` | bool | `false` | also run the simulator in this process, serving the simulated components placed on this node on its own loopback |
 | `--token` | string | (none) | enrollment token from POST /nodes/{name}:enroll (env OMNIGLASS_NODE_TOKEN) |
