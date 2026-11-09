@@ -1,0 +1,37 @@
+name: ticket-labels
+
+# The issue forms' Tier and Risk dropdowns become labels (#1602). A GitHub
+# issue form cannot apply a label from a dropdown answer, so each form renders
+# the answer into the body ("### Tier" holding tier:mid, "### Risk" holding
+# risk:low) and this run turns it into the label the dispatcher's ticket-lint
+# wants: exactly one tier:{jr,mid,sr} and one risk:{low,high}. The logic is
+# scripts/ticket-labels.sh (tested in go test ./scripts/); this job only fetches
+# the issue and lets the script edit it. An issue with no such sections (filed
+# by hand or by an agent, labels applied directly) is left alone.
+
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Apply the tier and risk labels the form answered
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.issue.number }}
+        run: |
+          gh issue view "$NUMBER" --json body,labels | scripts/ticket-labels.sh apply "$NUMBER"

@@ -1,63 +1,88 @@
 name: Feature / slice
-description: A single vertical slice of behavior.
+description: A single vertical slice of behavior. One ticket, one PR, one fresh agent session.
 title: "feat: "
-labels: ["feature"]
+type: Feature
 body:
+  - type: markdown
+    attributes:
+      value: >-
+        The five sections below are the ticket contract the dispatcher launches on
+        (docs/contributing/labels.md#the-ticket-contract). Write for a fresh session that
+        has only this body.
   - type: input
     id: epic
     attributes:
       label: Parent epic
-      description: The epic this belongs to (e.g. #12).
+      description: The epic this belongs to (e.g. #12). Also set it as the sub-issue's parent.
     validations:
       required: false
   - type: textarea
-    id: behavior
+    id: goal
     attributes:
-      label: Behavior
-      description: What the feature does and how it is observed (an assertion, not a vibe).
+      label: Goal
+      description: What the slice does and how it is observed (an assertion, not a vibe), and why it is worth a PR.
     validations:
       required: true
   - type: textarea
-    id: surfaces
+    id: spec
     attributes:
-      label: Surfaces (API / CLI / UI)
+      label: Spec
       description: >-
-        Every entry point this slice touches. The API route(s); the generated CLI command(s);
-        the UI view (live where the entity exists, an honest stub where its backend does not yet).
+        The behavior in detail. Every entry point it touches: the API route(s), the generated CLI
+        command(s), the UI view (live where the entity exists, an honest stub where its backend does
+        not yet). The "<resource>:<action>" permission checked and the ABAC scope injected, if any.
+        The thin cut (the deliberate simplifications) and what is deferred to which follow-up issue.
     validations:
       required: true
   - type: textarea
-    id: test
+    id: acceptance
     attributes:
-      label: How it will be tested
-      description: The failing test that will prove it. Tier(s)? unit / integration / e2e.
+      label: Acceptance criteria
+      description: >-
+        A checkbox list, one testable criterion per line: the failing test that proves it (its
+        tier: unit / integration / e2e), the docs that ship with it (which page, which status
+        badge moves, the build-log fragment), and the learning surface if it teaches a concept.
+      value: |
+        - [ ] a test fails before the change and passes after
+        - [ ] the docs page that teaches it ships in the same PR, its status badge advanced
+        - [ ]
     validations:
       required: true
   - type: textarea
-    id: docs
+    id: out_of_scope
     attributes:
-      label: Docs / learning page
-      description: The docs that ship with it. Is there an interactive learning surface?
+      label: Out of scope
+      description: What this ticket must not touch, naming the sibling tickets that own it.
     validations:
-      required: false
+      required: true
   - type: textarea
-    id: thin_cut
+    id: files
     attributes:
-      label: Thin cut
-      description: The deliberate simplifications this slice makes (the smallest honest increment).
+      label: Files likely touched
+      description: Paths, one per line, as they are in the tree ("(new)" for a file to create).
+      placeholder: "- internal/..."
     validations:
-      required: false
-  - type: textarea
-    id: deferred
+      required: true
+  - type: dropdown
+    id: tier
     attributes:
-      label: Deferred
-      description: Work moved to later slices, each its own follow-up issue (link them).
+      label: Tier
+      description: "The agent seniority the dispatcher assigns, applied as the label. jr: mechanical, one or two files. mid: a slice with its own tests and docs. sr: cross-cutting, a migration, an invariant, a new primitive."
+      options:
+        - tier:jr
+        - tier:mid
+        - tier:sr
+      default: 1
     validations:
-      required: false
-  - type: input
-    id: authz
+      required: true
+  - type: dropdown
+    id: risk
     attributes:
-      label: Permission and scope touched
-      description: The "<resource>:<action>" permission checked and the ABAC scope injected, if any.
+      label: Risk
+      description: "Applied as the label. high: authorization, scope, secrets, the edge, a migration, a delete, anything an operator cannot undo."
+      options:
+        - risk:low
+        - risk:high
+      default: 0
     validations:
-      required: false
+      required: true

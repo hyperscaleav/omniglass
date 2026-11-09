@@ -23,19 +23,64 @@ for one fact drift apart.
 
 ## What is a label
 
-Everything left is one of two prefixed families. The prefix encodes the one distinction
-that matters: does the label **describe** the issue, or does it **trigger** automation?
+Everything left is one of three prefixed families. The prefix encodes the one distinction
+that matters: does the label **describe** the issue (`area:*`, and `tier:*` and `risk:*` for
+the dispatcher), or does it **trigger** automation (`run:*`)?
 
 ### `area:<subsystem>` describes
 
 The subsystem a change touches, named to match the architecture glossary. The set grows as
 subsystems land; today:
 
-`area:foundation` `area:api` `area:storage` `area:auth` `area:collection` `area:expr`
-`area:ui` `area:node` `area:health` `area:settings` `area:tags` `area:files`
+`area:foundation` `area:api` `area:storage` `area:auth` `area:identity`
+`area:collection` `area:expr` `area:messaging` `area:ui` `area:node` `area:lab` `area:docs`
 
 Purely descriptive: it filters the issue list by subsystem. An issue can carry more than
 one.
+
+### `tier:<seniority>` and `risk:<level>` describe, for the dispatcher
+
+Two labels the [dispatcher](/contributing/autopilot/) reads before it launches a fresh agent
+session on a ticket. Each ticket carries **exactly one** of each; the dispatcher's lint refuses
+a ticket with none, two, or a value outside the set.
+
+- `tier:jr` `tier:mid` `tier:sr`: the agent seniority a ticket starts at. `jr` is mechanical
+  work in one or two files; `mid` is a slice with its own tests and docs; `sr` is cross-cutting,
+  a migration, an invariant, a new primitive. The dispatcher escalates a ticket that fails at its
+  tier (`jr` to `mid` to `sr`), so the label is the starting rung, not a ceiling.
+- `risk:low` `risk:high`: `high` marks authorization, scope, secrets, the edge, a migration, a
+  delete, anything an operator cannot undo. A `risk:high` ticket is reviewed as such, whichever
+  tier builds it.
+
+**Who sets them.** The filer, through the issue form: every form has a `Tier` and a `Risk`
+dropdown, and `ticket-labels.yml` turns the answer into the label the moment the issue is opened
+or edited (a GitHub issue form cannot apply a label from a dropdown by itself; the dropdown
+renders its answer into the body under `### Tier` and `### Risk`, and `scripts/ticket-labels.sh`
+reads those two sections and makes the labels match, removing a stale sibling of the same
+family). An issue filed by hand or by an agent carries them directly (`/file-bug` applies them
+with the create); the labeler leaves an issue with no such sections alone. Changing the label is
+the same as changing the dropdown: edit either, and the other follows on the next edit.
+
+### The ticket contract
+
+The dispatcher launches only on a ticket whose body a fresh session can work from with nothing
+else. That body has five sections, the issue-form headings exactly:
+
+| Section | Holds |
+| --- | --- |
+| `### Goal` | What the ticket achieves and how that is observed; for a bug, the symptom and what should happen instead |
+| `### Spec` | The behavior or change in detail: surfaces, permission and scope, the thin cut and what it defers; for a bug, the reproduction, the evidence and `Found during #<n>` |
+| `### Acceptance criteria` | A checkbox list (`- [ ]`), one testable criterion per line, at least one; the first is the test that fails before the change |
+| `### Out of scope` | What the ticket must not touch, naming the sibling ticket that owns it |
+| `### Files likely touched` | Paths as they are in the tree, one per line |
+
+Plus exactly one `tier:*` and one `risk:*` label, and no `epic` label: an epic is never
+dispatched, its sub-issues are. Every issue form (bug, feature, chore, docs, spike) is these five
+textareas, each required, with the house questions folded into the section descriptions, so a
+form-filed ticket passes the lint as filed. The lint itself is the dispatcher's `bin/ticket-lint`;
+a ticket that fails it stays where it is and the run says which section or label is wrong. The
+contract was adopted under [#1602](https://github.com/hyperscaleav/omniglass/issues/1602)
+(ADR-1602); the open tickets filed before it were rewritten into the shape in the same pass.
 
 ### `run:<task>` triggers
 
@@ -99,11 +144,12 @@ breaks the promise above.
 
 ## The fixed set
 
-That is the whole taxonomy: a native Issue Type, the Project priority field, `area:*`, and
-`run:*`. There are no stock GitHub labels (`bug`, `enhancement`, `good first issue` and the
-rest were removed) and no bare `type:*` or `prio:*` labels. Adding a label means either a
-new subsystem (`area:*`) or a new automation task (`run:*`); anything else belongs in a
-field.
+That is the whole taxonomy: a native Issue Type, the Project priority field, `area:*`,
+`tier:*` and `risk:*` for the dispatcher, and `run:*`. There are no stock GitHub labels (`bug`,
+`enhancement`, `good first issue` and the rest were removed) and no bare `type:*` or `prio:*`
+labels. Adding a label means a new subsystem (`area:*`) or a new automation task (`run:*`); the
+`tier:*` and `risk:*` sets are closed, they are what the dispatcher's lint accepts; anything
+else belongs in a field.
 
 ## The board
 

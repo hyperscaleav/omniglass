@@ -1,8 +1,15 @@
 name: Chore / maintenance
-description: Build, CI, deps, refactor, perf, or test work with no behavior change.
+description: Build, CI, deps, refactor, perf, or test work with no behavior change. One ticket, one PR, one fresh agent session.
 title: "chore: "
-labels: ["chore"]
+type: Task
 body:
+  - type: markdown
+    attributes:
+      value: >-
+        The five sections below are the ticket contract the dispatcher launches on
+        (docs/contributing/labels.md#the-ticket-contract). The title's prefix is the
+        conventional-commit type the PR will carry: chore, ci, refactor, test or perf.
+        If behavior changes, file a feature or a bug instead.
   - type: input
     id: epic
     attributes:
@@ -10,29 +17,64 @@ body:
       description: The epic this belongs to, if any (e.g. #12).
     validations:
       required: false
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What needs doing and why, with no behavior change.
+    validations:
+      required: true
+  - type: textarea
+    id: spec
+    attributes:
+      label: Spec
+      description: The change in enough detail that a fresh session needs nothing else.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: A checkbox list, one testable criterion per line (a green gate, a removed dep, a faster path, a cleaner seam, and how each is shown).
+      value: |
+        - [ ]
+    validations:
+      required: true
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: Out of scope
+      description: What this ticket must not touch.
+    validations:
+      required: true
+  - type: textarea
+    id: files
+    attributes:
+      label: Files likely touched
+      description: Paths, one per line, as they are in the tree.
+      placeholder: "- ..."
+    validations:
+      required: true
   - type: dropdown
-    id: type
+    id: tier
     attributes:
-      label: Change type
-      description: The conventional-commit type the PR title will use. (perf cuts a release, so file it as a feature/fix.)
+      label: Tier
+      description: "The agent seniority the dispatcher assigns, applied as the label. jr: mechanical, one or two files. mid: a few packages with their own tests. sr: cross-cutting or an invariant."
       options:
-        - chore
-        - ci
-        - refactor
-        - test
+        - tier:jr
+        - tier:mid
+        - tier:sr
+      default: 1
     validations:
       required: true
-  - type: textarea
-    id: task
+  - type: dropdown
+    id: risk
     attributes:
-      label: Task
-      description: What needs doing and why. No behavior change; if behavior changes, file a feature or bug instead.
+      label: Risk
+      description: "Applied as the label. high: authorization, scope, secrets, the edge, a migration, a delete, anything an operator cannot undo."
+      options:
+        - risk:low
+        - risk:high
+      default: 0
     validations:
       required: true
-  - type: textarea
-    id: done
-    attributes:
-      label: Definition of done
-      description: How we know it is complete (a green gate, a removed dep, a faster path, a cleaner seam).
-    validations:
-      required: false

@@ -1,8 +1,15 @@
 name: Spike / investigation
 description: A time-boxed investigation to learn whether something is possible. Not shippable behavior.
 title: "[Spike] "
-labels: ["spike"]
+type: Task
 body:
+  - type: markdown
+    attributes:
+      value: >-
+        The five sections below are the ticket contract the dispatcher launches on
+        (docs/contributing/labels.md#the-ticket-contract). A spike is bounded by definition:
+        its code is deleted or stabilized with tests before it merges, and it is never a
+        standing excuse to skip the failing test.
   - type: input
     id: epic
     attributes:
@@ -11,23 +18,64 @@ body:
     validations:
       required: false
   - type: textarea
-    id: question
+    id: goal
     attributes:
-      label: Question to answer
-      description: The specific unknown this spike resolves. State what a yes or no answer looks like.
-    validations:
-      required: true
-  - type: input
-    id: timebox
-    attributes:
-      label: Timebox
-      description: The time budget (e.g. 1 day). A spike is bounded by definition.
+      label: Goal
+      description: The specific unknown this spike resolves. State what a yes or a no answer looks like.
     validations:
       required: true
   - type: textarea
-    id: exit
+    id: spec
     attributes:
-      label: Exit criteria
-      description: What this produces (a decision note, a deleted prototype, follow-up issues). Spike code is deleted or stabilized with tests before it merges; it is never a standing excuse to skip the failing test.
+      label: Spec
+      description: How the question is answered (the prototype, the measurement, the reading) and the timebox (e.g. 1 day).
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: A checkbox list of what it produces (a decision note, a deleted prototype, follow-up issues).
+      value: |
+        - [ ] a decision note is posted on this issue, answering the question
+        - [ ]
+    validations:
+      required: true
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: Out of scope
+      description: What this spike must not touch (it ships no behavior).
+    validations:
+      required: true
+  - type: textarea
+    id: files
+    attributes:
+      label: Files likely touched
+      description: Paths, one per line, or "none" for a reading-only spike.
+      placeholder: "- ..."
+    validations:
+      required: true
+  - type: dropdown
+    id: tier
+    attributes:
+      label: Tier
+      description: The agent seniority the dispatcher assigns, applied as the label.
+      options:
+        - tier:jr
+        - tier:mid
+        - tier:sr
+      default: 1
+    validations:
+      required: true
+  - type: dropdown
+    id: risk
+    attributes:
+      label: Risk
+      description: Applied as the label. A spike that touches nothing an operator sees is low.
+      options:
+        - risk:low
+        - risk:high
+      default: 0
     validations:
       required: true
