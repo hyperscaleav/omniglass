@@ -221,35 +221,65 @@ func reasonPollTask() collection.TaskSpec {
 		Secrets: map[string]map[string]string{"community": {"community": "lab-public"}}}
 }
 
-// reasonLoop drives runTasks a second a tick, the way the run loop does.
+// reasonLoop drives the dispatcher a second a tick on a fake clock, the way
+// the run loop does: a pass at each tick, every run it started settled, and
+// a pass again whenever a run asked for one (a verdict moved the gate).
 type reasonLoop struct {
-	t         *testing.T
-	runner    *collection.Runner
-	sessions  *sessionManager
-	sched     *pollSchedule
-	report    *collectionReport
-	verdicts  map[string]string
-	faultseen map[string]string
-	spool     *telemetrySpool
-	now       time.Time
+	t        *testing.T
+	runner   *collection.Runner
+	sessions *sessionManager
+	sched    *pollSchedule
+	report   *collectionReport
+	spool    *telemetrySpool
+	coll     *collector
+	d        *dispatcher
+	now      time.Time
+	// probeEvery is the probe interval the dispatcher is made with: half a
+	// tick unless a test sets it before its first tick.
+	probeEvery time.Duration
 }
 
 func newReasonLoop(t *testing.T, runner *collection.Runner) *reasonLoop {
 	return &reasonLoop{t: t, runner: runner,
-		sessions: newSessionManager(nil, sessionHooks{}), sched: newPollSchedule(time.Second),
-		report: newCollectionReport(time.Minute, gateT0), verdicts: map[string]string{}, faultseen: map[string]string{},
+		sessions: newSessionManager(nil, sessionHooks{}), sched: newPollSchedule(),
+		report: newCollectionReport(time.Minute, gateT0),
 		spool: newTelemetrySpool("og.v1.telemetry.edge", "edge", func(string, []byte, string) (ackWait, error) {
 			return func(context.Context) error { return nil }, nil
 		}),
-		now: gateT0}
+		now: gateT0, probeEvery: 500 * time.Millisecond}
+}
+
+// dispatcher is made on the first tick, so a test may swap the sessions or
+// the probe interval before it. A probe runs every half second unless set,
+// so each tick runs it once.
+func (l *reasonLoop) dispatcher() *dispatcher {
+	if l.d == nil {
+		clock := func() time.Time { return l.now }
+		l.coll = newCollector(l.spool, "edge", l.runner, l.sessions, l.sched, l.report)
+		l.coll.clock = clock
+		l.d = newDispatcher(dispatchConfig{workers: 4, heartbeat: time.Second, probeEvery: l.probeEvery,
+			clock: clock, sched: l.sched, sessions: l.sessions, report: l.report, work: l.coll.run})
+		l.coll.every, l.coll.wake = l.d.interval, l.d.kick
+	}
+	return l.d
 }
 
 func (l *reasonLoop) tick(tasks ...collection.TaskSpec) {
 	l.t.Helper()
-	wl := collection.WorklistReply{Tasks: tasks}
+	d := l.dispatcher()
 	l.sessions.reconcile(tasks)
-	if err := runTasks(l.t.Context(), l.spool, "edge", wl, l.runner, l.sessions, l.sched, l.verdicts, l.faultseen, l.report, l.now); err != nil {
-		l.t.Fatal(err)
+	d.sync(collection.WorklistReply{Tasks: tasks}, l.now)
+	d.pass(l.t.Context(), l.now)
+	d.settle()
+	for {
+		select {
+		case <-d.wake:
+			d.pass(l.t.Context(), l.now)
+			d.settle()
+			continue
+		default:
+		}
+		break
 	}
 	l.now = l.now.Add(time.Second)
 }
@@ -307,13 +337,14 @@ func TestADuePollOnAnUnreachableEndpointIsHeld(t *testing.T) {
 	if n := getter.count(); n != 0 {
 		t.Fatalf("a held poll fetched %d times", n)
 	}
-	if at, booked := l.sched.nextOf("t-poll"); booked {
-		t.Fatalf("a held poll booked its next run at %v", at)
+	every := 10 * time.Second
+	if at, _ := l.sched.nextOf("t-poll"); !at.Equal(slotAfter(at.Add(-every), phaseOf("t-poll", every), every)) {
+		t.Fatalf("a held poll booked %v, want its next slot, never a retry", at)
 	}
 	if _, backoff := l.sched.backoff["t-poll"]; backoff {
 		t.Fatal("a held poll booked a backoff")
 	}
-	if _, faulted := l.faultseen["t-poll"]; faulted {
+	if _, faulted := l.coll.faultseen["t-poll"]; faulted {
 		t.Fatal("a held poll published a collection-failed")
 	}
 	got := l.metrics()

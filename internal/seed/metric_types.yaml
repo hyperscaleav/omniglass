@@ -32,6 +32,14 @@ metric_types:
     data_type: int
     label: Held Polls
     description: The endpoint's due driver polls its gate held in the report window because its probe reads it unreachable; never sent, so not failures; reported only when nonzero.
+  - name: poll-due-count
+    data_type: int
+    label: Due Polls
+    description: The endpoint's driver polls that fell due in the report window, each on its own interval, held, refused and skipped ones included; reported only when nonzero.
+  - name: poll-skipped-count
+    data_type: int
+    label: Skipped Polls
+    description: The endpoint's due driver polls the node skipped in the report window because the poll's last run was still in flight; counted, never queued; reported only when nonzero.
   - name: push-message-count
     data_type: int
     label: Pushed Messages

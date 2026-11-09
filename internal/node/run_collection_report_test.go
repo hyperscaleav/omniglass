@@ -7,7 +7,6 @@ package node_test
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -30,7 +29,7 @@ func (s *gateStack) runNodeReporting(name string, every time.Duration) {
 	ran := make(chan error, 1)
 	go func() {
 		_, err := node.Run(runCtx, node.Config{ServerURL: s.apiURL, Name: name, Token: s.token,
-			HeartbeatEvery: 100 * time.Millisecond, ReportEvery: every})
+			HeartbeatEvery: 100 * time.Millisecond, ProbeEvery: 100 * time.Millisecond, ReportEvery: every})
 		ran <- err
 	}()
 	s.stop = func() {
@@ -112,18 +111,7 @@ func TestEveryEndpointReportsItsOwnCollection(t *testing.T) {
 // second, so a test sees a gate refuse due polls window after window.
 func (s *httpStack) fastDriver(shipped, name string) {
 	s.t.Helper()
-	d, err := s.gw.GetDriver(s.ctx, shipped)
-	if err != nil {
-		s.t.Fatal(err)
-	}
-	var spec map[string]any
-	if err := json.Unmarshal(d.Spec, &spec); err != nil {
-		s.t.Fatal(err)
-	}
-	for _, p := range spec["polls"].([]any) {
-		p.(map[string]any)["schedule"] = map[string]any{"every": "1s"}
-	}
-	s.authorDriver(name, spec)
+	s.everyDriver(shipped, name, "1s")
 }
 
 // latestAt is the time of the endpoint's latest key, zero when none landed.

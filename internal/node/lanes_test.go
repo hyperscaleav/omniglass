@@ -121,7 +121,7 @@ func TestUnmatchedDiscardLandsNothing(t *testing.T) {
 // worklist is forgotten.
 func TestAPlainPollFiresOccurrencesOnChange(t *testing.T) {
 	t.Parallel()
-	s := newPollSchedule(time.Second)
+	s := newPollSchedule()
 	t0 := time.Now().UTC()
 	tick := func(msg string, at time.Time) []collection.Sample {
 		return []collection.Sample{
@@ -157,7 +157,7 @@ func TestAPlainPollFiresOccurrencesOnChange(t *testing.T) {
 // run.
 func TestTwoNamelessOccurrencesKeepTheirOwnMemory(t *testing.T) {
 	t.Parallel()
-	s := newPollSchedule(time.Second)
+	s := newPollSchedule()
 	tick := func() []collection.Sample {
 		return []collection.Sample{
 			{Lane: driver.LaneLog, Text: "last error: lamp", IsText: true, Emit: 0},

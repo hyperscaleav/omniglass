@@ -123,30 +123,28 @@ func TestAnHTTPCommandIsNeverSentWhereTheWorklistDoesNotPoint(t *testing.T) {
 func TestBookPollRunForHTTPAnswers(t *testing.T) {
 	t.Parallel()
 	now := time.Now()
-	s := newPollSchedule(time.Second)
+	s := newPollSchedule()
 	every := time.Hour
 	auth := collection.Sample{Name: collection.SignalEndpointAuthenticated, Text: "yes", IsText: true}
 
 	// A request's own fault (a 404) waits its interval, even with the
-	// session rung it proved.
-	s.due("p", every, now)
+	// session rung it proved: it keeps the slot the dispatcher booked.
+	s.book("p", now.Add(every))
 	bookPollRun(s, "p", every, now, []collection.Sample{auth}, []error{&collection.RequestFault{Status: 404, Reason: "x"}})
 	if next, _ := s.nextOf("p"); next.Before(now.Add(every - time.Second)) {
 		t.Fatalf("a 404 rebooked at %v, want its interval", next.Sub(now))
 	}
 
 	// A 503 asking for two minutes is not asked sooner.
-	s.due("q", every, now)
 	bookPollRun(s, "q", every, now, nil, []error{&collection.RetryableAnswer{Status: 503, Reason: "busy", RetryAfter: 2 * time.Minute}})
 	if next, _ := s.nextOf("q"); next.Before(now.Add(2*time.Minute)) || next.After(now.Add(3*time.Minute)) {
 		t.Fatalf("a 503 with Retry-After rebooked at %v, want two minutes", next.Sub(now))
 	}
 
-	// A plain failure backs off from the heartbeat.
-	s.due("r", every, now)
+	// A plain failure backs off from its base, never the heartbeat.
 	bookPollRun(s, "r", every, now, nil, []error{errors.New("refused")})
 	if next, _ := s.nextOf("r"); next.After(now.Add(2 * time.Second)) {
-		t.Fatalf("a failure rebooked at %v, want the heartbeat", next.Sub(now))
+		t.Fatalf("a failure rebooked at %v, want the backoff base", next.Sub(now))
 	}
 }
 
