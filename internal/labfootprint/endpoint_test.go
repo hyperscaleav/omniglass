@@ -371,11 +371,20 @@ func TestSummarizeEndpoints(t *testing.T) {
 	endSims(&b, func(o *collection.SimObservation) { protocol(o, "http").Latency = slow })
 	a.End.Node.QueueDepth = &collection.GaugeReading{HighWater: []obsstat.EpochHigh{{Epoch: obsstat.EpochOf(windowStart.Add(time.Minute)), Max: 7}}}
 	b.End.Node.BatchesDropped = 2
+	// core polls one more http target, one too slow for the window, and an
+	// icmp target the sim never sees.
+	b.Targets = append(b.Targets, PollTarget{ComponentID: "c-http-2", Transport: "https", Interval: 5 * time.Second},
+		PollTarget{ComponentID: "c-slow", Transport: "http", Interval: time.Minute},
+		PollTarget{ComponentID: "c-ping", Transport: "icmp", Interval: 5 * time.Second})
 
 	r := SummarizeEndpoints([]NodeBracket{a, b})
 	h := r.protocol("http")
 	if h == nil || h.Received != 120 || h.Accepted != 120 || h.Answered != 120 {
 		t.Fatalf("http = %+v, want both nodes' 60 requests", h)
+	}
+	if h.PollTargets != 3 || r.protocol("snmp").PollTargets != 2 || r.protocol("tcp").PollTargets != 0 {
+		t.Fatalf("poll targets: http %d, snmp %d, tcp %d, want 3, 2 and 0 (a target due under twice in the window is not counted)",
+			h.PollTargets, r.protocol("snmp").PollTargets, r.protocol("tcp").PollTargets)
 	}
 	if h.Latency.N != 20 || h.Latency.P50 >= 1 || h.Latency.P99 < 9 || h.Latency.P99 > 11 {
 		t.Fatalf("http latency = %+v, want p50 near 0.1 ms and p99 near 10 ms over 20 answers", h.Latency)
@@ -409,7 +418,7 @@ func TestSummarizeEndpoints(t *testing.T) {
 	}
 
 	tbl := ScaleReport{Endpoints: &r}.Table()
-	for _, want := range []string{"endpoints", "http received", "120", "spool-dropped", "overlap-ratio", "not wired yet", "since the sim started"} {
+	for _, want := range []string{"endpoints", "http received", "120", "3 poll targets", "spool-dropped", "overlap-ratio", "not wired yet", "since the sim started"} {
 		if !strings.Contains(tbl, want) {
 			t.Errorf("table lacks %q:\n%s", want, tbl)
 		}
@@ -418,7 +427,7 @@ func TestSummarizeEndpoints(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{`"endpoints":`, `"node_dispatch_queue_depth":null`, `"node_busy_workers":null`, `"gap":"spool-dropped"`} {
+	for _, want := range []string{`"endpoints":`, `"node_dispatch_queue_depth":null`, `"node_busy_workers":null`, `"gap":"spool-dropped"`, `"poll_targets":3`} {
 		if !strings.Contains(string(raw), want) {
 			t.Errorf("json lacks %s: %s", want, raw)
 		}

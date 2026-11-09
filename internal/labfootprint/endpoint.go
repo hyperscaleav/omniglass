@@ -239,12 +239,9 @@ func unhit(b NodeBracket, reading string) []ClosedLoopGap {
 	sampled := map[string]bool{}
 	var protocols []string
 	for _, t := range b.Targets {
-		if t.Interval <= 0 || t.Interval >= b.Window/2 {
-			continue
-		}
-		p, ok := collection.SimProtocolOf(t.Transport)
+		p, ok := dueProtocol(t, b.Window)
 		if !ok {
-			if t.Transport == "icmp" {
+			if t.Transport == "icmp" && due(t, b.Window) {
 				icmp++
 			}
 			continue
@@ -267,6 +264,20 @@ func unhit(b NodeBracket, reading string) []ClosedLoopGap {
 		out = append(out, ClosedLoopGap{Gap: GapUnhitEndpoint, Node: b.Node, Protocol: "icmp", Count: icmp, Reading: ReadingNotObserved})
 	}
 	return out
+}
+
+// due is whether the window should draw the target at least twice.
+func due(t PollTarget, window time.Duration) bool {
+	return t.Interval > 0 && t.Interval < window/2
+}
+
+// dueProtocol is the sim protocol a target due in the window lands on; false
+// when it is not due or the sim does not serve its transport.
+func dueProtocol(t PollTarget, window time.Duration) (string, bool) {
+	if !due(t, window) {
+		return "", false
+	}
+	return collection.SimProtocolOf(t.Transport)
 }
 
 // tallyRow is a transport's row in a node read, zero when it has none.
@@ -335,17 +346,20 @@ type EndpointReport struct {
 // counters from the first read to the last, the service time merged across
 // nodes, and each node's in-flight high water.
 type EndpointProtocol struct {
-	Protocol      string  `json:"protocol"`
-	Accepted      int64   `json:"accepted"`
-	Received      int64   `json:"received"`
-	Answered      int64   `json:"answered"`
-	Refused       int64   `json:"refused"`
-	Error         int64   `json:"error"`
-	Dropped       int64   `json:"dropped"`
-	Withheld      int64   `json:"withheld"`
-	StreamsOpened int64   `json:"streams_opened"`
-	Overlapped    int64   `json:"overlapped"`
-	OverlapRatio  float64 `json:"overlap_ratio"`
+	Protocol      string `json:"protocol"`
+	Accepted      int64  `json:"accepted"`
+	Received      int64  `json:"received"`
+	Answered      int64  `json:"answered"`
+	Refused       int64  `json:"refused"`
+	Error         int64  `json:"error"`
+	Dropped       int64  `json:"dropped"`
+	Withheld      int64  `json:"withheld"`
+	StreamsOpened int64  `json:"streams_opened"`
+	// PollTargets is how many enabled poll targets the window should have
+	// drawn on this protocol at least twice, over every node.
+	PollTargets  int64   `json:"poll_targets"`
+	Overlapped   int64   `json:"overlapped"`
+	OverlapRatio float64 `json:"overlap_ratio"`
 	// Latency is the sim's service time, in milliseconds.
 	Latency      Quantiles        `json:"latency_ms"`
 	InFlightHigh map[string]int64 `json:"in_flight_high"`
@@ -400,6 +414,15 @@ func (r *EndpointReport) protocol(name string) *EndpointProtocol {
 	return nil
 }
 
+// row is the protocol's row, added when it has none.
+func (r *EndpointReport) row(name string) *EndpointProtocol {
+	if p := r.protocol(name); p != nil {
+		return p
+	}
+	r.Protocols = append(r.Protocols, EndpointProtocol{Protocol: name, InFlightHigh: map[string]int64{}})
+	return &r.Protocols[len(r.Protocols)-1]
+}
+
 // SummarizeEndpoints reconciles every node and sums the window.
 func SummarizeEndpoints(brackets []NodeBracket) EndpointReport {
 	bs := append([]NodeBracket(nil), brackets...)
@@ -415,11 +438,7 @@ func SummarizeEndpoints(brackets []NodeBracket) EndpointReport {
 		arrivals := map[int64]int64{}
 		for _, p2 := range s2.Protocols {
 			p1 := s1.Protocol(p2.Protocol)
-			ep := r.protocol(p2.Protocol)
-			if ep == nil {
-				r.Protocols = append(r.Protocols, EndpointProtocol{Protocol: p2.Protocol, InFlightHigh: map[string]int64{}})
-				ep = &r.Protocols[len(r.Protocols)-1]
-			}
+			ep := r.row(p2.Protocol)
 			if !n.Restarted {
 				ep.Accepted += p2.Accepted - p1.Accepted
 				ep.Received += p2.Received - p1.Received
@@ -441,6 +460,11 @@ func SummarizeEndpoints(brackets []NodeBracket) EndpointReport {
 		}
 		for _, v := range arrivals {
 			n.ArrivalHigh = max(n.ArrivalHigh, v)
+		}
+		for _, t := range b.Targets {
+			if p, ok := dueProtocol(t, b.Window); ok {
+				r.row(p).PollTargets++
+			}
 		}
 		if g := b.End.Node.QueueDepth; g != nil {
 			v := g.High(from, to)
@@ -508,8 +532,8 @@ func (r EndpointReport) table(b *strings.Builder) {
 	line := func(name, value string) { fmt.Fprintf(b, "  %-28s %s\n", name, value) }
 	b.WriteString("\nendpoints: what each simulated endpoint observed, reconciled with what its node sent\n")
 	for _, p := range r.Protocols {
-		line(p.Protocol+" received", fmt.Sprintf("%s   (accepted %s, answered %s, refused %s, error %s, dropped %s, withheld %s, streams %s)",
-			count(float64(p.Received)), count(float64(p.Accepted)), count(float64(p.Answered)), count(float64(p.Refused)),
+		line(p.Protocol+" received", fmt.Sprintf("%s   (%s poll targets; accepted %s, answered %s, refused %s, error %s, dropped %s, withheld %s, streams %s)",
+			count(float64(p.Received)), count(float64(p.PollTargets)), count(float64(p.Accepted)), count(float64(p.Answered)), count(float64(p.Refused)),
 			count(float64(p.Error)), count(float64(p.Dropped)), count(float64(p.Withheld)), count(float64(p.StreamsOpened))))
 		if p.Latency.N > 0 {
 			line(p.Protocol+" service time", fmt.Sprintf("p50 %.2f ms, p95 %.2f ms, p99 %.2f ms   (%s settled)",
