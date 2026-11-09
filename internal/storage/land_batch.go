@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/internal/delivery"
 	"github.com/hyperscaleav/omniglass/internal/rules"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -60,6 +61,18 @@ type IngestBatch struct {
 	// groups and dropped on its own like one of them (its refusal carries
 	// NodeSelfIndex). Nil on every batch but a node's tick.
 	NodeSelf *NodeSelfReport
+	// Node is the node whose tick this is, recorded on the receipt so a read
+	// can name a boot's node (#1641). Empty on the push lane.
+	Node string
+	// Ledger is the delivery ledger the node stamped the batch with (#1641),
+	// recorded on the receipt with the batch's outcome. Nil on the push lane,
+	// which records no outcome.
+	Ledger *delivery.Stamp
+	// Tally is what the consumer counted before the batch reached the
+	// gateway (#1641): the items it refused, orphaned, could not place, or
+	// found missing. The gateway adds what it stored, coalesced and refused,
+	// and records the sum as the receipt's outcome.
+	Tally delivery.Tally
 }
 
 // ErrFanoutStale marks a batch whose fanned rows name an owner the

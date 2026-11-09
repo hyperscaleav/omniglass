@@ -62,3 +62,26 @@ func (l *Ledger) Mint(counts map[Kind]int, at time.Time, resolved uint64) Stamp 
 	}
 	return s
 }
+
+// Against compares what a batch's ledger declared with what the batch
+// decoded to, kind by kind: short is each kind it decoded fewer items of
+// (those items are missing), over each kind it decoded more of (a node
+// that miscounted, warned but never counted as loss). Pure.
+func (d Declared) Against(decoded map[Kind]int) (short, over map[Kind]int) {
+	for _, k := range Kinds {
+		declared, got := int(d[k].Count), decoded[k]
+		switch {
+		case got < declared:
+			if short == nil {
+				short = map[Kind]int{}
+			}
+			short[k] = declared - got
+		case got > declared:
+			if over == nil {
+				over = map[Kind]int{}
+			}
+			over[k] = got - declared
+		}
+	}
+	return short, over
+}

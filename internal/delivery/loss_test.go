@@ -246,3 +246,17 @@ func TestAStampRoundTripsThroughTheWire(t *testing.T) {
 		t.Fatal("a kind the boot never minted rides the stamp")
 	}
 }
+
+// TestDeclaredAgainst: a kind a batch decoded fewer items of than its
+// ledger declared is short by the difference, one it decoded more of is
+// over, and a kind that matches is neither.
+func TestDeclaredAgainst(t *testing.T) {
+	d := delivery.Declared{delivery.Metric: {Count: 5}, delivery.Property: {Count: 2}, delivery.Log: {Count: 1}}
+	short, over := d.Against(map[delivery.Kind]int{delivery.Metric: 3, delivery.Property: 2, delivery.Event: 4, delivery.Log: 1})
+	if len(short) != 1 || short[delivery.Metric] != 2 {
+		t.Errorf("short = %v, want metric 2", short)
+	}
+	if len(over) != 1 || over[delivery.Event] != 4 {
+		t.Errorf("over = %v, want event 4", over)
+	}
+}

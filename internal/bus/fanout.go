@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/delivery"
 	"github.com/hyperscaleav/omniglass/internal/driver"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
@@ -130,9 +131,10 @@ type fanPlan struct {
 // naming its observer in source as <conduit>/<endpoint>. Each unbound
 // identity is aggregated for the inbox: how many samples named it, first
 // and last, and the keys they carried. now dates a sample that carries no
-// time.
+// time. t counts each sample that lands no row under its outcome (#1641):
+// unidentified, unbound, or its lane's refusal.
 func planFanOut(fanned *ogv1.TelemetryBatch, conduitID, conduitName, endpoint string,
-	owners map[storage.IdentityKey]storage.IdentityOwner, reg collection.Registry, now time.Time) fanPlan {
+	owners map[storage.IdentityKey]storage.IdentityOwner, reg collection.Registry, now time.Time, t *delivery.Tally) fanPlan {
 	w := storage.FanoutWriter(conduitID)
 	p := fanPlan{rows: storage.FannedRows{Writer: w}}
 	source := conduitName + "/" + endpoint
@@ -173,36 +175,38 @@ func planFanOut(fanned *ogv1.TelemetryBatch, conduitID, conduitName, endpoint st
 		}
 		return b
 	}
-	route := func(id *ogv1.Identity, name string, known bool) (storage.IdentityOwner, bool) {
+	route := func(kind delivery.Kind, id *ogv1.Identity, name string, known bool) (storage.IdentityOwner, bool) {
 		k, ok := identityKey(id)
 		if !ok {
 			p.invalid++
+			t.Add(kind, delivery.Unidentified, 1)
 			return storage.IdentityOwner{}, false
 		}
 		o, ok := owners[k]
 		if !ok {
 			hear(k, name, known)
+			t.Add(kind, delivery.Unbound, 1)
 			return storage.IdentityOwner{}, false
 		}
 		return o, true
 	}
 	for _, m := range fanned.GetMetrics() {
 		_, known := reg.Metric(m.GetName())
-		if o, ok := route(m.GetIdentity(), m.GetName(), known); ok {
+		if o, ok := route(delivery.Metric, m.GetIdentity(), m.GetName(), known); ok {
 			b := sub(o)
 			b.Metrics = append(b.Metrics, &ogv1.MetricSample{Name: m.GetName(), Value: m.GetValue(), Ts: m.GetTs()})
 		}
 	}
 	for _, s := range fanned.GetProperties() {
 		_, known := reg.Property(s.GetName())
-		if o, ok := route(s.GetIdentity(), s.GetName(), known); ok {
+		if o, ok := route(delivery.Property, s.GetIdentity(), s.GetName(), known); ok {
 			b := sub(o)
 			b.Properties = append(b.Properties, &ogv1.PropertySample{Name: s.GetName(), ValueJson: s.GetValueJson(), Ts: s.GetTs()})
 		}
 	}
 	for _, e := range fanned.GetEvents() {
 		_, known := reg.Event(e.GetName())
-		if o, ok := route(e.GetIdentity(), e.GetName(), known); ok {
+		if o, ok := route(delivery.Event, e.GetIdentity(), e.GetName(), known); ok {
 			b := sub(o)
 			b.Events = append(b.Events, &ogv1.EventSample{Name: e.GetName(), Message: e.GetMessage(), Payload: e.GetPayload(), Ts: e.GetTs()})
 		}
@@ -212,9 +216,9 @@ func planFanOut(fanned *ogv1.TelemetryBatch, conduitID, conduitName, endpoint st
 	none := storage.TaskOwner{}
 	for _, o := range owned {
 		b, arc := byOwner[o], sampleArc{Kind: o.Kind, ID: o.ID}
-		p.rows.Metrics = append(p.rows.Metrics, deriveMetrics(b, arc, none, reg, w)...)
-		p.rows.Properties = append(p.rows.Properties, deriveProperties(b, arc, none, reg, w)...)
-		p.rows.Events = append(p.rows.Events, deriveEvents(b, arc, none, reg, w)...)
+		p.rows.Metrics = append(p.rows.Metrics, deriveMetrics(b, arc, none, reg, w, t)...)
+		p.rows.Properties = append(p.rows.Properties, deriveProperties(b, arc, none, reg, w, t)...)
+		p.rows.Events = append(p.rows.Events, deriveEvents(b, arc, none, reg, w, t)...)
 	}
 	for _, k := range order {
 		h := unbound[k]
