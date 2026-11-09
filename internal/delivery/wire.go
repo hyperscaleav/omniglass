@@ -38,3 +38,28 @@ func FromProto(l *ogv1.DeliveryLedger) Stamp {
 	}
 	return s
 }
+
+// GroupItems adds a task group's items per kind to into: its samples by
+// lane, its task log lines as logs.
+func GroupItems(into map[Kind]int, g *ogv1.TaskGroup) {
+	into[Metric] += len(g.GetMetrics())
+	into[Property] += len(g.GetProperties())
+	into[Event] += len(g.GetEvents())
+	into[Log] += len(g.GetTaskLogs())
+}
+
+// BatchItems is a batch's items per kind, what its ledger declares and what
+// the server decodes: its node-self samples are metrics, its self-logs and
+// task log lines logs, and each group counts as GroupItems does.
+func BatchItems(ev *ogv1.TelemetryBatch) map[Kind]int {
+	k := map[Kind]int{
+		Metric:   len(ev.GetMetrics()) + len(ev.GetNodeSelf().GetMetrics()),
+		Property: len(ev.GetProperties()),
+		Event:    len(ev.GetEvents()),
+		Log:      len(ev.GetLogs()) + len(ev.GetTaskLogs()),
+	}
+	for _, g := range ev.GetGroups() {
+		GroupItems(k, g)
+	}
+	return k
+}

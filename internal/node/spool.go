@@ -213,7 +213,7 @@ func (s *telemetrySpool) add(g *ogv1.TaskGroup) error {
 	if s.kinds == nil {
 		s.kinds = map[delivery.Kind]int{}
 	}
-	addGroupKinds(s.kinds, g)
+	delivery.GroupItems(s.kinds, g)
 	if s.groupBytes >= s.flushBytes {
 		if s.flushLocked() {
 			started = true
@@ -226,31 +226,6 @@ func (s *telemetrySpool) add(g *ogv1.TaskGroup) error {
 		s.tellOverflowStart()
 	}
 	return nil
-}
-
-// addGroupKinds counts g's items per kind into into: its task log lines are
-// the log kind.
-func addGroupKinds(into map[delivery.Kind]int, g *ogv1.TaskGroup) {
-	into[delivery.Metric] += len(g.GetMetrics())
-	into[delivery.Property] += len(g.GetProperties())
-	into[delivery.Event] += len(g.GetEvents())
-	into[delivery.Log] += len(g.GetTaskLogs())
-}
-
-// batchKinds is ev's items per kind, what a whole batch sent declares: its
-// node-self samples are metrics, its self-logs and task log lines logs, and
-// any group rides as a flushed one would.
-func batchKinds(ev *ogv1.TelemetryBatch) map[delivery.Kind]int {
-	k := map[delivery.Kind]int{
-		delivery.Metric:   len(ev.GetMetrics()) + len(ev.GetNodeSelf().GetMetrics()),
-		delivery.Property: len(ev.GetProperties()),
-		delivery.Event:    len(ev.GetEvents()),
-		delivery.Log:      len(ev.GetLogs()) + len(ev.GetTaskLogs()),
-	}
-	for _, g := range ev.GetGroups() {
-		addGroupKinds(k, g)
-	}
-	return k
 }
 
 // queueLocked stamps the batch data with the boot's next ledger and queues
@@ -370,7 +345,7 @@ func (s *telemetrySpool) send(ev *ogv1.TelemetryBatch) error {
 		s.failed()
 		return fmt.Errorf("node: marshal telemetry batch: %w", err)
 	}
-	kinds := batchKinds(ev)
+	kinds := delivery.BatchItems(ev)
 	s.mu.Lock()
 	started := s.flushLocked()
 	if s.queueLocked(b, kinds) {
