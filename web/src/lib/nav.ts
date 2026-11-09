@@ -74,6 +74,10 @@ export const navItems: NavItem[] = [
   // (#608). Nodes is infrastructure, not fleet inventory, so it keeps its own
   // door.
   { label: "Nodes", path: "/nodes", icon: Icons.Server, live: true, resource: "node", hint: "Collection daemons: their health, enrollment, and the collection tasks assigned to each." },
+  // Platform health (#1644): whether Omniglass itself is well, read off the
+  // platform components every node and server already has. Behind node:read,
+  // the same door as Nodes, because its rows are the node list.
+  { label: "Platform health", path: "/platform", icon: Icons.Activity, live: true, resource: "node", hint: "Whether Omniglass itself is well: the build running, how long it has been up, and each node's check-in, schedule and command queue." },
   // Simulation (#890): the simulated fleet a simulator beside a node serves,
   // its live hits, impairments and each component's API surface. A lab and demo
   // surface, so its door shows only while a simulator is connected.
