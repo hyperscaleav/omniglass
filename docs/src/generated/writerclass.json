@@ -55,14 +55,28 @@
     "reserved": true,
     "doc": "what only the Omniglass process writes about itself or its rollups",
     "keys": [
+      "checkin-age",
       "health",
+      "process-gc-pause",
+      "process-goroutine-count",
+      "process-heap-size",
+      "publish-failure-count",
+      "schedule-gap-excess",
+      "schedule-lateness",
+      "schedule-skip-count",
+      "session-held-count",
+      "spool-batch-count",
+      "spool-drop-count",
+      "tick-duration",
+      "tick-overrun-count",
       "webhook-post-count",
-      "webhook-refusal-count"
+      "webhook-refusal-count",
+      "worklist-task-count"
     ],
     "admits": [
       {
         "writer": "process",
-        "doc": "the Omniglass process (the health rollup)"
+        "doc": "the Omniglass process: the health rollup, the webhook receiver, and the platform's self-monitoring, a node's self-report landed on its platform component"
       }
     ]
   },
