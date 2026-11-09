@@ -280,15 +280,23 @@ func LaneOf(samples []LaneSample, from, to time.Time) Lane {
 	if len(in) < 2 {
 		return Lane{Reason: fmt.Sprintf("the server logged %d lane tallies in the window, two are needed", len(in))}
 	}
-	first, last := in[0], in[len(in)-1]
-	if last.Batches < first.Batches || last.Busy < first.Busy {
-		return Lane{Reason: "the lane's tallies went backwards in the window (the server restarted?)"}
+	// Every tally is a running total, so one that falls below the one before
+	// it is a fresh process: a restart inside the window, even one whose new
+	// count overtook the old by the window's end, measures nothing.
+	for i := 1; i < len(in); i++ {
+		if in[i].Batches < in[i-1].Batches || in[i].Busy < in[i-1].Busy {
+			return Lane{Reason: "the lane's tallies went backwards in the window (the server restarted?)"}
+		}
 	}
+	first, last := in[0], in[len(in)-1]
 	span := last.At.Sub(first.At)
 	if span <= 0 {
 		return Lane{Reason: "the lane's tallies in the window span no time"}
 	}
 	l := Lane{Measured: true, Batches: last.Batches - first.Batches, SpanSeconds: span.Seconds()}
+	// With one message in flight the lane is one handler at a time, so the
+	// fraction cannot pass 1. A partitioned consumer (#1585) would hold
+	// several lanes at once and need their count as the denominator.
 	busy := last.Busy - first.Busy
 	l.BusyFraction = float64(busy) / float64(span)
 	if l.Batches > 0 {

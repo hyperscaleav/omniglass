@@ -471,6 +471,16 @@ func TestLaneOf(t *testing.T) {
 	if l := LaneOf(restarted, at(0), at(600)); l.Measured || !strings.Contains(l.Reason, "restart") {
 		t.Errorf("a restarted server's tallies measured a lane: %+v", l)
 	}
+	// A restart whose new count overtook the old one by the window's end
+	// still shows between two neighbours.
+	overtook := []LaneSample{
+		{At: at(30), Batches: 100, Busy: 10 * time.Second},
+		{At: at(60), Batches: 20, Busy: time.Second},
+		{At: at(90), Batches: 150, Busy: 25 * time.Second},
+	}
+	if l := LaneOf(overtook, at(0), at(600)); l.Measured || !strings.Contains(l.Reason, "restart") {
+		t.Errorf("a mid-window restart that overtook the old count measured a lane: %+v", l)
+	}
 	// An idle lane is measured, at nothing.
 	idle := []LaneSample{{At: at(30), Batches: 100, Busy: 10 * time.Second}, {At: at(90), Batches: 100, Busy: 10 * time.Second}}
 	if l := LaneOf(idle, at(0), at(600)); !l.Measured || l.BusyFraction != 0 || l.ServiceMs != 0 {

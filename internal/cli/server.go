@@ -71,7 +71,7 @@ func labBootGate(ctx context.Context, gw labStater, lab bool) error {
 // Gateway, serve the HTTP API, and shut down gracefully on SIGINT/SIGTERM.
 func runServer(ctx context.Context, version string, lab bool) error {
 	c := cfg()
-	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	log := serverLogger(os.Stdout)
 
 	if err := clearReadyFile(c.ReadyFile); err != nil {
 		return err

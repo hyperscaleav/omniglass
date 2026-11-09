@@ -450,10 +450,12 @@ How to read each row:
   the batches it counted over the span. The server tallies every batch's handler time and logs the
   cumulative count and busy milliseconds every 30 s (`msg="ingest lane"`, only when the count moved,
   so an idle server is quiet); the harness reads the first and last tally inside the window and
-  divides the busy time between them by the time between them, so the fraction is exact over that
-  span and no boundary estimate is needed. Fewer than two tallies in the window (a window under a
-  minute, or a server built before this line) reads `not measured` with the reason under the table,
-  as does a tally that went backwards (the server restarted). Together with the lag this answers
+  divides the busy time between them by the time between them, so the fraction is exact to the
+  millisecond over that span and no boundary estimate is needed (a batch in flight at a tick counts
+  toward the next interval). It needs two tallies inside the window, 30 s apart: a window too short
+  to hold two ticks, a lane that was idle at a tick, or a server built before this line reads
+  `not measured` with the reason under the table, as does a tally that went backwards (the server
+  restarted inside the window). Together with the lag this answers
   whether more consumers would help: a lag at the spool wait with a lane mostly idle means the lane is
   not the bottleneck.
 - **fleet view p50, p95**: the time of `GET /api/v1/views/fleet`, the whole-fleet view the console

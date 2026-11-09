@@ -11,7 +11,8 @@ stream is a work queue with one durable consumer and one message in flight, so t
 and the handler's share of the wall clock is the lane's utilisation. The bus server tallies every
 batch's handler time (`Server.LaneTally`) and logs the cumulative count and busy milliseconds every 30 s
 as `msg="ingest lane"`, only when a batch landed; the harness reads the first and last tally inside the
-window and divides busy time by the span between them, so the fraction is exact over that span. Fewer
+window and divides busy time by the span between them, so the fraction is exact to the millisecond over that
+span. Fewer
 than two tallies, or a tally that went backwards across a restart, reads `not measured` with the reason
 under the table, and every other figure still prints. The JSON carries `wal_bytes_per_sample`, `p99`
 and `consumer_lane`. This is the measurement that decides whether partitioning the consumer (#1585) can

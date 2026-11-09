@@ -67,9 +67,11 @@ func TestIngestLaneTallyAndLogLine(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
+	// The logged busy time is the in-process total truncated to milliseconds,
+	// so it never exceeds the tally read after the drain.
 	last := samples[len(samples)-1]
-	if last.Busy <= 0 || last.Busy > time.Since(last.At.Add(-time.Minute)) {
-		t.Errorf("the logged busy time %s is not the lane's", last.Busy)
+	if last.Busy > tally.Busy {
+		t.Errorf("the logged busy time %s exceeds the lane's tally %s", last.Busy, tally.Busy)
 	}
 	// Quiet lanes do not log: the tally line appears only when the count moved.
 	sink.mu.Lock()
