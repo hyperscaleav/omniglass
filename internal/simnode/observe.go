@@ -54,7 +54,8 @@ func observationWire(node string, snap sim.ObservationSnapshot, impaired int) co
 	}
 	w.FacesOverlapped = len(snap.Faces)
 	for _, f := range snap.Faces[:min(len(snap.Faces), collection.SimObservationSampleCap)] {
-		w.Faces = append(w.Faces, collection.SimFaceOverlap(f))
+		w.Faces = append(w.Faces, collection.SimFaceOverlap{ComponentID: f.DeviceID, Component: f.Hostname,
+			Face: f.Face, Protocol: f.Protocol, Received: f.Received, Overlapped: f.Overlapped})
 	}
 	return w
 }

@@ -591,7 +591,7 @@ func (r EndpointReport) table(b *strings.Builder) {
 	if len(r.WorstFaces) > 0 {
 		b.WriteString("  worst faces since the sim started (not windowed):\n")
 		for _, f := range r.WorstFaces {
-			fmt.Fprintf(b, "    %s %s %s %s: %d of %d overlapped\n", f.Node, f.DeviceID, f.Face, f.Protocol, f.Overlapped, f.Received)
+			fmt.Fprintf(b, "    %s %s %s %s: %d of %d overlapped\n", f.Node, f.Component, f.Face, f.Protocol, f.Overlapped, f.Received)
 		}
 	}
 }

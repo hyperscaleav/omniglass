@@ -943,7 +943,7 @@ func NewDevice(deviceID, hostname string, ip net.IP, profileName string, version
 		now:         time.Now,
 		// A device standing alone observes into its own row; the engine
 		// points it at the engine's before it serves (installSeams).
-		observe: newEndpointObservation().device(deviceID),
+		observe: newEndpointObservation().device(deviceID, hostname),
 	}
 }
 

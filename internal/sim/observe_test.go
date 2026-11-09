@@ -8,7 +8,7 @@ import (
 
 func newObservedDevice(id string) (*endpointObservation, *deviceObservation) {
 	obs := newEndpointObservation()
-	return obs, obs.device(id)
+	return obs, obs.device(id, id)
 }
 
 func TestObservationEachOutcomeMovesOneCounter(t *testing.T) {
@@ -148,7 +148,7 @@ func TestObservationConnectionsAndStreams(t *testing.T) {
 
 func TestObservationOverlapCountsOnlyTheSameFace(t *testing.T) {
 	obs := newEndpointObservation()
-	a, b := obs.device("a"), obs.device("b")
+	a, b := obs.device("a", "a"), obs.device("b", "b")
 	aAPI, aCtl, bAPI := a.face("api", obsHTTP), a.face("control", obsHTTP), b.face("api", obsHTTP)
 
 	t1 := a.begin(obsHTTP, aAPI)

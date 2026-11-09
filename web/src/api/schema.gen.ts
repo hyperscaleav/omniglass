@@ -11148,7 +11148,8 @@ export interface components {
             status: "running" | "starting" | "failed" | "offline";
         };
         SimFaceOverlap: {
-            device_id: string;
+            component: string;
+            component_id: string;
             face: string;
             /** Format: int64 */
             overlapped: number;

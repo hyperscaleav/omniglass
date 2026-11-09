@@ -551,7 +551,7 @@ func (e *Engine) SetHitReporter(f func(Hit)) {
 // engine's current seams, so a seam set after a device starts serving reaches
 // it without writing fields its listeners are reading.
 func (e *Engine) installSeams(dev *Device) {
-	dev.observe = e.obs.device(dev.DeviceID)
+	dev.observe = e.obs.device(dev.DeviceID, dev.Hostname)
 	dev.Logger = func(l RequestLog) {
 		e.seamMu.RLock()
 		logger, hit := e.logger, e.hit

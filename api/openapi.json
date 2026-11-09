@@ -13252,7 +13252,10 @@
       "SimFaceOverlap": {
         "additionalProperties": false,
         "properties": {
-          "device_id": {
+          "component": {
+            "type": "string"
+          },
+          "component_id": {
             "type": "string"
           },
           "face": {
@@ -13271,7 +13274,8 @@
           }
         },
         "required": [
-          "device_id",
+          "component_id",
+          "component",
           "face",
           "protocol",
           "received",

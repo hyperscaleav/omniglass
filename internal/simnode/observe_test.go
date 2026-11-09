@@ -30,7 +30,7 @@ func TestObservationWireSumsProtocolsAndNamesUnhitDevices(t *testing.T) {
 			{DeviceID: "b", Rows: []sim.ProtocolCounters{{Protocol: "http", ObservationCounters: counters(1, 0)}}},
 			{DeviceID: "c", Rows: []sim.ProtocolCounters{{Protocol: "http"}}},
 		},
-		Faces: []sim.FaceOverlap{{DeviceID: "a", Face: "api", Protocol: "http", Received: 3, Overlapped: 1}},
+		Faces: []sim.FaceOverlap{{DeviceID: "a", Hostname: "dsp", Face: "api", Protocol: "http", Received: 3, Overlapped: 1}},
 	}
 	w := observationWire("edge", snap, 1)
 	if w.Node != "edge" || w.Devices != 3 || w.Impaired != 1 || !w.At.Equal(at) {
@@ -46,8 +46,8 @@ func TestObservationWireSumsProtocolsAndNamesUnhitDevices(t *testing.T) {
 	if s := w.Protocol("snmp"); s.Served != 1 || s.Unhit != 1 || fmt.Sprint(s.UnhitSample) != "[a]" {
 		t.Fatalf("snmp = %+v", s)
 	}
-	if len(w.Faces) != 1 || w.FacesOverlapped != 1 {
-		t.Fatalf("faces = %+v", w.Faces)
+	if len(w.Faces) != 1 || w.FacesOverlapped != 1 || w.Faces[0].ComponentID != "a" || w.Faces[0].Component != "dsp" {
+		t.Fatalf("faces = %+v, want a (dsp)", w.Faces)
 	}
 }
 

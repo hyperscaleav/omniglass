@@ -74,13 +74,15 @@ func (p SimProtocolObservation) Settled() int64 {
 	return p.Answered + p.Refused + p.Error + p.Dropped + p.Withheld
 }
 
-// SimFaceOverlap is one face that saw two requests in flight at once.
+// SimFaceOverlap is one face that saw two requests in flight at once, on
+// the component the simulated device stands in for.
 type SimFaceOverlap struct {
-	DeviceID   string `json:"device_id"`
-	Face       string `json:"face"`
-	Protocol   string `json:"protocol"`
-	Received   int64  `json:"received"`
-	Overlapped int64  `json:"overlapped"`
+	ComponentID string `json:"component_id"`
+	Component   string `json:"component"`
+	Face        string `json:"face"`
+	Protocol    string `json:"protocol"`
+	Received    int64  `json:"received"`
+	Overlapped  int64  `json:"overlapped"`
 }
 
 // Protocol returns the named protocol's row, zero when the simulator has none.

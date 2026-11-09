@@ -366,7 +366,7 @@ func TestSummarizeEndpoints(t *testing.T) {
 		p.Latency, p.Overlapped = fast, 6
 		p.InFlightHigh = []obsstat.EpochHigh{{Epoch: obsstat.EpochOf(windowStart.Add(time.Minute)), Max: 4}, {Epoch: obsstat.EpochOf(windowStart.Add(-time.Hour)), Max: 99}}
 		protocol(o, "snmp").InFlightHigh = []obsstat.EpochHigh{{Epoch: obsstat.EpochOf(windowStart.Add(time.Minute)), Max: 3}}
-		o.Faces = []collection.SimFaceOverlap{{DeviceID: "d1", Face: "api", Protocol: "http", Received: 9, Overlapped: 6}}
+		o.Faces = []collection.SimFaceOverlap{{ComponentID: "d1", Component: "dsp", Face: "api", Protocol: "http", Received: 9, Overlapped: 6}}
 	})
 	endSims(&b, func(o *collection.SimObservation) { protocol(o, "http").Latency = slow })
 	a.End.Node.QueueDepth = &collection.GaugeReading{HighWater: []obsstat.EpochHigh{{Epoch: obsstat.EpochOf(windowStart.Add(time.Minute)), Max: 7}}}
@@ -401,7 +401,7 @@ func TestSummarizeEndpoints(t *testing.T) {
 	if q := r.Nodes[1].DispatchQueueDepth; q == nil || *q != 7 || r.Nodes[1].BusyWorkers != nil || r.Nodes[0].DispatchQueueDepth != nil {
 		t.Fatalf("gauges = %+v", r.Nodes)
 	}
-	if len(r.WorstFaces) != 1 || r.WorstFaces[0].DeviceID != "d1" {
+	if len(r.WorstFaces) != 1 || r.WorstFaces[0].ComponentID != "d1" {
 		t.Fatalf("worst faces = %+v", r.WorstFaces)
 	}
 	var dropped *GapTotal

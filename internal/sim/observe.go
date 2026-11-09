@@ -132,12 +132,14 @@ type faceObservation struct {
 
 // deviceObservation is one device's fixed row.
 type deviceObservation struct {
-	id     string
-	engine *endpointObservation
-	rows   [obsProtocolCount]protocolRow
-	served [obsProtocolCount]atomic.Bool
-	faceMu sync.Mutex
-	faces  []*faceObservation
+	id string
+	// hostname is the device's name, the component's name in a lab.
+	hostname string
+	engine   *endpointObservation
+	rows     [obsProtocolCount]protocolRow
+	served   [obsProtocolCount]atomic.Bool
+	faceMu   sync.Mutex
+	faces    []*faceObservation
 }
 
 // endpointObservation is the engine's observation.
@@ -154,14 +156,15 @@ func newEndpointObservation() *endpointObservation {
 }
 
 // device returns the row for a device id, creating it once: a device the
-// engine rebuilds keeps counting into the same row.
-func (o *endpointObservation) device(id string) *deviceObservation {
+// engine rebuilds keeps counting into the same row, under the name it first
+// served by.
+func (o *endpointObservation) device(id, hostname string) *deviceObservation {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	if d, ok := o.byID[id]; ok {
 		return d
 	}
-	d := &deviceObservation{id: id, engine: o}
+	d := &deviceObservation{id: id, hostname: hostname, engine: o}
 	o.devices = append(o.devices, d)
 	o.byID[id] = d
 	return d
@@ -375,6 +378,7 @@ type ProtocolCounters struct {
 // FaceOverlap is one face that saw two requests in flight at once.
 type FaceOverlap struct {
 	DeviceID   string
+	Hostname   string
 	Face       string
 	Protocol   string
 	Received   int64
@@ -415,7 +419,7 @@ func (o *endpointObservation) snapshot(at time.Time) ObservationSnapshot {
 		d.faceMu.Lock()
 		for _, f := range d.faces {
 			if n := f.overlapped.Load(); n > 0 {
-				s.Faces = append(s.Faces, FaceOverlap{DeviceID: d.id, Face: f.name, Protocol: obsProtocolNames[f.protocol],
+				s.Faces = append(s.Faces, FaceOverlap{DeviceID: d.id, Hostname: d.hostname, Face: f.name, Protocol: obsProtocolNames[f.protocol],
 					Received: f.received.Load(), Overlapped: n})
 			}
 		}
