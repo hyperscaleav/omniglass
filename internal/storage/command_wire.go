@@ -72,22 +72,37 @@ type CommandDelivery struct {
 // is skipped with its execution error recorded, so it stops being redelivered
 // and the fault is visible on the row.
 func (p *PG) PendingNodeCommands(ctx context.Context, node string) ([]CommandDelivery, error) {
-	// Pick ONE actuating endpoint per command, globally: only an endpoint whose
-	// driver spec binds the command's type is a candidate (the jsonb_path_exists
-	// predicate), so the distinct-on can never collapse to a non-binding
-	// endpoint, and the same binding endpoint is chosen deterministically on
-	// every pull. The node filter is applied to that chosen endpoint, so a
+	// Read only this node's commands (#1631): a command is a candidate only
+	// when its component has a driver-attached endpoint placed on this node,
+	// and the scan of command is searched by those components through
+	// command_deliverable_idx, so a pull costs the node's own backlog, never
+	// the fleet's.
+	//
+	// Then pick ONE actuating endpoint per command over ALL of its component's
+	// endpoints, not only this node's: only an endpoint whose driver spec binds
+	// the command's type is a candidate (the jsonb_path_exists predicate), so
+	// the distinct-on can never collapse to a non-binding endpoint, and the
+	// same binding endpoint is chosen deterministically on every pull, by
+	// every node. The node filter is applied to that chosen endpoint, so a
 	// command is delivered to exactly one node (never once per node), which is
 	// what makes the render-fault terminal stamp below correct: there is no
 	// other endpoint that would have rendered it differently.
 	rows, err := p.pool.Query(ctx, `
-		with candidate as (
+		with here as (
+			select distinct e.component as component_id
+			from endpoint e
+			where e.node_name = (select principal_id from node where name = $1)
+			  and e.driver_id is not null
+			  and e.component is not null
+		),
+		candidate as (
 			select distinct on (c.id)
 				c.id, ct.name as command_type, c.params, i.id as endpoint_id, i.transport,
 				i.params as endpoint_params, i.node_name, d.spec,
 				(select pr.value from property pr where pr.command_id = c.id and pr.provenance = 'intended' order by pr.ts desc limit 1) as intended_prop,
 				(select m.value from metric_declared m where m.command_id = c.id order by m.ts desc limit 1) as intended_metric
-			from command c
+			from here h
+			join command c on c.component_id = h.component_id
 			join command_type ct on ct.id = c.command_type_id
 			join endpoint i on i.component = c.component_id and i.driver_id is not null
 			join driver d on d.id = i.driver_id
@@ -193,10 +208,21 @@ func (p *PG) PendingNodeCommands(ctx context.Context, node string) ([]CommandDel
 		out = append(out, d)
 		delivered = append(delivered, dispatch{r.id, r.endpointID})
 	}
-	for _, d := range delivered {
-		if _, err := p.pool.Exec(ctx, `update command set dispatched_at = now(), dispatched_endpoint_id = $2 where id = $1`, d.id, d.endpointID); err != nil {
-			return nil, fmt.Errorf("storage: mark command %d dispatched: %w", d.id, err)
-		}
+	if len(delivered) == 0 {
+		return out, nil
+	}
+	// One statement stamps the whole pull (#1631), so a pull's round trips do
+	// not grow with the commands it delivers.
+	ids := make([]int64, len(delivered))
+	endpoints := make([]string, len(delivered))
+	for i, d := range delivered {
+		ids[i], endpoints[i] = d.id, d.endpointID
+	}
+	if _, err := p.pool.Exec(ctx, `
+		update command c set dispatched_at = now(), dispatched_endpoint_id = u.endpoint_id
+		from unnest($1::bigint[], $2::uuid[]) as u(id, endpoint_id)
+		where c.id = u.id`, ids, endpoints); err != nil {
+		return nil, fmt.Errorf("storage: mark %d commands dispatched: %w", len(ids), err)
 	}
 	return out, nil
 }

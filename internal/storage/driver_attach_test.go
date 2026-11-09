@@ -695,6 +695,81 @@ func TestCommandWireDelivery(t *testing.T) {
 	if got, err := gw.PendingNodeCommands(ctx, "edge-9"); err != nil || len(got) != 0 {
 		t.Fatalf("unbound command delivered: %v (err %v)", got, err)
 	}
+
+	// #1631: a pull reads and stamps only its own node's commands. edge-b
+	// carries switcher-b alone, and switcher-dual binds set-input on two
+	// endpoints: tcp on edge-b and udp on edge-9. The actuating endpoint is the
+	// first binding one by name over ALL of the component's endpoints (tcp),
+	// so switcher-dual's command is edge-b's and never edge-9's, even though
+	// edge-9 holds an endpoint that binds it.
+	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-b"}, all, all); err != nil {
+		t.Fatalf("create node edge-b: %v", err)
+	}
+	if _, err := gw.CreateDriver(ctx, "", storage.Driver{Name: "udp-no-retry", Label: "UDP no retry", Version: "1.0.0", Spec: []byte(udpNoRetrySpec)}); err != nil {
+		t.Fatalf("create udp driver: %v", err)
+	}
+	attach := func(comp, drv, node string) string {
+		t.Helper()
+		ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
+			Driver: &drv, Component: &comp, Node: &node, Inputs: map[string]string{"host": "10.20.4.51"},
+		}, all)
+		if err != nil {
+			t.Fatalf("attach %s to %s on %s: %v", drv, comp, node, err)
+		}
+		return ep.ID
+	}
+	for _, c := range []string{"switcher-b", "switcher-dual"} {
+		if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: c}, all, all, all, all); err != nil {
+			t.Fatalf("create component %s: %v", c, err)
+		}
+	}
+	attach("switcher-b", "line-proto", "edge-b")
+	dualTCP := attach("switcher-dual", "line-proto", "edge-b")
+	attach("switcher-dual", "udp-no-retry", "edge-9")
+	issue := func(comp string) int64 {
+		t.Helper()
+		c, err := gw.IssueCommand(ctx, actor, "component", comp, "set-input", "", json.RawMessage(`"hdmi-3"`), nil)
+		if err != nil {
+			t.Fatalf("issue on %s: %v", comp, err)
+		}
+		return c.ID
+	}
+	mine, theirs, dual := issue("switcher-9"), issue("switcher-b"), issue("switcher-dual")
+	dispatched := func(id int64) bool {
+		t.Helper()
+		var ts *time.Time
+		if err := conn.QueryRow(ctx, `select dispatched_at from command where id = $1`, id).Scan(&ts); err != nil {
+			t.Fatalf("read dispatched_at of %d: %v", id, err)
+		}
+		return ts != nil
+	}
+	gotA, err := gw.PendingNodeCommands(ctx, "edge-9")
+	if err != nil {
+		t.Fatalf("edge-9 pull: %v", err)
+	}
+	if len(gotA) != 1 || gotA[0].ID != mine {
+		t.Fatalf("edge-9 pulled %+v, want only its own command %d", gotA, mine)
+	}
+	if dispatched(theirs) || dispatched(dual) {
+		t.Fatalf("edge-9's pull stamped another node's command dispatched (switcher-b %v, switcher-dual %v)", dispatched(theirs), dispatched(dual))
+	}
+	gotB, err := gw.PendingNodeCommands(ctx, "edge-b")
+	if err != nil {
+		t.Fatalf("edge-b pull: %v", err)
+	}
+	byID := map[int64]storage.CommandDelivery{}
+	for _, d := range gotB {
+		byID[d.ID] = d
+	}
+	if len(gotB) != 2 || byID[theirs].ID != theirs || byID[dual].ID != dual {
+		t.Fatalf("edge-b pulled %+v, want switcher-b's %d and switcher-dual's %d", gotB, theirs, dual)
+	}
+	if byID[dual].EndpointID != dualTCP || byID[dual].Transport != "tcp" {
+		t.Fatalf("switcher-dual's command rides %+v, want its first endpoint by name (tcp %s)", byID[dual], dualTCP)
+	}
+	if again, err := gw.PendingNodeCommands(ctx, "edge-9"); err != nil || len(again) != 0 {
+		t.Fatalf("edge-9 re-pull = %+v (err %v), want nothing: switcher-dual's command is edge-b's", again, err)
+	}
 }
 
 // TestAttachScopesSecretReference is the authz regression for the rollup review:
