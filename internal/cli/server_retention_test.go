@@ -2,8 +2,10 @@ package cli
 
 import (
 	"context"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,12 +19,25 @@ import (
 
 // bootServer runs runServer against dsn under the server identity name, on
 // kernel-picked ports, until the test ends, and returns once its ready file
-// lands. Cleanup cancels the boot's context and waits for runServer to
-// return, so its pool is closed before the harness drops the database.
-func bootServer(t *testing.T, dsn, name string) {
+// lands, with the path of the file the server logs to. Cleanup cancels the
+// boot's context and waits for runServer to return, so its pool is closed
+// before the harness drops the database.
+func bootServer(t *testing.T, dsn, name string) string {
 	t.Helper()
 	dir := t.TempDir()
 	ready := filepath.Join(dir, "ready.json")
+	// The server logs to os.Stdout and makes that its default logger, which
+	// the bus's retention loop logs through; the boot is pointed at a file so
+	// a test can read what the server said.
+	logPath := filepath.Join(dir, "server.log")
+	logFile, err := os.Create(logPath)
+	if err != nil {
+		t.Fatalf("server log: %v", err)
+	}
+	stdout, defaultLog := os.Stdout, slog.Default()
+	t.Cleanup(func() { slog.SetDefault(defaultLog); _ = logFile.Close() })
+	os.Stdout = logFile
+	defer func() { os.Stdout = stdout }()
 	t.Setenv("OMNIGLASS_DSN", dsn)
 	t.Setenv("OMNIGLASS_ADDR", "127.0.0.1:0")
 	t.Setenv("OMNIGLASS_NATS_ADDR", "127.0.0.1:0")
@@ -56,6 +71,17 @@ func bootServer(t *testing.T, dsn, name string) {
 		_, err := os.Stat(ready)
 		return err == nil
 	})
+	return logPath
+}
+
+// logged reports whether the server's log at path carries msg.
+func logged(t *testing.T, path, msg string) bool {
+	t.Helper()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read the server log: %v", err)
+	}
+	return strings.Contains(string(b), msg)
 }
 
 // waitUntil polls cond every 50 ms until it holds or within passes.
@@ -148,8 +174,9 @@ func TestABootedServerReportsItsRetentionPassOnItsOwnComponent(t *testing.T) {
 // boot whose platform component cannot be ensured (an identity of only
 // spaces) still starts and still runs its retention pass, which prunes a log
 // line planted past its window before the boot, and lands no retention figure
-// anywhere. Serial: it sets the process environment the server reads its
-// configuration from.
+// anywhere. The figures would land after the pass's last lane, so the count
+// waits for the line the loop logs once the pass and its record are done.
+// Serial: it sets the process environment and the stdout the server reads.
 func TestAServerWhoseComponentEnsureFailsStillPrunes(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
@@ -160,10 +187,13 @@ func TestAServerWhoseComponentEnsureFailsStillPrunes(t *testing.T) {
 	defer func() { _ = conn.Close(ctx) }()
 	old := plantOldLogLine(t, ctx, dsn, conn)
 
-	bootServer(t, dsn, "   ")
+	logPath := bootServer(t, dsn, "   ")
 
 	waitUntil(t, "the retention pass to prune the old line", 30*time.Second, func() bool {
 		return !logLineExists(t, ctx, conn, old)
+	})
+	waitUntil(t, "the retention pass to finish", 30*time.Second, func() bool {
+		return logged(t, logPath, "rows pruned past their retention window")
 	})
 	var servers int
 	if err := conn.QueryRow(ctx, `select count(*) from platform_server`).Scan(&servers); err != nil {

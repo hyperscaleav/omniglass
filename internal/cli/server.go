@@ -166,8 +166,11 @@ func runServer(ctx context.Context, version string, lab bool) error {
 
 	// Catch the stop signals before reporting ready: a supervisor that stops
 	// the server the moment the ready file lands gets a graceful shutdown.
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+	// The stop is the boot's context ending or one of them; the handler is
+	// released on return, so a process that outlives the server (a test)
+	// keeps its own signal handling.
+	stopCtx, releaseSignals := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
+	defer releaseSignals()
 
 	removeReady, err := writeReadyFile(c.ReadyFile, readyReport{
 		Addr: ln.Addr().String(), NatsAddr: busSrv.Addr().String(), NatsURL: natsURL,
@@ -185,10 +188,9 @@ func runServer(ctx context.Context, version string, lab bool) error {
 	defer stopNotify()
 	go notifier.New(gw, egress.Options{}).Run(notifyCtx)
 	// The server's self-report, once a collection report window, until
-	// shutdown cancels it; a server with no component reports nothing.
-	if serverComponentID != "" {
-		go self.reporter(gw, serverComponentID, log).Run(notifyCtx)
-	}
+	// shutdown cancels it. A server with no component writes nothing, and
+	// still re-reads its slow-query setting each window.
+	go self.reporter(gw, serverComponentID, log).Run(notifyCtx)
 
 	errc := make(chan error, 1)
 	go func() {
@@ -200,12 +202,7 @@ func runServer(ctx context.Context, version string, lab bool) error {
 	select {
 	case err := <-errc:
 		return err
-	case <-sig:
-		log.Info("shutting down")
-		sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		return srv.Shutdown(sctx)
-	case <-ctx.Done():
+	case <-stopCtx.Done():
 		log.Info("shutting down")
 		sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()

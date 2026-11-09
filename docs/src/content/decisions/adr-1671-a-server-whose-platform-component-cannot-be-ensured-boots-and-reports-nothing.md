@@ -2,7 +2,7 @@
 title: "A server whose platform component cannot be ensured boots and reports nothing"
 date: 2026-11-09
 status: Accepted
-summary: "Accepted: the boot ensures the server's platform component before the bus starts and hands its id to the retention pass, so the boot's own pass reports. A failed ensure, fatal under #1627, is now a WARN: the server serves and prunes with an empty id, and the retention pass and the self reporter write nothing."
+summary: "Accepted: the boot ensures the server's platform component before the bus starts and hands its id to the retention pass, so the boot's own pass reports. A failed ensure, fatal under #1627, is now a WARN: the server serves and prunes with an empty id, and the retention pass and the self reporter write nothing, the reporter still re-reading the slow-query setting each window."
 refs: [1671, 1627, 1629]
 ---
 
@@ -13,7 +13,8 @@ refs: [1671, 1627, 1629]
      bus starts, so the pass the bus runs at boot lands its figures too.
   2. **A failed ensure is a warning.** Under #1627 a failed ensure refused the boot. It now logs a
      WARN naming the identity and the cause, and the boot goes on with an empty id: the retention
-     pass prunes and writes no figure, and the self reporter does not start.
+     pass prunes and writes no figure, and the self reporter closes its windows and writes none, so
+     `database.slow_query_ms` is still re-read each window and its recorder still drains.
 - **Context:** the retention figures were built behind a seam (#1629) until the server had a
   component (#1627). Self-monitoring is an account of the server's work, not a precondition of it.
 - **Rejected:** keeping the refused boot (a bad `OMNIGLASS_SERVER_NAME` or a transient write

@@ -529,7 +529,8 @@ gone by the write is dropped rather than failed, as a node's is. The same compon
 server's retention pass figures ([storage](/architecture/storage/#what-a-retention-pass-reports)). A
 boot whose ensure fails (an identity of only spaces, a database refusing the write) logs a WARN with
 the identity and the cause and serves anyway, reporting none of these until a boot whose ensure
-succeeds: self-monitoring never keeps the server down. The decisions are
+succeeds (it still re-reads `database.slow_query_ms` each window): self-monitoring never keeps the
+server down. The decisions are
 [ADR-1627](/architecture/decisions/#adr-1627-a-server-reports-its-request-and-query-timing-by-route-template-and-statement-fingerprint)
 and [ADR-1671](/architecture/decisions/#adr-1671-a-server-whose-platform-component-cannot-be-ensured-boots-and-reports-nothing).
 
