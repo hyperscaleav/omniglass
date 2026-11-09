@@ -81,6 +81,13 @@ If your component read is scoped to part of the fleet, the page still lists ever
 pill, and one line says the platform figures need a fleet-wide read: the figures are left out, not
 shown as zero. Without a fleet-wide system read the Platform verdict reads `-`.
 
+## From the CLI
+
+The page is one read of the platform view, so `omniglass view platform list` returns the same
+answer: the system verdict, each server's build and start time, the key groups, and each node's
+verdict with its current figures. A key a node has not reported is absent from its `figures`,
+never zero, so the command reads not-reported the same way the page does.
+
 ## Walkthrough
 
 From Home, open the tile, read the header, and open a node's row onto its platform component.
