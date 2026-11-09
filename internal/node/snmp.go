@@ -47,7 +47,7 @@ func collectSNMPRung(ctx context.Context, runner *collection.Runner, task collec
 		return collection.Sample{Name: collection.SignalEndpointResponsive, Text: verdict, IsText: true, TS: now,
 			Labels: map[string]string{collection.ReasonLabel: reason}}
 	}
-	if gt, ok := sessions.blocked(task.EndpointID, rungAuthenticated); ok {
+	if gt, ok := sessions.refusedAt(task.EndpointID, rungAuthenticated); ok {
 		// Held: the community is refused under this fingerprint, and v2c
 		// has no request without it, so nothing is sent. The get is the
 		// only transport probe snmp has, so beneath the gate the agent is

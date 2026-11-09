@@ -383,7 +383,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	// The server's on-demand runs (#1163): a preview runs on its request's
 	// goroutine, a run now waits for the loop below, which owns the sessions.
 	runJobs := make(chan runJob, 1)
-	runSub, err := subscribeRuns(ctx, nc, cfg.Name, runner, runJobs)
+	runSub, err := subscribeRuns(ctx, nc, cfg.Name, runner, sessions.gates, runJobs)
 	if err != nil {
 		return wl, fmt.Errorf("node: subscribe runs: %w", err)
 	}

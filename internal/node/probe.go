@@ -76,15 +76,30 @@ func runTasks(ctx context.Context, out *telemetrySpool, node string, wl collecti
 			// up; an http poll is its own request, and an up stream beside it
 			// says nothing of what refused it (#1038).
 			sched.releaseRefused(task.ID, sessions.isUp(task.EndpointID) && !driver.IsHTTP(task.Transport))
+			// An http poll is its own request even beside a held stream
+			// (#1038): it answers to the gate itself, as a stateless poll does.
+			ownRequest := sessions.lookup(task.EndpointID) == nil || driver.IsHTTP(task.Transport)
+			gt, refused := sessions.refusedAt(task.EndpointID, statelessRung(task))
+			refused = refused && ownRequest
+			if !refused {
+				// A poll on an endpoint the gate holds for any other reason
+				// (its probe reads it unreachable, #1650) is held: nothing is
+				// sent and nothing is booked, so it is not a failure, starts
+				// no backoff, and runs on the first tick the gate opens. It
+				// counts as held once in each interval it waits through.
+				if _, held := sessions.holding(task.EndpointID); held {
+					if sched.heldDue(task.ID, interval, now) {
+						report.heldPoll(task.EndpointID)
+					}
+					continue
+				}
+			}
 			if !sched.due(task.ID, interval, now) {
 				continue
 			}
 			var dps []collection.Sample
 			var faults []error
-			// An http poll is its own request even beside a held stream
-			// (#1038): it answers to the gate itself, as a stateless poll does.
-			ownRequest := sessions.lookup(task.EndpointID) == nil || driver.IsHTTP(task.Transport)
-			if gt, gated := sessions.blocked(task.EndpointID, statelessRung(task)); gated && ownRequest {
+			if refused {
 				// A stateless poll on a gated endpoint is not retried under
 				// the fingerprint it was refused under (#1056 ruling).
 				faults = []error{fmt.Errorf("node: task %s: the endpoint is gated: %w", task.ID, gt.refusal())}
@@ -163,6 +178,12 @@ func runTasks(ctx context.Context, out *telemetrySpool, node string, wl collecti
 		}
 		if dps == nil {
 			continue // an unwired transport: nothing to publish
+		}
+		// The verdict feeds the endpoint's gate (#1650): the second down in
+		// a row closes it as unreachable, the next up reopens it. A probe
+		// that could not be attempted left above and never reaches here.
+		if up, ok := collection.EndpointVerdict(dps); ok {
+			sessions.verdict(task.EndpointID, task.ID, up, now)
 		}
 		// Compute and, on a transition only, append the endpoint reachability
 		// verdict as a state sample. The node remembers the last verdict per
@@ -413,7 +434,7 @@ func collectHTTPSProbe(ctx context.Context, runner *collection.Runner, task coll
 	if err != nil {
 		return nil, err
 	}
-	if gt, ok := sessions.blocked(task.EndpointID, rungResponsive); ok && gt.rung == rungResponsive {
+	if gt, ok := sessions.refusedAt(task.EndpointID, rungResponsive); ok && gt.rung == rungResponsive {
 		return runner.CollectTCP(ctx, t)
 	}
 	var p endpointParams
@@ -449,10 +470,10 @@ func collectSSHProbe(ctx context.Context, runner *collection.Runner, task collec
 		return nil, err
 	}
 	t.HostKeyPin = task.HostKey
-	if gt, ok := sessions.blocked(task.EndpointID, rungResponsive); ok && gt.rung == rungResponsive {
+	if gt, ok := sessions.refusedAt(task.EndpointID, rungResponsive); ok && gt.rung == rungResponsive {
 		return runner.CollectTCP(ctx, collection.TCPTask{Target: t.Target, Timeout: t.Timeout})
 	}
-	if _, ok := sessions.blocked(task.EndpointID, rungAuthenticated); ok {
+	if _, ok := sessions.refusedAt(task.EndpointID, rungAuthenticated); ok {
 		t.Username, t.Password = "", ""
 	}
 	dps, res, err := runner.CollectSSHResult(ctx, t)
@@ -481,7 +502,7 @@ func collectTLSProbe(ctx context.Context, runner *collection.Runner, task collec
 	if err != nil {
 		return nil, err
 	}
-	if gt, ok := sessions.blocked(task.EndpointID, rungResponsive); ok && gt.rung == rungResponsive {
+	if gt, ok := sessions.refusedAt(task.EndpointID, rungResponsive); ok && gt.rung == rungResponsive {
 		return runner.CollectTCP(ctx, t)
 	}
 	var p endpointParams

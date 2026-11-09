@@ -247,7 +247,7 @@ func (m *sessionManager) closeDatagram(id string, h *heldDatagram, why string) {
 // waits: the rung reads down until the gate lifts, and its first answer then
 // arms, as a recovery does.
 func (m *sessionManager) armDatagram(id string, h *heldDatagram) {
-	if _, gated := m.blocked(id, rungResponsive); gated {
+	if _, gated := m.refusedAt(id, rungResponsive); gated {
 		down := false
 		h.mu.Lock()
 		h.up = &down
@@ -388,7 +388,7 @@ func collectDatagramRung(ctx context.Context, task collection.TaskSpec, req *dri
 		return collection.Sample{Name: collection.SignalEndpointResponsive, Text: verdict, IsText: true, TS: now,
 			Labels: map[string]string{collection.ReasonLabel: reason}}
 	}
-	if gt, ok := sessions.blocked(task.EndpointID, rungResponsive); ok {
+	if gt, ok := sessions.refusedAt(task.EndpointID, rungResponsive); ok {
 		return []collection.Sample{responsive(collection.VerdictDown, "rejected: "+gt.class)}, nil
 	}
 	var timeout time.Duration

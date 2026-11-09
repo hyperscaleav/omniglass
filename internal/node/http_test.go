@@ -86,7 +86,7 @@ func TestAnHTTPCommandTakesItsCredentialFromTheWorklist(t *testing.T) {
 	if _, out := executeDelivery(t.Context(), runner, d, m); !strings.Contains(out, "auth") {
 		t.Fatalf("a 401 = %q, want the auth refusal", out)
 	}
-	if gt, ok := m.blocked("ep-k", rungAuthenticated); !ok || gt.rung != rungAuthenticated || gt.class != driver.ClassAuth {
+	if gt, ok := m.refusedAt("ep-k", rungAuthenticated); !ok || gt.rung != rungAuthenticated || gt.class != driver.ClassAuth {
 		t.Fatalf("gate = %+v %v, want auth at the session rung", gt, ok)
 	}
 	sent := len(f.sent)

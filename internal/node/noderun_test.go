@@ -30,7 +30,7 @@ func snmpPreviewTask() collection.TaskSpec {
 func TestPreviewRunAnswersWhatThePollRead(t *testing.T) {
 	t.Parallel()
 	runner := &collection.Runner{SNMP: fakeGetter{res: map[string]string{"1.3.6.1.2.1.1.1.0": "Boreal Edge 86", "1.3.6.1.2.1.1.3.0": "812"}}}
-	reply := previewRun(t.Context(), runner, []collection.TaskSpec{snmpPreviewTask()}, nil, 5*time.Second)
+	reply := previewRun(t.Context(), runner, nil, []collection.TaskSpec{snmpPreviewTask()}, nil, 5*time.Second)
 	if reply.Error != "" || len(reply.Results) != 1 {
 		t.Fatalf("reply = %+v", reply)
 	}

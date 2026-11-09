@@ -16,6 +16,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/bus"
+	"github.com/hyperscaleav/omniglass/internal/collection/rejection"
 	"github.com/hyperscaleav/omniglass/internal/node"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/secret"
@@ -293,8 +294,12 @@ func TestAWrongPortIsUnreachableNeverAuth(t *testing.T) {
 	if got := s.latest("panel-2", ep.Name, "session-reason"); !strings.Contains(got, "refused") || strings.HasPrefix(got, "auth") {
 		t.Fatalf("session-reason = %q, want a refused connect, never auth", got)
 	}
-	if got := s.latest("panel-2", ep.Name, "endpoint-rejection"); got != "" && got != "none" {
-		t.Fatalf("a wrong port published a gate: %q", got)
+	// The gate may hold unreachable (#1650), the probe's verdict on the
+	// dead port, but never a refusal.
+	if got := s.latest("panel-2", ep.Name, "endpoint-rejection"); got != "" {
+		if g, refused := rejection.Parse(got); refused {
+			t.Fatalf("a wrong port published a refusal: %+v (from %q)", g, got)
+		}
 	}
 	if n := s.panel.TelnetLogins(); n != 0 {
 		t.Fatalf("a wrong port tried %d logins", n)

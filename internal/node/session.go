@@ -853,12 +853,32 @@ func (m *sessionManager) pass(endpointID string) {
 	m.syncRejection(endpointID)
 }
 
-// blocked is the gate that blocks rung r for the endpoint, if any.
-func (m *sessionManager) blocked(endpointID string, r rung) (gate, bool) {
+// refusedAt is the refused reason that holds rung r for the endpoint, if any.
+func (m *sessionManager) refusedAt(endpointID string, r rung) (gate, bool) {
 	if m == nil {
 		return gate{}, false
 	}
-	return m.gates.blocked(endpointID, r)
+	return m.gates.refusedAt(endpointID, r)
+}
+
+// holding is the most causal reason that holds the whole endpoint, if any
+// (#1650): every reason but a rung-scoped refusal.
+func (m *sessionManager) holding(endpointID string) (reason, bool) {
+	if m == nil {
+		return reason{}, false
+	}
+	return m.gates.holding(endpointID)
+}
+
+// verdict feeds the endpoint's probe verdict to its gate and publishes the
+// gate when the verdict moved it.
+func (m *sessionManager) verdict(endpointID, taskID string, up bool, at time.Time) {
+	if m == nil || endpointID == "" {
+		return
+	}
+	if m.gates.verdict(endpointID, taskID, up, at) {
+		m.syncRejection(endpointID)
+	}
 }
 
 // observe takes each endpoint's fingerprint and published rejection off the
@@ -869,18 +889,24 @@ func (m *sessionManager) observe(tasks []collection.TaskSpec) {
 	// driver deletes old task ids, and a sample under one is an orphan).
 	pubTask := map[string][2]string{}
 	reflected := map[string]string{}
+	endpoints, taskIDs := map[string]bool{}, map[string]bool{}
 	for _, t := range tasks {
 		if t.EndpointID == "" {
 			continue
 		}
+		endpoints[t.EndpointID], taskIDs[t.ID] = true, true
 		if cur, ok := pubTask[t.EndpointID]; !ok || t.ID < cur[0] {
 			pubTask[t.EndpointID] = [2]string{t.ID, t.EndpointName}
 		}
 		if _, ok := reflected[t.EndpointID]; !ok {
 			reflected[t.EndpointID] = t.Rejection
 			m.gates.observe(t.EndpointID, t.Fingerprint, t.Rejection)
+			var p endpointParams
+			_ = json.Unmarshal(t.EndpointParams, &p)
+			m.gates.place(t.EndpointID, p.Target)
 		}
 	}
+	m.gates.retain(endpoints, taskIDs)
 	m.pubMu.Lock()
 	m.pubTask = pubTask
 	// What the server reflects back is what is published: a gate the node
@@ -1035,7 +1061,7 @@ func (m *sessionManager) start(id string, w sessionWant) {
 		// A refusal a poll or a command met holds the stream's reconnects
 		// too, under the same fingerprint.
 		a.Gate = func() *collection.TerminalError {
-			if gt, ok := m.gates.blocked(id, rungAuthenticated); ok {
+			if gt, ok := m.gates.refusedAt(id, rungAuthenticated); ok {
 				return gt.refusal()
 			}
 			return nil
@@ -1043,7 +1069,7 @@ func (m *sessionManager) start(id string, w sessionWant) {
 		w.auth = &collection.SessionAuth{HTTP: &a}
 	}
 	var rejected *collection.TerminalError
-	if gt, ok := m.gates.blocked(id, rungAuthenticated); ok {
+	if gt, ok := m.gates.refusedAt(id, rungAuthenticated); ok {
 		// A gate this node holds for this fingerprint, or carried back from
 		// before a restart: the session starts rejected and dials nothing.
 		rejected = gt.refusal()
@@ -1203,7 +1229,7 @@ func (m *sessionManager) streamPending(endpointID string) bool {
 
 // authGated reports an endpoint gated at the session rung.
 func (m *sessionManager) authGated(endpointID string) bool {
-	_, ok := m.gates.blocked(endpointID, rungAuthenticated)
+	_, ok := m.gates.refusedAt(endpointID, rungAuthenticated)
 	return ok
 }
 
