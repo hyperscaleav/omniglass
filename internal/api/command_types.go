@@ -26,6 +26,9 @@ type commandTypeBody struct {
 	SettleWindowSeconds int             `json:"settle_window_seconds" doc:"How long the device is given to actuate before a mismatch is a failed command"`
 	TargetPropertyType  string          `json:"target_property_type,omitempty" doc:"The property this command sets (one arm of the exclusive target arc; empty for fire-and-forget or a metric target)"`
 	TargetMetricType    string          `json:"target_metric_type,omitempty" doc:"The metric this command sets (the other arm of the arc; never set together with target_property_type)"`
+	Disruptive          bool            `json:"disruptive" doc:"The command takes its device down (reboot): its delivery closes the gates of every endpoint of the component on the delivering node until each reads up again"`
+	QuietSeconds        int             `json:"quiet_seconds" doc:"A disruptive type's quiet period: how long the node runs no poll, probe or session dial against the held endpoints after delivery. 0 on a type that is not disruptive"`
+	HoldSeconds         int             `json:"hold_seconds" doc:"A disruptive type's backstop: an endpoint with no up verdict this long after delivery reopens anyway, counted as hold-expiry-count. Not the settle window. 0 on a type that is not disruptive"`
 	Official            bool            `json:"official"`
 }
 
@@ -34,6 +37,7 @@ func toCommandTypeBody(ct *storage.CommandType) commandTypeBody {
 		ID: ct.ID, Name: ct.Name, Label: ct.Label, Description: ct.Description,
 		SettleWindowSeconds: ct.SettleWindowSeconds, TargetPropertyType: ct.TargetPropertyType,
 		TargetMetricType: ct.TargetMetricType, Official: ct.Official,
+		Disruptive: ct.Disruptive, QuietSeconds: ct.QuietSeconds, HoldSeconds: ct.HoldSeconds,
 	}
 	if len(ct.ParamsSchema) > 0 {
 		b.ParamsSchema = json.RawMessage(ct.ParamsSchema)
@@ -62,6 +66,9 @@ type createCommandTypeInput struct {
 		SettleWindowSeconds int    `json:"settle_window_seconds,omitempty" minimum:"0" doc:"The actuation window in seconds: how long the device is given to actuate before a mismatch is a failed command. 0 means settle immediately (a fire-and-forget command, or a settleable one judged at the moment of issue). A duration has no negative, so the schema floors it at 0 rather than accepting a value that behaves as 0 with no refusal to say so."`
 		TargetPropertyType  string `json:"target_property_type,omitempty" doc:"The property this command sets, for settlement (at most one target arm)"`
 		TargetMetricType    string `json:"target_metric_type,omitempty" doc:"The metric this command sets, for settlement (at most one target arm)"`
+		Disruptive          bool   `json:"disruptive,omitempty" doc:"The command takes its device down (reboot): its delivery closes the gates of the component's endpoints on the delivering node until each reads up again"`
+		QuietSeconds        int    `json:"quiet_seconds,omitempty" minimum:"0" doc:"A disruptive type's quiet period in seconds: no poll, probe or session dial runs against the held endpoints. Only on a disruptive type"`
+		HoldSeconds         int    `json:"hold_seconds,omitempty" minimum:"0" doc:"A disruptive type's backstop in seconds, greater than quiet_seconds: an endpoint with no up verdict by then reopens anyway, counted. Not the settle window. Only on a disruptive type"`
 	}
 }
 
@@ -74,6 +81,9 @@ type updateCommandTypeInput struct {
 		SettleWindowSeconds *int    `json:"settle_window_seconds,omitempty" minimum:"0" doc:"The actuation window in seconds, floored at 0 (a duration has no negative; 0 means settle immediately)"`
 		TargetPropertyType  *string `json:"target_property_type,omitempty" doc:"The property this command sets (empty clears it; a non-empty arm clears the other)"`
 		TargetMetricType    *string `json:"target_metric_type,omitempty" doc:"The metric this command sets (empty clears it; a non-empty arm clears the other)"`
+		Disruptive          *bool   `json:"disruptive,omitempty" doc:"Whether the command takes its device down; checked with quiet_seconds and hold_seconds on the merged row"`
+		QuietSeconds        *int    `json:"quiet_seconds,omitempty" minimum:"0" doc:"A disruptive type's quiet period in seconds"`
+		HoldSeconds         *int    `json:"hold_seconds,omitempty" minimum:"0" doc:"A disruptive type's backstop in seconds, greater than quiet_seconds; not the settle window"`
 	}
 }
 
@@ -135,6 +145,9 @@ func registerCommandTypeRoutes(api huma.API, a *authenticator, gw storage.Gatewa
 			SettleWindowSeconds: in.Body.SettleWindowSeconds,
 			TargetPropertyType:  in.Body.TargetPropertyType,
 			TargetMetricType:    in.Body.TargetMetricType,
+			Disruptive:          in.Body.Disruptive,
+			QuietSeconds:        in.Body.QuietSeconds,
+			HoldSeconds:         in.Body.HoldSeconds,
 		})
 		if err != nil {
 			return nil, mapCommandTypeErr(err)
@@ -147,7 +160,7 @@ func registerCommandTypeRoutes(api huma.API, a *authenticator, gw storage.Gatewa
 		Method:      http.MethodPatch,
 		Path:        "/command-types/{name}",
 		Summary:     "Update a command type",
-		Description: "Patches a custom command type's label, description, params schema, settle window, or target on either arm (a nil field is unchanged; an empty target clears it; a non-empty arm clears the other). The name is fixed at creation. Official types are read-only. Gated by command_type:update.",
+		Description: "Patches a custom command type's label, description, params schema, settle window, disruption (disruptive, quiet_seconds, hold_seconds, checked together on the merged row), or target on either arm (a nil field is unchanged; an empty target clears it; a non-empty arm clears the other). The name is fixed at creation. Official types are read-only. Gated by command_type:update.",
 	}, "command_type", "update"), func(ctx context.Context, in *updateCommandTypeInput) (*commandTypeOutput, error) {
 		schema, err := marshalValidation(in.Body.ParamsSchema)
 		if err != nil {
@@ -160,6 +173,9 @@ func registerCommandTypeRoutes(api huma.API, a *authenticator, gw storage.Gatewa
 			SettleWindowSeconds: in.Body.SettleWindowSeconds,
 			TargetPropertyType:  in.Body.TargetPropertyType,
 			TargetMetricType:    in.Body.TargetMetricType,
+			Disruptive:          in.Body.Disruptive,
+			QuietSeconds:        in.Body.QuietSeconds,
+			HoldSeconds:         in.Body.HoldSeconds,
 		})
 		if err != nil {
 			return nil, mapCommandTypeErr(err)
