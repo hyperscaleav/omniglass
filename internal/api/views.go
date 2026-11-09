@@ -135,7 +135,7 @@ type platformNodeBody struct {
 	LastHeartbeatAt *time.Time                    `json:"last_heartbeat_at,omitempty" doc:"The node's last heartbeat; absent when it has never sent one"`
 	Component       string                        `json:"component,omitempty" doc:"The node's platform component uuid, where every figure has its history; absent for a node the boot has not yet adopted"`
 	Verdict         string                        `json:"verdict,omitempty" doc:"The node's platform component verdict, which tones the row; absent without a fleet-wide component read"`
-	Figures         map[string]platformFigureBody `json:"figures,omitempty" doc:"The latest figure per key, by key name. A key the node has never reported is absent, never zero; the whole map is absent without a fleet-wide component read"`
+	Figures         map[string]platformFigureBody `json:"figures,omitempty" doc:"The current figure per key, by key name: a gauge's latest sample, a window count only while its window is the newest. A key the node has never reported, or whose last window has passed, is absent, never zero; the whole map is absent without a fleet-wide component read"`
 }
 
 type platformViewOutput struct {
@@ -232,7 +232,7 @@ func registerViewRoutes(api huma.API, a *authenticator, gw storage.Gateway, log 
 		Method:      http.MethodGet,
 		Path:        "/views/platform",
 		Summary:     "Read Omniglass's own health in one call",
-		Description: "Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its verdict, each server's running build and start time, the node table's column groups with each key's catalog facts, and one row per node with its last heartbeat and its platform component's latest figure per key. The rows need a fleet-wide node:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, verdicts and servers need a fleet-wide component:read and the system a fleet-wide system:read; short of that each is left out, never zeroed. Gated by node:read.",
+		Description: "Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its verdict, each server's running build and start time, the node table's column groups with each key's catalog facts, and one row per node with its last heartbeat and its platform component's current figure per key (a gauge's latest sample, a window count only while its window is the newest). The rows need a fleet-wide node:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, verdicts and servers need a fleet-wide component:read and the system a fleet-wide system:read; short of that each is left out, never zeroed. Gated by node:read.",
 	}, "node", "read"), func(ctx context.Context, _ *struct{}) (*platformViewOutput, error) {
 		v, err := gw.PlatformView(ctx,
 			a.scopeFor(ctx, "node", "read"),

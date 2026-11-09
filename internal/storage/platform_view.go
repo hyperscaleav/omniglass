@@ -18,8 +18,8 @@ import (
 // answers it from parts the fleet already has: every node and every server is
 // a component of the platform system (#1625, #1627), and every figure on the
 // page is a sample on one of those components. So this read invents no data;
-// it gathers the running build, the platform verdict and each node's latest
-// figure per key into one body, in a fixed number of statements however many
+// it gathers the running build, the platform verdict and each node's current
+// figure per key (PlatformWindowKeys) into one body, in a fixed number of statements however many
 // nodes there are.
 //
 // Scope is injected per tier, as FleetProjection does. node:read lets the
@@ -76,8 +76,9 @@ type PlatformKey struct {
 	Description string
 }
 
-// PlatformFigure is a key's latest value on one component and when it was
-// observed.
+// PlatformFigure is a key's current value on one component and when it was
+// observed: a gauge's latest sample, or a window count's newest window summed
+// over the instances written in it.
 type PlatformFigure struct {
 	Value      float64
 	ObservedAt time.Time

@@ -5529,7 +5529,7 @@ export interface paths {
         };
         /**
          * Read Omniglass's own health in one call
-         * @description Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its verdict, each server's running build and start time, the node table's column groups with each key's catalog facts, and one row per node with its last heartbeat and its platform component's latest figure per key. The rows need a fleet-wide node:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, verdicts and servers need a fleet-wide component:read and the system a fleet-wide system:read; short of that each is left out, never zeroed. Gated by node:read.
+         * @description Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its verdict, each server's running build and start time, the node table's column groups with each key's catalog facts, and one row per node with its last heartbeat and its platform component's current figure per key (a gauge's latest sample, a window count only while its window is the newest). The rows need a fleet-wide node:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, verdicts and servers need a fleet-wide component:read and the system a fleet-wide system:read; short of that each is left out, never zeroed. Gated by node:read.
          */
         get: operations["get-platform-view"];
         put?: never;
@@ -9658,7 +9658,7 @@ export interface components {
             /** @description The node's platform component uuid, where every figure has its history; absent for a node the boot has not yet adopted */
             component?: string;
             enrolled: boolean;
-            /** @description The latest figure per key, by key name. A key the node has never reported is absent, never zero; the whole map is absent without a fleet-wide component read */
+            /** @description The current figure per key, by key name: a gauge's latest sample, a window count only while its window is the newest. A key the node has never reported, or whose last window has passed, is absent, never zero; the whole map is absent without a fleet-wide component read */
             figures?: {
                 [key: string]: components["schemas"]["PlatformFigureBody"];
             };
