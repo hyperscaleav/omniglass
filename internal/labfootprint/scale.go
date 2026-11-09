@@ -32,19 +32,21 @@ func Percentile(xs []float64, p float64) float64 {
 	return s[rank-1]
 }
 
-// Quantiles is a sample's median and 95th percentile, with its size.
+// Quantiles is a sample's median, 95th and 99th percentiles, with its size.
+// The p99 is the scaling target's figure (the ingest lag under 5 s at p99).
 type Quantiles struct {
 	P50 float64 `json:"p50"`
 	P95 float64 `json:"p95"`
+	P99 float64 `json:"p99"`
 	N   int     `json:"n"`
 }
 
-// QuantilesOf is the p50 and p95 of xs.
+// QuantilesOf is the p50, p95 and p99 of xs.
 func QuantilesOf(xs []float64) Quantiles {
 	if len(xs) == 0 {
 		return Quantiles{}
 	}
-	return Quantiles{P50: Percentile(xs, 50), P95: Percentile(xs, 95), N: len(xs)}
+	return Quantiles{P50: Percentile(xs, 50), P95: Percentile(xs, 95), P99: Percentile(xs, 99), N: len(xs)}
 }
 
 // DurationQuantiles is QuantilesOf in milliseconds.
@@ -188,6 +190,130 @@ func CountRedeliveries(r io.Reader) (Redeliveries, error) {
 	return n, sc.Err()
 }
 
+// LaneSample is one "ingest lane" line of the server's log: the consumer
+// lane's running total of batches handled and the time its handler held the
+// lane for them, since the server started (internal/bus, startLaneLog).
+type LaneSample struct {
+	At      time.Time
+	Batches int64
+	Busy    time.Duration
+}
+
+const logLane = `msg="ingest lane"`
+
+// ParseLaneLog reads the lane tally lines out of a server's log, as the text
+// handler writes them: time=<RFC 3339> ... msg="ingest lane" ... batches=N
+// busy_ms=M. Any other line is skipped; a tally line that does not parse is
+// an error, since a harness that misread the server's count would print a
+// wrong figure with a straight face.
+func ParseLaneLog(r io.Reader) ([]LaneSample, error) {
+	var out []LaneSample
+	sc := bufio.NewScanner(r)
+	sc.Buffer(make([]byte, 0, 64<<10), 4<<20)
+	for sc.Scan() {
+		line := sc.Text()
+		if !strings.Contains(line, logLane) {
+			continue
+		}
+		var (
+			sample LaneSample
+			busyMs int64
+			err    error
+		)
+		for _, field := range strings.Fields(line) {
+			key, value, ok := strings.Cut(field, "=")
+			if !ok {
+				continue
+			}
+			switch key {
+			case "time":
+				sample.At, err = time.Parse(time.RFC3339Nano, value)
+			case "batches":
+				sample.Batches, err = strconv.ParseInt(value, 10, 64)
+			case "busy_ms":
+				busyMs, err = strconv.ParseInt(value, 10, 64)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("lane tally line %q: %w", line, err)
+			}
+		}
+		if sample.At.IsZero() {
+			return nil, fmt.Errorf("lane tally line %q has no time", line)
+		}
+		sample.Busy = time.Duration(busyMs) * time.Millisecond
+		out = append(out, sample)
+	}
+	return out, sc.Err()
+}
+
+// Lane is the consumer lane's utilisation over a window: how much of the
+// wall time its one handler held the lane, and the mean time a batch held it.
+// It answers whether the lane is the bottleneck (busy near 1) or waiting on
+// its publishers (busy near 0 with the ingest lag at the spool wait).
+type Lane struct {
+	// Measured is false when the window held fewer than two tallies, or the
+	// server restarted inside it; Reason then says which.
+	Measured bool   `json:"measured"`
+	Reason   string `json:"reason,omitempty"`
+	// Batches is the batches handled between the first and last tally in the
+	// window, BusyFraction the lane's busy time over the span between them,
+	// ServiceMs the mean milliseconds a batch held the lane, SpanSeconds the
+	// span itself.
+	Batches      int64   `json:"batches"`
+	BusyFraction float64 `json:"busy_fraction"`
+	ServiceMs    float64 `json:"service_ms"`
+	SpanSeconds  float64 `json:"span_seconds"`
+}
+
+// LaneOf is the lane's utilisation between the first and last tally inside
+// [from, to]. The tallies are running totals, so the difference between two
+// is exact for the span between them, and the span, not the window, is the
+// denominator: the warm-up's tallies and the partial intervals at the
+// window's edges do not count.
+func LaneOf(samples []LaneSample, from, to time.Time) Lane {
+	var in []LaneSample
+	for _, s := range samples {
+		if !s.At.Before(from) && !s.At.After(to) {
+			in = append(in, s)
+		}
+	}
+	if len(in) < 2 {
+		return Lane{Reason: fmt.Sprintf("the server logged %d lane tallies in the window, two are needed", len(in))}
+	}
+	// Every tally is a running total, so one that falls below the one before
+	// it is a fresh process: a restart inside the window, even one whose new
+	// count overtook the old by the window's end, measures nothing.
+	for i := 1; i < len(in); i++ {
+		if in[i].Batches < in[i-1].Batches || in[i].Busy < in[i-1].Busy {
+			return Lane{Reason: "the lane's tallies went backwards in the window (the server restarted?)"}
+		}
+	}
+	first, last := in[0], in[len(in)-1]
+	span := last.At.Sub(first.At)
+	if span <= 0 {
+		return Lane{Reason: "the lane's tallies in the window span no time"}
+	}
+	l := Lane{Measured: true, Batches: last.Batches - first.Batches, SpanSeconds: span.Seconds()}
+	// With one message in flight the lane is one handler at a time, so the
+	// fraction cannot pass 1. A partitioned consumer (#1585) would hold
+	// several lanes at once and need their count as the denominator.
+	busy := last.Busy - first.Busy
+	l.BusyFraction = float64(busy) / float64(span)
+	if l.Batches > 0 {
+		l.ServiceMs = float64(busy) / float64(time.Millisecond) / float64(l.Batches)
+	}
+	return l
+}
+
+// describe is the lane's table cell.
+func (l Lane) describe() string {
+	if !l.Measured {
+		return "not measured"
+	}
+	return fmt.Sprintf("%.1f %%   (%.1f ms a batch, %s batches over %.0f s)",
+		l.BusyFraction*100, l.ServiceMs, count(float64(l.Batches)), l.SpanSeconds)
+}
+
 // DrainSample is the retention backlog still in the table at an instant.
 type DrainSample struct {
 	At        time.Time
@@ -271,8 +397,10 @@ type ScaleRun struct {
 	// sample was.
 	LagGap       *LagGap
 	Redeliveries Redeliveries
-	FleetView    []time.Duration
-	Drain        Drain
+	// Lane is the consumer lane's utilisation, from the server's tally lines.
+	Lane      Lane
+	FleetView []time.Duration
+	Drain     Drain
 }
 
 // ScaleContainer is one container's figures over the window.
@@ -303,6 +431,9 @@ type ScaleReport struct {
 	ReceiptBytesPerDay    float64 `json:"receipt_bytes_per_day"`
 	DatabaseBytesPerDay   float64 `json:"database_bytes_per_day"`
 	WALBytesPerDay        float64 `json:"wal_bytes_per_day"`
+	// WALBytesPerSample is the WAL the window wrote over the samples it
+	// landed: the write amplification one row costs.
+	WALBytesPerSample float64 `json:"wal_bytes_per_sample"`
 
 	BatchesLanded    int64   `json:"batches_landed"`
 	SamplesLanded    int64   `json:"samples_landed"`
@@ -314,6 +445,7 @@ type ScaleReport struct {
 	// IngestLagGap is set, and IngestLag zero, when no lag was measured.
 	IngestLagGap *LagGap      `json:"ingest_lag_not_measured,omitempty"`
 	Redeliveries Redeliveries `json:"redeliveries"`
+	ConsumerLane Lane         `json:"consumer_lane"`
 	FleetView    Quantiles    `json:"fleet_view_ms"`
 	Drain        Drain        `json:"retention_drain"`
 }
@@ -340,6 +472,7 @@ func SummarizeScale(r ScaleRun) ScaleReport {
 		BatchesPerSecond:      w.BatchesPerSecond,
 		IngestLagGap:          r.LagGap,
 		Redeliveries:          r.Redeliveries,
+		ConsumerLane:          r.Lane,
 		FleetView:             DurationQuantiles(r.FleetView),
 		Drain:                 r.Drain,
 	}
@@ -348,6 +481,9 @@ func SummarizeScale(r ScaleRun) ScaleReport {
 		ms[i] = s * 1000
 	}
 	out.IngestLag = QuantilesOf(ms)
+	if w.SamplesLanded > 0 {
+		out.WALBytesPerSample = float64(w.WALBytes) / float64(w.SamplesLanded)
+	}
 
 	var names []string
 	for name := range w.Containers {
@@ -396,6 +532,7 @@ func (r ScaleReport) Table() string {
 	line("receipts a day", size(r.ReceiptBytesPerDay))
 	line("database a day", size(r.DatabaseBytesPerDay))
 	line("WAL a day", size(r.WALBytesPerDay))
+	line("WAL a sample", count(r.WALBytesPerSample)+" B")
 	line("batches landed", count(float64(r.BatchesLanded)))
 	line("samples landed", count(float64(r.SamplesLanded)))
 	line("samples per batch", fmt.Sprintf("%.1f", r.SamplesPerBatch))
@@ -410,17 +547,23 @@ func (r ScaleReport) Table() string {
 	if r.IngestLagGap != nil {
 		line("ingest lag p50", "not measured")
 		line("ingest lag p95", "not measured")
+		line("ingest lag p99", "not measured")
 	} else {
 		line("ingest lag p50", ms(r.IngestLag.P50))
-		line("ingest lag p95", ms(r.IngestLag.P95)+fmt.Sprintf("   (%s rows sampled)", count(float64(r.IngestLag.N))))
+		line("ingest lag p95", ms(r.IngestLag.P95))
+		line("ingest lag p99", ms(r.IngestLag.P99)+fmt.Sprintf("   (%s rows sampled)", count(float64(r.IngestLag.N))))
 	}
 	line("consumer redeliveries", fmt.Sprintf("%s   (%s unconfirmed acks, %s abandoned; a floor, see the lab guide)",
 		count(float64(r.Redeliveries.Total())), count(float64(r.Redeliveries.Unconfirmed)), count(float64(r.Redeliveries.Abandoned))))
+	line("consumer lane busy", r.ConsumerLane.describe())
 	line("fleet view p50", ms(r.FleetView.P50))
 	line("fleet view p95", ms(r.FleetView.P95)+fmt.Sprintf("   (%d reads)", r.FleetView.N))
 	line("retention drain", r.Drain.describe())
 	if r.IngestLagGap != nil {
 		b.WriteString("\n" + r.IngestLagGap.footer())
+	}
+	if !r.ConsumerLane.Measured && r.ConsumerLane.Reason != "" {
+		b.WriteString("\nconsumer lane not measured: " + r.ConsumerLane.Reason + "\n")
 	}
 	return b.String()
 }

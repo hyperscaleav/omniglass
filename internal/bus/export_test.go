@@ -27,6 +27,14 @@ func SetOrphanWindow(window, flush time.Duration) (restore func()) {
 	return func() { orphanWindow, orphanFlushEvery = pw, pf }
 }
 
+// SetLaneLogEvery shortens how often the ingest lane logs its tally, for a
+// test that reads the line; it returns the restore.
+func SetLaneLogEvery(every time.Duration) (restore func()) {
+	prior := laneLogEvery
+	laneLogEvery = every
+	return func() { laneLogEvery = prior }
+}
+
 // PublishTelemetryAs publishes b on the push lane under the given id, as
 // PublishTelemetry does under a fresh one, and reports whether the stream
 // held it as a duplicate: what a publisher's retry looks like to the stream.

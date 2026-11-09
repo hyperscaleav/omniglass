@@ -415,16 +415,23 @@ How to read each row:
 - **WAL a day**: the write-ahead log written during the window (the difference between two log
   positions), multiplied up to a day. It is what replication and backups would carry, and is usually
   more than the tables, since every change is logged and indexes are logged with it.
+- **WAL a sample**: the same WAL delta divided by the samples the window landed, the figure that
+  sizes replication and backups per device rather than per day. It carries every writer's WAL (the
+  receipts, the calculated metrics, the server's own rows), so it reads a little high for the raw
+  lane alone; a figure far above the row's width is index and receipt cost, not the sample.
 - **`<container>` cpu, memory**: each container's CPU in millicores (a thousand is one core) over
   the window, from the cgroup's CPU time, and its working set (anonymous plus shared memory, the part
   not reclaimable as page cache). One line each for the server, Postgres and every node, then the
   total. A node is one site's simulators and its collection, so its cost is what that site's devices
   add; the server and Postgres are what every site's writes add up to.
-- **ingest lag p50, p95**: the time from a sample's probe (the timestamp the node gave it) to the
+- **ingest lag p50, p95, p99**: the time from a sample's probe (the timestamp the node gave it) to the
   commit of its row, over the newest observed metric rows the window landed (up to 20,000, the count is
   shown). It includes the node's batching, the bus, the consumer and the insert. Percentiles are
-  nearest-rank. It is not network time to a real device: the simulators answer from the same host.
-  When no sample probed inside the window had committed by its end, both cells read `not measured`:
+  nearest-rank; the p99 is the figure the [scaling targets](/architecture/scaling/#ingest-one-batch-per-tick)
+  hold the ingest path to. A node flushes its spool once a second, so a lag near one second with a
+  flat tail is the spool wait, not a queue. It is not network time to a real device: the simulators
+  answer from the same host.
+  When no sample probed inside the window had committed by its end, all three cells read `not measured`:
   landing has fallen further behind than the window is long. The table then ends with the reason and
   how long before the read the newest row committed and its sample was probed, and, if that sample was
   probed before the window began, `ingest lag exceeds the window` with how long before the window's end
@@ -435,6 +442,22 @@ How to read each row:
   the server's log since the window began. A redelivery that succeeds the second time logs nothing, so
   this is a floor: zero means none was logged, not none happened. Anything above zero in a quiet lab
   is worth a look.
+- **consumer lane busy**: how much of the window the ingest consumer spent inside its handler, landing
+  batches. The telemetry stream is a work queue with one durable consumer and one message in flight,
+  so the consumer is one lane, and its busy fraction is the lane's utilisation: at 100 % every batch
+  waits for the one before it and lag grows without bound; at 25 % the lane could carry four times the
+  load before it saturates. The row also gives the service time a batch (busy time over batches) and
+  the batches it counted over the span. The server tallies every batch's handler time and logs the
+  cumulative count and busy milliseconds every 30 s (`msg="ingest lane"`, only when the count moved,
+  so an idle server is quiet); the harness reads the first and last tally inside the window and
+  divides the busy time between them by the time between them, so the fraction is exact to the
+  millisecond over that span and no boundary estimate is needed (a batch in flight at a tick counts
+  toward the next interval). It needs two tallies inside the window, 30 s apart: a window too short
+  to hold two ticks, a lane that was idle at a tick, or a server built before this line reads
+  `not measured` with the reason under the table, as does a tally that went backwards (the server
+  restarted inside the window). Together with the lag this answers
+  whether more consumers would help: a lag at the spool wait with a lane mostly idle means the lane is
+  not the bottleneck.
 - **fleet view p50, p95**: the time of `GET /api/v1/views/fleet`, the whole-fleet view the console
   opens on, read through the API with a token the harness mints, spread evenly over the window so it
   is read while the lab collects, not while it idles. The reads are sequential, so these are one

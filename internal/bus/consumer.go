@@ -155,6 +155,8 @@ func ack(msg jetstream.Msg) {
 // left for nakOrTerm, which redelivers (Nak) up to maxTelemetryDeliveries and then
 // terminates the message so it does not loop forever.
 func (s *Server) handleTelemetry(msg jetstream.Msg) {
+	start := time.Now()
+	defer func() { s.lane.observe(time.Since(start)) }()
 	ctx := context.Background()
 
 	var ev ogv1.TelemetryBatch

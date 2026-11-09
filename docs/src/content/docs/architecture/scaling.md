@@ -188,10 +188,15 @@ in the tick resolve in one read, however many conduits its groups name. A refuse
 | Ingest lag p99 | | under 5 s |
 
 The right-hand column is the target this slice is held to, not a measurement. `omniglass lab measure`
-prints the measured figures (batches landed, samples per batch, batches a second, receipts a day and
-the ingest lag) for a scale lab
+prints the measured figures (batches landed, samples per batch, batches a second, receipts a day, WAL
+bytes a sample, the ingest lag at p50, p95 and p99, consumer redeliveries, and the ingest consumer
+lane's busy fraction and service time a batch) for a scale lab
 ([the lab guide](/guides/lab/#measuring-a-scale-lab)); the measured run replaces this column's targets
-when the slice's pull request records it.
+when the slice's pull request records it. The lane's busy fraction is the figure that says whether the
+single consumer is the ceiling: the stream is a work queue with one message in flight, so the handler's
+share of the wall clock is the lane's utilisation, and a lag that sits at the node's one-second spool
+flush while the lane is mostly idle is not a consumer bottleneck
+([#1517](https://github.com/hyperscaleav/omniglass/issues/1517)).
 
 ## Platform configuration
 
