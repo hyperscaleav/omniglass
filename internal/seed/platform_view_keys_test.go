@@ -1,6 +1,7 @@
 package seed
 
 import (
+	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -38,6 +39,35 @@ func TestPlatformViewKeysAreSeeded(t *testing.T) {
 				t.Errorf("%s appears in group %s and again in %s", key, prev, g.Name)
 			}
 			seen[key] = g.Name
+		}
+	}
+}
+
+// TestPlatformWindowKeysAreTheNonzeroCounts proves the platform view ages out
+// exactly the keys a writer reports only when nonzero (#1644): those are the
+// window counts whose last sample stops being current once a later window
+// counted nothing, and every other key is a gauge written whether or not it
+// moved. A key the catalog describes one way and the view treats the other
+// would either show a long-gone count as current or blink a gauge out.
+func TestPlatformWindowKeysAreTheNonzeroCounts(t *testing.T) {
+	var doc metricTypesDoc
+	if err := yaml.Unmarshal(metricTypesYAML, &doc); err != nil {
+		t.Fatal(err)
+	}
+	nonzero := map[string]bool{}
+	for _, m := range doc.MetricTypes {
+		nonzero[m.Name] = strings.Contains(m.Description, "reported only when nonzero")
+	}
+	for _, g := range storage.PlatformViewGroups {
+		for _, key := range g.Keys {
+			if got, want := storage.PlatformWindowKeys[key], nonzero[key]; got != want {
+				t.Errorf("%s: window key = %v, catalog says reported only when nonzero = %v", key, got, want)
+			}
+		}
+	}
+	for key := range storage.PlatformWindowKeys {
+		if !nonzero[key] {
+			t.Errorf("%s is a window key the catalog does not describe as reported only when nonzero", key)
 		}
 	}
 }

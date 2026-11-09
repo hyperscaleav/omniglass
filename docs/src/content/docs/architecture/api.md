@@ -1164,7 +1164,8 @@ earns its own tier only when composing the entity reads in the browser would be 
 - `GET /views/platform` (`node:read`) is the read behind
   [Platform health](/guides/operator/platform-health/): the platform system's verdict, each
   server's build and start time, the node table's column groups with each key's catalog facts,
-  and one row per node with its latest figure per key, in a fixed number of statements however
+  and one row per node with its current figure per key (a gauge's latest sample, a
+  window count only while its window is the newest), in a fixed number of statements however
   many nodes there are. Its rows are `/nodes`', so a node read short of all-scope is a **403**, as
   `/nodes` answers, never an empty table. The figures, the verdicts and the servers need an
   all-scope `component:read` and the system an all-scope `system:read`; short of either they are

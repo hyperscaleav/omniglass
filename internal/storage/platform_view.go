@@ -294,26 +294,75 @@ func (p *PG) componentVerdicts(ctx context.Context, ids []string) (map[string]st
 	return out, rows.Err()
 }
 
-// platformFigures reads, in one statement, the latest sample of every
-// PlatformViewGroups key on every component in ids: the newest row of each
-// series (metricNewestSQL, the read EffectiveMetrics makes), then the newest
-// across a key's instances and provenances that report reality (observed,
-// calculated). An intended row is what a command asked for, never a figure.
+// PlatformWindowKeys are the PlatformViewGroups keys a writer reports once a
+// window and only when nonzero (the node's report window, the server's
+// command pass). Their last sample is the last window that counted
+// something, not a current reading: a later window that counted nothing
+// writes no row. So the view shows one only while it is the newest window's
+// and leaves it absent after (platformWindowHorizon). Every other key is a
+// gauge written whether or not it moved, whose latest sample is current
+// however old. The catalog describes exactly these as "reported only when
+// nonzero" (TestPlatformWindowKeysAreTheNonzeroCounts).
+var PlatformWindowKeys = map[string]bool{
+	writerclass.TickOverrunCount:    true,
+	writerclass.ScheduleSkipCount:   true,
+	writerclass.SpoolDropCount:      true,
+	writerclass.PublishFailureCount: true,
+	writerclass.CommandExpiredCount: true,
+}
+
+// platformWindowHorizon is how far back a window count still reads as the
+// current window: two report windows, so the newest window has ended and a
+// later one has too. The command pass's window (15 s) is shorter than the
+// shortest report window doubled (2 x 10 s), so the same horizon holds it.
+func platformWindowHorizon(reportSeconds int) time.Duration {
+	return 2 * time.Duration(reportSeconds) * time.Second
+}
+
+// platformFigures reads, in one statement, the current figure of every
+// PlatformViewGroups key on every component in ids. Per series instance it
+// takes the newest row (metricNewestSQL, the read EffectiveMetrics makes)
+// across the provenances that report reality (observed, calculated); an
+// intended row is what a command asked for, never a figure. A key's figure is
+// then the sum of its instances written at its newest time: a key split by
+// instance (command-expired-count's undelivered and unexecuted) is one count
+// written at one pass, and an instance from an earlier pass is not this
+// one's. A window count past the horizon is left out (PlatformWindowKeys).
 func (p *PG) platformFigures(ctx context.Context, ids []string) (map[string]map[string]PlatformFigure, error) {
 	out := map[string]map[string]PlatformFigure{}
 	if len(ids) == 0 {
 		return out, nil
 	}
+	collection, err := p.CollectionSettings(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var windowKeys []string
+	for _, k := range platformViewKeys() {
+		if PlatformWindowKeys[k] {
+			windowKeys = append(windowKeys, k)
+		}
+	}
 	rows, err := p.pool.Query(ctx, `
-		select distinct on (s.component_id, mt.name)
-		       s.component_id::text, mt.name, n.value, n.ts
-		from metric_series s
-		join metric_type mt on mt.id = s.metric_type_id
-		cross join lateral (`+metricNewestSQL("s.id")+`) n
-		where s.owner_kind = 'component' and s.component_id = any($1::uuid[])
-		  and mt.namespace = 'og' and mt.name = any($2::text[])
-		  and s.provenance in ('observed', 'calculated')
-		order by s.component_id, mt.name, n.ts desc, n.id desc`, ids, platformViewKeys())
+		with latest as (
+			select distinct on (s.component_id, mt.name, s.instance)
+			       s.component_id, mt.name, n.value, n.ts
+			from metric_series s
+			join metric_type mt on mt.id = s.metric_type_id
+			cross join lateral (`+metricNewestSQL("s.id")+`) n
+			where s.owner_kind = 'component' and s.component_id = any($1::uuid[])
+			  and mt.namespace = 'og' and mt.name = any($2::text[])
+			  and s.provenance in ('observed', 'calculated')
+			order by s.component_id, mt.name, s.instance, n.ts desc, n.id desc
+		), ranked as (
+			select *, max(ts) over (partition by component_id, name) as newest from latest
+		)
+		select component_id::text, name, sum(value), newest
+		from ranked
+		where ts = newest
+		  and not (name = any($3::text[]) and newest < now() - $4::interval)
+		group by component_id, name, newest`,
+		ids, platformViewKeys(), windowKeys, platformWindowHorizon(collection.ReportSeconds))
 	if err != nil {
 		return nil, fmt.Errorf("storage: platform view figures: %w", err)
 	}

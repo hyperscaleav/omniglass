@@ -1,4 +1,4 @@
-## frozen-fact-served-as-current (fixed; found by the #1035 review, regressed and fixed in the #821, #456, #1297 and #1626 reviews)
+## frozen-fact-served-as-current (fixed; found by the #1035 review, regressed and fixed in the #821, #456, #1297, #1626 and #1644 reviews)
 
 - **Cue:** a read that serves a latest-ever sample (a certificate's days left, a handshake's
   result) beside a gate or state that stops the probe from refreshing it.
@@ -34,3 +34,12 @@
   key's latest sample and a rule on it never cleared. Fix: write the zero reading when nothing
   waits (`CommandQueueMetrics`, internal/storage/command_health.go), as the sibling check-in age
   does.
+- **Sixth instance (#1644):** a latest-sample read over a count written only when nonzero. The
+  Platform health view took each key's latest sample, but the window counts (overruns, skips,
+  drops, publish failures, expired commands) write nothing for a window that counted nothing, so a
+  node that dropped five batches last week showed five under Spool Drops for good; and a
+  `distinct on` per key kept one instance of a split count, showing unexecuted 1 for an expired
+  total of 3. Fix: a window count reads only within two report windows of the read, and a key is
+  the sum of its instances at its newest time (`platformFigures`, `PlatformWindowKeys`,
+  internal/storage/platform_view.go), the window set held to the catalog's "reported only when
+  nonzero" by test.

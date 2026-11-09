@@ -2,7 +2,7 @@
 title: "Platform health is a page behind node:read, not a dashboard"
 date: 2026-11-09
 status: Accepted
-summary: "Accepted: #1644 ships Platform health as a hand-written page over a composed read, GET /views/platform, not a ViewResult dashboard. Its door is node:read, because its rows are the node list, and a scoped node read is a 403, not an empty table. Figures, verdicts and the server's identity need a fleet-wide component read and are omitted short of it. The server's start time is an RFC 3339 string, since there is no timestamp property type, and the view leaves the platform system out rather than writing it null. The Home tile carries the same gate."
+summary: "Accepted: #1644 ships Platform health as a hand-written page over a composed read, GET /views/platform, not a ViewResult dashboard. Its door is node:read, because its rows are the node list, and a scoped node read is a 403, not an empty table. Figures, verdicts and the server's identity need a fleet-wide component read and are omitted short of it. The server's start time is an RFC 3339 string, since there is no timestamp property type, and the view leaves the platform system out rather than writing it null. The Home tile carries the same gate. A count reported only when nonzero is shown only while its window is the newest."
 refs: [1644, 1643, 523, 1625, 1627, 1646]
 ---
 
@@ -35,7 +35,17 @@ refs: [1644, 1643, 523, 1625, 1627, 1646]
      verdict and the count of nodes whose pill is not up, linking to `/platform`, shown only to a
      caller holding `node:read`. Whichever of this and #523's Home v1 lands second carries the tile
      into the other.
-  7. **A node opens two ways.** A row opens the node's platform component, the ordinary component
+  7. **A window count is current only while its window is.** The ticket's view batched the latest
+     sample per (component, key). For a gauge that is the current reading, but the overrun, skip,
+     drop, failure and expired counts are written once a window and only when nonzero, so their latest
+     sample is the last window that counted something, however long ago. The view shows such a count
+     only while it is within two collection report windows of the read (the command pass's 15 s
+     window fits inside the shortest, 10 s, doubled) and leaves it absent after, which the page reads
+     as not reported. A key split by instance is the sum of the instances written at its newest time,
+     so expired commands are undelivered plus unexecuted, not whichever row sorted first.
+     `storage.PlatformWindowKeys` names the window keys, held to the catalog's "reported only when
+     nonzero" by test.
+  8. **A node opens two ways.** A row opens the node's platform component, the ordinary component
      detail, where each figure has its history. A secondary link opens the node's blade on the Nodes
      page through a new `?n=<name>` deep link, so editing stays where it lives.
 - **Context:** #1643 asks the platform to be monitored the way a fleet is. Every figure the page shows
