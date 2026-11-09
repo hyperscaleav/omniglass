@@ -15,6 +15,7 @@
       "icmp-rtt-avg",
       "poll-duration",
       "poll-failure-count",
+      "poll-held-count",
       "push-message-count",
       "push-unclaimed-count",
       "session-reason",

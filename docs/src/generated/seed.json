@@ -338,7 +338,7 @@
    "name": "endpoint-rejection",
    "data_type": "string",
    "label": "Endpoint Rejection",
-   "description": "An endpoint's gate: the ladder rung a refusal retrying cannot fix holds (responsive for a host key, certificate or protocol refusal, authenticated for a credential), its class, and the connection fingerprint it holds for, or none. While the fingerprint is unchanged nothing at or above that rung is attempted again; a changed secret, address, port, transport, login declaration or pin, or an operator's retry, lifts it. The fingerprint is a digest only. A refusal of a changed key (class host-key) appends its evidence, the pinned key and the key the component offered instead, each a SHA256 fingerprint."
+   "description": "An endpoint's gate: the ladder rung a refusal retrying cannot fix holds (responsive for a host key, certificate or protocol refusal, authenticated for a credential), its class, and the connection fingerprint it holds for, or none. While the fingerprint is unchanged nothing at or above that rung is attempted again; a changed secret, address, port, transport, login declaration or pin, or an operator's retry, lifts it. The fingerprint is a digest only. A refusal of a changed key (class host-key) appends its evidence, the pinned key and the key the component offered instead, each a SHA256 fingerprint. The gate is a set of reasons: beside that refusal, which comes first, each other reason is an entry of its kind, since when (RFC 3339) and the task that added it, the entries joined by a semicolon (unreachable 2026-11-09T14:03:00Z task-1, from the endpoint's own probe reading down twice in a row, lifted by its next up)."
   },
   {
    "name": "endpoint-rejection-reason",
@@ -542,6 +542,12 @@
    "data_type": "int",
    "label": "Poll Failures",
    "description": "The endpoint's driver polls that failed in the report window (faulted and landed nothing, or refused by the endpoint's gate); reported only when nonzero."
+  },
+  {
+   "name": "poll-held-count",
+   "data_type": "int",
+   "label": "Held Polls",
+   "description": "The endpoint's due driver polls its gate held in the report window because its probe reads it unreachable; never sent, so not failures; reported only when nonzero."
   },
   {
    "name": "push-message-count",

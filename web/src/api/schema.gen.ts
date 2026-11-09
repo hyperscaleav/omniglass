@@ -1675,7 +1675,7 @@ export interface paths {
         put?: never;
         /**
          * Preview a driver spec's polls through a node
-         * @description Runs a driver spec's polls once through the node named, against the target its inputs name, and answers with what each poll read: the samples its emits extracted, each emit that did not locate, and an excerpt of the raw answer, masked of every secret the preview used. Nothing is stored. The spec is a stored driver (driver) or an unsaved one (spec); an invalid spec is a 422 listing its findings, as validate-driver-spec gives them. A preview runs a poll that is its own request (http, https, an snmp get, a tcp line); a poll that rides a held session or a bound socket needs an attached endpoint (run-endpoint-poll). A secret input must be one the caller may reveal (secret:reveal), since the preview hands it to the target named. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight is a 429. Audited on the node and on each secret used. Gated by driver:preview.
+         * @description Runs a driver spec's polls once through the node named, against the target its inputs name, and answers with what each poll read: the samples its emits extracted, each emit that did not locate, and an excerpt of the raw answer, masked of every secret the preview used. Nothing is stored. The spec is a stored driver (driver) or an unsaved one (spec); an invalid spec is a 422 listing its findings, as validate-driver-spec gives them. A preview runs a poll that is its own request (http, https, an snmp get, a tcp line); a poll that rides a held session or a bound socket needs an attached endpoint (run-endpoint-poll). A secret input must be one the caller may reveal (secret:reveal), since the preview hands it to the target named. A target host the node's probe reads unreachable is a 409 naming that reason, and nothing is sent. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight is a 429. Audited on the node and on each secret used. Gated by driver:preview.
          */
         post: operations["preview-driver"];
         delete?: never;
@@ -1767,7 +1767,7 @@ export interface paths {
         put?: never;
         /**
          * Run an endpoint's poll now
-         * @description Runs one of an attached endpoint's polls now, on the node that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409) and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no node is a 409. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.
+         * @description Runs one of an attached endpoint's polls now, on the node that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409), a refusal or an unreachable verdict from the endpoint's probe, and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no node is a 409. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.
          */
         post: operations["run-endpoint-poll"];
         delete?: never;
@@ -10102,6 +10102,8 @@ export interface components {
             authenticated?: components["schemas"]["ReachVerdictBody"];
             /** @description The endpoint's derived name (its transport) */
             endpoint: string;
+            /** @description Every reason other than a refusal the endpoint's gate holds (the gate is a reason set, #1650), oldest first as the node published them: while any holds, due polls are held (poll-held-count), and a command or run now answers at once with the reason. Absent when none holds; a refusal is rejection */
+            gate_reasons?: components["schemas"]["ReachGateReasonBody"][] | null;
             /** @description The recent verdict transitions, oldest first, for the availability strip */
             history: components["schemas"]["ReachHistoryBody"][] | null;
             /** @description The endpoint's uuid, the address its custom methods take (POST /endpoints/{endpoint}:retry) */
@@ -10131,6 +10133,17 @@ export interface components {
             verdict: components["schemas"]["ReachVerdictBody"];
             /** @description A webhook endpoint's block (#1024): a push endpoint has no ladder and reads last_seen (last heard) in place of a verdict, never down for silence; its scheme, whether it is signed, its token's secret and what its scheme refused. Absent on every dialed transport */
             webhook?: components["schemas"]["EndpointWebhookBody"];
+        };
+        ReachGateReasonBody: {
+            /** @description The reason's kind: unreachable, two consecutive down verdicts from the endpoint's reachability probe, which lifts on its next up verdict */
+            kind: string;
+            /**
+             * Format: date-time
+             * @description When the reason began: for unreachable, the first of the down verdicts that closed the gate
+             */
+            since: string;
+            /** @description The task whose observation added the reason (the reachability probe's task id) */
+            source: string;
         };
         ReachHistoryBody: {
             /** Format: date-time */
