@@ -100,17 +100,17 @@ func TestCollectionEndToEnd(t *testing.T) {
 		t.Fatalf("omniglass node exit %d:\n%s", code, out)
 	}
 
-	// The sample is observable via the read path: tcp-open=1, component-owned,
+	// The result is observable via the read path: tcp-open=open, component-owned,
 	// observed. The consumer is async, so poll.
 	deadline := time.Now().Add(5 * time.Second)
 	for {
-		dp, err := gw.LatestMetric(ctx, "disp-1", "tcp-open")
+		dp, err := gw.LatestProperty(ctx, "disp-1", "tcp-open", "disp-1-tcp")
 		if err != nil {
-			t.Fatalf("latest metric: %v", err)
+			t.Fatalf("latest property: %v", err)
 		}
 		if dp != nil {
-			if dp.Value != 1 || dp.OwnerKind != "component" || dp.Provenance != "observed" {
-				t.Fatalf("tcp-open row = %+v, want value 1 component observed", dp)
+			if dp.Value != "open" || dp.OwnerKind != "component" || dp.Provenance != "observed" {
+				t.Fatalf("tcp-open row = %+v, want value open component observed", dp)
 			}
 			break
 		}

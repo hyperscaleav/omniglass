@@ -139,15 +139,15 @@ func TestRegistryHandleRenameKeepsReferences(t *testing.T) {
 		t.Fatalf("value: %v", err)
 	}
 	if err := insertMetrics(ctx, gw, []storage.MetricSampleWrite{{
-		OwnerKind: "component", OwnerID: "bar-1", Key: "tcp-open", Instance: "tcp", Value: 1, Source: "test"}}); err != nil {
+		OwnerKind: "component", OwnerID: "bar-1", Key: "tcp-connect-time", Instance: "tcp", Value: 1, Source: "test"}}); err != nil {
 		t.Fatalf("sample: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `update property_type set name = 'serial_no' where name = 'serial-number'`); err != nil {
 		t.Fatalf("rename property: %v", err)
 	}
-	// tcp-open lives on the metric lane (#587), so the telemetry rename happens
-	// on metric_type; the sample FK follows the same way.
-	if _, err := conn.Exec(ctx, `update metric_type set name = 'tcp-reachable' where name = 'tcp-open'`); err != nil {
+	// tcp-connect-time lives on the metric lane (#587), so the telemetry rename
+	// happens on metric_type; the sample FK follows the same way.
+	if _, err := conn.Exec(ctx, `update metric_type set name = 'tcp-dial-time' where name = 'tcp-connect-time'`); err != nil {
 		t.Fatalf("rename telemetry metric type: %v", err)
 	}
 	// The contract reads the property's new handle.
@@ -160,12 +160,12 @@ func TestRegistryHandleRenameKeepsReferences(t *testing.T) {
 	}
 	// The sample's key follows the property rename, which is the point of the
 	// telemetry foreign key.
-	dp, err := gw.LatestMetric(ctx, "bar-1", "tcp-reachable")
+	dp, err := gw.LatestMetric(ctx, "bar-1", "tcp-dial-time")
 	if err != nil {
 		t.Fatalf("latest metric by the new key: %v", err)
 	}
-	if dp == nil || dp.Key != "tcp-reachable" {
-		t.Errorf("sample key = %v, want tcp-reachable through the rename", dp)
+	if dp == nil || dp.Key != "tcp-dial-time" {
+		t.Errorf("sample key = %v, want tcp-dial-time through the rename", dp)
 	}
 
 	// Slice 4: the leaf registries (driver, location_type, secret_type,

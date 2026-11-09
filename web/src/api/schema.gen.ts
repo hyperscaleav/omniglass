@@ -10146,14 +10146,11 @@ export interface components {
             layer: string;
             /**
              * Format: date-time
-             * @description When the signal was observed
+             * @description When the signal last changed: one is stored only on a transition, so an endpoint's freshness is last_seen, not this
              */
             ts: string;
-            /**
-             * Format: double
-             * @description The latest signal value (1 = reachable/open, 0 = not)
-             */
-            value: number;
+            /** @description The latest signal value in the property's own words: up or down for ping, open or closed for port, up or down for request */
+            value: string;
         };
         ReachRejectionBody: {
             /** @description The refusal's class: auth, host-key, certificate or protocol */

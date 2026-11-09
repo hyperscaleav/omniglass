@@ -150,11 +150,11 @@ func newTickFixture(t *testing.T) *tickFixture {
 	return f
 }
 
-// group is one task's share of a tick: a distinct tcp-open value and an
+// group is one task's share of a tick: a distinct tcp-connect-time value (the probe timing that stays on the metric lane after #1592) and an
 // endpoint verdict, so each group's rows read back apart.
 func group(task string, v float64) *ogv1.TaskGroup {
 	return &ogv1.TaskGroup{TaskId: task,
-		Metrics:    []*ogv1.MetricSample{{Name: "tcp-open", Value: v}},
+		Metrics:    []*ogv1.MetricSample{{Name: "tcp-connect-time", Value: v}},
 		Properties: []*ogv1.PropertySample{{Name: "endpoint-reachable", ValueJson: `"up"`}},
 	}
 }
@@ -188,11 +188,11 @@ func (f *tickFixture) deliver(t *testing.T, ev *ogv1.TelemetryBatch) *deliveredM
 	return m
 }
 
-func (f *tickFixture) tcpOpen(t *testing.T, comp string) *storage.MetricSample {
+func (f *tickFixture) tcpConnectTime(t *testing.T, comp string) *storage.MetricSample {
 	t.Helper()
-	got, err := f.gw.LatestMetricInstance(f.ctx, comp, "tcp-open", comp+"-tcp")
+	got, err := f.gw.LatestMetricInstance(f.ctx, comp, "tcp-connect-time", comp+"-tcp")
 	if err != nil {
-		t.Fatalf("latest %s tcp-open: %v", comp, err)
+		t.Fatalf("latest %s tcp-connect-time: %v", comp, err)
 	}
 	return got
 }
@@ -224,8 +224,8 @@ func TestNodeTickLandsAsOneBatch(t *testing.T) {
 		}
 	}
 	for comp, want := range map[string]float64{"disp-1": 1, "disp-2": 0, "disp-3": 1} {
-		if got := f.tcpOpen(t, comp); got == nil || got.Value != want {
-			t.Errorf("%s tcp-open under %s-tcp = %+v, want %v", comp, comp, got, want)
+		if got := f.tcpConnectTime(t, comp); got == nil || got.Value != want {
+			t.Errorf("%s tcp-connect-time under %s-tcp = %+v, want %v", comp, comp, got, want)
 		}
 	}
 	if len(f.store.stamps) != 1 {
@@ -275,14 +275,14 @@ func TestNodeBatchRefusedGroupAcks(t *testing.T) {
 	acked(t, f.deliver(t, &ogv1.TelemetryBatch{NodeId: "node-a",
 		Groups: []*ogv1.TaskGroup{group("t-1", 1), group("t-2", 1), group("t-3", 1)}}))
 
-	if got := f.tcpOpen(t, "disp-1"); got == nil || got.Value != 1 {
-		t.Errorf("disp-1 tcp-open = %+v, want its group landed beside the refused one", got)
+	if got := f.tcpConnectTime(t, "disp-1"); got == nil || got.Value != 1 {
+		t.Errorf("disp-1 tcp-connect-time = %+v, want its group landed beside the refused one", got)
 	}
-	if got := f.tcpOpen(t, "disp-3"); got == nil || got.Value != 1 {
-		t.Errorf("disp-3 tcp-open = %+v, want its group landed beside the refused one", got)
+	if got := f.tcpConnectTime(t, "disp-3"); got == nil || got.Value != 1 {
+		t.Errorf("disp-3 tcp-connect-time = %+v, want its group landed beside the refused one", got)
 	}
-	if got := f.tcpOpen(t, "disp-2"); got != nil {
-		t.Errorf("disp-2 tcp-open = %+v, want nothing: its group was refused", got)
+	if got := f.tcpConnectTime(t, "disp-2"); got != nil {
+		t.Errorf("disp-2 tcp-connect-time = %+v, want nothing: its group was refused", got)
 	}
 	warned := logs(refusedGroupLog)
 	if len(warned) != 1 || warned[0]["task"] != "t-2" || !strings.Contains(fmt.Sprint(warned[0]["error"]), "writer class") {
@@ -297,7 +297,7 @@ func TestNodeBatchTopLevelTaskSamplesAreTermed(t *testing.T) {
 	f := newTickFixture(t)
 	for name, ev := range map[string]*ogv1.TelemetryBatch{
 		"task id":    {NodeId: "node-a", TaskId: "t-1", Groups: []*ogv1.TaskGroup{group("t-1", 1)}},
-		"metrics":    {NodeId: "node-a", Metrics: []*ogv1.MetricSample{{Name: "tcp-open", Value: 1}}},
+		"metrics":    {NodeId: "node-a", Metrics: []*ogv1.MetricSample{{Name: "tcp-connect-time", Value: 1}}},
 		"properties": {NodeId: "node-a", Properties: []*ogv1.PropertySample{{Name: "endpoint-reachable", ValueJson: `"up"`}}},
 		"events":     {NodeId: "node-a", Events: []*ogv1.EventSample{{Name: "call-started", Message: "x"}}},
 		"task logs":  {NodeId: "node-a", TaskLogs: []*ogv1.LogLine{{Message: "x"}}},
@@ -310,8 +310,8 @@ func TestNodeBatchTopLevelTaskSamplesAreTermed(t *testing.T) {
 	if len(f.store.lands) != 0 {
 		t.Fatalf("a termed batch reached LandBatch: %+v", f.store.lands)
 	}
-	if got := f.tcpOpen(t, "disp-1"); got != nil {
-		t.Fatalf("disp-1 tcp-open = %+v, want nothing from a termed batch", got)
+	if got := f.tcpConnectTime(t, "disp-1"); got != nil {
+		t.Fatalf("disp-1 tcp-connect-time = %+v, want nothing from a termed batch", got)
 	}
 	// A node's self-logs ride the top level and still land.
 	acked(t, f.deliver(t, &ogv1.TelemetryBatch{NodeId: "node-a", Logs: []*ogv1.LogLine{{Message: "self"}}}))
@@ -323,12 +323,12 @@ func TestNodeBatchOrphanGroupDoesNotBlockSiblings(t *testing.T) {
 		Groups: []*ogv1.TaskGroup{group("t-1", 1), group("t-b", 1), group("t-3", 1)}}))
 
 	for _, comp := range []string{"disp-1", "disp-3"} {
-		if got := f.tcpOpen(t, comp); got == nil {
-			t.Errorf("%s tcp-open missing: an orphan sibling blocked its group", comp)
+		if got := f.tcpConnectTime(t, comp); got == nil {
+			t.Errorf("%s tcp-connect-time missing: an orphan sibling blocked its group", comp)
 		}
 	}
-	if got, err := f.gw.LatestMetric(f.ctx, "disp-b", "tcp-open"); err != nil || got != nil {
-		t.Errorf("disp-b tcp-open = %+v (%v), want none: node-b's task is not node-a's to write", got, err)
+	if got, err := f.gw.LatestMetric(f.ctx, "disp-b", "tcp-connect-time"); err != nil || got != nil {
+		t.Errorf("disp-b tcp-connect-time = %+v (%v), want none: node-b's task is not node-a's to write", got, err)
 	}
 	if n := f.srv.orphans.drain()["node-a"].Batches; n != 1 {
 		t.Errorf("orphans counted on node-a = %d, want the one orphaned group", n)
@@ -353,11 +353,11 @@ func TestNodeBatchPostgresRefusedGroupAcks(t *testing.T) {
 	m := f.deliver(t, &ogv1.TelemetryBatch{NodeId: "node-a", Groups: []*ogv1.TaskGroup{group("t-1", 1), bad}})
 	acked(t, m)
 
-	if got := f.tcpOpen(t, "disp-1"); got == nil || got.Value != 1 {
-		t.Errorf("disp-1 tcp-open = %+v, want its group landed beside the refused one", got)
+	if got := f.tcpConnectTime(t, "disp-1"); got == nil || got.Value != 1 {
+		t.Errorf("disp-1 tcp-connect-time = %+v, want its group landed beside the refused one", got)
 	}
-	if got := f.tcpOpen(t, "disp-2"); got != nil {
-		t.Errorf("disp-2 tcp-open = %+v, want nothing: its group was refused", got)
+	if got := f.tcpConnectTime(t, "disp-2"); got != nil {
+		t.Errorf("disp-2 tcp-connect-time = %+v, want nothing: its group was refused", got)
 	}
 	if warned := logs(refusedGroupLog); len(warned) != 1 || warned[0]["task"] != "t-2" {
 		t.Errorf("refusal warnings = %v, want one naming t-2", warned)

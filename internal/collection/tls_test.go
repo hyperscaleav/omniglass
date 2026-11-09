@@ -362,7 +362,7 @@ func TestTLSProbeLandsTheHandshakeAndTheCertificateFacts(t *testing.T) {
 	for _, d := range dps {
 		got[d.Name] = d
 	}
-	if got["tcp-open"].Value != 1 || got["endpoint-responsive"].Text != "up" || got["tls-handshake-time"].Value <= 0 {
+	if got["tcp-open"].Text != collection.PortOpen || got["endpoint-responsive"].Text != "up" || got["tls-handshake-time"].Value <= 0 {
 		t.Fatalf("samples %+v, want open, responsive, a handshake time", dps)
 	}
 	if exp := got["tls-certificate-expiry"]; !exp.IsText || exp.Text != notAfter.Format(time.RFC3339) {
@@ -400,7 +400,7 @@ func TestTLSProbeLandsTheHandshakeAndTheCertificateFacts(t *testing.T) {
 	for _, d := range dps {
 		switch d.Name {
 		case "tcp-open":
-			if d.Value != 0 {
+			if d.Text != collection.PortClosed {
 				t.Fatal("a closed port read open")
 			}
 		case "endpoint-responsive":

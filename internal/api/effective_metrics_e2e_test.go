@@ -190,7 +190,7 @@ func TestComponentMetricsNameTheShownEndpoint(t *testing.T) {
 	}{
 		{"http", "tcp-connect-time", 2.2, time.Second},
 		{"tcp", "tcp-connect-time", 4.8, 2 * time.Second},
-		{"tcp", "tcp-open", 1, time.Second},
+		{"tcp", "icmp-rtt-avg", 1, time.Second},
 	} {
 		if err := gw.InsertMetricSamples(ctx, storage.NodeWriter(comp.ID, s.ep), []storage.MetricSampleWrite{{
 			OwnerKind: "component", OwnerID: comp.ID, Key: s.key, Instance: s.ep, Value: s.v, Source: "test", TS: base.Add(s.at),
@@ -214,7 +214,7 @@ func TestComponentMetricsNameTheShownEndpoint(t *testing.T) {
 	if len(two.Instances) != 2 || two.Instances[0].Instance != "tcp" || two.Instances[1].Instance != "http" || string(two.Instances[1].Value) != `2.2` {
 		t.Fatalf("two endpoints: want [tcp 4.8, http 2.2], got %+v", two.Instances)
 	}
-	one := byName["tcp-open"]
+	one := byName["icmp-rtt-avg"]
 	if string(one.Value) != `1` || one.Instance == nil || *one.Instance != "tcp" || one.InstanceCount != 1 || one.Instances != nil {
 		t.Fatalf("one endpoint: want 1 from tcp, count 1, no list, got %+v", one)
 	}

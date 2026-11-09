@@ -157,7 +157,7 @@ message Owner {
 // MetricSample is one numeric observation: a registered metric_type name plus a
 // double value. The lane is the type: no value oneof, no kind routing.
 message MetricSample {
-  // name is the canonical metric_type name (e.g. "tcp-open"). Validated against
+  // name is the canonical metric_type name (e.g. "tcp-connect-time"). Validated against
   // metric_type at ingest; an unregistered name is dropped.
   string name = 1;
 

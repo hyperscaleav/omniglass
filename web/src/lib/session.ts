@@ -1,7 +1,7 @@
 import { api } from "../api/client";
 import type { components } from "../api/schema.gen";
 import { can, type Me } from "./auth";
-import { STALENESS_WINDOW_MS, lastSeenAt, type ReachEndpoint } from "./reachability";
+import { STALENESS_WINDOW_MS, lastSeenAt, layerUp, type ReachEndpoint } from "./reachability";
 
 // A held session as the console reads it (#1059): the state the node last
 // published for an endpoint's session (ADR-0150, ADR-0155), aged by what the
@@ -108,10 +108,10 @@ function observed(up: boolean | undefined): RungStatus {
 export function ladder(iface: ReachEndpoint): Rung[] {
   const ping = iface.layers.find((l) => l.check === "icmp-reachable");
   const port = iface.layers.find((l) => l.check === "tcp-open");
-  const reachable: Rung = { key: "reachable", role: iface.transport === "icmp" ? "gate" : "informational", status: observed(ping ? ping.value >= 1 : undefined) };
+  const reachable: Rung = { key: "reachable", role: iface.transport === "icmp" ? "gate" : "informational", status: observed(ping ? layerUp(ping) : undefined) };
   const rungs: Rung[] = [reachable];
   if (iface.transport !== "icmp") {
-    const transport = iface.responsive ? iface.responsive.value === "up" : port ? port.value >= 1 : undefined;
+    const transport = iface.responsive ? iface.responsive.value === "up" : port ? layerUp(port) : undefined;
     rungs.push({ key: "responsive", role: "gate", status: observed(transport) });
     // The login rung exists where a login was tried or a gate holds it:
     // nothing on the read says a driver declares a login it never ran, so a

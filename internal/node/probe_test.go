@@ -46,14 +46,15 @@ func TestParseICMPTask(t *testing.T) {
 	}
 }
 
-// TestGroupForLanes: the group carries the task id, no component
-// identity, and each produced sample rides its own lane (#594): a numeric probe
-// result on metrics, a text verdict on properties as canonical JSON text. The
+// TestGroupForLanes: the group carries the task id, no component identity,
+// and each produced sample rides its own lane (#594): a probe's timing on
+// metrics, its result (a state, #1592) and the text verdict on properties as
+// canonical JSON text, the result's reason riding as a label. The
 // probes know their lanes statically, so no registry is consulted node-side.
 func TestGroupForLanes(t *testing.T) {
 	t.Parallel()
 	dps := []collection.Sample{
-		{Name: collection.SignalTCPOpen, Value: 1, Labels: map[string]string{collection.ReasonLabel: "responded"}},
+		collection.ProbeResult(collection.SignalTCPOpen, true, time.Time{}, collection.Responded),
 		{Name: collection.SignalTCPConnectTime, Value: 3.5},
 		{Name: collection.SignalEndpointReachable, Text: collection.VerdictUp, IsText: true},
 	}
@@ -61,14 +62,18 @@ func TestGroupForLanes(t *testing.T) {
 	if ev.GetTaskId() != "t1" {
 		t.Fatalf("group task id = %q, want t1", ev.GetTaskId())
 	}
-	if len(ev.GetMetrics()) != 2 || len(ev.GetProperties()) != 1 {
-		t.Fatalf("lanes = %d metrics / %d properties, want 2/1", len(ev.GetMetrics()), len(ev.GetProperties()))
+	if len(ev.GetMetrics()) != 1 || len(ev.GetProperties()) != 2 {
+		t.Fatalf("lanes = %d metrics / %d properties, want 1/2", len(ev.GetMetrics()), len(ev.GetProperties()))
 	}
-	first := ev.GetMetrics()[0]
-	if first.GetName() != collection.SignalTCPOpen || first.GetValue() != 1 {
-		t.Fatalf("first metric = %+v, want tcp-open=1", first)
+	timing := ev.GetMetrics()[0]
+	if timing.GetName() != collection.SignalTCPConnectTime || timing.GetValue() != 3.5 {
+		t.Fatalf("metric = %+v, want tcp-connect-time=3.5", timing)
 	}
-	verdict := ev.GetProperties()[0]
+	result := ev.GetProperties()[0]
+	if result.GetName() != collection.SignalTCPOpen || result.GetValueJson() != `"open"` || result.GetLabels()[collection.ReasonLabel] != string(collection.Responded) {
+		t.Fatalf("result property = %+v, want tcp-open with value_json %q and the reason label", result, `"open"`)
+	}
+	verdict := ev.GetProperties()[1]
 	if verdict.GetName() != collection.SignalEndpointReachable || verdict.GetValueJson() != `"up"` {
 		t.Fatalf("verdict property = %+v, want endpoint-reachable with value_json %q", verdict, `"up"`)
 	}
@@ -82,7 +87,7 @@ func TestGroupForTS(t *testing.T) {
 	t.Parallel()
 	stamped := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	dps := []collection.Sample{
-		{Name: collection.SignalTCPOpen, Value: 1, TS: stamped},
+		{Name: collection.SignalTCPConnectTime, Value: 1, TS: stamped},
 		{Name: collection.SignalTCPConnectTime, Value: 3.5},
 	}
 	ev := groupFor("t1", dps)
@@ -104,8 +109,8 @@ func TestGroupForTS(t *testing.T) {
 func TestAppendVerdict(t *testing.T) {
 	t.Parallel()
 	verdicts := map[string]string{}
-	up := []collection.Sample{{Name: collection.SignalTCPOpen, Value: 1}}
-	down := []collection.Sample{{Name: collection.SignalTCPOpen, Value: 0}}
+	up := []collection.Sample{{Name: collection.SignalTCPOpen, Text: collection.PortOpen, IsText: true}}
+	down := []collection.Sample{{Name: collection.SignalTCPOpen, Text: collection.PortClosed, IsText: true}}
 
 	// First observation (up): the verdict is appended.
 	got := appendVerdict(up, "if-1", verdicts)

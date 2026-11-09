@@ -18,7 +18,10 @@ import { share, spans } from "./timeline";
 export const STALENESS_WINDOW_MS = 150_000;
 
 export type ReachVerdict = { value: string; ts: string };
-export type ReachLayer = { layer: string; check: string; value: number; detail?: string; ts: string };
+// A layer's value is the probe's state word (#1592): "up"/"down" for a ping,
+// "open"/"closed" for a port, "up"/"down" for a request answered. The probe
+// result lives in the property lane, stored only when it changes.
+export type ReachLayer = { layer: string; check: string; value: string; detail?: string; ts: string };
 export type ReachHistory = { ts: string; value: string };
 export type ReachEndpoint = {
   // The endpoint's uuid, the address its custom methods take (:retry, #1059).
@@ -123,7 +126,7 @@ export function reason(iface: ReachEndpoint, now: number = Date.now()): string {
   if (endpointWord(iface, now) !== "down") return "";
   const ping = iface.layers.find((l) => l.check === "icmp-reachable");
   const port = iface.layers.find((l) => l.check === "tcp-open");
-  if (ping && ping.value >= 1 && port && port.value < 1) {
+  if (ping && layerUp(ping) && port && !layerUp(port)) {
     return "Host answers ping but the control port is refused: service down, box up.";
   }
   if (!port && iface.responsive && requestHeld(iface)) {
@@ -131,19 +134,19 @@ export function reason(iface: ReachEndpoint, now: number = Date.now()): string {
     // retrying cannot fix, and the node sends nothing more under it.
     return `The component refused the endpoint's request in a way retrying cannot fix (${iface.rejection?.class ?? "refused"}): nothing is sent to it until the endpoint changes or someone retries it.`;
   }
-  if (ping && ping.value >= 1 && !port && iface.responsive?.value === "down" && iface.transport === "snmp") {
+  if (ping && layerUp(ping) && !port && iface.responsive?.value === "down" && iface.transport === "snmp") {
     // An snmp endpoint (#821): its rung is a get, and v2c drops a wrong
     // community silently, so the cause cannot be narrowed.
     return "Host answers ping, but the agent does not answer its get: the agent is stopped, the community is wrong (a v2c agent drops a wrong community silently, so the two cannot be told apart), or the datagrams are lost.";
   }
-  if (ping && ping.value >= 1 && !port && iface.responsive?.value === "down") {
+  if (ping && layerUp(ping) && !port && iface.responsive?.value === "down") {
     // A udp endpoint (#1037): no port to open, so the rung is the request.
     return "Host answers ping, but the endpoint's request goes unanswered: an open udp port cannot be detected, so a request answered is the transport rung. The service is down, the port is closed, or the datagrams are lost.";
   }
-  if (ping && ping.value < 1) {
+  if (ping && !layerUp(ping)) {
     return "Host does not answer ping: unreachable on the network.";
   }
-  if (port && port.value < 1) {
+  if (port && !layerUp(port)) {
     return "The control port is refused or timing out.";
   }
   return "";
@@ -158,7 +161,7 @@ export function requestRung(iface: ReachEndpoint): boolean | undefined {
   if (iface.transport === "icmp") return undefined;
   if (iface.layers.some((l) => l.check === "tcp-open")) return undefined;
   const layer = requestLayer(iface);
-  if (layer) return layer.value >= 1;
+  if (layer) return layerUp(layer);
   if (!iface.responsive) return undefined;
   return iface.responsive.value === "up";
 }
@@ -177,9 +180,15 @@ export function requestLayer(iface: ReachEndpoint): ReachLayer | undefined {
   return iface.layers.find((l) => l.layer === "request");
 }
 
-// layerWord renders a probe layer's boolean signal as its per-layer word.
+// layerUp reads a probe layer's state word as reached: a ping that is up, a
+// port that is open, a request that is answered.
+export function layerUp(l: ReachLayer): boolean {
+  return l.value === "up" || l.value === "open";
+}
+
+// layerWord renders a probe layer's state as its per-layer word.
 export function layerWord(l: ReachLayer): string {
-  const up = l.value >= 1;
+  const up = layerUp(l);
   if (l.check === "tcp-open") return up ? "open" : "closed";
   return up ? "up" : "down";
 }

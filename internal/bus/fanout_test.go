@@ -13,7 +13,7 @@ import (
 
 func fanRegistry() collection.Registry {
 	return collection.NewRegistry(
-		[]storage.MetricType{{Name: "participant-count"}, {Name: "tcp-open"}},
+		[]storage.MetricType{{Name: "participant-count"}, {Name: "tcp-connect-time"}},
 		[]storage.PropertyType{{Name: "call-state", DataType: "string"}, {Name: "ucc-room-id", DataType: "string"}},
 		[]storage.EventType{{Name: "call-started"}})
 }
@@ -25,19 +25,19 @@ func room(id string) *ogv1.Identity { return &ogv1.Identity{Key: "ucc-room-id", 
 func TestSplitIdentified(t *testing.T) {
 	ev := &ogv1.TelemetryBatch{
 		Source:     "webhook",
-		Metrics:    []*ogv1.MetricSample{{Name: "participant-count", Value: 3, Identity: room("zr-a")}, {Name: "tcp-open", Value: 1}},
+		Metrics:    []*ogv1.MetricSample{{Name: "participant-count", Value: 3, Identity: room("zr-a")}, {Name: "tcp-connect-time", Value: 1}},
 		Properties: []*ogv1.PropertySample{{Name: "call-state", ValueJson: `"active"`, Identity: room("zr-a")}},
 		Events:     []*ogv1.EventSample{{Name: "call-started", Message: "m", Identity: room("zr-b")}},
 		Logs:       []*ogv1.LogLine{{Message: "raw"}},
 	}
 	own, fanned := splitIdentified(ev)
-	if len(own.GetMetrics()) != 1 || own.GetMetrics()[0].GetName() != "tcp-open" || len(own.GetProperties()) != 0 || len(own.GetEvents()) != 0 || len(own.GetLogs()) != 1 {
+	if len(own.GetMetrics()) != 1 || own.GetMetrics()[0].GetName() != "tcp-connect-time" || len(own.GetProperties()) != 0 || len(own.GetEvents()) != 0 || len(own.GetLogs()) != 1 {
 		t.Fatalf("own = %v, want the unidentified metric and the log line", own)
 	}
 	if fanned == nil || len(fanned.GetMetrics()) != 1 || len(fanned.GetProperties()) != 1 || len(fanned.GetEvents()) != 1 {
 		t.Fatalf("fanned = %v, want every identified sample", fanned)
 	}
-	if o, f := splitIdentified(&ogv1.TelemetryBatch{Metrics: []*ogv1.MetricSample{{Name: "tcp-open"}}}); f != nil || len(o.GetMetrics()) != 1 {
+	if o, f := splitIdentified(&ogv1.TelemetryBatch{Metrics: []*ogv1.MetricSample{{Name: "tcp-connect-time"}}}); f != nil || len(o.GetMetrics()) != 1 {
 		t.Fatal("a batch naming no identity split off a fan-out")
 	}
 }
@@ -54,7 +54,7 @@ func TestPlanFanOut(t *testing.T) {
 	fanned := &ogv1.TelemetryBatch{
 		Metrics: []*ogv1.MetricSample{
 			{Name: "participant-count", Value: 3, Instance: "forged", Identity: room("zr-a")},
-			{Name: "tcp-open", Value: 1, Identity: room("zr-a")}, // a node-probe key: refused
+			{Name: "tcp-connect-time", Value: 1, Identity: room("zr-a")}, // a node-probe key: refused
 			{Name: "participant-count", Value: 2, Identity: room("zr-x"), Ts: timestamppb.New(t0)},
 			{Name: "bad\x00name", Value: 2, Identity: room("zr-x")}, // no catalog key: counted, never named
 		},

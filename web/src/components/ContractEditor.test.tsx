@@ -221,12 +221,12 @@ describe("ContractEditor on a location type", () => {
 // are shared with the property lane.
 const metricContract: ClassifierMetric[] = [
   { metric_type_name: "icmp-rtt-avg", metric_type_id: "icmp-rtt-avg-id", default_value: 10.5, required: true },
-  { metric_type_name: "tcp-open", metric_type_id: "tcp-open-id", required: false },
+  { metric_type_name: "ssh-handshake-time", metric_type_id: "ssh-handshake-time-id", required: false },
 ];
 
 const metricCatalog: MetricRow[] = [
   { name: "icmp-rtt-avg", data_type: "float", label: "ICMP RTT (avg)", official: true },
-  { name: "tcp-open", data_type: "int", label: "TCP Port Open", official: true },
+  { name: "ssh-handshake-time", data_type: "float", label: "SSH Handshake Time", official: true },
   { name: "tcp-connect-time", data_type: "float", label: "TCP Connect Time", official: true },
 ];
 

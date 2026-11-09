@@ -365,7 +365,7 @@ func TestTelnetProbeDefersToAnUpSession(t *testing.T) {
 	for _, d := range dps {
 		got[d.Name] = d
 	}
-	if got["tcp-open"].Value != 1 || got["endpoint-responsive"].Text != "up" {
+	if got["tcp-open"].Text != collection.PortOpen || got["endpoint-responsive"].Text != "up" {
 		t.Fatalf("samples from the session = %+v", got)
 	}
 }

@@ -19,7 +19,7 @@ func (f fakeICMP) Ping(context.Context, string, int, time.Duration) (collection.
 	return f.res, f.err
 }
 
-// TestCollectICMPReachable: an echoing target yields icmp-reachable=1 plus a
+// TestCollectICMPReachable: an echoing target yields icmp-reachable=up plus a
 // present icmp-rtt-avg, and the reachable sample carries a responded reason.
 func TestCollectICMPReachable(t *testing.T) {
 	r := &collection.Runner{Ping: fakeICMP{res: collection.PingResult{
@@ -31,8 +31,8 @@ func TestCollectICMPReachable(t *testing.T) {
 	}
 	got := index(dps)
 	reach, ok := got[collection.SignalICMPReachable]
-	if !ok || reach.Value != 1 {
-		t.Fatalf("icmp-reachable: want present val=1, got %+v (present=%v)", reach, ok)
+	if !ok || !reach.IsText || reach.Text != collection.PingUp {
+		t.Fatalf("icmp-reachable: want present text up, got %+v (present=%v)", reach, ok)
 	}
 	if reach.Labels[collection.ReasonLabel] != string(collection.Responded) {
 		t.Fatalf("icmp-reachable reason: want responded, got %q", reach.Labels[collection.ReasonLabel])
@@ -43,7 +43,7 @@ func TestCollectICMPReachable(t *testing.T) {
 	}
 }
 
-// TestCollectICMPUnreachable: a target that did not echo yields icmp-reachable=0
+// TestCollectICMPUnreachable: a target that did not echo yields icmp-reachable=down
 // with a down reason, and icmp-rtt-avg is ABSENT. A non-answer is DATA, not error.
 func TestCollectICMPUnreachable(t *testing.T) {
 	r := &collection.Runner{Ping: fakeICMP{res: collection.PingResult{Received: 0, Reason: collection.Timedout}}}
@@ -53,8 +53,8 @@ func TestCollectICMPUnreachable(t *testing.T) {
 	}
 	got := index(dps)
 	reach, ok := got[collection.SignalICMPReachable]
-	if !ok || reach.Value != 0 {
-		t.Fatalf("icmp-reachable: want present val=0, got %+v (present=%v)", reach, ok)
+	if !ok || !reach.IsText || reach.Text != collection.PingDown {
+		t.Fatalf("icmp-reachable: want present text down, got %+v (present=%v)", reach, ok)
 	}
 	if reach.Labels[collection.ReasonLabel] != string(collection.Timedout) {
 		t.Fatalf("icmp-reachable reason: want timeout, got %q", reach.Labels[collection.ReasonLabel])

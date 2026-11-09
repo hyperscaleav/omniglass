@@ -197,7 +197,7 @@ func TestRequestRungIsTheTransportProven(t *testing.T) {
 	for _, d := range dps {
 		got[d.Name] = d
 	}
-	if len(line.sent) != 1 || line.sent[0] != "PING" || got["endpoint-responsive"].Text != "up" || got["tcp-open"].Value != 1 {
+	if len(line.sent) != 1 || line.sent[0] != "PING" || got["endpoint-responsive"].Text != "up" || got["tcp-open"].Text != collection.PortOpen {
 		t.Fatalf("sent %v, samples %+v: want the named request answered as the transport rung", line.sent, got)
 	}
 	// An answer that is not the declared reply does not prove it.

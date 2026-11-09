@@ -133,8 +133,8 @@ func TestNodeRunSimulateCollectsItsOwnFleet(t *testing.T) {
 		v, ok := read()
 		return ok && len(v.Devices) == 1 && v.Devices[0].HitsByProtocol["tcp"] > 0
 	})
-	waitForWithin(t, 30*time.Second, "the node's tcp-open sample to read up", func() bool {
-		req, _ := http.NewRequest(http.MethodGet, server+"/api/v1/components/sim-own/metrics/tcp-open/samples?limit=1", nil)
+	waitForWithin(t, 30*time.Second, "the node's tcp-open result to read open", func() bool {
+		req, _ := http.NewRequest(http.MethodGet, server+"/api/v1/components/sim-own/properties/tcp-open/samples?limit=1", nil)
 		req.Header.Set("Authorization", "Bearer "+ownerTok)
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
@@ -144,11 +144,11 @@ func TestNodeRunSimulateCollectsItsOwnFleet(t *testing.T) {
 		b, _ := io.ReadAll(resp.Body)
 		var out struct {
 			Samples []struct {
-				Value float64 `json:"value"`
+				Value string `json:"value"`
 			} `json:"samples"`
 		}
 		return resp.StatusCode == http.StatusOK && json.Unmarshal(b, &out) == nil &&
-			len(out.Samples) > 0 && out.Samples[len(out.Samples)-1].Value == 1
+			len(out.Samples) > 0 && out.Samples[len(out.Samples)-1].Value == "open"
 	})
 
 	// Stopping the process stops both halves: it exits cleanly, and the

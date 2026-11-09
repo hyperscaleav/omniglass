@@ -40,8 +40,8 @@ func TestCollectHTTPResponded(t *testing.T) {
 		Dialed: true, Responded: true, Status: 500, DialMS: 3.5, ResponseMS: 12.5,
 		Reason: collection.Responded,
 	})
-	if dps["tcp-open"].Value != 1.0 {
-		t.Errorf("tcp-open = %v, want 1 (the dial succeeded)", dps["tcp-open"].Value)
+	if dps["tcp-open"].Text != collection.PortOpen || !dps["tcp-open"].IsText {
+		t.Errorf("tcp-open = %+v, want open (the dial succeeded)", dps["tcp-open"])
 	}
 	if dps["tcp-connect-time"].Value != 3.5 {
 		t.Errorf("tcp-connect-time = %v, want the dial ms", dps["tcp-connect-time"].Value)
@@ -60,8 +60,8 @@ func TestCollectHTTPReachedButNotResponsive(t *testing.T) {
 	dps := httpSamplesByName(t, collection.HTTPResult{
 		Dialed: true, Responded: false, DialMS: 2.0, Reason: collection.Timedout,
 	})
-	if dps["tcp-open"].Value != 1.0 {
-		t.Errorf("tcp-open = %v, want 1: the port accepted", dps["tcp-open"].Value)
+	if dps["tcp-open"].Text != collection.PortOpen {
+		t.Errorf("tcp-open = %+v, want open: the port accepted", dps["tcp-open"])
 	}
 	if _, ok := dps["http-response-time"]; ok {
 		t.Error("http-response-time emitted with no response; absence is the fact")
@@ -79,8 +79,8 @@ func TestCollectHTTPPortClosed(t *testing.T) {
 	dps := httpSamplesByName(t, collection.HTTPResult{
 		Dialed: false, Reason: collection.Refused,
 	})
-	if dps["tcp-open"].Value != 0.0 {
-		t.Errorf("tcp-open = %v, want 0", dps["tcp-open"].Value)
+	if dps["tcp-open"].Text != collection.PortClosed {
+		t.Errorf("tcp-open = %+v, want closed", dps["tcp-open"])
 	}
 	if _, ok := dps["tcp-connect-time"]; ok {
 		t.Error("tcp-connect-time emitted on a refused dial")

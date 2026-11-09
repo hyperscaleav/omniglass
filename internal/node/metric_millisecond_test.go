@@ -44,7 +44,7 @@ func TestSpoolShipsMetricTimestampsOnTheMillisecond(t *testing.T) {
 	at := time.Date(2026, 11, 5, 12, 0, 0, 123456789, time.UTC)
 	groupTS := at.Add(time.Second)
 	dps := []collection.Sample{
-		{Name: "tcp-open", Value: 1, TS: at},
+		{Name: "icmp-rtt-avg", Value: 1, TS: at},
 		{Name: "tcp-connect-time", Value: 4},
 		{Name: "power-state", Text: "on", IsText: true, TS: at},
 	}
@@ -66,7 +66,7 @@ func TestSpoolShipsMetricTimestampsOnTheMillisecond(t *testing.T) {
 	}
 	got := pub.sent[0].GetGroups()[0]
 	wantMS := map[string]time.Time{
-		"tcp-open":         at.Truncate(time.Millisecond),
+		"icmp-rtt-avg":     at.Truncate(time.Millisecond),
 		"tcp-connect-time": groupTS.Truncate(time.Millisecond),
 	}
 	for _, m := range got.GetMetrics() {

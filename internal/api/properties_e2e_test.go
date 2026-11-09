@@ -74,8 +74,11 @@ func TestPropertyAPI(t *testing.T) {
 	if !names["rack-unit"] || !names["serial-number"] || !names["endpoint-reachable"] {
 		t.Fatalf("list missing properties: %v", names)
 	}
-	if names["icmp-reachable"] {
-		t.Fatalf("icmp-reachable listed on the property lane; numbers are metric types")
+	if !names["icmp-reachable"] || !names["tcp-open"] {
+		t.Fatalf("probe results missing from the property lane (#1592): %v", names)
+	}
+	if names["icmp-rtt-avg"] {
+		t.Fatalf("icmp-rtt-avg listed on the property lane; numbers are metric types")
 	}
 
 	// Update a mutable field.

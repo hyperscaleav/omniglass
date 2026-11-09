@@ -58,11 +58,12 @@ type Signal struct {
 // 2026-10-27 measurement of the dev scenario at the product's 30 s cadence:
 // about 1,000 metric rows a minute from 130 simulated endpoints (about four
 // metric rows per endpoint per check), roughly half the metric series constant
-// over a window, the probe results the largest writers, and the property lane
-// sparse because it stores transitions only.
+// over a window, and the property lane sparse because it stores transitions
+// only. The probe states (icmp-reachable, tcp-open) moved to that lane in
+// #1592, so a steady fleet writes them once; the timings stay metric rows.
 var StandardMix = []Signal{
-	{Key: "icmp-reachable", Lane: MetricLane, Shape: Constant, Base: 1},
-	{Key: "tcp-open", Lane: MetricLane, Shape: Constant, Base: 1},
+	{Key: "icmp-reachable", Lane: PropertyLane, Shape: Constant, Text: "up"},
+	{Key: "tcp-open", Lane: PropertyLane, Shape: Constant, Text: "open"},
 	{Key: "tcp-connect-time", Lane: MetricLane, Shape: Noisy, Base: 1.5, Spread: 1},
 	{Key: "uptime", Lane: MetricLane, Shape: Counter, Base: 86400},
 	{Key: "endpoint-reachable", Lane: PropertyLane, Shape: Constant, Text: "up"},

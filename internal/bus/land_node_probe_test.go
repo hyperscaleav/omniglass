@@ -86,11 +86,11 @@ func TestNodeLaneConfinesNodeProbeKeysToItsEndpoint(t *testing.T) {
 
 	// A foreign instance on every lane a node-probe key rides: refused.
 	land(&ogv1.TelemetryBatch{
-		Metrics:    []*ogv1.MetricSample{{Name: "tcp-open", Instance: "panel", Value: 1}},
+		Metrics:    []*ogv1.MetricSample{{Name: "tcp-connect-time", Instance: "panel", Value: 1}},
 		Properties: []*ogv1.PropertySample{{Name: "endpoint-reachable", Instance: "panel", ValueJson: `"up"`}, {Name: "session-state", Instance: "nowhere", ValueJson: `"up"`}},
 	})
-	if n := rows("metric", "tcp-open", "panel"); n != 0 {
-		t.Errorf("node-a wrote tcp-open under node-b's endpoint panel (%d rows)", n)
+	if n := rows("metric", "tcp-connect-time", "panel"); n != 0 {
+		t.Errorf("node-a wrote tcp-connect-time under node-b's endpoint panel (%d rows)", n)
 	}
 	if n := rows("property", "endpoint-reachable", "panel"); n != 0 {
 		t.Errorf("node-a wrote endpoint-reachable under node-b's endpoint panel (%d rows)", n)
@@ -101,11 +101,11 @@ func TestNodeLaneConfinesNodeProbeKeysToItsEndpoint(t *testing.T) {
 
 	// Its own endpoint, named or left empty: lands under ssh.
 	land(&ogv1.TelemetryBatch{
-		Metrics:    []*ogv1.MetricSample{{Name: "tcp-open", Instance: "ssh", Value: 1}},
+		Metrics:    []*ogv1.MetricSample{{Name: "tcp-connect-time", Instance: "ssh", Value: 1}},
 		Properties: []*ogv1.PropertySample{{Name: "endpoint-reachable", ValueJson: `"up"`}},
 	})
-	if n := rows("metric", "tcp-open", "ssh"); n != 1 {
-		t.Errorf("tcp-open under its own endpoint: %d rows, want 1", n)
+	if n := rows("metric", "tcp-connect-time", "ssh"); n != 1 {
+		t.Errorf("tcp-connect-time under its own endpoint: %d rows, want 1", n)
 	}
 	if n := rows("property", "endpoint-reachable", "ssh"); n != 1 {
 		t.Errorf("endpoint-reachable with no instance: %d rows under ssh, want 1", n)

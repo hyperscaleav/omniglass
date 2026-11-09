@@ -14,15 +14,15 @@ import (
 func TestRegistryLaneMembership(t *testing.T) {
 	reg := collection.NewRegistry(
 		[]storage.MetricType{
-			{Name: "tcp-open"},
-			{Name: "icmp-reachable"},
+			{Name: "tcp-connect-time"},
+			{Name: "icmp-rtt-avg"},
 		},
 		[]storage.PropertyType{{Name: "video-input", DataType: "string", Validation: []byte(`{"enum":["hdmi1","hdmi2"]}`)}},
 		[]storage.EventType{{Name: "call-started", PayloadSchema: []byte(`{"type":"object"}`)}},
 	)
 
-	if _, ok := reg.Metric("tcp-open"); !ok {
-		t.Error("tcp-open: want metric-lane membership")
+	if _, ok := reg.Metric("tcp-connect-time"); !ok {
+		t.Error("tcp-connect-time: want metric-lane membership")
 	}
 	pt, ok := reg.Property("video-input")
 	if !ok || pt.DataType != "string" || len(pt.Validation) == 0 {
@@ -38,11 +38,11 @@ func TestRegistryLaneMembership(t *testing.T) {
 	if _, ok := reg.Metric("video-input"); ok {
 		t.Error("video-input resolved on the metric lane; membership is per catalog")
 	}
-	if _, ok := reg.Property("tcp-open"); ok {
-		t.Error("tcp-open resolved on the property lane; membership is per catalog")
+	if _, ok := reg.Property("tcp-connect-time"); ok {
+		t.Error("tcp-connect-time resolved on the property lane; membership is per catalog")
 	}
-	if _, ok := reg.Event("tcp-open"); ok {
-		t.Error("tcp-open resolved on the event lane; membership is per catalog")
+	if _, ok := reg.Event("tcp-connect-time"); ok {
+		t.Error("tcp-connect-time resolved on the event lane; membership is per catalog")
 	}
 
 	// Unregistered everywhere: refused everywhere.
@@ -205,17 +205,17 @@ func TestOnlyAnUnambiguousOperatorRowShadows(t *testing.T) {
 // later release reserves cannot take the official probe key's place.
 func TestAReservedKeyIsNeverShadowed(t *testing.T) {
 	reg := collection.NewRegistry(
-		[]storage.MetricType{{Name: "icmp-reachable", Official: true}},
-		[]storage.PropertyType{{Name: "icmp-reachable"}},
+		[]storage.MetricType{{Name: "icmp-rtt-avg", Official: true}},
+		[]storage.PropertyType{{Name: "icmp-rtt-avg"}},
 		nil,
 	)
-	if got := reg.Collisions(); len(got) != 1 || got[0] != "icmp-reachable" {
-		t.Errorf("Collisions() = %v, want [icmp-reachable]", got)
+	if got := reg.Collisions(); len(got) != 1 || got[0] != "icmp-rtt-avg" {
+		t.Errorf("Collisions() = %v, want [icmp-rtt-avg]", got)
 	}
 	if got := reg.Shadowed(); len(got) != 0 {
 		t.Errorf("Shadowed() = %v, want none", got)
 	}
-	if _, ok := reg.Property("icmp-reachable"); ok {
+	if _, ok := reg.Property("icmp-rtt-avg"); ok {
 		t.Error("an operator row took a reserved key")
 	}
 }

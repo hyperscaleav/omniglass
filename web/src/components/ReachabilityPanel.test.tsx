@@ -21,8 +21,8 @@ const seed: Reachability = {
       node: "node-a",
       verdict: { value: "up", ts: nowIso },
       layers: [
-        { layer: "ping", check: "icmp-reachable", value: 1, detail: "12.0 ms", ts: nowIso },
-        { layer: "port", check: "tcp-open", value: 1, detail: "3.1 ms", ts: nowIso },
+        { layer: "ping", check: "icmp-reachable", value: "up", detail: "12.0 ms", ts: nowIso },
+        { layer: "port", check: "tcp-open", value: "open", detail: "3.1 ms", ts: nowIso },
       ],
       history: [{ ts: ago(120_000), value: "up" }],
     },
@@ -33,8 +33,8 @@ const seed: Reachability = {
       node: "node-a",
       verdict: { value: "down", ts: nowIso },
       layers: [
-        { layer: "ping", check: "icmp-reachable", value: 1, ts: nowIso },
-        { layer: "port", check: "tcp-open", value: 0, ts: nowIso },
+        { layer: "ping", check: "icmp-reachable", value: "up", ts: nowIso },
+        { layer: "port", check: "tcp-open", value: "closed", ts: nowIso },
       ],
       history: [
         { ts: ago(120_000), value: "up" },
@@ -65,7 +65,7 @@ describe("ReachabilityPanel", () => {
         endpoint: "disp-2-tcp", transport: "tcp", node: "node-a",
         verdict: { value: "up", ts: old },
         last_seen: ago(5_000),
-        layers: [{ layer: "port", check: "tcp-open", value: 1, ts: ago(5_000) }],
+        layers: [{ layer: "port", check: "tcp-open", value: "open", ts: ago(5_000) }],
         history: [{ ts: old, value: "up" }],
       }],
     });
@@ -297,7 +297,7 @@ describe("a probe's gate on the row, no session held", () => {
     ...(gated
       ? { authenticated: { value: "no", ts: nowIso }, rejection: { rung: "authenticated" as const, class: "auth", ts: nowIso, reason: "auth: the agent answered authorizationError for the community" } }
       : {}),
-    layers: [{ layer: "ping", check: "icmp-reachable", value: 1, ts: nowIso }],
+    layers: [{ layer: "ping", check: "icmp-reachable", value: "up", ts: nowIso }],
     history: [],
   });
 
@@ -330,7 +330,7 @@ describe("a tls endpoint", () => {
     last_seen: nowIso,
     verdict: { value: "up", ts: nowIso },
     responsive: { value: "up", ts: nowIso },
-    layers: [{ layer: "port", check: "tcp-open", value: 1, detail: "0.4 ms", ts: nowIso }],
+    layers: [{ layer: "port", check: "tcp-open", value: "open", detail: "0.4 ms", ts: nowIso }],
     history: [{ ts: ago(120_000), value: "up" }],
     tls: { mode, key: mode === "pin" ? key : undefined, handshake_ms: 12.5, expires: "2026-11-03T12:00:00Z", days_left: daysLeft },
   });
@@ -409,9 +409,9 @@ describe("a udp endpoint", () => {
     verdict: { value: answered ? "up" : "down", ts: nowIso },
     responsive: { value: answered ? "up" : "down", ts: nowIso },
     layers: [
-      { layer: "ping", check: "icmp-reachable", value: 1, ts: nowIso },
+      { layer: "ping", check: "icmp-reachable", value: "up", ts: nowIso },
       // The read serves the request rung as a layer, timed while answered.
-      { layer: "request", check: "endpoint-responsive", value: answered ? 1 : 0, detail: answered ? "0.7 ms" : undefined, ts: nowIso },
+      { layer: "request", check: "endpoint-responsive", value: answered ? "up" : "down", detail: answered ? "0.7 ms" : undefined, ts: nowIso },
     ],
     history: [{ ts: ago(120_000), value: answered ? "up" : "down" }],
   });

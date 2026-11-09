@@ -173,7 +173,7 @@ func TestNodePublishMissingItsAckIsRetriedOnce(t *testing.T) {
 	}
 	// The task's sample rides a tick batch (#1582): its group added, then
 	// flushed, the batch's id and bytes minted once at the flush.
-	if err := spool.add(groupFor("t-1", []collection.Sample{{Name: "tcp-open", Value: 1, TS: time.Now().UTC()}})); err != nil {
+	if err := spool.add(groupFor("t-1", []collection.Sample{{Name: "tcp-connect-time", Value: 1, TS: time.Now().UTC()}})); err != nil {
 		t.Fatalf("add the sample group: %v", err)
 	}
 	spool.flush()
@@ -193,7 +193,7 @@ func TestNodePublishMissingItsAckIsRetriedOnce(t *testing.T) {
 	count := func() (logs, metrics int) {
 		if err := conn.QueryRow(ctx, `select
 			(select count(*) from node_log where message = 'ack lost twice'),
-			(select count(*) from `+storagetest.MetricRows+` metric where metric_type_id = (select id from metric_type where name = 'tcp-open'))`).Scan(&logs, &metrics); err != nil {
+			(select count(*) from `+storagetest.MetricRows+` metric where metric_type_id = (select id from metric_type where name = 'tcp-connect-time'))`).Scan(&logs, &metrics); err != nil {
 			t.Fatalf("count rows: %v", err)
 		}
 		return

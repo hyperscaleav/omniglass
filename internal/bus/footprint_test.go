@@ -66,7 +66,10 @@ const (
 	// (18). Until #1582 a batch was one task's check; since, it is one node
 	// tick, a group for every task the node checked (215 here), resolved in
 	// one read, landed in one transaction and stamped seen in one write, so
-	// 19 statements carry what 215 batches of 18 did.
+	// 19 statements carry what 215 batches of 18 did. #1592 moved the probe
+	// states (icmp-reachable, tcp-open) from the metric lane to the property
+	// lane, which the tick batch locks and lands set-based too, so the three
+	// properties a task now emits move nothing here.
 	wantStatementsPerBatch = 19
 	// wantMetricRowsPerPage is how many of the window's metric rows fill one
 	// 8 KiB heap page (about 60 bytes a row). Exact on every full page. Density

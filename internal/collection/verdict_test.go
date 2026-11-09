@@ -14,12 +14,13 @@ func TestInterfaceVerdict(t *testing.T) {
 		wantUp bool
 		wantOk bool
 	}{
-		{"single tcp open", []Sample{{Name: SignalTCPOpen, Value: 1}, {Name: SignalTCPConnectTime, Value: 3}}, true, true},
-		{"single tcp closed", []Sample{{Name: SignalTCPOpen, Value: 0}}, false, true},
-		{"single icmp up", []Sample{{Name: SignalICMPReachable, Value: 1}, {Name: SignalICMPRTTAvg, Value: 2}}, true, true},
-		{"single icmp down", []Sample{{Name: SignalICMPReachable, Value: 0}}, false, true},
-		{"and of two up", []Sample{{Name: SignalTCPOpen, Value: 1}, {Name: SignalICMPReachable, Value: 1}}, true, true},
-		{"and one down", []Sample{{Name: SignalTCPOpen, Value: 1}, {Name: SignalICMPReachable, Value: 0}}, false, true},
+		{"single tcp open", []Sample{{Name: SignalTCPOpen, Text: PortOpen, IsText: true}, {Name: SignalTCPConnectTime, Value: 3}}, true, true},
+		{"single tcp closed", []Sample{{Name: SignalTCPOpen, Text: PortClosed, IsText: true}}, false, true},
+		{"single icmp up", []Sample{{Name: SignalICMPReachable, Text: PingUp, IsText: true}, {Name: SignalICMPRTTAvg, Value: 2}}, true, true},
+		{"single icmp down", []Sample{{Name: SignalICMPReachable, Text: PingDown, IsText: true}}, false, true},
+		{"and of two up", []Sample{{Name: SignalTCPOpen, Text: PortOpen, IsText: true}, {Name: SignalICMPReachable, Text: PingUp, IsText: true}}, true, true},
+		{"and one down", []Sample{{Name: SignalTCPOpen, Text: PortOpen, IsText: true}, {Name: SignalICMPReachable, Text: PingDown, IsText: true}}, false, true},
+		{"a numeric 1 under a result key is not reached", []Sample{{Name: SignalTCPOpen, Value: 1}}, false, true},
 		{"no reachability metric", []Sample{{Name: SignalTCPConnectTime, Value: 3}}, false, false},
 		{"empty", nil, false, false},
 	}
@@ -48,7 +49,7 @@ func TestTheResponsiveRungIsTheVerdictWhereNoPortCanBeOpened(t *testing.T) {
 	}{
 		{"answered", []Sample{up, {Name: SignalUDPResponseTime, Value: 2}}, true, true},
 		{"unanswered", []Sample{down}, false, true},
-		{"beside an open port it decides nothing", []Sample{{Name: SignalTCPOpen, Value: 1}, down}, true, true},
+		{"beside an open port it decides nothing", []Sample{{Name: SignalTCPOpen, Text: PortOpen, IsText: true}, down}, true, true},
 	} {
 		gotUp, gotOk := EndpointVerdict(tc.dps)
 		if gotUp != tc.wantUp || gotOk != tc.wantOk {

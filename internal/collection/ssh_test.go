@@ -77,8 +77,8 @@ func TestCollectSSHReachedButNotResponsive(t *testing.T) {
 	dps := sshSamplesByName(t, collection.SSHResult{
 		Dialed: true, Responded: false, DialMS: 1.0, Reason: collection.Timedout,
 	})
-	if dps["tcp-open"].Value != 1.0 {
-		t.Errorf("tcp-open = %v, want 1: the port accepted", dps["tcp-open"].Value)
+	if dps["tcp-open"].Text != collection.PortOpen {
+		t.Errorf("tcp-open = %+v, want open: the port accepted", dps["tcp-open"])
 	}
 	if dps["endpoint-responsive"].Text != "down" {
 		t.Errorf("endpoint-responsive = %+v, want down", dps["endpoint-responsive"])

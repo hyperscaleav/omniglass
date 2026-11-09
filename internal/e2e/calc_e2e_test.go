@@ -27,7 +27,7 @@ const calcE2EPortShift = 26000
 
 // TestCalcRuleEndToEnd drives a calc rule as an operator would (#996): the
 // real server, a simulated device, and a node collecting its tcp probe. A
-// calc rule authored through the CLI folds the probe's tcp-open over its
+// calc rule authored through the CLI folds the probe's tcp-connect-time over its
 // instances into a metric of its own, the server's calc tick writes it as a
 // calculated sample naming the rule, and an event rule on that output key
 // raises an alarm on the component.
@@ -101,11 +101,11 @@ func TestCalcRuleEndToEnd(t *testing.T) {
 	}
 	// The operator authors the output key, the calc rule over the probe,
 	// and an event rule on the output.
-	must("metric-type", "create", "--name", "port-open-peak", "--data-type", "float")
-	must("calc-rule", "create", "--name", "port-open", "--owner-kind", "component",
-		"--inputs", `[{"alias":"open","key":"tcp-open"}]`, "--reduce", `{"expr":"max(open)"}`, "--output-key", "port-open-peak")
-	must("event-rule", "create", "--name", "port-up", "--sample-key", "port-open-peak",
-		"--fire-criteria", `{"expr":"value >= 1.0"}`, "--severity", "high", "--fire-event-type", "condition-started")
+	must("metric-type", "create", "--name", "tcp-dial-peak", "--data-type", "float")
+	must("calc-rule", "create", "--name", "tcp-dial", "--owner-kind", "component",
+		"--inputs", `[{"alias":"dial","key":"tcp-connect-time"}]`, "--reduce", `{"expr":"max(dial)"}`, "--output-key", "tcp-dial-peak")
+	must("event-rule", "create", "--name", "port-up", "--sample-key", "tcp-dial-peak",
+		"--fire-criteria", `{"expr":"value > 0.0"}`, "--severity", "high", "--fire-event-type", "condition-started")
 
 	simCtx, stopSim := context.WithCancel(ctx)
 	defer stopSim()
@@ -130,12 +130,12 @@ func TestCalcRuleEndToEnd(t *testing.T) {
 	waitForWithin(t, 60*time.Second, "the node's tcp probe to reach the simulated device", func() bool {
 		_, _ = cli("node", "run", "--server", server, "--name", "edge-c", "--token", nodeTok, "--once")
 		return scalarInt(`select count(*) from `+storagetest.MetricRows+` m join metric_type t on t.id = m.metric_type_id
-			where t.name = 'tcp-open' and m.value = 1 and m.component_id = (select id from component where name = 'calc-dev')`) > 0
+			where t.name = 'tcp-connect-time' and m.value > 0 and m.component_id = (select id from component where name = 'calc-dev')`) > 0
 	})
-	waitFor(t, "the calc tick to write port-open-peak as a calculated sample", func() bool {
+	waitFor(t, "the calc tick to write tcp-dial-peak as a calculated sample", func() bool {
 		return scalarInt(`select count(*) from `+storagetest.MetricRows+` m join metric_type t on t.id = m.metric_type_id
-			where t.name = 'port-open-peak' and m.provenance = 'calculated' and m.source_rule = 'port-open'
-			and m.source_rule_version = 1 and m.value = 1 and m.instance = ''`) > 0
+			where t.name = 'tcp-dial-peak' and m.provenance = 'calculated' and m.source_rule = 'tcp-dial'
+			and m.source_rule_version = 1 and m.value > 0 and m.instance = ''`) > 0
 	})
 	waitFor(t, "the event rule on the calc output to raise its alarm", func() bool {
 		return scalarInt(`select count(*) from alarm a join event_rule e on e.id = a.raised_by_rule_id

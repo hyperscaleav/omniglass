@@ -365,7 +365,7 @@ func collectProbe(ctx context.Context, runner *collection.Runner, task collectio
 	if transport.ProbeYieldsToSession(task.Transport) && sessions.isUp(task.EndpointID) {
 		now := time.Now().UTC()
 		return []collection.Sample{
-			{Name: collection.SignalTCPOpen, Value: 1, TS: now, Labels: map[string]string{collection.ReasonLabel: string(collection.Responded)}},
+			collection.ProbeResult(collection.SignalTCPOpen, true, now, collection.Responded),
 			{Name: collection.SignalEndpointResponsive, Text: "up", IsText: true, TS: now,
 				Labels: map[string]string{collection.ReasonLabel: "the held session is up"}},
 		}, nil
@@ -531,16 +531,15 @@ func collectRequestRung(ctx context.Context, runner *collection.Runner, task col
 	} else if !answered {
 		reason = collection.Timedout
 	}
-	open := 0.0
-	if xerr == nil || reason == collection.Timedout {
-		open = 1.0 // the port took the request; whether it answered is the next fact
-	}
+	// The port took the request when the send went through; whether it
+	// answered is the next fact.
+	open := xerr == nil || reason == collection.Timedout
 	verdict := "down"
 	if answered {
 		verdict = "up"
 	}
 	return []collection.Sample{
-		{Name: collection.SignalTCPOpen, Value: open, TS: now, Labels: map[string]string{collection.ReasonLabel: string(reason)}},
+		collection.ProbeResult(collection.SignalTCPOpen, open, now, reason),
 		{Name: collection.SignalEndpointResponsive, Text: verdict, IsText: true, TS: now, Labels: map[string]string{collection.ReasonLabel: string(reason)}},
 	}, nil
 }

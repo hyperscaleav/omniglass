@@ -11,13 +11,17 @@ import SchemaTable from '../../../components/SchemaTable.astro';
 import WriterClasses from '../../../components/WriterClasses.astro';
 
 :::note[Partial]
-Built: both sample lanes end to end. The **metric** path (reachability): the tcp probe produces
-`tcp-open` / `tcp-connect-time`, the icmp (ping) probe `icmp-reachable` / `icmp-rtt-avg`; the ingest
-consumer writes them to `metric` with `provenance=observed`, owner bound server-side from the task's
+Built: both sample lanes end to end, fed by reachability. The **metric** path: the tcp probe's
+`tcp-connect-time` and the icmp (ping) probe's `icmp-rtt-avg` are timings, so the ingest consumer
+writes them to `metric` with `provenance=observed`, owner bound server-side from the task's
 endpoint (`owner_kind=component`), reject-not-project against the `metric_type` catalog. The
-**property** path: the node computes the per-endpoint verdict `endpoint-reachable` (the AND of its
-probe results); the consumer lands it in `property` under the same owner-confinement,
-**transition-only** (one row per flip, guarded at the node and at ingest). Raw lines land on the
+**property** path: each probe's state is a word (`tcp-open` is `open` or `closed`,
+`icmp-reachable` is `up` or `down`) and the node computes the per-endpoint verdict
+`endpoint-reachable` (the AND of its probe results); the consumer lands all three in `property`
+under the same owner-confinement, **transition-only** (one row per flip, the guard inside the
+ingest's insert; a steady fleet writes a probe's state once,
+[ADR-1592](/architecture/decisions/#adr-1592-a-probes-state-is-a-transition-only-property-not-a-metric-row)).
+Raw lines land on the
 `log_line` / `node_log` lanes, never here
 ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)).
 **Two ingest lanes**, one write path: the node lane (a node publishes on its own subject; the
@@ -64,7 +68,7 @@ on [messaging](/architecture/messaging/#two-lanes-one-bus); this page owns what 
 The telemetry model is **five lanes** with five names and no overlap: a **metric**, a **property**, an [**event**](/architecture/events/), a [**command**](/architecture/commands/), and a [**log line**](/architecture/events/). This page owns the two **sample** lanes:
 
 - A **metric is a quantity**: a numeric reading of a registered `metric_type`, a float8 row in `metric`. Quantities **aggregate**: `AVG(volume)`, a p95 latency, a rate over time are all meaningful. The firehose.
-- A **property is a value**: what something *is* right now, a jsonb row in `property` typed by a registered `property_type`. A value can be a **number used as a name** (input 3, zone 4): averaging inputs is meaningless. Values do not aggregate, they **have duration**: "how long was the input 3?" is the question the lane answers, so it is written transition-only and the series is its own edge history.
+- A **property is a value**: what something *is* right now, a jsonb row in `property` typed by a registered `property_type`. A value can be a **number used as a name** (input 3, zone 4): averaging inputs is meaningless. A probe's **state** is a value too (`icmp-reachable` is `up` or `down`, `tcp-open` is `open` or `closed`): nothing is averaged over it and the operator's question is when it flipped, so it is written transition-only while the probe's timing beside it stays a metric ([ADR-1592](/architecture/decisions/#adr-1592-a-probes-state-is-a-transition-only-property-not-a-metric-row)). Values do not aggregate, they **have duration**: "how long was the input 3?" is the question the lane answers, so it is written transition-only and the series is its own edge history.
 
 A **sample** is one timestamped reading in either lane, `(owner, type, instance, ts, value, provenance, source, lineage)`. A **series** is one stream of them, `(type, owner, instance, provenance)`. The **current value** is the latest row of a series, derived by reading it, never stored beside it ([below](#current-value-is-the-latest-series-row)).
 

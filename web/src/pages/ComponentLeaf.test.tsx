@@ -66,8 +66,8 @@ const reach: Reachability = {
   endpoints: [
     // A stale sample: last verdict long ago, but the node below is alive.
     { endpoint: "ssh", transport: "ssh", node: "edge-1", verdict: { value: "up", ts: iso(600) }, layers: [
-      { layer: "ping", check: "icmp-reachable", value: 1, ts: iso(600) },
-      { layer: "port", check: "tcp-open", value: 1, ts: iso(600) },
+      { layer: "ping", check: "icmp-reachable", value: "up", ts: iso(600) },
+      { layer: "port", check: "tcp-open", value: "open", ts: iso(600) },
     ], history: [] },
   ],
 } as unknown as Reachability;
@@ -287,7 +287,7 @@ describe("the leaf's dispatch facts (#786)", () => {
       instance: "tcp", instance_count: 2,
       instances: [{ instance: "tcp", value: connect, ts: iso(30), endpoint: true }, { instance: "http", value: 2.2, ts: iso(45), endpoint: true }],
     },
-    { metric_type_name: "tcp-open", label: "TCP Open", data_type: "float", value: 1, is_sampled: true, from_contract: false, required: false, instance: "tcp", instance_count: 1 },
+    { metric_type_name: "icmp-rtt-avg", label: "ICMP RTT (avg)", data_type: "float", value: 1, is_sampled: true, from_contract: false, required: false, instance: "icmp", instance_count: 1 },
   ];
 
   it("a metric two endpoints collect names the endpoint it shows and the count, and opens to each", () => {
@@ -296,7 +296,7 @@ describe("the leaf's dispatch facts (#786)", () => {
     const toggle = within(card).getByRole("button", { name: /latest of 2 endpoints \(tcp\)/ });
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     // The single-instance metric carries no caption.
-    expect(within(screen.getByTestId("vital-spread-tcp-open")).queryByText(/latest of/)).toBeNull();
+    expect(within(screen.getByTestId("vital-spread-icmp-rtt-avg")).queryByText(/latest of/)).toBeNull();
     expect(within(card).getAllByText(/latest of/)).toHaveLength(1);
     expect(screen.queryByTestId("vital-instances-tcp-connect-time")).toBeNull();
 
@@ -344,7 +344,7 @@ describe("the leaf's dispatch facts (#786)", () => {
       id: uuidFor("cf-ep-telnet"), endpoint: "telnet", transport: "telnet", node: "edge-1", last_seen: iso(2),
       verdict: { value: "up", ts: iso(60) }, responsive: { value: "up", ts: iso(60) }, authenticated: { value: "no", ts: iso(30) },
       session: { state: "rejected", ts: iso(30), reason: "auth: auth rejected" }, rejection: { rung: "authenticated", class: "auth", ts: "2026-10-23T11:58:00.000Z" },
-      layers: [{ layer: "ping", check: "icmp-reachable", value: 1, ts: iso(2) }], history: [],
+      layers: [{ layer: "ping", check: "icmp-reachable", value: "up", ts: iso(2) }], history: [],
     }],
   } as unknown as Reachability;
 
@@ -365,7 +365,7 @@ describe("the leaf's dispatch facts (#786)", () => {
       id: uuidFor("cf-ep-snmp"), endpoint: "snmp", transport: "snmp", node: "edge-1", last_seen: iso(2),
       verdict: { value: "down", ts: iso(60) }, responsive: { value: "down", ts: iso(60) }, authenticated: { value: "no", ts: iso(60) },
       rejection: { rung: "authenticated", class: "auth", ts: iso(60), reason: "auth: the agent answered authorizationError for the community" },
-      layers: [{ layer: "ping", check: "icmp-reachable", value: 1, ts: iso(2) }], history: [],
+      layers: [{ layer: "ping", check: "icmp-reachable", value: "up", ts: iso(2) }], history: [],
     }],
   } as unknown as Reachability;
 

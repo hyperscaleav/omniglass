@@ -38,8 +38,8 @@ func TestResolveNameLane(t *testing.T) {
 		{"two local rows over an og one", "x", []storage.NameHolder{op("metric"), op("property"), off("event")}, storage.NameHolder{}, false, false},
 		{"a publisher's row never answers a bare name", "x", []storage.NameHolder{pub("metric")}, storage.NameHolder{}, false, false},
 		{"a publisher's row beside og", "x", []storage.NameHolder{pub("metric"), off("property")}, off("property"), false, true},
-		{"a reserved key is never shadowed", "icmp-reachable", []storage.NameHolder{off("metric"), op("property")}, storage.NameHolder{}, false, false},
-		{"a reserved key held once resolves", "icmp-reachable", []storage.NameHolder{off("metric")}, off("metric"), false, true},
+		{"a reserved key is never shadowed", "icmp-rtt-avg", []storage.NameHolder{off("metric"), op("property")}, storage.NameHolder{}, false, false},
+		{"a reserved key held once resolves", "icmp-rtt-avg", []storage.NameHolder{off("metric")}, off("metric"), false, true},
 	}
 	for _, c := range cases {
 		got, shadowed, ok := storage.ResolveNameLane(c.name, c.holders)

@@ -60,7 +60,7 @@ func TestMetricTypeCRUD(t *testing.T) {
 	for _, m := range mts {
 		names[m.Name] = true
 	}
-	if !names["pump-speed"] || !names["icmp-rtt-avg"] || !names["tcp-open"] {
+	if !names["pump-speed"] || !names["icmp-rtt-avg"] || !names["tcp-connect-time"] {
 		t.Fatalf("list missing metric types: %v", names)
 	}
 
@@ -84,10 +84,10 @@ func TestMetricTypeCRUD(t *testing.T) {
 	}
 
 	// Official (seeded) metric types are read-only.
-	if _, err := gw.UpdateMetricType(ctx, "", "tcp-open", storage.MetricTypePatch{Label: &label}); !errors.Is(err, storage.ErrMetricTypeOfficial) {
+	if _, err := gw.UpdateMetricType(ctx, "", "tcp-connect-time", storage.MetricTypePatch{Label: &label}); !errors.Is(err, storage.ErrMetricTypeOfficial) {
 		t.Fatalf("update official err = %v, want ErrMetricTypeOfficial", err)
 	}
-	if err := gw.DeleteMetricType(ctx, "", "tcp-open"); !errors.Is(err, storage.ErrMetricTypeOfficial) {
+	if err := gw.DeleteMetricType(ctx, "", "tcp-connect-time"); !errors.Is(err, storage.ErrMetricTypeOfficial) {
 		t.Fatalf("delete official err = %v, want ErrMetricTypeOfficial", err)
 	}
 

@@ -23,6 +23,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/hyperscaleav/omniglass/internal/auth"
+	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
@@ -147,12 +148,31 @@ func TestNodeSimulateImpairmentsSpareTheNode(t *testing.T) {
 			return ok && ts.After(since) && want(v)
 		}
 	}
-	up := func(v float64) bool { return v == 1 }
-	down := func(v float64) bool { return v == 0 }
+	// latestState reads the newest tcp-open result, a change-only property
+	// since #1592: its ts is when the port last flipped.
+	latestState := func(comp string) (string, time.Time, bool) {
+		var out struct {
+			Samples []struct {
+				Value string    `json:"value"`
+				TS    time.Time `json:"ts"`
+			} `json:"samples"`
+		}
+		if !get("/components/"+comp+"/properties/tcp-open/samples?limit=1", &out) || len(out.Samples) == 0 {
+			return "", time.Time{}, false
+		}
+		s := out.Samples[len(out.Samples)-1]
+		return s.Value, s.TS, true
+	}
+	flipped := func(comp string, since time.Time, want string) func() bool {
+		return func() bool {
+			v, ts, ok := latestState(comp)
+			return ok && ts.After(since) && v == want
+		}
+	}
 
 	start := time.Now()
 	for name := range addrs {
-		waitForWithin(t, 30*time.Second, name+" to read up", fresh(name, "tcp-open", start, up))
+		waitForWithin(t, 30*time.Second, name+" to read open", flipped(name, start, collection.PortOpen))
 	}
 
 	slowed := time.Now()
@@ -179,6 +199,9 @@ func TestNodeSimulateImpairmentsSpareTheNode(t *testing.T) {
 
 	unplugged := time.Now()
 	as("component", "impairment", "set", "sim-slow", "--unplugged")
-	waitForWithin(t, 30*time.Second, "sim-slow to go dark once unplugged", fresh("sim-slow", "tcp-open", unplugged, down))
-	waitForWithin(t, 10*time.Second, "sim-fine to stay up beside it", fresh("sim-fine", "tcp-open", time.Now(), up))
+	waitForWithin(t, 30*time.Second, "sim-slow to go dark once unplugged", flipped("sim-slow", unplugged, collection.PortClosed))
+	waitForWithin(t, 10*time.Second, "sim-fine to stay open beside it", func() bool {
+		v, _, ok := latestState("sim-fine")
+		return ok && v == collection.PortOpen
+	})
 }

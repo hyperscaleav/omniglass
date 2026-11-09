@@ -277,13 +277,13 @@ func TestFanOutFollowsTheBindings(t *testing.T) {
 		t.Errorf("after binding, the inbox still holds %+v", inbox)
 	}
 	probed := rooms("zr-x")
-	probed.Metrics = append(probed.Metrics, &ogv1.MetricSample{Name: "tcp-open", Value: 1, Identity: room("zr-x")})
+	probed.Metrics = append(probed.Metrics, &ogv1.MetricSample{Name: "tcp-connect-time", Value: 1, Identity: room("zr-x")})
 	subject, ev = f.nodeLane(probed)
 	f.deliver(t, subject, ev, "")
 	if n := f.count(t, `select count(*) from property p join system s on s.id = p.system_id where s.name = 'room-c' and p.provenance = 'observed'`); n != 1 {
 		t.Errorf("after binding, room-c holds %d call-state rows, want one", n)
 	}
-	if n := f.count(t, `select count(*) from `+storagetest.MetricRows+` m join metric_type t on t.id = m.metric_type_id where t.name = 'tcp-open'`); n != 0 {
+	if n := f.count(t, `select count(*) from `+storagetest.MetricRows+` m join metric_type t on t.id = m.metric_type_id where t.name = 'tcp-connect-time'`); n != 0 {
 		t.Errorf("a node-probe key under a bound identity landed %d rows", n)
 	}
 
