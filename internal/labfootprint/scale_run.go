@@ -285,6 +285,9 @@ func (h *harness) measureScale(ctx context.Context, cfg ScaleConfig) (ScaleRepor
 		return ScaleReport{}, err
 	}
 
+	// The closed loop's marks sit outside the window's own reads. A lab
+	// whose nodes do not answer for their endpoints still measures the rest.
+	start, endpointErr := h.markStart(ctx, l)
 	db0, use0, err := h.readScale(ctx, l)
 	if err != nil {
 		return ScaleReport{}, err
@@ -309,6 +312,13 @@ func (h *harness) measureScale(ctx context.Context, cfg ScaleConfig) (ScaleRepor
 	if err != nil {
 		return ScaleReport{}, err
 	}
+	var stop endpointMark
+	if endpointErr == nil {
+		stop, endpointErr = h.markEnd(ctx, l)
+	}
+	// A batch the bus acknowledged before the end mark has landed within
+	// the ack wait.
+	landed := time.Now().Add(receiptMargin)
 	if run.Measured, err = WindowOf(db0, db1, use0, use1); err != nil {
 		return ScaleReport{}, err
 	}
@@ -322,6 +332,16 @@ func (h *harness) measureScale(ctx context.Context, cfg ScaleConfig) (ScaleRepor
 	}
 	if run.Lane, err = h.consumerLane(ctx, l.server, db0.At, db1.At); err != nil {
 		return ScaleReport{}, err
+	}
+	if endpointErr == nil {
+		if err := sleep(ctx, time.Until(landed)); err != nil {
+			return ScaleReport{}, err
+		}
+		run.Endpoints, endpointErr = h.endpointBrackets(ctx, l, start, stop)
+	}
+	if endpointErr != nil {
+		run.EndpointsGap = endpointErr.Error()
+		h.say("endpoints not measured: %v", endpointErr)
 	}
 	if cfg.Backlog > 0 {
 		if run.Drain, err = h.drainProbe(ctx, l.server, cfg); err != nil {
