@@ -1351,6 +1351,13 @@ components:
           type: string
         description:
           type: string
+        disruptive:
+          description: "The command takes its device down (reboot): its delivery closes the gates of every endpoint of the component on the delivering node until each reads up again"
+          type: boolean
+        hold_seconds:
+          description: "A disruptive type's backstop: an endpoint with no up verdict this long after delivery reopens anyway, counted as hold-expiry-count. Not the settle window. 0 on a type that is not disruptive"
+          format: int64
+          type: integer
         id:
           description: The command type's uuid, the stable form of name
           type: string
@@ -1362,6 +1369,10 @@ components:
           type: boolean
         params_schema:
           description: A JSON Schema fragment for the invocation params
+        quiet_seconds:
+          description: "A disruptive type's quiet period: how long the node runs no poll, probe or session dial against the held endpoints after delivery. 0 on a type that is not disruptive"
+          format: int64
+          type: integer
         settle_window_seconds:
           description: How long the device is given to actuate before a mismatch is a failed command
           format: int64
@@ -1376,6 +1387,9 @@ components:
         - id
         - name
         - settle_window_seconds
+        - disruptive
+        - quiet_seconds
+        - hold_seconds
         - official
       type: object
     ComponentBody:
@@ -1784,6 +1798,14 @@ components:
         description:
           description: What the command does
           type: string
+        disruptive:
+          description: "The command takes its device down (reboot): its delivery closes the gates of the component's endpoints on the delivering node until each reads up again"
+          type: boolean
+        hold_seconds:
+          description: "A disruptive type's backstop in seconds, greater than quiet_seconds: an endpoint with no up verdict by then reopens anyway, counted. Not the settle window. Only on a disruptive type"
+          format: int64
+          minimum: 0
+          type: integer
         label:
           description: A human label
           type: string
@@ -1793,6 +1815,11 @@ components:
           type: string
         params_schema:
           description: A JSON Schema fragment for the params
+        quiet_seconds:
+          description: "A disruptive type's quiet period in seconds: no poll, probe or session dial runs against the held endpoints. Only on a disruptive type"
+          format: int64
+          minimum: 0
+          type: integer
         settle_window_seconds:
           description: "The actuation window in seconds: how long the device is given to actuate before a mismatch is a failed command. 0 means settle immediately (a fire-and-forget command, or a settleable one judged at the moment of issue). A duration has no negative, so the schema floors it at 0 rather than accepting a value that behaves as 0 with no refusal to say so."
           format: int64
@@ -8047,7 +8074,7 @@ components:
           description: The endpoint's derived name (its transport)
           type: string
         gate_reasons:
-          description: "Every reason other than a refusal the endpoint's gate holds (the gate is a reason set, #1650), oldest first as the node published them: while any holds, due polls are held (poll-held-count), and a command or run now answers at once with the reason. Absent when none holds; a refusal is rejection"
+          description: "Every reason other than a refusal the endpoint's gate holds (the gate is a reason set, #1650), most causal first as the node published them: while any holds, due polls are held (poll-held-count), and a command or run now answers at once with the reason. Absent when none holds; a refusal is rejection"
           items:
             $ref: "#/components/schemas/ReachGateReasonBody"
           type:
@@ -8113,14 +8140,14 @@ components:
       additionalProperties: false
       properties:
         kind:
-          description: "The reason's kind: unreachable, two consecutive down verdicts from the endpoint's reachability probe, which lifts on its next up verdict"
+          description: "The reason's kind: disrupted, a disruptive command (a reboot) delivered to the endpoint's component, which lifts on the endpoint's first up verdict after the command type's quiet period or at its hold backstop; unreachable, two consecutive down verdicts from the endpoint's reachability probe, which lifts on its next up verdict"
           type: string
         since:
-          description: "When the reason began: for unreachable, the first of the down verdicts that closed the gate"
+          description: "When the reason began: for disrupted, the command's delivery; for unreachable, the first of the down verdicts that closed the gate"
           format: date-time
           type: string
         source:
-          description: The task whose observation added the reason (the reachability probe's task id)
+          description: "What added the reason: for disrupted, the command (command-<id>); for unreachable, the reachability probe's task id"
           type: string
       required:
         - kind
@@ -11518,11 +11545,24 @@ components:
         description:
           description: What the command does
           type: string
+        disruptive:
+          description: Whether the command takes its device down; checked with quiet_seconds and hold_seconds on the merged row
+          type: boolean
+        hold_seconds:
+          description: A disruptive type's backstop in seconds, greater than quiet_seconds; not the settle window
+          format: int64
+          minimum: 0
+          type: integer
         label:
           description: A human label
           type: string
         params_schema:
           description: A JSON Schema fragment (replaces wholesale)
+        quiet_seconds:
+          description: A disruptive type's quiet period in seconds
+          format: int64
+          minimum: 0
+          type: integer
         settle_window_seconds:
           description: The actuation window in seconds, floored at 0 (a duration has no negative; 0 means settle immediately)
           format: int64
@@ -13560,7 +13600,7 @@ paths:
       summary: Get a command type
       x-omniglass-permission: command_type:read
     patch:
-      description: Patches a custom command type's label, description, params schema, settle window, or target on either arm (a nil field is unchanged; an empty target clears it; a non-empty arm clears the other). The name is fixed at creation. Official types are read-only. Gated by command_type:update.
+      description: Patches a custom command type's label, description, params schema, settle window, disruption (disruptive, quiet_seconds, hold_seconds, checked together on the merged row), or target on either arm (a nil field is unchanged; an empty target clears it; a non-empty arm clears the other). The name is fixed at creation. Official types are read-only. Gated by command_type:update.
       operationId: update-command-type
       parameters:
         - description: The command type's name
