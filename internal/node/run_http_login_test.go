@@ -134,9 +134,18 @@ func (s *httpStack) setPassword(sec *storage.Secret, pass string) {
 }
 
 // refusedOnceThenRecovers sets a wrong password, watches the endpoint read
-// rejected with reason after exactly one more attempt (counted by
-// attempts), holds that across a node restart, then fixes the secret in
-// place and watches it recover.
+// rejected with reason, and holds that the attempt counted by attempts
+// stopped at the gate (the refusal is not retried) and stays stopped across
+// a node restart, then fixes the secret in place and watches it recover.
+//
+// The count is read once the gate is published, not before the password
+// changes: polls under the old fingerprint keep answering (and counting)
+// until the node reads the changed worklist, and under load that window
+// spans a poll or more (#1597), so the count at the gate is the baseline
+// plus those plus the perAttempt the refusal itself took, never a fixed
+// number. What is fixed is that the refused attempt was counted (the
+// component counts an answer before it replies, and the gate follows the
+// reply) and that nothing counts after the gate.
 func (s *httpStack) refusedOnceThenRecovers(nodeName, comp, instance string, sec *storage.Secret, right string, attempts func() int64, perAttempt int64, reason string) {
 	s.t.Helper()
 	before := attempts()
@@ -144,9 +153,13 @@ func (s *httpStack) refusedOnceThenRecovers(nodeName, comp, instance string, sec
 	s.waitFor(comp, instance, "endpoint-authenticated", is("no"), "no: the wrong password refused")
 	s.waitFor(comp, instance, "endpoint-rejection", func(v string) bool { return strings.HasPrefix(v, "authenticated auth ") }, "the auth gate")
 	s.waitFor(comp, instance, "endpoint-rejection-reason", is(reason), "the gate's reason, for the notice")
-	s.settles("attempts with the wrong password", attempts, before+perAttempt)
+	gated := attempts()
+	if gated < before+perAttempt {
+		s.t.Fatalf("attempts at the gate = %d, want at least %d: the refused attempt was not counted", gated, before+perAttempt)
+	}
+	s.settles("attempts after the gate", attempts, gated)
 	s.runNode(nodeName)
-	s.settles("attempts after a node restart", attempts, before+perAttempt)
+	s.settles("attempts after a node restart", attempts, gated)
 	// Fixed in place: the fingerprint moves, the gate lifts.
 	s.setPassword(sec, right)
 	s.waitFor(comp, instance, "endpoint-rejection", is("none"), "none, the secret fixed")
@@ -288,8 +301,9 @@ func TestNodeHTTPDigestAnswersItsChallenge(t *testing.T) {
 			t.Fatalf("%s: power = %s after set-power, want standby", name, got)
 		}
 
-		// A wrong password: one answered attempt (the bare request the
-		// fresh state sends first draws the challenge it answers).
+		// A wrong password: the fresh state's bare request draws the
+		// challenge, one answer to it is refused, and the gate holds; no
+		// answer counts after the gate.
 		s.refusedOnceThenRecovers("edge-digest", comp, ep.Name, sec, password, answers, 1, "auth: the component refused the credential (401)")
 	}
 }
