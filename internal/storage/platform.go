@@ -24,6 +24,9 @@ const (
 	platformTypeName = "platform"
 	// NodeProductName is the og product every node's platform component is.
 	NodeProductName = "omniglass-node"
+	// platformLockKey names the advisory lock the boot's platform step
+	// serializes on.
+	platformLockKey = "platform boot"
 )
 
 var (
@@ -199,6 +202,13 @@ func (p *PG) EnsurePlatform(ctx context.Context) error {
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	// Two servers booting at once each read "no platform system" and "this
+	// node has no component" before they write, so the step holds one lock
+	// across both reads and their writes: the first boot creates and adopts,
+	// the others wait, then find nothing to do.
+	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(hashtextextended($1, 0))`, platformLockKey); err != nil {
+		return fmt.Errorf("storage: lock the platform step: %w", err)
+	}
 	sysID, err := platformSystemID(ctx, tx)
 	if err != nil {
 		return err

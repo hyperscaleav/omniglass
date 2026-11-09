@@ -3,7 +3,11 @@ package storage_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"sync"
 	"testing"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
@@ -230,5 +234,88 @@ func TestPlatformSystemRefusesAnOperatorComponent(t *testing.T) {
 	}
 	if err := gw.AddMember(ctx, "", "borrower", c.Name, all, all, all, all); !errors.Is(err, storage.ErrPlatformComponentReserved) {
 		t.Errorf("add a platform component to an operator system = %v, want ErrPlatformComponentReserved", err)
+	}
+}
+
+// TestEnsurePlatformSerializesConcurrentBoots proves two servers booting at
+// once leave one platform system and one component per node (#1625): each
+// boot's platform step reads "no platform system" and "this node has no
+// component" before it writes, so without one lock across the step the
+// second boot mints `platform-2` beside the first, and re-adopts a node the
+// first already gave a component, orphaning that component.
+func TestEnsurePlatformSerializesConcurrentBoots(t *testing.T) {
+	t.Parallel()
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer conn.Close(ctx)
+	// A database from the release before the platform: seeded, no platform
+	// system, and nodes registered with no component.
+	if _, err := conn.Exec(ctx, `delete from system where name = 'platform'`); err != nil {
+		t.Fatalf("take the database back before the platform: %v", err)
+	}
+	const nodes = 4
+	for i := 0; i < nodes; i++ {
+		if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: fmt.Sprintf("early-%d", i)}, all, all); err != nil {
+			t.Fatalf("create node %d: %v", i, err)
+		}
+	}
+
+	const boots = 8
+	start := make(chan struct{})
+	errs := make(chan error, boots)
+	var wg sync.WaitGroup
+	for i := 0; i < boots; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			errs <- gw.EnsurePlatform(ctx)
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Errorf("a concurrent boot's platform step failed: %v", err)
+		}
+	}
+
+	var systems int
+	if err := conn.QueryRow(ctx, `
+		select count(*) from system s join system_type st on st.id = s.system_type_id
+		where st.namespace = 'og' and st.name = 'platform'`).Scan(&systems); err != nil {
+		t.Fatalf("count platform systems: %v", err)
+	}
+	if systems != 1 {
+		t.Errorf("systems of the platform type = %d after %d concurrent boots, want 1", systems, boots)
+	}
+	// Every member of a platform system is a node's component, one per node,
+	// and every one is the component its node names.
+	var members, named int
+	if err := conn.QueryRow(ctx, `
+		select count(*), count(n.name) from system_member m
+		join system s on s.id = m.system_id
+		join system_type st on st.id = s.system_type_id and st.namespace = 'og' and st.name = 'platform'
+		left join node n on n.platform_component_id = m.component_id`).Scan(&members, &named); err != nil {
+		t.Fatalf("count platform members: %v", err)
+	}
+	if members != nodes {
+		t.Errorf("platform members = %d after %d concurrent boots, want one per node (%d)", members, boots, nodes)
+	}
+	if named != members {
+		t.Errorf("%d of %d platform members are no node's component; a second boot re-adopted a node", members-named, members)
 	}
 }
