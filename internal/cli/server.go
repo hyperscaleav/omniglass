@@ -67,6 +67,21 @@ func labBootGate(ctx context.Context, gw labStater, lab bool) error {
 	return storage.CheckLabMark(lab, st.Marked, st.HoldsData)
 }
 
+// identityRecorder is the gateway's server identity write.
+type identityRecorder interface {
+	RecordServerIdentity(ctx context.Context, componentID, version string, startedAt time.Time) error
+}
+
+// bootServerIdentity writes the build this server runs and the instant it
+// started on its platform component (#1644), what the Platform health page
+// reads its header from. A failure is logged, not fatal: the identity is a
+// reading, never a reason to refuse to serve.
+func bootServerIdentity(ctx context.Context, gw identityRecorder, log *slog.Logger, componentID, version string, startedAt time.Time) {
+	if err := gw.RecordServerIdentity(ctx, componentID, version, startedAt); err != nil {
+		log.Warn("server identity not recorded", "component", componentID, "err", err)
+	}
+}
+
 // runServer boots the control plane: apply migrations, open the Storage
 // Gateway, serve the HTTP API, and shut down gracefully on SIGINT/SIGTERM.
 func runServer(ctx context.Context, version string, lab bool) error {
@@ -131,6 +146,7 @@ func runServer(ctx context.Context, version string, lab bool) error {
 		return err
 	}
 	log.Info("server platform component", "server", c.ServerName, "component", serverComponentID)
+	bootServerIdentity(ctx, gw, log, serverComponentID, version, time.Now())
 
 	// The embedded NATS server carries the node-server protocol (worklist,
 	// heartbeat, and the checkpoint-3 telemetry stream). It is hosted in-process

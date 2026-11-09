@@ -2,8 +2,10 @@ package api
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/hyperscaleav/omniglass/internal/storage"
@@ -94,6 +96,110 @@ func toFleetViewOutput(v *storage.FleetView) *fleetViewOutput {
 	return out
 }
 
+type platformSystemBody struct {
+	ID      string `json:"id" doc:"The platform system's uuid: the page's verdict links to its system detail, where the verdict is explained"`
+	Name    string `json:"name"`
+	Verdict string `json:"verdict" doc:"The platform system's recorded verdict, the same one its health read serves"`
+}
+
+type platformServerBody struct {
+	Component string     `json:"component" doc:"The server's platform component uuid"`
+	Name      string     `json:"name" doc:"The server's platform component name"`
+	Version   string     `json:"version,omitempty" doc:"The build the server runs, as its boot wrote it (server-version); absent before a boot has written it"`
+	StartedAt *time.Time `json:"started_at,omitempty" doc:"When the server's current boot started (server-started-at); uptime is read_at minus this"`
+	Verdict   string     `json:"verdict" doc:"The server component's recorded verdict"`
+}
+
+type platformKeyBody struct {
+	Name        string `json:"name" doc:"The metric type's name: the key a node's figures are indexed by"`
+	Label       string `json:"label" doc:"The metric type's label, the column header"`
+	Unit        string `json:"unit,omitempty" doc:"The metric type's unit, when it has one"`
+	Description string `json:"description,omitempty" doc:"The metric type's catalog description, the column's tooltip"`
+}
+
+type platformGroupBody struct {
+	Name  string            `json:"name" doc:"The group's stable handle"`
+	Label string            `json:"label" doc:"The group's title over its columns"`
+	Keys  []platformKeyBody `json:"keys" doc:"The group's columns, in order, each with its catalog facts"`
+}
+
+type platformFigureBody struct {
+	Value      float64   `json:"value"`
+	ObservedAt time.Time `json:"observed_at" doc:"When the sample was taken"`
+}
+
+type platformNodeBody struct {
+	Name            string                        `json:"name"`
+	Label           string                        `json:"label"`
+	Enrolled        bool                          `json:"enrolled"`
+	LastHeartbeatAt *time.Time                    `json:"last_heartbeat_at,omitempty" doc:"The node's last heartbeat; absent when it has never sent one"`
+	Component       string                        `json:"component,omitempty" doc:"The node's platform component uuid, where every figure has its history; absent for a node the boot has not yet adopted"`
+	Verdict         string                        `json:"verdict,omitempty" doc:"The node's platform component verdict, which tones the row; absent without a fleet-wide component read"`
+	Figures         map[string]platformFigureBody `json:"figures,omitempty" doc:"The latest figure per key, by key name. A key the node has never reported is absent, never zero; the whole map is absent without a fleet-wide component read"`
+}
+
+type platformViewOutput struct {
+	Body struct {
+		ReadAt      time.Time            `json:"read_at" doc:"The server's clock when the view was read: uptime and the liveness pill are both judged against it, so they read one clock"`
+		Lab         bool                 `json:"lab" doc:"True when this server runs as an omniglass lab"`
+		FiguresRead bool                 `json:"figures_read" doc:"True when the caller's component read reached the platform components. False means the figures, verdicts and servers are left out because the caller may not read them, not because nothing was reported"`
+		System      *platformSystemBody  `json:"system,omitempty" doc:"The platform system and its verdict; absent without a fleet-wide system read"`
+		Servers     []platformServerBody `json:"servers" doc:"Every server's platform component and the identity its boot wrote; empty without a fleet-wide component read"`
+		Groups      []platformGroupBody  `json:"groups" doc:"The node table's column groups, in order: the page renders these and has no key list of its own"`
+		Nodes       []platformNodeBody   `json:"nodes" doc:"One row per node, in name order"`
+	}
+}
+
+func toPlatformViewOutput(v *storage.PlatformView, readAt time.Time, lab bool) *platformViewOutput {
+	out := &platformViewOutput{}
+	out.Body.ReadAt = readAt
+	out.Body.Lab = lab
+	out.Body.FiguresRead = v.FiguresRead
+	if v.System != nil {
+		out.Body.System = &platformSystemBody{ID: v.System.ID, Name: v.System.Name, Verdict: v.System.Verdict}
+	}
+	out.Body.Servers = make([]platformServerBody, 0, len(v.Servers))
+	for _, s := range v.Servers {
+		body := platformServerBody{Component: s.ComponentID, Name: s.Name, StartedAt: s.StartedAt, Verdict: s.Verdict}
+		if s.Version != nil {
+			body.Version = *s.Version
+		}
+		out.Body.Servers = append(out.Body.Servers, body)
+	}
+	keys := map[string]platformKeyBody{}
+	for _, k := range v.Keys {
+		keys[k.Name] = platformKeyBody{Name: k.Name, Label: k.Label, Unit: k.Unit, Description: k.Description}
+	}
+	out.Body.Groups = make([]platformGroupBody, 0, len(v.Groups))
+	for _, g := range v.Groups {
+		body := platformGroupBody{Name: g.Name, Label: g.Label, Keys: make([]platformKeyBody, 0, len(g.Keys))}
+		for _, k := range g.Keys {
+			if kb, ok := keys[k]; ok {
+				body.Keys = append(body.Keys, kb)
+			}
+		}
+		out.Body.Groups = append(out.Body.Groups, body)
+	}
+	out.Body.Nodes = make([]platformNodeBody, 0, len(v.Nodes))
+	for _, n := range v.Nodes {
+		body := platformNodeBody{Name: n.Name, Label: n.Label, Enrolled: n.Enrolled, LastHeartbeatAt: n.LastHeartbeatAt}
+		if n.ComponentID != nil {
+			body.Component = *n.ComponentID
+		}
+		if n.Verdict != nil {
+			body.Verdict = *n.Verdict
+		}
+		if n.Figures != nil {
+			body.Figures = make(map[string]platformFigureBody, len(n.Figures))
+			for k, f := range n.Figures {
+				body.Figures[k] = platformFigureBody{Value: f.Value, ObservedAt: f.ObservedAt}
+			}
+		}
+		out.Body.Nodes = append(out.Body.Nodes, body)
+	}
+	return out
+}
+
 // registerViewRoutes wires the surface-shaped reads.
 func registerViewRoutes(api huma.API, a *authenticator, gw storage.Gateway, log *slog.Logger) {
 	huma.Register(api, a.gated(huma.Operation{
@@ -120,5 +226,26 @@ func registerViewRoutes(api huma.API, a *authenticator, gw storage.Gateway, log 
 			return nil, huma.Error500InternalServerError("read fleet view")
 		}
 		return toFleetViewOutput(v), nil
+	})
+	huma.Register(api, a.gated(huma.Operation{
+		OperationID: "get-platform-view",
+		Method:      http.MethodGet,
+		Path:        "/views/platform",
+		Summary:     "Read Omniglass's own health in one call",
+		Description: "Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its verdict, each server's running build and start time, the node table's column groups with each key's catalog facts, and one row per node with its last heartbeat and its platform component's latest figure per key. The rows need a fleet-wide node:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, verdicts and servers need a fleet-wide component:read and the system a fleet-wide system:read; short of that each is left out, never zeroed. Gated by node:read.",
+	}, "node", "read"), func(ctx context.Context, _ *struct{}) (*platformViewOutput, error) {
+		v, err := gw.PlatformView(ctx,
+			a.scopeFor(ctx, "node", "read"),
+			a.scopeFor(ctx, "system", "read"),
+			a.scopeFor(ctx, "component", "read"),
+		)
+		if errors.Is(err, storage.ErrNodeForbidden) {
+			return nil, huma.Error403Forbidden("forbidden")
+		}
+		if err != nil {
+			log.ErrorContext(ctx, "read platform view", "error", err)
+			return nil, huma.Error500InternalServerError("read platform view")
+		}
+		return toPlatformViewOutput(v, time.Now().UTC(), a.lab), nil
 	})
 }

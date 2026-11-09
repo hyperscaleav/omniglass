@@ -170,6 +170,17 @@ const (
 	CommandExpiredUnexecuted  = "unexecuted"
 )
 
+// The server's identity (#1644): the build a server runs and when it last
+// started, two properties its boot writes on its own platform component, so
+// Platform health can say which Omniglass is running and for how long.
+const (
+	ServerVersion   = "server-version"
+	ServerStartedAt = "server-started-at"
+)
+
+// serverBootWriter is what writes the server's identity properties.
+const serverBootWriter = "the server boot"
+
 // nodeSelfWriter is what writes a node's self-report: the node, of itself,
 // landed by the process on the node's platform component.
 const nodeSelfWriter = "a node, of itself (its node-self report)"
@@ -207,6 +218,11 @@ var platform = map[string]string{
 	DBPoolMax:              serverSelfWriter,
 	DBPoolWaitCount:        serverSelfWriter,
 	DBPoolWaitDuration:     serverSelfWriter,
+
+	// The server's identity (#1644).
+	ServerVersion:   serverBootWriter,
+	ServerStartedAt: serverBootWriter,
+
 	// A node's command queue (#1626).
 	CommandPendingCount:     "the server's command queue timer",
 	CommandPendingAge:       "the server's command queue timer",
