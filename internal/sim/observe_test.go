@@ -175,4 +175,3 @@ func TestObservationOverlapCountsOnlyTheSameFace(t *testing.T) {
 		t.Fatalf("faces = %+v, want only a/api with one overlap of three received", snap.Faces)
 	}
 }
-
