@@ -223,11 +223,27 @@ func (d *deviceObservation) accept(p obsProtocol) func() {
 	if d == nil {
 		return func() {}
 	}
-	row := &d.rows[p]
-	row.openConnections.Add(1)
-	row.accepted.Add(1)
+	d.connected(p)
 	var once sync.Once
-	return func() { once.Do(func() { row.openConnections.Add(-1) }) }
+	return func() { once.Do(func() { d.disconnected(p) }) }
+}
+
+// connected counts one connection accepted, for a listener whose hooks
+// already see each connection's end exactly once (net/http's ConnState).
+func (d *deviceObservation) connected(p obsProtocol) {
+	if d == nil {
+		return
+	}
+	d.rows[p].openConnections.Add(1)
+	d.rows[p].accepted.Add(1)
+}
+
+// disconnected lowers the open gauge for one connection ended.
+func (d *deviceObservation) disconnected(p obsProtocol) {
+	if d == nil {
+		return
+	}
+	d.rows[p].openConnections.Add(-1)
 }
 
 // openStream counts one stream opened and returns its close.
@@ -586,4 +602,30 @@ func (r *highWaterRing) epochs() []EpochHigh {
 		out = append(out, EpochHigh{Epoch: int64(ep), Max: int64(uint32(v))})
 	}
 	return out
+}
+
+// obsProtocolOf names a protocol back to its index.
+func obsProtocolOf(name string) (obsProtocol, bool) {
+	for p, n := range obsProtocolNames {
+		if n == name {
+			return obsProtocol(p), true
+		}
+	}
+	return 0, false
+}
+
+// Observed is what the device's faces of one protocol saw: connections,
+// requests and how each settled. An unknown protocol reads zero.
+func (d *Device) Observed(protocol string) ObservationCounters {
+	p, ok := obsProtocolOf(protocol)
+	if !ok || d.observe == nil {
+		return ObservationCounters{}
+	}
+	return d.observe.counters(p)
+}
+
+// Observation reads every device's counters, the per-protocol latency and
+// in-flight high water, and the faces that saw an overlap.
+func (e *Engine) Observation() ObservationSnapshot {
+	return e.obs.snapshot(time.Now())
 }

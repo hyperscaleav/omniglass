@@ -311,6 +311,13 @@ type Device struct {
 	// deterministic, individually phased random walks across runs.
 	rand *deviceRand
 
+	// observe counts what each face was sent and how it settled (see
+	// observe.go); never nil for a device built by NewDevice.
+	observe *deviceObservation
+	// beforeRoute, when set, runs before an http request is routed: a
+	// test holds a request in flight with it.
+	beforeRoute func(*http.Request)
+
 	// faces records the address each face the engine started bound, in
 	// profile order (Faces).
 	faceMu sync.Mutex
@@ -326,16 +333,13 @@ type Device struct {
 	// snmpRefused is the community the SNMP face answers with
 	// authorizationError (#821): one the agent knows and refuses.
 	snmpRefused string
-	// snmpRequests counts the datagrams the SNMP face was sent.
-	snmpRequests atomic.Int64
 	sshListener  net.Listener
 	// tlsID is the key and certificate the device's tls line face serves
 	// (#1035), derived from its id so it is the same on every run.
 	tlsID tlsIdentity
-	// httpRequests and httpRefusals count the requests the device's http
-	// faces were sent and the ones its auth gate refused (401), so a test
-	// tells a gated collector (no credentialed request) from a retrying one.
-	httpRequests atomic.Int64
+	// httpRefusals counts the requests the device's auth gate refused
+	// (401), so a test tells a gated collector (no credentialed request)
+	// from a retrying one; the requests themselves are observed (observe).
 	httpRefusals atomic.Int64
 	// httpCredentialRefusals counts the refused requests that carried an
 	// Authorization header (#1038): a collector's credentialed attempts,
@@ -578,6 +582,8 @@ type statusRecorder struct {
 	body     bytes.Buffer
 	bodyCap  int  // max bytes to retain; 0 = capture everything
 	bodyTrim bool // true once a Write was truncated
+	writeErr bool // a write to the client failed: it went before the answer
+	streamed bool // the request opened the event stream
 }
 
 // Flush passes a stream's flush through to the connection (#1038).
@@ -615,7 +621,11 @@ func (r *statusRecorder) Write(b []byte) (int, error) {
 	} else {
 		r.bodyTrim = true
 	}
-	return r.ResponseWriter.Write(b)
+	n, err := r.ResponseWriter.Write(b)
+	if err != nil {
+		r.writeErr = true
+	}
+	return n, err
 }
 
 // routeEntry pairs a parsed route match with a compiled template and
@@ -931,6 +941,9 @@ func NewDevice(deviceID, hostname string, ip net.IP, profileName string, version
 		Version:     version,
 		state:       state,
 		now:         time.Now,
+		// A device standing alone observes into its own row; the engine
+		// points it at the engine's before it serves (installSeams).
+		observe: newEndpointObservation().device(deviceID),
 	}
 }
 
@@ -1133,8 +1146,43 @@ func (d *Device) SetState(state map[string]any, version int64) {
 
 // ServeHTTP handles an incoming HTTP request by matching against routes.
 func (d *Device) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	d.serveHTTP(w, r, nil)
+}
+
+// httpFace is the handler of one http listener, so the observation knows
+// which face a request reached.
+type httpFace struct {
+	d    *Device
+	face *faceObservation
+}
+
+func (h httpFace) ServeHTTP(w http.ResponseWriter, r *http.Request) { h.d.serveHTTP(w, r, h.face) }
+
+// httpOutcome is how an http request settled: dropped when the client went
+// before the answer was written, otherwise read from the status.
+func httpOutcome(r *http.Request, rec *statusRecorder) Outcome {
+	if rec.writeErr || r.Context().Err() != nil {
+		return OutcomeDropped
+	}
+	return outcomeForStatus(rec.status)
+}
+
+func (d *Device) serveHTTP(w http.ResponseWriter, r *http.Request, face *faceObservation) {
 	start := time.Now()
 	rec := &statusRecorder{ResponseWriter: w, bodyCap: httpBodyCaptureCap}
+	// A request for the event stream is a request until it opens the
+	// stream (serveEvents counts that); any other is one from here.
+	stream := d.isEventStream(r)
+	if !stream {
+		tok := d.observe.begin(obsHTTP, face)
+		defer func() { tok.end(httpOutcome(r, rec)) }()
+	} else {
+		defer func() {
+			if !rec.streamed {
+				d.observe.begin(obsHTTP, face).end(httpOutcome(r, rec))
+			}
+		}()
+	}
 	// Pass the raw peer address through to the logger; source
 	// labelling is left to the hit consumer. We deliberately do NOT
 	// read X-Omniglass-Client / similar self-identification headers
@@ -1194,8 +1242,7 @@ func (d *Device) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// requests. The gate is a no-op when HTTPAuth.Mode is empty, which
 	// preserves the open-by-default behavior every existing profile
 	// relies on.
-	d.httpRequests.Add(1)
-	if d.isEventStream(r) {
+	if stream {
 		d.events.attempts.Add(1)
 	}
 	if d.answerLogin(rec, r) {
@@ -1208,9 +1255,12 @@ func (d *Device) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	if d.isEventStream(r) {
+	if stream {
 		d.serveEvents(rec, r)
 		return
+	}
+	if d.beforeRoute != nil {
+		d.beforeRoute(r)
 	}
 
 	reqCtx := parseRequestContext(r)
@@ -1532,14 +1582,21 @@ func (d *Device) startHTTPWith(port int, tlsCfg *tls.Config) (net.Addr, error) {
 	d.Port = boundPort(lis.Addr())
 	addr = lis.Addr().String()
 
-	srv := &http.Server{Handler: d,
+	face := d.observe.face(strconv.Itoa(d.Port), obsHTTP)
+	srv := &http.Server{Handler: httpFace{d: d, face: face},
 		// The server's own complaints (a TLS port check that never shakes
 		// hands, a client gone mid-request) are routine for a device a
 		// collector probes: debug, not a line per probe.
 		ErrorLog: slog.NewLogLogger(slog.Default().Handler(), slog.LevelDebug),
+		// Each connection reaches StateNew once and then exactly one of
+		// StateClosed or StateHijacked.
 		ConnState: func(c net.Conn, s http.ConnState) {
-			if s == http.StateNew {
+			switch s {
+			case http.StateNew:
+				d.observe.connected(obsHTTP)
 				d.logConnect(c)
+			case http.StateClosed, http.StateHijacked:
+				d.observe.disconnected(obsHTTP)
 			}
 		}}
 	d.httpMu.Lock()
@@ -1571,7 +1628,11 @@ func (d *Device) startHTTPWith(port int, tlsCfg *tls.Config) (net.Addr, error) {
 }
 
 // HTTPRequests counts the requests the device's http faces were sent.
-func (d *Device) HTTPRequests() int64 { return d.httpRequests.Load() }
+// It reads the observation: every request plus every stream opened.
+func (d *Device) HTTPRequests() int64 {
+	c := d.Observed("http")
+	return c.Received + c.StreamsOpened
+}
 
 // HTTPCredentialRefusals counts the refused requests that carried an
 // Authorization header.

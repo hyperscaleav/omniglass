@@ -7,7 +7,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/gosnmp/gosnmp"
@@ -64,7 +63,8 @@ func (d *Device) startSNMP(port int, community string) (net.Addr, error) {
 	// The read loop is ours, around the library's request handler: the
 	// library's own listener nils its socket on Shutdown while its serve
 	// loop reads it, a data race. Owning the socket, a stop only closes it.
-	loop := &snmpLoop{conn: conn, community: community, refused: d.snmpRefused, requests: &d.snmpRequests}
+	loop := &snmpLoop{conn: conn, community: community, refused: d.snmpRefused,
+		obs: d.observe, face: d.observe.face(strconv.Itoa(boundPort(conn.LocalAddr())), obsSNMP)}
 	d.snmpServer = loop
 	go func() {
 		slog.Debug("device SNMP started", "device", d.Hostname, "addr", addr)
@@ -79,7 +79,9 @@ type snmpLoop struct {
 	conn      *net.UDPConn
 	community string
 	refused   string
-	requests  *atomic.Int64
+	// obs counts each datagram and how it settled; face is this socket.
+	obs  *deviceObservation
+	face *faceObservation
 }
 
 func (l *snmpLoop) serve(agent *GoSNMPServer.MasterAgent) {
@@ -89,22 +91,37 @@ func (l *snmpLoop) serve(agent *GoSNMPServer.MasterAgent) {
 		if err != nil {
 			return // closed by Shutdown
 		}
-		l.requests.Add(1)
-		refusal, admit := l.adjudicate(buf[:n])
-		if refusal != nil {
-			_, _ = l.conn.WriteToUDP(refusal, from)
-		}
-		if !admit {
-			continue
-		}
-		reply, err := agent.ResponseForBuffer(append([]byte(nil), buf[:n]...))
-		if err != nil {
-			slog.Debug("snmp request refused", "from", from.String(), "error", err)
-		}
-		if len(reply) > 0 {
-			_, _ = l.conn.WriteToUDP(reply, from)
-		}
+		tok := l.obs.begin(obsSNMP, l.face)
+		tok.end(l.answer(agent, buf[:n], from))
 	}
+}
+
+// answer judges and answers one datagram, returning how it settled: a
+// refused community refused, any other community withheld, a request the
+// library cannot answer an error, and a reply the socket would not take
+// dropped.
+func (l *snmpLoop) answer(agent *GoSNMPServer.MasterAgent, raw []byte, from *net.UDPAddr) Outcome {
+	refusal, admit := l.adjudicate(raw)
+	if !admit {
+		if refusal == nil {
+			return OutcomeWithheld
+		}
+		if _, err := l.conn.WriteToUDP(refusal, from); err != nil {
+			return OutcomeDropped
+		}
+		return OutcomeRefused
+	}
+	reply, err := agent.ResponseForBuffer(append([]byte(nil), raw...))
+	if err != nil {
+		slog.Debug("snmp request refused", "from", from.String(), "error", err)
+	}
+	if len(reply) == 0 {
+		return OutcomeError
+	}
+	if _, err := l.conn.WriteToUDP(reply, from); err != nil {
+		return OutcomeDropped
+	}
+	return OutcomeAnswered
 }
 
 // adjudicate judges a request's community before the library sees it (the
@@ -145,7 +162,8 @@ func (d *Device) SetSNMPRefusedCommunity(c string) { d.snmpRefused = c }
 
 // SNMPRequests counts the datagrams the SNMP face was sent: a test-harness
 // hook, so a test can prove a refused community is not sent again.
-func (d *Device) SNMPRequests() int64 { return d.snmpRequests.Load() }
+// It reads the observation.
+func (d *Device) SNMPRequests() int64 { return d.Observed("snmp").Received }
 
 // Shutdown closes the socket, which ends the read loop.
 func (l *snmpLoop) Shutdown() { _ = l.conn.Close() }
