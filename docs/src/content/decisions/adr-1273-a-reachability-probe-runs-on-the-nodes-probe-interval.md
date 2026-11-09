@@ -18,3 +18,4 @@ refs: [1273, 1265, 822]
   - **Named profiles** (`lab`, `default`, `hosted`). Sugar over two numbers no deployment yet needs; a later need can add them over the flags.
   - **A slower heartbeat for the lab.** It would slow every change reaching the node, the lab's reason for 2s.
   - **Probing every 10s in the recorder's lab too.** It would put the alarm walkthrough at risk of its budget on every recording.
+- **Amended (#1637):** the probe interval rounded to the heartbeat is the built step, not the target: a probe is to run on its own interval at a stable phase, with no heartbeat rounding and no half-heartbeat tolerance, and its verdict feeds the endpoint gate every lane consults (#1634, [ADR-1637](/architecture/decisions/#adr-1637-a-node-runs-each-kind-of-work-on-its-own-timer-and-pool-one-request-per-endpoint-at-a-time)).

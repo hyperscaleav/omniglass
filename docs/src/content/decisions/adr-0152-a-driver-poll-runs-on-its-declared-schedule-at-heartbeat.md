@@ -23,6 +23,9 @@ summary: "A driver poll runs on its declared `schedule.every` at heartbeat granu
   schedule (every tick when it is unset), and a task is due on the tick within half a heartbeat of its
   due time rather than the first tick at or after it, so an interval equal to the heartbeat never skips
   a jittered tick ([ADR-1273](/architecture/decisions/#adr-1273-a-reachability-probe-runs-on-the-nodes-probe-interval-not-every-heartbeat)).
+  **Amended (#1637):** heartbeat granularity is the built step, not the target: a poll is to run on its
+  own interval at a stable phase from a scheduler of its own, with a run still in flight at its next due
+  skipped and counted, never burst (#1634, [ADR-1637](/architecture/decisions/#adr-1637-a-node-runs-each-kind-of-work-on-its-own-timer-and-pool-one-request-per-endpoint-at-a-time)).
 - **Context:** The schedule was validated and baked but unread, so `snmp-generic`'s `every: 60s` polled
   every 30s heartbeat and a `24h` poll would have asked a device 2880 times a day. The nodes page left
   per-task cadence within a tick as an open question; a per-task gate settles it for driver polls
