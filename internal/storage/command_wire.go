@@ -64,6 +64,33 @@ type CommandDelivery struct {
 	Request *driver.Request
 }
 
+// commandCandidates is the one resolution of which node actuates a command
+// (#1626), shared by the pull (PendingNodeCommands) and the queue's health
+// read (CommandQueueHealth), so the depth the health read reports can never
+// disagree with what a pull delivers. It is the body of a CTE: every
+// unexecuted component command issued after lower, each with the ONE endpoint
+// that would carry it. Only an endpoint whose driver spec binds the command's
+// type is a candidate (the jsonb_path_exists predicate), so the distinct-on
+// never collapses to a non-binding endpoint, and the same endpoint is chosen
+// on every read whatever the command's dispatch state. A command no endpoint
+// binds is no node's and is absent. The unexecuted predicate is
+// command_unexecuted_idx's, which keeps the read off the executed history.
+func commandCandidates(lower string) string {
+	return `
+		select distinct on (c.id)
+			c.id, c.ts, c.dispatched_at, c.first_dispatched_at, c.delivery_count, ct.name as command_type, c.params,
+			i.id as endpoint_id, i.transport, i.params as endpoint_params, i.node_name, d.spec
+		from command c
+		join command_type ct on ct.id = c.command_type_id
+		join endpoint i on i.component = c.component_id and i.driver_id is not null
+		join driver d on d.id = i.driver_id
+		where c.owner_kind = 'component'
+		  and c.executed_at is null
+		  and c.ts > ` + lower + `
+		  and jsonb_path_exists(d.spec, '$.commands[*] ? (@.command_type == $ct)', jsonb_build_object('ct', ct.name))
+		order by c.id, i.name`
+}
+
 // PendingNodeCommands resolves and marks dispatched the commands a node
 // should actuate now: unexecuted, within the delivery TTL, not recently
 // dispatched, owned by a component whose driver-attached endpoint is placed
@@ -72,35 +99,21 @@ type CommandDelivery struct {
 // is skipped with its execution error recorded, so it stops being redelivered
 // and the fault is visible on the row.
 func (p *PG) PendingNodeCommands(ctx context.Context, node string) ([]CommandDelivery, error) {
-	// Pick ONE actuating endpoint per command, globally: only an endpoint whose
-	// driver spec binds the command's type is a candidate (the jsonb_path_exists
-	// predicate), so the distinct-on can never collapse to a non-binding
-	// endpoint, and the same binding endpoint is chosen deterministically on
-	// every pull. The node filter is applied to that chosen endpoint, so a
-	// command is delivered to exactly one node (never once per node), which is
-	// what makes the render-fault terminal stamp below correct: there is no
-	// other endpoint that would have rendered it differently.
+	// The candidate fragment picks ONE actuating endpoint per command,
+	// globally, so a command is delivered to exactly one node (never once
+	// per node), which is what makes the render-fault terminal stamp below
+	// correct: there is no other endpoint that would have rendered it
+	// differently. The node filter and the redelivery wait apply to that
+	// chosen endpoint, outside the fragment, so the health read resolves the
+	// same endpoint for every command whether it is due now or not.
 	rows, err := p.pool.Query(ctx, `
-		with candidate as (
-			select distinct on (c.id)
-				c.id, ct.name as command_type, c.params, i.id as endpoint_id, i.transport,
-				i.params as endpoint_params, i.node_name, d.spec,
-				(select pr.value from property pr where pr.command_id = c.id and pr.provenance = 'intended' order by pr.ts desc limit 1) as intended_prop,
-				(select m.value from metric_declared m where m.command_id = c.id order by m.ts desc limit 1) as intended_metric
-			from command c
-			join command_type ct on ct.id = c.command_type_id
-			join endpoint i on i.component = c.component_id and i.driver_id is not null
-			join driver d on d.id = i.driver_id
-			where c.owner_kind = 'component'
-			  and c.executed_at is null
-			  and (c.dispatched_at is null or c.dispatched_at < now() - interval '`+redeliverAfter+`')
-			  and c.ts > now() - interval '`+deliveryTTL+`'
-			  and jsonb_path_exists(d.spec, '$.commands[*] ? (@.command_type == $ct)', jsonb_build_object('ct', ct.name))
-			order by c.id, i.name
-		)
-		select id, command_type, params, endpoint_id, transport, endpoint_params, spec, intended_prop, intended_metric
-		from candidate
-		where node_name = (select principal_id from node where name = $1)`, node)
+		with candidate as (`+commandCandidates("now() - interval '"+deliveryTTL+"'")+`)
+		select k.id, k.command_type, k.params, k.endpoint_id, k.transport, k.endpoint_params, k.spec,
+			(select pr.value from property pr where pr.command_id = k.id and pr.provenance = 'intended' order by pr.ts desc limit 1),
+			(select m.value from metric_declared m where m.command_id = k.id order by m.ts desc limit 1)
+		from candidate k
+		where k.node_name = (select principal_id from node where name = $1)
+		  and (k.dispatched_at is null or k.dispatched_at < now() - interval '`+redeliverAfter+`')`, node)
 	if err != nil {
 		return nil, fmt.Errorf("storage: pending commands for %q: %w", node, err)
 	}
@@ -194,11 +207,64 @@ func (p *PG) PendingNodeCommands(ctx context.Context, node string) ([]CommandDel
 		delivered = append(delivered, dispatch{r.id, r.endpointID})
 	}
 	for _, d := range delivered {
-		if _, err := p.pool.Exec(ctx, `update command set dispatched_at = now(), dispatched_endpoint_id = $2 where id = $1`, d.id, d.endpointID); err != nil {
-			return nil, fmt.Errorf("storage: mark command %d dispatched: %w", d.id, err)
+		if err := p.markDispatched(ctx, d.id, d.endpointID); err != nil {
+			return nil, err
 		}
 	}
 	return out, nil
+}
+
+// markDispatched stamps one delivery of a command (#1626): dispatched_at is
+// when a node last took it, first_dispatched_at when one first did, and
+// delivery_count how many times it has been taken. The first delivery writes
+// the command's dispatch latency (first_dispatched_at - ts) on the taking
+// node's platform component, in the same transaction as the stamp it derives
+// from. Each command is its own transaction, so each sample has its own time
+// and two dispatched in one pull never collide on their series.
+func (p *PG) markDispatched(ctx context.Context, id int64, endpointID string) error {
+	return p.sampleWrite(ctx, "mark command dispatched", func(ctx context.Context, tx pgx.Tx) error {
+		var (
+			count     int
+			latencyMS float64
+			at        time.Time
+			platform  *string
+		)
+		err := tx.QueryRow(ctx, `
+			update command set dispatched_at = now(), first_dispatched_at = coalesce(first_dispatched_at, now()),
+				delivery_count = delivery_count + 1, dispatched_endpoint_id = $2
+			where id = $1
+			returning delivery_count, extract(epoch from first_dispatched_at - ts) * 1000, first_dispatched_at,
+				(select n.platform_component_id::text from endpoint i join node n on n.principal_id = i.node_name where i.id = $2)`,
+			id, endpointID).Scan(&count, &latencyMS, &at, &platform)
+		if err != nil {
+			return fmt.Errorf("storage: mark command %d dispatched: %w", id, err)
+		}
+		if count != 1 || platform == nil {
+			return nil
+		}
+		p.recordCommandLatency(ctx, tx, id, PlatformMetric{ComponentID: *platform, Key: writerclass.CommandDispatchLatency, Value: latencyMS, TS: at})
+		return nil
+	})
+}
+
+// recordCommandLatency writes one per-command latency sample under a
+// savepoint of the stamp's transaction: a sample that cannot land (the
+// platform component gone, a refusal) is logged and costs only itself, never
+// the delivery or the execution stamp it measures.
+func (p *PG) recordCommandLatency(ctx context.Context, tx pgx.Tx, id int64, m PlatformMetric) {
+	sp, err := tx.Begin(ctx)
+	if err == nil {
+		err = p.writeMetricSamples(ctx, sp, gatewayWriter(writerclass.Process), []MetricSampleWrite{{OwnerKind: "component",
+			OwnerID: m.ComponentID, Key: m.Key, Value: m.Value, TS: m.TS}})
+		if err == nil {
+			err = sp.Commit(ctx)
+		} else {
+			_ = sp.Rollback(ctx)
+		}
+	}
+	if err != nil {
+		slog.Warn("command latency sample not recorded", "facility", "command", "command", id, "key", m.Key, "error", err.Error())
+	}
 }
 
 // RecordCommandExecution stamps a node's execution report, once: a redelivered
@@ -230,6 +296,9 @@ func (p *PG) RecordCommandExecution(ctx context.Context, node string, commandID 
 	defer func() { _ = tx.Rollback(ctx) }()
 	var (
 		ownerKind, arc, instance, commandType, endpointID string
+		latencyMS                                         *float64
+		executedAt                                        time.Time
+		platform                                          *string
 	)
 	// The confining stamp first: a report the node had no standing to make
 	// is refused before anything about the endpoint (its secrets included)
@@ -245,8 +314,10 @@ func (p *PG) RecordCommandExecution(ctx context.Context, node string, commandID 
 			where i.id = c.dispatched_endpoint_id
 			  and i.node_name = (select principal_id from node where name = $2))
 		returning c.owner_kind, coalesce(c.component_id, c.system_id, c.location_id, c.node_id)::text,
-			c.instance, (select name from command_type where id = c.command_type_id), c.dispatched_endpoint_id::text`,
-		commandID, node).Scan(&ownerKind, &arc, &instance, &commandType, &endpointID)
+			c.instance, (select name from command_type where id = c.command_type_id), c.dispatched_endpoint_id::text,
+			extract(epoch from c.executed_at - c.first_dispatched_at) * 1000, c.executed_at,
+			(select platform_component_id::text from node where name = $2)`,
+		commandID, node).Scan(&ownerKind, &arc, &instance, &commandType, &endpointID, &latencyMS, &executedAt, &platform)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrCommandNotDispatchedHere
 	}
@@ -289,6 +360,13 @@ func (p *PG) RecordCommandExecution(ctx context.Context, node string, commandID 
 		}
 	} else if err := sp.Commit(ctx); err != nil {
 		return fmt.Errorf("storage: release savepoint for command %d: %w", commandID, err)
+	}
+	// The execution latency (#1626), first dispatch to report, on the
+	// reporting node's platform component, in the stamp's transaction. A
+	// command dispatched before its first delivery was kept has none.
+	if latencyMS != nil && platform != nil {
+		p.recordCommandLatency(ctx, tx, commandID, PlatformMetric{ComponentID: *platform, Key: writerclass.CommandExecutionLatency,
+			Value: *latencyMS, TS: executedAt})
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("storage: commit record execution: %w", err)
