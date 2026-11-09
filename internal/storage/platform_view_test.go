@@ -66,7 +66,7 @@ func newPlatformViewFixture(t *testing.T) platformViewFixture {
 	if _, err := conn.Exec(ctx, `
 		insert into property (owner_kind, component_id, property_type_id, instance, value, provenance, source_rule)
 		values ('component', $1::uuid,
-		        (select id from property_type where namespace = 'og' and name = 'health'), '', to_jsonb('critical'::text), 'calculated', 'test')`,
+		        (select id from property_type where namespace = 'og' and name = 'health'), '', to_jsonb('outage'::text), 'calculated', 'test')`,
 		f.bravo.ID); err != nil {
 		t.Fatalf("record edge-bravo's verdict: %v", err)
 	}
@@ -126,8 +126,8 @@ func TestPlatformViewReadsTheWholePlatform(t *testing.T) {
 	if got := bravo.Figures[writerclass.CheckinAge]; got.Value != 400 {
 		t.Errorf("edge-bravo checkin-age = %+v, want 400", got)
 	}
-	if bravo.Verdict == nil || *bravo.Verdict != "critical" {
-		t.Errorf("edge-bravo verdict = %v, want critical", bravo.Verdict)
+	if bravo.Verdict == nil || *bravo.Verdict != "outage" {
+		t.Errorf("edge-bravo verdict = %v, want outage", bravo.Verdict)
 	}
 	if bravo.ComponentID == nil || *bravo.ComponentID != f.bravo.ID {
 		t.Errorf("edge-bravo component = %v, want %s", bravo.ComponentID, f.bravo.ID)
