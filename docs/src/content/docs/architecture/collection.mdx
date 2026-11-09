@@ -458,14 +458,19 @@ Every platform metric key, rendered from the writer-class ruling and the seed:
 
 <PlatformKeys />
 
-**Who writes them.** A node reports all but three of itself, in the **node-self block** of the batch
+**Who writes them.** A node reports most of them itself, in the **node-self block** of the batch
 its tick already publishes (`TelemetryBatch.node_self`, field 15). The block names no owner and no
 task: the server takes the node from the subject it published on, lands the rows on that node's
 platform component as the process, and holds every row to the node-self keys, so a node writes no
 other platform key (`health`, `checkin-age`, the webhook counts) and no other component's. A node-self
 sample that names an identity, or a batch that names an owner, never lands; a refused block drops
 alone and the tick's task groups still land. A platform key in a task group, a push, a command or a
-calc is refused like any reserved key. `checkin-age` is the server's: a timer writes every claimed
+calc is refused like any reserved key. The node's command queue figures are the server's but one: the
+wire writes the per-command dispatch and execution latencies as it stamps them, a 15 s timer writes
+the queue's depth, oldest age, stuck commands, redeliveries and expiries, and the node counts only its
+own failed pulls of the queue, on its node-self lane
+([commands](/architecture/commands/#queue-health-each-nodes-command-queue-measured)).
+`checkin-age` is the server's: a timer writes every claimed
 node's age every 15 s, half the default heartbeat, as the seconds since its last heartbeat (or since
 its claim, before its first). It keeps growing while a node is silent, which is the series a
 node-silent rule reads. The webhook counts are the receiver's
