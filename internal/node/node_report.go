@@ -19,7 +19,7 @@ import (
 //
 // Two shapes, per the key table. The each-tick figures are one observation
 // per sample, taken every tick. The windowed counts (tick overruns, skipped
-// intervals, spool drops, publish failures) are tallied over the node's
+// intervals, spool drops, publish failures, failed command pulls) are tallied over the node's
 // report window, the collection report's (report.go), and emitted once when
 // it ends, only when nonzero: the poll-failure-count convention, no zero
 // noise. Pure: the run loop feeds it and sends what it takes.
@@ -33,6 +33,9 @@ type nodeReport struct {
 	skipped  int
 	drops    int
 	failures int
+	// pullFailures is the command queue pulls that failed in the window
+	// (#1626): no answer from the bus, or one the node could not read.
+	pullFailures int
 
 	samples []*ogv1.MetricSample
 }
@@ -138,6 +141,14 @@ func (r *nodeReport) process(p platformmetric.Process, at time.Time) {
 	}
 }
 
+// commandPullFailed tallies one failed pull of the command queue toward the
+// window.
+func (r *nodeReport) commandPullFailed() {
+	if r != nil {
+		r.pullFailures++
+	}
+}
+
 // worklist records the size of a worklist the node just installed.
 func (r *nodeReport) worklist(tasks int, at time.Time) {
 	if r == nil {
@@ -162,12 +173,13 @@ func (r *nodeReport) take(now time.Time) []*ogv1.MetricSample {
 			{writerclass.ScheduleSkipCount, r.skipped},
 			{writerclass.SpoolDropCount, r.drops},
 			{writerclass.PublishFailureCount, r.failures},
+			{writerclass.CommandPullFailureCount, r.pullFailures},
 		} {
 			if c.n > 0 {
 				r.sample(c.key, float64(c.n), now, "")
 			}
 		}
-		r.overruns, r.skipped, r.drops, r.failures = 0, 0, 0, 0
+		r.overruns, r.skipped, r.drops, r.failures, r.pullFailures = 0, 0, 0, 0, 0
 		r.since = now
 	}
 	out := r.samples

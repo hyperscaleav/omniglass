@@ -368,7 +368,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	if err := runTasks(ctx, spool, cfg.Name, wl, runner, sessions, sched, verdicts, faultseen, report, time.Now()); err != nil {
 		return wl, err
 	}
-	runCommands(ctx, nc, cfg.Name, runner, sessions, executedCommands)
+	runCommands(ctx, nc, cfg.Name, runner, sessions, executedCommands, self)
 	// A heartbeat the connection cannot take right now (a reconnect in
 	// flight, with no reconnect buffer) is retried next tick, as in the loop
 	// below; it never ends the node (#1577).
@@ -460,7 +460,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 			}
 			_ = runTasks(ctx, spool, cfg.Name, wl, runner, sessions, sched, verdicts, faultseen, report, time.Now())
 			// Pull and actuate the pending command queue (#815).
-			runCommands(ctx, nc, cfg.Name, runner, sessions, executedCommands)
+			runCommands(ctx, nc, cfg.Name, runner, sessions, executedCommands, self)
 			// Report the inbound lines no listener claimed this tick.
 			sessions.flushUnclaimed()
 			// Count this tick's pushes into the collection report, and

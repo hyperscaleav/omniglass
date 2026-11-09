@@ -45,18 +45,21 @@ func pruneCommandMemory(executed map[int64]commandOutcome, now time.Time) {
 	}
 }
 
-// runCommands runs one pull-execute-report cycle. A pull failure is silent
-// (the next tick re-pulls, the server redelivers); a report publish failure is
-// also survivable, since the redelivered command finds its outcome remembered.
-func runCommands(ctx context.Context, nc *nats.Conn, name string, runner *collection.Runner, sessions *sessionManager, executed map[int64]commandOutcome) {
+// runCommands runs one pull-execute-report cycle. A pull failure is counted
+// on the node's report (#1626) and otherwise survived: the next tick re-pulls,
+// the server redelivers. A report publish failure is also survivable, since
+// the redelivered command finds its outcome remembered.
+func runCommands(ctx context.Context, nc *nats.Conn, name string, runner *collection.Runner, sessions *sessionManager, executed map[int64]commandOutcome, self *nodeReport) {
 	now := time.Now()
 	pruneCommandMemory(executed, now)
 	msg, err := nc.Request(collection.CommandSubject(name), nil, worklistTimeout)
 	if err != nil {
+		self.commandPullFailed()
 		return
 	}
 	var reply collection.CommandPullReply
 	if err := json.Unmarshal(msg.Data, &reply); err != nil {
+		self.commandPullFailed()
 		return
 	}
 	for _, d := range reply.Commands {
