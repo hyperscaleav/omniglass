@@ -9,6 +9,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/internal/driver"
+	"github.com/hyperscaleav/omniglass/internal/nettest"
 	"github.com/hyperscaleav/omniglass/internal/sim"
 )
 
@@ -301,12 +302,7 @@ func TestTalliedRefusedConnectionCountsNothing(t *testing.T) {
 	if testing.Short() {
 		t.Skip("real-socket integration test")
 	}
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	closed := ln.Addr().String()
-	_ = ln.Close()
+	closed := nettest.RefusedAddr(t)
 	tally := collection.NewRequestTally()
 	ctx := context.Background()
 	_, _, _ = collection.NewTalliedTCPDialer(tally).Dial(ctx, closed, time.Second)
