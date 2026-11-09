@@ -2712,6 +2712,8 @@ Measures a scale lab (`omniglass lab run --scenario corporate --systems N`) over
 
 With no --systems it measures the scale lab already running. With --systems it brings up a throwaway scale lab of that size, measures it, and removes it, so the one command is the whole run.
 
+When no sample probed in the window had landed by its end, the ingest lag cell reads not measured, with the reason and the age of the newest landed sample under the table, and every other figure still prints.
+
 The retention probe plants a backlog of aged property rows and restarts the server to run its pass; --backlog 0 skips it and leaves the server alone. A lab started before this build's `lab run` does not record commit timestamps, which the ingest lag reads: bring it up again.
 
 | Flag | Type | Default | Description |

@@ -74,6 +74,85 @@ func ParseLagSeconds(out string) ([]float64, error) {
 	return lags, nil
 }
 
+// LagAges is what the lag gap query reads about the newest observed samples
+// when none probed inside the window had landed: seconds, each nil when the
+// metric table holds no such row.
+type LagAges struct {
+	// CommitAgeS is how long before the read the newest row committed.
+	CommitAgeS *float64
+	// ProbeAgeS is how long before the read the newest landed row was probed.
+	ProbeAgeS *float64
+	// ProbeBeforeWindowEndS is how long before the window ended that row was
+	// probed.
+	ProbeBeforeWindowEndS *float64
+}
+
+// ParseLagAges reads the gap query's one line: three seconds separated by
+// bars, a cell empty when there is no row to read it from.
+func ParseLagAges(out string) (LagAges, error) {
+	line := strings.TrimSpace(out)
+	cells := strings.Split(line, "|")
+	if len(cells) != 3 {
+		return LagAges{}, fmt.Errorf("ingest lag ages: %q is not three numbers of seconds", line)
+	}
+	var f [3]*float64
+	for i, c := range cells {
+		c = strings.TrimSpace(c)
+		if c == "" {
+			continue
+		}
+		v, err := strconv.ParseFloat(c, 64)
+		if err != nil {
+			return LagAges{}, fmt.Errorf("ingest lag ages: %q is not a number of seconds", c)
+		}
+		f[i] = &v
+	}
+	return LagAges{CommitAgeS: f[0], ProbeAgeS: f[1], ProbeBeforeWindowEndS: f[2]}, nil
+}
+
+// LagGap is why the ingest lag has no figure: no observed sample probed in
+// the window had committed by its end, and how stale the newest landed
+// sample was. A lag that is past the window is a finding, not a blank.
+type LagGap struct {
+	Reason                string   `json:"reason"`
+	NewestCommitAgeS      *float64 `json:"newest_commit_age_seconds,omitempty"`
+	NewestProbeAgeS       *float64 `json:"newest_probe_age_seconds,omitempty"`
+	ProbeBeforeWindowEndS *float64 `json:"newest_probe_before_window_end_seconds,omitempty"`
+	// ExceedsWindow is true when the newest landed sample was probed before
+	// the window began.
+	ExceedsWindow bool `json:"exceeds_window"`
+}
+
+const lagGapReason = "no sample probed in the window had landed by its end"
+
+// NewLagGap is the gap for a window of the given length, from the ages read.
+func NewLagGap(a LagAges, window time.Duration) LagGap {
+	g := LagGap{
+		Reason: lagGapReason, NewestCommitAgeS: a.CommitAgeS, NewestProbeAgeS: a.ProbeAgeS,
+		ProbeBeforeWindowEndS: a.ProbeBeforeWindowEndS,
+	}
+	g.ExceedsWindow = a.ProbeBeforeWindowEndS != nil && *a.ProbeBeforeWindowEndS > window.Seconds()
+	return g
+}
+
+// footer is the gap's account under the table.
+func (g LagGap) footer() string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "ingest lag not measured: %s", g.Reason)
+	switch {
+	case g.NewestCommitAgeS == nil || g.NewestProbeAgeS == nil:
+		b.WriteString("; the metric table holds no observed sample")
+	default:
+		fmt.Fprintf(&b, "; the newest committed row landed %.0f s before the read, its sample probed %.0f s before it",
+			*g.NewestCommitAgeS, *g.NewestProbeAgeS)
+	}
+	b.WriteString("\n")
+	if g.ExceedsWindow {
+		fmt.Fprintf(&b, "ingest lag exceeds the window: newest landed sample probed %.0f s before the window ended\n", *g.ProbeBeforeWindowEndS)
+	}
+	return b.String()
+}
+
 // Redeliveries is what the server's log says about batches the consumer saw
 // more than once. A Nak redelivery logs nothing, so this is a floor: the acks
 // the stream did not confirm (the batch comes back after its ack wait, and
@@ -187,7 +266,10 @@ type ScaleRun struct {
 	Systems, Sites, Components, Tasks int
 	Measured                          Window
 	// Lag is each sampled row's seconds from its probe to its commit.
-	Lag          []float64
+	Lag []float64
+	// LagGap is set when Lag is empty: why, and how stale the newest landed
+	// sample was.
+	LagGap       *LagGap
 	Redeliveries Redeliveries
 	FleetView    []time.Duration
 	Drain        Drain
@@ -227,11 +309,13 @@ type ScaleReport struct {
 	SamplesPerBatch  float64 `json:"samples_per_batch"`
 	BatchesPerSecond float64 `json:"batches_per_second"`
 
-	Containers   []ScaleContainer `json:"containers"`
-	IngestLag    Quantiles        `json:"ingest_lag_ms"`
-	Redeliveries Redeliveries     `json:"redeliveries"`
-	FleetView    Quantiles        `json:"fleet_view_ms"`
-	Drain        Drain            `json:"retention_drain"`
+	Containers []ScaleContainer `json:"containers"`
+	IngestLag  Quantiles        `json:"ingest_lag_ms"`
+	// IngestLagGap is set, and IngestLag zero, when no lag was measured.
+	IngestLagGap *LagGap      `json:"ingest_lag_not_measured,omitempty"`
+	Redeliveries Redeliveries `json:"redeliveries"`
+	FleetView    Quantiles    `json:"fleet_view_ms"`
+	Drain        Drain        `json:"retention_drain"`
 }
 
 // SummarizeScale turns a run into its report. The containers list the server
@@ -254,6 +338,7 @@ func SummarizeScale(r ScaleRun) ScaleReport {
 		SamplesLanded:         w.SamplesLanded,
 		SamplesPerBatch:       w.SamplesPerBatch,
 		BatchesPerSecond:      w.BatchesPerSecond,
+		IngestLagGap:          r.LagGap,
 		Redeliveries:          r.Redeliveries,
 		FleetView:             DurationQuantiles(r.FleetView),
 		Drain:                 r.Drain,
@@ -322,13 +407,21 @@ func (r ScaleReport) Table() string {
 		line(c.Name+" memory", fmt.Sprintf("%.0f MiB", c.WorkingSetMiB))
 	}
 	ms := func(v float64) string { return fmt.Sprintf("%.1f ms", v) }
-	line("ingest lag p50", ms(r.IngestLag.P50))
-	line("ingest lag p95", ms(r.IngestLag.P95)+fmt.Sprintf("   (%s rows sampled)", count(float64(r.IngestLag.N))))
+	if r.IngestLagGap != nil {
+		line("ingest lag p50", "not measured")
+		line("ingest lag p95", "not measured")
+	} else {
+		line("ingest lag p50", ms(r.IngestLag.P50))
+		line("ingest lag p95", ms(r.IngestLag.P95)+fmt.Sprintf("   (%s rows sampled)", count(float64(r.IngestLag.N))))
+	}
 	line("consumer redeliveries", fmt.Sprintf("%s   (%s unconfirmed acks, %s abandoned; a floor, see the lab guide)",
 		count(float64(r.Redeliveries.Total())), count(float64(r.Redeliveries.Unconfirmed)), count(float64(r.Redeliveries.Abandoned))))
 	line("fleet view p50", ms(r.FleetView.P50))
 	line("fleet view p95", ms(r.FleetView.P95)+fmt.Sprintf("   (%d reads)", r.FleetView.N))
 	line("retention drain", r.Drain.describe())
+	if r.IngestLagGap != nil {
+		b.WriteString("\n" + r.IngestLagGap.footer())
+	}
 	return b.String()
 }
 

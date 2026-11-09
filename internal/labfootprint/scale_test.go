@@ -2,6 +2,7 @@ package labfootprint
 
 import (
 	"encoding/json"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -277,5 +278,115 @@ func TestScaleTableDrainStates(t *testing.T) {
 	run.Drain = Drain{}
 	if got := SummarizeScale(run).Table(); !strings.Contains(got, "not measured") {
 		t.Errorf("no backlog:\n%s", got)
+	}
+}
+
+// The gap query prints three bar-separated numbers; a cell is empty when the
+// metric table has no observed row to read it from.
+func TestParseLagAges(t *testing.T) {
+	got, err := ParseLagAges("3.5|130.25|190.75\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.CommitAgeS == nil || got.ProbeAgeS == nil || got.ProbeBeforeWindowEndS == nil ||
+		!near(*got.CommitAgeS, 3.5) || !near(*got.ProbeAgeS, 130.25) || !near(*got.ProbeBeforeWindowEndS, 190.75) {
+		t.Fatalf("ages %+v, want 3.5, 130.25 and 190.75", got)
+	}
+	empty, err := ParseLagAges("||\n")
+	if err != nil || empty != (LagAges{}) {
+		t.Fatalf("no rows: %+v, %v, want the zero value", empty, err)
+	}
+	for _, bad := range []string{"1|2\n", "1|soon|3\n", ""} {
+		if _, err := ParseLagAges(bad); err == nil {
+			t.Errorf("%q parsed, want an error", bad)
+		}
+	}
+}
+
+func f64(v float64) *float64 { return &v }
+
+// A window no sample probed in had landed by the end of is not a failed run:
+// the table prints every figure, the lag cell reads not measured, and the
+// JSON carries the reason and the ages.
+func TestScaleReportWithoutALag(t *testing.T) {
+	db0, db1, use0, use1 := scaleWindowFixture()
+	w, _ := WindowOf(db0, db1, use0, use1)
+	gap := NewLagGap(LagAges{CommitAgeS: f64(3), ProbeAgeS: f64(40), ProbeBeforeWindowEndS: f64(55)}, 10*time.Minute)
+	rep := SummarizeScale(ScaleRun{
+		Build: "abc123", Scenario: "corporate", Systems: 1000, Started: at(0), Window: 10 * time.Minute, Measured: w,
+		LagGap: &gap, FleetView: []time.Duration{time.Millisecond},
+	})
+	table := rep.Table()
+	for _, want := range []string{
+		"metric rows a minute", "fleet view p50", "retention drain", // the other figures still print
+		"no sample probed in the window had landed by its end",
+		"landed 3 s before the read", "probed 40 s before it",
+	} {
+		if !strings.Contains(table, want) {
+			t.Errorf("the table lacks %q:\n%s", want, table)
+		}
+	}
+	for _, row := range []string{"ingest lag p50", "ingest lag p95"} {
+		if !regexp.MustCompile(row + `\s+not measured\n`).MatchString(table) {
+			t.Errorf("the %s cell does not read not measured:\n%s", row, table)
+		}
+	}
+	if strings.Contains(table, "exceeds the window") {
+		t.Errorf("a lag within the window reads as past it:\n%s", table)
+	}
+	b, err := json.Marshal(rep)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var back struct {
+		Gap struct {
+			Reason          string   `json:"reason"`
+			CommitAge       *float64 `json:"newest_commit_age_seconds"`
+			ProbeAge        *float64 `json:"newest_probe_age_seconds"`
+			BeforeWindowEnd *float64 `json:"newest_probe_before_window_end_seconds"`
+			Exceeds         bool     `json:"exceeds_window"`
+		} `json:"ingest_lag_not_measured"`
+		Lag Quantiles `json:"ingest_lag_ms"`
+	}
+	if err := json.Unmarshal(b, &back); err != nil {
+		t.Fatal(err)
+	}
+	g := back.Gap
+	if g.Reason != "no sample probed in the window had landed by its end" || g.CommitAge == nil || *g.CommitAge != 3 ||
+		g.ProbeAge == nil || *g.ProbeAge != 40 || g.BeforeWindowEnd == nil || *g.BeforeWindowEnd != 55 || g.Exceeds {
+		t.Errorf("the JSON gap is %+v, want the reason and the ages:\n%s", g, b)
+	}
+	if back.Lag != (Quantiles{}) {
+		t.Errorf("a lag was reported with none measured: %+v", back.Lag)
+	}
+}
+
+// A newest landed sample probed before the window began is a finding: the
+// footer says by how much, measured from the window's end.
+func TestScaleTableLagPastTheWindow(t *testing.T) {
+	db0, db1, use0, use1 := scaleWindowFixture()
+	w, _ := WindowOf(db0, db1, use0, use1)
+	run := ScaleRun{Window: 2 * time.Minute, Measured: w, FleetView: []time.Duration{time.Millisecond}}
+
+	gap := NewLagGap(LagAges{CommitAgeS: f64(1), ProbeAgeS: f64(190), ProbeBeforeWindowEndS: f64(185)}, 2*time.Minute)
+	if !gap.ExceedsWindow {
+		t.Fatalf("a sample probed 185 s before a 120 s window's end: %+v, want past the window", gap)
+	}
+	run.LagGap = &gap
+	want := "ingest lag exceeds the window: newest landed sample probed 185 s before the window ended"
+	if got := SummarizeScale(run).Table(); !strings.Contains(got, want) {
+		t.Errorf("the footer lacks %q:\n%s", want, got)
+	}
+
+	// Probed at the window's very start is inside it; with no sample at all
+	// there is nothing to measure against.
+	if NewLagGap(LagAges{ProbeBeforeWindowEndS: f64(120)}, 2*time.Minute).ExceedsWindow {
+		t.Error("a sample probed at the window's start reads as past it")
+	}
+	none := NewLagGap(LagAges{}, 2*time.Minute)
+	run.LagGap = &none
+	got := SummarizeScale(run).Table()
+	if none.ExceedsWindow || strings.Contains(got, "exceeds the window") || !strings.Contains(got, "holds no observed sample") {
+		t.Errorf("an empty metric table:\n%s", got)
 	}
 }

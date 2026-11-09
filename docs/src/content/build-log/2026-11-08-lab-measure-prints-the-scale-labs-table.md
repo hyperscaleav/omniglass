@@ -1,7 +1,7 @@
 ---
 title: "omniglass lab measure prints the scale lab's table (#1556)"
 date: 2026-11-08
-refs: [1556, 1357, 1277, 1568, 1265, 1570, 1571]
+refs: [1556, 1357, 1277, 1568, 1265, 1570, 1571, 1587]
 ---
 
 The last slice of the scale lab: `omniglass lab measure` (and `make scale-measure`) runs against a scale
@@ -60,21 +60,37 @@ the receipts table grows about as fast as the metric table (1.20 GiB a day again
 database's CPU is as high as the server's. The drain figure is quantized by the half-second poll and a
 150,000-row backlog under one pass's budget, so it is a floor on the rate, not a limit.
 
-**1,000 systems: partial (#1571, #1587).**
+**1,000 systems (#1571, #1587).**
 
-The 1,000-system run (18 sites, 3,016 components, 17,340 enabled tasks) now comes up: before #1577 the
+The 1,000-system run (18 sites, 3,016 components, 17,340 enabled tasks) comes up: before #1577 the
 lab's bring-up, with the seed taking 42 seconds, was still waiting on its last site after 10 minutes
 (17 of 18 sites up, 2,210 of 3,016 components), because the headquarters node could not get its
 worklist. With #1577 it was ready in 2 minutes 44 seconds. The measurement, with a 2 minute warm-up
-and a 2 minute window (shortened from 3 so the run fits one foreground command), read the window and
-then failed on its ingest lag read: no metric row probed inside the window had landed by its end
-(#1587). The table is not printed on that failure, so the column holds only what the run printed
-before it:
+and a 2 minute window (shortened from 3 so the run fits one foreground command), first failed on its
+ingest lag read, which found no metric row probed inside the window that had landed by its end, and
+printed no table (#1587). The lag read now reports what it found instead of failing, so the run
+completes (`make scale-measure SYSTEMS=1000`, JSON written):
 
 | | 1,000 systems (18 sites, 3,016 components, 17,340 tasks) |
 | --- | --- |
 | bring-up, command to ready | 2 m 44 s |
-| metric rows a minute | 21,714 |
-| total cpu | 2,630 m |
+| metric rows a minute | 11,596 |
+| metric table a day | 2.19 GiB |
+| receipts a day | 2.44 GiB |
+| database, WAL a day | 4.63 GiB, 9.03 GiB |
+| server, db cpu | 594 m, 642 m |
+| total cpu, memory | 2,096 m, 3,173 MiB (headquarters node 201 m, 618 MiB) |
+| ingest lag p50, p95 | not measured |
+| consumer redeliveries | 0 |
+| fleet view p50, p95 | 78 ms, 131 ms (20 reads) |
 
-The rest of the column is recorded when #1587 lands; `make scale-measure SYSTEMS=1000` takes it.
+The lag is past the window, which is the finding: the newest sample that had landed by the end of the
+window was probed 424 s before it ended, against a 120 s window, while the newest commit was milliseconds
+old. Landing runs more than seven minutes behind the probes at this size, so the lag has no figure here.
+The window's row rate (11,596 a minute; the earlier run that failed read 21,714) is a rate of rows
+landing, not of the fleet producing them, so it is not a capacity figure while landing is behind. The
+lag itself is ingest throughput, not this ticket's: it is named on #1517 with its figure.
+
+The reading is a new `ingest_lag_not_measured` object in the JSON (the reason, the age of the newest
+commit and of its sample, and whether the sample predates the window) and a footer under the table; the
+lag cells read `not measured`. The 100-system table is unchanged.
