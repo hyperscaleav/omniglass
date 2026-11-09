@@ -490,6 +490,38 @@ func TestARunNowOnAnUnreachableEndpointAnswersWithTheReason(t *testing.T) {
 	}
 }
 
+// A run now on an unreachable endpoint is answered as it arrives, not queued
+// behind the run loop: a tick running long (a probe timing out against the
+// gone device) would otherwise outlast the caller's budget, and the caller
+// would read a timeout where the gate had its reason ready. A run now on an
+// open endpoint is queued as before.
+func TestARunNowOnAnUnreachableEndpointIsAnsweredBeforeTheRunLoop(t *testing.T) {
+	t.Parallel()
+	m := newSessionManager(nil, sessionHooks{})
+	m.reconcile([]collection.TaskSpec{reasonPollTask()})
+	jobs := make(chan runJob, 1)
+	var replies []collection.RunReply
+	respond := func(r collection.RunReply) { replies = append(replies, r) }
+	req := collection.RunRequest{Kind: collection.RunNow, Tasks: []collection.TaskSpec{reasonPollTask()}}
+
+	takeRun(t.Context(), nil, m.gates, jobs, req, respond)
+	if len(replies) != 0 || len(jobs) != 1 {
+		t.Fatalf("an open endpoint's run now: replies %+v, queued %d; want queued, unanswered", replies, len(jobs))
+	}
+	<-jobs
+
+	m.gates.verdict("ep-1", "t-probe", false, gateT0)
+	m.gates.verdict("ep-1", "t-probe", false, gateT0.Add(time.Second))
+	takeRun(t.Context(), nil, m.gates, jobs, req, respond)
+	if len(jobs) != 0 {
+		t.Fatal("a run now on an unreachable endpoint was queued to the run loop")
+	}
+	if len(replies) != 1 || !replies[0].Gated || replies[0].GateReason != string(reasonUnreachable) ||
+		!strings.Contains(replies[0].Error, "unreachable since 2026-11-09T14:03:00Z") {
+		t.Fatalf("replies = %+v, want one gated by unreachable", replies)
+	}
+}
+
 // A preview carries no endpoint: it answers Gated when its target's host is
 // unreachable on this node, and runs when only a refusal holds (a preview
 // connects with its own inputs).
