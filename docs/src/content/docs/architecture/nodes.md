@@ -46,7 +46,8 @@ node serving its own simulated components, `omniglass node run --simulate` (#119
 durable JetStream command queue, the session pool knobs and the held transports beyond these
 (#1036 (mqtt), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip), [ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)),
 node self-telemetry, the node-down sweep, the
-cascade-resolved buffer knobs, and tick scheduling and concurrency knobs. The credential is a shared
+cascade-resolved buffer knobs, and the per-kind timers and pools that replace the heartbeat tick
+([ADR-1637](/architecture/decisions/#adr-1637-a-node-runs-each-kind-of-work-on-its-own-timer-and-pool-one-request-per-endpoint-at-a-time)). The credential is a shared
 secret (the enrollment token doubles as the NATS password); the decentralized nkey/JWT model is
 deferred. See [implementation status](/architecture/status/) and
 [decision log](/architecture/decisions/) (ADR-0036).
@@ -551,8 +552,8 @@ it is **open only when the set is empty**. Several triggers, one gate:
 | `disrupted` | a disruptive command, at delivery, on every endpoint of its hold set | after a quiet period with no connectivity attempts (probes included), each endpoint's first up verdict; a backstop releases the rest and counts the expiry | #1651 |
 | `upstream` | a closed gate on the component the endpoint is reached through (a path edge, transitive and cycle-guarded) | the upstream opening, then the dependent's own first up verdict | #1652, edges #1648 |
 
-A disruptive command no longer blocks a lane until the host comes back: the `disrupted` reason
-closes the gate, and the lane, consulting it, sends nothing. While the gate is closed, a due
+A disruptive command does not block its lane until the host comes back (the smart-wait this
+replaces): the `disrupted` reason closes the gate, and the lane, consulting it, sends nothing. While the gate is closed, a due
 scheduled poll is skipped and counted in `poll-held-count` (held, not loss), and a command, a run
 now or a preview answers at once with the reason ("unreachable since", "disrupted by", "upstream",
 or today's refusal) instead of queueing. Only the probe runs, and not while a reason suppresses it
