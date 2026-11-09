@@ -184,3 +184,29 @@ func TestNodeReportIsNilSafe(t *testing.T) {
 		t.Fatalf("a nil report took %v", got)
 	}
 }
+
+// TestNodeReportCountsAFailedCommandPullOncePerWindow (#1626): every failed
+// pull of the command queue is tallied, and the window's tally is sent once
+// when it ends; a window with no failure sends nothing.
+func TestNodeReportCountsAFailedCommandPullOncePerWindow(t *testing.T) {
+	t.Parallel()
+	t0 := time.Unix(1_800_000_000, 0)
+	r := newNodeReport(30*time.Second, time.Minute, t0)
+	r.commandPullFailed()
+	if mid := readings(r.take(t0.Add(30 * time.Second))); mid[writerclass.CommandPullFailureCount] != 0 {
+		t.Fatalf("command-pull-failure-count emitted before its window ended: %v", mid)
+	}
+	r.commandPullFailed()
+	got := readings(r.take(t0.Add(time.Minute)))
+	if got[writerclass.CommandPullFailureCount] != 2 {
+		t.Errorf("command-pull-failure-count = %v, want the window's 2: %v", got[writerclass.CommandPullFailureCount], got)
+	}
+	if _, dup := got[writerclass.CommandPullFailureCount+"#dup"]; dup {
+		t.Error("command-pull-failure-count emitted twice in one window")
+	}
+	if quiet := readings(r.take(t0.Add(2 * time.Minute))); len(quiet) != 0 {
+		t.Errorf("a window with no failed pull sent %v, want nothing", quiet)
+	}
+	var none *nodeReport
+	none.commandPullFailed()
+}
