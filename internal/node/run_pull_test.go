@@ -123,7 +123,7 @@ func TestANodeWhoseFirstPullsFailRetriesAndRuns(t *testing.T) {
 	ran := make(chan error, 1)
 	go func() {
 		_, err := node.Run(runCtx, node.Config{ServerURL: apiSrv.URL, Name: "edge-r", Token: token,
-			HeartbeatEvery: 200 * time.Millisecond, WorklistEvery: time.Hour})
+			HeartbeatEvery: 200 * time.Millisecond, ProbeEvery: 200 * time.Millisecond, WorklistEvery: time.Hour})
 		ran <- err
 	}()
 	defer func() {
@@ -215,7 +215,7 @@ func TestATransientStorageErrorLeavesTheNodesSessionsUntouched(t *testing.T) {
 	ran := make(chan error, 1)
 	go func() {
 		_, err := node.Run(runCtx, node.Config{ServerURL: apiSrv.URL, Name: nodeName, Token: token,
-			HeartbeatEvery: 200 * time.Millisecond, WorklistEvery: 200 * time.Millisecond})
+			HeartbeatEvery: 200 * time.Millisecond, ProbeEvery: 200 * time.Millisecond, WorklistEvery: 200 * time.Millisecond})
 		ran <- err
 	}()
 	defer func() {

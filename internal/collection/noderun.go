@@ -114,6 +114,9 @@ type RunReply struct {
 	Results []RunResult `json:"results,omitempty"`
 	Error   string      `json:"error,omitempty"`
 	Gated   bool        `json:"gated,omitempty"`
+	// GateReason names the kind of reason holding the gate (refused,
+	// unreachable) when Gated, so the server answers with the cause (#1650).
+	GateReason string `json:"gate_reason,omitempty"`
 	// Pending is a run now held back because the endpoint's stream is still
 	// making its first attempt (#1038): nothing has refused it yet.
 	Pending bool `json:"pending,omitempty"`

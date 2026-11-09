@@ -2039,7 +2039,7 @@ Preview a driver spec's polls through a node
 omniglass driver preview [flags]
 ```
 
-Runs a driver spec's polls once through the node named, against the target its inputs name, and answers with what each poll read: the samples its emits extracted, each emit that did not locate, and an excerpt of the raw answer, masked of every secret the preview used. Nothing is stored. The spec is a stored driver (driver) or an unsaved one (spec); an invalid spec is a 422 listing its findings, as validate-driver-spec gives them. A preview runs a poll that is its own request (http, https, an snmp get, a tcp line); a poll that rides a held session or a bound socket needs an attached endpoint (run-endpoint-poll). A secret input must be one the caller may reveal (secret:reveal), since the preview hands it to the target named. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight is a 429. Audited on the node and on each secret used. Gated by driver:preview.
+Runs a driver spec's polls once through the node named, against the target its inputs name, and answers with what each poll read: the samples its emits extracted, each emit that did not locate, and an excerpt of the raw answer, masked of every secret the preview used. Nothing is stored. The spec is a stored driver (driver) or an unsaved one (spec); an invalid spec is a 422 listing its findings, as validate-driver-spec gives them. A preview runs a poll that is its own request (http, https, an snmp get, a tcp line); a poll that rides a held session or a bound socket needs an attached endpoint (run-endpoint-poll). A secret input must be one the caller may reveal (secret:reveal), since the preview hands it to the target named. A target host the node's probe reads unreachable is a 409 naming that reason, and nothing is sent. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight is a 429. Audited on the node and on each secret used. Gated by driver:preview.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -2208,7 +2208,7 @@ Run an endpoint's poll now
 omniglass endpoint poll run <endpoint> <poll> [flags]
 ```
 
-Runs one of an attached endpoint's polls now, on the node that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409) and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no node is a 409. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.
+Runs one of an attached endpoint's polls now, on the node that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409), a refusal or an unreachable verdict from the endpoint's probe, and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no node is a 409. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -3747,8 +3747,9 @@ Runs the edge node: claims its NATS credential with the enrollment token, pulls 
 | `--name` | string | (none) | this node's registered name (env OMNIGLASS_NODE_NAME) |
 | `--once` | bool | `false` | run a single claim + pull + heartbeat cycle and exit |
 | `--poll` | duration | `10s` | with --simulate: how often the simulator re-pulls its component list |
+| `--poll-workers` | int | `16` | how many collection tasks run at once, one at a time per endpoint (env OMNIGLASS_POLL_WORKERS) |
 | `--port-offset` | int | `0` | with --simulate: lift the simulated ports below 1024 by this much, to serve without the privilege to bind them |
-| `--probe-every` | duration | `0s` | how often each reachability probe runs; 0 probes on every heartbeat. Keep it under the console's 150s staleness window, past which a probe-only endpoint reads stale between probes |
+| `--probe-every` | duration | `30s` | how often each reachability probe runs, on the node's own timer, apart from the heartbeat. Keep it under the console's 150s staleness window, past which a probe-only endpoint reads stale between probes |
 | `--server` | string | (none) | Omniglass server base URL (env OMNIGLASS_SERVER) |
 | `--simulate` | bool | `false` | also run the simulator in this process, serving the simulated components placed on this node on its own loopback |
 | `--token` | string | (none) | enrollment token from POST /nodes/{name}:enroll (env OMNIGLASS_NODE_TOKEN) |

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
@@ -48,7 +49,10 @@ func pruneCommandMemory(executed map[int64]commandOutcome, now time.Time) {
 // runCommands runs one pull-execute-report cycle. A pull failure is silent
 // (the next tick re-pulls, the server redelivers); a report publish failure is
 // also survivable, since the redelivered command finds its outcome remembered.
-func runCommands(ctx context.Context, nc *nats.Conn, name string, runner *collection.Runner, sessions *sessionManager, executed map[int64]commandOutcome) {
+// Each command waits for its endpoint's lane on pool, ahead of the scheduled
+// tasks queued there (#1634), so it never talks to a device a poll is
+// talking to; a nil pool runs it at once.
+func runCommands(ctx context.Context, nc *nats.Conn, name string, runner *collection.Runner, sessions *sessionManager, pool *lanePool, executed map[int64]commandOutcome) {
 	now := time.Now()
 	pruneCommandMemory(executed, now)
 	msg, err := nc.Request(collection.CommandSubject(name), nil, worklistTimeout)
@@ -66,7 +70,12 @@ func runCommands(ctx context.Context, nc *nats.Conn, name string, runner *collec
 		o, done := executed[d.ID]
 		outcome, reply := o.outcome, o.reply
 		if !done {
-			reply, outcome = executeDelivery(ctx, runner, d, sessions)
+			actuate := func() { reply, outcome = executeDelivery(ctx, runner, d, sessions) }
+			if pool != nil {
+				pool.do(commandLane(d), laneOperator, actuate)
+			} else {
+				actuate()
+			}
 			executed[d.ID] = commandOutcome{outcome: outcome, reply: reply, at: now}
 			if outcome == "" {
 				slog.Info("command actuated", "facility", "command", "command", d.ID, "type", d.CommandType)
@@ -80,6 +89,14 @@ func runCommands(ctx context.Context, nc *nats.Conn, name string, runner *collec
 		}
 		_ = nc.Publish(collection.CommandStatusSubject(name), st)
 	}
+}
+
+// commandLane is the lane a command runs on: its endpoint's.
+func commandLane(d collection.CommandDelivery) string {
+	if d.EndpointID != "" {
+		return d.EndpointID
+	}
+	return "command:" + strconv.FormatInt(d.ID, 10)
 }
 
 // commandWaits reports a command that waits a tick: an http command whose
@@ -100,10 +117,15 @@ func commandWaits(d collection.CommandDelivery, sessions *sessionManager) bool {
 // server from the reply (when the binding settles from the response) or from
 // what is observed next.
 func executeDelivery(ctx context.Context, runner *collection.Runner, d collection.CommandDelivery, sessions *sessionManager) (reply, outcome string) {
-	if gt, gated := sessions.blocked(d.EndpointID, rungResponsive); gated {
+	if gt, gated := sessions.refusedAt(d.EndpointID, rungResponsive); gated {
 		// A gated endpoint (#1056 ruling): the command fails fast with the
 		// refusal on every path, never a dial under the refused fingerprint.
 		return "", "node: the endpoint is gated: " + gt.refusal().Error()
+	}
+	if r, held := sessions.holding(d.EndpointID); held {
+		// An unreachable endpoint (#1650) answers at once with the reason,
+		// never a dial the probe already says will not land.
+		return "", "node: the endpoint is " + r.text + ", so the command was not sent"
 	}
 	switch {
 	case driver.IsHTTP(d.Transport):
@@ -193,7 +215,7 @@ func executeHTTP(ctx context.Context, runner *collection.Runner, d collection.Co
 	if runner.HTTPFetch == nil {
 		return "", "node: no http actuator wired"
 	}
-	if gt, gated := sessions.blocked(d.EndpointID, rungAuthenticated); gated {
+	if gt, gated := sessions.refusedAt(d.EndpointID, rungAuthenticated); gated {
 		// Every http request carries the credential, so a refused one holds
 		// the command too (#1056 ruling), as it holds the poll.
 		return "", "node: the endpoint is gated: " + gt.refusal().Error()

@@ -28,7 +28,8 @@ import (
 // pull: a new listen task starts a session, a removed one (or a change to
 // what the connection depends on) tears it down, node shutdown tears down
 // them all. It runs on the run loop's goroutine; what a session's goroutines
-// read back (where to publish, the listeners) sits behind locks.
+// and the dispatcher's workers read back (where to publish, the listeners,
+// the held set) sits behind locks.
 
 // sessionHooks is where a session's facts go: its transitions, the samples
 // its listeners land, the faults they meet, and the arm conversation.
@@ -535,6 +536,11 @@ func (h *heldSession) publishTo() (string, string) {
 type sessionManager struct {
 	dialers map[string]collection.SessionDialer
 	hooks   sessionHooks
+	// mapsMu guards held, certPins, datagrams, datagramRefused and
+	// httpEndpoints (#1634): the run loop alone writes them, under the write
+	// lock, and the dispatcher's workers read them, under the read lock, while
+	// a task runs. The run loop's own reads take no lock.
+	mapsMu  sync.RWMutex
 	held    map[string]*heldSession
 	refused map[string]string // last refusal per endpoint, so it logs once
 	// pins carries each ssh endpoint's trusted host key across a session's
@@ -556,12 +562,12 @@ type sessionManager struct {
 	// trusts a key the other refused. It outlives a session's recycle (a key
 	// trusted on first use stays the pin while the server does not yet hold
 	// it) and is replaced only when the worklist delivers another pin (an
-	// operator's :retry with certificate). Touched on the run loop only; the
-	// pin itself is safe across goroutines.
+	// operator's :retry with certificate). Behind mapsMu; the pin itself is
+	// safe across goroutines.
 	certPins map[string]*collection.HostKeyPin
 	// datagrams is each udp endpoint's bound socket (#1037), and
 	// datagramRefused the last reason each endpoint has none, so it logs
-	// once. Touched on the run loop only.
+	// once. Behind mapsMu.
 	datagrams       map[string]*heldDatagram
 	datagramRefused map[string]string
 	// leftPushes is the claimed and unclaimed counts of the routers torn
@@ -570,8 +576,7 @@ type sessionManager struct {
 	leftPushes map[string][2]int
 	// httpEndpoints is each http or https endpoint's credential and trust,
 	// read off its worklist tasks (#902): what an http command, which the
-	// delivery carries without either, actuates with. Touched on the run
-	// loop only.
+	// delivery carries without either, actuates with. Behind mapsMu.
 	httpEndpoints map[string]httpEndpoint
 	// httpAuth is each http endpoint's learned auth (#1114): its cookie
 	// jar, its digest challenge and its login session, under the
@@ -640,7 +645,9 @@ func (m *sessionManager) syncHTTPEndpoints(tasks []collection.TaskSpec) {
 		}
 		eps[t.EndpointID] = ep
 	}
+	m.mapsMu.Lock()
 	m.httpEndpoints = eps
+	m.mapsMu.Unlock()
 	// A websocket's upgrade keeps its learned auth too (#1034): its login's
 	// session and cookies, under the fingerprint they were learned with.
 	authed := map[string]string{}
@@ -688,6 +695,8 @@ func (m *sessionManager) httpEndpointOf(endpointID string) (httpEndpoint, bool) 
 	if m == nil {
 		return httpEndpoint{}, false
 	}
+	m.mapsMu.RLock()
+	defer m.mapsMu.RUnlock()
 	ep, ok := m.httpEndpoints[endpointID]
 	return ep, ok
 }
@@ -715,22 +724,29 @@ func (m *sessionManager) syncCertPins(tasks []collection.TaskSpec) {
 			delivered[t.EndpointID] = t.CertificatePin
 		}
 	}
+	m.mapsMu.Lock()
 	for id := range m.certPins {
 		if _, ok := delivered[id]; !ok {
 			delete(m.certPins, id)
 		}
 	}
+	m.mapsMu.Unlock()
+	setPin := func(id string, pin *collection.HostKeyPin) {
+		m.mapsMu.Lock()
+		m.certPins[id] = pin
+		m.mapsMu.Unlock()
+	}
 	for id, pin := range delivered {
 		held := m.certPins[id]
 		switch {
 		case held == nil, pin != "" && pin != held.Get():
-			m.certPins[id] = m.newCertPin(id, pin)
+			setPin(id, m.newCertPin(id, pin))
 		case pin == "" && held.Get() != "" && !held.Learned():
 			// A pin the server delivered and now withdraws (a declared pin
 			// the writer ruling retired, ADR-0161): forgotten, so the next
 			// connection trusts on first use; a session held under it
 			// redials, its pin no longer the endpoint's.
-			m.certPins[id] = m.newCertPin(id, "")
+			setPin(id, m.newCertPin(id, ""))
 		case pin == "" && held.Get() != "":
 			m.publishCertificate(id, held.Get())
 		}
@@ -761,7 +777,10 @@ func (m *sessionManager) publishCertificate(endpointID, fp string) {
 // delivered key alone when the node holds none (no session manager).
 func (m *sessionManager) certPinOf(task collection.TaskSpec) *collection.HostKeyPin {
 	if m != nil {
-		if pin, ok := m.certPins[task.EndpointID]; ok {
+		m.mapsMu.RLock()
+		pin, ok := m.certPins[task.EndpointID]
+		m.mapsMu.RUnlock()
+		if ok {
 			return pin
 		}
 	}
@@ -853,12 +872,32 @@ func (m *sessionManager) pass(endpointID string) {
 	m.syncRejection(endpointID)
 }
 
-// blocked is the gate that blocks rung r for the endpoint, if any.
-func (m *sessionManager) blocked(endpointID string, r rung) (gate, bool) {
+// refusedAt is the refused reason that holds rung r for the endpoint, if any.
+func (m *sessionManager) refusedAt(endpointID string, r rung) (gate, bool) {
 	if m == nil {
 		return gate{}, false
 	}
-	return m.gates.blocked(endpointID, r)
+	return m.gates.refusedAt(endpointID, r)
+}
+
+// holding is the most causal reason that holds the whole endpoint, if any
+// (#1650): every reason but a rung-scoped refusal.
+func (m *sessionManager) holding(endpointID string) (reason, bool) {
+	if m == nil {
+		return reason{}, false
+	}
+	return m.gates.holding(endpointID)
+}
+
+// verdict feeds the endpoint's probe verdict to its gate and publishes the
+// gate when the verdict moved it.
+func (m *sessionManager) verdict(endpointID, taskID string, up bool, at time.Time) {
+	if m == nil || endpointID == "" {
+		return
+	}
+	if m.gates.verdict(endpointID, taskID, up, at) {
+		m.syncRejection(endpointID)
+	}
 }
 
 // observe takes each endpoint's fingerprint and published rejection off the
@@ -869,18 +908,24 @@ func (m *sessionManager) observe(tasks []collection.TaskSpec) {
 	// driver deletes old task ids, and a sample under one is an orphan).
 	pubTask := map[string][2]string{}
 	reflected := map[string]string{}
+	endpoints, taskIDs := map[string]bool{}, map[string]bool{}
 	for _, t := range tasks {
 		if t.EndpointID == "" {
 			continue
 		}
+		endpoints[t.EndpointID], taskIDs[t.ID] = true, true
 		if cur, ok := pubTask[t.EndpointID]; !ok || t.ID < cur[0] {
 			pubTask[t.EndpointID] = [2]string{t.ID, t.EndpointName}
 		}
 		if _, ok := reflected[t.EndpointID]; !ok {
 			reflected[t.EndpointID] = t.Rejection
 			m.gates.observe(t.EndpointID, t.Fingerprint, t.Rejection)
+			var p endpointParams
+			_ = json.Unmarshal(t.EndpointParams, &p)
+			m.gates.place(t.EndpointID, p.Target)
 		}
 	}
+	m.gates.retain(endpoints, taskIDs)
 	m.pubMu.Lock()
 	m.pubTask = pubTask
 	// What the server reflects back is what is published: a gate the node
@@ -1009,7 +1054,9 @@ func (m *sessionManager) start(id string, w sessionWant) {
 			t.Pin = m.certPins[id]
 			if t.Pin == nil {
 				t.Pin = m.newCertPin(id, "")
+				m.mapsMu.Lock()
 				m.certPins[id] = t.Pin
+				m.mapsMu.Unlock()
 			}
 			h.certPin = t.Pin
 		}
@@ -1035,7 +1082,7 @@ func (m *sessionManager) start(id string, w sessionWant) {
 		// A refusal a poll or a command met holds the stream's reconnects
 		// too, under the same fingerprint.
 		a.Gate = func() *collection.TerminalError {
-			if gt, ok := m.gates.blocked(id, rungAuthenticated); ok {
+			if gt, ok := m.gates.refusedAt(id, rungAuthenticated); ok {
 				return gt.refusal()
 			}
 			return nil
@@ -1043,7 +1090,7 @@ func (m *sessionManager) start(id string, w sessionWant) {
 		w.auth = &collection.SessionAuth{HTTP: &a}
 	}
 	var rejected *collection.TerminalError
-	if gt, ok := m.gates.blocked(id, rungAuthenticated); ok {
+	if gt, ok := m.gates.refusedAt(id, rungAuthenticated); ok {
 		// A gate this node holds for this fingerprint, or carried back from
 		// before a restart: the session starts rejected and dials nothing.
 		rejected = gt.refusal()
@@ -1091,12 +1138,16 @@ func (m *sessionManager) start(id string, w sessionWant) {
 			}
 		},
 	})
+	m.mapsMu.Lock()
 	m.held[id] = h
+	m.mapsMu.Unlock()
 }
 
 func (m *sessionManager) teardown(id string, h *heldSession, why string) {
 	h.sess.Close()
+	m.mapsMu.Lock()
 	delete(m.held, id)
+	m.mapsMu.Unlock()
 	m.keepPushes(id, h.router)
 	taskID, endpoint := h.publishTo()
 	slog.Info("session torn down", "facility", "session", "task", taskID, "endpoint", endpoint, "target", h.conn.target, "reason", why)
@@ -1185,7 +1236,9 @@ func (m *sessionManager) streamPending(endpointID string) bool {
 	if m == nil || endpointID == "" {
 		return false
 	}
+	m.mapsMu.RLock()
 	h, ok := m.held[endpointID]
+	m.mapsMu.RUnlock()
 	if !ok || !driver.IsHTTP(h.conn.transport) {
 		return false
 	}
@@ -1203,7 +1256,7 @@ func (m *sessionManager) streamPending(endpointID string) bool {
 
 // authGated reports an endpoint gated at the session rung.
 func (m *sessionManager) authGated(endpointID string) bool {
-	_, ok := m.gates.blocked(endpointID, rungAuthenticated)
+	_, ok := m.gates.refusedAt(endpointID, rungAuthenticated)
 	return ok
 }
 
@@ -1219,6 +1272,8 @@ func (m *sessionManager) lookup(endpointID string) collection.HeldExchanger {
 	if m == nil || endpointID == "" {
 		return nil
 	}
+	m.mapsMu.RLock()
+	defer m.mapsMu.RUnlock()
 	if h, ok := m.held[endpointID]; ok {
 		return h.sess
 	}
@@ -1230,7 +1285,9 @@ func (m *sessionManager) isUp(endpointID string) bool {
 	if m == nil || endpointID == "" {
 		return false
 	}
+	m.mapsMu.RLock()
 	h, ok := m.held[endpointID]
+	m.mapsMu.RUnlock()
 	if !ok {
 		return false
 	}

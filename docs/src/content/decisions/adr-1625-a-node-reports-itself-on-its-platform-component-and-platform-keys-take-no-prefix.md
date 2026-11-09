@@ -39,7 +39,13 @@ refs: [1625, 1094, 161, 1641, 1634, 1626, 1627, 1628, 1659]
      interval unset) is measured against the heartbeat. Lateness of a run the schedule had no booking
      for is measured from the tick's start. A dropped tick is a gap between ticker fires above 1.5
      heartbeats. `tick-duration` and `tick-overrun-count` describe the serial loop and #1634 redefines
-     them.
+     them. Amended when this met the dispatcher
+     ([ADR-1634](/architecture/decisions/#adr-1634-each-poll-and-probe-runs-on-its-own-interval-from-a-dispatcher-of-its-own)):
+     the figures come from the dispatcher's heartbeat window. `tick-duration` is its longest pass,
+     `tick-overrun-count` the dues that met their run in flight, `schedule-skip-count` every due it
+     passed over, `schedule-lateness` its latest dispatch, and `schedule-gap-excess` the worst gap
+     between two scheduled starts of a task off its interval. With no heartbeat rounding left, a poll
+     keeping its interval reads 0.
   6. **Counts go once per window and only when nonzero.** Overruns, skipped intervals, spool drops and
      publish failures (refused, not acked, or failed to encode) follow the `poll-failure-count`
      convention on the node's report window; the each-tick figures go every tick, and

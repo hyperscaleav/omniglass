@@ -131,7 +131,7 @@ private key; a `session.login` beside it only answers keyboard-interactive quest
 nothing declared answers, such as a one-time code, rejects the session), `session.pty` asks for a
 terminal and `session.exec` runs a command as the channel instead of a shell. The host key is trusted
 on first use and kept as the endpoint's `ssh-host-key`; when it changes the session reads `rejected`
-naming both keys, which the gate carries as data (`endpoint-rejection` ends with the pinned and the
+naming both keys, which the gate carries as data (the refusal's entry in `endpoint-rejection` ends with the pinned and the
 offered key). The console's **Trust this key** on the session's notice trusts the offered one after
 a confirm ([held sessions](/guides/operator/collection/#a-changed-key)), and so does
 `omniglass endpoint retry <component>/ssh --host-key <the offered key>`. While the refusal holds, the key must be
@@ -393,10 +393,12 @@ session:
   reprobe: 1h
 ```
 
-A poll's `schedule.every` is how often the node asks the device, at the node's heartbeat
-granularity (a `60s` poll on a 30s heartbeat runs every other tick). A poll whose fetch fails
-(the device rebooting, say) retries sooner, on a backoff that starts at the heartbeat and doubles
-up to the interval, so a daily poll is not lost for a day. A listener's pushes land as they arrive
+A poll's `schedule.every` is how often the node asks the device, on the node's own timer rather
+than its heartbeat: a `10s` poll runs every ten seconds at a stable phase of its own, whatever
+the heartbeat
+([ADR-1634](/architecture/decisions/#adr-1634-each-poll-and-probe-runs-on-its-own-interval-from-a-dispatcher-of-its-own)).
+A poll whose fetch fails (the device rebooting, say) retries sooner, on a backoff that starts at
+one second and doubles up to the interval, so a daily poll is not lost for a day. A listener's pushes land as they arrive
 whatever the schedule. Changing a spec (or its version) reaches the endpoints already attached through it: their tasks
 re-derive in the update's own transaction, under its one audit row, and the next poll runs the
 new spec; an official spec a new release ships reaches them at boot the same way.

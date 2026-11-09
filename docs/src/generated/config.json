@@ -113,6 +113,11 @@
    "doc": "the node's enrollment token, used by omniglass node run and sim run when --token is omitted, read when the command runs and never printed by help"
   },
   {
+   "key": "OMNIGLASS_POLL_WORKERS",
+   "scope": "node",
+   "doc": "how many collection tasks omniglass node run runs at once, one at a time per endpoint, when --poll-workers is omitted"
+  },
+  {
    "key": "DOCKER_HOST",
    "scope": "cli",
    "doc": "the Docker daemon omniglass lab run drives, ahead of any docker context; a daemon on another machine is refused"

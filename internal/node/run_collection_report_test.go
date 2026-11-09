@@ -7,7 +7,6 @@ package node_test
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -30,7 +29,7 @@ func (s *gateStack) runNodeReporting(name string, every time.Duration) {
 	ran := make(chan error, 1)
 	go func() {
 		_, err := node.Run(runCtx, node.Config{ServerURL: s.apiURL, Name: name, Token: s.token,
-			HeartbeatEvery: 100 * time.Millisecond, ReportEvery: every})
+			HeartbeatEvery: 100 * time.Millisecond, ProbeEvery: 100 * time.Millisecond, ReportEvery: every})
 		ran <- err
 	}()
 	s.stop = func() {
@@ -60,7 +59,7 @@ func (s *gateStack) waitMetric(comp, instance, key string, ok func(float64) bool
 // its listeners claim) attached to a simulated bar, and to a second bar
 // whose device is gone. Each report window, the live bar's endpoint lands
 // the mean time of its polls and the messages its listeners claimed, a
-// quiet window as zero; the dead bar's endpoint lands its failed polls. The
+// quiet window as zero; the dead bar's endpoint lands its held polls. The
 // rows are the endpoint's own series (instance: the endpoint), owned by its
 // component, and a push may not forge them.
 func TestEveryEndpointReportsItsOwnCollection(t *testing.T) {
@@ -102,27 +101,17 @@ func TestEveryEndpointReportsItsOwnCollection(t *testing.T) {
 	s.waitMetric("bar-live", live.Name, probekeys.PushMessageCount, func(v float64) bool { return v >= 1 }, "the claimed change counted")
 	s.waitMetric("bar-live", live.Name, probekeys.PushMessageCount, func(v float64) bool { return v == 0 }, "a quiet window as zero")
 
-	// The gone bar's polls are refused at the port: each window counts them.
-	s.waitMetric("bar-gone", gone.Name, probekeys.PollFailureCount, func(v float64) bool { return v >= 1 }, "the refused polls counted")
-	s.waitMetric("bar-gone", gone.Name, probekeys.PollDuration, func(v float64) bool { return v >= 0 }, "a failed poll's time counted too")
+	// The gone bar's probe reads down at the port, so its gate holds
+	// unreachable and its due polls are held (#1650): each window counts
+	// them, apart from failures.
+	s.waitMetric("bar-gone", gone.Name, probekeys.PollHeldCount, func(v float64) bool { return v >= 1 }, "the held polls counted")
 }
 
 // fastDriver authors a copy of a shipped driver whose every poll runs each
 // second, so a test sees a gate refuse due polls window after window.
 func (s *httpStack) fastDriver(shipped, name string) {
 	s.t.Helper()
-	d, err := s.gw.GetDriver(s.ctx, shipped)
-	if err != nil {
-		s.t.Fatal(err)
-	}
-	var spec map[string]any
-	if err := json.Unmarshal(d.Spec, &spec); err != nil {
-		s.t.Fatal(err)
-	}
-	for _, p := range spec["polls"].([]any) {
-		p.(map[string]any)["schedule"] = map[string]any{"every": "1s"}
-	}
-	s.authorDriver(name, spec)
+	s.everyDriver(shipped, name, "1s")
 }
 
 // latestAt is the time of the endpoint's latest key, zero when none landed.
