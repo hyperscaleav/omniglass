@@ -458,7 +458,7 @@ Every platform metric key, rendered from the writer-class ruling and the seed:
 
 <PlatformKeys />
 
-**Who writes them.** A node reports all but three of itself, in the **node-self block** of the batch
+**Who writes them.** A node reports the node-self keys of itself, in the **node-self block** of the batch
 its tick already publishes (`TelemetryBatch.node_self`, field 15). The block names no owner and no
 task: the server takes the node from the subject it published on, lands the rows on that node's
 platform component as the process, and holds every row to the node-self keys, so a node writes no
@@ -469,7 +469,9 @@ calc is refused like any reserved key. `checkin-age` is the server's: a timer wr
 node's age every 15 s, half the default heartbeat, as the seconds since its last heartbeat (or since
 its claim, before its first). It keeps growing while a node is silent, which is the series a
 node-silent rule reads. The webhook counts are the receiver's
-([above](#collection-telemetry-every-endpoints-account-of-itself)).
+([above](#collection-telemetry-every-endpoints-account-of-itself)), and the `retention-*`,
+`metric-*`, `table-bytes` and `database-bytes` figures are the retention pass's
+([storage](/architecture/storage/#what-a-retention-pass-reports)).
 
 **How a node samples.** Two shapes, as collection telemetry has. The each-tick figures (the pass's
 duration, the tick's worst lateness and gap excess, the spool's depth, the sessions held by state,
