@@ -28,7 +28,8 @@ import (
 // pull: a new listen task starts a session, a removed one (or a change to
 // what the connection depends on) tears it down, node shutdown tears down
 // them all. It runs on the run loop's goroutine; what a session's goroutines
-// read back (where to publish, the listeners) sits behind locks.
+// and the dispatcher's workers read back (where to publish, the listeners,
+// the held set) sits behind locks.
 
 // sessionHooks is where a session's facts go: its transitions, the samples
 // its listeners land, the faults they meet, and the arm conversation.

@@ -17,15 +17,16 @@ import (
 // the node to run work now and the node answers once. A preview runs polls of
 // a spec no endpoint holds yet, on the request's own goroutine, touching no
 // held session and publishing nothing. A run now runs one of the node's own
-// poll tasks on the run loop, where every held session and gate lives, so it
-// borrows the endpoint's session and honors its gate exactly as a scheduled
-// run does, and lands what it reads.
+// poll tasks on a dispatcher worker in its endpoint's lane (#1634), ahead
+// of the scheduled runs waiting there, so it borrows the endpoint's session
+// and honors its gate exactly as a scheduled run does, and lands what it
+// reads.
 
 // defaultRunTimeout bounds a run whose request names no budget.
 const defaultRunTimeout = 20 * time.Second
 
-// runJob is a run now handed to the run loop: the task, its budget, and the
-// one answer the request is owed.
+// runJob is a run now handed to the run loop, which gives it to the task's
+// lane: the task, its budget, and the one answer the request is owed.
 type runJob struct {
 	task collection.TaskSpec
 	// deadline is stamped when the request arrives, so a job the loop takes
@@ -185,7 +186,7 @@ func landableRun(sched *pollSchedule, taskID string, dps []collection.Sample) []
 	return sched.changed(taskID, dps)
 }
 
-// runNowTask runs one of the node's poll tasks now, on the run loop, exactly
+// runNowTask runs one of the node's poll tasks now, on its lane, exactly
 // as a scheduled run would, its schedule untouched: the endpoint's held
 // session borrowed where it has one, its gate honored (a gated stateless
 // poll is refused with the gate's refusal, an endpoint its probe reads

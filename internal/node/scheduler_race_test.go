@@ -3,6 +3,7 @@ package node
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -126,5 +127,58 @@ func TestSixtyPollsAcrossTenComponentsRunConcurrentlyOneAtATimePerEndpoint(t *te
 	}
 	if getter.max < 2 {
 		t.Fatalf("at most %d gets ran at once, want the endpoints run side by side", getter.max)
+	}
+}
+
+// slowFailGetter is an snmp getter whose every get times out, the fake clock
+// moving on by the time the device took to not answer.
+type slowFailGetter struct {
+	advance func(time.Duration)
+	took    time.Duration
+}
+
+func (g *slowFailGetter) Get(context.Context, string, string, []string, time.Duration) (map[string]string, error) {
+	g.advance(g.took)
+	return nil, errors.New("snmp: request timeout")
+}
+
+// A poll whose device times out is retried a backoff after the run ended,
+// not after it began: booked from the start, a ten second timeout puts every
+// retry in the past at finish, and the dispatcher runs the poll again at
+// once, back to back, until the backoff outgrows the timeout.
+func TestAFailedPollRetriesABackoffAfterItsRunEnded(t *testing.T) {
+	t.Parallel()
+	var mu sync.Mutex
+	now := gateT0
+	clock := func() time.Time {
+		mu.Lock()
+		defer mu.Unlock()
+		return now
+	}
+	getter := &slowFailGetter{took: 10 * time.Second, advance: func(d time.Duration) {
+		mu.Lock()
+		defer mu.Unlock()
+		now = now.Add(d)
+	}}
+	sessions := newSessionManager(nil, sessionHooks{})
+	sched := newPollSchedule()
+	report := newCollectionReport(time.Minute, gateT0)
+	spool := newTelemetrySpool("og.v1.telemetry.edge", "edge", func(string, []byte, string) (ackWait, error) {
+		return func(context.Context) error { return nil }, nil
+	})
+	coll := newCollector(spool, "edge", &collection.Runner{SNMP: getter}, sessions, sched, report)
+	coll.clock = clock
+	coll.every = func(collection.TaskSpec) time.Duration { return time.Minute }
+	task := fleetPoll(0, 0, 0)
+	sessions.reconcile([]collection.TaskSpec{task})
+	if err := coll.runPoll(t.Context(), task); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	next, ok := sched.nextOf(task.ID)
+	if !ok {
+		t.Fatal("the failed poll booked no retry")
+	}
+	if want := gateT0.Add(getter.took + backoffBase); !next.Equal(want) {
+		t.Fatalf("the retry is due %v after the run began, want %v (a backoff after it ended)", next.Sub(gateT0), want.Sub(gateT0))
 	}
 }

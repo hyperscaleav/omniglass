@@ -98,7 +98,6 @@ func (c *collector) run(ctx context.Context, task collection.TaskSpec) {
 // static misconfiguration that faults every run lands one event, not one per
 // run forever, so a stuck driver does not flood the event lane.
 func (c *collector) runPoll(ctx context.Context, task collection.TaskSpec) error {
-	now := c.clock()
 	interval := c.every(task)
 	// An http poll is its own request even beside a held stream (#1038): it
 	// answers to the gate itself, as a stateless poll does.
@@ -127,7 +126,10 @@ func (c *collector) runPoll(ctx context.Context, task collection.TaskSpec) error
 			}
 		}
 	}
-	bookPollRun(c.sched, task.ID, interval, now, dps, faults)
+	// A retry waits its backoff from the run's end (#1634): from its start,
+	// a device that takes longer than the wait to time out would be asked
+	// again the moment it finished.
+	bookPollRun(c.sched, task.ID, interval, c.clock(), dps, faults)
 	current := ""
 	for _, f := range faults {
 		current += f.Error() + "\n"
