@@ -231,6 +231,18 @@ The age cap sits inside the receipt's 24-hour horizon, so a stored batch whose a
 come back after its receipt is pruned and land twice. A one-shot run (`--once`) ends only once the
 stream has acked what it collected; a stopping node gives the spool five seconds to drain.
 
+Every batch the spool flushes also carries a **delivery ledger** (#1641), stamped under the spool's
+lock so it is dense in queue order: the spool's `boot` (a UUIDv7 minted when it starts), a `seq` from
+1, the node clock at the flush, the items of each kind the batch carries and the items the boot
+minted before it, and `resolved`, the highest seq below which nothing is still queued (the shipper
+removes batches from the head only, on an ack or a bus refusal). A self-log batch counts its lines as
+kind `log`. The ledger is encoded into the batch's bytes at the flush, so a retry carries it
+unchanged, and a batch that never lands leaves a hole in the boot's `seq` that the server's read
+counts by kind ([messaging](/architecture/messaging/#accounting-every-item-the-loss-ratio)). A
+dropped batch takes a seq too, so it reads as missing at ingest until the node hop names it
+(#1692); the spool is memory, so a restart mints a new boot and a killed boot's unshipped tail is not
+revealed by any later batch.
+
 ### On-demand runs: asked, answered once
 
 The server can ask a node to **run work now** on the node's own run subject (`og.v1.run.<node>`), a

@@ -198,6 +198,21 @@ share of the wall clock is the lane's utilisation, and a lag that sits at the no
 flush while the lane is mostly idle is not a consumer bottleneck
 ([#1517](https://github.com/hyperscaleav/omniglass/issues/1517)).
 
+A faster lane is only a win if it still lands everything, so the same run reads every telemetry
+kind's **loss ratio** across the ingest hop, `(in - out) / in` with 0 healthy, from the ledger each
+batch carries on its receipt
+([messaging](/architecture/messaging/#accounting-every-item-the-loss-ratio), #1641). It is the one
+delivery measurement for every kind and hop: a change that gets faster by dropping data reads a loss
+above 0 instead of a win, and the perf gate will fail such a run (#1695). The accounting rides on the receipt
+rather than on new rows, and its cost shows in the receipts' own figure: on a three-system corporate
+lab the receipt grew from about 290 to about 675 bytes a batch (receipts a day 56 to 129 MiB at about
+2.3 batches a second, WAL a sample 400 to 474 B), part of it the dead tuple the outcome update leaves
+until vacuum. At the 18 batches a second the table above expects of 1,000 systems, that is about
+1 GiB a day where the narrow receipt read about 0.4: past the 0.5 GiB target, which predates the
+ledger. Receipts are pruned at a day, so this is the table's standing size, not unbounded growth;
+narrowing the receipt or revising the target is
+[#1699](https://github.com/hyperscaleav/omniglass/issues/1699).
+
 ### Scale up or scale out: what the figures say
 
 A running server reports the figures that make this call on its own platform component, every report
