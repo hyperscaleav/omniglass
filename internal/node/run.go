@@ -256,6 +256,14 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 				d.kick()
 			}
 		},
+		gateMoved: func() {
+			// A disruptive delivery closed its endpoints' gates (#1651): a
+			// pass defers their probes and re-arms the timer for the hold
+			// backstop.
+			if d != nil {
+				d.kick()
+			}
+		},
 		auth: func(taskID, endpoint string, v collection.AuthVerdict) {
 			// The auth step's verdict is the endpoint-authenticated rung, the
 			// ladder's own vocabulary, published when it changes.

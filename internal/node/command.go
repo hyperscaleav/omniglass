@@ -127,6 +127,15 @@ func executeDelivery(ctx context.Context, runner *collection.Runner, d collectio
 		// never a dial the probe already says will not land.
 		return "", "node: the endpoint is " + r.text + ", so the command was not sent"
 	}
+	if d.Disruptive {
+		// A disruptive command (#1651) closes the gate of every endpoint of
+		// its component on this node before it goes out, so nothing the
+		// dispatcher starts meanwhile reads the device going down as a
+		// failure. A send that fails leaves the gates closed: the device may
+		// still have acted, and each reopens on its first up verdict after
+		// the quiet period, or at the hold backstop.
+		sessions.disrupt(d)
+	}
 	switch {
 	case driver.IsHTTP(d.Transport):
 		return executeHTTP(ctx, runner, d, sessions)

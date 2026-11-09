@@ -169,6 +169,10 @@ func (c *collector) runPoll(ctx context.Context, task collection.TaskSpec) error
 func (c *collector) runProbe(ctx context.Context, task collection.TaskSpec) error {
 	// The ladder's informational ping runs beside the probe, bounded, so
 	// gear that drops ICMP costs the run nothing extra.
+	// began is when the probe read the device: its verdict is judged at
+	// it, so an up from a probe in flight across a disruptive delivery
+	// cannot release the disruption (#1651).
+	began := c.clock()
 	pinged := make(chan []collection.Sample, 1)
 	go func() { pinged <- pingInformational(ctx, c.runner, task, nil) }()
 	dps, err := collectProbe(ctx, c.runner, task, c.sessions)
@@ -191,7 +195,7 @@ func (c *collector) runProbe(ctx context.Context, task collection.TaskSpec) erro
 	// that could not be attempted left above and never reaches here, and a
 	// refusal's own down reading is no verdict (probeVerdict).
 	if up, ok := probeVerdict(dps); ok {
-		c.sessions.verdict(task.EndpointID, task.ID, up, c.clock())
+		c.sessions.verdict(task.EndpointID, task.ID, up, began)
 		c.wake()
 	}
 	// Compute and, on a transition only, append the endpoint reachability

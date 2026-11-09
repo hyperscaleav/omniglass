@@ -47,6 +47,10 @@ type sessionHooks struct {
 	// certificate hears a tls public key the endpoint trusted on first use
 	// (#1035), and republishes it while the server lacks it.
 	certificate func(taskID, endpoint, fingerprint string)
+	// gateMoved hears a disruptive delivery close its endpoints' gates
+	// (#1651), off the run loop: the dispatcher's next pass defers their
+	// probes and arms the hold backstop's wake.
+	gateMoved func()
 }
 
 // sessionConn is what a held connection depends on: the transport, the
@@ -593,6 +597,10 @@ type sessionManager struct {
 	streamResumes map[string]heldResume
 	// httpFetch sends a stream login's steps; nil is the real fetcher.
 	httpFetch collection.HTTPFetcher
+	// now is the node's clock for a disruption's quiet and hold (#1651):
+	// when a disruptive delivery adds disrupted, and what a held session's
+	// dial waits on. The wall clock unless a test sets it.
+	now func() time.Time
 }
 
 // heldResume is an endpoint's stream resume and the target it was learned
@@ -705,7 +713,7 @@ func newSessionManager(dialers map[string]collection.SessionDialer, hooks sessio
 	return &sessionManager{dialers: dialers, hooks: hooks, held: map[string]*heldSession{}, refused: map[string]string{}, pins: map[string]string{},
 		gates: newGates(), published: map[string]string{}, reasonSent: map[string]string{}, pubTask: map[string][2]string{}, certPins: map[string]*collection.HostKeyPin{},
 		datagrams: map[string]*heldDatagram{}, datagramRefused: map[string]string{}, httpAuth: map[string]heldHTTPAuth{},
-		streamResumes: map[string]heldResume{}}
+		streamResumes: map[string]heldResume{}, now: time.Now}
 }
 
 // syncCertPins brings each tls endpoint's pin to what the worklist
@@ -898,6 +906,59 @@ func (m *sessionManager) verdict(endpointID, taskID string, up bool, at time.Tim
 	if m.gates.verdict(endpointID, taskID, up, at) {
 		m.syncRejection(endpointID)
 	}
+}
+
+// disrupt closes the gate of every endpoint a disruptive delivery holds
+// (#1651), before the command is sent: disrupted since now, naming the
+// command, with the delivery's quiet period and hold backstop. Each is
+// published, and the dispatcher is woken to defer their probes.
+func (m *sessionManager) disrupt(d collection.CommandDelivery) {
+	if m == nil || !d.Disruptive || len(d.HoldEndpoints) == 0 {
+		return
+	}
+	m.gates.disrupt(d.HoldEndpoints, d.CommandType, d.ID, m.now(),
+		time.Duration(d.QuietSeconds)*time.Second, time.Duration(d.HoldSeconds)*time.Second)
+	for _, ep := range d.HoldEndpoints {
+		m.syncRejection(ep)
+	}
+	slog.Info("disruptive command closed its endpoints' gates", "facility", "command", "command", d.ID,
+		"command_type", d.CommandType, "endpoints", d.HoldEndpoints, "quiet_seconds", d.QuietSeconds, "hold_seconds", d.HoldSeconds)
+	if m.hooks.gateMoved != nil {
+		m.hooks.gateMoved()
+	}
+}
+
+// quietUntil is when the endpoint's quiet period ends; false when it is not
+// in one at now.
+func (m *sessionManager) quietUntil(endpointID string, now time.Time) (time.Time, bool) {
+	if m == nil {
+		return time.Time{}, false
+	}
+	return m.gates.quietUntil(endpointID, now)
+}
+
+// expireHolds releases every disrupted endpoint whose hold backstop came
+// with no up verdict, publishes each, and returns them for the report to
+// count (hold-expiry-count).
+func (m *sessionManager) expireHolds(now time.Time) []string {
+	if m == nil {
+		return nil
+	}
+	expired := m.gates.expire(now)
+	for _, ep := range expired {
+		m.syncRejection(ep)
+		slog.Warn("disrupted endpoint released at its hold backstop with no up verdict", "facility", "command", "endpoint", ep)
+	}
+	return expired
+}
+
+// nextHoldExpiry is the earliest hold backstop held, for the dispatcher's
+// wake.
+func (m *sessionManager) nextHoldExpiry() (time.Time, bool) {
+	if m == nil {
+		return time.Time{}, false
+	}
+	return m.gates.nextExpiry()
 }
 
 // observe takes each endpoint's fingerprint and published rejection off the
@@ -1096,6 +1157,12 @@ func (m *sessionManager) start(id string, w sessionWant) {
 		rejected = gt.refusal()
 	}
 	h.sess = collection.StartSession(collection.SessionConfig{
+		// A disruptive command's quiet period (#1651) holds the dial: a
+		// recover after the device drops waits it out.
+		Quiet: func() time.Time {
+			until, _ := m.gates.quietUntil(id, m.now())
+			return until
+		},
 		Rejected: rejected,
 		Target:   w.conn.target,
 		Timeout:  w.conn.timeout,

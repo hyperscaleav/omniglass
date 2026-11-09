@@ -91,9 +91,16 @@ const (
 	PollFailureCount = "poll-failure-count"
 	// PollHeldCount is how many of an endpoint's due polls its gate held in
 	// a report window (#1650) because the endpoint's own probe reads it
-	// unreachable: never sent, so not a failure and no backoff, counted once
-	// in each interval it waits through. Landed only when nonzero.
+	// unreachable, or a disruptive command it was sent holds it (#1651):
+	// never sent, so not a failure and no backoff, counted once in each
+	// interval it waits through. Landed only when nonzero.
 	PollHeldCount = "poll-held-count"
+	// HoldExpiryCount is how many disruptions (#1651) of an endpoint the
+	// hold backstop released in a report window: a disruptive command (a
+	// reboot) closed its gate, and no up verdict came between the quiet
+	// period's end and hold_seconds. Landed only when nonzero; any is a
+	// device that did not come back in time, or a hold set too short.
+	HoldExpiryCount = "hold-expiry-count"
 	// PollDueCount is how many of an endpoint's polls fell due in a report
 	// window (#1634), each on its own interval: held, refused and skipped
 	// dues included. Landed only when nonzero. It is the denominator of the
@@ -135,6 +142,7 @@ var nodeOnly = []string{
 	EndpointReachable, EndpointResponsive, EndpointAuthenticated, SessionState, SessionReason, SSHHostKey, EndpointRejection, EndpointRejectionReason,
 	TLSHandshakeTime, TLSCertificate, TLSCertificateExpiry, TLSCertificateDaysLeft, UDPResponseTime, SNMPResponseTime,
 	CollectionFailed, PollDuration, PollFailureCount, PollHeldCount, PollDueCount, PollSkippedCount, PushMessageCount, PushUnclaimedCount,
+	HoldExpiryCount,
 }
 
 // pushable are the native keys a push may write too, each mapped to the
