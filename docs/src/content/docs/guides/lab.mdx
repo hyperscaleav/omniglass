@@ -575,7 +575,9 @@ end to end  metric 0  property 0  event -  log -
   `withheld` (the simulator kept the answer back, a wrong community or its own datagram loss),
   `dropped` (it could not write the reply), or `not-returned` (the reply left the simulator and never
   reached the node, lost on the way or late past the node's timeout). A reply still in flight at the
-  node when the mark reads is not lost, and a node that restarted in the window reads no sim row.
+  node when the mark reads is not lost. The rows sum the nodes, and a node that restarted in the window
+  has no figure to add: the table names it under the rows, `sim not counted: edge-west restarted in
+  the window`, so a row never reads as every node's when it is not.
   Dedup reads `-`: a request is never redelivered. The JSON carries each sim row's `protocol` in place
   of a `kind`, with these four outcomes.
 - **dedup** is the items a redelivery carried again, which the receipt absorbed. It sits beside the
@@ -608,7 +610,9 @@ Two limitations, both closed by the node hop (#1692):
 The same 23-hour window limit applies, since receipts are kept a day. A lab
 whose server predates the ledger reads `delivery not measured` with the reason, and every other figure
 is still reported. When the sim rows were read but the ingest hop was not, the table keeps the sim
-rows and ends with `ingest not measured` and the reason.
+rows and ends with `ingest not measured` and the reason. When the closed loop was not read (the
+endpoints block reads `endpoints not measured`), the table has no sim rows, its end to end is the
+ingest hop alone, and it says so under the rows: `sim not measured` and the same reason.
 
 The window and the warm-up are printed above the table, and belong beside any figure you quote from it.
 

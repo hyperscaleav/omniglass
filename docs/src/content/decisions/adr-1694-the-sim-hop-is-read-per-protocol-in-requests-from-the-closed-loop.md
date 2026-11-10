@@ -15,8 +15,9 @@ refs: [1694, 1641, 1639, 1623, 1692, 1693, 1738]
   2. **Read from the closed loop's narrowest span.** Each node's in is the requests the simulators
      settled between the start mark's second simulator read and the end mark's first, less the
      traffic the node does not tally; lost is what did not come back, less what is still in flight at
-     the node's end read. A node that restarted reads no sim row, as it reads no gaps
-     ([ADR-1639](/architecture/decisions/#adr-1639-the-scale-lab-closes-the-loop-from-a-pull-only-bracketed-snapshot)).
+     the node's end read. A node that restarted adds nothing to the summed rows, as it reads no gaps
+     ([ADR-1639](/architecture/decisions/#adr-1639-the-scale-lab-closes-the-loop-from-a-pull-only-bracketed-snapshot)),
+     and the table names it (`sim not counted`) so a row never passes for every node's.
   3. **A refusal or error that came back is returned.** The device said no and the task reports it;
      the hop carried the reply. Loss is a reply that never reached the node, by cause: `withheld`,
      `dropped`, then `not-returned` for the rest. Dedup reads `-`, since a request is never
@@ -25,7 +26,9 @@ refs: [1694, 1641, 1639, 1623, 1692, 1693, 1738]
      `1 - prod(1 - loss)`, into every kind with an ingest row. This approximates: a lost request
      carried some kinds and not others.
   5. **The table outlives a missing ingest read.** When receipts cannot be read, the sim rows still
-     print and the table ends with `ingest not measured` and the reason.
+     print and the table ends with `ingest not measured` and the reason. The converse holds too: a
+     closed loop that was not read prints `sim not measured` under the ingest rows, since end to end
+     then covers the ingest hop alone.
 - **Context:** #1641 defined one loss ratio per kind per hop and read only the ingest hop. #1639's
   marks already bracket the simulators and the node's request tally, so the sim hop's counts were
   there to read; this slice reads them as a ratio beside the ingest rows.

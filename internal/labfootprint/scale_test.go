@@ -780,6 +780,37 @@ func TestScaleDeliverySimRowWithoutReceipts(t *testing.T) {
 	}
 }
 
+// A run whose closed loop was not read says the sim hop was not measured,
+// under the end-to-end line it is missing from, rather than reading as a
+// lab with no sim hop at all.
+func TestScaleDeliverySimNotMeasured(t *testing.T) {
+	run := deliveryRun(receipt("b1", 1, 100, delivery.Declared{delivery.Metric: {Count: 80}}, nil))
+	run.EndpointsGap = "edge-west did not answer the mark"
+	table := SummarizeScale(run).Table()
+	if !strings.Contains(table, "sim         not measured: edge-west did not answer the mark\n") {
+		t.Errorf("the table hides the unread sim hop:\n%s", table)
+	}
+}
+
+// A node that restarted in the window is left out of the summed sim row, and
+// the table names it: the row otherwise reads as every node's.
+func TestScaleDeliverySimNamesRestartedNode(t *testing.T) {
+	run := deliveryRun(receipt("b1", 1, 100, delivery.Declared{delivery.Metric: {Count: 80}}, nil))
+	west := simBracket("edge-west", "snmp", 20, 0, 20)
+	west.End.SimBefore.Started = west.Start.SimBefore.Started.Add(time.Minute)
+	west.End.SimAfter.Started = west.End.SimBefore.Started
+	run.Endpoints = []closedloop.NodeBracket{simBracket("edge-hq", "snmp", 30, 0, 30), west}
+	table := SummarizeScale(run).Table()
+	for _, want := range []string{"snmp        sim     30       30       0        -      -\n", "sim         not counted: edge-west restarted in the window\n"} {
+		if !strings.Contains(table, want) {
+			t.Errorf("the table has no %q:\n%s", want, table)
+		}
+	}
+	if strings.Contains(table, "not counted: edge-hq") {
+		t.Errorf("the table names a node that did not restart:\n%s", table)
+	}
+}
+
 // A run that read no receipts says so, not a table of nothing.
 func TestScaleDeliveryNotRead(t *testing.T) {
 	run := deliveryRun()

@@ -277,10 +277,12 @@ func ParseBacklog(out string) Backlog {
 
 // deliveryTable is the report's delivery section: a row per protocol across
 // the sim hop, a row per kind across the ingest hop, the end-to-end line,
-// then each unsettled boot by name with no ratio.
+// then what the sim rows leave out, then each unsettled boot by name with no
+// ratio.
 func (r ScaleReport) deliveryTable(b *strings.Builder) {
 	if r.DeliveryNotRead != "" && len(r.Delivery) == 0 {
 		fmt.Fprintf(b, "%-12s%s\n", "delivery", "not measured: "+r.DeliveryNotRead)
+		r.simGap(b)
 		return
 	}
 	row := func(cells ...string) {
@@ -318,6 +320,7 @@ func (r ScaleReport) deliveryTable(b *strings.Builder) {
 	if r.DeliveryNotRead != "" {
 		fmt.Fprintf(b, "%-12s%s\n", "ingest", "not measured: "+r.DeliveryNotRead)
 	}
+	r.simGap(b)
 	for _, u := range r.DeliveryUnsettled {
 		fmt.Fprintf(b, "%-12snode %s, boot %s: no ratio\n", "unsettled", u.Node, u.Boot)
 	}
@@ -326,6 +329,28 @@ func (r ScaleReport) deliveryTable(b *strings.Builder) {
 	}
 	if r.DeliveryNote != "" {
 		b.WriteString(r.DeliveryNote + "\n")
+	}
+}
+
+// simGap says what the sim rows leave out: the whole hop when the closed
+// loop was not read, or the nodes that restarted in the window, whose
+// requests no sim row counts (the rows sum the other nodes).
+func (r ScaleReport) simGap(b *strings.Builder) {
+	if r.EndpointsGap != "" {
+		fmt.Fprintf(b, "%-12s%s\n", "sim", "not measured: "+r.EndpointsGap)
+		return
+	}
+	if r.Endpoints == nil {
+		return
+	}
+	var restarted []string
+	for _, n := range r.Endpoints.Nodes {
+		if n.Restarted {
+			restarted = append(restarted, n.Node)
+		}
+	}
+	if len(restarted) > 0 {
+		fmt.Fprintf(b, "%-12snot counted: %s restarted in the window\n", "sim", strings.Join(restarted, ", "))
 	}
 }
 

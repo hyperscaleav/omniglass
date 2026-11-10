@@ -474,8 +474,9 @@ type ScaleReport struct {
 	EndpointsGap string                     `json:"endpoints_not_measured,omitempty"`
 
 	// Delivery is each kind's loss across each hop it crosses (#1641), over
-	// the settled boots, after the sim hop's row per protocol (#1694); DeliveryEndToEnd is each kind's loss over all its
-	// hops; DeliveryUnsettled names each boot no ratio was read from.
+	// the settled boots, after the sim hop's row per protocol (#1694);
+	// DeliveryEndToEnd is each kind's loss over all its hops;
+	// DeliveryUnsettled names each boot no ratio was read from.
 	Delivery          []DeliveryRow             `json:"delivery"`
 	DeliveryEndToEnd  map[delivery.Kind]float64 `json:"delivery_end_to_end,omitempty"`
 	DeliveryUnsettled []UnsettledBoot           `json:"delivery_unsettled,omitempty"`
