@@ -22,9 +22,11 @@ import (
 // missing.
 const MaxDeliveryWindow = 23 * time.Hour
 
-// missingLabel is what a missing item is, at this stage: the ingest cannot
-// yet tell these apart (see the lab guide).
-const missingLabel = "never landed: Termed at ingest, dropped at the node, or lost in between"
+// missingLabel is what a missing item is: a batch the server Terms whole
+// reads under its own cause (#1691), so what is left is one that never
+// decoded, was dropped at the node, or was lost in between, which the read
+// cannot yet tell apart (see the lab guide).
+const missingLabel = "never landed: undecodable at ingest, dropped at the node, or lost in between"
 
 // DeliveryRead is what the run read for the delivery table: the window, the
 // receipts of every boot with a batch minted in it, and whether the
