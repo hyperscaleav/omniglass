@@ -108,7 +108,7 @@ func TestStartPushersRefusesAProfileThatCannotPush(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, p := range []string{"no-such-profile", "ucc-platform"} {
+	for _, p := range []string{"no-such-profile", "generic-device"} {
 		if _, err := startPushers(store, "http://127.0.0.1:1", []Pusher{{Name: "x", Profile: p, Token: "t"}}); err == nil || !strings.Contains(err.Error(), p) {
 			t.Errorf("profile %s: %v, want refused naming it", p, err)
 		}
