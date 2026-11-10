@@ -13,7 +13,8 @@ refs: [1696, 1641, 1623, 1659, 1691, 1024]
      the push route, so a webhook's batches are accounted too. Its boot is minted once per server
      process; each server in a cluster is its own boot.
   2. **One publish at a time, resolved the seq below.** Publishes take a turn (a wait the caller's
-     context can abandon, which mints nothing), and each waits for the stream's ack before the
+     context can abandon, bounded at one ack timeout, after which the caller is answered `503`;
+     either way it mints nothing), and each waits for the stream's ack before the
      next mints, so the seq and offsets are dense in the stream's order and every batch below the
      one being minted has its answer: `resolved = seq - 1`.
   3. **A refused publish takes its items back.** A publish the stream does not ack answers the
@@ -37,7 +38,9 @@ refs: [1696, 1641, 1623, 1659, 1691, 1024]
 - **Thin cuts:**
   - Serializing publishes caps the push lane at one stream round trip a batch, server-wide; the
     stream is local (the embedded server), so the cap is well above the lane's traffic today. A lane
-    that outgrows it shards the publisher, one boot per shard.
+    that outgrows it shards the publisher, one boot per shard. A stalled stream holds the turn
+    through every attempt of the publish at the head, so the turn's wait is bounded: a caller
+    behind it hears `503` within one ack timeout, not that stall times its place in the queue.
   - A refused publish whose copy the stream did store (the ack lost in flight) lands with offsets
     that overlap its next neighbor's. Read alone it counts correctly, but when the batch above it is
     also missing, that hole reads up to the withdrawn count short. Both must happen in one window,

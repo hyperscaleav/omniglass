@@ -112,7 +112,7 @@ func New(cfg Config, store Store) (*Server, error) {
 	}
 	s := &Server{store: store, internalToken: hex.EncodeToString(tok), sims: simhub.New(), orphans: newOrphanTally(orphanWindow),
 		worklistWorkers: worklistWorkers(cfg.WorklistWorkers, cfg.DBPoolSize), metrics: pipelineMetrics{cfg.Metrics},
-		platformComponentID: cfg.PlatformComponentID, push: delivery.NewPublisher(collection.NewBatchID(), time.Now)}
+		platformComponentID: cfg.PlatformComponentID, push: delivery.NewPublisher(collection.NewBatchID(), time.Now, pushTurnWait)}
 	if s.metrics.rec == nil {
 		s.metrics.rec = platformmetric.NewRecorder(time.Now)
 	}
@@ -384,6 +384,13 @@ const (
 	publishAttempts   = 3
 	publishRetryWait  = 100 * time.Millisecond
 )
+
+// pushTurnWait bounds a push lane publish's wait for its turn (#1696): one
+// stream ack is milliseconds on the embedded stream, so a healthy queue
+// clears well inside it, while a publish stalled through every attempt
+// (about publishAttempts times publishAckTimeout) answers the callers behind
+// it 503 in this time, not in that stall times their place in the queue.
+const pushTurnWait = publishAckTimeout
 
 // PublishTelemetry puts an already-authorized batch on the API telemetry lane. It
 // satisfies the API's TelemetryPublisher seam, so the HTTP handler never holds a

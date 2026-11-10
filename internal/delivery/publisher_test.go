@@ -35,7 +35,7 @@ func publish(t *testing.T, p *delivery.Publisher, counts map[delivery.Kind]int, 
 // below, since the batch ahead had its answer from the stream before this one
 // was minted.
 func TestPublisherStampsADenseSeqAndCumulativeOffsets(t *testing.T) {
-	p := delivery.NewPublisher("push-boot", pubClock)
+	p := delivery.NewPublisher("push-boot", pubClock, time.Minute)
 	if p.Boot() != "push-boot" {
 		t.Fatalf("Boot = %q", p.Boot())
 	}
@@ -71,7 +71,7 @@ func TestPublisherStampsADenseSeqAndCumulativeOffsets(t *testing.T) {
 // lost lands under that seq, never a second batch's), and its items come
 // off the offsets, so the hole it leaves holds nothing to read as missing.
 func TestPublisherWithdrawsARefusedBatchsItems(t *testing.T) {
-	p := delivery.NewPublisher("push-boot", pubClock)
+	p := delivery.NewPublisher("push-boot", pubClock, time.Minute)
 	refused := errors.New("stream gone")
 	a := publish(t, p, map[delivery.Kind]int{delivery.Metric: 3}, nil)
 	publish(t, p, map[delivery.Kind]int{delivery.Metric: 5}, refused)
@@ -100,7 +100,7 @@ func TestPublisherWithdrawsARefusedBatchsItems(t *testing.T) {
 // and the offsets stay dense in the order the stream stored them; a caller
 // that gives up while waiting mints nothing.
 func TestPublisherWaitsItsTurn(t *testing.T) {
-	p := delivery.NewPublisher("push-boot", pubClock)
+	p := delivery.NewPublisher("push-boot", pubClock, time.Minute)
 	const n = 50
 	var mu sync.Mutex
 	var order []delivery.Stamp
@@ -147,5 +147,44 @@ func TestPublisherWaitsItsTurn(t *testing.T) {
 	next := publish(t, p, map[delivery.Kind]int{delivery.Metric: 1}, nil)
 	if next.Seq != n+2 {
 		t.Fatalf("after a cancelled wait: seq %d, want %d (the cancelled caller minted none)", next.Seq, n+2)
+	}
+}
+
+// TestPublisherBoundsItsTurn: a turn held past the publisher's wait (a stream
+// that stalls each attempt to its ack timeout) refuses the caller behind it
+// with ErrTurnTimeout instead of queueing it for the head's whole retry, so
+// a pusher behind a stalled publish hears 503 in a bounded time, as it did
+// when publishes ran side by side. The refused caller mints nothing.
+func TestPublisherBoundsItsTurn(t *testing.T) {
+	p := delivery.NewPublisher("push-boot", pubClock, 20*time.Millisecond)
+	hold, release := make(chan struct{}), make(chan struct{})
+	go func() {
+		_ = p.Publish(context.Background(), nil, func(delivery.Stamp) error {
+			close(hold)
+			<-release
+			return nil
+		})
+	}()
+	<-hold
+	done := make(chan error, 1)
+	go func() {
+		done <- p.Publish(context.Background(), map[delivery.Kind]int{delivery.Metric: 1}, func(delivery.Stamp) error {
+			t.Error("a caller refused its turn was sent")
+			return nil
+		})
+	}()
+	select {
+	case err := <-done:
+		if !errors.Is(err, delivery.ErrTurnTimeout) {
+			t.Fatalf("a wait past the bound = %v, want ErrTurnTimeout", err)
+		}
+	case <-time.After(2 * time.Second):
+		close(release)
+		t.Fatal("a caller behind a held turn waited past the publisher's bound")
+	}
+	close(release)
+	next := publish(t, p, map[delivery.Kind]int{delivery.Metric: 1}, nil)
+	if next.Seq != 2 || next.Kinds[delivery.Metric].Before != 0 {
+		t.Fatalf("after a refused turn: seq %d before %d, want 2 and 0 (the refused caller minted none)", next.Seq, next.Kinds[delivery.Metric].Before)
 	}
 }
