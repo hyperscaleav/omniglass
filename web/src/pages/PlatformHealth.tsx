@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/solid-query";
 import Page from "../components/Page";
 import HealthBadge from "../components/HealthBadge";
 import InfoTip from "../components/InfoTip";
+import PipelineFlow from "../components/PipelineFlow";
 import { ArrowUpRight } from "../components/icons";
 import { fmtTime } from "../lib/format";
 import { LEAF_POLL_MS } from "../lib/component_leaf";
@@ -14,6 +15,9 @@ import {
   NOT_REPORTED,
   PLATFORM_VIEW_KEY,
   figureText,
+  lossTinted,
+  nodeLossHint,
+  nodeLossText,
   nodePill,
   platformColumns,
   platformRefusal,
@@ -81,6 +85,7 @@ export default function PlatformHealth() {
                 Platform figures need a fleet-wide read: your component read does not reach the platform components, so each node shows only its check-in.
               </div>
             </Show>
+            <Show when={v().pipeline}>{(p) => <PipelineFlow pipeline={p()} />}</Show>
             <NodeTable view={v()} />
           </>
         )}
@@ -132,9 +137,17 @@ function Fact(props: { label: string; sub: string; children: JSX.Element }) {
   );
 }
 
+// HEAD_TIP is a column header's tooltip trigger: the label itself, dotted, so
+// the description is a keyboard focus away.
+const HEAD_TIP = "cursor-help whitespace-nowrap underline decoration-base-content/30 decoration-dotted underline-offset-4 focus-visible:outline-none focus-visible:text-primary";
+
 function NodeTable(props: { view: PlatformView }) {
   const columns = () => platformColumns(props.view);
   const groups = () => (props.view.groups ?? []).filter((g) => (g.keys ?? []).length > 0);
+  // The Loss group (#1646) is a composed figure, not a key: the view says which
+  // hops it composes, and a view that names none has no Loss column.
+  const lossShown = () => (props.view.loss_hops ?? []).length > 0;
+  const width = () => columns().length + 3 + (lossShown() ? 1 : 0);
   return (
     <div class="overflow-x-auto rounded-box border border-base-300">
       <table class="table table-sm" data-testid="platform-nodes">
@@ -144,6 +157,9 @@ function NodeTable(props: { view: PlatformView }) {
             <For each={groups()}>
               {(g) => <th colSpan={(g.keys ?? []).length} class="border-l border-base-300 text-center">{g.label}</th>}
             </For>
+            <Show when={lossShown()}>
+              <th class="border-l border-base-300 text-center">Loss</th>
+            </Show>
             <th />
           </tr>
           <tr>
@@ -153,22 +169,25 @@ function NodeTable(props: { view: PlatformView }) {
               {(c) => (
                 <th class="text-right">
                   <Show when={c.description} fallback={c.label}>
-                    <InfoTip
-                      text={c.description}
-                      label={c.label}
-                      class="cursor-help whitespace-nowrap underline decoration-base-content/30 decoration-dotted underline-offset-4 focus-visible:outline-none focus-visible:text-primary"
-                    >
+                    <InfoTip text={c.description} label={c.label} class={HEAD_TIP}>
                       {c.label}
                     </InfoTip>
                   </Show>
                 </th>
               )}
             </For>
+            <Show when={lossShown()}>
+              <th class="text-right">
+                <InfoTip text={nodeLossHint(props.view)} label="Node Loss" class={HEAD_TIP}>
+                  Node Loss
+                </InfoTip>
+              </th>
+            </Show>
             <th />
           </tr>
         </thead>
         <tbody>
-          <For each={props.view.nodes ?? []} fallback={<tr><td colSpan={columns().length + 3} class="text-base-content/50">No nodes yet.</td></tr>}>
+          <For each={props.view.nodes ?? []} fallback={<tr><td colSpan={width()} class="text-base-content/50">No nodes yet.</td></tr>}>
             {(n) => <NodeRow node={n} view={props.view} />}
           </For>
         </tbody>
@@ -215,6 +234,15 @@ function NodeRow(props: { node: PlatformNode; view: PlatformView }) {
           );
         }}
       </For>
+      <Show when={(props.view.loss_hops ?? []).length > 0}>
+        <td
+          class="tnum whitespace-nowrap text-right"
+          data-figure="loss"
+          classList={{ "text-base-content/30": props.node.loss === undefined, "font-semibold text-error": lossTinted(props.node.loss) }}
+        >
+          {nodeLossText(props.node)}
+        </td>
+      </Show>
       <td class="text-right">
         <A href={`/nodes?n=${encodeURIComponent(props.node.name)}`} class="btn btn-quiet btn-xs btn-square" aria-label={`Open ${props.node.name} in Nodes`} title="Open this node's blade on the Nodes page" onClick={(e) => e.stopPropagation()}>
           <ArrowUpRight size={14} />

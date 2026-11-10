@@ -18,6 +18,13 @@ import { describeError } from "./format";
 export type PlatformView = components["schemas"]["PlatformViewOutputBody"];
 export type PlatformNode = components["schemas"]["PlatformNodeBody"];
 export type PlatformServer = components["schemas"]["PlatformServerBody"];
+export type PlatformPipeline = components["schemas"]["PlatformPipelineBody"];
+export type PlatformPipelineHop = components["schemas"]["PlatformPipelineHopBody"];
+export type PlatformPipelineComponent = components["schemas"]["PlatformPipelineComponentBody"];
+export type PlatformPipelineFigure = components["schemas"]["PlatformPipelineFigureBody"];
+export type PipelineKind = components["schemas"]["PlatformPipelineKindBody"]["kind"];
+// The kind selector's choice: every kind summed, or one.
+export type PipelineKindChoice = PipelineKind | "all";
 
 export const PLATFORM_VIEW_KEY = ["platform-view"] as const;
 
@@ -86,4 +93,73 @@ export function nodePill(n: PlatformNode, readAt: string): NodeStatus {
 // tile's second figure.
 export function notUpCount(v: PlatformView): number {
   return (v.nodes ?? []).filter((n) => nodePill(n, v.read_at) !== "up").length;
+}
+
+// Where work is lost (#1646). Every figure is a loss ratio: the share of what a
+// hop took in that it did not hand on, 0 is healthy. The page holds no hop
+// list: the hops are the view's, in the order an item crosses them.
+
+// The delivery model's kind order (delivery.Kinds on the server).
+export const PIPELINE_KINDS: PipelineKind[] = ["metric", "property", "event", "log"];
+
+// lossPercent is a ratio as a percent with two significant figures, so a
+// small loss (0.0002) reads 0.02% and is never rounded to a healthy 0.
+export function lossPercent(r: number): string {
+  if (r === 0) return "0%";
+  return `${Number((r * 100).toPrecision(2))}%`;
+}
+
+// lossTinted is the one tint rule: a ratio above 0 draws the eye, 0 and an
+// absent ratio do not.
+export function lossTinted(r: number | undefined): boolean {
+  return r !== undefined && r > 0;
+}
+
+// pickFigure reads a span's last hour for every kind (the total) or one kind's
+// row; absent when the hop or component carried nothing of the kind, or
+// carried nothing at all.
+function pickFigure(
+  kinds: { kind: PipelineKind; last_hour: PlatformPipelineFigure }[] | null,
+  total: { last_hour: PlatformPipelineFigure },
+  kind: PipelineKindChoice,
+): PlatformPipelineFigure | undefined {
+  const rows = kinds ?? [];
+  if (kind === "all") return rows.length > 0 ? total.last_hour : undefined;
+  return rows.find((k) => k.kind === kind)?.last_hour;
+}
+
+export function hopFigure(h: PlatformPipelineHop, kind: PipelineKindChoice): PlatformPipelineFigure | undefined {
+  return pickFigure(h.kinds, h.total, kind);
+}
+
+export function componentFigure(c: PlatformPipelineComponent, kind: PipelineKindChoice): PlatformPipelineFigure | undefined {
+  return pickFigure(c.kinds, c.total, kind);
+}
+
+// pipelineKinds is the kinds any hop carried, in the delivery model's order:
+// the selector offers no kind the pipeline has never seen.
+export function pipelineKinds(p: PlatformPipeline): PipelineKind[] {
+  const seen = new Set((p.hops ?? []).flatMap((h) => (h.kinds ?? []).map((k) => k.kind)));
+  return PIPELINE_KINDS.filter((k) => seen.has(k));
+}
+
+// endToEndFigure is the share lost anywhere on the path over the last hour:
+// 1 - the product of every hop's survival, composed on the server.
+export function endToEndFigure(p: PlatformPipeline, kind: PipelineKindChoice): number | undefined {
+  if (kind === "all") return p.end_to_end_total.last_hour;
+  return (p.end_to_end ?? []).find((e) => e.kind === kind)?.last_hour;
+}
+
+// nodeLossText is a node's Loss cell: its composed ratio, or not reported for
+// a node whose own hops took nothing in (never a fake 0).
+export function nodeLossText(n: PlatformNode): string {
+  return n.loss === undefined ? NOT_REPORTED : lossPercent(n.loss);
+}
+
+// nodeLossHint is the Loss column's tooltip, naming the hops the figure
+// composes, which the view says rather than the page assuming.
+export function nodeLossHint(v: PlatformView): string {
+  const hops = v.loss_hops ?? [];
+  const named = hops.length > 1 ? `${hops.slice(0, -1).join(", ")} and ${hops[hops.length - 1]} hops` : `${hops[0] ?? "node"} hop`;
+  return `The share of what this node's own ${named} took in over the last hour that it did not hand on, every kind summed and composed as the end to end is. 0% is healthy; not reported means nothing went in.`;
 }

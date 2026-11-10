@@ -22,6 +22,7 @@ const view: PlatformView = {
   system: { id: uuidFor("platform"), name: "omniglass-platform", verdict: "degraded" },
   servers: [],
   groups: [],
+  loss_hops: ["node"],
   nodes: [
     { name: "edge-a", label: "", enrolled: true, last_heartbeat_at: ago(1000) },
     { name: "edge-b", label: "", enrolled: true, last_heartbeat_at: ago(NODE_DOWN_AFTER_MS + 1) },
