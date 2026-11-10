@@ -25,7 +25,9 @@ place from `allowed_parent_types`, never from a type's name (ADR-0137). **Platfo
 projection (`GET /views/platform`) with the running build, its uptime, the platform system's
 verdict and a row per node of its platform figures, each row opening onto the node's platform
 component. Its columns are the groups the view returns, headed with each key's catalog
-description, so the page holds no key list. The views model, the renderer library, and composable
+description, so the page holds no key list. With a simulator connected the page gains a closed-loop
+section (#1647, `GET /views/platform/simulation`): each node's hops as loss ratios over a sliding
+window, with impaired, restarted and warming-up readings, its protocols and its simulated devices. The views model, the renderer library, and composable
 dashboards remain the intended **read side** for the analytical surfaces (alarms, sample
 history, the cascade view, fleet dashboards), not built yet.
 Realized shell: the [design system](/contributing/design-system/); operating it: the

@@ -38,7 +38,9 @@ a dev-fleet component that is no planted fault, the simulator subscribes a simul
 webhook endpoint, and a simulated booking service pushes through `POST /telemetry:push`. Also
 built: [what an endpoint observed](#what-an-endpoint-observed) (#1639), every simulated endpoint
 counting what reached it and how it answered, read beside the node's own tally so a scale lab
-closes the loop. Still `Design`: the Helm sidecar (#892).
+closes the loop. Also built: the same loop on a running server (#1647), bracketed into a sliding
+window per node and read on [Platform health](/guides/operator/platform-health/#with-a-simulator).
+Still `Design`: the Helm sidecar (#892).
 :::
 
 ## The catalog
@@ -331,7 +333,11 @@ over the node's devices, with a count of devices that saw nothing on a protocol 
 their ids (capped at twenty), and the overlapping faces likewise capped, so it stays the same size
 at any fleet. It needs `simulation:read` and an all-scope component read, since the totals span
 every component the node simulates. A scale lab reconciles it hop by hop
-([measuring a scale lab](/guides/lab/#measuring-a-scale-lab)).
+([measuring a scale lab](/guides/lab/#measuring-a-scale-lab)), and a running server does the same
+continuously: `internal/closedloop` holds the reconcile, and its ring brackets each node with a
+connected simulator once a minute (faster on a lab) and reads the last ten brackets as a sliding
+window, shown on [Platform health](/guides/operator/platform-health/#with-a-simulator). The counters
+never reset, so a window is a difference of two reads, never a total since start.
 
 ### In the node's own process
 

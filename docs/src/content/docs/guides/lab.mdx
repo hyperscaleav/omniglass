@@ -169,6 +169,12 @@ stale the moment every owner it covers carries the tier, so a closed issue canno
 `make test-lab`, which CI may run on lab-touching changes only. The check is a function of a base URL and a client, so
 the scale lab runs the same judgment against a lab of any size.
 
+The lab can also be watched whole while it runs. With its simulator connected,
+[Platform health](/guides/operator/platform-health/#with-a-simulator) closes the loop over a window
+that slides every 10 seconds: every hop a request or a batch travels, from the node to the simulated
+device and back to the server, read as a loss ratio. A lab that is whole reads 0 on every gap, and every
+polled protocol draws its requests.
+
 ## Stopping it, and your data
 
 Press **Ctrl-C** in the lab's terminal (or send it SIGTERM). The lab stops and removes every

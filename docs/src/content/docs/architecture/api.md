@@ -1178,6 +1178,15 @@ earns its own tier only when composing the entity reads in the browser would be 
   `/nodes` answers, never an empty table. The figures, the verdicts and the servers need an
   all-scope `component:read` and the system an all-scope `system:read`; short of either they are
   omitted, never zeroed, and `figures_read` says which.
+- `GET /views/platform/simulation` (`simulation:read`) is the read behind Platform health's
+  [simulation section](/guides/operator/platform-health/#with-a-simulator): one row per node with a
+  connected simulator, read over a sliding window the server holds in memory (`internal/closedloop`'s
+  ring, ten brackets of `bracket_seconds`). Each gap is a loss ratio (null when nothing went into the
+  hop), its masking term and its reading (`loss`, `impaired`, `restarted`); beside them each
+  protocol's counts and each simulated device's requests. A node reads `warming up` until the ring
+  holds a window and the bracket after it. The devices are unplaced simulator state, so a component
+  read short of all-scope is a **404**, where the node's observation read answers 403
+  ([ADR-1647](/architecture/decisions/#adr-1647-platform-health-closes-the-loop-over-a-server-held-sliding-window)).
 
 Two properties are worth stating because they are easy to lose:
 
