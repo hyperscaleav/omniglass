@@ -98,9 +98,13 @@ func runServer(ctx context.Context, version string, lab bool) error {
 		return fmt.Errorf("server: load settings file: %w", err)
 	}
 
+	// The server's measure of itself (#1627): its slow-query tracer is
+	// installed on the pool the gateway opens, so it is built first.
+	self := newServerMetrics(log, time.Now)
 	gw, err := storage.NewPG(ctx, c.DSN,
 		storage.WithSecretProvider(secret.NewStaticProvider(kek)),
-		storage.WithSettingsFile(settingsFile))
+		storage.WithSettingsFile(settingsFile),
+		storage.WithQueryTracer(self.tracer))
 	if err != nil {
 		return err
 	}
@@ -118,6 +122,15 @@ func runServer(ctx context.Context, version string, lab bool) error {
 	}
 	log.Info("boot seed applied")
 	auditWriterRuling(ctx, log, gw)
+	self.applySlowQuery(ctx, gw)
+
+	// The server's own platform component, named by its identity, carries
+	// its request, query and pool figures; a restart finds the one it had.
+	serverComponentID, err := gw.EnsureServerComponent(ctx, c.ServerName)
+	if err != nil {
+		return err
+	}
+	log.Info("server platform component", "server", c.ServerName, "component", serverComponentID)
 
 	// The embedded NATS server carries the node-server protocol (worklist,
 	// heartbeat, and the checkpoint-3 telemetry stream). It is hosted in-process
@@ -148,7 +161,7 @@ func runServer(ctx context.Context, version string, lab bool) error {
 		return err
 	}
 	srv := &http.Server{
-		Handler:           api.NewHandler(gw, api.WithVersion(version), api.WithSecureCookies(c.SecureCookies), api.WithTrustedProxies(trust), api.WithNatsURL(natsURL), api.WithSettingsService(gw.Settings()), api.WithTelemetryPublisher(busSrv), api.WithSimHub(busSrv), api.WithNodeRunner(busSrv), api.WithLab(lab)),
+		Handler:           api.NewHandler(gw, api.WithVersion(version), api.WithSecureCookies(c.SecureCookies), api.WithTrustedProxies(trust), api.WithNatsURL(natsURL), api.WithSettingsService(gw.Settings()), api.WithTelemetryPublisher(busSrv), api.WithSimHub(busSrv), api.WithNodeRunner(busSrv), api.WithLab(lab), api.WithRequestRecorder(self.rec)),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	log.Info("http api listening", "addr", ln.Addr().String())
@@ -173,6 +186,9 @@ func runServer(ctx context.Context, version string, lab bool) error {
 	notifyCtx, stopNotify := context.WithCancel(ctx)
 	defer stopNotify()
 	go notifier.New(gw, egress.Options{}).Run(notifyCtx)
+	// The server's self-report, once a collection report window, until
+	// shutdown cancels it.
+	go self.reporter(gw, serverComponentID, log).Run(notifyCtx)
 
 	errc := make(chan error, 1)
 	go func() {

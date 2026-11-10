@@ -7602,6 +7602,14 @@ export interface components {
             /** @description The short form's threshold: text for a property, a number for a metric */
             value?: unknown;
         };
+        DatabaseSettings: {
+            /**
+             * Format: int64
+             * @description Milliseconds a query may run before the server logs it as slow (its statement's shape and duration, never its values) and counts it; 0 turns the log off
+             * @default 500
+             */
+            slow_query_ms: number;
+        };
         DownloadFileOutputBody: {
             /**
              * Format: uri
@@ -11160,6 +11168,7 @@ export interface components {
         };
         Settings: {
             collection: components["schemas"]["CollectionSettings"];
+            database: components["schemas"]["DatabaseSettings"];
             keybindings: components["schemas"]["Keybindings"];
             label: components["schemas"]["LabelSettings"];
             notification: components["schemas"]["NotificationSettings"];

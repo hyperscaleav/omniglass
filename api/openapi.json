@@ -4585,6 +4585,23 @@
         },
         "type": "object"
       },
+      "DatabaseSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "slow_query_ms": {
+            "default": 500,
+            "description": "Milliseconds a query may run before the server logs it as slow (its statement's shape and duration, never its values) and counts it; 0 turns the log off",
+            "format": "int64",
+            "maximum": 600000,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "slow_query_ms"
+        ],
+        "type": "object"
+      },
       "DownloadFileOutputBody": {
         "additionalProperties": false,
         "properties": {
@@ -13127,6 +13144,9 @@
           "collection": {
             "$ref": "#/components/schemas/CollectionSettings"
           },
+          "database": {
+            "$ref": "#/components/schemas/DatabaseSettings"
+          },
           "keybindings": {
             "$ref": "#/components/schemas/Keybindings"
           },
@@ -13149,7 +13169,8 @@
           "label",
           "retention",
           "collection",
-          "notification"
+          "notification",
+          "database"
         ],
         "type": "object"
       },

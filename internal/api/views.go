@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -94,7 +95,7 @@ func toFleetViewOutput(v *storage.FleetView) *fleetViewOutput {
 }
 
 // registerViewRoutes wires the surface-shaped reads.
-func registerViewRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
+func registerViewRoutes(api huma.API, a *authenticator, gw storage.Gateway, log *slog.Logger) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-fleet-view",
 		Method:      http.MethodGet,
@@ -113,6 +114,9 @@ func registerViewRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 			a.scopeFor(ctx, "component", "read"),
 		)
 		if err != nil {
+			// The answer stays opaque to the caller; the cause goes to the
+			// server's log, where an operator can find it (#1627).
+			log.ErrorContext(ctx, "read fleet view", "error", err)
 			return nil, huma.Error500InternalServerError("read fleet view")
 		}
 		return toFleetViewOutput(v), nil

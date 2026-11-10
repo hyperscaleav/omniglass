@@ -308,6 +308,25 @@ func TestTheNodeSelfKeysArePlatformKeys(t *testing.T) {
 	}
 }
 
+// TestServerKeysAreTheProcesssAlone: the server's request and database keys
+// (#1627) are platform keys only the process writes, and a node naming one on
+// its node-self lane is refused like any key not its own.
+func TestServerKeysAreTheProcesssAlone(t *testing.T) {
+	keys := []string{HTTPRequestCount, HTTPRequestDuration, HTTPRequestDurationMax, DBSlowQueryCount,
+		DBPoolAcquired, DBPoolIdle, DBPoolTotal, DBPoolMax, DBPoolWaitCount, DBPoolWaitDuration}
+	for _, key := range keys {
+		if c, ok := Reserved(key); !ok || c != Platform {
+			t.Errorf("%s resolves to %q (%v), want platform", key, c, ok)
+		}
+		if !Admits(Platform, Process, key) || Admits(Platform, Node, key) || Admits(Platform, Push, key) {
+			t.Errorf("%s: only the process writes a server key", key)
+		}
+		if NodeSelf(key) {
+			t.Errorf("the node-self lane admits %s", key)
+		}
+	}
+}
+
 // A node's command queue (#1626) is platform keys the process writes. The
 // server measures the queue and the wire, so only the pull-failure count, the
 // one fact the node alone sees, rides the node-self lane.
