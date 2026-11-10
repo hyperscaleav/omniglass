@@ -6,7 +6,7 @@ summary: "Accepted: the induced refusal is a seed step, not a simulator profile 
 refs: [1698, 1641]
 ---
 
-- **Date:** 2026-11-10 | **Status:** Accepted | **Pages:** [messaging](/architecture/messaging/)
+- **Date:** 2026-11-10 | **Status:** Accepted | **Pages:** [lab](/guides/lab/#reading-the-delivery-table)
 - **Decision:**
   1. **The refusal is induced in the catalog, not the sim.** A sim answers what a driver polls, and
      a driver's emit names are checked against the catalog when the driver is written and again when
