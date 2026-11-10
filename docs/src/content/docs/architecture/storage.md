@@ -44,9 +44,12 @@ Postgres is the **relational system of record** (entities, events, alarms, actio
 
 Built today, the ingest consumer writes a batch's every sink (`metric`, `property`, `event`,
 `log_line`, `node_log`) in **one transaction** whose first statement inserts the batch's
-**receipt**, `telemetry_receipt (batch_id, landed_at)`, keyed by the subject the batch arrived on and
-its `Nats-Msg-Id`: all or nothing, and a batch id that already landed writes nothing, so a
-redelivery lands each row once, raw log lines included, though a log line has no key of its own.
+**receipt** (`telemetry_receipt`), keyed by the subject the batch arrived on and its `Nats-Msg-Id`:
+all or nothing, and a batch id that already landed lands no rows and only counts one more delivery on
+its receipt, so a redelivery lands each row once, raw log lines included, though a log line has no key
+of its own. The receipt also carries the batch's delivery ledger and what became of each of its items,
+written in the same transaction
+([accounting](/architecture/messaging/#accounting-every-item-the-loss-ratio), [ADR-1641](/architecture/decisions/#adr-1641-every-telemetry-item-is-accounted-on-its-batchs-receipt-and-read-as-a-loss-ratio)).
 Receipts are pruned past a day by the server
 ([ADR-0311](/architecture/decisions/#adr-0311-a-telemetry-batch-lands-once-in-one-transaction-under-its-receipt)).
 

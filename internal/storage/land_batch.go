@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/internal/delivery"
 	"github.com/hyperscaleav/omniglass/internal/rules"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -60,6 +61,18 @@ type IngestBatch struct {
 	// groups and dropped on its own like one of them (its refusal carries
 	// NodeSelfIndex). Nil on every batch but a node's tick.
 	NodeSelf *NodeSelfReport
+	// Node is the node whose tick this is, recorded on the receipt so a read
+	// can name a boot's node (#1641). Empty on the push lane.
+	Node string
+	// Ledger is the delivery ledger the node stamped the batch with (#1641),
+	// recorded on the receipt with the batch's outcome. Nil on the push lane,
+	// which records no outcome.
+	Ledger *delivery.Stamp
+	// Tally is what the consumer counted before the batch reached the
+	// gateway (#1641): the items it refused, orphaned, could not place, or
+	// found missing. The gateway adds what it stored, coalesced and refused,
+	// and records the sum as the receipt's outcome.
+	Tally delivery.Tally
 }
 
 // ErrFanoutStale marks a batch whose fanned rows name an owner the
@@ -185,16 +198,17 @@ func (p *PG) landBatch(ctx context.Context, b IngestBatch, isolate bool, drop ma
 	var res LandResult
 	err := p.sampleWrite(ctx, "land batch", func(ctx context.Context, attempt pgx.Tx) error {
 		res = LandResult{}
+		coalesced := 0
 		// Each attempt (a deadlock retries the whole batch) resolves its owners
 		// and reads its clock afresh, once, for every lane and group (#1274).
 		bt := newBatchTx(attempt)
 		bt.targeted = b.CommandTargeted
 		if b.BatchID != "" {
-			tag, err := bt.Exec(ctx, `insert into telemetry_receipt (batch_id) values ($1) on conflict (batch_id) do nothing`, b.BatchID)
+			first, err := insertReceipt(ctx, bt, b)
 			if err != nil {
-				return fmt.Errorf("storage: land batch %s: receipt: %w", b.BatchID, err)
+				return err
 			}
-			if tag.RowsAffected() == 0 {
+			if !first {
 				return nil // landed before: a redelivery or a retry
 			}
 		}
@@ -237,20 +251,32 @@ func (p *PG) landBatch(ctx context.Context, b IngestBatch, isolate bool, drop ma
 			return err
 		}
 		if isolate {
-			if err := p.landIsolated(ctx, bt, live, &res); err != nil {
+			n, err := p.landIsolated(ctx, bt, live, &res)
+			if err != nil {
 				return err
 			}
 			if len(res.Refused) > 0 {
 				return &groupsRefused{refused: res.Refused}
 			}
-		} else if err := p.landGroups(ctx, bt, live); err != nil {
-			if IsRefusedWrite(err) && slices.ContainsFunc(live, func(g landGroup) bool { return !g.whole }) {
-				return &groupLanesRefused{err: err}
+			coalesced = n
+		} else {
+			n, err := p.landGroups(ctx, bt, live)
+			if err != nil {
+				if IsRefusedWrite(err) && slices.ContainsFunc(live, func(g landGroup) bool { return !g.whole }) {
+					return &groupLanesRefused{err: err}
+				}
+				return err
 			}
-			return err
+			coalesced = n
 		}
 		if len(b.NodeLogs) > 0 {
 			if err := p.writeNodeLogs(ctx, bt, b.NodeLogs); err != nil {
+				return err
+			}
+		}
+		res.Outcome = b.outcome(groups, live, res.Refused, coalesced)
+		if b.Ledger != nil {
+			if err := recordBatchOutcome(ctx, bt, b.BatchID, res.Outcome); err != nil {
 				return err
 			}
 		}
@@ -268,42 +294,47 @@ func (p *PG) landBatch(ctx context.Context, b IngestBatch, isolate bool, drop ma
 // back its group's savepoint alone and is recorded in res; any other failure
 // fails the batch. A pass that records a refusal is rolled back whole
 // (landBatch), so nothing it wrote, marked or logged survives it.
-func (p *PG) landIsolated(ctx context.Context, bt *batchTx, live []landGroup, res *LandResult) error {
+//
+// coalesced is the property rows the groups that landed held back as
+// unchanged (writePropertySets).
+func (p *PG) landIsolated(ctx context.Context, bt *batchTx, live []landGroup, res *LandResult) (coalesced int, err error) {
 	// Read once on the batch, so no savepoint reads them again.
 	if _, err := bt.clock(ctx); err != nil {
-		return err
+		return 0, err
 	}
 	if _, err := commandTargetedProperties(ctx, bt); err != nil {
-		return err
+		return 0, err
 	}
 	for _, g := range live {
 		sp, err := bt.Begin(ctx)
 		if err != nil {
-			return fmt.Errorf("storage: land batch: open a group's savepoint: %w", err)
+			return 0, fmt.Errorf("storage: land batch: open a group's savepoint: %w", err)
 		}
-		err = p.landGroups(ctx, bt.savepoint(sp), []landGroup{g})
+		n, err := p.landGroups(ctx, bt.savepoint(sp), []landGroup{g})
 		if err == nil {
 			if err := sp.Commit(ctx); err != nil {
-				return fmt.Errorf("storage: land batch: release a group's savepoint: %w", err)
+				return 0, fmt.Errorf("storage: land batch: release a group's savepoint: %w", err)
 			}
+			coalesced += n
 			continue
 		}
 		if rerr := sp.Rollback(ctx); rerr != nil {
-			return errors.Join(err, rerr)
+			return 0, errors.Join(err, rerr)
 		}
 		if g.whole || !IsRefusedWrite(err) {
-			return err
+			return 0, err
 		}
 		res.Refused = append(res.Refused, GroupRefusal{Index: g.index, TaskID: g.TaskID, Err: err})
 	}
-	return nil
+	return coalesced, nil
 }
 
 // landGroups lands the groups' rows lane by lane, each lane in the statements
 // one group's rows would take: the sets of each row identity (a node's tasks
 // share one, a conduit's fanned rows another) in one writer call, every log
-// line in one, every unbound identity in one.
-func (p *PG) landGroups(ctx context.Context, tx pgx.Tx, groups []landGroup) error {
+// line in one, every unbound identity in one. coalesced is the property rows
+// the transition guard held back as unchanged.
+func (p *PG) landGroups(ctx context.Context, tx pgx.Tx, groups []landGroup) (coalesced int, err error) {
 	var props []propertySet
 	var metrics []metricSet
 	var events []eventSet
@@ -334,31 +365,33 @@ func (p *PG) landGroups(ctx context.Context, tx pgx.Tx, groups []landGroup) erro
 		unbound = append(unbound, g.Unbound...)
 	}
 	for _, sets := range byWriteIdentity(props, func(s propertySet) KeyWriter { return s.w }) {
-		if err := p.writePropertySets(ctx, tx, sets, true); err != nil {
-			return err
+		n, err := p.writePropertySets(ctx, tx, sets, true)
+		if err != nil {
+			return 0, err
 		}
+		coalesced += n
 	}
 	for _, sets := range byWriteIdentity(metrics, func(s metricSet) KeyWriter { return s.w }) {
 		if err := p.writeMetricSets(ctx, tx, sets); err != nil {
-			return err
+			return 0, err
 		}
 	}
 	for _, sets := range byWriteIdentity(events, func(s eventSet) KeyWriter { return s.w }) {
 		if err := p.writeEventSets(ctx, tx, sets); err != nil {
-			return err
+			return 0, err
 		}
 	}
 	if len(lines) > 0 {
 		if err := p.writeLogLines(ctx, tx, lines); err != nil {
-			return err
+			return 0, err
 		}
 	}
 	if len(unbound) > 0 {
 		if err := writeUnboundIdentities(ctx, tx, mergeUnbound(unbound)); err != nil {
-			return err
+			return 0, err
 		}
 	}
-	return nil
+	return coalesced, nil
 }
 
 // lockGroups takes the live groups' rule rows, calc marks and property

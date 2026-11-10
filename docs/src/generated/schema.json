@@ -6281,6 +6281,47 @@
       "type": "timestamp with time zone",
       "nullable": false,
       "default": "now()"
+     },
+     {
+      "name": "node",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "boot",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "seq",
+      "type": "bigint",
+      "nullable": true
+     },
+     {
+      "name": "minted",
+      "type": "timestamp with time zone",
+      "nullable": true
+     },
+     {
+      "name": "resolved",
+      "type": "bigint",
+      "nullable": true
+     },
+     {
+      "name": "deliveries",
+      "type": "integer",
+      "nullable": false,
+      "default": "1"
+     },
+     {
+      "name": "ledger",
+      "type": "jsonb",
+      "nullable": true
+     },
+     {
+      "name": "outcome",
+      "type": "jsonb",
+      "nullable": true
      }
     ]
    }

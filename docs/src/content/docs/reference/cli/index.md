@@ -2770,17 +2770,19 @@ A working omniglass on Docker, to learn on
 
 ### `omniglass lab measure`
 
-Measure a running scale lab: rows a minute, growth, WAL a sample, CPU and memory, ingest lag, redeliveries, the consumer lane's busy fraction, fleet view times and the retention drain
+Measure a running scale lab: rows a minute, growth, WAL a sample, CPU and memory, ingest lag, redeliveries, the consumer lane's busy fraction, fleet view times, the retention drain and each kind's delivery loss
 
 ```
 omniglass lab measure [flags]
 ```
 
-Measures a scale lab (`omniglass lab run --scenario corporate --systems N`) over a stated window and prints one table: rows a minute per lane, table and WAL growth a day extrapolated from the window, CPU and memory per container, WAL bytes a sample, ingest lag from probe to row (p50, p95, p99), consumer redeliveries, the ingest consumer lane's busy fraction and service time a batch, the console's fleet view response times, and the retention pass's drain rate. It writes the same figures as JSON so two runs compare.
+Measures a scale lab (`omniglass lab run --scenario corporate --systems N`) over a stated window and prints one table: rows a minute per lane, table and WAL growth a day extrapolated from the window, CPU and memory per container, WAL bytes a sample, ingest lag from probe to row (p50, p95, p99), consumer redeliveries, the ingest consumer lane's busy fraction and service time a batch, the console's fleet view response times, the retention pass's drain rate, and each telemetry kind's delivery loss across the ingest hop (in, out, loss, deduplicated and the cause of any loss), with the end-to-end loss a kind. It writes the same figures as JSON so two runs compare.
 
 With no --systems it measures the scale lab already running. With --systems it brings up a throwaway scale lab of that size, measures it, and removes it, so the one command is the whole run.
 
 When no sample probed in the window had landed by its end, the ingest lag cell reads not measured, with the reason and the age of the newest landed sample under the table, and every other figure still prints. The consumer lane row is read from the server's periodic `ingest lane` log line and needs two tallies, 30 s apart, inside the window; a window too short to hold them reads not measured, with the reason under the table.
+
+The delivery read waits, up to --settle-timeout, until every node boot that minted a batch in the window has landed one minted after it and the telemetry consumer holds nothing pending, then reconciles each batch's ledger against what landed. A healthy lab reads loss 0 for every kind; a boot that did not settle prints unsettled with its node, and no ratio is read from it.
 
 The retention probe plants a backlog of aged property rows and restarts the server to run its pass; --backlog 0 skips it and leaves the server alone. A lab started before this build's `lab run` does not record commit timestamps, which the ingest lag reads: bring it up again.
 
@@ -2791,6 +2793,7 @@ The retention probe plants a backlog of aged property rows and restarts the serv
 | `--fleet-reads` | int | `20` | how many timed fleet view reads, spread over the window |
 | `--json` | string | `lab-measure.json` | also write the figures here as JSON; empty writes none |
 | `--scenario` | string | `corporate` | the scale scenario a --systems lab runs |
+| `--settle-timeout` | duration | `3m0s` | how long the delivery read waits for every node's batches from the window to land before naming a boot unsettled |
 | `--systems` | int | `0` | bring up a throwaway scale lab of this many systems, measure it and remove it; 0 measures the one already running |
 | `--warmup` | duration | `2m0s` | how long the lab runs before the window starts |
 | `--window` | duration | `5m0s` | the window the rates, growth and usage are read over |

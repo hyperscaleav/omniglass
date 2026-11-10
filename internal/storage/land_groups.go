@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/internal/delivery"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -43,6 +44,10 @@ type GroupRefusal struct {
 type LandResult struct {
 	Landed  bool
 	Refused []GroupRefusal
+	// Outcome is the batch's items by kind and outcome (#1641): the
+	// caller's IngestBatch.Tally plus what the committed pass stored,
+	// coalesced and refused. Empty when nothing landed.
+	Outcome delivery.Tally
 }
 
 // landGroup is one group as landBatch walks it. whole marks the batch's

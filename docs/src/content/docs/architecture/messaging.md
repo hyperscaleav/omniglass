@@ -22,7 +22,9 @@ lane fanning the commit onto JetStream for an `action_rule` consumer
 ([ADR-0618](/architecture/decisions/#adr-0618-notifications-are-postgres-rows-drained-by-a-server-tick-not-cdc-to-a-jetstream-sender)).
 The delivery contract on that stream is built: every publish waits for the stream's ack under a
 `Nats-Msg-Id` the stream deduplicates, and the consumer lands each batch once, in one transaction
-under its receipt ([below](#delivery-a-batch-lands-once)). The server measures that pipeline from
+under its receipt ([below](#delivery-a-batch-lands-once)), and that receipt accounts for every item
+the batch carried, so a lab run reads each telemetry kind's loss across the ingest hop
+([below](#accounting-every-item-the-loss-ratio)). The server measures that pipeline from
 inside, its ingest lag, backlog, drops and request failures, on its own platform component
 ([below](#measuring-the-pipeline)).
 :::
@@ -140,6 +142,54 @@ order, so the lane keeps order end to end: a node's window stays in publish orde
 ([nodes](/architecture/nodes/#delivery-a-batch-lands-once)), and the consumer keeps one batch in
 flight, redelivering a transient failure before anything behind it and dropping at once a group the
 gateway refuses outright, the rest of its batch landing ([workers](/architecture/workers/)).
+
+### Accounting every item: the loss ratio
+
+A batch landing once says nothing about whether every item in it reached the store. The **loss
+ratio** does, and it reads the same for every telemetry kind (metric, property, event, log) at every
+hop: `loss = (in - out) / in`, where `out` is the items accounted for in the store. A healthy
+pipeline reads exactly 0 for every kind, so reading it needs no knowledge of a kind's internals. A
+kind with nothing in reads no ratio, never a 0; a hop a kind does not cross has no row
+([ADR-1641](/architecture/decisions/#adr-1641-every-telemetry-item-is-accounted-on-its-batchs-receipt-and-read-as-a-loss-ratio), #1641).
+Only the ingest hop is read today; the node, schedule and sim hops follow (#1692, #1693, #1694).
+
+- **The ledger rides on the batch.** A node's spool stamps each batch it flushes with a
+  `DeliveryLedger` (field 16 of `TelemetryBatch`): the spool's `boot` (a UUIDv7 minted when the
+  spool starts), a dense `seq` from 1, the node clock's `minted`, `resolved` (every batch of the boot
+  at or below it had left the spool when this one was minted) and, per kind, the items it carries
+  (`count`) and the items the boot minted before it (`before`). A retry resends the same bytes, so
+  the ledger is identical on every delivery. A missing batch leaves a hole in `seq`, and the
+  neighbors' `before` offsets say how many items of each kind it held, whatever order the batches
+  arrived in.
+- **The receipt is the accounting row.** The landing transaction writes the ledger and the batch's
+  **outcome** (its items by kind and outcome, from the pass that commits) on the batch's receipt, so
+  the accounting commits exactly when the data does and adds no rows. A redelivery the receipt
+  absorbs counts one more `deliveries` on it and lands nothing.
+- **Each item takes exactly one outcome.** Out: `stored`, and `coalesced` (an unchanged property
+  value the transition guard skipped on purpose). Loss: `refused-unregistered`, `refused-writer`,
+  `refused-instance`, `refused-invalid`, `refused-empty`, `refused-write` (a group the gateway
+  refused while its siblings landed), `orphaned` (its task's owner gone), `unbound` (an identified
+  sample whose identity has no binding), `unidentified`, and `missing` (a hole in a boot's offsets).
+- **A refusal is loss.** Counting refused items as out would let a fleet refusing a third of its
+  samples read 0, and only someone who knew to look at the refusal counts would notice; so would an
+  unbound identity, which the conduit's inbox names but whose samples are not stored. The read names
+  the largest outcome behind a loss as its **cause** instead.
+- **Deduplicated sits beside the ratio.** `in` and `out` count distinct items, and a redelivery's
+  items count as `deduplicated` next to the ratio, never inside it: a retry storm counted on both
+  sides would dilute the ratio and could hide real loss.
+- **A gap belongs to its lower neighbor.** A read over a window counts a receipt minted in it, and
+  the seqs between two present receipts are the lower one's; a gap below a boot's lowest receipt is
+  that receipt's. Each gap has one owner, so adjacent windows sum to one window over both. A gap
+  can still fill until a later batch's `resolved` passes it and the stream has drained; a boot not
+  there yet reads **unsettled**, with no ratio.
+- **End to end composes.** A kind's loss over every hop it crosses is `1 - prod(1 - loss)`; with the
+  one hop today it equals the ingest row.
+
+A batch the consumer Terms whole (undecodable, an owner or a task row it may not assert, refused
+whole, unreadable metadata, its fifth delivery) leaves no receipt, so its items read as `missing`
+for now; naming each under its own cause is #1691. The push lane's batches carry no ledger and read
+no row yet (#1696). `omniglass lab measure` prints the table
+([lab](/guides/lab/#reading-the-delivery-table)).
 
 :::design[Target design, tracked in #430]
 
