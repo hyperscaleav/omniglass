@@ -126,6 +126,29 @@ const (
 	ProcessGCPause        = "process-gc-pause"
 )
 
+// A node's command queue (#1626): what waits for the node, how long the
+// oldest has waited, each command's issue-to-dispatch and dispatch-to-execute
+// latency, its redeliveries, the commands stuck dispatched and those that
+// aged out unexecuted. The server reads them off the command rows; a node
+// counts only the pulls of its queue that failed.
+const (
+	CommandPendingCount     = "command-pending-count"
+	CommandPendingAge       = "command-pending-age"
+	CommandDispatchLatency  = "command-dispatch-latency"
+	CommandExecutionLatency = "command-execution-latency"
+	CommandRedeliveryCount  = "command-redelivery-count"
+	CommandStuckCount       = "command-stuck-count"
+	CommandExpiredCount     = "command-expired-count"
+	CommandPullFailureCount = "command-pull-failure-count"
+)
+
+// The instances of command-expired-count: a command that aged out before any
+// node took it, and one taken but never reported executed.
+const (
+	CommandExpiredUndelivered = "undelivered"
+	CommandExpiredUnexecuted  = "unexecuted"
+)
+
 // nodeSelfWriter is what writes a node's self-report: the node, of itself,
 // landed by the process on the node's platform component.
 const nodeSelfWriter = "a node, of itself (its node-self report)"
@@ -151,6 +174,15 @@ var platform = map[string]string{
 	ProcessGoroutineCount: nodeSelfWriter,
 	ProcessHeapSize:       nodeSelfWriter,
 	ProcessGCPause:        nodeSelfWriter,
+	// A node's command queue (#1626).
+	CommandPendingCount:     "the server's command queue timer",
+	CommandPendingAge:       "the server's command queue timer",
+	CommandDispatchLatency:  "the command wire, at a command's first dispatch",
+	CommandExecutionLatency: "the command wire, at a command's execution report",
+	CommandRedeliveryCount:  "the server's command queue timer",
+	CommandStuckCount:       "the server's command queue timer",
+	CommandExpiredCount:     "the server's command queue timer",
+	CommandPullFailureCount: nodeSelfWriter,
 }
 
 // NodeSelf reports a platform key a node may report of itself on the

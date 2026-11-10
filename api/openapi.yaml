@@ -1202,6 +1202,10 @@ components:
           description: When a node last took it from its queue
           format: date-time
           type: string
+        delivery_count:
+          description: "How many times a node has taken it: 0 while queued, 1 once delivered, more when it went silent past the redelivery wait and was taken again"
+          format: int64
+          type: integer
         driver:
           description: The driver whose binding renders and settles it, by name
           type: string
@@ -1216,6 +1220,10 @@ components:
           type: string
         executed_at:
           description: When its node's execution report landed
+          format: date-time
+          type: string
+        first_delivered_at:
+          description: When a node first took it from its queue; a redelivery moves delivered_at, not this
           format: date-time
           type: string
         id:
@@ -1325,6 +1333,7 @@ components:
         - settle_window_seconds
         - deadline
         - issued_at
+        - delivery_count
       type: object
     CommandObservation:
       additionalProperties: false

@@ -111,7 +111,7 @@ func TestNodeSelfReportLandsEveryKeyOnThePlatformComponent(t *testing.T) {
 // tick's task group lands.
 func TestNodeSelfReportRefusesAKeyNotItsOwn(t *testing.T) {
 	t.Parallel()
-	for _, key := range []string{"room-temperature", "an-undeclared-key", writerclass.CheckinAge, writerclass.Health} {
+	for _, key := range []string{"room-temperature", "an-undeclared-key", writerclass.CheckinAge, writerclass.Health, writerclass.CommandPendingCount} {
 		t.Run(key, func(t *testing.T) {
 			t.Parallel()
 			f := newGroupFixture(t)

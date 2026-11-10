@@ -391,7 +391,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	if cfg.Once {
 		d.settle()
 	}
-	runCommands(ctx, nc, cfg.Name, runner, sessions, d.pool, executedCommands)
+	runCommands(ctx, nc, cfg.Name, runner, sessions, d.pool, executedCommands, self)
 	// A heartbeat the connection cannot take right now (a reconnect in
 	// flight, with no reconnect buffer) is retried next tick, as in the loop
 	// below; it never ends the node (#1577).
@@ -507,7 +507,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 			if commandsBusy.CompareAndSwap(false, true) {
 				commands.Go(func() {
 					defer commandsBusy.Store(false)
-					runCommands(ctx, nc, cfg.Name, runner, sessions, d.pool, executedCommands)
+					runCommands(ctx, nc, cfg.Name, runner, sessions, d.pool, executedCommands, self)
 				})
 			}
 			// Report the inbound lines no listener claimed this tick.

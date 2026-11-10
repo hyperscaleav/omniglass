@@ -926,6 +926,10 @@ type Gateway interface {
 	// NodeCheckins reads every claimed node's platform component and the time
 	// it last spoke, the check-in age's input (#1625).
 	NodeCheckins(ctx context.Context) ([]NodeCheckin, error)
+	// CommandQueueHealth reads every node's command queue (#1626): the
+	// pending, oldest and stuck now, and the redelivered and expired since the
+	// previous read's Now (none for a zero since).
+	CommandQueueHealth(ctx context.Context, since time.Time) (CommandQueueRead, error)
 
 	// Membership: the binding a role attaches to. Many-valued on purpose, since a
 	// shared device belongs to every system it serves, which a single pointer on

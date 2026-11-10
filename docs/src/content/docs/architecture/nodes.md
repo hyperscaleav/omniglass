@@ -48,7 +48,9 @@ kept alive by ping and pong ([websocket and wss](/architecture/collection/#webso
 node serving its own simulated components, `omniglass node run --simulate` (#1198,
 [below](#serving-its-own-simulated-components)). Also built: the node's account of itself (#1625,
 [below](#self-monitoring-the-node-reports-itself)), its schedule, spool, session and process figures
-landed each tick on its own platform component, and the server's check-in age for every claimed node.
+landed each tick on its own platform component, and the server's check-in age for every claimed node;
+and its command queue's health (#1626, [below](#self-monitoring-the-node-reports-itself)): depth,
+oldest age, latencies, redeliveries, stuck and expired commands, and the node's failed pulls.
 Still `Design`: the
 durable JetStream command queue, the session pool knobs and the held transports beyond these
 (#1036 (mqtt), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip), [ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)),
@@ -677,6 +679,16 @@ moving: `checkin-age`, every claimed node's seconds since its last heartbeat (or
 first), every 15 s; it grows while the node is silent and is the input of the node-down sweep
 below. The keys, their units and how each is sampled are in
 [collection](/architecture/collection/#self-monitoring-every-nodes-account-of-itself).
+
+The node's **command queue** reports on the same component (#1626). The server reads every node's
+queue every 15 s and writes `command-pending-count`, `command-pending-age` (zero while nothing
+waits) and `command-stuck-count`, and, over the window since its last read (zero for a quiet window),
+`command-redelivery-count` and `command-expired-count` (instance `undelivered` or `unexecuted`). The
+command wire writes `command-dispatch-latency` at a command's first take and
+`command-execution-latency` at its report, one sample per command. The node itself counts
+`command-pull-failure-count`, the pulls of its queue that got no answer or one it could not read,
+once per report window, 0 when quiet, on its node-self lane. How each is read, and why expiry keys on the execution
+stamp rather than the status, is on [commands](/architecture/commands/#queue-health-each-nodes-command-queue-measured).
 
 ## Scheduling, concurrency, and self-observability
 

@@ -1,6 +1,7 @@
 package node
 
 import (
+	"sync/atomic"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
@@ -19,7 +20,8 @@ import (
 //
 // Two shapes, per the key table. The each-tick figures are one observation
 // per sample, taken every heartbeat tick. The windowed counts (dues met in
-// flight, skipped intervals, spool drops, publish failures) are tallied over the node's
+// flight, skipped intervals, spool drops, publish failures, failed command
+// pulls) are tallied over the node's
 // report window, the collection report's (report.go), and emitted once when
 // it ends, every window, a quiet window's as zero: a count written only when
 // nonzero would leave the last event's count standing as the series' latest
@@ -33,6 +35,11 @@ type nodeReport struct {
 	skipped  int
 	drops    int
 	failures int
+	// pullFailures is the command queue pulls that failed in the window
+	// (#1626): no answer from the bus, or one the node could not read.
+	// Atomic because the command cycle runs off the heartbeat goroutine
+	// (#1634) while the heartbeat takes the window.
+	pullFailures atomic.Int64
 
 	samples []*ogv1.MetricSample
 }
@@ -116,6 +123,14 @@ func (r *nodeReport) process(p platformmetric.Process, at time.Time) {
 	}
 }
 
+// commandPullFailed tallies one failed pull of the command queue toward the
+// window.
+func (r *nodeReport) commandPullFailed() {
+	if r != nil {
+		r.pullFailures.Add(1)
+	}
+}
+
 // worklist records the size of a worklist the node just installed.
 func (r *nodeReport) worklist(tasks int, at time.Time) {
 	if r == nil {
@@ -140,6 +155,7 @@ func (r *nodeReport) take(now time.Time) []*ogv1.MetricSample {
 			{writerclass.ScheduleSkipCount, r.skipped},
 			{writerclass.SpoolDropCount, r.drops},
 			{writerclass.PublishFailureCount, r.failures},
+			{writerclass.CommandPullFailureCount, int(r.pullFailures.Swap(0))},
 		} {
 			r.sample(c.key, float64(c.n), now, "")
 		}

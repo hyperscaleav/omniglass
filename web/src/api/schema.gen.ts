@@ -6298,6 +6298,11 @@ export interface components {
              * @description When a node last took it from its queue
              */
             delivered_at?: string;
+            /**
+             * Format: int64
+             * @description How many times a node has taken it: 0 while queued, 1 once delivered, more when it went silent past the redelivery wait and was taken again
+             */
+            delivery_count: number;
             /** @description The driver whose binding renders and settles it, by name */
             driver?: string;
             /** @description The endpoint it rides, by name: the one a node took it over, else the one a node would (its driver binds the type); absent when no endpoint can carry it */
@@ -6311,6 +6316,11 @@ export interface components {
              * @description When its node's execution report landed
              */
             executed_at?: string;
+            /**
+             * Format: date-time
+             * @description When a node first took it from its queue; a redelivery moves delivered_at, not this
+             */
+            first_delivered_at?: string;
             /**
              * Format: int64
              * @description The command's id: with its component, its address (a command has no name)
