@@ -42,10 +42,10 @@ Enter
 Wait
 Show
 
-Type "# A preview naming the display's address rides the display's lane, and reads it; nothing is stored"
+Type "# A preview naming the display's address rides the display's lane, and reads it; nothing is stored (reach: the endpoint's auth rung and what refused it)"
 Enter
 Wait
-Type `reach() { omniglass component reachability list "$display" | jq -c '.endpoints[] | select(.endpoint == "http") | {endpoint, authenticated: .authenticated.value, gate: [.gate_reasons[]? | .kind]}'; }`
+Type `reach() { omniglass component reachability list "$display" | jq -c '.endpoints[] | select(.endpoint == "http") | {endpoint, authenticated: .authenticated.value, refused: .rejection.class}'; }`
 Enter
 Wait
 Type `reach`
@@ -62,7 +62,7 @@ Type `omniglass secret update demo-lane-login --fields '{"password":"wrong-passw
 Enter
 Wait
 Hide
-Type `demo_until 120 'omniglass component reachability list "$display" | jq -e ".endpoints[] | select(.endpoint == \"http\") | [.gate_reasons[]? | .kind] | index(\"refused\")"'`
+Type `demo_until 120 'omniglass component reachability list "$display" | jq -e ".endpoints[] | select(.endpoint == \"http\") | .rejection.class == \"auth\""'`
 Enter
 Wait@150s
 Show
@@ -89,7 +89,7 @@ Type `omniglass secret update demo-lane-login --fields '{"password":"boreal"}' |
 Enter
 Wait
 Hide
-Type `demo_until 120 'omniglass component reachability list "$display" | jq -e ".endpoints[] | select(.endpoint == \"http\") | .authenticated.value == \"yes\" and ((.gate_reasons // []) | length == 0)"'`
+Type `demo_until 120 'omniglass component reachability list "$display" | jq -e ".endpoints[] | select(.endpoint == \"http\") | .authenticated.value == \"yes\" and .rejection == null"'`
 Enter
 Wait@150s
 Show
