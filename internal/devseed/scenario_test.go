@@ -130,6 +130,30 @@ func TestReplicateCopiesWholeRoomsOnly(t *testing.T) {
 			t.Errorf("copied membership %+v reaches another room", m)
 		}
 	}
+	// A dependency edge is copied with its room when both ends sit in it
+	// (#1648), so a replicated fleet's hold sets are the template's, room by
+	// room, and never reach across copies.
+	isRoom := map[string]bool{}
+	for _, r := range rooms {
+		isRoom[r] = true
+	}
+	wantDeps := 0
+	for _, d := range base.ComponentDependencies {
+		if at := compAt[d.Component]; isRoom[at] && at == compAt[d.Upstream] {
+			wantDeps++
+		}
+	}
+	if wantDeps == 0 {
+		t.Fatal("no fixture dependency edge sits in a copied room, so the copy is untested")
+	}
+	if got := len(doc.ComponentDependencies) - len(base.ComponentDependencies); got != wantDeps*p.Sites*p.RoomCopies {
+		t.Errorf("copied dependency edges = %d, want %d", got, wantDeps*p.Sites*p.RoomCopies)
+	}
+	for _, d := range doc.ComponentDependencies[len(base.ComponentDependencies):] {
+		if compAt[d.Component] != compAt[d.Upstream] {
+			t.Errorf("copied dependency %+v reaches another room", d)
+		}
+	}
 	if !reflect.DeepEqual(doc, devseed.Replicate(base, p)) {
 		t.Error("Replicate is not deterministic")
 	}
@@ -186,13 +210,22 @@ func openSeededGateway(t *testing.T) (context.Context, *storage.PG, *pgx.Conn) {
 
 type fleetCounts struct{ locations, components, systems, assignments, alarms int }
 
+// The operator's fleet, without the platform's own rows (#1625): the boot
+// seed's platform system, each node's platform component, and the membership
+// that joins them. Devseed seeds a fleet; the platform is not part of it.
+const (
+	fleetComponentCount = `select count(*) from component where id not in (select platform_component_id from node where platform_component_id is not null)`
+	fleetSystemCount    = `select count(*) from system where name <> 'platform'`
+	fleetMemberCount    = `select count(*) from system_member m join system s on s.id = m.system_id where s.name <> 'platform'`
+)
+
 func countFleet(t *testing.T, ctx context.Context, conn *pgx.Conn) fleetCounts {
 	t.Helper()
 	var c fleetCounts
 	for q, dst := range map[string]*int{
 		`select count(*) from location`:               &c.locations,
-		`select count(*) from component`:              &c.components,
-		`select count(*) from system`:                 &c.systems,
+		fleetComponentCount:                           &c.components,
+		fleetSystemCount:                              &c.systems,
 		`select count(*) from system_role_assignment`: &c.assignments,
 		`select count(*) from alarm`:                  &c.alarms,
 	} {

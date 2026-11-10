@@ -2,6 +2,7 @@ import { createIdentity, entityLabel } from "../lib/entities";
 import { Show, For, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { Dialog } from "@kobalte/core/dialog";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
+import { useSearchParams } from "@solidjs/router";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import BladeTitle from "../components/BladeTitle";
 import BladeField from "../components/BladeField";
@@ -86,6 +87,9 @@ const columns: FlatColumn<Node>[] = [
 export default function Nodes() {
   const me = useMe();
   const nodes = useQuery(() => ({ queryKey: NODES_KEY, queryFn: () => listNodes() }));
+  // ?n=<name> deep-links to a node's blade (Platform health's row link, #1644).
+  const [params] = useSearchParams();
+  const openId = () => (Array.isArray(params.n) ? params.n[0] : params.n) || undefined;
 
   // One filter facet per tag key present across the nodes, derived from their
   // effective tags, so the bar can filter by any tag like any other field
@@ -121,6 +125,7 @@ export default function Nodes() {
           columns,
           empty: "No nodes yet.",
           rowId: (n) => n.name,
+          openId,
           blades: { registry: { node: nodeBlade }, rootKind: "node" },
           create: {
             label: "New node",

@@ -22,7 +22,11 @@ lane fanning the commit onto JetStream for an `action_rule` consumer
 ([ADR-0618](/architecture/decisions/#adr-0618-notifications-are-postgres-rows-drained-by-a-server-tick-not-cdc-to-a-jetstream-sender)).
 The delivery contract on that stream is built: every publish waits for the stream's ack under a
 `Nats-Msg-Id` the stream deduplicates, and the consumer lands each batch once, in one transaction
-under its receipt ([below](#delivery-a-batch-lands-once)).
+under its receipt ([below](#delivery-a-batch-lands-once)), and that receipt accounts for every item
+the batch carried, so a lab run reads each telemetry kind's loss across the ingest hop
+([below](#accounting-every-item-the-loss-ratio)). The server measures that pipeline from
+inside, its ingest lag, backlog, drops and request failures, on its own platform component
+([below](#measuring-the-pipeline)).
 :::
 
 This page is the **one home of the two-lane data plane**: the admission / trusted / persistence split, the CDC publisher, and the ingest-path enumeration live here, only named (with a link) everywhere else.
@@ -139,6 +143,64 @@ order, so the lane keeps order end to end: a node's window stays in publish orde
 flight, redelivering a transient failure before anything behind it and dropping at once a group the
 gateway refuses outright, the rest of its batch landing ([workers](/architecture/workers/)).
 
+### Accounting every item: the loss ratio
+
+A batch landing once says nothing about whether every item in it reached the store. The **loss
+ratio** does, and it reads the same for every telemetry kind (metric, property, event, log) at every
+hop: `loss = (in - out) / in`, where `out` is the items accounted for (in the store, or held for the
+operator to place). A healthy
+pipeline reads exactly 0 for every kind, so reading it needs no knowledge of a kind's internals. A
+kind with nothing in reads no ratio, never a 0; a hop a kind does not cross has no row
+([ADR-1641](/architecture/decisions/#adr-1641-every-telemetry-item-is-accounted-on-its-batchs-receipt-and-read-as-a-loss-ratio), #1641).
+Only the ingest hop is read today; the node, schedule and sim hops follow (#1692, #1693, #1694).
+Apart from this read, the node and the server each write their own hop's in, out and ratio per kind
+every window as platform metrics, 0 when nothing came in (#1659,
+[below](#measuring-the-pipeline)).
+
+- **The ledger rides on the batch.** A node's spool stamps each batch it flushes with a
+  `DeliveryLedger` (field 16 of `TelemetryBatch`): the spool's `boot` (a UUIDv7 minted when the
+  spool starts), a dense `seq` from 1, the node clock's `minted`, `resolved` (every batch of the boot
+  at or below it had left the spool when this one was minted) and, per kind, the items it carries
+  (`count`) and the items the boot minted before it (`before`). A retry resends the same bytes, so
+  the ledger is identical on every delivery. A missing batch leaves a hole in `seq`, and the
+  neighbors' `before` offsets say how many items of each kind it held, whatever order the batches
+  arrived in.
+- **The receipt is the accounting row.** The landing transaction writes the ledger and the batch's
+  **outcome** (its items by kind and outcome, from the pass that commits) on the batch's receipt, so
+  the accounting commits exactly when the data does and adds no rows. A redelivery the receipt
+  absorbs counts one more `deliveries` on it and lands nothing.
+- **Each item takes exactly one outcome.** Out: `stored`, `coalesced` (an unchanged property value
+  the transition guard skipped on purpose), and `unbound` (an identified sample whose identity no
+  binding places). Loss: `refused-unregistered`, `refused-writer`, `refused-instance`,
+  `refused-invalid`, `refused-empty`, `refused-write` (a group the gateway refused while its siblings
+  landed), `orphaned` (its task's owner gone), `unidentified`, and `missing` (a hole in a boot's
+  offsets).
+- **A refusal is loss.** Counting refused items as out would let a fleet refusing a third of its
+  samples read 0, and only someone who knew to look at the refusal counts would notice. The read
+  names the largest outcome behind a loss as its **cause** instead.
+- **An unbound identity is accounted for, not lost.** An identity a conduit reports that no binding
+  places is the operator's configuration, not data omniglass dropped: the operator has not assigned
+  it, and the conduit's [unbound inbox](/architecture/collection/#shared-api-collection-one-component-many-owners)
+  already surfaces it (the count, the keys, how often it was heard). Like a device that fails to
+  answer, it is accounted for, so a healthy fleet with an unassigned identity reads 0. The outcome is
+  still counted on every row.
+- **Deduplicated sits beside the ratio.** `in` and `out` count distinct items, and a redelivery's
+  items count as `deduplicated` next to the ratio, never inside it: a retry storm counted on both
+  sides would dilute the ratio and could hide real loss.
+- **A gap belongs to its lower neighbor.** A read over a window counts a receipt minted in it, and
+  the seqs between two present receipts are the lower one's; a gap below a boot's lowest receipt is
+  that receipt's. Each gap has one owner, so adjacent windows sum to one window over both. A gap
+  can still fill until a later batch's `resolved` passes it and the stream has drained; a boot not
+  there yet reads **unsettled**, with no ratio.
+- **End to end composes.** A kind's loss over every hop it crosses is `1 - prod(1 - loss)`; with the
+  one hop today it equals the ingest row.
+
+A batch the consumer Terms whole (undecodable, an owner or a task row it may not assert, refused
+whole, unreadable metadata, its fifth delivery) leaves no receipt, so its items read as `missing`
+for now; naming each under its own cause is #1691. The push lane's batches carry no ledger and read
+no row yet (#1696). `omniglass lab measure` prints the table
+([lab](/guides/lab/#reading-the-delivery-table)).
+
 :::design[Target design, tracked in #430]
 
 ## The pipeline, end to end
@@ -211,6 +273,73 @@ and calculated samples carry `source_rule` on the row, and intended names its co
 keyed to a property sample as its observed side.
 
 :::
+
+## Measuring the pipeline
+
+The server measures its own pipeline from inside and lands the figures on its platform component,
+the `omniglass-server` in the platform system, once a report window (`collection.report_seconds`),
+through the same window recorder as its request timing
+([collection](/architecture/collection/#self-monitoring-the-servers-account-of-itself), #1628). Every
+failure count has its attempts beside it, so each loss reads as a ratio where 0 is healthy.
+
+- **`ingest-lag`, `ingest-lag-max`**: how far behind its samples the server lands them. **Ingest lag
+  is the server's clock at the batch's commit minus the sample's `ts`**, read on the server once the
+  transaction has committed, so it covers the whole trip (the node's spool, the publish, the stream,
+  the consumer's queue and the landing itself). `ingest-lag` is the window's mean over each committed
+  batch's newest and oldest sample; `ingest-lag-max` is the window's worst, the oldest sample of any
+  batch. A sample with no `ts` on it, its group or its batch is stamped at ingest, so it counts
+  toward throughput and never toward lag. Healthy is about the node's spool flush (a second) plus the
+  landing: a few seconds, and `ingest-lag-max` close to `ingest-lag`. The seeded official rule
+  **`ingest-lag-high`** opens a warning alarm on the server's component when `ingest-lag-max` holds
+  over 30 s for 2 minutes, and clears it when a window reads 30 s or under.
+- **The clock skew caveat.** The node stamps `ts` and the server reads the commit, so lag is two
+  clocks subtracted. A node clock ahead of the server's reads short, even negative; one behind reads
+  long. A negative lag is kept as read, not clamped: it is the evidence of the skew, and fixing the
+  clock is the fix ([time](/architecture/time/), #419). Read a lag that jumps on one node's batches
+  and not the rest as a clock before a pipeline.
+- **`ingest-batch-count`, `ingest-sample-count`**: the batches the consumer committed in the window
+  and the samples they landed, the throughput. Their ratio is samples per batch. A redelivery its
+  receipt held to a no-op landed nothing, so it adds no batch, no sample and no lag; nor does a
+  node's group the fence or the gateway dropped.
+- **`delivery-in-count`, `delivery-out-count`, `delivery-loss-ratio`**, per item kind as the
+  instance (#1659): the server hop's delivery over the window, the same three keys and the same
+  ratio a node writes for its own hop ([nodes](/architecture/nodes/#self-monitoring-the-node-reports-itself)).
+  An item is in once its batch settles: landed (stored, coalesced and unbound items out, refused and
+  orphaned items not; a deduplicated item is out, since an earlier copy landed it, so a replay reads 0), held
+  by its receipt as a redelivery (every item in and out), or Termed (every item it names in, none
+  out: refused whole, its fifth delivery failed, unreadable metadata, or naming an owner or a task it
+  may not). A batch held for a retry counts in the window it settles. The ratio is written as 0 when
+  nothing came in, and all three land every window, 0 when quiet; healthy is 0. An undecodable batch
+  names no items, so it counts nothing here (#1712) and its items read as `missing` on the ledger
+  ([above](#accounting-every-item-the-loss-ratio)). The API lane counts its refused samples the same
+  way.
+- **`bus-telemetry-ack-failure-count`**: deliveries whose double ack the stream did not confirm,
+  a redelivery its receipt held included. The receipt holds the redelivery to a no-op, so this costs
+  work, not rows; as a share of `ingest-batch-count`, healthy is 0.
+- **`bus-consumer-pending`, `bus-consumer-ack-pending`, `bus-consumer-redelivered`**: the
+  `og-telemetry-worker` durable at the window's close: batches stored and not yet delivered, delivered
+  and not yet acked (at most one, the batch in flight), and redelivered. Healthy is a pending count
+  near 0 that does not grow window over window; a growing one is a backlog the lane is not clearing.
+- **`ingest-lane-busy`**: the share of the window the consumer spent handling batches. One batch is
+  in flight, so this is the lane's utilisation. Near 1 with a growing backlog, the lane is the
+  ceiling; low with a high lag, the lag is upstream of it.
+- **`bus-worklist-pull-count`**, per outcome (`served`, `read-failed`, `oversize`, `respond-failed`,
+  `expired`, `abandoned`, `busy`), and **`bus-worklist-reply-bytes-max`**: the window's worklist
+  pulls, counted as each window's own (the change in the server's running totals, never the totals),
+  and the largest reply held for any node. Every outcome but `served` is a loss over the sum; a reply
+  size nearing the bus payload limit is the warning before `oversize`.
+- **`bus-request-count`, `bus-request-failure-count`**, per path (`heartbeat`, `command-pull`,
+  `command-report`): the node requests the server handled and those it failed to serve. A heartbeat
+  write that fails also logs one WARN for the node, `heartbeat not recorded, the node may read as
+  silent`, and not again until a heartbeat from that node lands, so a database outage under a fleet
+  heartbeating every few seconds is one line a node, not one a beat. Healthy is 0 failures.
+
+A count reads its window's sum, then one zero the window after its last activity, then nothing; a
+gauge, mean or max reads nothing in a window with no observation, so a missing figure is no activity,
+never a zero that did not happen. What the figures say about scaling is
+[scaling](/architecture/scaling/#scale-up-or-scale-out-what-the-figures-say); the calc, outbox and
+sweep figures are [workers](/architecture/workers/#measuring-the-ticks). The decisions are
+[ADR-1628](/architecture/decisions/#adr-1628-ingest-lag-is-the-commit-time-minus-the-sample-ts-read-on-the-server).
 
 ## Subjects, accounts, and scope
 

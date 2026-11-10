@@ -572,7 +572,9 @@ out-of-scope component is a non-disclosing 404 (a deliberate early exception to
   session: the latest `session-state`, when it changed, and the `session-reason` beside it, cut to
   500 characters), and the `rejection` a terminal refusal holds (the rung and class of
   `endpoint-rejection`; the connection fingerprint it carries is never served), which the console's
-  session pill and ladder render (#1059). The `rejection` is served whether or not a session is
+  session pill and ladder render (#1059). Every other reason the gate holds (the gate is a set,
+  [ADR-1650](/architecture/decisions/#adr-1650-an-endpoint-gate-holds-a-set-of-reasons)) is served as
+  `gate_reasons`, each with its `kind`, `since` and `source`, absent when none holds (#1650). The `rejection` is served whether or not a session is
   held, since a reachability probe's refusal gates an endpoint too, with its `reason` (the
   `endpoint-rejection-reason` the node publishes beside the gate, cut to 500 characters like a
   session's) and `ts` (when the gate was last published), so the console's refusal notice and its
@@ -662,7 +664,7 @@ Both are gated `command:read`, resolved on the component tier with the read and 
 :::note[Thin cuts today]
 The operationally useful slice, not the full CRUD matrix. A **node** carries the full set (create,
 list, get, update, delete, plus `:enroll` and `:claim`); its delete **cascades** its endpoints, their
-derived tasks, its node-owned tags and self-telemetry, and its enrollment credential. An **endpoint**
+derived tasks, its node-owned tags and self-telemetry, its platform component, and its enrollment credential. An **endpoint**
 `PATCH` changes only its node placement and its params (target); the type (and the name it derives)
 and the owning component are fixed at creation, and a delete is refused while a task still references
 it (a **409**). The four built endpoint types are `icmp`, `tcp`, `ssh`, and `http`; there is no
@@ -1169,6 +1171,17 @@ earns its own tier only when composing the entity reads in the browser would be 
   else. A renderer draws a mark per component across the whole fleet, so a component **row** per
   mark is a fleet-sized payload on every draw; the projection is the shape that avoids it, and
   the wire is pinned by test against being widened back into a component list.
+- `GET /views/platform` (`node:read`) is the read behind
+  [Platform health](/guides/operator/platform-health/): the platform system's verdict, each
+  server's build and start time with its panel groups (each key's current figure, a key written
+  only for a window that saw something only while that window is current, a ranked key's
+  instances as the server cut its newest window, and the alarms open on the server's keys, #1645),
+  the node table's column groups with each key's catalog facts, and one row per node with its current figure per key (a gauge's latest sample, a
+  window count only while its window is the newest), in a fixed number of statements however
+  many nodes there are. Its rows are `/nodes`', so a node read short of all-scope is a **403**, as
+  `/nodes` answers, never an empty table. The figures, the verdicts and the servers need an
+  all-scope `component:read` and the system an all-scope `system:read`; short of either they are
+  omitted, never zeroed, and `figures_read` says which.
 
 Two properties are worth stating because they are easy to lose:
 

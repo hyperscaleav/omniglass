@@ -19,6 +19,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/internal/delivery"
+
 	"github.com/moby/moby/api/pkg/stdcopy"
 	"github.com/moby/moby/client"
 
@@ -47,7 +49,10 @@ type ScaleConfig struct {
 	Backlog int64
 	// DrainTimeout bounds the wait for the pass to clear the backlog.
 	DrainTimeout time.Duration
-	Out, LabLog  io.Writer
+	// SettleTimeout bounds the delivery read's wait for the window's batches
+	// to land (#1641).
+	SettleTimeout time.Duration
+	Out, LabLog   io.Writer
 }
 
 // scaleLab is the running scale lab's containers, found by their compose
@@ -337,6 +342,10 @@ func (h *harness) measureScale(ctx context.Context, cfg ScaleConfig) (ScaleRepor
 		run.EndpointsGap = endpointErr.Error()
 		h.say("endpoints not measured: %v", endpointErr)
 	}
+	run.Delivery = h.readDelivery(ctx, delivery.Window{From: db0.At, To: db1.At}, cfg.SettleTimeout)
+	if run.Delivery.Read {
+		h.say("delivery: %d receipts read", len(run.Delivery.Receipts))
+	}
 	if cfg.Backlog > 0 {
 		if run.Drain, err = h.drainProbe(ctx, l.server, cfg); err != nil {
 			return ScaleReport{}, err
@@ -424,6 +433,44 @@ func lagAgesQuery(to time.Time) string {
 			extract(epoch from to_timestamp(%.3f) - max(ts))
 		from (select ts, xmin from metric where source_rule is null order by ts desc limit %d) newest`,
 		float64(to.UnixMilli())/1000, lagSampleRows)
+}
+
+// settlePoll is how often the delivery read re-reads while it settles.
+const settlePoll = 5 * time.Second
+
+// readDelivery settles, then reads, the receipts the delivery table
+// reconciles: it re-reads until every boot with a batch minted in the window
+// has landed one minted after it, whose resolved reaches past the window, and
+// the server has gauged its telemetry consumer empty since the window closed,
+// or until the bound. What has not settled by then is read as unsettled, not
+// guessed at. A read that fails leaves the table not measured, with why; the
+// run's other figures still print.
+func (h *harness) readDelivery(ctx context.Context, w delivery.Window, bound time.Duration) DeliveryRead {
+	if w.To.Sub(w.From) > MaxDeliveryWindow {
+		return DeliveryRead{Reason: "the window is over 23 h, and receipts are pruned at a day"}
+	}
+	deadline := time.Now().Add(bound)
+	for {
+		out, err := h.psql(ctx, ReceiptsQuery(w.From, w.To))
+		if err != nil {
+			return DeliveryRead{Reason: fmt.Sprintf("the receipts did not read (a lab from before this build's ledger has none: bring it up again): %v", err)}
+		}
+		rs, err := ParseReceipts(out)
+		if err != nil {
+			return DeliveryRead{Reason: err.Error()}
+		}
+		var backlog Backlog
+		if out, err := h.psql(ctx, BacklogQuery(w.To)); err == nil {
+			backlog = ParseBacklog(out)
+		}
+		d := DeliveryRead{Read: true, Window: w, Receipts: rs, StreamClear: backlog.Clear(), Backlog: backlog}
+		if d.StreamClear && len(delivery.Unsettled(w, rs)) == 0 || !time.Now().Before(deadline) {
+			return d
+		}
+		if err := sleep(ctx, settlePoll); err != nil {
+			return DeliveryRead{Reason: err.Error()}
+		}
+	}
 }
 
 // ingestLag reads the lag of the samples the window landed. When none had,

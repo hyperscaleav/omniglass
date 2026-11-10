@@ -98,12 +98,17 @@ The level drifts as a behavior inside a band. Per-channel gain, mute and peak ar
 face but not collected: they wait on a driver naming an instance (#1252) and the full DSP class set
 (#1360).
 
-The Ferrite PDU 4C (#1368) is the read-only counterpart: the rack power conditioner answers, under the
-Ferrite enterprise arc, the mains voltage in millivolts, the total current in milliamps, and an outlet
-table of name, state and current for its four outlets, and the `ferrite-pdu-snmp` driver reads the
-voltage, the current and each outlet's state. It has no control face: a read-only JSON document carries the
-same state, and nothing switches an outlet. Its outlets drift as behaviors, an outlet that is off draws
-nothing, and the total is always what the outlets draw.
+The Ferrite PDU 4C (#1368) is the rack power conditioner: it answers, under the Ferrite enterprise
+arc, the mains voltage in millivolts, the total current in milliamps, and an outlet table of name, state
+and current for its four outlets, and the `ferrite-pdu-snmp` driver reads the voltage, the current and
+each outlet's state. Its control face (#1653) is a JSON API behind basic auth: `GET /pdu.json` carries the
+same state, and a POST to its `/api/outlets/state` with `{"outlet": 2, "state": "off"}` switches one outlet, so the
+next SNMP read and the next document both show it. An outlet outside 1 to 4, a state other than `on` or
+`off`, or a wrong password is refused and moves nothing. The `ferrite-pdu-api` driver carries the
+`outlet-off` and `outlet-on` commands over that face. Its outlets drift as behaviors, an outlet that is
+off draws nothing, and the total is always what the outlets draw. The simulated PDU powers nothing: a
+component fed from an outlet keeps answering while that outlet is off, so its hold ends on the first up
+verdict after the quiet period rather than on the device's return.
 
 The catalog names only fictional vendors (Kestrel, Polaris, Newtron, Boreal, Tessellate, Shinra Cloud, Ferrite), the same
 rule the boot seed follows, and a test holds it to that.

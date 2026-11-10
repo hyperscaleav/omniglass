@@ -87,7 +87,7 @@ func TestCreatePlanLandsWhole(t *testing.T) {
 	if _, err := gw.CreatePlan(ctx, "", plan("no-such-product"), allScopes()); err == nil {
 		t.Fatal("a plan with an unknown product landed")
 	}
-	if n := count(`select count(*) from location`) + count(`select count(*) from system`) + count(`select count(*) from component`) + count(`select count(*) from standard`); n != 0 {
+	if n := count(`select count(*) from location`) + count(`select count(*) from system where name <> 'platform'`) + count(`select count(*) from component`) + count(`select count(*) from standard`); n != 0 {
 		t.Fatalf("a refused plan left %d rows behind", n)
 	}
 	if n := count(`select count(*) from audit_log`); n != before {
@@ -155,7 +155,7 @@ func TestCreatePlanChecksEveryPieceInScope(t *testing.T) {
 	if _, err := gw.CreatePlan(ctx, "", plan, noComponent); !isStage(err, "component") {
 		t.Fatalf("a plan without component:create = %v, want a component-stage refusal", err)
 	}
-	if n := count(`select count(*) from location`) + count(`select count(*) from system`) + count(`select count(*) from standard`); n != 0 {
+	if n := count(`select count(*) from location`) + count(`select count(*) from system where name <> 'platform'`) + count(`select count(*) from standard`); n != 0 {
 		t.Fatalf("refused plans left %d rows behind", n)
 	}
 }
