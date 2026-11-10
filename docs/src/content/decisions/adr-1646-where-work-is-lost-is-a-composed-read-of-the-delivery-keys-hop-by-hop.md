@@ -39,5 +39,5 @@ refs: [1646, 1659, 1641, 1644, 1623, 1692, 1693]
      a minute's recording. A learner's lab and a lab with no node (the docs shots) keep the
      platform's 60 s.
 - **Consequences:** the [lab topology](/guides/lab/) table gains the report window column. The
-  server ingest hop reads a small nonzero loss on a fresh lab while the node hop reads 0 (#1641),
-  which this page now makes visible rather than fixes.
+  server ingest hop's small nonzero loss on a fresh lab was the dev seed's unassigned identity,
+  which ADR-1659 decision 7 counts as accounted for (#1641), so on the lab every hop reads 0.
