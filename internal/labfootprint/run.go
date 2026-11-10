@@ -186,7 +186,7 @@ func (h *harness) measure(ctx context.Context) (Report, error) {
 	if err == nil && img.Config != nil {
 		run.Build = img.Config.Labels[lab.VersionLabel]
 	}
-	fleet, err := h.psql(ctx, `select (select count(*) from system), (select count(*) from component), (select count(*) from task where enabled)`)
+	fleet, err := h.psql(ctx, fleetSizeSQL)
 	if err != nil {
 		return Report{}, fmt.Errorf("read the fleet's size: %w", err)
 	}

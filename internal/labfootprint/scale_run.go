@@ -27,6 +27,17 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/lab"
 )
 
+// fleetSizeSQL reads a lab's fleet: its systems, components and enabled
+// tasks. The platform system (og/platform, which the boot seed plants on
+// every server since #1625) is the server's own, not the scenario's, so it
+// is not counted: a scale lab at 300 systems reads 300, which the perf gate
+// compares with its baseline's size (#1640).
+const fleetSizeSQL = `select
+	(select count(*) from system s left join system_type st on st.id = s.system_type_id
+	 where st.id is null or not (st.namespace = 'og' and st.name = 'platform')),
+	(select count(*) from component),
+	(select count(*) from task where enabled)`
+
 // ScaleConfig is one scale measurement (#1556).
 type ScaleConfig struct {
 	// Binary, when set, is the omniglass binary whose `lab run` brings up a
@@ -318,7 +329,7 @@ func (h *harness) prepareScale(ctx context.Context, cfg ScaleConfig) (scaleSessi
 	if img, err := h.dc.ImageInspect(ctx, l.image); err == nil && img.Config != nil {
 		run.Build = img.Config.Labels[lab.VersionLabel]
 	}
-	fleet, err := h.psql(ctx, `select (select count(*) from system), (select count(*) from component), (select count(*) from task where enabled)`)
+	fleet, err := h.psql(ctx, fleetSizeSQL)
 	if err != nil {
 		return scaleSession{}, fmt.Errorf("read the fleet's size: %w", err)
 	}
