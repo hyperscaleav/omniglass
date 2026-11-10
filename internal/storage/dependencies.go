@@ -209,43 +209,37 @@ func (p *PG) ListComponentDependencies(ctx context.Context, component string, re
 	if err != nil {
 		return nil, err
 	}
-	rows, err := p.pool.Query(ctx, `select `+dependencyCols+dependencyFrom+`
+	// The other end's read scope is bound into the query (one round trip,
+	// no unscoped row read): an edge is listed when the caller reads the end
+	// that is not this component, and only counted when it does not.
+	cf := newNamedReadFilter(componentTable, read, 2, "vis_comp")
+	args := append([]any{c.ID}, cf.Args...)
+	rows, err := p.pool.Query(ctx, joinReadFilters(cf)+`select `+dependencyCols+`, `+
+		cf.Pred(`case when d.component_id = $1 then d.upstream_id else d.component_id end`)+dependencyFrom+`
 		where d.component_id = $1 or d.upstream_id = $1
-		order by d.kind, uc.name, dc.name`, c.ID)
+		order by d.kind, uc.name, dc.name`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list component dependencies: %w", err)
 	}
-	var edges []*ComponentDependency
+	defer rows.Close()
+	out := &ComponentDependencyList{Upstreams: []ComponentDependency{}, Dependents: []ComponentDependency{}}
 	for rows.Next() {
-		d, err := scanDependency(rows)
-		if err != nil {
-			rows.Close()
+		var d ComponentDependency
+		var visible bool
+		if err := rows.Scan(&d.ID, &d.ComponentID, &d.ComponentName, &d.UpstreamID, &d.UpstreamName, &d.Kind, &d.Outlet, &d.CreatedAt, &visible); err != nil {
 			return nil, fmt.Errorf("storage: scan component dependency: %w", err)
 		}
-		edges = append(edges, d)
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("storage: list component dependencies: %w", err)
-	}
-	out := &ComponentDependencyList{Upstreams: []ComponentDependency{}, Dependents: []ComponentDependency{}}
-	for _, d := range edges {
-		other := d.UpstreamID
-		if d.UpstreamID == c.ID {
-			other = d.ComponentID
-		}
-		ok, err := inScopeTree(ctx, p.pool, componentTable, other, read)
-		if err != nil {
-			return nil, err
-		}
 		switch {
-		case !ok:
+		case !visible:
 			out.Hidden++
 		case d.ComponentID == c.ID:
-			out.Upstreams = append(out.Upstreams, *d)
+			out.Upstreams = append(out.Upstreams, d)
 		default:
-			out.Dependents = append(out.Dependents, *d)
+			out.Dependents = append(out.Dependents, d)
 		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("storage: list component dependencies: %w", err)
 	}
 	return out, nil
 }
