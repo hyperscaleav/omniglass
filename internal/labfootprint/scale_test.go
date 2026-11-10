@@ -2,6 +2,8 @@ package labfootprint
 
 import (
 	"encoding/json"
+	"github.com/hyperscaleav/omniglass/internal/closedloop"
+	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/internal/delivery"
 	"regexp"
 	"strings"
@@ -673,6 +675,108 @@ func TestScaleDeliveryUnsettled(t *testing.T) {
 	}
 	if table := rep.Table(); !strings.Contains(table, "node edge-hq, boot b1: no ratio") || strings.Contains(table, "end to end") {
 		t.Errorf("an unsettled stream still prints a ratio:\n%s", table)
+	}
+}
+
+// simBracket is one node's closed-loop bracket over the window in which the
+// sim settled in requests of protocol p: withheld of them it chose not to
+// answer, and the node got returned replies back (the rest timed out).
+func simBracket(node, p string, in, withheld, returned int64) closedloop.NodeBracket {
+	start := collection.SimObservation{Node: node, Protocols: []collection.SimProtocolObservation{{Protocol: p}}}
+	end := collection.SimObservation{Node: node, Protocols: []collection.SimProtocolObservation{
+		{Protocol: p, Received: in, Answered: in - withheld, Withheld: withheld}}}
+	return closedloop.NodeBracket{Node: node, Window: 2 * time.Minute,
+		Start: collection.EndpointObservation{SimBefore: start, SimAfter: start,
+			Node: collection.RequestTallySnapshot{Node: node, Transports: []collection.TallyCounters{{Transport: p}}}},
+		End: collection.EndpointObservation{SimBefore: end, SimAfter: end,
+			Node: collection.RequestTallySnapshot{Node: node, Transports: []collection.TallyCounters{
+				{Transport: p, Sent: in, Answered: returned, TimedOut: in - returned}}}},
+	}
+}
+
+// The sim hop (#1694) prints a row per protocol the nodes polled, ahead of
+// the ingest rows: what the simulated endpoints settled against what came
+// back to the node, a withheld answer read as the hop's loss. End to end
+// composes the sim hop's loss into every kind's: a reply the node never got
+// is every item it would have carried.
+func TestScaleDeliverySimRowPerProtocol(t *testing.T) {
+	run := deliveryRun(
+		receipt("b1", 1, 100, delivery.Declared{delivery.Metric: {Count: 80}, delivery.Property: {Count: 8}}, nil),
+		receipt("b1", 2, 700, delivery.Declared{delivery.Metric: {Count: 80, Before: 80}, delivery.Property: {Count: 8, Before: 8}}, nil),
+	)
+	run.Endpoints = []closedloop.NodeBracket{simBracket("edge-hq", "http", 60, 0, 60), simBracket("edge-hq", "snmp", 40, 10, 30)}
+	rep := SummarizeScale(run)
+	if len(rep.Delivery) != 4 {
+		t.Fatalf("delivery rows = %+v, want http and snmp sim rows, then metric and property ingest rows", rep.Delivery)
+	}
+	snmp := rep.Delivery[1]
+	if snmp.Hop != delivery.Sim || snmp.Protocol != "snmp" || snmp.In != 40 || snmp.Out != 30 || snmp.Loss == nil || *snmp.Loss != 0.25 ||
+		snmp.Outcomes[delivery.Withheld] != 10 || snmp.Cause != delivery.Withheld {
+		t.Errorf("the snmp sim row = %+v, want 40 in, 30 out, 0.25 lost to withheld", snmp)
+	}
+	table := rep.Table()
+	want := "delivery    hop     in       out      loss     dedup  cause\n" +
+		"http        sim     60       60       0        -      -\n" +
+		"snmp        sim     40       30       0.25     -      withheld\n" +
+		"metric      ingest  80       80       0        0      -\n" +
+		"property    ingest  8        8        0        0      -\n" +
+		"end to end  metric 0.1  property 0.1  event -  log -\n"
+	if !strings.Contains(table, want) {
+		t.Errorf("the table has no\n%s\nin:\n%s", want, table)
+	}
+	if got := rep.DeliveryEndToEnd[delivery.Metric]; got < 0.0999999 || got > 0.1000001 {
+		t.Errorf("metric end to end %v, want 0.1: the sim hop's 10 of 100 composed with ingest's 0", got)
+	}
+
+	b, err := json.Marshal(rep)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var back struct {
+		Delivery []map[string]json.RawMessage `json:"delivery"`
+	}
+	if err := json.Unmarshal(b, &back); err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range back.Delivery[:2] {
+		for _, key := range []string{"hop", "protocol", "in", "out", "loss", "deduplicated", "outcomes"} {
+			if _, ok := row[key]; !ok {
+				t.Errorf("a sim row has no %q key: %s", key, b)
+			}
+		}
+		if _, ok := row["kind"]; ok {
+			t.Errorf("a sim row carries a kind, which the sim cannot know: %s", b)
+		}
+		var outcomes map[string]uint64
+		if err := json.Unmarshal(row["outcomes"], &outcomes); err != nil {
+			t.Fatal(err)
+		}
+		if len(outcomes) != len(delivery.SimOutcomes) {
+			t.Errorf("sim outcomes = %v, want exactly %v", outcomes, delivery.SimOutcomes)
+		}
+		for _, o := range delivery.SimOutcomes {
+			if _, ok := outcomes[string(o)]; !ok {
+				t.Errorf("a sim row's outcomes has no %q: %s", o, row["outcomes"])
+			}
+		}
+	}
+}
+
+// The sim hop reads from the closed loop, not the receipts, so a run that
+// read no receipts still prints it, and says the ingest hop was not
+// measured; a healthy sim reads 0.
+func TestScaleDeliverySimRowWithoutReceipts(t *testing.T) {
+	run := deliveryRun()
+	run.Delivery = DeliveryRead{Reason: "the window is over 23 h"}
+	run.Endpoints = []closedloop.NodeBracket{simBracket("edge-hq", "snmp", 30, 0, 30), simBracket("edge-west", "snmp", 20, 0, 20)}
+	table := SummarizeScale(run).Table()
+	for _, want := range []string{"snmp        sim     50       50       0        -      -\n", "ingest      not measured: the window is over 23 h\n"} {
+		if !strings.Contains(table, want) {
+			t.Errorf("the table has no %q:\n%s", want, table)
+		}
+	}
+	if strings.Contains(table, "delivery    not measured") {
+		t.Errorf("the table says delivery was not measured over a sim row:\n%s", table)
 	}
 }
 

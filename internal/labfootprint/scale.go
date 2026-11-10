@@ -474,7 +474,7 @@ type ScaleReport struct {
 	EndpointsGap string                     `json:"endpoints_not_measured,omitempty"`
 
 	// Delivery is each kind's loss across each hop it crosses (#1641), over
-	// the settled boots; DeliveryEndToEnd is each kind's loss over all its
+	// the settled boots, after the sim hop's row per protocol (#1694); DeliveryEndToEnd is each kind's loss over all its
 	// hops; DeliveryUnsettled names each boot no ratio was read from.
 	Delivery          []DeliveryRow             `json:"delivery"`
 	DeliveryEndToEnd  map[delivery.Kind]float64 `json:"delivery_end_to_end,omitempty"`
@@ -523,10 +523,13 @@ func SummarizeScale(r ScaleRun) ScaleReport {
 		ms[i] = s * 1000
 	}
 	out.IngestLag = QuantilesOf(ms)
+	out.Delivery = SimDeliveryOf(r.Endpoints)
 	if d := r.Delivery; !d.Read {
 		out.DeliveryNotRead = cmp.Or(d.Reason, "no receipts read")
 	} else {
-		out.Delivery, out.DeliveryUnsettled = DeliveryOf(d)
+		var ingest []DeliveryRow
+		ingest, out.DeliveryUnsettled = DeliveryOf(d)
+		out.Delivery = append(out.Delivery, ingest...)
 		out.DeliveryEndToEnd = EndToEndOf(out.Delivery)
 		if !d.StreamClear {
 			out.DeliveryNote = fmt.Sprintf("unsettled: the telemetry consumer still held batches when the settle ran out (%s pending, %s unacked)",

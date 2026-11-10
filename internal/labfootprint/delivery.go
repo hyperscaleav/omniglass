@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/internal/closedloop"
 	"github.com/hyperscaleav/omniglass/internal/delivery"
 	"github.com/hyperscaleav/omniglass/internal/writerclass"
 )
@@ -42,10 +43,13 @@ type DeliveryRead struct {
 }
 
 // DeliveryRow is one kind across one hop: the same keys for every kind and
-// hop, every outcome counted, and loss absent when nothing went in.
+// hop, every outcome counted, and loss absent when nothing went in. A sim
+// hop row is one protocol instead (#1694), counted in requests: the sim
+// cannot know which kinds an answer would have carried.
 type DeliveryRow struct {
 	Hop          delivery.Hop                `json:"hop"`
-	Kind         delivery.Kind               `json:"kind"`
+	Kind         delivery.Kind               `json:"kind,omitempty"`
+	Protocol     string                      `json:"protocol,omitempty"`
 	In           uint64                      `json:"in"`
 	Out          uint64                      `json:"out"`
 	Loss         *float64                    `json:"loss,omitempty"`
@@ -101,6 +105,26 @@ func DeliveryOf(d DeliveryRead) ([]DeliveryRow, []UnsettledBoot) {
 	return rows, named
 }
 
+// SimDeliveryOf is the sim hop (#1694): one row per protocol the nodes
+// tallied that the simulated endpoints settled requests on, in protocol
+// order, summed over every node's closed-loop bracket. In is what the sims
+// settled, out what came back to the node's tasks; a healthy lab reads 0.
+func SimDeliveryOf(brackets []closedloop.NodeBracket) []DeliveryRow {
+	var rows []DeliveryRow
+	for _, c := range closedloop.SimHops(brackets) {
+		t := delivery.Total{In: uint64(c.In), Out: uint64(c.In - c.Lost), Outcomes: map[delivery.Outcome]uint64{
+			delivery.Returned: uint64(c.In - c.Lost), delivery.Withheld: uint64(c.Withheld),
+			delivery.Dropped: uint64(c.Dropped), delivery.NotReturned: uint64(c.NotReturned),
+		}}
+		row := DeliveryRow{Hop: delivery.Sim, Protocol: c.Protocol, In: t.In, Out: t.Out, Outcomes: t.Outcomes, Cause: t.Cause()}
+		if l, ok := t.Loss(); ok {
+			row.Loss = &l
+		}
+		rows = append(rows, row)
+	}
+	return rows
+}
+
 // inWindowBoots is every boot with a batch minted in the window, in node and
 // boot order.
 func inWindowBoots(w delivery.Window, receipts []delivery.Receipt) []delivery.Boot {
@@ -116,16 +140,30 @@ func inWindowBoots(w delivery.Window, receipts []delivery.Receipt) []delivery.Bo
 }
 
 // EndToEndOf is each kind's loss over every hop it crosses, 1 - prod(1 -
-// loss), for the kinds with a ratio on every row.
+// loss), for the kinds with a ratio on every row. The sim hop's rows are per
+// protocol, not per kind, so they compose as one: the requests every
+// protocol lost over the requests every protocol settled, read into every
+// kind with a row of its own. That is a lost reply losing every item it
+// would have carried, in proportion to the requests (ADR-1694).
 func EndToEndOf(rows []DeliveryRow) map[delivery.Kind]float64 {
 	hops := map[delivery.Kind][]float64{}
 	absent := map[delivery.Kind]bool{}
+	var simIn, simOut uint64
 	for _, r := range rows {
+		if r.Hop == delivery.Sim {
+			simIn, simOut = simIn+r.In, simOut+r.Out
+			continue
+		}
 		if r.Loss == nil {
 			absent[r.Kind] = true
 			continue
 		}
 		hops[r.Kind] = append(hops[r.Kind], *r.Loss)
+	}
+	if sim, ok := delivery.Loss(simIn, simOut); ok {
+		for k := range hops {
+			hops[k] = append(hops[k], sim)
+		}
 	}
 	out := map[delivery.Kind]float64{}
 	for k, ls := range hops {
@@ -237,10 +275,11 @@ func ParseBacklog(out string) Backlog {
 	return b
 }
 
-// deliveryTable is the report's delivery section: a row per kind and hop,
-// the end-to-end line, then each unsettled boot by name with no ratio.
+// deliveryTable is the report's delivery section: a row per protocol across
+// the sim hop, a row per kind across the ingest hop, the end-to-end line,
+// then each unsettled boot by name with no ratio.
 func (r ScaleReport) deliveryTable(b *strings.Builder) {
-	if r.DeliveryNotRead != "" {
+	if r.DeliveryNotRead != "" && len(r.Delivery) == 0 {
 		fmt.Fprintf(b, "%-12s%s\n", "delivery", "not measured: "+r.DeliveryNotRead)
 		return
 	}
@@ -258,8 +297,12 @@ func (r ScaleReport) deliveryTable(b *strings.Builder) {
 			cause = string(d.Cause)
 			missing = missing || d.Cause == delivery.Missing
 		}
-		row(string(d.Kind), string(d.Hop), strconv.FormatUint(d.In, 10), strconv.FormatUint(d.Out, 10), loss,
-			strconv.FormatUint(d.Deduplicated, 10), cause)
+		name, dedup := string(d.Kind), strconv.FormatUint(d.Deduplicated, 10)
+		if d.Hop == delivery.Sim {
+			// A sim row is a protocol, and the sim hop has no redelivery.
+			name, dedup = d.Protocol, "-"
+		}
+		row(name, string(d.Hop), strconv.FormatUint(d.In, 10), strconv.FormatUint(d.Out, 10), loss, dedup, cause)
 	}
 	if len(r.Delivery) > 0 {
 		cells := []string{"end to end"}
@@ -271,6 +314,9 @@ func (r ScaleReport) deliveryTable(b *strings.Builder) {
 			cells = append(cells, string(k)+" "+v)
 		}
 		b.WriteString(strings.Join(cells, "  ") + "\n")
+	}
+	if r.DeliveryNotRead != "" {
+		fmt.Fprintf(b, "%-12s%s\n", "ingest", "not measured: "+r.DeliveryNotRead)
 	}
 	for _, u := range r.DeliveryUnsettled {
 		fmt.Fprintf(b, "%-12snode %s, boot %s: no ratio\n", "unsettled", u.Node, u.Boot)
