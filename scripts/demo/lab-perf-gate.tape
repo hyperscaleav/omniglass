@@ -32,7 +32,10 @@ Wait
 Type "# Check the same run against it (--samples reads the run kept with --append): every figure passes"
 Enter
 Wait
-Type "omniglass lab perf check --baseline /tmp/perf-base.json --samples /tmp/perf-runs.jsonl --runs 1 --json /tmp/verdict.json | head -3"
+Type "omniglass lab perf check --baseline /tmp/perf-base.json --samples /tmp/perf-runs.jsonl --runs 1 --json /tmp/verdict.json >/tmp/check.txt"
+Enter
+Wait
+Type "grep -E '^(perf gate|host)' /tmp/check.txt"
 Enter
 Wait
 Type `jq -r '.figures | group_by(.status) | map("\(.[0].status): \(length) figures") | .[]' /tmp/verdict.json`
@@ -44,12 +47,15 @@ Wait
 Type `jq '(.figures[] | select(.name == "metric_rows_per_minute_per_system") | .median, .values[]) /= 2' /tmp/perf-base.json > /tmp/halved.json`
 Enter
 Wait
-Type "omniglass lab perf check --baseline /tmp/halved.json --samples /tmp/perf-runs.jsonl --runs 1 --json /tmp/halved-verdict.json >/tmp/halved.txt 2>&1; echo exit $?"
+Type "omniglass lab perf check --baseline /tmp/halved.json --samples /tmp/perf-runs.jsonl --runs 1 --json /tmp/halved.json.verdict >/tmp/halved.txt || echo check exited $?"
 Enter
 Wait
 Type "# The check exits nonzero and names the figure that failed, with its delta and tolerance"
 Enter
 Wait
-Type "grep -E '^(perf gate|STATUS|fail)' /tmp/halved.txt | cut -c1-130"
+Type "grep '^perf gate' /tmp/halved.txt"
+Enter
+Wait
+Type `jq -c '.figures[] | select(.status == "fail") | {name, class, baseline, observed, delta_ratio, tolerance}' /tmp/halved.json.verdict`
 Enter
 Wait
