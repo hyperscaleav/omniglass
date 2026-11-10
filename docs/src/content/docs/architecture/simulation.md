@@ -42,7 +42,9 @@ closes the loop. Also built: the same loop on a running server (#1647), brackete
 window per node and read on [Platform health](/guides/operator/platform-health/#with-a-simulator). Also
 built: the [push face](#a-pusher-pushes-on-its-own-cadence) (#1743), an outside actor that reports by
 pushing as an emulator device of its profile, declared by a scenario as it declares devices, so the
-dev lab and the scale lab push through the same path.
+dev lab and the scale lab push through the same path. Also built: the webhook sender (#1747), a
+meeting platform a scale scenario declares per site, seeded with its own signing key and its site's
+systems as rooms, which the simulator adds and reports on through the webhook face.
 Still `Design`: the Helm sidecar (#892).
 :::
 
@@ -543,6 +545,16 @@ room-naming listeners read the posts, each declaring the `ucc-room-id` identity.
 carries the platform at headquarters with both endpoints and binds four of its rooms to their
 systems; its fifth room, `zr-boardroom-b`, is bound to nothing, so its values land in the conduit's
 unbound inbox until an operator binds it ([ADR-1282](/architecture/decisions/#adr-1282-a-conduit-fans-each-identified-value-out-to-the-owner-its-binding-names-and-a-binding-costs-a-write-on-both-of-its-ends)).
+
+The platform also reports on its own: a `rooms_report` behavior posts the same batched
+`rooms.state` every 30 seconds, so an account no one drives is still heard. A profile that is a
+**webhook sender** (#1747) names, beside its subscribe route, the driver its endpoint takes
+(`webhook.driver`, a shipped webhook driver; a test holds every profile to one) and a provision route
+(`webhook.provision`, a POST taking a room's `id`). The device list then carries, with the
+subscription, the identity values bound on the component, and the simulator adds each one it has
+not added yet through the provision route, so a room bound later is added on the next pull and a
+restarted device has every room added again. That is how a scale scenario's meeting platform comes
+to speak for exactly its site's systems ([the lab guide](/guides/lab/#scale-lab-scenarios)).
 The lab's per-room UCC services stay beside it until #1390 retires them.
 
 ### A pusher pushes on its own cadence
@@ -572,6 +584,15 @@ lab mints its token on every run and sets it on the principal, and the simulator
 pusher's node runs it as an emulator device holding that token. The token reaches the simulator's
 environment and nowhere else: the seed is handed its hash, and neither the plan nor a log prints
 it ([ADR-1743](/architecture/decisions/#adr-1743-an-outside-actor-is-an-emulator-device-a-scenario-declares)).
+
+A scale scenario declares a webhook sender in the same list (#1747): its profile has a webhook
+face instead of a push face, and `systems` may be omitted to scope it to every system of its site.
+The seed makes it a component rather than a principal, with an endpoint of its profile's driver, a
+signing secret minted for that seed alone (each field random, sealed in the server, never printed),
+and a binding per system on the driver's room identity, valued with the system's name. Everything
+the seed needs is read from the profile and the driver spec, so a second platform is a profile and
+a driver, not seed code. The simulator subscribes and provisions it as above, and its signed posts
+land on the push lane with the bookings.
 
 ## Adding a simulated component
 
