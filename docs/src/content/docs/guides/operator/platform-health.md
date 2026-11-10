@@ -135,11 +135,12 @@ A failed poll is not lost work. A device that does not answer is a fact the node
 on (it lands on that device's component, as its poll failures), so the node hop still reads 0 while
 a broken device fails every poll. A hop's loss is work the platform itself dropped.
 
-The schedule hop (whether each run the worklist asks for is run, #1693) is not drawn yet. It
-appears when its figures are written; until then the path starts at the node's spool. The node
-hop's loss by cause (a spool cap, a bus refusal, a dropped self-log line, an encode failure) is
-not drawn here either: each batch's ledger carries it, and a lab run reads it per kind
-([reading the delivery table](/guides/lab/#reading-the-delivery-table), #1692).
+Two parts of the path are not drawn yet. The schedule hop (whether each run the worklist asks for
+is run): nodes write its figures since #1693, at the instance `schedule/{kind}` on their own
+component, where its series already read; the page draws it with #1739. Until then the path starts
+at the node's spool. The node hop's loss by cause (a spool cap, a bus refusal, a dropped self-log
+line, an encode failure) is not drawn here either: each batch's ledger carries it, and a lab run
+reads it per kind ([reading the delivery table](/guides/lab/#reading-the-delivery-table), #1692).
 
 ## The server panels
 

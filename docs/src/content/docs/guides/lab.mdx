@@ -601,20 +601,37 @@ Below the endpoints block, the delivery table says how much telemetry the lab lo
 exactly 0 for every kind:
 
 ```
-delivery    hop     in       out      loss     dedup  cause
-metric      node    1275     1275     0        0      -
-metric      ingest  1275     1275     0        0      -
-property    node    166      166      0        0      -
-property    ingest  166      166      0        0      -
-event       node    0        0        -        0      -
-event       ingest  0        0        -        0      -
-log         node    0        0        -        0      -
-log         ingest  0        0        -        0      -
+delivery    hop       in       out      loss     dedup  cause
+metric      schedule  4100     4100     0        0      -
+metric      node      1275     1275     0        0      -
+metric      ingest    1275     1275     0        0      -
+property    schedule  3020     3020     0        0      -
+property    node      166      166      0        0      -
+property    ingest    166      166      0        0      -
+event       node      0        0        -        0      -
+event       ingest    0        0        -        0      -
+log         node      0        0        -        0      -
+log         ingest    0        0        -        0      -
 end to end  metric 0  property 0  event -  log -
 ```
 
-Each kind reads two hops, in the order its items cross them:
+Each kind reads its hops in the order its work crosses them:
 
+- The **schedule** row is the hop upstream of every item, the nodes' dispatchers (#1693): **in** is
+  the runs due on the schedule that produce the kind and **out** the runs made, so its counts are
+  runs, not items, and its cause is `skipped`, a due passed over because the lane's last run was
+  still in flight or the pass came late. A healthy lab reads 0. The row comes before the kind's node
+  and ingest rows, and a kind no scheduled task produces (events and logs, today) has none:
+
+  ```
+  delivery    hop       in       out      loss     dedup  cause
+  metric      schedule  4100     3690     0.1      0      skipped
+  metric      node      1275     1275     0        0      -
+  metric      ingest    1275     1275     0        0      -
+  ```
+
+  A skipped due made no item, so it never reaches the node or ingest rows: a lab whose devices answer
+  slower than their poll interval reads 0 at the node and at ingest and its loss here.
 - The **node** row is what the node minted against what its spool shipped (#1692). **in** is the
   items the node minted in the window and the items it lost before minting them into a batch, **out**
   the items it handed to the stream (`shipped`). Its causes are the node's own: `spool-overflow` (the
@@ -627,7 +644,7 @@ Each kind reads two hops, in the order its items cross them:
   `coalesced`, an unchanged value skipped on purpose; and `unbound`, an identity no binding places,
   which the conduit's unbound inbox holds for the operator to assign).
 
-A kind with nothing in reads `-`, never 0. The schedule and sim hops follow.
+A kind with nothing in reads `-`, never 0. The sim hop follows (#1694).
 - **dedup** is the items a redelivery carried again, which the receipt absorbed. It sits beside the
   ratio, never in it, so a retry storm never moves the loss off 0.
 - **cause** is the largest outcome behind a loss: a `refused-<why>` (a key not registered, a writer or
@@ -647,7 +664,11 @@ A kind with nothing in reads `-`, never 0. The schedule and sim hops follow.
   receipt and reads under its own cause. What is left cannot say why; the footer reads `shipped by
   the node, never landed: undecodable at ingest, or lost between the stream and the store`.
 - **end to end** is each kind's loss over every hop it crosses, `1 - prod(1 - loss)`: a third lost at
-  the node and nothing at ingest reads 0.3333 end to end.
+  the node and nothing at ingest reads 0.3333 end to end, and in the schedule example above metrics
+  read 0.1, the schedule hop's. A hop with nothing in loses nothing, so a schedule that skipped every
+  due of a kind reads that kind's end to end as 1 though its later rows read `-`. A kind with no
+  ingest row (every boot unsettled) reads `-`: the schedule hop alone does not stand for the end to
+  end.
 - **unsettled** names a node boot whose window's batches were not all known when `--settle-timeout`
   ran out (no later batch said the spool had cleared past them, or the stream still held batches),
   with no ratio for it rather than a guess. A note under the table gives the stream's pending and

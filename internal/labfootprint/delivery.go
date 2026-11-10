@@ -43,6 +43,8 @@ type DeliveryRead struct {
 	// unacked batch when the settle ended; Backlog is what it last read.
 	StreamClear bool
 	Backlog     Backlog
+	// Schedule is the schedule hop's runs due and made per kind (#1693).
+	Schedule []ScheduleCount
 }
 
 // DeliveryRow is one kind across one hop: the same keys for every kind and
@@ -152,20 +154,23 @@ func inWindowBoots(w delivery.Window, receipts []delivery.Receipt) []delivery.Bo
 }
 
 // EndToEndOf is each kind's loss over every hop it crosses, 1 - prod(1 -
-// loss), for the kinds with a ratio on every row.
+// loss), for the kinds with a settled ingest row (the last hop; without it
+// the kind's delivery is not known) and a ratio on some hop. A hop with
+// nothing in has no ratio and loses nothing, so it composes as 0: a schedule
+// that skipped every due leaves the ingest nothing to carry, and the kind
+// reads the schedule's whole loss.
 func EndToEndOf(rows []DeliveryRow) map[delivery.Kind]float64 {
 	hops := map[delivery.Kind][]float64{}
-	absent := map[delivery.Kind]bool{}
+	ingested := map[delivery.Kind]bool{}
 	for _, r := range rows {
-		if r.Loss == nil {
-			absent[r.Kind] = true
-			continue
+		ingested[r.Kind] = ingested[r.Kind] || r.Hop == delivery.Ingest
+		if r.Loss != nil {
+			hops[r.Kind] = append(hops[r.Kind], *r.Loss)
 		}
-		hops[r.Kind] = append(hops[r.Kind], *r.Loss)
 	}
 	out := map[delivery.Kind]float64{}
 	for k, ls := range hops {
-		if !absent[k] {
+		if ingested[k] {
 			out[k] = delivery.EndToEnd(ls...)
 		}
 	}
@@ -289,8 +294,14 @@ func (r ScaleReport) deliveryTable(b *strings.Builder) {
 		fmt.Fprintf(b, "%-12s%s\n", "delivery", "not measured: "+r.DeliveryNotRead)
 		return
 	}
+	// The hop column fits its longest name with two spaces after it, eight
+	// wide at least.
+	hop := 8
+	for _, d := range r.Delivery {
+		hop = max(hop, len(d.Hop)+2)
+	}
 	row := func(cells ...string) {
-		fmt.Fprintf(b, "%-12s%-8s%-9s%-9s%-9s%-7s%s\n", cells[0], cells[1], cells[2], cells[3], cells[4], cells[5], cells[6])
+		fmt.Fprintf(b, "%-12s%-*s%-9s%-9s%-9s%-7s%s\n", cells[0], hop, cells[1], cells[2], cells[3], cells[4], cells[5], cells[6])
 	}
 	row("delivery", "hop", "in", "out", "loss", "dedup", "cause")
 	missing := false

@@ -152,7 +152,7 @@ operator to place). A healthy
 pipeline reads exactly 0 for every kind, so reading it needs no knowledge of a kind's internals. A
 kind with nothing in reads no ratio, never a 0; a hop a kind does not cross has no row
 ([ADR-1641](/architecture/decisions/#adr-1641-every-telemetry-item-is-accounted-on-its-batchs-receipt-and-read-as-a-loss-ratio), #1641).
-The node hop and the ingest hop are read (#1692); the schedule and sim hops follow (#1693, #1694).
+The schedule, node and ingest hops are read today (#1693, #1692); the sim hop follows (#1694).
 Apart from this read, the node and the server each write their own hop's in, out and ratio per kind
 every window as platform metrics, 0 when nothing came in (#1659,
 [below](#measuring-the-pipeline)).
@@ -205,8 +205,19 @@ every window as platform metrics, 0 when nothing came in (#1659,
   that receipt's. Each gap has one owner, so adjacent windows sum to one window over both. A gap
   can still fill until a later batch's `resolved` passes it and the stream has drained; a boot not
   there yet reads **unsettled**, with no ratio.
+- **The schedule hop counts runs, not items.** Upstream of every item is a run that makes it: a node's
+  dispatcher counts each due on a task's schedule in and each run it makes out, per kind the run
+  produces (a reachability probe's metric and property, a driver poll's the lanes its emits
+  declare), so a due it passes over (a run still in flight on the lane, a late pass) is that hop's
+  loss and its cause is `skipped` (#1693). A probe an upstream holds counts made: it runs the moment
+  the upstream opens. A run off the schedule (an operator's offer) is no due. The node writes the
+  three keys every window at the instance `schedule/{kind}` on its own component, beside its spool's
+  per-kind instances.
 - **End to end composes.** A kind's loss over every hop it crosses is `1 - prod(1 - loss)`: a third
-  lost at the node and nothing at ingest is a third end to end.
+  lost at the node and nothing at ingest is a third end to end, and a node that skips a fifth of its
+  dues and lands every item it made reads 0.2 end to end, the schedule hop's. A hop with nothing in
+  loses nothing, so a kind whose every due was skipped reads 1 end to end, not unknown; a kind with
+  no settled ingest reading has no end to end at all.
 - **A killed boot is named, not yet counted.** A node's spool is memory, so a node that starts again
   while its spool holds batches loses them, and nothing that landed says how many items they held.
   The read takes such a boot as far as it landed and names its unshipped tail beside the table;

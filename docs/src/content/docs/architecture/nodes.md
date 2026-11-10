@@ -777,7 +777,10 @@ it never encodes, or (a self-log line) the bounded log buffer drops it (in only,
 does. These three replace the old spool-drop and publish-failure counts, so every hop's loss reads
 as the same ratio ([messaging](/architecture/messaging/#accounting-every-item-the-loss-ratio)), and
 [Platform health](/guides/operator/platform-health/#where-work-is-lost) draws this hop beside the
-server's ingest, with each node's own share as its Loss (#1646). The schedule figures read
+server's ingest, with each node's own share as its Loss (#1646). The **schedule hop** writes the
+same three keys at the instance `schedule/{kind}` (#1693): the runs due on the schedule that produce
+the kind in, the runs made out, so a skipped due is that hop's loss; Platform health draws it with
+#1739. The schedule figures read
 the dispatcher's window ([below](#scheduling-concurrency-and-self-observability)): a poll keeping its
 interval reads a zero `schedule-gap-excess`, and a late pass or a skipped slot reads the distance it
 lost. A node that goes silent sends nothing, so the server writes the one figure that keeps

@@ -530,6 +530,7 @@ func SummarizeScale(r ScaleRun) ScaleReport {
 		out.DeliveryNotRead = cmp.Or(d.Reason, "no receipts read")
 	} else {
 		out.Delivery, out.DeliveryUnsettled, out.DeliveryEnded = DeliveryOf(d)
+		out.Delivery = WithSchedule(ScheduleRowsOf(d.Schedule), out.Delivery)
 		out.DeliveryEndToEnd = EndToEndOf(out.Delivery)
 		if !d.StreamClear {
 			out.DeliveryNote = fmt.Sprintf("unsettled: the telemetry consumer still held batches when the settle ran out (%s pending, %s unacked)",
