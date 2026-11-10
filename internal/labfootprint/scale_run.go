@@ -46,6 +46,9 @@ type ScaleConfig struct {
 	Binary   string
 	Scenario string
 	Systems  int
+	// Image, when set, is the omniglass image the brought-up lab runs (lab
+	// run's own --image); empty is the binary's own build.
+	Image string
 	// DockerHost is the daemon the lab runs on.
 	DockerHost string
 	// ReadyTimeout bounds a bring-up (lab run's own --ready-timeout).
@@ -148,6 +151,9 @@ func (h *harness) bringUpScale(ctx context.Context, cfg ScaleConfig) (func() err
 	cmd := exec.Command(cfg.Binary, "lab", "run", "--scenario", cfg.Scenario, "--systems", strconv.Itoa(cfg.Systems),
 		"--port", "0", "--ready-file", ready, "--while-pid", strconv.Itoa(os.Getpid()),
 		"--ready-timeout", cfg.ReadyTimeout.String())
+	if cfg.Image != "" {
+		cmd.Args = append(cmd.Args, "--image", cfg.Image)
+	}
 	cmd.Stdout, cmd.Stderr = cfg.LabLog, cfg.LabLog
 	if err := cmd.Start(); err != nil {
 		_ = os.RemoveAll(dir)
@@ -337,6 +343,20 @@ func (h *harness) prepareScale(ctx context.Context, cfg ScaleConfig) (scaleSessi
 		run.Systems, _ = strconv.Atoi(f[0])
 		run.Components, _ = strconv.Atoi(f[1])
 		run.Tasks, _ = strconv.Atoi(f[2])
+	}
+	// The perf gate (#1640) names the host a run measured on and the device
+	// set its scenario places. A lab on a remote daemon ran elsewhere, so
+	// its runs carry no host rather than this one's.
+	if cfg.DockerHost == "" || lab.IsLocal(cfg.DockerHost) {
+		host := ReadFingerprint()
+		run.Host = &host
+	}
+	planned := cfg.Systems
+	if planned <= 0 {
+		planned = run.Systems
+	}
+	if digest, err := lab.PerfPlanDigest(run.Scenario, planned); err == nil {
+		run.PlanDigest = digest
 	}
 	// One read before anything is timed, so an API that refuses the fleet
 	// view fails the run in seconds, not after its window. Its answer names
