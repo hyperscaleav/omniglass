@@ -5560,6 +5560,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/views/platform/simulation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read what each simulator saw against what the platform collected
+         * @description Returns the read behind the Platform health page's simulation section: one row per node with a connected simulator, read over a sliding window the server brackets each minute. Each gap is a loss ratio (count over what went into the hop, 0 healthy, null when nothing did), its masking term and how to read it: impaired under an applied impairment, restarted while the window holds a restart, otherwise loss. Beside them, the receipts counted for the window, each protocol's received and answered counts, service-time quantiles and in-flight high water, and each simulated device's requests. A node reads warming up until the server holds a full window. The devices are unplaced simulator state, so the read needs a fleet-wide component:read; short of that it answers not found. Gated by simulation:read.
+         */
+        get: operations["get-platform-simulation-view"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/webhooks/{token}": {
         parameters: {
             query?: never;
@@ -9729,6 +9749,174 @@ export interface components {
             /** @description The build the server runs, as its boot wrote it (server-version); absent before a boot has written it */
             version?: string;
         };
+        PlatformSimulationDevice: {
+            component_id: string;
+            /** @description Whether the simulator impairs the device at the window's end. */
+            impaired: boolean;
+            /** @description The component's name; empty when it is no longer one of the node's simulated devices. */
+            name: string;
+            /** @description Requests the device saw over the window, by protocol. */
+            received: {
+                [key: string]: number;
+            };
+            /** @description Whether it is a poll target due over the window that the simulator never saw. */
+            unhit: boolean;
+        };
+        PlatformSimulationGap: {
+            /**
+             * Format: int64
+             * @description Answers the node gave up on before they arrived.
+             */
+            answered_late: number;
+            /**
+             * Format: int64
+             * @description How many were lost at the hop over the window, past its masking term.
+             */
+            count: number;
+            /** @description The hop a request or a batch was lost at, in travel order. */
+            gap: string;
+            /**
+             * Format: int64
+             * @description How many went into the hop over the window: the ratio's denominator.
+             */
+            in: number;
+            /**
+             * Format: int64
+             * @description How many the masking term accounts for, not counted as lost.
+             */
+            masked: number;
+            /** @description What the masking term is, empty when the gap has none. */
+            masked_by: string;
+            /** @description The protocol the gap is on; empty for a batch gap, which is per node. */
+            protocol: string;
+            /**
+             * Format: double
+             * @description count over in, 0 healthy; null when nothing went in, when the sim does not observe the hop, or on a restarted node.
+             */
+            ratio: number | null;
+            /**
+             * @description How to read the gap: loss is a fault, impaired is expected under an applied impairment, restarted means no figure is meaningful.
+             * @enum {string}
+             */
+            reading: "loss" | "impaired" | "restarted" | "not observed by the sim";
+        };
+        PlatformSimulationNode: {
+            /**
+             * Format: int64
+             * @description How many brackets the server holds for the node.
+             */
+            brackets: number;
+            /**
+             * Format: int64
+             * @description The node's busy-worker high water; null until a node reports it.
+             */
+            busy_workers: number | null;
+            devices: components["schemas"]["PlatformSimulationDevice"][] | null;
+            /**
+             * Format: date-time
+             * @description The window's last bracket; null while warming up.
+             */
+            end: string | null;
+            /** @description Why the last bracket or its reads failed; empty when they did not. */
+            error: string;
+            /** @description Every gap over the window in travel order; null while warming up. */
+            gaps: components["schemas"]["PlatformSimulationGap"][] | null;
+            /**
+             * Format: int64
+             * @description The most requests the simulator held at once over every protocol.
+             */
+            in_flight_high: number;
+            node: string;
+            protocols: components["schemas"]["PlatformSimulationProtocol"][] | null;
+            /**
+             * Format: int64
+             * @description The node's dispatch queue depth; null until a node reports it.
+             */
+            queue_depth: number | null;
+            receipts: components["schemas"]["PlatformSimulationReceipts"];
+            /**
+             * Format: date-time
+             * @description The window's first bracket; null while warming up.
+             */
+            start: string | null;
+            /**
+             * @description warming up until the server holds a window and the bracket after it; restarted while the window holds a restart.
+             * @enum {string}
+             */
+            state: "warming up" | "measured" | "restarted";
+        };
+        PlatformSimulationProtocol: {
+            /**
+             * Format: int64
+             * @description Requests it answered.
+             */
+            answered: number;
+            /**
+             * Format: int64
+             * @description The most requests on the protocol the simulator held at once.
+             */
+            in_flight_high: number;
+            /** @description The simulator's service time in milliseconds; n is 0 when it timed nothing. */
+            latency_ms: components["schemas"]["Quantiles"];
+            /**
+             * Format: int64
+             * @description Enabled poll targets the window should have drawn on the protocol at least twice.
+             */
+            poll_targets: number;
+            protocol: string;
+            /**
+             * Format: int64
+             * @description Requests the simulator received on the protocol over the window.
+             */
+            received: number;
+        };
+        PlatformSimulationReceipts: {
+            /**
+             * Format: int64
+             * @description Of those, the ones landed after the end, acknowledged before the end read.
+             */
+            after_end: number;
+            /**
+             * Format: int64
+             * @description Batches the ingest lane held at the end. The server does not read it, so it is 0.
+             */
+            backlog: number;
+            /**
+             * Format: int64
+             * @description Batches landed from the margin before the window's start to the bracket after its end.
+             */
+            landed: number;
+            /**
+             * Format: int64
+             * @description Of those, the ones landed before the start: a batch acknowledged before the start read.
+             */
+            margin: number;
+        };
+        PlatformSimulationViewOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/PlatformSimulationViewOutputBody.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: int64
+             * @description How often the server brackets each node.
+             */
+            bracket_seconds: number;
+            /** @description Each node with a connected simulator; empty when none is. */
+            nodes: components["schemas"]["PlatformSimulationNode"][] | null;
+            /**
+             * Format: date-time
+             * @description The server's clock at the read.
+             */
+            read_at: string;
+            /**
+             * Format: int64
+             * @description A full window's length.
+             */
+            window_seconds: number;
+        };
         PlatformSystemBody: {
             /** @description The platform system's uuid: the page's verdict links to its system detail, where the verdict is explained */
             id: string;
@@ -10252,6 +10440,16 @@ export interface components {
              * @enum {string}
              */
             owner_kind: "component" | "system";
+        };
+        Quantiles: {
+            /** Format: int64 */
+            n: number;
+            /** Format: double */
+            p50: number;
+            /** Format: double */
+            p95: number;
+            /** Format: double */
+            p99: number;
         };
         RaiseAlarmInputBody: {
             /**
@@ -24759,6 +24957,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlatformViewOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-platform-simulation-view": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformSimulationViewOutputBody"];
                 };
             };
             /** @description Error */
