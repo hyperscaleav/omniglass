@@ -493,8 +493,10 @@ node-silent rule reads. The webhook counts are the receiver's
 dispatcher's longest pass, the worst lateness and gap excess of the runs it dispatched, the spool's
 depth, the sessions held by state, the process figures) are one observation per sample, never a
 stored average. The counts (dues met in flight, skipped intervals, spool drops, publish failures) are
-tallied over the node's report window and land once when it ends, only when nonzero, the
-`poll-failure-count` convention. The schedule figures come from the dispatcher's window, taken each
+tallied over the node's report window and land once when it ends, every window, 0 when quiet, so a
+count's latest value returns to 0 after the window that had it rather than standing on the last
+event; the first window runs from the node's start and lands too. The schedule figures come from the
+dispatcher's window, taken each
 heartbeat ([nodes](/architecture/nodes/#scheduling-concurrency-and-self-observability)), and are
 measured per scheduled start: a run's lateness is its dispatch against its due time, and its gap
 excess is how far the gap since the task's own previous scheduled start strays from its interval,

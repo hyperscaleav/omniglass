@@ -77,7 +77,7 @@ metric_types:
   - name: tick-overrun-count
     data_type: int
     label: Tick Overruns
-    description: Dues that met their task's previous run still in flight, so were skipped, over the report window; reported only when nonzero.
+    description: Dues that met their task's previous run still in flight, so were skipped, over the report window; reported every window, 0 when quiet.
   - name: schedule-lateness
     data_type: float
     unit: ms
@@ -91,7 +91,7 @@ metric_types:
   - name: schedule-skip-count
     data_type: int
     label: Schedule Skips
-    description: Task dues the dispatcher passed over (a run still in flight, a late pass), over the report window; reported only when nonzero.
+    description: Task dues the dispatcher passed over (a run still in flight, a late pass), over the report window; reported every window, 0 when quiet.
   - name: spool-batch-count
     data_type: int
     label: Spool Depth
@@ -99,11 +99,11 @@ metric_types:
   - name: spool-drop-count
     data_type: int
     label: Spool Drops
-    description: Batches the spool dropped as full or overflowed, over the report window; reported only when nonzero.
+    description: Batches the spool dropped as full or overflowed, over the report window; reported every window, 0 when quiet.
   - name: publish-failure-count
     data_type: int
     label: Publish Failures
-    description: Batches the bus refused, never acknowledged, or the node failed to encode, over the report window; reported only when nonzero.
+    description: Batches the bus refused, never acknowledged, or the node failed to encode, over the report window; reported every window, 0 when quiet.
   - name: session-held-count
     data_type: int
     label: Sessions Held

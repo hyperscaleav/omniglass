@@ -591,7 +591,8 @@ on the publishing node's platform component under the platform writer class, so 
 itself, and only in the keys declared as its own. Figures the node reads every tick (the dispatcher's longest pass,
 the worst lateness and gap excess of the runs it dispatched, the spool depth, the sessions held by
 state, the Go process figures) go every tick; counts (dues met in flight, skipped intervals, spool
-drops, publish failures) go once per report window, and only when nonzero. The schedule figures read
+drops, publish failures) go once per report window, every window, 0 when quiet, so a count returns to
+0 after the window that had it. The schedule figures read
 the dispatcher's window ([below](#scheduling-concurrency-and-self-observability)): a poll keeping its
 interval reads a zero `schedule-gap-excess`, and a late pass or a skipped slot reads the distance it
 lost. A node that goes silent sends nothing, so the server writes the one figure that keeps

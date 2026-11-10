@@ -49,8 +49,8 @@ func TestNodeReportReadsAPunctualDispatcherAsNoOverrun(t *testing.T) {
 		r.dispatch(dispatchWindow{passes: 4, passMax: 2 * time.Second}, t0.Add(time.Duration(i)*30*time.Second))
 	}
 	got := readings(r.take(t0.Add(time.Minute)))
-	if _, ok := got[writerclass.TickOverrunCount]; ok {
-		t.Fatalf("a punctual dispatcher reported overruns: %v", got)
+	if v, ok := got[writerclass.TickOverrunCount]; !ok || v != 0 {
+		t.Fatalf("an on-time loop's window read tick-overrun-count %v (written %v), want 0: %v", v, ok, got)
 	}
 	if got[writerclass.TickDuration] != 2000 {
 		t.Fatalf("tick-duration = %v ms, want 2000", got[writerclass.TickDuration])
@@ -67,7 +67,7 @@ func TestNodeReportReadsNoTickDurationForAWindowWithNoPass(t *testing.T) {
 	}
 }
 
-func TestNodeReportEmitsEachWindowedCountOncePerWindowAndNoZeroNoise(t *testing.T) {
+func TestNodeReportEmitsEachWindowedCountOncePerWindowZeroWhenQuiet(t *testing.T) {
 	t.Parallel()
 	t0 := time.Unix(1_800_000_000, 0)
 	r := newNodeReport(time.Minute, t0)
@@ -107,11 +107,50 @@ func TestNodeReportEmitsEachWindowedCountOncePerWindowAndNoZeroNoise(t *testing.
 		}
 	}
 
-	// A quiet window emits no windowed count at all, not a zero.
+	// A quiet window emits each windowed count once, as zero.
 	quiet := readings(r.take(t0.Add(2 * time.Minute)))
 	for _, k := range windowed {
-		if _, ok := quiet[k]; ok {
-			t.Errorf("a quiet window emitted %s = %v", k, quiet[k])
+		if v, ok := quiet[k]; !ok || v != 0 {
+			t.Errorf("a quiet window read %s = %v (written %v), want 0", k, v, ok)
+		}
+		if _, dup := quiet[k+"#dup"]; dup {
+			t.Errorf("%s emitted twice in a quiet window", k)
+		}
+	}
+}
+
+// TestNodeReportCountsReturnToZeroAfterAQuietWindow: the node's first window
+// runs from its start, so it is whole and writes every count, zero included;
+// a window with an overrun, a skip, a drop and a failure follows, then a
+// quiet one, and each key's latest value is 0 again at the quiet window's end
+// rather than the event's count left standing as current.
+func TestNodeReportCountsReturnToZeroAfterAQuietWindow(t *testing.T) {
+	t.Parallel()
+	t0 := time.Unix(1_800_000_000, 0)
+	t1, t2, t3 := t0.Add(time.Minute), t0.Add(2*time.Minute), t0.Add(3*time.Minute)
+	r := newNodeReport(time.Minute, t0)
+	windowed := []string{writerclass.TickOverrunCount, writerclass.ScheduleSkipCount, writerclass.SpoolDropCount, writerclass.PublishFailureCount}
+
+	first := readings(r.take(t1))
+	for _, k := range windowed {
+		if v, ok := first[k]; !ok || v != 0 {
+			t.Errorf("the first window read %s = %v (written %v), want 0", k, v, ok)
+		}
+	}
+
+	r.dispatch(dispatchWindow{passes: 1, passMax: 40 * time.Second, overruns: 1, skips: 1}, t1.Add(time.Second))
+	r.spool(spoolFigures{drops: 1, failures: 1}, t1.Add(time.Second))
+	event := r.take(t2)
+	quiet := r.take(t3)
+
+	latest := map[string]*ogv1.MetricSample{}
+	for _, m := range append(event, quiet...) {
+		latest[m.GetName()] = m
+	}
+	for _, k := range windowed {
+		m, ok := latest[k]
+		if !ok || !m.GetTs().AsTime().Equal(t3) || m.GetValue() != 0 {
+			t.Errorf("%s latest = %v (written %v), want 0 at the quiet window's end %v", k, m, ok, t3)
 		}
 	}
 }

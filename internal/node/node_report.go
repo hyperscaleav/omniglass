@@ -21,8 +21,10 @@ import (
 // per sample, taken every heartbeat tick. The windowed counts (dues met in
 // flight, skipped intervals, spool drops, publish failures) are tallied over the node's
 // report window, the collection report's (report.go), and emitted once when
-// it ends, only when nonzero: the poll-failure-count convention, no zero
-// noise. Pure: the run loop feeds it and sends what it takes.
+// it ends, every window, a quiet window's as zero: a count written only when
+// nonzero would leave the last event's count standing as the series' latest
+// value long after it. The first window runs from the node's start, so it is
+// whole and writes too. Pure: the run loop feeds it and sends what it takes.
 type nodeReport struct {
 	every time.Duration
 	since time.Time
@@ -127,8 +129,8 @@ func (r *nodeReport) worklist(tasks int, at time.Time) {
 }
 
 // take returns what the report holds: the each-tick samples since the last
-// take, and, once the window has run its length, the window's nonzero counts
-// stamped at now, the window's end, the next window starting there.
+// take, and, once the window has run its length, the window's counts, zero
+// included, stamped at now, the window's end, the next window starting there.
 func (r *nodeReport) take(now time.Time) []*ogv1.MetricSample {
 	if r == nil {
 		return nil
@@ -143,9 +145,7 @@ func (r *nodeReport) take(now time.Time) []*ogv1.MetricSample {
 			{writerclass.SpoolDropCount, r.drops},
 			{writerclass.PublishFailureCount, r.failures},
 		} {
-			if c.n > 0 {
-				r.sample(c.key, float64(c.n), now, "")
-			}
+			r.sample(c.key, float64(c.n), now, "")
 		}
 		r.overruns, r.skipped, r.drops, r.failures = 0, 0, 0, 0
 		r.since = now
