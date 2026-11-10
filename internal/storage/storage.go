@@ -904,6 +904,10 @@ type Gateway interface {
 	PruneMetricTrends(ctx context.Context, before time.Time, limit int) (int64, error)
 	// MetricPartitions lists the metric table's daily partitions.
 	MetricPartitions(ctx context.Context) ([]MetricPartition, error)
+	// RetentionStatus is what the retention pass reports of storage after
+	// it runs (#1629): the metric partitions and the stored tables' and the
+	// database's on-disk bytes.
+	RetentionStatus(ctx context.Context) (RetentionStatus, error)
 	// PruneSamplesOfType is PruneSamples for one type with a window of its
 	// own, which the lane's prune skips (#417).
 	PruneSamplesOfType(ctx context.Context, lane, typeID string, days int, before time.Time, limit int) (int64, error)

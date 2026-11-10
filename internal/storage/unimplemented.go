@@ -763,6 +763,9 @@ func (UnimplementedGateway) PruneMetricTrends(context.Context, time.Time, int) (
 func (UnimplementedGateway) MetricPartitions(context.Context) ([]MetricPartition, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) RetentionStatus(context.Context) (RetentionStatus, error) {
+	return RetentionStatus{}, nil
+}
 func (UnimplementedGateway) PruneSamplesOfType(context.Context, string, string, int, time.Time, int) (int64, error) {
 	return 0, nil
 }

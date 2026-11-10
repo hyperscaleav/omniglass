@@ -1,4 +1,4 @@
-## frozen-fact-served-as-current (fixed; found by the #1035 review, regressed and fixed in the #821, #456, #1297, #1626 and #1644 reviews)
+## frozen-fact-served-as-current (fixed; found by the #1035 review, regressed and fixed in the #821, #456, #1297, #1626 and #1644 reviews, open again from the #1629 review as #1673)
 
 - **Cue:** a read that serves a latest-ever sample (a certificate's days left, a handshake's
   result) beside a gate or state that stops the probe from refreshing it.
@@ -43,3 +43,9 @@
   the sum of its instances at its newest time (`platformFigures`, `PlatformWindowKeys`,
   internal/storage/platform_view.go), the window set held to the catalog's "reported only when
   nonzero" by test.
+- **Seventh instance (#1629, open as #1673):** a rule's pending streak on a series that stops
+  arriving. The retention pass writes `retention-behind` only for the lanes it ran, so a lane that
+  read 1 and then left the report (its type override removed, its window stored out of range, the
+  metric window out of range for the compaction flags) keeps a pending fire streak: the rule sweep
+  fires it with no fresh sample, and the clear only runs at ingest, so the warning never clears.
+  Cue: a flag written per member of a set that can shrink, read by a rule whose clear needs a sample.

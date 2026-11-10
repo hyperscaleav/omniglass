@@ -137,3 +137,21 @@ func TestServerReporterSaysNothingOfAnUnreadOutbox(t *testing.T) {
 		}
 	}
 }
+
+// TestAServerWithNoComponentStillFollowsTheSlowQuerySetting (#1671): a server
+// whose component was not ensured re-reads database.slow_query_ms each window
+// as any server does, and lands no platform figure.
+func TestAServerWithNoComponentStillFollowsTheSlowQuerySetting(t *testing.T) {
+	t.Parallel()
+	m := newServerMetrics(slog.New(slog.NewTextHandler(io.Discard, nil)), time.Now)
+	gw := &fakeSelfStore{database: settings.DatabaseSettings{SlowQueryMS: 900}, pool: storage.PoolStat{Max: 12}}
+	if err := m.reporter(gw, "", nil).Report(context.Background()); err != nil {
+		t.Fatalf("report: %v", err)
+	}
+	if got := m.tracer.Threshold(); got != 900*time.Millisecond {
+		t.Errorf("threshold after a window = %v, want the setting's 900ms", got)
+	}
+	if len(gw.written) != 0 {
+		t.Errorf("wrote %+v with no component, want nothing", gw.written)
+	}
+}

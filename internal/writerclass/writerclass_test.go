@@ -308,6 +308,31 @@ func TestTheNodeSelfKeysArePlatformKeys(t *testing.T) {
 	}
 }
 
+// TestTheRetentionKeysArePlatformKeys (#1629): the retention pass's figures
+// are platform keys with no prefix, written by the process alone, and none is
+// a key a node reports of itself.
+func TestTheRetentionKeysArePlatformKeys(t *testing.T) {
+	keys := RetentionKeys()
+	want := []string{DatabaseBytes, MetricBlockMarkLag, MetricOldestDayAge, MetricPartitionCount,
+		MetricPartitionCreatedCount, MetricPartitionDroppedCount, MetricTrendMarkLag, RetentionBehind,
+		RetentionDeletedCount, RetentionPassDuration, RetentionPassFailureCount, RetentionWindowDays, TableBytes}
+	slices.Sort(want)
+	if !slices.Equal(keys, want) {
+		t.Fatalf("retention keys %v, want the 13 the pass reports %v", keys, want)
+	}
+	for _, key := range keys {
+		if c, ok := Reserved(key); !ok || c != Platform {
+			t.Errorf("%s resolves to %q (%v), want platform", key, c, ok)
+		}
+		if !Admits(Platform, Process, key) || Admits(Platform, Node, key) || Admits(Platform, Push, key) || Admits(Platform, Operator, key) {
+			t.Errorf("%s: only the process writes a retention key", key)
+		}
+		if NodeSelf(key) {
+			t.Errorf("the node-self lane admits %s", key)
+		}
+	}
+}
+
 // TestServerKeysAreTheProcesssAlone: the server's request and database keys
 // (#1627) are platform keys only the process writes, and a node naming one on
 // its node-self lane is refused like any key not its own.

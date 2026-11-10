@@ -105,6 +105,9 @@ func (f fakeStore) CompactMetricBlocks(context.Context, storage.BlockFold) (stor
 func (f fakeStore) DropMetricPartitions(context.Context, time.Time) ([]string, error) {
 	return nil, nil
 }
+func (f fakeStore) RetentionStatus(context.Context) (storage.RetentionStatus, error) {
+	return storage.RetentionStatus{}, nil
+}
 func (f fakeStore) PruneTelemetryReceipts(context.Context, time.Time, int) (int64, error) {
 	return 0, nil
 }
