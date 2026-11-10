@@ -20,6 +20,7 @@ import (
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
 	"github.com/hyperscaleav/omniglass/internal/clientaddr"
+	"github.com/hyperscaleav/omniglass/internal/closedloop"
 	mcpserver "github.com/hyperscaleav/omniglass/internal/mcp"
 	"github.com/hyperscaleav/omniglass/internal/platformmetric"
 	"github.com/hyperscaleav/omniglass/internal/settings"
@@ -83,6 +84,9 @@ type options struct {
 	// requestRecorder times every API request into the server's platform
 	// metrics (#1627). Nil records nothing: a test's handler.
 	requestRecorder *platformmetric.Recorder
+	// ring is the server's closed-loop window over each node with a
+	// simulator (#1647). Nil reads as no node measured.
+	ring *closedloop.Ring
 	// log is where a route logs a failure it answers without its cause.
 	// Unset is slog.Default.
 	log *slog.Logger
@@ -432,6 +436,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 		viewLog = slog.Default()
 	}
 	registerViewRoutes(api, a, gw, viewLog)
+	registerPlatformSimulationView(api, a, gw, o.ring, viewLog)
 	registerNodeRoutes(api, a, gw, o.natsURL)
 	registerSecretRoutes(api, a, gw)
 	registerVariableRoutes(api, a, gw)

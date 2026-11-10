@@ -16,6 +16,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/bus"
 	"github.com/hyperscaleav/omniglass/internal/clientaddr"
+	"github.com/hyperscaleav/omniglass/internal/closedloop"
 	"github.com/hyperscaleav/omniglass/internal/config"
 	"github.com/hyperscaleav/omniglass/internal/egress"
 	"github.com/hyperscaleav/omniglass/internal/migrate"
@@ -176,8 +177,12 @@ func runServer(ctx context.Context, version string, lab bool) error {
 	if err != nil {
 		return err
 	}
+	// The closed loop over each node with a connected simulator (#1647,
+	// ADR-1647): a bracket a minute, read as a sliding window on the
+	// Platform health page.
+	ring := closedloop.NewRing(api.NewSimLoopSource(busSrv, gw), time.Now, closedloop.RingSpan)
 	srv := &http.Server{
-		Handler:           api.NewHandler(gw, api.WithVersion(version), api.WithSecureCookies(c.SecureCookies), api.WithTrustedProxies(trust), api.WithNatsURL(natsURL), api.WithSettingsService(gw.Settings()), api.WithTelemetryPublisher(busSrv), api.WithSimHub(busSrv), api.WithNodeRunner(busSrv), api.WithLab(lab), api.WithRequestRecorder(self.rec)),
+		Handler:           api.NewHandler(gw, api.WithClosedLoopRing(ring), api.WithVersion(version), api.WithSecureCookies(c.SecureCookies), api.WithTrustedProxies(trust), api.WithNatsURL(natsURL), api.WithSettingsService(gw.Settings()), api.WithTelemetryPublisher(busSrv), api.WithSimHub(busSrv), api.WithNodeRunner(busSrv), api.WithLab(lab), api.WithRequestRecorder(self.rec)),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	log.Info("http api listening", "addr", ln.Addr().String())
@@ -205,6 +210,7 @@ func runServer(ctx context.Context, version string, lab bool) error {
 	// The server's self-report, once a collection report window, until
 	// shutdown cancels it.
 	go self.reporter(gw, serverComponentID, log).Run(notifyCtx)
+	go ring.Run(notifyCtx, api.SimLoopNodes(busSrv, time.Now))
 
 	errc := make(chan error, 1)
 	go func() {
