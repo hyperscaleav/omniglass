@@ -200,14 +200,64 @@ func TestTheUpstreamReasonIsPublishedNamingTheComponentAndAdoptedOnRestart(t *te
 		t.Fatalf("c-1 text = %q; want it to name upstream A since", r.text)
 	}
 
-	// A restarted node adopts the reason off the worklist, then re-derives
-	// it live: A reads open (its unreachable is re-earned), so C waits on its
-	// own probe rather than dropping the hold unseen.
+	// A restarted node adopts the reason off the worklist and keeps it held:
+	// the upstream's own unreachable is re-earned from its probes, so until
+	// B reads up nothing says the path is open, and probing C now would read
+	// it down behind a dead upstream.
 	restarted := newGates()
 	restarted.observe("c-1", "fp", value)
 	chainGates(restarted, false)
+	if h, ok := restarted.upstream["c-1"]; !ok || h.wait || !h.since.Equal(r.since) {
+		t.Fatalf("restarted c-1 = %+v, %v; want the adopted reason, held, since %s", h, ok, r.since)
+	}
+	if !restarted.upstreamHeld("c-1") {
+		t.Fatal("restarted c-1 probes before its upstream read up")
+	}
+	// B reads up: the path is open, so C waits on its own probe.
+	restarted.verdict("b-1", "probe-b", true, gateT0.Add(time.Second))
 	if h, ok := restarted.upstream["c-1"]; !ok || !h.wait || !h.since.Equal(r.since) {
 		t.Fatalf("restarted c-1 = %+v, %v; want the adopted reason, waiting, since %s", h, ok, r.since)
+	}
+}
+
+func TestAnAdoptedHoldBecomesTheUpstreamsOwnOnceItReadsDown(t *testing.T) {
+	t.Parallel()
+	g := newGates()
+	g.observe("b-1", "fp", "upstream "+gateT0.Format(time.RFC3339)+" comp-a")
+	chainGates(g, false)
+	if !g.upstreamHeld("b-1") {
+		t.Fatal("restarted b-1 probes before A read up")
+	}
+	g.verdict("a-1", "probe-a", false, gateT0.Add(time.Second))
+	g.verdict("a-1", "probe-a", false, gateT0.Add(2*time.Second))
+	if h := g.upstream["b-1"]; h.wait || h.component != "comp-a" || h.name != "A" || !h.since.Equal(gateT0) {
+		t.Fatalf("b-1 = %+v; want held naming A since the adopted %s", h, gateT0)
+	}
+	g.verdict("a-1", "probe-a", true, gateT0.Add(3*time.Second))
+	if h, ok := g.upstream["b-1"]; !ok || !h.wait {
+		t.Fatalf("b-1 = %+v, %v; want waiting once A reads up", h, ok)
+	}
+}
+
+func TestADownReadBeforeTheHoldDoesNotCountTowardUnreachableAfterIt(t *testing.T) {
+	t.Parallel()
+	g := newGates()
+	chainGates(g, true)
+	// B's probe reads down once as A goes: the same outage, seen from B.
+	g.verdict("b-1", "probe-b", false, gateT0)
+	g.verdict("a-1", "probe-a", false, gateT0)
+	g.verdict("a-1", "probe-a", false, gateT0.Add(time.Second))
+	if !g.upstreamHeld("b-1") {
+		t.Fatal("b-1 is not held behind A")
+	}
+	g.verdict("a-1", "probe-a", true, gateT0.Add(time.Minute))
+	// One down while B waits (it has not re-registered yet) is one, not two.
+	g.verdict("b-1", "probe-b", false, gateT0.Add(time.Minute+time.Second))
+	if _, ok := g.others["b-1"][reasonUnreachable]; ok {
+		t.Fatalf("b-1 unreachable on one down after the hold: %+v", g.others["b-1"])
+	}
+	if h, ok := g.upstream["b-1"]; !ok || !h.wait {
+		t.Fatalf("b-1 = %+v, %v; want still waiting on its own probe", h, ok)
 	}
 }
 

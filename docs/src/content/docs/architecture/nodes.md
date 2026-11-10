@@ -492,7 +492,7 @@ The type's hold is the backstop: an endpoint still held then reopens anyway and 
 it as `hold-expiry-count`, so a device that never comes back is seen rather than silently resumed.
 The lane is never blocked: work on other endpoints runs throughout. A failed send leaves the
 gates closed until up or the backstop, since whether the device received the command is unknown. A
-restarted node does not adopt `disrupted` from its worklist (only a refusal is adopted): the
+restarted node does not adopt `disrupted` from its worklist (only a refusal and an `upstream` hold are adopted): the
 restart itself outlasts the moment, and the probe reads the device fresh.
 
 **A path upstream holds what is reached through it** (built, #1652,
@@ -512,14 +512,17 @@ probe result never moves and nothing fires on it, and a command, run now or prev
 gateway, not a storm on everything behind it. **Waiting**, once every upstream opens: the probe
 resumes, polls stay held, and the dependent's own next up verdict releases it; a dependent with no
 probe has nothing to wait for and is released at once, and one that earns its own `unreachable`
-while waiting drops `upstream`, so its gate names its own cause. **The reason names the root.** Down
+while waiting drops `upstream`, so its gate names its own cause. Downs its probe read before the hold do
+not count toward that: they saw the same outage through the upstream. **The reason names the root.** Down
 a chain A to B to C, while A is closed B and C both read `upstream A`; once A opens and B waits on
 its probe, C reads `upstream B`, since B is now the closure nearest it. The derivation never takes a
 dependent's reason from a closure rooted in its own component, and a waiting upstream never holds a
 component it depends on itself, so a path cycle terminates and never holds itself up. The reason is
 published in the endpoint's rejection row naming the upstream's component id, the reachability read
-serves that component's current name when the caller may read it, and a restarted node adopts it
-from the worklist and then re-derives it live, so a restart never drops a hold unseen. An upstream
+serves that component's current name when the caller may read it. A restarted node adopts it from
+the worklist and keeps it held until the upstream's probes read up (the upstream's own
+`unreachable` is re-earned, not adopted, so until then nothing says the path is open), then
+re-derives it live, so a restart neither drops a hold unseen nor probes through a dead upstream. An upstream
 on another node is not followed (#1655), and a held session's own reconnect is not yet gated by
 `upstream` (#1703).
 

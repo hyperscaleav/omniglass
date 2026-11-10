@@ -28,6 +28,8 @@ refs: [1652, 1650, 1648, 1651, 1655, 1624, 1703]
      upstream opens the reason moves to its wait phase: probes resume, polls stay held, and the
      dependent's own up verdict releases it. A dependent with no probe is released at once; one that
      earns its own `unreachable` while waiting drops `upstream`, so its gate names its own cause.
+     Downs its probe read before the hold do not count toward that `unreachable`: they saw the same
+     outage through the upstream.
   5. **The reason names the root.** A dependent of an upstream closed only by a held-phase `upstream`
      reason inherits that reason's component; any other closure names the upstream itself. Down A to
      B to C, both B and C read `upstream A` while A is closed; once A opens and B waits on its probe,
@@ -38,8 +40,10 @@ refs: [1652, 1650, 1648, 1651, 1655, 1624, 1703]
      (the iteration reaches a fixed point) and never holds itself up.
   7. **Published and adopted.** The reason rides the endpoint's rejection row as `upstream <since>
      <component-id>`; the reachability read serves the component's current name beside the id when
-     the caller may read it. A restarted node adopts it as the prior hold and re-derives it live, so a
-     restart never drops a hold unseen and never invents one.
+     the caller may read it. A restarted node adopts it as the prior hold, keeps it held until the
+     upstream's probes read up (the upstream's own `unreachable` is re-earned, not adopted), and then
+     re-derives it live, so a restart never drops a hold unseen, never invents one, and never probes
+     through a dead upstream.
 - **Divergences and follow-ups:** a held session's own reconnect is not gated by `upstream` yet
   (#1703); an upstream or dependent on another node is #1655; the console rendering of gate reasons
   is #1657.

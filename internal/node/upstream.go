@@ -31,25 +31,30 @@ type pathUpstream struct {
 
 // upstreamHold is an endpoint's upstream reason. component and name are the
 // component it names; root is the component whose own closure the hold
-// descends from, which the cycle guard reads; wait marks the wait phase.
+// descends from, which the cycle guard reads; wait marks the wait phase;
+// adopted marks a hold a restarted node took off its published rejection,
+// before any upstream closure was derived live.
 type upstreamHold struct {
 	root      string
 	component string
 	name      string
 	since     time.Time
 	wait      bool
+	adopted   bool
 }
 
 // upstreamState is what the rule reads: each endpoint's component, its path
 // upstreams, which endpoints are closed by a reason of their own (any but
-// upstream), which hold their own unreachable, which have a probe task, the
-// holds the last derive gave, and the time a new hold is since.
+// upstream), which hold their own unreachable, which have a probe task,
+// which have read up since the node started, the holds the last derive gave,
+// and the time a new hold is since.
 type upstreamState struct {
 	componentOf map[string]string
 	edges       map[string][]pathUpstream
 	ownClosed   map[string]bool
 	unreachable map[string]bool
 	probed      map[string]bool
+	upSeen      map[string]bool
 	prior       map[string]upstreamHold
 	now         time.Time
 }
@@ -72,8 +77,12 @@ type closure struct {
 // component, and a wait-phase upstream never holds a component it depends on
 // itself, so a path cycle terminates and never holds itself up. An endpoint
 // that was held and no longer is waits for its own probe when it has one and
-// holds no unreachable of its own, and is released otherwise.
+// holds no unreachable of its own, and is released otherwise. An adopted
+// hold stays held until every probed endpoint of its upstreams has read up:
+// an upstream's own unreachable is re-earned after a restart, not adopted,
+// so until then nothing says the path is open.
 func deriveUpstream(s upstreamState) map[string]upstreamHold {
+	adopted := adoptedHeld(s)
 	// waiting is every endpoint that would wait if nothing held it now:
 	// the holds the last derive gave, on an endpoint still placed here that
 	// has a probe to wait for and no unreachable of its own.
@@ -87,9 +96,9 @@ func deriveUpstream(s upstreamState) map[string]upstreamHold {
 	dependsOn := componentGraph(s)
 	dependents := sortedKeys(s.edges)
 
-	held := map[string]upstreamHold{}
+	held := copyHolds(adopted)
 	for range len(s.componentOf) + 2 {
-		next := map[string]upstreamHold{}
+		next := copyHolds(adopted)
 		for _, ep := range dependents {
 			own := s.componentOf[ep]
 			if own == "" {
@@ -124,6 +133,37 @@ func deriveUpstream(s upstreamState) map[string]upstreamHold {
 		if _, ok := out[ep]; !ok {
 			out[ep] = h
 		}
+	}
+	return out
+}
+
+// adoptedHeld is every adopted hold still in its held phase that stays so:
+// on an endpoint still placed here, with a probed endpoint of its upstreams
+// that has not read up since the node started.
+func adoptedHeld(s upstreamState) map[string]upstreamHold {
+	out := map[string]upstreamHold{}
+	for ep, h := range s.prior {
+		if !h.adopted || h.wait {
+			continue
+		}
+		if _, placed := s.componentOf[ep]; !placed {
+			continue
+		}
+		for _, pu := range s.edges[ep] {
+			for _, u := range pu.endpoints {
+				if s.probed[u] && !s.upSeen[u] {
+					out[ep] = h
+				}
+			}
+		}
+	}
+	return out
+}
+
+func copyHolds(m map[string]upstreamHold) map[string]upstreamHold {
+	out := make(map[string]upstreamHold, len(m))
+	for k, v := range m {
+		out[k] = v
 	}
 	return out
 }

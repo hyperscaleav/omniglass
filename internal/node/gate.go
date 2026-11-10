@@ -266,6 +266,9 @@ type gates struct {
 	topo     upstreamTopology
 	moved    map[string]bool
 	clock    func() time.Time
+	// upSeen is every endpoint whose probe has read up since the node
+	// started, which an adopted hold waits on (#1652).
+	upSeen map[string]bool
 }
 
 // upstreamTopology is the path dependencies the worklist carries (#1652):
@@ -280,7 +283,8 @@ type upstreamTopology struct {
 func newGates() *gates {
 	return &gates{held: map[string]gate{}, current: map[string]string{},
 		others: map[string]map[reasonKind]reason{}, streak: map[string]downStreak{}, hosts: map[string]string{},
-		quiet: map[string]disruption{}, upstream: map[string]upstreamHold{}, moved: map[string]bool{}, clock: time.Now}
+		quiet: map[string]disruption{}, upstream: map[string]upstreamHold{}, moved: map[string]bool{}, clock: time.Now,
+		upSeen: map[string]bool{}}
 }
 
 // topology takes the path dependencies off the worklist and derives the
@@ -323,7 +327,15 @@ func (g *gates) propagateAtLocked(now time.Time) {
 		}
 	}
 	next := deriveUpstream(upstreamState{componentOf: g.topo.componentOf, edges: g.topo.edges, ownClosed: own,
-		unreachable: unreachable, probed: g.topo.probed, prior: g.upstream, now: now})
+		unreachable: unreachable, probed: g.topo.probed, upSeen: g.upSeen, prior: g.upstream, now: now})
+	for ep, h := range next {
+		// A held endpoint's probe is not run, so the downs it read before
+		// the hold (the same outage, seen through the upstream) are not its
+		// own: its wait phase counts afresh.
+		if !h.wait {
+			delete(g.streak, ep)
+		}
+	}
 	for ep, h := range g.upstream {
 		if n, ok := next[ep]; !ok || n != h {
 			g.moved[ep] = true
@@ -388,14 +400,15 @@ func (g *gates) observe(endpointID, fingerprint, published string) {
 
 // adoptUpstreamLocked takes the upstream reason a restarted node published
 // before it (#1652) as the endpoint's prior hold, the first time the node
-// sees the endpoint: the next derive keeps it held while its upstream is
-// still closed and moves it to its wait phase otherwise, so a restart never
-// drops a hold unseen. Caller holds mu.
+// sees the endpoint: it stays held until its upstream's probes read up (the
+// upstream's own unreachable is re-earned, not adopted), then waits on its
+// own probe, so a restart never drops a hold unseen nor probes through a
+// dead upstream. Caller holds mu.
 func (g *gates) adoptUpstreamLocked(endpointID, published string) {
 	_, _, others := rejection.ParseSet(published)
 	for _, r := range others {
 		if reasonKind(r.Kind) == reasonUpstream {
-			g.upstream[endpointID] = upstreamHold{root: r.Source, component: r.Source, since: r.Since}
+			g.upstream[endpointID] = upstreamHold{root: r.Source, component: r.Source, since: r.Since, adopted: true}
 			return
 		}
 	}
@@ -568,6 +581,11 @@ func (g *gates) retain(endpoints, taskIDs map[string]bool) {
 			delete(g.streak, id)
 		}
 	}
+	for id := range g.upSeen {
+		if !endpoints[id] {
+			delete(g.upSeen, id)
+		}
+	}
 	for id := range g.quiet {
 		if !endpoints[id] {
 			delete(g.quiet, id)
@@ -641,6 +659,7 @@ func (g *gates) verdict(endpointID, taskID string, up bool, at time.Time) bool {
 	defer g.propagateLocked()
 	if up {
 		delete(g.streak, endpointID)
+		g.upSeen[endpointID] = true
 		changed := false
 		if _, ok := g.upstream[endpointID]; ok {
 			// The wait phase ends on the endpoint's own up verdict.
