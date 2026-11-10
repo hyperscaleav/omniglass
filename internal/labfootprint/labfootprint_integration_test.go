@@ -10,6 +10,7 @@ package labfootprint
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"fmt"
 	"os"
@@ -116,7 +117,7 @@ func TestIntegrationScaleDelivery(t *testing.T) {
 		}
 		measured++
 		if *d.Loss != 0 || d.Outcomes[delivery.Missing] != 0 {
-			t.Errorf("%s across %s: loss %v, outcomes %v; a healthy lab loses nothing", d.Kind, d.Hop, *d.Loss, d.Outcomes)
+			t.Errorf("%s across %s: loss %v, outcomes %v; a healthy lab loses nothing", cmp.Or(string(d.Kind), d.Protocol), d.Hop, *d.Loss, d.Outcomes)
 		}
 	}
 	if measured == 0 {

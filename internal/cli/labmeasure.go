@@ -124,8 +124,10 @@ func newLabMeasureCmd() *cobra.Command {
 			"one table: rows a minute per lane, table and WAL growth a day extrapolated from the window, CPU and memory " +
 			"per container, WAL bytes a sample, ingest lag from probe to row (p50, p95, p99), consumer redeliveries, the " +
 			"ingest consumer lane's busy fraction and service time a batch, the console's fleet view response " +
-			"times, the retention pass's drain rate, and each telemetry kind's delivery loss across the node hop and the " +
-			"ingest hop (in, out, loss, deduplicated and the cause of any loss), with the end-to-end loss a kind. It writes the same figures as JSON so two runs compare.\n\n" +
+			"times, the retention pass's drain rate, each telemetry kind's delivery loss across the node hop and the " +
+			"ingest hop (in, out, loss, deduplicated and the cause of any loss), each polled protocol's loss across the " +
+			"sim hop (the requests the simulated endpoints settled against the replies that reached the node), and the " +
+			"end-to-end loss a kind. It writes the same figures as JSON so two runs compare.\n\n" +
 			"With no --systems it measures the scale lab already running. With --systems it brings up a throwaway scale " +
 			"lab of that size, measures it, and removes it, so the one command is the whole run.\n\n" +
 			"When no sample probed in the window had landed by its end, the ingest lag cell reads not measured, with the " +

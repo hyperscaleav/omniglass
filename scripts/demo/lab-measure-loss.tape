@@ -28,7 +28,7 @@ Wait
 Type "grep -E '^(ready|measuring|delivery|torn down)' /tmp/lab-measure.err"
 Enter
 Wait
-Type "# The delivery table: each kind across the schedule hop (runs), the node hop, then the ingest hop (items), with the loss ratio and its cause"
+Type "# The delivery table: after the sim rows, each kind across the schedule hop (runs), the node hop, then the ingest hop (items), with the loss ratio and its cause"
 Enter
 Wait
 Type "sed -n '/^delivery /,$p' /tmp/lab-measure.txt"
@@ -37,13 +37,13 @@ Wait
 Type "# The same figures in the JSON a second run compares against: each kind that sent items reads 0 on every hop"
 Enter
 Wait
-Type `jq -c '.delivery[] | {kind, hop, in, out, loss, deduplicated, outcomes}' /tmp/lab-measure.json`
+Type `jq -c '.delivery[] | select(.hop != "sim") | {kind, hop, in, out, loss, deduplicated, outcomes}' /tmp/lab-measure.json`
 Enter
 Wait
 Type "# The node's out is the ingest's in: a hole the node accounts for is its loss, never ingest missing"
 Enter
 Wait
-Type `jq -c '.delivery | group_by(.kind)[] | {kind: .[0].kind, node_out: (map(select(.hop == "node"))[0].out), ingest_in: (map(select(.hop == "ingest"))[0].in)}' /tmp/lab-measure.json`
+Type `jq -c '[.delivery[] | select(.kind)] | group_by(.kind)[] | {kind: .[0].kind, node_out: (map(select(.hop == "node"))[0].out), ingest_in: (map(select(.hop == "ingest"))[0].in)}' /tmp/lab-measure.json`
 Enter
 Wait
 Type `jq -c '.delivery_end_to_end' /tmp/lab-measure.json`

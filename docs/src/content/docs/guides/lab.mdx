@@ -602,6 +602,8 @@ exactly 0 for every kind:
 
 ```
 delivery    hop       in       out      loss     dedup  cause
+http        sim       540      540      0        -      -
+snmp        sim       310      310      0        -      -
 metric      schedule  4100     4100     0        0      -
 metric      node      1275     1275     0        0      -
 metric      ingest    1275     1275     0        0      -
@@ -615,8 +617,21 @@ log         ingest    0        0        -        0      -
 end to end  metric 0  property 0  event -  log -
 ```
 
-Each kind reads its hops in the order its work crosses them:
+The rows read in the order the work crosses the hops, each kind's own in turn:
 
+- The **sim** rows come first, one per protocol the nodes tally (`http`, `snmp`), read from the same
+  marks as the endpoints block. They count **requests**, not items, since a simulator cannot know which
+  kinds an answer would have carried: **in** is every request the simulators settled on traffic the
+  nodes tally, **out** the replies that reached the node (`returned`). A refusal or error that came
+  back is returned: the device said no and the task reports it. The rest is loss, by cause:
+  `withheld` (the simulator kept the answer back, a wrong community or its own datagram loss),
+  `dropped` (it could not write the reply), or `not-returned` (the reply left the simulator and never
+  reached the node, lost on the way or late past the node's timeout). A reply still in flight at the
+  node when the mark reads is not lost. The rows sum the nodes, and a node that restarted in the window
+  has no figure to add: the table names it under the rows, `sim not counted: edge-west restarted in
+  the window`, so a row never reads as every node's when it is not.
+  Dedup reads `-`: a request is never redelivered. The JSON carries each sim row's `protocol` in place
+  of a `kind`, with these four outcomes.
 - The **schedule** row is the hop upstream of every item, the nodes' dispatchers (#1693): **in** is
   the runs due on the schedule that produce the kind and **out** the runs made, so its counts are
   runs, not items, and its cause is `skipped`, a due passed over because the lane's last run was
@@ -644,7 +659,7 @@ Each kind reads its hops in the order its work crosses them:
   `coalesced`, an unchanged value skipped on purpose; and `unbound`, an identity no binding places,
   which the conduit's unbound inbox holds for the operator to assign).
 
-A kind with nothing in reads `-`, never 0. The sim hop follows (#1694).
+A kind with nothing in reads `-`, never 0.
 - **dedup** is the items a redelivery carried again, which the receipt absorbed. It sits beside the
   ratio, never in it, so a retry storm never moves the loss off 0.
 - **cause** is the largest outcome behind a loss: a `refused-<why>` (a key not registered, a writer or
@@ -668,7 +683,9 @@ A kind with nothing in reads `-`, never 0. The sim hop follows (#1694).
   read 0.1, the schedule hop's. A hop with nothing in loses nothing, so a schedule that skipped every
   due of a kind reads that kind's end to end as 1 though its later rows read `-`. A kind with no
   ingest row (every boot unsettled) reads `-`: the schedule hop alone does not stand for the end to
-  end.
+  end. The sim hop enters as one loss pooled over every protocol's requests, composed into each kind
+  with an ingest row: an approximation, since a lost request carried some kinds and not others. With
+  no sim rows it is the product of the kind's own hops.
 - **unsettled** names a node boot whose window's batches were not all known when `--settle-timeout`
   ran out (no later batch said the spool had cleared past them, or the stream still held batches),
   with no ratio for it rather than a guess. A note under the table gives the stream's pending and
@@ -698,7 +715,10 @@ summary names the device and the driver copy. It is off unless asked, and only a
 
 The same 23-hour window limit applies, since receipts are kept a day. A lab
 whose server predates the ledger reads `delivery not measured` with the reason, and every other figure
-is still reported.
+is still reported. When the sim rows were read but the ingest hop was not, the table keeps the sim
+rows and ends with `ingest not measured` and the reason. When the closed loop was not read (the
+endpoints block reads `endpoints not measured`), the table has no sim rows, its end to end is the
+ingest hop alone, and it says so under the rows: `sim not measured` and the same reason.
 
 The window and the warm-up are printed above the table, and belong beside any figure you quote from it.
 

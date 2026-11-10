@@ -79,6 +79,27 @@ const (
 	EncodeFailed Outcome = "encode-failed"
 )
 
+// The sim hop's outcomes (#1694). The sim hop counts requests a simulated
+// endpoint settled, not telemetry items (the sim cannot know which kinds an
+// answer would have carried), so it has its own set, never mixed into the
+// ingest rows. A refusal or an error the endpoint sent back is returned: it
+// reached the node's task, which reports it; it is not the hop's loss.
+const (
+	// Returned is a request whose reply reached the node's task.
+	Returned Outcome = "returned"
+	// Withheld is a request the sim chose not to answer: a credential it
+	// does not accept, or its own configured datagram loss.
+	Withheld Outcome = "withheld"
+	// Dropped is a reply the sim could not write to its socket.
+	Dropped Outcome = "dropped"
+	// NotReturned is a reply the sim sent that never reached the node's
+	// task: lost on the way back, or late past the task's timeout.
+	NotReturned Outcome = "not-returned"
+)
+
+// SimOutcomes is every sim hop outcome, out first, then loss.
+var SimOutcomes = []Outcome{Returned, Withheld, Dropped, NotReturned}
+
 // IngestOutcomes is every outcome of the ingest hop, out first, then the
 // dedup count, then loss.
 var IngestOutcomes = []Outcome{
@@ -93,12 +114,15 @@ var NodeOutcomes = []Outcome{
 	Shipped, SpoolOverflow, SpoolExpired, BusRefused, SelfLogOverflow, EncodeFailed,
 }
 
-// Outcomes is every outcome of every hop: the ingest hop's, then the node's.
+// Outcomes is every item outcome of every hop: the ingest hop's, then the
+// node's. The sim hop counts requests, not items, so SimOutcomes stands apart.
 var Outcomes = append(append([]Outcome{}, IngestOutcomes...), NodeOutcomes...)
 
 // OutcomesOf is the outcomes a hop's row counts, nil for a hop with none.
 func OutcomesOf(h Hop) []Outcome {
 	switch h {
+	case Sim:
+		return SimOutcomes
 	case Node:
 		return NodeOutcomes
 	case Ingest:
@@ -109,8 +133,10 @@ func OutcomesOf(h Hop) []Outcome {
 
 // Out reports whether the outcome counts as out: accounted for, in the store
 // or, for an unbound sample, in its conduit's unbound inbox, or at the node
-// hop handed to the stream.
-func (o Outcome) Out() bool { return o == Stored || o == Coalesced || o == Unbound || o == Shipped }
+// hop handed to the stream, or, on the sim hop, back at the node.
+func (o Outcome) Out() bool {
+	return o == Stored || o == Coalesced || o == Unbound || o == Shipped || o == Returned
+}
 
 // Deduplicated reports whether the outcome is the redelivery count, reported
 // beside the ratio.

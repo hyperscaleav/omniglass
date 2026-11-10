@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/closedloop"
+	"github.com/hyperscaleav/omniglass/internal/delivery"
 	"github.com/hyperscaleav/omniglass/internal/lab"
 )
 
@@ -19,7 +20,8 @@ import (
 // its closed loop shut: every protocol the nodes poll
 // drew requests, no poll target went unhit, every gap is zero, and no face
 // saw two requests at once. It is what a fake cannot prove: real nodes, real
-// sims and real receipts, bracketed through the server's API.
+// sims and real receipts, bracketed through the server's API. The sim hop
+// of the delivery table reads 0 on every protocol (#1694).
 func TestIntegrationScaleEndpointsCloseTheLoop(t *testing.T) {
 	if os.Getenv("OMNIGLASS_LAB_TEST") != "1" {
 		t.Skip("the scale lab's closed loop runs through make test-lab (it needs the image make builds)")
@@ -67,6 +69,20 @@ func TestIntegrationScaleEndpointsCloseTheLoop(t *testing.T) {
 		if g.Loss != 0 || g.Impaired != 0 {
 			t.Errorf("%s: loss %d, impaired %d, want 0", g.Gap, g.Loss, g.Impaired)
 		}
+	}
+	// The sim hop (#1694): every request the sims settled came back.
+	simRows := 0
+	for _, d := range rep.Delivery {
+		if d.Hop != delivery.Sim {
+			continue
+		}
+		simRows++
+		if d.Loss == nil || *d.Loss != 0 {
+			t.Errorf("%s across the sim hop: in %d, out %d, outcomes %v; a healthy lab loses nothing", d.Protocol, d.In, d.Out, d.Outcomes)
+		}
+	}
+	if simRows == 0 {
+		t.Errorf("the delivery table has no sim row: %+v", rep.Delivery)
 	}
 	for _, g := range e.Gaps {
 		if g.Gap == closedloop.GapUnhitEndpoint && g.Reading != closedloop.ReadingNotObserved && g.Count > 0 {

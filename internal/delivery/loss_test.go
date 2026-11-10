@@ -85,6 +85,44 @@ func TestEveryOutcomeIsClassedExactlyOnce(t *testing.T) {
 	}
 }
 
+// The sim hop (#1694) counts requests, not items, so it has its own outcome
+// set: a request a simulated endpoint settled either came back to the node
+// (returned, out) or was lost one of three ways. Each is classed exactly once,
+// none is shared with the ingest set, and a total's cause reads from it.
+func TestEverySimOutcomeIsClassedExactlyOnce(t *testing.T) {
+	ingest := map[delivery.Outcome]bool{}
+	for _, o := range delivery.Outcomes {
+		ingest[o] = true
+	}
+	want := []delivery.Outcome{delivery.Returned, delivery.Withheld, delivery.Dropped, delivery.NotReturned}
+	if len(delivery.SimOutcomes) != len(want) {
+		t.Fatalf("SimOutcomes = %v; want %v", delivery.SimOutcomes, want)
+	}
+	for i, o := range delivery.SimOutcomes {
+		if o != want[i] {
+			t.Errorf("SimOutcomes[%d] = %q; want %q", i, o, want[i])
+		}
+		if ingest[o] {
+			t.Errorf("sim outcome %q is also an ingest outcome", o)
+		}
+		if o.Deduplicated() {
+			t.Errorf("sim outcome %q is beside the ratio", o)
+		}
+		if o.Out() == o.Lost() {
+			t.Errorf("sim outcome %q is out %v and lost %v; want exactly one", o, o.Out(), o.Lost())
+		}
+	}
+	if !delivery.Returned.Out() {
+		t.Error("returned is not out")
+	}
+	tot := delivery.Total{In: 10, Out: 4, Outcomes: map[delivery.Outcome]uint64{
+		delivery.Returned: 4, delivery.Withheld: 2, delivery.Dropped: 1, delivery.NotReturned: 3,
+	}}
+	if got := tot.Cause(); got != delivery.NotReturned {
+		t.Errorf("Cause = %q; want not-returned, the largest loss", got)
+	}
+}
+
 // receipt is a landed batch of boot b at seq, minted at minute m, carrying
 // count metrics with before metrics minted ahead of it, every one stored.
 func receipt(b string, seq uint64, m int, before, count uint64) delivery.Receipt {

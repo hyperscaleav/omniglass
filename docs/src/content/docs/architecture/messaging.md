@@ -152,7 +152,10 @@ operator to place). A healthy
 pipeline reads exactly 0 for every kind, so reading it needs no knowledge of a kind's internals. A
 kind with nothing in reads no ratio, never a 0; a hop a kind does not cross has no row
 ([ADR-1641](/architecture/decisions/#adr-1641-every-telemetry-item-is-accounted-on-its-batchs-receipt-and-read-as-a-loss-ratio), #1641).
-The schedule, node and ingest hops are read today (#1693, #1692); the sim hop follows (#1694).
+The schedule, node and ingest hops are read today (#1693, #1692). The lab also reads the sim hop,
+what the simulated endpoints settled against what reached the node, per protocol in requests rather
+than per kind in items, since a simulator cannot know which kinds an answer would carry
+([ADR-1694](/architecture/decisions/#adr-1694-the-sim-hop-is-read-per-protocol-in-requests-from-the-closed-loop), #1694).
 Apart from this read, the node and the server each write their own hop's in, out and ratio per kind
 every window as platform metrics, 0 when nothing came in (#1659,
 [below](#measuring-the-pipeline)).
