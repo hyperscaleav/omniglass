@@ -265,3 +265,57 @@ func TestDeclaredAgainst(t *testing.T) {
 		t.Errorf("over = %v, want event 4", over)
 	}
 }
+
+// TestScheduleHopLossIsSkippedOverDue (#1693): the schedule hop's in is the
+// runs that fell due and its out the runs made, counted for each kind a run
+// produces, so its loss is the skipped dues over the dues; it reads under a
+// hop-named instance, and the end to end composes it with the hops after it.
+func TestScheduleHopLossIsSkippedOverDue(t *testing.T) {
+	var c delivery.Counts
+	c.Scheduled([]delivery.Kind{delivery.Metric, delivery.Property}, 3, 1) // 3 made, 1 skipped
+	c.Scheduled([]delivery.Kind{delivery.Metric}, 0, 0)                    // nothing due counts nothing
+
+	got := map[string]float64{}
+	for _, r := range c.HopReadings(delivery.Schedule) {
+		got[r.Key+" "+r.Instance] = r.Value
+	}
+	want := map[string]float64{
+		"delivery-in-count schedule/metric":     4,
+		"delivery-out-count schedule/metric":    3,
+		"delivery-loss-ratio schedule/metric":   0.25,
+		"delivery-in-count schedule/property":   4,
+		"delivery-loss-ratio schedule/property": 0.25,
+		"delivery-in-count schedule/event":      0, // a kind no run produces reads 0, never a stale loss
+		"delivery-loss-ratio schedule/log":      0,
+	}
+	for k, v := range want {
+		if g, ok := got[k]; !ok || g != v {
+			t.Errorf("%s = %v (present %v), want %v", k, g, ok, v)
+		}
+	}
+	if len(got) != 3*len(delivery.Kinds) {
+		t.Errorf("readings = %d, want %d (three per kind)", len(got), 3*len(delivery.Kinds))
+	}
+
+	h, k, ok := delivery.ParseHopInstance("schedule/metric")
+	if !ok || h != delivery.Schedule || k != delivery.Metric {
+		t.Errorf("ParseHopInstance(schedule/metric) = %q, %q, %v", h, k, ok)
+	}
+	for _, bad := range []string{"metric", "schedule/", "/metric", "schedule/widget", "nowhere/metric"} {
+		if _, _, ok := delivery.ParseHopInstance(bad); ok {
+			t.Errorf("ParseHopInstance(%q) parsed; want refused", bad)
+		}
+	}
+	if s := delivery.HopInstance(delivery.Schedule, delivery.Log); s != "schedule/log" {
+		t.Errorf("HopInstance = %q, want schedule/log", s)
+	}
+
+	schedule, _ := delivery.Loss(4, 3)
+	ingest, _ := delivery.Loss(3, 3)
+	if e := delivery.EndToEnd(schedule, ingest); e != 0.25 {
+		t.Errorf("end to end over a lossy schedule and a clean ingest = %v, want 0.25", e)
+	}
+	if e := delivery.EndToEnd(schedule, 0.5); math.Abs(e-0.625) > 1e-12 {
+		t.Errorf("end to end = %v, want 0.625 (1 - 0.75*0.5)", e)
+	}
+}
