@@ -538,13 +538,13 @@ func TestScaleDeliveryRowPerKindCrossed(t *testing.T) {
 		}
 	}
 	table := rep.Table()
-	for _, want := range []string{"delivery    hop     in       out      loss     dedup  cause", "metric      ingest  80       80       0        0      -",
-		"property    ingest  8        8        0        0      -", "end to end  metric 0  property 0  event -  log -"} {
+	for _, want := range []string{"delivery    lane  hop     in       out      loss     dedup  cause", "metric      node  ingest  80       80       0        0      -",
+		"property    node  ingest  8        8        0        0      -", "end to end  node  metric 0  property 0  event -  log -"} {
 		if !strings.Contains(table, want) {
 			t.Errorf("the table has no %q:\n%s", want, table)
 		}
 	}
-	for _, absent := range []string{"event       ingest", "log         ingest"} {
+	for _, absent := range []string{"event       node  ingest", "log         node  ingest"} {
 		if strings.Contains(table, absent) {
 			t.Errorf("the table has a row for a kind that crossed nothing, %q:\n%s", absent, table)
 		}
@@ -565,10 +565,10 @@ func TestScaleDeliveryCauseAndJSON(t *testing.T) {
 		receipt("b1", 2, 700, delivery.Declared{delivery.Metric: {Count: 10, Before: 10}, delivery.Property: {Count: 10, Before: 10}}, nil),
 	))
 	table := rep.Table()
-	if !strings.Contains(table, "property    ingest  10       5        0.5      0      refused-unregistered") {
+	if !strings.Contains(table, "property    node  ingest  10       5        0.5      0      refused-unregistered") {
 		t.Errorf("the property row does not name its largest outcome as the cause:\n%s", table)
 	}
-	if !strings.Contains(table, "end to end  metric 0  property 0.5  event -  log -") {
+	if !strings.Contains(table, "end to end  node  metric 0  property 0.5  event -  log -") {
 		t.Errorf("the end-to-end line does not carry the property loss:\n%s", table)
 	}
 	b, err := json.Marshal(rep)
@@ -586,7 +586,7 @@ func TestScaleDeliveryCauseAndJSON(t *testing.T) {
 	}
 	for _, row := range back.Delivery {
 		kind := string(row["kind"])
-		for _, key := range []string{"hop", "kind", "in", "out", "deduplicated", "outcomes"} {
+		for _, key := range []string{"lane", "hop", "kind", "in", "out", "deduplicated", "outcomes"} {
 			if _, ok := row[key]; !ok {
 				t.Errorf("the %s row has no %q key: %s", kind, key, b)
 			}
@@ -628,8 +628,8 @@ func TestScaleDeliveryUnboundIsNotLoss(t *testing.T) {
 		receipt("b1", 2, 700, delivery.Declared{delivery.Metric: {Count: 10, Before: 10}, delivery.Property: {Count: 10, Before: 10}}, nil),
 	))
 	table := rep.Table()
-	for _, want := range []string{"metric      ingest  10       10       0        0      -",
-		"property    ingest  10       8        0.2      0      refused-writer"} {
+	for _, want := range []string{"metric      node  ingest  10       10       0        0      -",
+		"property    node  ingest  10       8        0.2      0      refused-writer"} {
 		if !strings.Contains(table, want) {
 			t.Errorf("the table has no %q:\n%s", want, table)
 		}
@@ -673,6 +673,78 @@ func TestScaleDeliveryUnsettled(t *testing.T) {
 	}
 	if table := rep.Table(); !strings.Contains(table, "node edge-hq, boot b1: no ratio") || strings.Contains(table, "end to end") {
 		t.Errorf("an unsettled stream still prints a ratio:\n%s", table)
+	}
+}
+
+// pushed is one batch the API's push lane published (#1696): the same ledger
+// as a node's, under the server's own boot, with no node.
+func pushed(seq uint64, s int, declared delivery.Declared, outcome func(*delivery.Tally)) delivery.Receipt {
+	r := receipt("push-boot", seq, s, declared, outcome)
+	r.Node = ""
+	return r
+}
+
+// The push lane reads as its own ingest-hop row, apart from the node lane's
+// (#1696): its loss is not folded into the nodes', and its one hop is not
+// composed into the node lane's end to end. A pushed batch Termed at ingest
+// leaves a hole in the server's boot, read as missing on the push row alone.
+func TestScaleDeliveryPushLaneRowsApart(t *testing.T) {
+	m := func(n, before uint64) delivery.Declared {
+		return delivery.Declared{delivery.Metric: {Count: n, Before: before}}
+	}
+	rep := SummarizeScale(deliveryRun(
+		receipt("b1", 1, 100, m(40, 0), nil),
+		receipt("b1", 2, 700, m(40, 40), nil),
+		pushed(1, 100, m(3, 0), nil),
+		// seq 2, 2 metrics, was Termed at ingest and left no receipt.
+		pushed(3, 300, m(2, 5), nil),
+		pushed(4, 700, m(1, 7), nil),
+	))
+	if len(rep.Delivery) != 2 {
+		t.Fatalf("delivery rows = %+v, want a node row and a push row for metric", rep.Delivery)
+	}
+	nodeRow, pushRow := rep.Delivery[0], rep.Delivery[1]
+	if nodeRow.Lane != LaneNode || nodeRow.In != 40 || nodeRow.Out != 40 || nodeRow.Loss == nil || *nodeRow.Loss != 0 {
+		t.Errorf("node row = %+v, want 40 in 40 out, 0 loss", nodeRow)
+	}
+	if pushRow.Lane != LanePush || pushRow.Hop != delivery.Ingest || pushRow.In != 7 || pushRow.Out != 5 ||
+		pushRow.Outcomes[delivery.Missing] != 2 || pushRow.Cause != delivery.Missing {
+		t.Errorf("push row = %+v, want 7 in 5 out, 2 missing", pushRow)
+	}
+	if got := rep.DeliveryEndToEnd[delivery.Metric]; got != 0 {
+		t.Errorf("node end to end metric = %v, want 0: the push lane's loss is its own row's", got)
+	}
+	table := rep.Table()
+	for _, want := range []string{
+		"metric      node  ingest  40       40       0        0      -",
+		"metric      push  ingest  7        5        0.2857   0      missing",
+		"end to end  node  metric 0  property -  event -  log -",
+		"missing     push  " + pushMissingLabel,
+	} {
+		if !strings.Contains(table, want) {
+			t.Errorf("the table has no %q:\n%s", want, table)
+		}
+	}
+	if strings.Contains(table, "missing     node") {
+		t.Errorf("the node lane lost nothing but reads missing:\n%s", table)
+	}
+	b, _ := json.Marshal(rep)
+	if !strings.Contains(string(b), `"lane":"push","hop":"ingest","kind":"metric","in":7,"out":5`) {
+		t.Errorf("the JSON push row is not marked by its lane: %s", b)
+	}
+}
+
+// A push boot whose batches are not all known prints as the push lane's,
+// not as a node with no name.
+func TestScaleDeliveryPushLaneUnsettled(t *testing.T) {
+	rep := SummarizeScale(deliveryRun(
+		pushed(1, 100, delivery.Declared{delivery.Metric: {Count: 3}}, nil),
+	))
+	if len(rep.Delivery) != 0 || len(rep.DeliveryUnsettled) != 1 {
+		t.Fatalf("rows %+v, unsettled %+v; want the push boot unsettled", rep.Delivery, rep.DeliveryUnsettled)
+	}
+	if table := rep.Table(); !strings.Contains(table, "unsettled   push lane, boot push-boot: no ratio") {
+		t.Errorf("the table does not name the unsettled push boot:\n%s", table)
 	}
 }
 

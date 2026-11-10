@@ -15,16 +15,45 @@ import (
 
 // The delivery read (#1641): every telemetry kind's loss across the ingest
 // hop over the measured window, reconciled from the ledger each batch's
-// receipt carries. A healthy lab reads exactly 0 for every kind.
+// receipt carries. A healthy lab reads exactly 0 for every kind. Each lane
+// reads apart (#1696): the node lane's batches carry their node's boot, the
+// push lane's (the API's push route and webhooks) the server's own, with no
+// node.
 
 // MaxDeliveryWindow is the longest window the read reconciles: receipts are
 // pruned at a day, and a window near that would read pruned batches as
 // missing.
 const MaxDeliveryWindow = 23 * time.Hour
 
-// missingLabel is what a missing item is, at this stage: the ingest cannot
-// yet tell these apart (see the lab guide).
+// missingLabel is what a missing item is on the node lane, at this stage:
+// the ingest cannot yet tell these apart (see the lab guide).
 const missingLabel = "never landed: Termed at ingest, dropped at the node, or lost in between"
+
+// pushMissingLabel is what a missing item is on the push lane: the server
+// mints the ledger as it publishes, and a publish the stream refused is
+// taken back off it (the pusher was told and still holds its items), so a
+// hole is a batch the stream stored and the ingest Termed, or one the stream
+// gave up before it was read.
+const pushMissingLabel = "never landed: Termed at ingest, or dropped by the stream before it was read"
+
+// DeliveryLane is which way a batch came in: from a node, or pushed to the
+// API.
+type DeliveryLane string
+
+// The lanes, in the order the table reads them.
+const (
+	LaneNode DeliveryLane = "node"
+	LanePush DeliveryLane = "push"
+)
+
+// laneOf is the lane a receipt came in on: a receipt with no node is the
+// push lane's.
+func laneOf(node string) DeliveryLane {
+	if node == "" {
+		return LanePush
+	}
+	return LaneNode
+}
 
 // DeliveryRead is what the run read for the delivery table: the window, the
 // receipts of every boot with a batch minted in it, and whether the
@@ -41,9 +70,11 @@ type DeliveryRead struct {
 	Backlog     Backlog
 }
 
-// DeliveryRow is one kind across one hop: the same keys for every kind and
-// hop, every outcome counted, and loss absent when nothing went in.
+// DeliveryRow is one kind across one hop of one lane: the same keys for
+// every kind, hop and lane, every outcome counted, and loss absent when
+// nothing went in.
 type DeliveryRow struct {
+	Lane         DeliveryLane                `json:"lane"`
 	Hop          delivery.Hop                `json:"hop"`
 	Kind         delivery.Kind               `json:"kind"`
 	In           uint64                      `json:"in"`
@@ -56,17 +87,17 @@ type DeliveryRow struct {
 	Cause delivery.Outcome `json:"-"`
 }
 
-// UnsettledBoot is a node boot whose batches were not all known when the
-// settle ended: no ratio is read from it.
+// UnsettledBoot is a boot whose batches were not all known when the settle
+// ended: no ratio is read from it. A push-lane boot has no node.
 type UnsettledBoot struct {
 	Node string `json:"node"`
 	Boot string `json:"boot"`
 }
 
-// DeliveryOf reconciles the read into one row per kind the window's batches
-// carried across the ingest hop, in kind order, over the settled boots only.
-// A boot still unsettled is named instead of read; while the stream still
-// held batches, every boot is.
+// DeliveryOf reconciles the read into one row per lane and kind the
+// window's batches carried across the ingest hop, the node lane first, each
+// in kind order, over the settled boots only. A boot still unsettled is
+// named instead of read; while the stream still held batches, every boot is.
 func DeliveryOf(d DeliveryRead) ([]DeliveryRow, []UnsettledBoot) {
 	unsettled := delivery.Unsettled(d.Window, d.Receipts)
 	if !d.StreamClear {
@@ -81,14 +112,23 @@ func DeliveryOf(d DeliveryRead) ([]DeliveryRow, []UnsettledBoot) {
 	settled := slices.DeleteFunc(slices.Clone(d.Receipts), func(r delivery.Receipt) bool {
 		return skip[delivery.Boot{Node: r.Node, Boot: r.Boot}]
 	})
-	totals := delivery.Reconcile(d.Window, settled)
+	var rows []DeliveryRow
+	for _, lane := range []DeliveryLane{LaneNode, LanePush} {
+		mine := slices.DeleteFunc(slices.Clone(settled), func(r delivery.Receipt) bool { return laneOf(r.Node) != lane })
+		rows = append(rows, laneRows(lane, delivery.Reconcile(d.Window, mine))...)
+	}
+	return rows, named
+}
+
+// laneRows is one row per kind a lane's reconcile carried, in kind order.
+func laneRows(lane DeliveryLane, totals map[delivery.Kind]delivery.Total) []DeliveryRow {
 	var rows []DeliveryRow
 	for _, k := range delivery.Kinds {
 		t, ok := totals[k]
 		if !ok {
 			continue
 		}
-		row := DeliveryRow{Hop: delivery.Ingest, Kind: k, In: t.In, Out: t.Out, Deduplicated: t.Deduplicated,
+		row := DeliveryRow{Lane: lane, Hop: delivery.Ingest, Kind: k, In: t.In, Out: t.Out, Deduplicated: t.Deduplicated,
 			Outcomes: map[delivery.Outcome]uint64{}, Cause: t.Cause()}
 		for _, o := range delivery.Outcomes {
 			row.Outcomes[o] = t.Outcomes[o]
@@ -98,7 +138,7 @@ func DeliveryOf(d DeliveryRead) ([]DeliveryRow, []UnsettledBoot) {
 		}
 		rows = append(rows, row)
 	}
-	return rows, named
+	return rows
 }
 
 // inWindowBoots is every boot with a batch minted in the window, in node and
@@ -115,12 +155,16 @@ func inWindowBoots(w delivery.Window, receipts []delivery.Receipt) []delivery.Bo
 	})
 }
 
-// EndToEndOf is each kind's loss over every hop it crosses, 1 - prod(1 -
-// loss), for the kinds with a ratio on every row.
+// EndToEndOf is each kind's loss over every hop the node lane carries it
+// across, 1 - prod(1 - loss), for the kinds with a ratio on every row. The
+// push lane crosses the ingest hop alone, so its row is its end to end.
 func EndToEndOf(rows []DeliveryRow) map[delivery.Kind]float64 {
 	hops := map[delivery.Kind][]float64{}
 	absent := map[delivery.Kind]bool{}
 	for _, r := range rows {
+		if r.Lane != LaneNode {
+			continue
+		}
 		if r.Loss == nil {
 			absent[r.Kind] = true
 			continue
@@ -237,18 +281,19 @@ func ParseBacklog(out string) Backlog {
 	return b
 }
 
-// deliveryTable is the report's delivery section: a row per kind and hop,
-// the end-to-end line, then each unsettled boot by name with no ratio.
+// deliveryTable is the report's delivery section: a row per lane, kind and
+// hop, the node lane's end-to-end line, then each unsettled boot by name
+// with no ratio, then what missing means on each lane that read it.
 func (r ScaleReport) deliveryTable(b *strings.Builder) {
 	if r.DeliveryNotRead != "" {
 		fmt.Fprintf(b, "%-12s%s\n", "delivery", "not measured: "+r.DeliveryNotRead)
 		return
 	}
 	row := func(cells ...string) {
-		fmt.Fprintf(b, "%-12s%-8s%-9s%-9s%-9s%-7s%s\n", cells[0], cells[1], cells[2], cells[3], cells[4], cells[5], cells[6])
+		fmt.Fprintf(b, "%-12s%-6s%-8s%-9s%-9s%-9s%-7s%s\n", cells[0], cells[1], cells[2], cells[3], cells[4], cells[5], cells[6], cells[7])
 	}
-	row("delivery", "hop", "in", "out", "loss", "dedup", "cause")
-	missing := false
+	row("delivery", "lane", "hop", "in", "out", "loss", "dedup", "cause")
+	missing := map[DeliveryLane]bool{}
 	for _, d := range r.Delivery {
 		loss, cause := "-", "-"
 		if d.Loss != nil {
@@ -256,13 +301,13 @@ func (r ScaleReport) deliveryTable(b *strings.Builder) {
 		}
 		if d.Cause != "" {
 			cause = string(d.Cause)
-			missing = missing || d.Cause == delivery.Missing
+			missing[d.Lane] = missing[d.Lane] || d.Cause == delivery.Missing
 		}
-		row(string(d.Kind), string(d.Hop), strconv.FormatUint(d.In, 10), strconv.FormatUint(d.Out, 10), loss,
+		row(string(d.Kind), string(d.Lane), string(d.Hop), strconv.FormatUint(d.In, 10), strconv.FormatUint(d.Out, 10), loss,
 			strconv.FormatUint(d.Deduplicated, 10), cause)
 	}
-	if len(r.Delivery) > 0 {
-		cells := []string{"end to end"}
+	if slices.ContainsFunc(r.Delivery, func(d DeliveryRow) bool { return d.Lane == LaneNode }) {
+		cells := []string{fmt.Sprintf("%-12s%s", "end to end", LaneNode)}
 		for _, k := range delivery.Kinds {
 			v := "-"
 			if l, ok := r.DeliveryEndToEnd[k]; ok {
@@ -273,10 +318,19 @@ func (r ScaleReport) deliveryTable(b *strings.Builder) {
 		b.WriteString(strings.Join(cells, "  ") + "\n")
 	}
 	for _, u := range r.DeliveryUnsettled {
-		fmt.Fprintf(b, "%-12snode %s, boot %s: no ratio\n", "unsettled", u.Node, u.Boot)
+		who := "node " + u.Node
+		if laneOf(u.Node) == LanePush {
+			who = "push lane"
+		}
+		fmt.Fprintf(b, "%-12s%s, boot %s: no ratio\n", "unsettled", who, u.Boot)
 	}
-	if missing {
-		b.WriteString("missing: " + missingLabel + "\n")
+	for _, l := range []struct {
+		lane  DeliveryLane
+		label string
+	}{{LaneNode, missingLabel}, {LanePush, pushMissingLabel}} {
+		if missing[l.lane] {
+			fmt.Fprintf(b, "%-12s%-6s%s\n", "missing", l.lane, l.label)
+		}
 	}
 	if r.DeliveryNote != "" {
 		b.WriteString(r.DeliveryNote + "\n")
