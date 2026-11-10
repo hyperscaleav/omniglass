@@ -956,6 +956,15 @@ type Gateway interface {
 	PutIdentityBinding(ctx context.Context, actorID, conduit, key, value string, owner IdentityBindingOwner, sc IdentityBindingScopes) (*IdentityBinding, error)
 	DeleteIdentityBinding(ctx context.Context, actorID, conduit, key, value string, sc IdentityBindingScopes) error
 
+	// Component dependencies (#1648): an edge from a dependent to its upstream,
+	// of kind power (with the outlet), host or path. A write resolves the
+	// dependent in read then update and the upstream in read; a cycle within a
+	// kind is refused. A disruptive command's hold set follows the power and
+	// host edges (ResolveHoldSet).
+	CreateComponentDependency(ctx context.Context, actorID, component string, spec ComponentDependencySpec, read, update scope.Set) (*ComponentDependency, error)
+	ListComponentDependencies(ctx context.Context, component string, read scope.Set) (*ComponentDependencyList, error)
+	DeleteComponentDependency(ctx context.Context, actorID, component, kind, upstream string, read, update scope.Set) error
+
 	// The role tier: a system's roles resolve from its standard (inherited) and its
 	// own ad-hoc declarations; assignment refuses a component whose product's
 	// component_type is not one the role's typed-slot guard accepts (#626).

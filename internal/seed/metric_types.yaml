@@ -28,6 +28,22 @@ metric_types:
     data_type: int
     label: Poll Failures
     description: The endpoint's driver polls that failed in the report window (faulted and landed nothing, or refused by the endpoint's gate); reported only when nonzero.
+  - name: poll-held-count
+    data_type: int
+    label: Held Polls
+    description: The endpoint's due driver polls its gate held in the report window because its probe reads it unreachable, a disruptive command (a reboot) holds it, or a component it is reached through is down (which holds its probes too, counted here); never sent, so not failures; reported only when nonzero.
+  - name: hold-expiry-count
+    data_type: int
+    label: Hold Expiries
+    description: Disruptions of the endpoint (a reboot closed its gate) released in the report window by the command type's hold backstop because no up verdict came after the quiet period; reported only when nonzero.
+  - name: poll-due-count
+    data_type: int
+    label: Due Polls
+    description: The endpoint's driver polls that fell due in the report window, each on its own interval, held, refused and skipped ones included; reported only when nonzero.
+  - name: poll-skipped-count
+    data_type: int
+    label: Skipped Polls
+    description: The endpoint's due driver polls the node skipped in the report window because the poll's last run was still in flight; counted, never queued; reported only when nonzero.
   - name: push-message-count
     data_type: int
     label: Pushed Messages
@@ -61,25 +77,25 @@ metric_types:
     data_type: float
     unit: ms
     label: Tick Duration
-    description: Time one pass of the node's heartbeat loop took, sampled each pass; describes today's serial loop and is redefined when the loop changes (#1634).
+    description: The longest pass the node's dispatcher took over one heartbeat window, sampled each heartbeat.
   - name: tick-overrun-count
     data_type: int
     label: Tick Overruns
-    description: Passes that ran past the heartbeat plus the ticks the ticker dropped meanwhile, over the report window; reported every window, 0 when quiet.
+    description: Dues that met their task's previous run still in flight, so were skipped, over the report window; reported every window, 0 when quiet.
   - name: schedule-lateness
     data_type: float
     unit: ms
     label: Schedule Lateness
-    description: The worst gap between a task's due time and its actual start over one tick's due runs.
+    description: The worst gap between a task's due time and its dispatch over one heartbeat window's scheduled runs.
   - name: schedule-gap-excess
     data_type: float
     unit: ms
     label: Schedule Gap Excess
-    description: The worst deviation between a task's actual gap since its previous run and its configured interval over one tick; a 45 s poll on a 30 s heartbeat reads 15 s every run.
+    description: The worst deviation between a task's gap since its previous scheduled start and its interval over one heartbeat window; a poll keeping its interval reads 0, a skipped slot a whole interval.
   - name: schedule-skip-count
     data_type: int
     label: Schedule Skips
-    description: Whole task intervals the schedule skipped because a run came late, over the report window; reported every window, 0 when quiet.
+    description: Task dues the dispatcher passed over (a run still in flight, a late pass), over the report window; reported every window, 0 when quiet.
   - name: spool-batch-count
     data_type: int
     label: Spool Depth

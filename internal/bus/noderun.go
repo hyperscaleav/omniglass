@@ -110,5 +110,30 @@ func taskSpecOf(t storage.WorklistTask) collection.TaskSpec {
 		Fingerprint:    t.Fingerprint,
 		Rejection:      t.Rejection,
 		Ladder:         t.Ladder,
+		ComponentID:    componentOnWire(t),
+		PathUpstreams:  pathUpstreamsOf(t.PathUpstreams),
 	}
+}
+
+// componentOnWire is the task's component when it is reached through a path
+// upstream, else none (#1652): the node reads an upstream's component off the
+// edge that names it, so the tasks reached through nothing, most of a large
+// worklist, pay no bytes for it.
+func componentOnWire(t storage.WorklistTask) string {
+	if len(t.PathUpstreams) == 0 {
+		return ""
+	}
+	return t.ComponentID
+}
+
+// pathUpstreamsOf maps a task's stored path upstreams onto the wire (#1652).
+func pathUpstreamsOf(ups []storage.PathUpstream) []collection.PathUpstream {
+	if len(ups) == 0 {
+		return nil
+	}
+	out := make([]collection.PathUpstream, len(ups))
+	for i, u := range ups {
+		out[i] = collection.PathUpstream{ComponentID: u.ComponentID, ComponentName: u.ComponentName, EndpointIDs: u.EndpointIDs}
+	}
+	return out
 }
