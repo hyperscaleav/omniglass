@@ -193,6 +193,12 @@
       "setup": []
     },
     {
+      "id": "watch-an-impaired-device",
+      "title": "Watch an impaired device",
+      "description": "Drop a simulated device's packets from its drawer, watch Platform health read its protocol's gap as impaired, then repair it and watch the attribution clear as the window slides.",
+      "setup": []
+    },
+    {
       "id": "write-a-rule-as-an-expression",
       "title": "Write a rule as an expression",
       "description": "Author an event rule's criteria as an expression, see a mistake pointed at by line and column, fix it, preview what the rule would have done over the last day, and save it.",
@@ -213,7 +219,7 @@
       "heartbeat": "2s",
       "probe_every": "every check-in",
       "worklist_every": "2s",
-      "closed_loop_bracket": "2s",
+      "closed_loop_bracket": "1s",
       "for": "a script's throwaway lab: a walkthrough waiting on a probe's verdict sees it within seconds"
     },
     {
