@@ -988,6 +988,14 @@ func (UnimplementedGateway) FleetProjection(context.Context, scope.Set, scope.Se
 	return nil, nil
 }
 
+func (UnimplementedGateway) PlatformView(context.Context, scope.Set, scope.Set, scope.Set) (*PlatformView, error) {
+	return nil, nil
+}
+
+func (UnimplementedGateway) RecordServerIdentity(context.Context, string, string, time.Time) error {
+	return nil
+}
+
 func (UnimplementedGateway) ListSystemEvents(context.Context, string, time.Duration, int) ([]Event, error) {
 	return nil, nil
 }

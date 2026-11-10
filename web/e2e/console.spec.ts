@@ -373,4 +373,32 @@ test.describe("operator console", () => {
     await expect.poll(async () => (await page.request.get(`/api/v1/action-rules/${rule}`)).status()).toBe(404);
     expect((await page.request.delete(`/api/v1/notification-targets/${target}`)).ok()).toBeTruthy();
   });
+
+  test("platform health: the Home tile opens the page, which names the build, its verdict and a row per node", async ({ page }) => {
+    await page.goto("/web/");
+    const tile = page.getByTestId("home-platform");
+    await expect(tile).toContainText(/not up/);
+    await tile.click();
+    await page.waitForURL(/\/web\/platform$/);
+
+    // The header: the build the server booted, how long it has been up, and the
+    // platform system's verdict, all read from the platform's own components.
+    const header = page.getByTestId("platform-header");
+    await expect(header.getByTestId("platform-version").first()).not.toHaveText(/not reported/);
+    await expect(header.getByTestId("platform-uptime").first()).not.toHaveText(/not reported/);
+    await expect(header.getByTestId("platform-verdict")).toContainText(/healthy|incomplete|degraded|outage/);
+    await expect(page.getByTestId("platform-lab")).toBeVisible();
+
+    // A row for every enrolled node, and a checkin figure on each that has
+    // checked in (the empty scenario enrolls none; the read-platform-health
+    // walkthrough drives a live row).
+    const nodes = (await (await page.request.get("/api/v1/nodes")).json()) as {
+      nodes?: { name: string; enrolled: boolean; last_heartbeat_at?: string }[];
+    };
+    for (const n of (nodes.nodes ?? []).filter((x) => x.enrolled)) {
+      const row = page.getByTestId(`platform-node-${n.name}`);
+      await expect(row).toBeVisible();
+      if (n.last_heartbeat_at) await expect(row.locator("[data-figure=checkin-age]")).not.toHaveText(/not reported/);
+    }
+  });
 });

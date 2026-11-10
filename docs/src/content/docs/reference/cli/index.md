@@ -7415,6 +7415,26 @@ Example:
 omniglass view fleet list
 ```
 
+### `omniglass view platform`
+
+Commands for the platform resource
+
+#### `omniglass view platform list`
+
+Read Omniglass's own health in one call
+
+```
+omniglass view platform list
+```
+
+Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its verdict, each server's running build and start time, the node table's column groups with each key's catalog facts, and one row per node with its last heartbeat and its platform component's current figure per key (a gauge's latest sample, a window count only while its window is the newest). The rows need a fleet-wide node:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, verdicts and servers need a fleet-wide component:read and the system a fleet-wide system:read; short of that each is left out, never zeroed. Gated by node:read.
+
+Example:
+
+```sh
+omniglass view platform list
+```
+
 ## `omniglass webhook`
 
 Commands for the webhook resource

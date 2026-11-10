@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, fireEvent, screen, waitFor, within } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
+import { Router, Route } from "@solidjs/router";
 import Nodes from "./Nodes";
 import { NODES_KEY, type Node } from "../lib/nodes";
 import { TASKS_KEY, type Task } from "../lib/tasks";
@@ -48,7 +49,9 @@ function mount(me: Me, lateLocations = false) {
   return Object.assign(
     render(() => (
       <QueryClientProvider client={qc}>
-        <Nodes />
+        <Router>
+          <Route path="*" component={Nodes} />
+        </Router>
       </QueryClientProvider>
     )),
     { qc },
@@ -56,7 +59,19 @@ function mount(me: Me, lateLocations = false) {
 }
 
 describe("Nodes page", () => {
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    vi.restoreAllMocks();
+    window.history.pushState({}, "", "/");
+  });
+
+  // ?n=<name> deep-links to a node's blade, the door Platform health's
+  // secondary link opens (#1644).
+  it("opens the blade a ?n= deep link names", async () => {
+    window.history.pushState({}, "", "/nodes?n=edge-hq");
+    mount(owner);
+    const blade = await screen.findByRole("dialog");
+    expect(within(blade).getByText("HQ closet")).toBeTruthy();
+  });
 
   it("labels each row by its label (key as subtitle), falling back to the key, with the status pill", () => {
     const { getByText, getAllByText } = mount(owner);

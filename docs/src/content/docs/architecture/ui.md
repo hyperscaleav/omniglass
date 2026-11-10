@@ -20,7 +20,12 @@ the CRUD lists, and the detail views it opens. Its core is one pure model,
 sits, folds single-child chains, counts what a row holds in the registry's own type labels,
 and counts systems by verdict rather than rolling them up worst-wins; `components/Outline.tsx`
 renders it as an ARIA tree, and `lib/location_type_graph.ts` reads what may sit under a
-place from `allowed_parent_types`, never from a type's name (ADR-0137). The views model, the renderer library, and composable
+place from `allowed_parent_types`, never from a type's name (ADR-0137). **Platform health**
+(`/platform`, #1644) is the second: Omniglass watching itself, one page over the platform
+projection (`GET /views/platform`) with the running build, its uptime, the platform system's
+verdict and a row per node of its platform figures, each row opening onto the node's platform
+component. Its columns are the groups the view returns, headed with each key's catalog
+description, so the page holds no key list. The views model, the renderer library, and composable
 dashboards remain the intended **read side** for the analytical surfaces (alarms, sample
 history, the cascade view, fleet dashboards), not built yet.
 Realized shell: the [design system](/contributing/design-system/); operating it: the

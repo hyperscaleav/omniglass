@@ -407,3 +407,29 @@ func TestTheCommandQueueKeysArePlatformKeys(t *testing.T) {
 		t.Errorf("the node-self lane refuses %s", CommandPullFailureCount)
 	}
 }
+
+// TestTheServerIdentityKeysAreTheBootsAlone: the server's build and start
+// time (#1644) are platform keys only the server's boot writes, so a node's
+// probe lane or a push naming either is refused with the platform-key reason,
+// which names the boot as the key's writer.
+func TestTheServerIdentityKeysAreTheBootsAlone(t *testing.T) {
+	for _, key := range []string{ServerVersion, ServerStartedAt} {
+		if c, ok := Reserved(key); !ok || c != Platform {
+			t.Errorf("%s resolves to %q (%v), want platform", key, c, ok)
+		}
+		if !Admits(Platform, Process, key) {
+			t.Errorf("the process may not write %s", key)
+		}
+		for _, w := range []Writer{Node, Push, Fanout, Operator, CalcRule} {
+			if Admits(Platform, w, key) {
+				t.Errorf("%s may write %s", w, key)
+			}
+			if got := Refusal(Platform, key, w, ""); got != key+" is a platform key: only the server boot writes it" {
+				t.Errorf("Refusal(%s by %s) = %q", key, w, got)
+			}
+		}
+		if NodeSelf(key) {
+			t.Errorf("the node-self lane admits %s", key)
+		}
+	}
+}

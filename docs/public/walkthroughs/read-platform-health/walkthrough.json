@@ -1,0 +1,50 @@
+{
+  "id": "read-platform-health",
+  "title": "Read the platform's health",
+  "description": "From Home, open Platform health, read the build and its uptime, then open the lab node's row onto its platform component to see its check-in age.",
+  "steps": [
+    {
+      "n": 1,
+      "kind": "goto",
+      "caption": "Home's Platform tile carries the platform's verdict and how many nodes are not up.",
+      "still": "step-01.png"
+    },
+    {
+      "n": 2,
+      "kind": "click",
+      "caption": "Open Platform health.",
+      "still": "step-02.png"
+    },
+    {
+      "n": 3,
+      "kind": "wait",
+      "caption": "The build, its uptime and the verdict, each read from the platform's own components.",
+      "still": "step-03.png"
+    },
+    {
+      "n": 4,
+      "kind": "wait",
+      "caption": "One row per node. A figure the node never reported reads not reported, never 0.",
+      "still": "step-04.png"
+    },
+    {
+      "n": 5,
+      "kind": "click",
+      "caption": "A node is a component of the platform system. Open its row.",
+      "still": "step-05.png"
+    },
+    {
+      "n": 6,
+      "kind": "wait",
+      "caption": "The node's platform component, the same detail as any device. Its check-in age is a series like any other metric.",
+      "still": "step-06.png"
+    }
+  ],
+  "poster": "step-06.png",
+  "preview": "preview.webp",
+  "budget": {
+    "seconds": 26.1,
+    "bytes": 352129,
+    "previewBytes": 215154
+  }
+}

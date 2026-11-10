@@ -119,6 +119,8 @@
       "schedule-gap-excess",
       "schedule-lateness",
       "schedule-skip-count",
+      "server-started-at",
+      "server-version",
       "session-held-count",
       "spool-batch-count",
       "spool-drop-count",

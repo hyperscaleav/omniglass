@@ -1,4 +1,4 @@
-## frozen-fact-served-as-current (fixed; found by the #1035 review, regressed and fixed in the #821, #456, #1297 and #1626 reviews, open again from the #1629 review as #1673)
+## frozen-fact-served-as-current (fixed; found by the #1035 review, regressed and fixed in the #821, #456, #1297, #1626 and #1644 reviews, open again from the #1629 review as #1673)
 
 - **Cue:** a read that serves a latest-ever sample (a certificate's days left, a handshake's
   result) beside a gate or state that stops the probe from refreshing it.
@@ -40,3 +40,12 @@
   metric window out of range for the compaction flags) keeps a pending fire streak: the rule sweep
   fires it with no fresh sample, and the clear only runs at ingest, so the warning never clears.
   Cue: a flag written per member of a set that can shrink, read by a rule whose clear needs a sample.
+- **Seventh instance (#1644):** a latest-sample read over a count written only when nonzero. The
+  Platform health view took each key's latest sample, but the window counts (overruns, skips,
+  drops, publish failures, expired commands) write nothing for a window that counted nothing, so a
+  node that dropped five batches last week showed five under Spool Drops for good; and a
+  `distinct on` per key kept one instance of a split count, showing unexecuted 1 for an expired
+  total of 3. Fix: a window count reads only within two report windows of the read, and a key is
+  the sum of its instances at its newest time (`platformFigures`, `PlatformWindowKeys`,
+  internal/storage/platform_view.go), the window set held to the catalog's "reported only when
+  nonzero" by test.

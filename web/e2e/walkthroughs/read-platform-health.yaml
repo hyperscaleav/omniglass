@@ -1,0 +1,25 @@
+# Platform health (#1644): Omniglass watching itself. Home's Platform tile
+# carries the platform system's verdict and how many nodes are not up; the
+# page names the build the server runs and how long it has been up, and gives
+# each node a row of its platform figures. A row opens onto the node's
+# platform component, the ordinary component detail, where each figure has
+# its history.
+title: Read the platform's health
+description: From Home, open Platform health, read the build and its uptime, then open the lab node's row onto its platform component to see its check-in age.
+steps:
+  - goto: /
+    caption: Home's Platform tile carries the platform's verdict and how many nodes are not up.
+  - click: '[data-testid=home-platform]'
+    caption: Open Platform health.
+  - wait: { selector: '[data-testid=platform-version]' }
+    caption: The build, its uptime and the verdict, each read from the platform's own components.
+    hold: 1500
+  - wait: { selector: '[data-testid=platform-node-edge-hq]' }
+    caption: One row per node. A figure the node never reported reads not reported, never 0.
+    hold: 2000
+  - click: '[data-testid=platform-node-edge-hq] a >> nth=0'
+    caption: A node is a component of the platform system. Open its row.
+  - wait: { selector: '[data-testid=vital-checkin-age]' }
+    caption: The node's platform component, the same detail as any device. Its check-in age is a series like any other metric.
+    poster: true
+    hold: 2000
