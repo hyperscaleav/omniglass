@@ -13,8 +13,9 @@ import (
 // lives on (#1641, ADR-1641), and reports whether this delivery is its first.
 // A batch id already landed counts one more delivery on its receipt and lands
 // nothing: the count is what a read reports as deduplicated. A batch with a
-// ledger records the ledger on it; one without (the push lane) leaves those
-// columns empty.
+// ledger records the ledger on it; one without (a publisher that stamps none)
+// leaves those columns empty. A pushed batch's ledger has no node: the push
+// lane's boot is the server's own (#1696).
 func insertReceipt(ctx context.Context, tx pgx.Tx, b IngestBatch) (first bool, err error) {
 	var node, boot, ledger *string
 	var seq, resolved *int64

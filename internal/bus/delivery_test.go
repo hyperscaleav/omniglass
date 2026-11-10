@@ -695,11 +695,16 @@ func (r ledgerRig) waitReceipts(t *testing.T, srv *bus.Server, n int) {
 	r.waitDrained(t, srv)
 }
 
-// read is the lab's delivery read over the window, as lab measure makes it.
+// read is the lab's delivery read over the rig's window.
 func (r ledgerRig) read(t *testing.T) ([]labfootprint.DeliveryRow, []labfootprint.UnsettledBoot) {
 	t.Helper()
-	w := r.window()
-	rows, err := r.conn.Query(r.ctx, labfootprint.ReceiptsQuery(w.From, w.To))
+	return r.readDelivery(t, r.window())
+}
+
+// readDelivery is the lab's delivery read over w, as lab measure makes it.
+func (f deliveryFixture) readDelivery(t *testing.T, w delivery.Window) ([]labfootprint.DeliveryRow, []labfootprint.UnsettledBoot) {
+	t.Helper()
+	rows, err := f.conn.Query(f.ctx, labfootprint.ReceiptsQuery(w.From, w.To))
 	if err != nil {
 		t.Fatalf("read receipts: %v", err)
 	}

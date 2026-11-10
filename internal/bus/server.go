@@ -66,6 +66,7 @@ type Server struct {
 	subs              []*nats.Subscription
 	consumeCtx        jetstream.ConsumeContext // the telemetry durable consumer's pull loop
 	js                jetstream.JetStream      // the internal client's JetStream, the push lane's publisher
+	push              *delivery.Publisher      // the push lane's ledger, one boot per server process (#1696)
 	streamEpoch       string                   // OG_TELEMETRY's creation time, keying a batch with no id (batchID)
 	internalToken     string
 	sims              *simhub.Registry   // the simulators beside this server's nodes
@@ -111,7 +112,7 @@ func New(cfg Config, store Store) (*Server, error) {
 	}
 	s := &Server{store: store, internalToken: hex.EncodeToString(tok), sims: simhub.New(), orphans: newOrphanTally(orphanWindow),
 		worklistWorkers: worklistWorkers(cfg.WorklistWorkers, cfg.DBPoolSize), metrics: pipelineMetrics{cfg.Metrics},
-		platformComponentID: cfg.PlatformComponentID}
+		platformComponentID: cfg.PlatformComponentID, push: delivery.NewPublisher(collection.NewBatchID(), time.Now)}
 	if s.metrics.rec == nil {
 		s.metrics.rec = platformmetric.NewRecorder(time.Now)
 	}
@@ -394,9 +395,20 @@ const (
 // stream's word that OG_TELEMETRY persisted it, which is what lets the route
 // answer 202. A store the stream refuses, or never answers, is an error after a
 // bounded retry, and the route answers 503.
+//
+// Every batch carries the push lane's ledger (#1696), minted here under the
+// server's own boot as a node's spool mints its own: a dense seq and each
+// kind's running offset, so a batch the stream stored and the ingest Termed
+// reads as missing. Publishes take their turn one at a time, so the seq
+// follows the order the stream stored them in, and a refused publish takes
+// its items back off the offsets (the pusher was answered 503 and still
+// holds them) while its seq stays spent.
 func (s *Server) PublishTelemetry(ctx context.Context, b *ogv1.TelemetryBatch) error {
-	_, err := s.publishTelemetry(ctx, b, collection.NewBatchID())
-	return err
+	return s.push.Publish(ctx, delivery.BatchItems(b), func(st delivery.Stamp) error {
+		b.Ledger = st.Proto()
+		_, err := s.publishTelemetry(ctx, b, collection.NewBatchID())
+		return err
+	})
 }
 
 // publishTelemetry publishes one batch under id, retrying a failed attempt up to

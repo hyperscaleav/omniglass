@@ -609,6 +609,13 @@ func taskBound(ev *ogv1.TelemetryBatch) int {
 // publisher's retry past the stream's duplicate window lands each row once.
 func (s *Server) land(ctx context.Context, id string, ev *ogv1.TelemetryBatch, bind ingestBinding) error {
 	batch := storage.IngestBatch{BatchID: id, Writer: bind.Writer}
+	// The push lane's ledger (#1696), the server's own boot's; a batch from
+	// a publisher before it carries none and its receipt no ledger.
+	if l := ev.GetLedger(); l != nil {
+		stamp := delivery.FromProto(l)
+		batch.Ledger = &stamp
+		declaredShortfall(&batch.Tally, stamp, ev, "")
+	}
 	// The raw log sink, routed by lane: a node's self-logs to node_log, a push's
 	// component-owned lines to log_line (#589). The storage layer refuses any
 	// other binding, so a future lane cannot quietly widen the log owner.
@@ -639,7 +646,7 @@ func (s *Server) land(ctx context.Context, id string, ev *ogv1.TelemetryBatch, b
 		if err != nil {
 			return err
 		}
-		rows := s.deriveSamples(ev, bind, reg, identities, &batch.Tally) // no ledger (#1641), but its server hop counts (#1659)
+		rows := s.deriveSamples(ev, bind, reg, identities, &batch.Tally)
 		batch.Metrics, batch.Properties, batch.Events = rows.Metrics, rows.Properties, rows.Events
 		batch.Fanned, batch.Unbound = rows.Fanned, rows.Unbound
 	}
