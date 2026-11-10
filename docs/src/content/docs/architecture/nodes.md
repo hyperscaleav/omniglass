@@ -303,35 +303,44 @@ wait for someone to re-point them
 ([ADR-1638](/architecture/decisions/#adr-1638-a-sites-components-spread-across-its-nodes-by-expected-cost-guarded-by-measured-headroom)).
 
 :::design[Target design: a site's components spread across its nodes, tracked in #1638]
-**The unit is the component.** Every endpoint of one component runs on one node (#1687). The node's
+**The unit is the component.** Every node-run endpoint of one component runs on one node (#1687). The node's
 lanes are per endpoint (#1637), but a component's endpoints share a device, its driver's
 component-wide exclusion (#1649) and the endpoint gate's default hold set. Splitting them would put
 two sessions on one device and split one gate across two nodes. The system is not the unit: a
 component can sit in several systems ([cascade](/architecture/cascade/)), so systems do not
 partition a site, and a large system is too lumpy to balance. Systems pull together through
-**affinity** instead (below).
+**affinity** instead (below). A push endpoint (a webhook, ADR-1024) is hosted by the server and takes
+no node, so it stays outside the unit: it never inherits the component's pin or assignment, it adds
+nothing to the component's cost, and its listen tasks never enter a node's worklist.
 
 **The pool is the location.** A component's candidate nodes are the claimed nodes at its location,
-or failing that at its nearest ancestor location that has any. A component with no node up its
-chain stays unassigned and says why. Once cascaded properties land (#1351), a `node-pool` property
+or failing that at its nearest ancestor location that has any. A child component with no location of
+its own takes its nearest located parent's. A component with no node up its chain stays unassigned
+and says why. Once cascaded properties land (#1351), a `node-pool` property
 resolved through the cascade can widen, narrow or name a pool at any level, with the location pool
 as its default. An endpoint's explicit `node_name` stays the **pin**: it pins the whole component,
 and assignment never moves it.
 
 **Capacity: expected cost balances, measured headroom guards.** The server balances on a
-component's **expected cost**, the sum over its tasks of 1 / interval (runs a second). This is pure,
-known before any node runs the work, and does not move when the assignment does. Equal component
-counts are not enough, because a 5 s poll costs six times a 30 s one. A node's **measured
-headroom** is a guard, not the objective. A node is **saturated**, and takes no new component, when
-its schedule loss ratio is above 0 (#1659) or any pool's `worker-busy-fraction` (#1686) is above a
-ceiling. Balancing on the measured figures would chase its own tail: moving load changes the load
-it measured.
+component's **expected cost**, the sum over its tasks of 1 / interval (runs a second). A poll
+counts at its own interval and a reachability probe at the default probe interval (#1634). A listen
+task has no interval, so a held session or a listener counts at a flagged weight, by default one
+30 s poll, and a listen-only component never costs 0. This is pure, known before any node runs the
+work, and does not move when the assignment does. Equal component counts are not enough, because a
+5 s poll costs six times a 30 s one. A node's **measured headroom** is a guard, not the objective. A
+node is **saturated**, and takes no new component, when its schedule loss ratio is above a ceiling
+(#1659) or any pool's `worker-busy-fraction` (#1686) is above a ceiling. The loss ceiling is small
+but not 0, so one late tick does not close a node. The guard reads only values from the node's
+latest report window: a node that ran nothing publishes no loss ratio, and its last one must not
+hold it saturated for good. Balancing on the measured figures would chase its own tail: moving load
+changes the load it measured.
 
 **Assignment is a server reconcile** (#1688): read state, run a pure `assign`, apply the moves in
 one transaction.
 - **Pins win.**
 - **Sticky:** a component stays on its node while that node is in its pool and unsaturated.
-- **Placement:** an unassigned component goes to the least-loaded unsaturated pool node.
+- **Placement:** an unassigned component goes to the least-loaded unsaturated pool node, ties
+  broken by fewer components, then by node name.
 - **Affinity:** a component goes to a dependency-edge neighbour's node (power, host or path,
   #1648) when that node is unsaturated, which keeps the gate's upstream propagation node-local.
   Affinity is soft: a split pair is still correct, carried by the cross-node relay (#1655), only
@@ -340,22 +349,30 @@ one transaction.
   number per pass.
 
 The assignment lives in its own column beside the pin, so the reconcile never overwrites an
-operator's choice. Deleting a node returns its assigned components to the pool, where the pin's
-cascade deletes the endpoints.
+operator's choice. Deleting a node returns its assigned components to the pool; the endpoints it
+pins keep today's cascade.
 
 **Rebalance on loss and join** (#1689).
 - **Loss.** A node is lost only after the node-silent window (#1094) plus a grace period, so a
   restart, an upgrade or a WAN blip does not reshuffle the site. Its assigned components then spread
   over the unsaturated peers. What the peers cannot take stays unassigned, and the site reads as
-  under capacity rather than overloading a peer. Pinned components stay.
+  under capacity rather than overloading a peer. Pinned components stay. A lost node that is in
+  fact still running, cut off from the server but not from its devices, keeps its last worklist
+  (#1577), so a moved component can see two sessions until that node reconnects and drops it. The
+  design accepts that over leaving the site unpolled.
 - **Join and return.** A joining or returning node starts empty and fills under the per-pass cap,
   so a join is not a stampede of dials. A returning node gets no automatic give-back.
 - **Moves between live nodes are two-phase.** The old node's next pull drops the tasks and closes
-  its session first. Only then, or at a deadline, does the new node dial, so two nodes never hold a
-  single-session device.
+  its session first. The new node is assigned only once the old node confirms it: its pull request
+  names the worklist generation it is running, and a generation at or past the clear confirms it. A
+  reply the server sent is not proof, since a pull can time out at the node after the server answers
+  and the node then keeps its last worklist (#1577). A move unconfirmed at its deadline is abandoned
+  and the component goes back to the old node, so two live nodes never hold a single-session
+  device.
 
-**The worklist wire is unchanged.** A move reaches both nodes on their next worklist pull (30 s,
-jittered), and the materialized worklist's nudge (#1586) shortens that later. The worklist
+**The worklist wire is unchanged** but for one pull request header, the generation the node is
+running (the two-phase confirmation above). A move reaches both nodes on their next worklist pull
+(30 s, jittered), and the materialized worklist's nudge (#1586) shortens that later. The worklist
 generation moves on both nodes on every move, because the max `updated_at` of the remaining
 endpoints may not.
 
