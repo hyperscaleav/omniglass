@@ -3,6 +3,7 @@ package labfootprint
 import (
 	"encoding/json"
 	"github.com/hyperscaleav/omniglass/internal/delivery"
+	"github.com/hyperscaleav/omniglass/internal/lab"
 	"regexp"
 	"strings"
 	"testing"
@@ -751,5 +752,27 @@ func TestScaleRunArgsInduceTheRefusalOnlyWhenAsked(t *testing.T) {
 	cfg.InduceUnregistered = true
 	if on := strings.Join(scaleRunArgs(cfg, "/tmp/x/lab.env", 42), " "); on != want+" --induce-unregistered" {
 		t.Errorf("induced args = %q, want the flag appended", on)
+	}
+}
+
+// The attached measurement reads the fleet from the lab it measures (#1719):
+// the scenario and size come from the server container's labels, and the
+// --scenario and --systems flags, which only size a lab the run brings up,
+// never relabel a lab already running.
+func TestScaleRunReadsTheFleetFromTheLab(t *testing.T) {
+	cfg := ScaleConfig{Scenario: "dev", Systems: 999, Warmup: time.Minute, Window: 5 * time.Minute}
+	labels := map[string]string{lab.LabelLabScenario: "corporate", lab.LabelLabSystems: "300"}
+	run, err := scaleRunOf(labels, cfg, 9)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.Scenario != "corporate" || run.Systems != 300 || run.Sites != 9 || run.Warmup != time.Minute || run.Window != 5*time.Minute {
+		t.Fatalf("run %+v, want corporate at 300 systems on 9 sites over the config's windows", run)
+	}
+	if _, err := scaleRunOf(map[string]string{}, cfg, 9); err == nil || !strings.Contains(err.Error(), "bring it up again") {
+		t.Fatalf("an unlabelled lab: err %v, want a refusal that says to bring it up again", err)
+	}
+	if _, err := scaleRunOf(map[string]string{lab.LabelLabScenario: "dev"}, cfg, 1); err == nil || !strings.Contains(err.Error(), "runs the dev scenario, which has no size") {
+		t.Fatalf("a dev lab: err %v, want a refusal naming its scenario", err)
 	}
 }

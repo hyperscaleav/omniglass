@@ -34,6 +34,8 @@ lab: all
 # up, publishes one loopback port, keeps privilege on the node, collects, takes
 # an impairment, tears down leaving no container and no network, keeps its
 # estate across a re-run, reaps a killed run, and starts over with --fresh.
+# The measuring tests run the ladder's smoke size, corporate at 20 systems
+# (every product seeded; #1719): the footprint and a scale measure.
 # Outside make test, because it builds the image (as the demo targets do).
 test-lab: all
 	$(MAKE) test-lab-image
@@ -50,8 +52,10 @@ test-lab-image:
 # component at its own loopback address, the containers' memory and CPU, and
 # a teardown that leaves nothing). Outside make test and CI: it builds the
 # image and stands up thousands of simulated devices. SYSTEMS sets the size,
-# SCENARIO the scenario, SCALE_LAB_ARGS passes lab run flags.
-SYSTEMS  ?= 100
+# SCENARIO the scenario, SCALE_LAB_ARGS passes lab run flags. The measurement
+# ladder is 300, 1,000 and 3,000 systems (#1719), so the default is its first
+# level; the dev fleet is the showcase, never a measurement basis.
+SYSTEMS  ?= 300
 SCENARIO ?= corporate
 scale-lab: all
 	scripts/scale-lab.sh $(SYSTEMS) $(SCENARIO) $(SCALE_LAB_ARGS)
@@ -296,7 +300,8 @@ footprint:
 	printf '%s\n' "$$out" | grep -E 'metric_block(_lineage)?_test.go|^(ok|FAIL|---)'; \
 	if [ $$status -ne 0 ]; then printf '%s\n' "$$out" | tail -40; fi; exit $$status
 
-# The lab footprint (#1277): a throwaway lab at a cadence profile, warmed up,
+# The lab footprint (#1277): a throwaway lab of corporate at 20 systems (the
+# ladder's smoke size, every product seeded; #1719) at a cadence profile, warmed up,
 # then each container's CPU (millicores) and working set (anon plus shmem),
 # metric and property rows a minute, table, database and WAL growth a day, and
 # the 24 h and 30 d series read latency with the server and Postgres held to

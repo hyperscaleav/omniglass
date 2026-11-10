@@ -16,6 +16,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"maps"
 	"net"
 	"sort"
 	"strconv"
@@ -80,9 +81,49 @@ const (
 	// LabelLabEphemeral marks a throwaway lab (a demo recorder's, #1197):
 	// its data goes with it, and the reaper may remove an abandoned one of
 	// any project, which it never does to a learner's lab.
-	LabelLabEphemeral     = "omniglass.lab.ephemeral"
+	LabelLabEphemeral = "omniglass.lab.ephemeral"
+	// LabelLabScenario and LabelLabSystems are the fleet the lab seeded
+	// (#1719): its scenario, and a scale lab's size. A measurement of the
+	// running lab reads them (FleetOf), so its report names the fleet the
+	// lab really runs, never a flag that could disagree with it.
+	LabelLabScenario      = "omniglass.lab.scenario"
+	LabelLabSystems       = "omniglass.lab.systems"
 	composeVersionClaimed = "2.0.0"
 )
+
+// Fleet is the fleet a lab seeded: its scenario, and the size a scale lab
+// was resolved at (0 for a dev scenario, which has no size).
+type Fleet struct {
+	Scenario string
+	Systems  int
+}
+
+// labels is the fleet as the service labels that carry it.
+func (f Fleet) labels() map[string]string {
+	l := map[string]string{LabelLabScenario: f.Scenario}
+	if f.Systems > 0 {
+		l[LabelLabSystems] = strconv.Itoa(f.Systems)
+	}
+	return l
+}
+
+// FleetOf reads the fleet from a lab container's labels. A container with no
+// scenario label was brought up by a build before the labels, and one whose
+// size is not a count is refused, rather than either read as a guess.
+func FleetOf(labels map[string]string) (Fleet, error) {
+	f := Fleet{Scenario: labels[LabelLabScenario]}
+	if f.Scenario == "" {
+		return Fleet{}, fmt.Errorf("the lab's containers name no scenario: it was brought up by a build before the fleet labels, so stop it and bring it up again with this build's `lab run`")
+	}
+	if v, ok := labels[LabelLabSystems]; ok {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 {
+			return Fleet{}, fmt.Errorf("the lab's size label %s=%q is not a count of systems", LabelLabSystems, v)
+		}
+		f.Systems = n
+	}
+	return f, nil
+}
 
 // Cadence is a cadence profile (#1277): how often the lab's node checks in
 // and probes reachability. The lab's own profiles keep a change in the
@@ -409,6 +450,11 @@ func Plan(o Options) (Spec, error) {
 		}
 		return m
 	}
+	fleet := Fleet{Scenario: o.Scenario}
+	if o.Scale() {
+		fleet.Systems = o.Systems
+	}
+	fleetLabels := fleet.labels()
 	volDB, volData := o.Project+"_db", o.Project+"_data"
 	spec := Spec{
 		Project:       o.Project,
@@ -428,10 +474,12 @@ func Plan(o Options) (Spec, error) {
 		if oneOff {
 			of = "True"
 		}
-		return with(map[string]string{
+		l := with(map[string]string{
 			LabelComposeService: name, LabelComposeNumber: "1", LabelComposeOneOff: of,
 			LabelComposeWorkDir: o.WorkDir, LabelComposeVersion: composeVersionClaimed,
 		})
+		maps.Copy(l, fleetLabels)
+		return l
 	}
 	dsn := DSN
 	appEnv := []string{
