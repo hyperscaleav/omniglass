@@ -9,6 +9,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
@@ -51,9 +52,13 @@ type Config struct {
 	Name           string
 	Token          string
 	HeartbeatEvery time.Duration
-	// ProbeEvery is how often each reachability probe runs (#1273). Zero
-	// probes every heartbeat tick, the behavior before it existed.
+	// ProbeEvery is how often each reachability probe runs (#1273), on the
+	// dispatcher's timer, never the heartbeat (#1634). Zero is
+	// DefaultProbeEvery.
 	ProbeEvery time.Duration
+	// PollWorkers is how many tasks the node runs at once (#1634), one at a
+	// time per endpoint. Zero is DefaultPollWorkers.
+	PollWorkers int
 	// WorklistEvery is how often the node pulls its worklist, on a goroutine
 	// of its own, so a pull never holds the heartbeat (#1577). Zero pulls at
 	// the heartbeat's interval; `node run` defaults it to DefaultWorklistEvery.
@@ -231,6 +236,9 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	if wsSession == nil {
 		wsSession = collection.NewWebSocketDialer()
 	}
+	// d is the dispatcher (#1634), made once the first worklist is in; a
+	// session transition may open or close a gate, so it asks for a pass.
+	var d *dispatcher
 	sessions := newSessionManager(map[string]collection.SessionDialer{"tcp": lineSession, "tls": tlsSession, "telnet": telnetSession, "ssh": sshSession,
 		"http": streamSession, "https": streamSession, "websocket": wsSession, "wss": wsSession}, sessionHooks{
 		transition: func(taskID, endpoint string, tr collection.SessionTransition) {
@@ -243,6 +251,9 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 			logger.Log(ctx, level, "session "+string(tr.State), "facility", "session", "task", taskID, "endpoint", endpoint, "reason", tr.Reason)
 			if err := publishBatch(spool, cfg.Name, taskID, sessionSamples(tr)); err != nil {
 				logger.Warn("session state not published", "facility", "session", "task", taskID, "error", err.Error())
+			}
+			if d != nil {
+				d.kick()
 			}
 		},
 		auth: func(taskID, endpoint string, v collection.AuthVerdict) {
@@ -319,22 +330,13 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	sessions.httpFetch = httpFetcher
 	defer sessions.closeAll()
 
-	// verdicts remembers the last reachability verdict per task (keyed by the
-	// node-unique task id, since interface names collide across components) across
-	// ticks, so the node emits endpoint-reachable only on a flip or first
-	// observation (transition-only). It lives for the whole run, not per tick.
-	verdicts := map[string]string{}
-	// faultseen remembers each driver task's last fault set so a static
-	// misconfiguration lands one collection-failed, not one per tick (#814).
-	faultseen := map[string]string{}
-	// sched remembers when each driver poll is next due, so a poll runs on
-	// its declared schedule rather than every heartbeat (#822).
 	heartbeat := cfg.HeartbeatEvery
 	if heartbeat <= 0 {
 		heartbeat = DefaultHeartbeat
 	}
-	sched := newPollSchedule(heartbeat)
-	sched.probeEvery = cfg.ProbeEvery
+	// sched remembers what each poll's runs booked on top of its interval: a
+	// retry backoff, a refusal, the fingerprint it runs under (#822, #1634).
+	sched := newPollSchedule()
 
 	wl, ok, err := firstWorklist(ctx, nc, cfg.Name, cfg.Once, logger)
 	if err != nil {
@@ -345,7 +347,6 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 		return collection.WorklistReply{}, nil
 	}
 	logger.Info("worklist pulled", "facility", "collection", "tasks", len(wl.Tasks))
-	sessions.reconcile(wl.Tasks)
 	// executedCommands remembers each pulled command's outcome across ticks:
 	// at-least-once delivery means redelivery, and idempotence per command id
 	// lives here (the report repeats, the device is not touched twice). It is
@@ -357,10 +358,24 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	if cfg.ReportEvery <= 0 {
 		report.setEvery(wl.ReportEvery())
 	}
-	if err := runTasks(ctx, spool, cfg.Name, wl, runner, sessions, sched, verdicts, faultseen, report, time.Now()); err != nil {
-		return wl, err
+	// Each poll and probe runs on its own interval (#1634): the dispatcher
+	// keeps every task's next due and hands what is due to a lane per
+	// endpoint, on its own timer; the heartbeat below keeps the node's
+	// housekeeping and sets no task's cadence.
+	coll := newCollector(spool, cfg.Name, runner, sessions, sched, report)
+	d = newDispatcher(dispatchConfig{workers: cfg.PollWorkers, heartbeat: heartbeat, probeEvery: cfg.ProbeEvery,
+		sched: sched, sessions: sessions, report: report, work: coll.run})
+	coll.every, coll.wake = d.interval, d.kick
+	// Shutdown waits for the runs in flight before the sessions close
+	// (deferred calls run last first).
+	defer d.settle()
+	sessions.reconcile(wl.Tasks)
+	d.sync(wl, time.Now())
+	d.pass(ctx, time.Now())
+	if cfg.Once {
+		d.settle()
 	}
-	runCommands(ctx, nc, cfg.Name, runner, sessions, executedCommands)
+	runCommands(ctx, nc, cfg.Name, runner, sessions, d.pool, executedCommands)
 	// A heartbeat the connection cannot take right now (a reconnect in
 	// flight, with no reconnect buffer) is retried next tick, as in the loop
 	// below; it never ends the node (#1577).
@@ -401,8 +416,33 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	pulls.Go(func() { pullWorklists(pctx, nc, cfg.Name, pullEvery, logger, worklists) })
 	defer func() { stopPulls(); pulls.Wait() }()
 
+	// Commands are pulled each heartbeat on a goroutine of their own, one
+	// pull at a time, so a command waiting for a busy endpoint's lane never
+	// holds the loop (#1634); shutdown waits for the pull in flight before
+	// the sessions close.
+	var commands sync.WaitGroup
+	var commandsBusy atomic.Bool
+	defer commands.Wait()
+	// A run now waits for its endpoint's lane, ahead of the scheduled tasks
+	// queued there, and answers from the worker that ran it.
+	var runNows sync.WaitGroup
+	defer runNows.Wait()
+
 	ticker := time.NewTicker(heartbeat)
 	defer ticker.Stop()
+	// due wakes the loop at the dispatcher's earliest due (#1634); with
+	// nothing booked it waits a heartbeat, and a pass ends early whenever a
+	// run ends or a gate moves (d.wake).
+	due := time.NewTimer(heartbeat)
+	defer due.Stop()
+	arm := func() {
+		wait := heartbeat
+		if at, ok := d.next(); ok {
+			wait = max(0, time.Until(at))
+		}
+		due.Reset(wait)
+	}
+	arm()
 	for {
 		select {
 		case <-ctx.Done():
@@ -416,39 +456,52 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 			cancel()
 			_ = nc.Flush()
 			return wl, nil
+		case <-due.C:
+			d.pass(ctx, time.Now())
+		case <-d.wake:
+			d.pass(ctx, time.Now())
 		case job := <-runJobs:
 			if time.Now().Before(job.deadline) {
-				job.respond(runNowTask(ctx, spool, cfg.Name, runner, sessions, sched, report, job.task, job.deadline))
+				runNows.Go(func() {
+					d.pool.do(laneKey(job.task), laneOperator, func() {
+						job.respond(runNowTask(ctx, spool, cfg.Name, runner, sessions, sched, report, job.task, job.deadline))
+					})
+				})
 			}
-			publishSelfLogs(spool, cfg.Name, sink)
 		case next := <-worklists:
-			// The next tick reconciles sessions and runs tasks against it.
+			// Sessions and the dispatcher take the new worklist at once: a
+			// new task runs now, one gone stops, the rest keep their dues.
 			wl = next
+			sessions.reconcile(wl.Tasks)
+			d.sync(wl, time.Now())
+			d.pass(ctx, time.Now())
 		case <-ticker.C:
 			_ = publishHeartbeat(nc, cfg.Name)
-			// Ship what the spool held since the last tick before this tick's
-			// work, so batches land in the order they were collected (#454).
+			// Ship what the spool held since the last tick, so batches land
+			// in the order they were collected (#454).
 			spool.retry()
 			// A batch the spool dropped at its cap may have carried a
 			// transition the node remembers as sent: forget what was sent, so
-			// this tick sends current state again (the property lane's
-			// transition guard keeps an unchanged value from landing twice).
+			// each task's next run sends current state again (the property
+			// lane's transition guard keeps an unchanged value from landing
+			// twice).
 			if spool.takeOverflow() {
-				clear(verdicts)
-				clear(faultseen)
+				coll.forgetTransitions()
 				sched.forgetOccurrences()
 			}
 			// Hold, recycle, or tear down sessions to match the latest
 			// worklist pulled; a failed pull left the last good one in place.
 			sessions.reconcile(wl.Tasks)
-			// Run the worklist's tcp tasks and publish their telemetry. A publish
-			// failure is non-fatal (retry next tick).
 			if cfg.ReportEvery <= 0 {
 				report.setEvery(wl.ReportEvery())
 			}
-			_ = runTasks(ctx, spool, cfg.Name, wl, runner, sessions, sched, verdicts, faultseen, report, time.Now())
 			// Pull and actuate the pending command queue (#815).
-			runCommands(ctx, nc, cfg.Name, runner, sessions, executedCommands)
+			if commandsBusy.CompareAndSwap(false, true) {
+				commands.Go(func() {
+					defer commandsBusy.Store(false)
+					runCommands(ctx, nc, cfg.Name, runner, sessions, d.pool, executedCommands)
+				})
+			}
 			// Report the inbound lines no listener claimed this tick.
 			sessions.flushUnclaimed()
 			// Count this tick's pushes into the collection report, and
@@ -460,10 +513,28 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 					_ = publishBatch(spool, cfg.Name, row.task, row.samples)
 				}
 			}
+			logDispatchWindow(logger, d.takeWindow())
 			// Ship whatever the node logged this tick as self-logs.
 			publishSelfLogs(spool, cfg.Name, sink)
 		}
+		arm()
 	}
+}
+
+// logDispatchWindow self-logs the dispatcher's account of the heartbeat
+// window just ended (#1634): the longest pass, the dues that met their run
+// still in flight, the dues passed over, the latest dispatch, and the most
+// workers busy and dispatches waiting at once. Said only for a window that
+// passed a due over, so a node keeping its schedule logs nothing.
+func logDispatchWindow(logger *slog.Logger, w dispatchWindow) {
+	if w.overruns == 0 && w.skips == 0 {
+		return
+	}
+	logger.Warn("dispatch window", "facility", "collection",
+		"passes", w.passes, "tick-duration-ms", w.passMax.Milliseconds(),
+		"tick-overrun-count", w.overruns, "schedule-skip-count", w.skips,
+		"dispatch-late-ms", w.lateMax.Milliseconds(),
+		"worker-busy-count", w.busyMax, "dispatch-queue-depth", w.queueMax)
 }
 
 // reconnectWait and reconnectJitter space the node's reconnect attempts

@@ -7,7 +7,6 @@ package node_test
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -23,11 +22,11 @@ import (
 // runNodeReporting starts the node with its own collection report window, as
 // runNode does with the platform's: a test cannot wait the minute.
 func (s *gateStack) runNodeReporting(name string, every time.Duration) {
-	s.runNodeProbing(name, every, 0)
+	s.runNodeProbing(name, every, 100*time.Millisecond)
 }
 
-// runNodeProbing is runNodeReporting with the reachability probes on their
-// own interval, not every tick (zero: every tick).
+// runNodeProbing is runNodeReporting with the reachability probes on the
+// given interval, not the tenth of a second it runs them on.
 func (s *gateStack) runNodeProbing(name string, every, probeEvery time.Duration) {
 	if s.stop != nil {
 		s.stop()
@@ -36,7 +35,7 @@ func (s *gateStack) runNodeProbing(name string, every, probeEvery time.Duration)
 	ran := make(chan error, 1)
 	go func() {
 		_, err := node.Run(runCtx, node.Config{ServerURL: s.apiURL, Name: name, Token: s.token,
-			HeartbeatEvery: 100 * time.Millisecond, ReportEvery: every, ProbeEvery: probeEvery})
+			HeartbeatEvery: 100 * time.Millisecond, ProbeEvery: probeEvery, ReportEvery: every})
 		ran <- err
 	}()
 	s.stop = func() {
@@ -118,18 +117,7 @@ func TestEveryEndpointReportsItsOwnCollection(t *testing.T) {
 // second, so a test sees a gate refuse due polls window after window.
 func (s *httpStack) fastDriver(shipped, name string) {
 	s.t.Helper()
-	d, err := s.gw.GetDriver(s.ctx, shipped)
-	if err != nil {
-		s.t.Fatal(err)
-	}
-	var spec map[string]any
-	if err := json.Unmarshal(d.Spec, &spec); err != nil {
-		s.t.Fatal(err)
-	}
-	for _, p := range spec["polls"].([]any) {
-		p.(map[string]any)["schedule"] = map[string]any{"every": "1s"}
-	}
-	s.authorDriver(name, spec)
+	s.everyDriver(shipped, name, "1s")
 }
 
 // latestAt is the time of the endpoint's latest key, zero when none landed.

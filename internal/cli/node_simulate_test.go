@@ -41,3 +41,31 @@ func TestNodeRunRefusesSimulateWithOnce(t *testing.T) {
 		t.Fatalf("node run --simulate --once: %v, want a refusal naming --once", err)
 	}
 }
+
+// A probe runs on an interval of its own and a node runs its tasks on a pool
+// of workers (#1634): an interval or a pool of none would run nothing, so
+// node run refuses either before it claims anything, as it does a worker
+// count from the environment that is not a number.
+func TestNodeRunRefusesAProbeIntervalOrAWorkerPoolOfNone(t *testing.T) {
+	for _, tc := range []struct {
+		args []string
+		env  string
+		want string
+	}{
+		{[]string{"--probe-every", "0s"}, "", "--probe-every"},
+		{[]string{"--poll-workers", "0"}, "", "--poll-workers"},
+		{nil, "many", "OMNIGLASS_POLL_WORKERS"},
+		{nil, "0", "--poll-workers"},
+	} {
+		t.Setenv("OMNIGLASS_POLL_WORKERS", tc.env)
+		root := Root("test")
+		var out bytes.Buffer
+		root.SetOut(&out)
+		root.SetErr(&out)
+		root.SetArgs(append([]string{"node", "run", "--server", "http://127.0.0.1:1", "--name", "edge", "--token", "t"}, tc.args...))
+		err := root.Execute()
+		if err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("node run %v (OMNIGLASS_POLL_WORKERS=%q): %v, want a refusal naming %s", tc.args, tc.env, err, tc.want)
+		}
+	}
+}

@@ -2,6 +2,7 @@ package node
 
 import (
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
@@ -18,9 +19,11 @@ const defaultReportEvery = time.Minute
 // data a driver declares. Its polls report a mean duration and a failure
 // count, its held session's or socket's listeners the messages they claimed
 // and did not. Aggregating over a window keeps the cost at a few rows per
-// endpoint per window however fast a driver polls or a device pushes. Pure:
-// the run loop feeds it and publishes what it takes.
+// endpoint per window however fast a driver polls or a device pushes. The
+// dispatcher, its workers and the run loop feed it from their own goroutines
+// (#1634), and the run loop publishes what it takes.
 type collectionReport struct {
+	mu        sync.Mutex
 	every     time.Duration
 	since     time.Time
 	endpoints map[string]*endpointTally
@@ -37,6 +40,12 @@ type endpointTally struct {
 	// heldPolls is the due polls the endpoint's gate held (#1650): never
 	// sent, so neither a run nor a failure.
 	heldPolls int
+	// due is the polls that fell due in the window (#1634), held, refused
+	// and skipped ones included; skipped is the dues the dispatcher passed
+	// over because the poll's last run was still in flight. Together they
+	// are the endpoint's schedule loss, skipped over due.
+	due     int
+	skipped int
 }
 
 // endpointReport is one endpoint's rows for a window, under the task they
@@ -56,6 +65,8 @@ func newCollectionReport(every time.Duration, now time.Time) *collectionReport {
 // setEvery applies the window the worklist carries, from the window in
 // progress; none (zero) keeps the window the node has.
 func (r *collectionReport) setEvery(every time.Duration) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if every > 0 {
 		r.every = every
 	}
@@ -76,6 +87,8 @@ func (r *collectionReport) poll(endpoint string, took time.Duration, failed bool
 	if r == nil {
 		return
 	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	e := r.tally(endpoint)
 	e.runs++
 	e.took += took
@@ -91,6 +104,8 @@ func (r *collectionReport) refused(endpoint string) {
 	if r == nil {
 		return
 	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.tally(endpoint).failures++
 }
 
@@ -101,7 +116,31 @@ func (r *collectionReport) heldPoll(endpoint string) {
 	if r == nil {
 		return
 	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.tally(endpoint).heldPolls++
+}
+
+// pollDue records one poll of endpoint falling due (#1634), whatever then
+// became of it.
+func (r *collectionReport) pollDue(endpoint string) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.tally(endpoint).due++
+}
+
+// pollSkipped records a due poll of endpoint the dispatcher skipped because
+// its last run was still in flight (#1634): counted, never queued.
+func (r *collectionReport) pollSkipped(endpoint string) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.tally(endpoint).skipped++
 }
 
 // pushes records what a held endpoint's listeners claimed and did not since
@@ -111,6 +150,8 @@ func (r *collectionReport) pushes(endpoint string, claimed, unclaimed int) {
 	if r == nil {
 		return
 	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	e := r.tally(endpoint)
 	e.held = true
 	e.claimed += claimed
@@ -118,7 +159,11 @@ func (r *collectionReport) pushes(endpoint string, claimed, unclaimed int) {
 }
 
 // due reports a window that has run its length.
-func (r *collectionReport) due(now time.Time) bool { return !now.Before(r.since.Add(r.every)) }
+func (r *collectionReport) due(now time.Time) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return !now.Before(r.since.Add(r.every))
+}
 
 // take returns the window's rows, each stamped at now, the window's end, and
 // starts the next window there. Each endpoint's rows publish under the task
@@ -126,10 +171,12 @@ func (r *collectionReport) due(now time.Time) bool { return !now.Before(r.since.
 // mid-window replaces an endpoint's task ids, and a row under a deleted one
 // would be refused as an orphan. An endpoint tasks does not name (deleted, or
 // moved to another node) reports nothing. A mean duration lands only for an
-// endpoint that polled, a failure, held or unclaimed count only when nonzero, and a
+// endpoint that polled, a failure, held, due, skipped or unclaimed count only when nonzero, and a
 // claimed count for every held endpoint. Ordered by task, so a publish order
 // holds still.
 func (r *collectionReport) take(now time.Time, tasks map[string]string) []endpointReport {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	out := make([]endpointReport, 0, len(r.endpoints))
 	for endpoint, e := range r.endpoints {
 		task, held := tasks[endpoint]
@@ -148,6 +195,12 @@ func (r *collectionReport) take(now time.Time, tasks map[string]string) []endpoi
 		}
 		if e.heldPolls > 0 {
 			metric(probekeys.PollHeldCount, float64(e.heldPolls))
+		}
+		if e.due > 0 {
+			metric(probekeys.PollDueCount, float64(e.due))
+		}
+		if e.skipped > 0 {
+			metric(probekeys.PollSkippedCount, float64(e.skipped))
 		}
 		if e.held {
 			metric(probekeys.PushMessageCount, float64(e.claimed))

@@ -235,50 +235,43 @@ func TestDriverPollNeverFallsBackWhenItsDriverDeclaresASession(t *testing.T) {
 	}
 }
 
-// A terminal fault waits the poll's interval, never the failure backoff.
+// A terminal fault waits the poll's interval, never the failure backoff; a
+// transient one backs off from its base.
 func TestTerminalFaultBooksTheFullInterval(t *testing.T) {
 	t.Parallel()
-	sched := newPollSchedule(5 * time.Second)
+	sched := newPollSchedule()
 	now := time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)
 	every := time.Hour
-	if !sched.due("p1", every, now) {
-		t.Fatal("a new poll was not due")
-	}
+	sched.book("p1", now.Add(every))
 	terminal := &collection.TerminalError{Class: driver.ClassAuth, Reason: "auth rejected"}
 	bookPollRun(sched, "p1", every, now, nil, []error{terminal})
 	if next, _ := sched.nextOf("p1"); !next.Equal(now.Add(every)) {
 		t.Fatalf("next run = %s after a terminal fault, want the full interval", next.Sub(now))
 	}
-	if !sched.due("p2", every, now) {
-		t.Fatal("a new poll was not due")
-	}
+	sched.book("p2", now.Add(every))
 	bookPollRun(sched, "p2", every, now, nil, []error{errors.New("connection refused")})
-	if next, _ := sched.nextOf("p2"); !next.Equal(now.Add(5 * time.Second)) {
-		t.Fatalf("next run = %s after a transient fault, want the heartbeat backoff", next.Sub(now))
+	if next, _ := sched.nextOf("p2"); !next.Equal(now.Add(backoffBase)) {
+		t.Fatalf("next run = %s after a transient fault, want the backoff base", next.Sub(now))
 	}
 }
 
 // A poll its session refused waits its interval while the session stays
-// rejected, but runs at the first tick the session is up again, so a fixed
-// credential lands data within a tick, not an interval later.
+// rejected, but is released the moment the session is up again, so a fixed
+// credential lands data at once, not an interval later; and only once.
 func TestARefusedPollRunsOnceItsSessionIsUpAgain(t *testing.T) {
 	t.Parallel()
-	sched := newPollSchedule(5 * time.Second)
+	sched := newPollSchedule()
 	now := time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC)
 	every := time.Hour
-	sched.due("p1", every, now)
+	sched.book("p1", now.Add(every))
 	bookPollRun(sched, "p1", every, now, nil, []error{&collection.TerminalError{Class: driver.ClassAuth, Reason: "auth rejected"}})
-	later := now.Add(time.Minute)
-	sched.releaseRefused("p1", false)
-	if sched.due("p1", every, later) {
-		t.Fatal("a refused poll ran while its session was still rejected")
+	if sched.releaseRefused("p1", false) {
+		t.Fatal("a refused poll was released while its session was still rejected")
 	}
-	sched.releaseRefused("p1", true)
-	if !sched.due("p1", every, later) {
-		t.Fatal("a refused poll did not run once its session was up")
+	if !sched.releaseRefused("p1", true) {
+		t.Fatal("a refused poll was not released once its session was up")
 	}
-	sched.releaseRefused("p1", true)
-	if sched.due("p1", every, later.Add(time.Second)) {
+	if sched.releaseRefused("p1", true) {
 		t.Fatal("the release ran the poll twice")
 	}
 }

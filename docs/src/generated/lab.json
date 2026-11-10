@@ -204,14 +204,14 @@
     {
       "name": "walkthrough",
       "heartbeat": "2s",
-      "probe_every": "every check-in",
+      "probe_every": "2s",
       "worklist_every": "2s",
       "for": "a script's throwaway lab: a walkthrough waiting on a probe's verdict sees it within seconds"
     },
     {
       "name": "default",
       "heartbeat": "30s",
-      "probe_every": "every check-in",
+      "probe_every": "30s",
       "worklist_every": "30s",
       "for": "the product's own defaults: what a deployment's node runs at"
     }

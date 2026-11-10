@@ -17,15 +17,16 @@ import (
 // the node to run work now and the node answers once. A preview runs polls of
 // a spec no endpoint holds yet, on the request's own goroutine, touching no
 // held session and publishing nothing. A run now runs one of the node's own
-// poll tasks on the run loop, where every held session and gate lives, so it
-// borrows the endpoint's session and honors its gate exactly as a scheduled
-// run does, and lands what it reads.
+// poll tasks on a dispatcher worker in its endpoint's lane (#1634), ahead
+// of the scheduled runs waiting there, so it borrows the endpoint's session
+// and honors its gate exactly as a scheduled run does, and lands what it
+// reads.
 
 // defaultRunTimeout bounds a run whose request names no budget.
 const defaultRunTimeout = 20 * time.Second
 
-// runJob is a run now handed to the run loop: the task, its budget, and the
-// one answer the request is owed.
+// runJob is a run now handed to the run loop, which gives it to the task's
+// lane: the task, its budget, and the one answer the request is owed.
 type runJob struct {
 	task collection.TaskSpec
 	// deadline is stamped when the request arrives, so a job the loop takes
@@ -36,9 +37,10 @@ type runJob struct {
 }
 
 // subscribeRuns takes the server's run requests for this node. A preview runs
-// at once on its own goroutine; a run now is queued to the run loop (and
-// refused, not waited on, when the loop already holds a run's worth), unless
-// a reason holds its endpoint, which answers it at once.
+// at once on its own goroutine; a run now is handed through the run loop to
+// its endpoint's lane (and refused, not waited on, when the loop has not yet
+// taken the last one handed), unless a reason holds its endpoint, which
+// answers it at once.
 func subscribeRuns(ctx context.Context, nc *nats.Conn, node string, runner *collection.Runner, g *gates, jobs chan<- runJob) (*nats.Subscription, error) {
 	return nc.Subscribe(collection.RunSubject(node), func(m *nats.Msg) {
 		respond := func(r collection.RunReply) {
@@ -58,7 +60,7 @@ func subscribeRuns(ctx context.Context, nc *nats.Conn, node string, runner *coll
 }
 
 // takeRun routes one run request: a preview to its own goroutine, a run now
-// to the run loop.
+// through the run loop to its lane.
 func takeRun(ctx context.Context, runner *collection.Runner, g *gates, jobs chan<- runJob, req collection.RunRequest, respond func(collection.RunReply)) {
 	timeout := time.Duration(req.TimeoutMs) * time.Millisecond
 	if timeout <= 0 {
@@ -73,9 +75,9 @@ func takeRun(ctx context.Context, runner *collection.Runner, g *gates, jobs chan
 			return
 		}
 		// A reason that holds the whole endpoint answers here, as the
-		// request arrives (#1650): queued, it would wait out whatever the
-		// run loop is in the middle of, and a tick spent timing out against
-		// a gone device can outlast the caller's budget.
+		// request arrives (#1650): queued, it would wait out whatever its
+		// lane is in the middle of, and a run spent timing out against a
+		// gone device can outlast the caller's budget.
 		if r, held := g.holding(req.Tasks[0].EndpointID); held {
 			respond(heldRun(r))
 			return
@@ -202,14 +204,14 @@ func landableRun(sched *pollSchedule, taskID string, dps []collection.Sample) []
 
 // heldRun is the answer to a run now on an endpoint a reason holds whole
 // (unreachable, today): gated, naming the reason and what releases it. A
-// refusal is rung-scoped, so the run loop asks it, where the endpoint's held
-// session is known.
+// refusal is rung-scoped, so runNowTask asks it on the endpoint's lane, where
+// the endpoint's held session is known.
 func heldRun(r reason) collection.RunReply {
 	return collection.RunReply{Gated: true, GateReason: string(r.kind),
 		Error: "node: the endpoint is " + r.text + "; " + reasonRules[r.kind].release}
 }
 
-// runNowTask runs one of the node's poll tasks now, on the run loop, exactly
+// runNowTask runs one of the node's poll tasks now, on its lane, exactly
 // as a scheduled run would, its schedule untouched: the endpoint's held
 // session borrowed where it has one, its gate honored (a gated stateless
 // poll is refused with the gate's refusal, an endpoint its probe reads
