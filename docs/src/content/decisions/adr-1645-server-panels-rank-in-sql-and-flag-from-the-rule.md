@@ -2,7 +2,7 @@
 title: "Server panels rank in SQL and flag a panel from its alarm's rule"
 date: 2026-11-10
 status: Accepted
-summary: "Accepted: #1645 renders each server's Requests, Ingest, Queues and Retention panels from storage.PlatformServerGroups. Both request keys are ranked, the busiest routes beside the slowest. A panel is flagged by an open alarm whose rule samples one of its keys, matched on the rule's sample_key. Server figures carry no window aging. A ranked key with no window reads as one not-reported row. A key's tooltip leads in-app onto its series. Walkthroughs gained hover and an off-camera ready wait, and docs shots gained a wait step."
+summary: "Accepted: #1645 renders each server's Requests, Ingest, Queues and Retention panels from storage.PlatformServerGroups. Both request keys are ranked, the busiest routes beside the slowest. A panel is flagged by an open alarm whose rule samples one of its keys, matched on the rule's sample_key. A server figure written only for a window that saw something ages out past two report windows. A ranked key with no window reads as one not-reported row. A key's tooltip leads in-app onto its series. Walkthroughs gained hover and an off-camera ready wait, and docs shots gained a wait step."
 refs: [1645, 1644, 1627, 1628, 1629, 1646]
 ---
 
@@ -18,11 +18,13 @@ refs: [1645, 1644, 1627, 1628, 1629, 1646]
      page flags the panel that holds that key. A hand-raised alarm, or one whose rule is gone, has
      no key and flags no panel; it still counts in the server's "open" badge. The page holds no
      threshold.
-  3. **Server figures carry no window aging.** ADR-1644 shows a node's window count only while its
-     window is the newest. The server's counts need no such filter: the request and slow-query
-     counts write one zero after a window that counted something, and the pipeline and retention
-     figures are written every window or pass. A server figure is its latest sample, per
-     instance, unsummed.
+  3. **A window figure ages out.** Most server figures are gauges sampled every window or retention
+     facts the hourly pass writes, and each reads as its latest sample, per instance, unsummed,
+     however old. The keys the server writes only for a window that observed something (a route's
+     timing and count, a slow query, ingest lag, a landed batch, a drop reason) are marked
+     `PlatformServerKey.Window`, and the view leaves such a sample out, instance by instance, once
+     `platformWindowHorizon` (two report windows) has passed, as ADR-1644 does for a node's window
+     counts. Without it a quiet fleet's last ingest lag read as current.
   4. **A ranked key with no window is one row.** Before the first report window a ranked key has no
      instance to rank. It reads as a single not-reported row named by the key, not as a heading
      over an "owner-level" row.
