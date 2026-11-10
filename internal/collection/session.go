@@ -59,6 +59,10 @@ const (
 	SessionRejected SessionState = "rejected"
 )
 
+// SessionStates is every SessionState, in the order a session moves through
+// them: the instances a node's session-held-count reports (#1625).
+var SessionStates = []SessionState{SessionEstablishing, SessionUp, SessionRecovering, SessionDown, SessionRejected}
+
 // The recovery bounds. A failed attempt waits SessionBackoff(attempt), an
 // exponential curve from SessionBackoffBase capped at SessionBackoffMax and
 // jittered by SessionBackoffJitter either way, so a fleet of sessions that
@@ -333,6 +337,11 @@ type SessionConfig struct {
 	// Reprobe is how long a rejected session waits before trying once more
 	// on its own; zero is never (the driver declares it, slow by design).
 	Reprobe time.Duration
+	// Quiet is when the endpoint's quiet period ends (a disruptive command
+	// took the device down, #1651); the zero time when it is in none. No
+	// dial is made before it, so a reboot's dropped connection is redialed
+	// once the device has had its quiet period, not on the backoff.
+	Quiet func() time.Time
 	// After is the clock's timer for the backoff and the re-probe; nil is
 	// time.After. Tests inject a fake clock.
 	After func(time.Duration) <-chan time.Time
@@ -699,6 +708,9 @@ func (s *Session) run(ctx context.Context) {
 		if wait > 0 && !s.sleep(ctx, wait) {
 			return
 		}
+		if !s.waitQuiet(ctx) {
+			return
+		}
 		conn, err := s.connect(ctx)
 		if ctx.Err() != nil {
 			if conn != nil {
@@ -937,6 +949,22 @@ func (s *Session) sleep(ctx context.Context, d time.Duration) bool {
 	case <-s.cfg.After(d):
 		return true
 	}
+}
+
+// waitQuiet waits out the endpoint's quiet period, if any, reading it again
+// after each wait (a second disruptive command extends it). false when ctx
+// ended.
+func (s *Session) waitQuiet(ctx context.Context) bool {
+	for s.cfg.Quiet != nil {
+		left := s.cfg.Quiet().Sub(s.cfg.Now())
+		if left <= 0 {
+			break
+		}
+		if !s.sleep(ctx, left) {
+			return false
+		}
+	}
+	return ctx.Err() == nil
 }
 
 // ErrUnacknowledged is reported for an arm command the device sent nothing

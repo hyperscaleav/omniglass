@@ -92,6 +92,21 @@ describe("commandSteps", () => {
     expect(steps[1].label).toBe("Delivered to edge-hq");
     expect(steps[3].label).toMatch(/settles, fails or times out/i);
   });
+  it("notes a redelivery on the delivered step: how many times, and when the first came", () => {
+    const steps = commandSteps(
+      command({
+        phase: "awaiting-reply",
+        first_delivered_at: "2026-10-25T10:00:02Z",
+        delivered_at: "2026-10-25T10:01:05Z",
+        delivery_count: 3,
+      }),
+    );
+    expect(steps[1]).toMatchObject({ at: "2026-10-25T10:01:05Z", note: "delivered 3 times, first +2.0s" });
+  });
+  it("leaves a single delivery, or none, unnoted", () => {
+    expect(commandSteps(command({ delivered_at: "2026-10-25T10:00:01Z", first_delivered_at: "2026-10-25T10:00:01Z", delivery_count: 1 }))[1].note).toBeUndefined();
+    expect(commandSteps(command({ delivery_count: 0 }))[1].note).toBeUndefined();
+  });
   it("names the outcome once terminal", () => {
     const steps = commandSteps(command({ status: "timed-out", phase: "timed-out", settled_at: "2026-10-25T10:00:20Z" }));
     expect(steps[3]).toMatchObject({ label: "Timed out", reached: true, at: "2026-10-25T10:00:20Z" });

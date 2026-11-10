@@ -1162,6 +1162,11 @@ func TestEveryStoredSystemAndLocationLabelEqualsWhatItsRuleProduces(t *testing.T
 	if _, err := gw.SetLabelRule(ctx, "", "location", "{{.TypeName}} {{.Name | upper}}"); err != nil {
 		t.Fatalf("location rule: %v", err)
 	}
+	// The boot seed's platform system (#1625) predates the rule; the verb
+	// brings it there, as it would for any operator's row.
+	if _, err := gw.RecomputeLabels(ctx, "", "system", all, all); err != nil {
+		t.Fatalf("recompute the seeded systems: %v", err)
+	}
 	roomA := makeRoom(t, gw, ctx, "room-a")
 	roomB := makeRoom(t, gw, ctx, "room-b")
 

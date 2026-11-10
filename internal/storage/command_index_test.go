@@ -137,25 +137,64 @@ func TestCommandPullReachesTheDeliverableIndex(t *testing.T) {
 
 // TestCommandPullStatementsDoNotGrowWithItsDeliveries holds a pull's round
 // trips flat in the number of commands it delivers (#1631): the dispatched
-// stamps land in one statement, not one per command.
+// stamps land in one statement, not one per command. A command's FIRST take
+// also writes its own dispatch-latency sample (#1626), one per command because
+// delivery loss counts them, so the flat count is held on redeliveries, which
+// stamp without sampling: a pull redelivering 21 commands issues exactly the
+// statements of one redelivering 1, and a pull of 20 first takes stamps them
+// all in the one statement.
 func TestCommandPullStatementsDoNotGrowWithItsDeliveries(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
 	f := newCommandPullFixture(t)
+	conn := connectDSN(t, f.dsn)
+	// overdue backdates every pending command's last take past redeliverAfter,
+	// so the next pull redelivers it.
+	overdue := func() {
+		t.Helper()
+		if _, err := conn.Exec(f.ctx, `update command set dispatched_at = dispatched_at - interval '31 seconds'
+			where executed_at is null and dispatched_at is not null`); err != nil {
+			t.Fatalf("backdate dispatch: %v", err)
+		}
+	}
+	stamps := func() int {
+		n := 0
+		for _, c := range f.counter.Calls() {
+			if strings.Contains(c.SQL, "from unnest($1::bigint[]") {
+				n++
+			}
+		}
+		return n
+	}
+
 	f.issue(t, 1)
 	if got := f.pull(t); len(got) != 1 {
 		t.Fatalf("first pull delivered %d commands, want 1", len(got))
 	}
+	overdue()
+	if got := f.pull(t); len(got) != 1 {
+		t.Fatalf("redelivering pull delivered %d commands, want 1", len(got))
+	}
 	one, oneSummary := f.counter.N(), f.counter.Summary()
+
 	f.issue(t, 20)
 	if got := f.pull(t); len(got) != 20 {
-		t.Fatalf("second pull delivered %d commands, want 20", len(got))
+		t.Fatalf("pull of 20 first takes delivered %d commands, want 20", len(got))
 	}
-	if twenty := f.counter.N(); twenty != one {
-		t.Fatalf("a pull delivering 1 command issued %d statements and one delivering 20 issued %d:\n\t1: %s\n\t20: %s",
-			one, twenty, strings.Join(oneSummary, "\n\t   "), strings.Join(f.counter.Summary(), "\n\t    "))
+	if n := stamps(); n != 1 {
+		t.Fatalf("a pull delivering 20 commands stamped them in %d statements, want 1:\n\t%s",
+			n, strings.Join(f.counter.Summary(), "\n\t"))
+	}
+
+	overdue()
+	if got := f.pull(t); len(got) != 21 {
+		t.Fatalf("redelivering pull delivered %d commands, want 21", len(got))
+	}
+	if many := f.counter.N(); many != one {
+		t.Fatalf("a pull redelivering 1 command issued %d statements and one redelivering 21 issued %d:\n\t1: %s\n\t21: %s",
+			one, many, strings.Join(oneSummary, "\n\t   "), strings.Join(f.counter.Summary(), "\n\t    "))
 	}
 	// The batched stamp landed on every delivered row: an immediate re-pull
 	// redelivers nothing.

@@ -2,6 +2,7 @@ package labfootprint
 
 import (
 	"bufio"
+	"cmp"
 	"fmt"
 	"io"
 	"math"
@@ -9,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/hyperscaleav/omniglass/internal/delivery"
 )
 
 // This file is the scale lab's measurement (#1556): the arithmetic of one
@@ -401,6 +404,12 @@ type ScaleRun struct {
 	Lane      Lane
 	FleetView []time.Duration
 	Drain     Drain
+	// Endpoints is each node's bracketed endpoint observation; when none was
+	// read, EndpointsGap says why.
+	Endpoints    []NodeBracket
+	EndpointsGap string
+	// Delivery is the receipts the delivery table reconciles (#1641).
+	Delivery DeliveryRead
 }
 
 // ScaleContainer is one container's figures over the window.
@@ -448,6 +457,21 @@ type ScaleReport struct {
 	ConsumerLane Lane         `json:"consumer_lane"`
 	FleetView    Quantiles    `json:"fleet_view_ms"`
 	Drain        Drain        `json:"retention_drain"`
+	// Endpoints is the closed loop, nil when it was not read; EndpointsGap
+	// then says why.
+	Endpoints    *EndpointReport `json:"endpoints,omitempty"`
+	EndpointsGap string          `json:"endpoints_not_measured,omitempty"`
+
+	// Delivery is each kind's loss across each hop it crosses (#1641), over
+	// the settled boots; DeliveryEndToEnd is each kind's loss over all its
+	// hops; DeliveryUnsettled names each boot no ratio was read from.
+	Delivery          []DeliveryRow             `json:"delivery"`
+	DeliveryEndToEnd  map[delivery.Kind]float64 `json:"delivery_end_to_end,omitempty"`
+	DeliveryUnsettled []UnsettledBoot           `json:"delivery_unsettled,omitempty"`
+	// DeliveryNotRead is why no receipts were read, when none were;
+	// DeliveryNote qualifies a read that was.
+	DeliveryNotRead string `json:"delivery_not_measured,omitempty"`
+	DeliveryNote    string `json:"delivery_note,omitempty"`
 }
 
 // SummarizeScale turns a run into its report. The containers list the server
@@ -475,12 +499,27 @@ func SummarizeScale(r ScaleRun) ScaleReport {
 		ConsumerLane:          r.Lane,
 		FleetView:             DurationQuantiles(r.FleetView),
 		Drain:                 r.Drain,
+		EndpointsGap:          r.EndpointsGap,
+	}
+	if len(r.Endpoints) > 0 {
+		e := SummarizeEndpoints(r.Endpoints)
+		out.Endpoints = &e
 	}
 	ms := make([]float64, len(r.Lag))
 	for i, s := range r.Lag {
 		ms[i] = s * 1000
 	}
 	out.IngestLag = QuantilesOf(ms)
+	if d := r.Delivery; !d.Read {
+		out.DeliveryNotRead = cmp.Or(d.Reason, "no receipts read")
+	} else {
+		out.Delivery, out.DeliveryUnsettled = DeliveryOf(d)
+		out.DeliveryEndToEnd = EndToEndOf(out.Delivery)
+		if !d.StreamClear {
+			out.DeliveryNote = fmt.Sprintf("unsettled: the telemetry consumer still held batches when the settle ran out (%s pending, %s unacked)",
+				gauge(d.Backlog.Pending, d.Backlog.SeenPending), gauge(d.Backlog.AckPending, d.Backlog.SeenAckPending))
+		}
+	}
 	if w.SamplesLanded > 0 {
 		out.WALBytesPerSample = float64(w.WALBytes) / float64(w.SamplesLanded)
 	}
@@ -559,6 +598,13 @@ func (r ScaleReport) Table() string {
 	line("fleet view p50", ms(r.FleetView.P50))
 	line("fleet view p95", ms(r.FleetView.P95)+fmt.Sprintf("   (%d reads)", r.FleetView.N))
 	line("retention drain", r.Drain.describe())
+	if r.Endpoints != nil {
+		r.Endpoints.table(&b)
+	} else if r.EndpointsGap != "" {
+		b.WriteString("\nendpoints not measured: " + r.EndpointsGap + "\n")
+	}
+	b.WriteString("\n")
+	r.deliveryTable(&b)
 	if r.IngestLagGap != nil {
 		b.WriteString("\n" + r.IngestLagGap.footer())
 	}

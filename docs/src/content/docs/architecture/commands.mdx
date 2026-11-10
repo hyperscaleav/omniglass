@@ -23,6 +23,9 @@ command queue and actuates the device through the driver's command binding (belo
 Since #1155 a command's **status reads back whole**, from issue to settlement, over the API, the
 CLI and the console, with the evidence that decided it and an issue that can wait for it (below,
 [ADR-1155](/architecture/decisions/#adr-1155-a-command-is-read-whole-its-evidence-kept-and-masked-and-an-issue-may-wait)).
+Since #1626 a command **keeps its delivery history** (its first delivery and how many times a node
+took it) and every node's **command queue reports its health** as platform metrics on the node's
+own component (below, [ADR-1626](/architecture/decisions/#adr-1626-command-queue-expiry-keys-on-the-execution-stamp-not-the-status)).
 :::
 
 :::design[Rule-issued and scheduled commands: the action layer (ADR-0050) and the clock, tracked in #419]
@@ -51,11 +54,12 @@ The issue records; the **wire actuates** (#815). The moving parts:
   recorded terminal on the row (`exec_error`) instead of redelivering forever. Exactly one
   actuating endpoint is chosen per command (only an endpoint whose driver binds the type is a
   candidate), so a command is delivered to one node, never once per node.
-- **At-least-once, idempotent.** The pull marks the row `dispatched_at`; a dispatched command
-  whose execution report never lands is redelivered after a silence interval, and past a delivery
-  TTL it stops being deliverable at all (settlement's `timed-out` covers a command no node picked
-  up). The node remembers each command's outcome per id, so a redelivery repeats the **report**,
-  never the actuation.
+- **At-least-once, idempotent.** The pull marks the row `dispatched_at` (the last take), stamps
+  `first_dispatched_at` on the first take only, and counts every take in `delivery_count`; a
+  dispatched command whose execution report never lands is redelivered after a silence interval
+  (30 s), and past a delivery TTL (10 minutes) it stops being deliverable at all (settlement's
+  `timed-out` covers a command no node picked up). The node remembers each command's outcome per
+  id, so a redelivery repeats the **report**, never the actuation.
 - **A pull reads only its own components' commands.** Every node pulls once a heartbeat, so the
   pull starts from the components that carry an attached endpoint on this node and finds their
   deliverable commands (owned by a component, not yet executed) through
@@ -63,8 +67,8 @@ The issue records; the **wire actuates** (#815). The moving parts:
   endpoint on this node is never read (#1631). The actuating-endpoint choice is still made over
   all of the component's endpoints, so a component with endpoints on two nodes is read by both
   pulls and delivered by exactly one. Every row a
-  pull delivers is stamped `dispatched_at` in one statement, so a pull's round trips do not grow
-  with its deliveries. The command table is not yet pruned: a terminal command stays until
+  pull delivers is stamped in one statement, so the stamp's round trips do not grow with its
+  deliveries; a first take adds only its own `command-dispatch-latency` sample (below). The command table is not yet pruned: a terminal command stays until
   retention gains a command lane (#1684).
 - **The report carries the reply; the binding judges it.** The node reports execution on
   `og.v1.commandstatus.<node>` with the device's reply (any device answer counts as actuated; a
@@ -75,16 +79,107 @@ The issue records; the **wire actuates** (#815). The moving parts:
   settlement's judgment, made on the server: from the reply when the binding settles from the
   response, otherwise from the next observation the driver's polls (#814) report.
 
+### Queue health: each node's command queue, measured
+
+Every node's command queue reports its health on the node's
+[platform component](/architecture/collection/#self-monitoring-every-nodes-account-of-itself) (#1626),
+as the `command-*` platform metrics, each one observation per sample. The wire writes two at the
+moment they happen, in the transaction of the stamp they derive from: `command-dispatch-latency`
+(issue to first take) when a node first takes a command, and `command-execution-latency` (first take
+to the report) when its execution report lands. A command no node ever takes writes no dispatch
+sample; it shows up as expired instead. A percentile derives from these per-command samples and is
+never stored.
+
+A server timer beside the settlement sweep reads the whole fleet's queues every 15 s in one
+statement, using the same candidate resolution the pull uses (one SQL fragment, which the pull
+narrows to its own components, so the depth it reports cannot disagree with what a pull delivers), and attributes each command to the node its
+chosen endpoint is placed on. Every node with a platform component gets, at each read:
+
+- `command-pending-count`: the commands its next pull would take plus the ones it took that still
+  await their report, and `command-pending-age`, how long the oldest has waited (zero while none
+  waits, so a drained queue's last age never stands as its latest);
+- `command-stuck-count`: the ones it took and has been silent on past the redelivery wait, still
+  inside the delivery TTL.
+
+Over the window since the previous read, written every read and zero for a quiet window, so the
+latest value never stands on a past event's count (a first read has no window and writes neither):
+
+- `command-redelivery-count`: commands taken again in the window, read 5 s behind it: a take is
+  stamped at its transaction's start, so a read that runs before it commits cannot see it, and a
+  window ending at the read would pass it by;
+- `command-expired-count`: commands that aged past the delivery TTL unexecuted, as instance
+  `undelivered` (no node ever took it) or `unexecuted` (taken, never reported).
+
+Expiry keys on `executed_at` and age, not on the recorded status, so a fire-and-forget command no
+node took counts as expired even though it reads `settled`
+([ADR-1626](/architecture/decisions/#adr-1626-command-queue-expiry-keys-on-the-execution-stamp-not-the-status)).
+The node counts the one figure the server cannot see: `command-pull-failure-count`, the pulls of its
+queue that got no answer or one it could not read, once per report window, 0 when quiet, on its node-self lane.
+Each figure is a loss count or a delay, 0 healthy, and the loss ratios derive from them without a key
+of their own: delivery loss is undelivered over dispatch samples plus undelivered, execution loss is
+unexecuted over execution samples plus unexecuted. The keys, units and writers are rendered with
+every platform key on [collection](/architecture/collection/#self-monitoring-every-nodes-account-of-itself).
+
 A **command** is the "do" half of the telemetry model, alongside a [metric or property](/architecture/properties/) (**know**) and an [event](/architecture/events/) (**happen**): it records what a component was **told**. Its registry is `command_type`, the driver-owned twin of the sample and event catalogs.
 
 ## The command_type registry
 
-`command_type` describes every command: `(name, label, params_schema, settle_window_seconds, target_property_type_id, target_metric_type_id, official)`. Two facts are the driver's, not the abstract signal's:
+`command_type` describes every command: `(name, label, params_schema, settle_window_seconds, target_property_type_id, target_metric_type_id, disruptive, quiet_seconds, hold_seconds, power_outlet_param, official)`. Two facts are the driver's, not the abstract signal's:
 
 - **`settle_window_seconds`**: how long the device physically takes to actuate (a projector warms up in twenty seconds, a matrix switch flips in one), so a difference from the reported value is not called drift until the device has had time to act. It is a duration, so the schema floors it at **0** and both write paths refuse a negative one: `Settle` tests `windowSeconds > 0`, so a negative window behaves exactly as zero does, and a value that is stored, read back, and then never honoured is worse than a refusal.
 - **The two-armed target**: a **settleable** command names the value it sets in exactly one lane, `target_property_type_id` (`set-input` targets `video-input`) **or** `target_metric_type_id` (`set-volume` targets a numeric level), never both (a CHECK enforces the arc). A command with no target is **fire-and-forget** (`reboot`): it records the invocation and a caused event, with no value to settle.
+- **The disruption** (#1651): a **disruptive** command takes its device down (`reboot` is seeded disruptive, quiet 15 s, hold 300 s; `set-input` is not). Its delivery carries the flag and the **hold set**, the endpoints placed on the delivering node that the command takes down (its target's in-band endpoints and what the target hosts, [below](#the-hold-set-follows-dependency-edges)), and the node closes each one's [gate](/architecture/nodes/#implicit-reachability) with reason `disrupted` before it sends ([ADR-1651](/architecture/decisions/#adr-1651-a-disruptive-command-closes-its-endpoints-gates)). For **`quiet_seconds`** nothing runs against a held endpoint: no poll, no probe, no session dial, so a device mid-reboot is not read as a failure or hammered with reconnects. After quiet, each endpoint reopens on **its own** first up verdict that began after quiet (an answer already in flight at the delivery cannot release it), while a sibling that has not answered stays held. **`hold_seconds`** is the backstop: an endpoint with no up verdict by then reopens anyway, counted as `hold-expiry-count`. The hold is **not** the settle window: `settle_window_seconds` is how long settlement watches a value, and a fire-and-forget reboot has none, while the hold bounds how long its endpoints may stay closed. A non-disruptive type carries neither (a CHECK refuses a quiet or hold on one), and a disruptive type's hold must exceed its quiet.
+
+**The power commands** (#1653) are the seeded pair that switch one outlet of a PDU. **`outlet-off`**
+is disruptive (quiet 15 s, hold 300 s) and names `outlet` as its `power_outlet_param`, so its hold
+set is what that outlet feeds ([below](#the-hold-set-follows-dependency-edges)); **`outlet-on`**
+takes nothing down, so it is not disruptive and holds nothing. Both are fire-and-forget (the
+outlet's state is read back by the PDU's own polls, not settled), and both carry a
+`params_schema` that requires `outlet` as an integer from 1 to 4, so an issue naming no outlet,
+or one the PDU does not have, is refused with a 422 before anything is recorded. A driver binds
+them as any command: the shipped `ferrite-pdu-api` renders a POST to the PDU's `/api/outlets/state` with
+`{"outlet": ${arg.outlet}, "state": "off"}`, a whole-leaf reference keeping the outlet a number:
+
+```bash
+omniglass component command issue power-1 --command-type outlet-off --params '{"outlet": 2}'
+```
 
 The registry is seeded official and operator-extensible, official rows read-only, on the same shape as the [sample](/architecture/properties/#the-two-catalogs) and [event](/architecture/events/#the-event_type-registry) catalogs (a console **Command Types** page, `/command-types` CRUD gated by `command_type:*`).
+
+### The hold set follows dependency edges
+
+A reboot takes down more than its own device's endpoints, and less. The server resolves which
+endpoints a disruptive delivery holds with one pure function over the
+[dependency edges](/architecture/core-entities/#dependency-edges-what-a-component-needs-apart-from-where-it-sits)
+reachable from the target and the endpoints of the components they name
+([ADR-1648](/architecture/decisions/#adr-1648-a-disruptive-commands-hold-set-follows-dependency-edges)):
+
+- **A reboot** (a disruptive type with no `power_outlet_param`) holds the target's **in-band**
+  endpoints and the in-band endpoints of every component the target **hosts**, transitively: a
+  codec's reboot holds the touch panel paired to it, and a panel hosted by that panel.
+- **A power command** (a disruptive type whose `power_outlet_param` names the param carrying the
+  outlet) holds **every** endpoint of each component fed from that outlet of the target, its
+  out-of-band ones included (the outlet takes the whole device dark), and the in-band endpoints of
+  what those components host. The PDU's own endpoints are not held: the PDU stays up while its
+  outlet is off. An outlet off has no up verdict to read, so its hold ends at the `hold_seconds`
+  backstop, by design.
+- **An out-of-band endpoint** (a BMC, a management port; `out_of_band` on the
+  [endpoint](/architecture/collection/#endpoints-the-devices-apis-declared-once)) answers
+  through a reboot of its device, so a reboot leaves its gate open.
+- **Containment holds nothing.** A child component is not held because its parent rebooted, and a
+  `path` dependent is not held either: reaching it through a closed upstream is the `upstream`
+  gate reason's question ([nodes](/architecture/nodes/#implicit-reachability)), not a disruption.
+  It follows anyway: the reboot closes the upstream's gates, and the node holds what is reached
+  through it in the same pass.
+
+The walk keeps a visited set, so a cycle that slipped past the create check (two creates racing)
+cannot loop it, and each endpoint is held once. Only endpoints placed on the delivering node are
+sent; holding one on another node is [#1655](https://github.com/hyperscaleav/omniglass/issues/1655).
+A component with no edges holds what it held before, less its out-of-band endpoints. The
+power-command marker is set only on a disruptive type (a CHECK and a 422 refuse it on any other),
+and the one shipped type that sets it is [`outlet-off`](#the-command_type-registry). The outlet is
+read from the params as the dependency names it, a whole number as its digits however the JSON
+spells it, so `{"outlet": 2.0}` holds what outlet 2 feeds just as `{"outlet": 2}` does.
 
 ## Issuing a command composes the whole model
 
@@ -179,6 +274,9 @@ its address, the component taking every spelling the component routes take. Each
   `command_id` lineage) and the property or metric it sets;
 - **its state machine**, a time per transition: `issued_at`, `delivered_at` (a node last took it from
   its queue), `executed_at` (the node's report landed) and `settled_at`, beside the recorded `status`;
+  and its **delivery history**: `first_delivered_at` (the first take) and `delivery_count` (how many
+  takes, 2 or more for a redelivered command). The console's arc shows a redelivered command's count
+  and its first delivery as an offset from the issue beside the last;
 - **where it sits now** (`phase`), derived on read and never stored: `queued` for its node,
   `delivered` to it (a binding that settles on observation, so the reply decides nothing),
   `awaiting-reply` (the reply settles it), `awaiting-observation` within its window (the report is in,
@@ -237,6 +335,10 @@ The physical layout (the owner arc, the caused-event lineage, partitioning) live
     settle_window_seconds: 'How long settlement watches for the observed value to agree',
     target_property_type_id: 'One arm of the target arc: the property the command intends to set',
     target_metric_type_id: 'The other arm: the metric the command intends to set; never both',
+    disruptive: 'Whether the command takes its device down: its delivery closes the gates of its hold set on that node',
+    quiet_seconds: 'A disruptive type&#39;s quiet period: no poll, probe or session dial runs against a held endpoint',
+    hold_seconds: 'A disruptive type&#39;s backstop: a held endpoint with no up verdict by then reopens, counted; not the settle window',
+    power_outlet_param: 'The power-command marker: the param that names the outlet, so the hold set is what that outlet feeds; disruptive types only',
     official: 'Shipped-canonical versus org-local; official rows are read-only',
   }}
 />
@@ -251,6 +353,8 @@ The physical layout (the owner arc, the caused-event lineage, partitioning) live
     settled_at: 'The terminal moment; null exactly while status is issued',
     caused_event_id: 'The recorded event this invocation caused',
     dispatched_at: 'When a node&#39;s queue pull last delivered it (#815); null until a node picks it up',
+    first_dispatched_at: 'When a node&#39;s queue pull first delivered it (#1626); kept across redeliveries, null until a node picks it up',
+    delivery_count: 'How many times a pull delivered it (#1626); 0 until a node picks it up, 2 or more once redelivered',
     executed_at: 'When the node&#39;s execution report stamped, once; the actuation fact beside the settlement verdict',
     exec_error: 'A failed or unrenderable actuation&#39;s story; null on success',
     dispatched_endpoint_id: 'The endpoint a dispatch chose to actuate over; the confinement anchor for the execution report',

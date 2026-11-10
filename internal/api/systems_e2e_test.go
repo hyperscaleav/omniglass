@@ -68,15 +68,16 @@ func TestSystemAPI(t *testing.T) {
 		t.Fatalf("cleared standard_id = %q, want empty (a one-off system)", got)
 	}
 
-	// Owner lists all three.
+	// Owner lists all three, beside the boot seed's platform system (#1625),
+	// which an all-scope read sees.
 	var listed struct {
 		Systems []struct {
 			ID, Name string
 		} `json:"systems"`
 	}
 	json.Unmarshal(c.do(ownerTok, http.MethodGet, "/systems", nil, http.StatusOK), &listed)
-	if len(listed.Systems) != 3 {
-		t.Fatalf("owner list = %d, want 3", len(listed.Systems))
+	if len(listed.Systems) != 4 {
+		t.Fatalf("owner list = %d, want 4 (av, av-sub, lab, platform)", len(listed.Systems))
 	}
 	var avID string
 	for _, s := range listed.Systems {

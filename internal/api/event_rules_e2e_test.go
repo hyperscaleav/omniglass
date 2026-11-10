@@ -120,8 +120,8 @@ func TestEventRuleAPI(t *testing.T) {
 	if err := json.Unmarshal(c.do(viewer, http.MethodGet, "/event-rules", nil, http.StatusOK), &list); err != nil {
 		t.Fatal(err)
 	}
-	if len(list.EventRules) != 2 {
-		t.Fatalf("listed %d rules, want 2 (the authored one and the official reachability rule)", len(list.EventRules))
+	if len(list.EventRules) != 4 {
+		t.Fatalf("listed %d rules, want 4 (the authored one and the official reachability-lost, ingest-lag-high and retention-behind)", len(list.EventRules))
 	}
 	for _, r := range list.EventRules {
 		if r.OpenAlarms == nil || r.Pending == nil {
@@ -203,8 +203,8 @@ func TestEventRuleAPI(t *testing.T) {
 		if err := json.Unmarshal(c.do(tok, http.MethodGet, "/event-rules", nil, http.StatusOK), &list); err != nil {
 			t.Fatal(err)
 		}
-		if len(list.EventRules) != 2 {
-			t.Fatalf("a scoped viewer lists %d rules, want both", len(list.EventRules))
+		if len(list.EventRules) != 4 {
+			t.Fatalf("a scoped viewer lists %d rules, want all 4 (both here and the official ingest-lag-high and retention-behind)", len(list.EventRules))
 		}
 		for _, r := range list.EventRules {
 			if r.Name == "reach-lost" && *r.Pending != len(want) {

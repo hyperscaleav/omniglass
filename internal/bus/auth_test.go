@@ -49,6 +49,15 @@ func (f fakeStore) NodeWorklist(context.Context, string) (storage.Worklist, erro
 	return storage.Worklist{}, nil
 }
 func (f fakeStore) RecordHeartbeat(context.Context, string) error { return nil }
+func (f fakeStore) NodeCheckins(context.Context) ([]storage.NodeCheckin, error) {
+	return nil, nil
+}
+func (f fakeStore) RecordPlatformMetrics(context.Context, []storage.PlatformMetric) error {
+	return nil
+}
+func (f fakeStore) CommandQueueHealth(context.Context, time.Time) (storage.CommandQueueRead, error) {
+	return storage.CommandQueueRead{}, nil
+}
 func (f fakeStore) ResolveTaskOwners(context.Context, string, []string) (map[string]storage.TaskOwner, error) {
 	return map[string]storage.TaskOwner{}, nil
 }
@@ -95,6 +104,9 @@ func (f fakeStore) CompactMetricBlocks(context.Context, storage.BlockFold) (stor
 }
 func (f fakeStore) DropMetricPartitions(context.Context, time.Time) ([]string, error) {
 	return nil, nil
+}
+func (f fakeStore) RetentionStatus(context.Context) (storage.RetentionStatus, error) {
+	return storage.RetentionStatus{}, nil
 }
 func (f fakeStore) PruneTelemetryReceipts(context.Context, time.Time, int) (int64, error) {
 	return 0, nil
