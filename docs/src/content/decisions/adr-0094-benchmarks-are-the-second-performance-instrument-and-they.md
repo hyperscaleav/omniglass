@@ -2,7 +2,7 @@
 title: "Benchmarks are the second performance instrument, and they gate nothing"
 date: 2026-08-09
 status: "Accepted"
-summary: "Performance has two instruments: round-trip counting gates in `make test`, wall-clock benchmarks (`make bench`, two estate sizes, fixtures outside the timed section) are diagnostic and gate nothing; no CI perf job, no stored baseline, no `EXPLAIN` assertions (deferred), no timing assertion anywhere, and one candidate benchmark was measured as three-quarters transport and dropped rather than shipped. **Amended (#725):** the `EXPLAIN` deferral holds for the plan a planner PREFERS and is lifted for the access path a query can REACH; planned under `enable_seqscan = off` that answer does not move with the fixture's size, so an access-path assertion on one relation (index name AND index condition, never plan shape, never a duration) becomes a third instrument that gates"
+summary: "Performance has two instruments: round-trip counting gates in `make test`, wall-clock benchmarks (`make bench`, two estate sizes, fixtures outside the timed section) are diagnostic and gate nothing; no CI perf job, no stored baseline, no `EXPLAIN` assertions (deferred), no timing assertion anywhere, and one candidate benchmark was measured as three-quarters transport and dropped rather than shipped. **Amended (#725):** the `EXPLAIN` deferral holds for the plan a planner PREFERS and is lifted for the access path a query can REACH; planned under `enable_seqscan = off` that answer does not move with the fixture's size, so an access-path assertion on one relation (index name AND index condition, never plan shape, never a duration) becomes a third instrument that gates. **Amended (#1640):** the refusals hold for the micro-benchmarks alone; a whole scale lab measured end to end gates against a committed, generated baseline per host class, opt in in CI and never required, its times only on the baseline's host"
 ---
 
 - **Date:** 2026-08-09 | **Status:** Accepted | **Pages:** [test-driven](/contributing/test-driven/)
@@ -54,6 +54,14 @@ summary: "Performance has two instruments: round-trip counting gates in `make te
     either way.
   - **No timing assertion anywhere,** in a benchmark or a test. This is a standing invariant, not a
     property of this slice.
+
+    **Amended ([#1640](https://github.com/hyperscaleav/omniglass/issues/1640)):** the micro-benchmarks
+    stay diagnostic, and the three refusals above now hold for them alone. A whole scale lab measured
+    end to end gates against a committed baseline (`make perf-check`): a CI job that is opt in and never
+    required, a baseline that is generated per host class and carries its host's fingerprint, and times
+    compared only as medians against the runs' and the baseline's spread, only on that host. Still no
+    timing assertion in a test or a benchmark
+    ([ADR-1640](#adr-1640-a-scale-lab-measured-end-to-end-gates-against-a-committed-baseline)).
 - **What the first run measured, because a benchmark set is only as honest as its floor.** One pool
   acquire and one empty statement costs about 265us on the dev box, and every other number contains
   one copy of that per statement the call issues. The reads land between 0.7ms and 5.7ms with a
