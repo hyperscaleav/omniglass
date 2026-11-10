@@ -302,9 +302,9 @@ func TestPlanCadenceProfiles(t *testing.T) {
 		bracket   string
 	}{
 		{"", false, "2s", "10s", "5s", "2s", "10s"},
-		{"", true, "2s", "", "2s", "2s", "2s"},
+		{"", true, "2s", "", "2s", "2s", "1s"},
 		{"lab", true, "2s", "10s", "5s", "2s", "10s"},
-		{"walkthrough", false, "2s", "", "2s", "2s", "2s"},
+		{"walkthrough", false, "2s", "", "2s", "2s", "1s"},
 		// The product's own: the node's and the simulator's defaults, so
 		// the profile cannot drift from what a deployment runs.
 		{"default", true, node.DefaultHeartbeat.String(), "", node.DefaultWorklistEvery.String(), simnode.DefaultPoll.String(), "1m"},

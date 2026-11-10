@@ -137,8 +137,10 @@ func CadenceProfiles() []Cadence {
 			For: "a learner's lab: a change in the console shows within seconds"},
 		// A script's throwaway lab lives for minutes and probes on every
 		// check-in, so a walkthrough waiting on a probe's verdict keeps its
-		// recorded budget.
-		{Name: CadenceWalkthrough, Heartbeat: "2s", WorklistEvery: "2s", SimPoll: "2s", ClosedLoopBracket: "2s",
+		// recorded budget. Its closed loop brackets every second, a 10s
+		// window, so a walkthrough sees an impairment's attribution clear
+		// inside its budget (#1647).
+		{Name: CadenceWalkthrough, Heartbeat: "2s", WorklistEvery: "2s", SimPoll: "2s", ClosedLoopBracket: "1s",
 			For: "a script's throwaway lab: a walkthrough waiting on a probe's verdict sees it within seconds"},
 		{Name: CadenceDefault, Heartbeat: node.DefaultHeartbeat.String(), WorklistEvery: node.DefaultWorklistEvery.String(), SimPoll: simnode.DefaultPoll.String(), ClosedLoopBracket: "1m",
 			For: "the product's own defaults: what a deployment's node runs at"},
