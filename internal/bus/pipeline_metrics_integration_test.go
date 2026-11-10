@@ -10,6 +10,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/bus"
 	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/delivery"
 	"github.com/hyperscaleav/omniglass/internal/platformmetric"
 	"github.com/hyperscaleav/omniglass/internal/rules"
 	"github.com/hyperscaleav/omniglass/internal/scope"
@@ -97,7 +98,8 @@ func (r pipelineRig) enrollNode(t *testing.T, srv *bus.Server) *nats.Conn {
 // TestTelemetryBatchLandsPipelineMetricsOverNATS: a batch a node publishes
 // lands, and the window it landed in reports its lag, its samples and the
 // consumer's backlog on the server's platform component. A group the fence
-// drops landed nothing, so it counts toward neither.
+// drops landed nothing, so it counts toward neither, and reads as the
+// server's delivery loss.
 func TestTelemetryBatchLandsPipelineMetricsOverNATS(t *testing.T) {
 	r := newPipelineRig(t)
 	srv := r.start(t, r.gw)
@@ -138,6 +140,27 @@ func TestTelemetryBatchLandsPipelineMetricsOverNATS(t *testing.T) {
 	}
 	r.latest(t, writerclass.BusConsumerAckPending, "")
 	r.latest(t, writerclass.IngestLaneBusy, "")
+
+	// The server's hop (#1659): the tick's 3 metrics came in and 1 went out.
+	// The fence kept t-ghost's, and tcp-open is a property the metric lane
+	// refuses, so the landed group stored only tcp-connect-time. The kinds
+	// the tick did not carry read a quiet window's zeros, not nothing.
+	got := [3]float64{
+		r.latest(t, writerclass.DeliveryInCount, string(delivery.Metric)),
+		r.latest(t, writerclass.DeliveryOutCount, string(delivery.Metric)),
+		r.latest(t, writerclass.DeliveryLossRatio, string(delivery.Metric)),
+	}
+	if want := [3]float64{3, 1, 2.0 / 3}; got != want {
+		t.Fatalf("metric delivery in/out/loss = %v, want %v", got, want)
+	}
+	for _, k := range []delivery.Kind{delivery.Property, delivery.Event, delivery.Log} {
+		if n := r.latest(t, writerclass.DeliveryInCount, string(k)); n != 0 {
+			t.Fatalf("%s delivery-in-count = %v, want a quiet window's 0", k, n)
+		}
+		if n := r.latest(t, writerclass.DeliveryLossRatio, string(k)); n != 0 {
+			t.Fatalf("%s delivery-loss-ratio = %v, want a quiet window's 0", k, n)
+		}
+	}
 }
 
 // failLanding fails, as a database that blinks fails, every landing of a
@@ -159,8 +182,9 @@ func (s *failLanding) LandBatch(ctx context.Context, b storage.IngestBatch) (sto
 }
 
 // TestMaxDeliverCountsOneDrop: a batch that fails every delivery is dropped
-// at the bound, and the drop counts once under max-deliver, however many
-// deliveries it took to get there; a batch that landed counts as landed.
+// at the bound, and its items count once as in and never out, however many
+// deliveries it took to get there (#1659); a batch that landed counts as
+// landed.
 func TestMaxDeliverCountsOneDrop(t *testing.T) {
 	restore := bus.SetTelemetryNakDelay(20 * time.Millisecond)
 	defer restore()
@@ -182,9 +206,9 @@ func TestMaxDeliverCountsOneDrop(t *testing.T) {
 	}
 	r.report(t, srv)
 
-	if n := r.latest(t, writerclass.BusTelemetryDropCount, "max-deliver"); n != 1 {
-		t.Fatalf("bus-telemetry-drop-count[max-deliver] = %v, want 1", n)
-	}
+	// Each batch carries one item of every kind: the doomed one came in and
+	// never went out, the landed one went both ways.
+	r.wantDelivery(t, 2, 1, 0.5)
 	if n := r.latest(t, writerclass.IngestBatchCount, ""); n != 1 {
 		t.Fatalf("ingest-batch-count = %v, want the 1 batch that landed", n)
 	}
@@ -211,7 +235,7 @@ func (s *alreadyLanded) LandBatch(ctx context.Context, b storage.IngestBatch) (s
 
 // TestAHeldRedeliveryCountsNoLanding: a batch its receipt holds to a no-op
 // landed nothing, so it adds no batch, no samples and no lag; only the batch
-// that landed counts.
+// that landed counts. Its delivery reads no loss.
 func TestAHeldRedeliveryCountsNoLanding(t *testing.T) {
 	r := newPipelineRig(t)
 	store := &alreadyLanded{PG: r.gw, value: "held"}
@@ -239,6 +263,25 @@ func TestAHeldRedeliveryCountsNoLanding(t *testing.T) {
 	}
 	if lag := r.latest(t, writerclass.IngestLagMax, ""); lag > 30*60 {
 		t.Fatalf("ingest-lag-max = %v s, want the landed batch's minute, not the held batch's hour", lag)
+	}
+	// The held copy is one an earlier delivery landed: in and out alike, so
+	// a redelivery reads no loss (#1659).
+	r.wantDelivery(t, 2, 2, 0)
+}
+
+// wantDelivery fails unless the server's delivery figures (#1659) read in,
+// out and loss for every kind.
+func (r pipelineRig) wantDelivery(t *testing.T, in, out, loss float64) {
+	t.Helper()
+	for _, k := range delivery.Kinds {
+		got := [3]float64{
+			r.latest(t, writerclass.DeliveryInCount, string(k)),
+			r.latest(t, writerclass.DeliveryOutCount, string(k)),
+			r.latest(t, writerclass.DeliveryLossRatio, string(k)),
+		}
+		if got != [3]float64{in, out, loss} {
+			t.Errorf("%s delivery in/out/loss = %v, want [%v %v %v]", k, got, in, out, loss)
+		}
 	}
 }
 

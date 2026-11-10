@@ -6,7 +6,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/internal/delivery"
 	"github.com/hyperscaleav/omniglass/internal/platformmetric"
+	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/writerclass"
 	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
 )
@@ -127,20 +129,24 @@ func (s *Server) committed(l landing) {
 	observeLanding(s.metrics, time.Now(), l)
 }
 
-// The drop reasons, bus-telemetry-drop-count's instances: a write the gateway
-// refused, a delivery count that could not be read, a batch that failed
-// maxTelemetryDeliveries times, and a batch that will never land as sent.
-const (
-	dropRefused    = "refused"
-	dropMetadata   = "metadata"
-	dropMaxDeliver = "max-deliver"
-	dropMalformed  = "malformed"
-)
-
-// drop terminates a telemetry batch and counts it under reason.
-func (s *Server) drop(msg interface{ Term() error }, reason string) {
+// drop terminates a telemetry batch and counts its items as lost at the
+// server's hop (#1659). An undecodable batch has no items it can name, so it
+// counts none; the ledger reads its items missing.
+func (s *Server) drop(msg interface{ Term() error }, items map[delivery.Kind]int) {
 	_ = msg.Term()
-	s.metrics.count(writerclass.BusTelemetryDropCount, reason, 1)
+	s.flow.Lost(items)
+}
+
+// settled counts a landing's items at the server's hop (#1659): the store's
+// outcome for a batch that landed, and for one its receipt held (a copy an
+// earlier delivery landed), every item in and out, so a redelivery reads no
+// loss.
+func (s *Server) settled(ev *ogv1.TelemetryBatch, res storage.LandResult) {
+	if res.Landed {
+		s.flow.Landed(res.Outcome)
+		return
+	}
+	s.flow.Delivered(delivery.BatchItems(ev))
 }
 
 // The request-reply paths, the instances of bus-request-count and
@@ -285,6 +291,9 @@ func (s *Server) Sampler() platformmetric.Sampler {
 			m.max(writerclass.BusWorklistReplyBytesMax, "", float64(b))
 		}
 		s.sampleConsumer(ctx, m)
+		for _, rd := range s.flow.Take().Readings() {
+			m.gauge(rd.Key, rd.Instance, rd.Value)
+		}
 	}
 }
 

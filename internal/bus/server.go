@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/delivery"
 	"github.com/hyperscaleav/omniglass/internal/platformmetric"
 	"github.com/hyperscaleav/omniglass/internal/simhub"
 	"github.com/hyperscaleav/omniglass/internal/storage"
@@ -89,6 +90,7 @@ type Server struct {
 	worklistDone      sync.WaitGroup     // the pool's workers
 	ownStoreDir       string             // non-empty when the Server created (and must clean) it
 	metrics           pipelineMetrics    // the pipeline's platform metrics (#1628)
+	flow              delivery.Flow      // the server hop's delivery, per window (#1659)
 	cons              jetstream.Consumer // the telemetry durable, read for its backlog
 	heartbeatFail     failOnce           // the nodes whose heartbeat write is failing, warned once a run
 }
