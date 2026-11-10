@@ -691,7 +691,7 @@ export interface paths {
         head?: never;
         /**
          * Update a command type
-         * @description Patches a custom command type's label, description, params schema, settle window, or target on either arm (a nil field is unchanged; an empty target clears it; a non-empty arm clears the other). The name is fixed at creation. Official types are read-only. Gated by command_type:update.
+         * @description Patches a custom command type's label, description, params schema, settle window, disruption (disruptive, quiet_seconds, hold_seconds, power_outlet_param, checked together on the merged row), or target on either arm (a nil field is unchanged; an empty target clears it; a non-empty arm clears the other). The name is fixed at creation. Official types are read-only. Gated by command_type:update.
          */
         patch: operations["update-command-type"];
         trace?: never;
@@ -995,6 +995,50 @@ export interface paths {
          */
         post: operations["issue-component-command"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/components/{name}/dependencies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List what a component depends on and what depends on it
+         * @description This component's dependency edges both ways: its upstreams (what it depends on) and its dependents (what depends on it), each of kind power (fed from an outlet of the upstream), host (hosted by it) or path (reached through it). A disruptive command follows host edges down from its target and a power command follows the power edges from its outlet, so these edges are what a reboot or an outlet cycle holds; a path edge holds the dependent's in-band endpoints while its upstream's gate is closed. Containment (a component's parent) is a different fact and never appears here. An edge whose other end is outside the caller's component:read is counted in hidden, never named. Gated by component:read; a component outside it is a non-disclosing 404.
+         */
+        get: operations["list-component-dependencies"];
+        put?: never;
+        /**
+         * Record that a component depends on another
+         * @description Records that this component depends on the upstream: power (fed from the named outlet of the upstream; the outlet is required on this kind and refused on the others), host (hosted by the upstream, so a reboot of the upstream holds this component's endpoints too) or path (reached through the upstream, so while the upstream's gate is closed on this component's node its in-band endpoints are held with an upstream reason naming it). A component never depends on itself, one edge of a kind joins a pair once (a 409 for the second), and an edge whose upstream already depends on this component through edges of the same kind would close a cycle and is a 422. The edge is a fact about the dependent: gated by component:update on it (a dependent the caller reads but cannot write is a 403), with the upstream resolved in the caller's component:read (outside it, a non-disclosing 404).
+         */
+        post: operations["create-component-dependency"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/components/{name}/dependencies/{kind}/{upstream}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a component's dependency on another
+         * @description Removes this component's edge of the kind to the upstream. Gated by component:update on the dependent (read but not writable, a 403). An upstream outside the caller's component:read is a 404, as an edge that does not exist is: the list does not name it either.
+         */
+        delete: operations["delete-component-dependency"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1675,7 +1719,7 @@ export interface paths {
         put?: never;
         /**
          * Preview a driver spec's polls through a node
-         * @description Runs a driver spec's polls once through the node named, against the target its inputs name, and answers with what each poll read: the samples its emits extracted, each emit that did not locate, and an excerpt of the raw answer, masked of every secret the preview used. Nothing is stored. The spec is a stored driver (driver) or an unsaved one (spec); an invalid spec is a 422 listing its findings, as validate-driver-spec gives them. A preview runs a poll that is its own request (http, https, an snmp get, a tcp line); a poll that rides a held session or a bound socket needs an attached endpoint (run-endpoint-poll). A secret input must be one the caller may reveal (secret:reveal), since the preview hands it to the target named. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight is a 429. Audited on the node and on each secret used. Gated by driver:preview.
+         * @description Runs a driver spec's polls once through the node named, against the target its inputs name, and answers with what each poll read: the samples its emits extracted, each emit that did not locate, and an excerpt of the raw answer, masked of every secret the preview used. Nothing is stored. The spec is a stored driver (driver) or an unsaved one (spec); an invalid spec is a 422 listing its findings, as validate-driver-spec gives them. A preview runs a poll that is its own request (http, https, an snmp get, a tcp line); a poll that rides a held session or a bound socket needs an attached endpoint (run-endpoint-poll). A secret input must be one the caller may reveal (secret:reveal), since the preview hands it to the target named. A preview whose transport and target name an endpoint the node holds runs on that endpoint's lane, never beside its other requests and ahead of its scheduled polls; when that endpoint's gate is closed (refused, unreachable, or disrupted by a command), or the probe reads the target's host unreachable, it is a 409 naming the reason, and nothing is sent. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the node's operator lanes, is a 429. Audited on the node and on each secret used. Gated by driver:preview.
          */
         post: operations["preview-driver"];
         delete?: never;
@@ -1751,7 +1795,7 @@ export interface paths {
         head?: never;
         /**
          * Update an endpoint
-         * @description Patches an endpoint's node placement, params, label, or (driver-attached) its connection inputs in place: the host, port and attached secret references, validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
+         * @description Patches an endpoint's node placement, params, label, out-of-band mark, or (driver-attached) its connection inputs in place: the host, port and attached secret references, validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
          */
         patch: operations["update-endpoint"];
         trace?: never;
@@ -1767,7 +1811,7 @@ export interface paths {
         put?: never;
         /**
          * Run an endpoint's poll now
-         * @description Runs one of an attached endpoint's polls now, on the node that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409) and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no node is a 409. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.
+         * @description Runs one of an attached endpoint's polls now, on the node that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run waits for the endpoint's lane on the node, ahead of its scheduled polls and never beside another request to the endpoint; it borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409), a refusal, an unreachable verdict from the endpoint's probe, or a disruptive command (a reboot) the run was queued behind, and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no node is a 409. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the node's operator lanes, is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.
          */
         post: operations["run-endpoint-poll"];
         delete?: never;
@@ -6254,6 +6298,11 @@ export interface components {
              * @description When a node last took it from its queue
              */
             delivered_at?: string;
+            /**
+             * Format: int64
+             * @description How many times a node has taken it: 0 while queued, 1 once delivered, more when it went silent past the redelivery wait and was taken again
+             */
+            delivery_count: number;
             /** @description The driver whose binding renders and settles it, by name */
             driver?: string;
             /** @description The endpoint it rides, by name: the one a node took it over, else the one a node would (its driver binds the type); absent when no endpoint can carry it */
@@ -6267,6 +6316,11 @@ export interface components {
              * @description When its node's execution report landed
              */
             executed_at?: string;
+            /**
+             * Format: date-time
+             * @description When a node first took it from its queue; a redelivery moves delivered_at, not this
+             */
+            first_delivered_at?: string;
             /**
              * Format: int64
              * @description The command's id: with its component, its address (a command has no name)
@@ -6360,6 +6414,13 @@ export interface components {
              */
             readonly $schema?: string;
             description?: string;
+            /** @description The command takes its device down (reboot): its delivery closes the gates of the hold set on the delivering node until each reads up again. The hold set is the target and what it hosts (host dependencies, followed down), less any out-of-band endpoint of the target */
+            disruptive: boolean;
+            /**
+             * Format: int64
+             * @description A disruptive type's backstop: an endpoint with no up verdict this long after delivery reopens anyway, counted as hold-expiry-count. Not the settle window. 0 on a type that is not disruptive
+             */
+            hold_seconds: number;
             /** @description The command type's uuid, the stable form of name */
             id: string;
             label?: string;
@@ -6367,6 +6428,13 @@ export interface components {
             official: boolean;
             /** @description A JSON Schema fragment for the invocation params */
             params_schema?: unknown;
+            /** @description Marks a power command: the name of the param that carries the outlet. Its hold set is the components that outlet feeds (their power dependencies) and what they host, not the target itself. Only on a disruptive type */
+            power_outlet_param?: string;
+            /**
+             * Format: int64
+             * @description A disruptive type's quiet period: how long the node runs no poll, probe or session dial against the held endpoints after delivery. 0 on a type that is not disruptive
+             */
+            quiet_seconds: number;
             /**
              * Format: int64
              * @description How long the device is given to actuate before a mismatch is a failed command
@@ -6424,6 +6492,34 @@ export interface components {
             system_count: number;
             /** @description The primary system's id, the canonical handle */
             system_id?: string;
+        };
+        ComponentDependencyBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ComponentDependencyBody.json
+             */
+            readonly $schema?: string;
+            /** @description Name of the dependent component, the one that goes down with the upstream */
+            component: string;
+            /** @description The dependent component's uuid */
+            component_id: string;
+            /**
+             * Format: date-time
+             * @description When the edge was recorded
+             */
+            created_at: string;
+            /**
+             * @description How it depends: power (fed from an outlet of the upstream, a PDU), host (hosted by the upstream, a codec and the peripheral it reboots, a chassis and its line card) or path (reached through the upstream, a gateway)
+             * @enum {string}
+             */
+            kind: "power" | "host" | "path";
+            /** @description The upstream's outlet that feeds the component; set on a power edge only */
+            outlet?: string;
+            /** @description Name of the component it depends on */
+            upstream: string;
+            /** @description The upstream component's uuid */
+            upstream_id: string;
         };
         ComponentMetricsOutputBody: {
             /**
@@ -6594,12 +6690,26 @@ export interface components {
             readonly $schema?: string;
             /** @description What the command does */
             description?: string;
+            /** @description The command takes its device down (reboot): its delivery closes the gates of the hold set (the target and what it hosts) on the delivering node until each reads up again */
+            disruptive?: boolean;
+            /**
+             * Format: int64
+             * @description A disruptive type's backstop in seconds, greater than quiet_seconds: an endpoint with no up verdict by then reopens anyway, counted. Not the settle window. Only on a disruptive type
+             */
+            hold_seconds?: number;
             /** @description A human label */
             label?: string;
             /** @description The command type name (lowercase kebab) */
             name: string;
             /** @description A JSON Schema fragment for the params */
             params_schema?: unknown;
+            /** @description Marks a power command: the name of the param that carries the outlet, so its hold set is what that outlet feeds. Only on a disruptive type */
+            power_outlet_param?: string;
+            /**
+             * Format: int64
+             * @description A disruptive type's quiet period in seconds: no poll, probe or session dial runs against the held endpoints. Only on a disruptive type
+             */
+            quiet_seconds?: number;
             /**
              * Format: int64
              * @description The actuation window in seconds: how long the device is given to actuate before a mismatch is a failed command. 0 means settle immediately (a fire-and-forget command, or a settleable one judged at the moment of issue). A duration has no negative, so the schema floors it at 0 rather than accepting a value that behaves as 0 with no refusal to say so.
@@ -6609,6 +6719,30 @@ export interface components {
             target_metric_type?: string;
             /** @description The property this command sets, for settlement (at most one target arm) */
             target_property_type?: string;
+        };
+        CreateComponentDependencyInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateComponentDependencyInputBody.json
+             */
+            readonly $schema?: string;
+            /**
+             * @description How it depends: power, host or path
+             * @example power
+             * @enum {string}
+             */
+            kind: "power" | "host" | "path";
+            /**
+             * @description The upstream's outlet that feeds this component: required on a power edge, refused on any other
+             * @example 3
+             */
+            outlet?: string;
+            /**
+             * @description Name or uuid of the component this one depends on, or a dotted address
+             * @example pdu-1
+             */
+            upstream: string;
         };
         CreateComponentFromTemplateInputBody: {
             /**
@@ -6734,6 +6868,8 @@ export interface components {
             label?: string;
             /** @description Node placement, by name or id */
             node?: string;
+            /** @description Mark the endpoint a management path (a BMC, a management port) that answers through a reboot of its device, so a reboot's hold leaves its gate open */
+            out_of_band?: boolean;
             /** @description Address/target settings (jsonb); an attach derives them from the inputs instead */
             params?: unknown;
             /** @description A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set */
@@ -7466,6 +7602,14 @@ export interface components {
             /** @description The short form's threshold: text for a property, a number for a metric */
             value?: unknown;
         };
+        DatabaseSettings: {
+            /**
+             * Format: int64
+             * @description Milliseconds a query may run before the server logs it as slow (its statement's shape and duration, never its values) and counts it; 0 turns the log off
+             * @default 500
+             */
+            slow_query_ms: number;
+        };
         DownloadFileOutputBody: {
             /**
              * Format: uri
@@ -7670,6 +7814,8 @@ export interface components {
             node?: string;
             /** @description The placed node's id; the stable form of node */
             node_id?: string;
+            /** @description A management path to the device (a BMC, a management port) that answers through a reboot of it: a reboot's hold leaves this endpoint's gate open. A power command on the outlet feeding the device still holds it */
+            out_of_band: boolean;
             /** @description The address/target settings (jsonb) */
             params?: unknown;
             /** @description The transport name (the wire this endpoint speaks over), from the code registry */
@@ -8499,6 +8645,25 @@ export interface components {
             commands: components["schemas"]["CommandBody"][] | null;
             /** @description The component, by name */
             component: string;
+        };
+        ListComponentDependenciesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListComponentDependenciesOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The component, as addressed */
+            component: string;
+            /** @description What depends on this component, ordered by kind then dependent name */
+            dependents: components["schemas"]["ComponentDependencyBody"][] | null;
+            /**
+             * Format: int64
+             * @description How many more edges this component has whose other end is outside the caller's component:read: counted, never named
+             */
+            hidden: number;
+            /** @description What this component depends on, ordered by kind then upstream name */
+            upstreams: components["schemas"]["ComponentDependencyBody"][] | null;
         };
         ListComponentMembershipsOutputBody: {
             /**
@@ -10102,6 +10267,8 @@ export interface components {
             authenticated?: components["schemas"]["ReachVerdictBody"];
             /** @description The endpoint's derived name (its transport) */
             endpoint: string;
+            /** @description Every reason other than a refusal the endpoint's gate holds (the gate is a reason set, #1650), most causal first as the node published them: while any holds, due polls are held (poll-held-count), and a command or run now answers at once with the reason. Absent when none holds; a refusal is rejection */
+            gate_reasons?: components["schemas"]["ReachGateReasonBody"][] | null;
             /** @description The recent verdict transitions, oldest first, for the availability strip */
             history: components["schemas"]["ReachHistoryBody"][] | null;
             /** @description The endpoint's uuid, the address its custom methods take (POST /endpoints/{endpoint}:retry) */
@@ -10131,6 +10298,19 @@ export interface components {
             verdict: components["schemas"]["ReachVerdictBody"];
             /** @description A webhook endpoint's block (#1024): a push endpoint has no ladder and reads last_seen (last heard) in place of a verdict, never down for silence; its scheme, whether it is signed, its token's secret and what its scheme refused. Absent on every dialed transport */
             webhook?: components["schemas"]["EndpointWebhookBody"];
+        };
+        ReachGateReasonBody: {
+            /** @description An upstream reason only: the name of the component source names, when the caller may read it; absent otherwise, and for every other kind */
+            component?: string;
+            /** @description The reason's kind: disrupted, a disruptive command (a reboot) delivered to the endpoint's component, which lifts on the endpoint's first up verdict after the command type's quiet period or at its hold backstop; unreachable, two consecutive down verdicts from the endpoint's reachability probe, which lifts on its next up verdict; upstream, a component the endpoint's component is reached through (a path dependency, #1652) has a closed gate on this node, which holds the endpoint's probes as well as its polls until the upstream opens, then lifts on the endpoint's own next up verdict (at once when it has no probe) */
+            kind: string;
+            /**
+             * Format: date-time
+             * @description When the reason began: for disrupted, the command's delivery; for unreachable, the first of the down verdicts that closed the gate; for upstream, when the upstream's gate closed this endpoint's
+             */
+            since: string;
+            /** @description What added the reason: for disrupted, the command (command-<id>); for unreachable, the reachability probe's task id; for upstream, the uuid of the component it is held by: the root of the chain (a gateway behind a gateway names the one whose own gate is closed), or the direct upstream once that one opens and waits on its own probe */
+            source: string;
         };
         ReachHistoryBody: {
             /** Format: date-time */
@@ -10988,6 +11168,7 @@ export interface components {
         };
         Settings: {
             collection: components["schemas"]["CollectionSettings"];
+            database: components["schemas"]["DatabaseSettings"];
             keybindings: components["schemas"]["Keybindings"];
             label: components["schemas"]["LabelSettings"];
             notification: components["schemas"]["NotificationSettings"];
@@ -12042,10 +12223,24 @@ export interface components {
             readonly $schema?: string;
             /** @description What the command does */
             description?: string;
+            /** @description Whether the command takes its device down; checked with quiet_seconds and hold_seconds on the merged row */
+            disruptive?: boolean;
+            /**
+             * Format: int64
+             * @description A disruptive type's backstop in seconds, greater than quiet_seconds; not the settle window
+             */
+            hold_seconds?: number;
             /** @description A human label */
             label?: string;
             /** @description A JSON Schema fragment (replaces wholesale) */
             params_schema?: unknown;
+            /** @description The param that carries a power command's outlet (empty clears it); only on a disruptive type, checked on the merged row */
+            power_outlet_param?: string;
+            /**
+             * Format: int64
+             * @description A disruptive type's quiet period in seconds
+             */
+            quiet_seconds?: number;
             /**
              * Format: int64
              * @description The actuation window in seconds, floored at 0 (a duration has no negative; 0 means settle immediately)
@@ -12117,6 +12312,8 @@ export interface components {
             label?: string;
             /** @description Reassign the node placement, by name or id */
             node?: string;
+            /** @description Mark the endpoint a management path that answers through a reboot of its device (true), or an ordinary one (false). Omit to leave it alone */
+            out_of_band?: boolean;
             /** @description Replace the address/target settings (jsonb). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs */
             params?: unknown;
             /** @description The transport: a driver-attached endpoint takes only one its driver speaks */
@@ -14791,6 +14988,108 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["CommandBody"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-component-dependencies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListComponentDependenciesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-component-dependency": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Name of the dependent component, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateComponentDependencyInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComponentDependencyBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-component-dependency": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Name of the dependent component, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
+                name: string;
+                /** @description The edge's kind */
+                kind: "power" | "host" | "path";
+                /** @description Name or uuid of the upstream component, or a dotted address */
+                upstream: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {

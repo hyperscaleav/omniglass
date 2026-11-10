@@ -126,14 +126,14 @@ func addMemberTx(ctx context.Context, q txQuerier, systemID, componentID string)
 	// when this component has no membership yet. The platform guard (#1625)
 	// rides the same statement, so a create into a system pays no extra round
 	// trip for it: the platform system admits no member this way (node
-	// registration writes its own), and a node's platform component joins no
-	// other system. The insert lands only when neither holds.
+	// registration and a server's boot write their own), and a node's or a
+	// server's platform component joins no other system. The insert lands only when neither holds.
 	var platformSystem, platformComponent bool
 	if err := q.QueryRow(ctx, `
 		with guard as (
 			select exists(select 1 from system s join system_type st on st.id = s.system_type_id
 				where s.id = $1::uuid and st.namespace = 'og' and st.name = $3) as platform_system,
-			exists(select 1 from node where platform_component_id = $2::uuid) as platform_component
+			`+platformComponentExists("$2")+` as platform_component
 		), ins as (
 			insert into system_member (system_id, component_id, is_primary)
 			select $1::uuid, $2::uuid, not exists (select 1 from system_member where component_id = $2::uuid)

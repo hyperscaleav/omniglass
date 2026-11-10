@@ -1153,6 +1153,35 @@
      }
     ]
    },
+   "platform_server": {
+    "columns": [
+     {
+      "name": "name",
+      "type": "text",
+      "nullable": false,
+      "pk": true
+     },
+     {
+      "name": "platform_component_id",
+      "type": "uuid",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "component.id"
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     }
+    ],
+    "uniques": [
+     {
+      "name": "platform_server_platform_component_id_key",
+      "definition": "CREATE UNIQUE INDEX platform_server_platform_component_id_key ON public.platform_server USING btree (platform_component_id)"
+     }
+    ]
+   },
    "sim_impairment": {
     "columns": [
      {
@@ -2250,6 +2279,67 @@
      }
     ]
    },
+   "component_dependency": {
+    "columns": [
+     {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false,
+      "default": "uuidv7()",
+      "pk": true
+     },
+     {
+      "name": "component_id",
+      "type": "uuid",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "component.id"
+     },
+     {
+      "name": "upstream_id",
+      "type": "uuid",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "component.id"
+     },
+     {
+      "name": "kind",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "outlet",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     }
+    ],
+    "checks": [
+     {
+      "name": "component_dependency_kind_check",
+      "expr": "CHECK ((kind = ANY (ARRAY['power'::text, 'host'::text, 'path'::text])))"
+     },
+     {
+      "name": "component_dependency_outlet_check",
+      "expr": "CHECK ((((kind = 'power'::text) AND (outlet IS NOT NULL) AND ((char_length(outlet) \u003e= 1) AND (char_length(outlet) \u003c= 64))) OR ((kind \u003c\u003e 'power'::text) AND (outlet IS NULL))))"
+     },
+     {
+      "name": "component_dependency_self_check",
+      "expr": "CHECK ((component_id \u003c\u003e upstream_id))"
+     }
+    ],
+    "uniques": [
+     {
+      "name": "component_dependency_edge_key",
+      "definition": "CREATE UNIQUE INDEX component_dependency_edge_key ON public.component_dependency USING btree (component_id, upstream_id, kind)"
+     }
+    ]
+   },
    "endpoint": {
     "columns": [
      {
@@ -2324,6 +2414,12 @@
       "type": "bigint",
       "nullable": false,
       "default": "0"
+     },
+     {
+      "name": "out_of_band",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
      }
     ],
     "uniques": [
@@ -4345,6 +4441,17 @@
       "nullable": true,
       "fk": true,
       "fk_target": "event.id"
+     },
+     {
+      "name": "first_dispatched_at",
+      "type": "timestamp with time zone",
+      "nullable": true
+     },
+     {
+      "name": "delivery_count",
+      "type": "integer",
+      "nullable": false,
+      "default": "0"
      }
     ],
     "checks": [
@@ -4437,9 +4544,36 @@
       "type": "text",
       "nullable": false,
       "default": "'local'::text"
+     },
+     {
+      "name": "disruptive",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
+     },
+     {
+      "name": "quiet_seconds",
+      "type": "integer",
+      "nullable": false,
+      "default": "0"
+     },
+     {
+      "name": "hold_seconds",
+      "type": "integer",
+      "nullable": false,
+      "default": "0"
+     },
+     {
+      "name": "power_outlet_param",
+      "type": "text",
+      "nullable": true
      }
     ],
     "checks": [
+     {
+      "name": "command_type_disruption_check",
+      "expr": "CHECK (((quiet_seconds \u003e= 0) AND (hold_seconds \u003e= 0) AND (disruptive OR ((quiet_seconds = 0) AND (hold_seconds = 0))) AND ((NOT disruptive) OR (hold_seconds \u003e quiet_seconds))))"
+     },
      {
       "name": "command_type_namespace_check",
       "expr": "CHECK ((namespace ~ '^[a-z0-9][a-z0-9-]*$'::text))"
@@ -4447,6 +4581,10 @@
      {
       "name": "command_type_og_official_check",
       "expr": "CHECK (((namespace \u003c\u003e 'og'::text) OR official))"
+     },
+     {
+      "name": "command_type_power_outlet_param_check",
+      "expr": "CHECK (((power_outlet_param IS NULL) OR (disruptive AND ((char_length(power_outlet_param) \u003e= 1) AND (char_length(power_outlet_param) \u003c= 64)))))"
      },
      {
       "name": "command_type_target_arc_check",

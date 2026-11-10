@@ -231,6 +231,13 @@ products:
     vendor_id: omniglass
     kind: app
     component_type: omniglass-node
+  # Every server's platform component is one of these; the server's boot
+  # creates it (#1627).
+  - id: omniglass-server
+    label: Omniglass Server
+    vendor_id: omniglass
+    kind: app
+    component_type: omniglass-server
   # The generic floor.
   - id: generic-device
     label: Generic Device

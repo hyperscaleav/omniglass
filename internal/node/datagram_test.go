@@ -260,7 +260,7 @@ func TestAUDPTerminalReplyGatesTheEndpoint(t *testing.T) {
 	if _, err := collectProbe(t.Context(), runner, task, m); err != nil {
 		t.Fatal(err)
 	}
-	gt, ok := m.blocked("ep-1", rungResponsive)
+	gt, ok := m.refusedAt("ep-1", rungResponsive)
 	if !ok || gt.class != driver.ClassAuth || gt.rung != rungResponsive {
 		t.Fatalf("gate = %+v, %v; want the transport rung gated, class auth", gt, ok)
 	}
@@ -519,7 +519,7 @@ func TestAUDPEndpointArmsNothingBeneathAGate(t *testing.T) {
 	}
 	held := rejection.Gate{Rung: string(rungResponsive), Class: driver.ClassAuth, Fingerprint: "fp-1"}.String()
 	m.reconcile(gated("fp-1", held))
-	if _, ok := m.blocked("ep-1", rungResponsive); !ok {
+	if _, ok := m.refusedAt("ep-1", rungResponsive); !ok {
 		t.Fatal("the carried-back gate was not adopted")
 	}
 	time.Sleep(300 * time.Millisecond)

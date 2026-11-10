@@ -30,6 +30,9 @@ type Store interface {
 	// written on its platform component.
 	NodeCheckins(ctx context.Context) ([]storage.NodeCheckin, error)
 	RecordPlatformMetrics(ctx context.Context, rows []storage.PlatformMetric) error
+	// CommandQueueHealth is the command queue health timer's read (#1626):
+	// every node's queue, and the window's counts since the previous read.
+	CommandQueueHealth(ctx context.Context, since time.Time) (storage.CommandQueueRead, error)
 	// RecordOrphanedBatches counts a node's batches the confinement fence
 	// orphaned (#1200), once per flush rather than per batch.
 	RecordOrphanedBatches(ctx context.Context, name string, batches int64, at time.Time) error
