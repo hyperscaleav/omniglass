@@ -132,6 +132,7 @@ type pushServer struct {
 	auths    []string
 	rejected bool
 	down     bool
+	gone     map[string]bool
 }
 
 func (s *pushServer) handler() http.Handler {
@@ -156,6 +157,10 @@ func (s *pushServer) handler() http.Handler {
 			return
 		}
 		s.pushes = append(s.pushes, b)
+		if ref, _ := b["owner"].(map[string]any)["ref"].(string); s.gone[ref] {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
 		if s.rejected {
 			_ = json.NewEncoder(w).Encode(map[string]any{"rejected": []map[string]string{{"name": "booking-count", "reason": "no such metric"}}})
 			return
@@ -232,6 +237,27 @@ func TestPushFaceRereadsItsGrantAfterAFailure(t *testing.T) {
 	}
 	if refs := srv.refs(); refs[len(refs)-1] != "sys-9" {
 		t.Errorf("pushed to %v after a failure, want the grant read again (sys-9)", refs)
+	}
+}
+
+// A grant outlives the system it names (deleting a system leaves the grant),
+// so a push for that system is refused on every tick; it costs only its own
+// push, and every other system the grant names is still pushed for (#1743).
+func TestPushFaceKeepsPushingPastAGoneSystem(t *testing.T) {
+	srv := &pushServer{grants: []map[string]string{
+		{"scope_kind": "system", "scope_id": "sys-gone"},
+		{"scope_kind": "system", "scope_id": "sys-1"},
+	}, gone: map[string]bool{"sys-gone": true}}
+	ts := httptest.NewServer(srv.handler())
+	defer ts.Close()
+	d := bookingService(t, time.Date(2026, 10, 29, 9, 30, 0, 0, time.UTC))
+	d.SetPushCredential(ts.URL, "tok")
+	err := d.PushOnce(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "sys-gone") {
+		t.Fatalf("push = %v, want the gone system's refusal named", err)
+	}
+	if got := strings.Join(srv.refs(), ","); got != "sys-gone,sys-1" {
+		t.Errorf("pushed to %s, want sys-gone,sys-1: the live system still pushed", got)
 	}
 }
 

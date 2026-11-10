@@ -555,7 +555,9 @@ its clock. The face holds a bearer token for a principal granted `telemetry:push
 systems; it reads them off its own grant (`GET /auth/me`), renders each one's batch, and posts it
 through `POST /telemetry:push`, then does it again on every tick. A failed push (a server still
 coming up, an item the server refused) drops the grant it read, so the next tick reads it again,
-and it is logged with the device and the reason, never the token. The face is a primitive of the
+and it is logged with the device and the reason, never the token. Each system is pushed on its own:
+a grant outlives the system it names, so a refused system costs only its own push, and one tick's
+failures log once, the first named and the rest counted. The face is a primitive of the
 engine, so a pusher is a profile, not code: the shipped `booking-service` is the first, its body
 reading one meeting day (`configuration.calendar.bookings`, windows in UTC) through the
 `bookingsAt` template function.

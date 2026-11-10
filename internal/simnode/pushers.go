@@ -41,12 +41,16 @@ func ParsePushers(s string) ([]Pusher, error) {
 	}
 	var out []Pusher
 	seen := map[string]bool{}
-	for _, part := range strings.Split(s, ",") {
+	for i, part := range strings.Split(s, ",") {
 		name, rest, ok := strings.Cut(part, "=")
+		if !ok {
+			// With no "=" the whole part, token included, would be the name:
+			// place it by position, never echo it.
+			return nil, fmt.Errorf("sim: %s: pusher %d is not name=profile:token", PushersEnv, i+1)
+		}
 		prof, token, ok2 := strings.Cut(rest, ":")
-		if !ok || !ok2 || name == "" || prof == "" || token == "" {
-			// The part may hold a token: name the pusher, never echo the part.
-			return nil, fmt.Errorf("sim: %s: a pusher %q is not name=profile:token", PushersEnv, name)
+		if !ok2 || name == "" || prof == "" || token == "" {
+			return nil, fmt.Errorf("sim: %s: pusher %d (%q) is not name=profile:token", PushersEnv, i+1, name)
 		}
 		if seen[name] {
 			return nil, fmt.Errorf("sim: %s: pusher %q is given twice", PushersEnv, name)

@@ -39,6 +39,21 @@ func TestPushersRoundTrip(t *testing.T) {
 	}
 }
 
+// A malformed pusher's error never carries its token (#1743): a part missing
+// its "=" is all name, profile and token at once, so naming it would print the
+// secret into the emulator's log.
+func TestParsePushersKeepsTheTokenOutOfItsError(t *testing.T) {
+	for _, bad := range []string{"booking-service:ogp_0a0b0c0d_c2VjcmV0", "ok=booking-service:t,booking-service:ogp_0a0b0c0d_c2VjcmV0"} {
+		_, err := ParsePushers(bad)
+		if err == nil {
+			t.Fatalf("ParsePushers(%q) took it, want refused", bad)
+		}
+		if strings.Contains(err.Error(), "c2VjcmV0") {
+			t.Errorf("ParsePushers(%q) = %v, echoes the token", bad, err)
+		}
+	}
+}
+
 // grantServer is a server's two push-face routes, granting each token the
 // one system named for it and recording which token pushed for which system.
 type grantServer struct {

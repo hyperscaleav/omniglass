@@ -240,23 +240,46 @@ func (d *Device) pushOwners(ctx context.Context, server, token string, owners []
 		d.push.owners = owners
 		d.push.mu.Unlock()
 	}
+	// Each system is pushed for on its own: a grant outlives the system it
+	// names, so one refused system must not cost the others their push. The
+	// failures collapse to one error, the first named and the rest counted.
+	var first error
+	failed := 0
 	for _, owner := range owners {
-		body, err := d.RenderPush(owner)
-		if err != nil {
-			return err
+		if err := d.pushOwner(ctx, server, token, owner); err != nil {
+			if first == nil {
+				first = err
+			}
+			failed++
 		}
-		var out struct {
-			Rejected []struct {
-				Name   string `json:"name"`
-				Reason string `json:"reason"`
-			} `json:"rejected"`
-		}
-		if err := pushCall(ctx, server, token, http.MethodPost, "/api/v1/telemetry:push", body, &out); err != nil {
-			return err
-		}
-		if len(out.Rejected) > 0 {
-			return fmt.Errorf("the server rejected %s for %s: %s", out.Rejected[0].Name, owner, out.Rejected[0].Reason)
-		}
+	}
+	switch {
+	case failed == 0:
+		return nil
+	case failed == 1:
+		return first
+	default:
+		return fmt.Errorf("%w (and %d more of %d systems)", first, failed-1, len(owners))
+	}
+}
+
+// pushOwner renders and pushes one system's batch.
+func (d *Device) pushOwner(ctx context.Context, server, token, owner string) error {
+	body, err := d.RenderPush(owner)
+	if err != nil {
+		return fmt.Errorf("render for %s: %w", owner, err)
+	}
+	var out struct {
+		Rejected []struct {
+			Name   string `json:"name"`
+			Reason string `json:"reason"`
+		} `json:"rejected"`
+	}
+	if err := pushCall(ctx, server, token, http.MethodPost, "/api/v1/telemetry:push", body, &out); err != nil {
+		return fmt.Errorf("push for %s: %w", owner, err)
+	}
+	if len(out.Rejected) > 0 {
+		return fmt.Errorf("the server rejected %s for %s: %s", out.Rejected[0].Name, owner, out.Rejected[0].Reason)
 	}
 	return nil
 }
