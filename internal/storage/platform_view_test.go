@@ -411,3 +411,49 @@ func TestPlatformViewGroupsCarryNoFoldedDropCount(t *testing.T) {
 		}
 	}
 }
+
+// TestPlatformViewPipelineNewestIsTheCurrentWindow: a node that stopped
+// reporting twenty minutes ago keeps its lossy last window as its newest
+// sample. Past two report windows (the default 60 s, so 2 minutes) that window
+// is not the pipeline's newest: the hop's and the end to end's newest read the
+// node still reporting, while the stopped node's loss still counts in the
+// last hour.
+func TestPlatformViewPipelineNewestIsTheCurrentWindow(t *testing.T) {
+	t.Parallel()
+	f := newPlatformViewFixture(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	var ms []storage.PlatformMetric
+	ms = append(ms, deliveryWindow(f.alpha.ID, "metric", 10, 10, now.Add(-30*time.Second))...)
+	ms = append(ms, deliveryWindow(f.bravo.ID, "metric", 10, 0, now.Add(-20*time.Minute))...)
+	if err := f.gw.RecordPlatformMetrics(f.ctx, ms); err != nil {
+		t.Fatalf("record delivery windows: %v", err)
+	}
+	v, err := f.gw.PlatformView(f.ctx, all, all, all)
+	if err != nil {
+		t.Fatalf("platform view: %v", err)
+	}
+	if v.Pipeline == nil {
+		t.Fatal("pipeline = nil for an all-scope component read")
+	}
+	m := pipelineKind(t, pipelineHop(t, v.Pipeline, delivery.Node).Kinds, delivery.Metric)
+	if m.Newest.In != 10 || m.Newest.Out != 10 || ratio(m.Newest.Loss) != 0 {
+		t.Errorf("node metric newest = %+v loss %v, want edge-alpha's current 10 of 10, 0", m.Newest, ratio(m.Newest.Loss))
+	}
+	if m.LastHour.In != 20 || m.LastHour.Out != 10 {
+		t.Errorf("node metric last hour = %+v, want both nodes' 20 in, 10 out", m.LastHour)
+	}
+	if e := pipelineEnd(t, v.Pipeline.EndToEnd, delivery.Metric); ratio(e.Newest) != 0 {
+		t.Errorf("metric end to end newest = %v, want 0: edge-bravo's last window is not current", ratio(e.Newest))
+	}
+}
+
+func pipelineEnd(t *testing.T, ends []storage.PlatformPipelineEnd, kind delivery.Kind) storage.PlatformPipelineEnd {
+	t.Helper()
+	for _, e := range ends {
+		if e.Kind == kind {
+			return e
+		}
+	}
+	t.Fatalf("kind %s absent from the end to end: %+v", kind, ends)
+	return storage.PlatformPipelineEnd{}
+}

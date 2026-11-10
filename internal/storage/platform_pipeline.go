@@ -150,7 +150,9 @@ type PlatformPipeline struct {
 
 // pipelineSample is one series as the pipeline reads it: its component and
 // that component's class, its key and instance, its newest sample and the sum
-// of its samples over the last hour.
+// of its samples over the last hour. Stale marks a newest sample past the
+// window horizon (platformWindowHorizon): a producer that stopped keeps its
+// last window as its newest forever, and that window is not current.
 type pipelineSample struct {
 	ComponentID   string
 	ComponentName string
@@ -160,6 +162,7 @@ type pipelineSample struct {
 	Newest        float64
 	NewestAt      time.Time
 	HourSum       float64
+	Stale         bool
 }
 
 // pipelineTally is a cell being summed: the counts, and the producer's own
@@ -209,7 +212,8 @@ func count(v float64) uint64 {
 // instance, and to no hop otherwise. A kind with no in series at a hop has no
 // row there. A component's newest ratio is its own loss key as written, read
 // only when something went in; every ratio across components or windows is
-// composed from the summed counts.
+// composed from the summed counts. A stale newest window (pipelineSample.Stale)
+// adds nothing to the newest figures; its last hour still counts.
 func composePipeline(hops []PlatformPipelineHop, samples []pipelineSample) PlatformPipeline {
 	type compKind struct {
 		comp string
@@ -255,11 +259,15 @@ func composePipeline(hops []PlatformPipelineHop, samples []pipelineSample) Platf
 			}
 			by[i].names[s.ComponentID] = s.ComponentName
 			at := s.NewestAt
+			newest := count(s.Newest)
+			if s.Stale {
+				newest = 0
+			}
 			if s.Key == writerclass.DeliveryInCount {
-				t.newestIn, t.hourIn = count(s.Newest), count(s.HourSum)
+				t.newestIn, t.hourIn = newest, count(s.HourSum)
 				t.newestAt = &at
 			} else {
-				t.newestOut, t.hourOut = count(s.Newest), count(s.HourSum)
+				t.newestOut, t.hourOut = newest, count(s.HourSum)
 			}
 		}
 	}
@@ -395,7 +403,9 @@ const pipelineHour = time.Hour
 // raw rows did). Per (component, key, instance) the series with the newest
 // sample is read, across the provenances that report reality. $3, $4 and $5
 // are the bucket grid's (series_buckets.go): the report window, the hour
-// rounded up to whole windows, and the in-count key's retention.
+// rounded up to whole windows, and the in-count key's retention; $6 is the
+// window horizon past which a newest sample is stale (platformWindowHorizon),
+// read on the database's clock as platformFigures reads it.
 func (p *PG) platformPipeline(ctx context.Context) (*PlatformPipeline, error) {
 	collection, err := p.CollectionSettings(ctx)
 	if err != nil {
@@ -421,7 +431,8 @@ func (p *PG) platformPipeline(ctx context.Context) (*PlatformPipeline, error) {
 		)
 		select distinct on (s.component_id, mt.name, s.instance)
 		       s.component_id::text, c.name, comps.class, mt.name, s.instance, n.value, n.ts,
-		       coalesce((select sum(h.value) from (`+read+`) h), 0)
+		       coalesce((select sum(h.value) from (`+read+`) h), 0),
+		       n.ts < now() - $6::interval
 		from metric_series s
 		join comps on comps.id = s.component_id
 		join component c on c.id = s.component_id
@@ -431,7 +442,8 @@ func (p *PG) platformPipeline(ctx context.Context) (*PlatformPipeline, error) {
 		  and mt.namespace = 'og' and mt.name = any($1::text[])
 		  and s.provenance in `+measuredProvenance+`
 		order by s.component_id, mt.name, s.instance, n.ts desc, n.id desc`,
-		pipelineKeys, s.Retention.MetricDays, res.Seconds(), span.Seconds(), days)
+		pipelineKeys, s.Retention.MetricDays, res.Seconds(), span.Seconds(), days,
+		platformWindowHorizon(collection.ReportSeconds))
 	if err != nil {
 		return nil, fmt.Errorf("storage: platform pipeline: %w", err)
 	}
@@ -439,7 +451,7 @@ func (p *PG) platformPipeline(ctx context.Context) (*PlatformPipeline, error) {
 	var samples []pipelineSample
 	for rows.Next() {
 		var x pipelineSample
-		if err := rows.Scan(&x.ComponentID, &x.ComponentName, &x.Class, &x.Key, &x.Instance, &x.Newest, &x.NewestAt, &x.HourSum); err != nil {
+		if err := rows.Scan(&x.ComponentID, &x.ComponentName, &x.Class, &x.Key, &x.Instance, &x.Newest, &x.NewestAt, &x.HourSum, &x.Stale); err != nil {
 			return nil, fmt.Errorf("storage: platform pipeline: %w", err)
 		}
 		samples = append(samples, x)

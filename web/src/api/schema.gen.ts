@@ -9705,7 +9705,7 @@ export interface components {
             last_hour?: number;
             /**
              * Format: double
-             * @description The newest windows' end to end loss
+             * @description The current newest windows' end to end loss
              */
             newest?: number;
         };
@@ -9722,7 +9722,7 @@ export interface components {
             last_hour?: number;
             /**
              * Format: double
-             * @description The newest windows' end to end loss
+             * @description The current newest windows' end to end loss
              */
             newest?: number;
         };
@@ -9775,22 +9775,22 @@ export interface components {
             kind: "metric" | "property" | "event" | "log";
             /** @description Every window over the last hour, summed */
             last_hour: components["schemas"]["PlatformPipelineFigureBody"];
-            /** @description Each component's newest report window, summed */
+            /** @description Each component's newest report window while it is current (within two report windows), summed; a component that stopped reporting adds nothing here, only to the last hour */
             newest: components["schemas"]["PlatformPipelineFigureBody"];
             /**
              * Format: date-time
-             * @description When the newest of those windows was written
+             * @description When the newest window was written, current or not
              */
             newest_at?: string;
         };
         PlatformPipelineSpanBody: {
             /** @description Every window over the last hour, summed */
             last_hour: components["schemas"]["PlatformPipelineFigureBody"];
-            /** @description Each component's newest report window, summed */
+            /** @description Each component's newest report window while it is current (within two report windows), summed; a component that stopped reporting adds nothing here, only to the last hour */
             newest: components["schemas"]["PlatformPipelineFigureBody"];
             /**
              * Format: date-time
-             * @description When the newest of those windows was written
+             * @description When the newest window was written, current or not
              */
             newest_at?: string;
         };

@@ -7338,7 +7338,7 @@ components:
           format: double
           type: number
         newest:
-          description: The newest windows' end to end loss
+          description: The current newest windows' end to end loss
           format: double
           type: number
       type: object
@@ -7358,7 +7358,7 @@ components:
           format: double
           type: number
         newest:
-          description: The newest windows' end to end loss
+          description: The current newest windows' end to end loss
           format: double
           type: number
       required:
@@ -7458,9 +7458,9 @@ components:
           description: Every window over the last hour, summed
         newest:
           $ref: "#/components/schemas/PlatformPipelineFigureBody"
-          description: Each component's newest report window, summed
+          description: Each component's newest report window while it is current (within two report windows), summed; a component that stopped reporting adds nothing here, only to the last hour
         newest_at:
-          description: When the newest of those windows was written
+          description: When the newest window was written, current or not
           format: date-time
           type: string
       required:
@@ -7476,9 +7476,9 @@ components:
           description: Every window over the last hour, summed
         newest:
           $ref: "#/components/schemas/PlatformPipelineFigureBody"
-          description: Each component's newest report window, summed
+          description: Each component's newest report window while it is current (within two report windows), summed; a component that stopped reporting adds nothing here, only to the last hour
         newest_at:
-          description: When the newest of those windows was written
+          description: When the newest window was written, current or not
           format: date-time
           type: string
       required:

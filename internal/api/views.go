@@ -146,15 +146,15 @@ type platformPipelineFigureBody struct {
 }
 
 type platformPipelineSpanBody struct {
-	Newest   platformPipelineFigureBody `json:"newest" doc:"Each component's newest report window, summed"`
-	NewestAt *time.Time                 `json:"newest_at,omitempty" doc:"When the newest of those windows was written"`
+	Newest   platformPipelineFigureBody `json:"newest" doc:"Each component's newest report window while it is current (within two report windows), summed; a component that stopped reporting adds nothing here, only to the last hour"`
+	NewestAt *time.Time                 `json:"newest_at,omitempty" doc:"When the newest window was written, current or not"`
 	LastHour platformPipelineFigureBody `json:"last_hour" doc:"Every window over the last hour, summed"`
 }
 
 type platformPipelineKindBody struct {
 	Kind     string                     `json:"kind" enum:"metric,property,event,log" doc:"The kind of item, the series instance"`
-	Newest   platformPipelineFigureBody `json:"newest" doc:"Each component's newest report window, summed"`
-	NewestAt *time.Time                 `json:"newest_at,omitempty" doc:"When the newest of those windows was written"`
+	Newest   platformPipelineFigureBody `json:"newest" doc:"Each component's newest report window while it is current (within two report windows), summed; a component that stopped reporting adds nothing here, only to the last hour"`
+	NewestAt *time.Time                 `json:"newest_at,omitempty" doc:"When the newest window was written, current or not"`
 	LastHour platformPipelineFigureBody `json:"last_hour" doc:"Every window over the last hour, summed"`
 }
 
@@ -177,13 +177,13 @@ type platformPipelineHopBody struct {
 }
 
 type platformPipelineEndBody struct {
-	Newest   *float64 `json:"newest,omitempty" doc:"The newest windows' end to end loss"`
+	Newest   *float64 `json:"newest,omitempty" doc:"The current newest windows' end to end loss"`
 	LastHour *float64 `json:"last_hour,omitempty" doc:"The last hour's end to end loss"`
 }
 
 type platformPipelineEndKindBody struct {
 	Kind     string   `json:"kind" enum:"metric,property,event,log" doc:"The kind of item"`
-	Newest   *float64 `json:"newest,omitempty" doc:"The newest windows' end to end loss"`
+	Newest   *float64 `json:"newest,omitempty" doc:"The current newest windows' end to end loss"`
 	LastHour *float64 `json:"last_hour,omitempty" doc:"The last hour's end to end loss"`
 }
 

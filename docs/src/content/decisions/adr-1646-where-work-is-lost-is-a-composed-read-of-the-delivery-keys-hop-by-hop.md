@@ -18,7 +18,10 @@ refs: [1646, 1659, 1641, 1644, 1623, 1692, 1693]
      components' summed counts (the newest window and the last hour), never an average or sum of
      their ratios; the end to end per kind is `1 - prod(1 - loss)` over the hops that kind crossed
      (`delivery.EndToEnd`). Nothing in is no ratio, and a kind with no series at a hop is no row:
-     neither reads 0.
+     neither reads 0. A component's newest window counts toward the newest figures only while it
+     is current, within two report windows (`platformWindowHorizon`, the horizon a window count
+     already reads by): a node that stopped, or a server back under a new name, keeps its last
+     window as its newest sample forever, and that window counts in the hour, not as now.
   3. **A node's Loss is a composed field, not a key group.** The issue placed the node's delivery
      as a column group of keys. The page shows one figure per node instead, the end to end over the
      last hour of the hops its own component records, every kind summed, and the view says which

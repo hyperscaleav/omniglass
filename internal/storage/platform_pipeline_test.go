@@ -200,3 +200,47 @@ func lossText(f *float64) any {
 	}
 	return *f
 }
+
+// TestPipelineNewestLeavesOutAWindowPastTheHorizon: a node that stopped
+// reporting keeps its last window as its newest sample forever. That window
+// is not the hop's newest: the hop's newest and the end to end's sum only the
+// windows still current, while the stopped node's last hour still counts and
+// its row still reads, with no newest figure of its own.
+func TestPipelineNewestLeavesOutAWindowPastTheHorizon(t *testing.T) {
+	t.Parallel()
+	at := time.Date(2026, 11, 10, 12, 0, 0, 0, time.UTC)
+	var samples []pipelineSample
+	samples = append(samples, pipelineWindow("n1", "edge-alpha", PlatformClassNode, "metric", 10, 10, 30, 30, at)...)
+	gone := pipelineWindow("n2", "edge-bravo", PlatformClassNode, "metric", 10, 0, 10, 0, at.Add(-30*time.Minute))
+	for i := range gone {
+		gone[i].Stale = true
+	}
+	samples = append(samples, gone...)
+	p := composePipeline(PlatformPipelineHops, samples)
+
+	node := hopOf(t, p, delivery.Node)
+	m, ok := kindOf(node.Kinds, delivery.Metric)
+	if !ok {
+		t.Fatalf("node hop kinds = %+v, want a metric row", node.Kinds)
+	}
+	if m.Newest.In != 10 || m.Newest.Out != 10 || m.Newest.Loss == nil || *m.Newest.Loss != 0 {
+		t.Errorf("node metric newest = %+v (loss %v), want edge-alpha's current 10 of 10, 0", m.Newest, lossText(m.Newest.Loss))
+	}
+	if m.LastHour.In != 40 || m.LastHour.Out != 30 {
+		t.Errorf("node metric last hour = %+v, want both nodes' hour, 40 in, 30 out", m.LastHour)
+	}
+	if e, ok := endOf(p.EndToEnd, delivery.Metric); !ok || e.Newest == nil || *e.Newest != 0 {
+		t.Errorf("metric end to end newest = %+v, want 0: the stopped node's last window is not current", e)
+	}
+	if len(node.ByComponent) != 2 {
+		t.Fatalf("by component = %+v, want both nodes", node.ByComponent)
+	}
+	bravo := node.ByComponent[1]
+	bm, _ := kindOf(bravo.Kinds, delivery.Metric)
+	if bravo.Name != "edge-bravo" || bm.Newest.In != 0 || bm.Newest.Loss != nil || bm.LastHour.In != 10 {
+		t.Errorf("edge-bravo = %+v, want no newest figure and its hour's 10 in", bravo)
+	}
+	if bm.NewestAt == nil || !bm.NewestAt.Equal(at.Add(-30*time.Minute)) {
+		t.Errorf("edge-bravo newest at = %v, want when it last wrote", bm.NewestAt)
+	}
+}
