@@ -3,8 +3,10 @@
 # Every telemetry batch a node sends carries a delivery ledger: its boot, its seq, and how many
 # items of each kind it holds. The server writes what became of each item onto the batch's
 # receipt (stored, coalesced, deduplicated, or refused and why), and omniglass lab measure
-# reconciles the ledgers against the receipts once every node has settled. Each kind and hop reads
-# as one loss ratio, 0 healthy, with the cause of any loss named beside it (#1641, ADR-1641).
+# reconciles the ledgers against the receipts once every node has settled. Upstream of every item,
+# each node's dispatcher counts the schedule hop: the runs due on its schedule against the runs it
+# made, per kind (#1693). Each kind and hop reads as one loss ratio, 0 healthy, with the cause of any
+# loss named beside it (#1641, ADR-1641).
 
 # demo-needs: docker-socket
 
@@ -22,13 +24,13 @@ Wait
 Type "grep -E '^(ready|measuring|delivery|torn down)' /tmp/lab-measure.err"
 Enter
 Wait
-Type "# The delivery table: each kind across the ingest hop, in and out, the loss ratio and its cause"
+Type "# The delivery table: each kind across the schedule hop (runs) and the ingest hop (items), and its cause"
 Enter
 Wait
 Type "sed -n '/^delivery /,$p' /tmp/lab-measure.txt"
 Enter
 Wait
-Type "# The same figures in the JSON a second run compares against: each kind that sent items reads 0"
+Type "# The same figures in the JSON a second run compares against: each kind that sent items reads 0 at every hop"
 Enter
 Wait
 Type `jq -c '.delivery[] | {kind, hop, in, out, loss, deduplicated, outcomes}' /tmp/lab-measure.json`
