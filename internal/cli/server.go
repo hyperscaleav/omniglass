@@ -20,6 +20,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/egress"
 	"github.com/hyperscaleav/omniglass/internal/migrate"
 	"github.com/hyperscaleav/omniglass/internal/notifier"
+	"github.com/hyperscaleav/omniglass/internal/platformmetric"
 	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/settings"
@@ -135,7 +136,7 @@ func runServer(ctx context.Context, version string, lab bool) error {
 	// The embedded NATS server carries the node-server protocol (worklist,
 	// heartbeat, and the checkpoint-3 telemetry stream). It is hosted in-process
 	// and shut down with the server.
-	busSrv, err := startBus(c, gw)
+	busSrv, err := startBus(c, gw, self.rec)
 	if err != nil {
 		return err
 	}
@@ -188,7 +189,7 @@ func runServer(ctx context.Context, version string, lab bool) error {
 	go notifier.New(gw, egress.Options{}).Run(notifyCtx)
 	// The server's self-report, once a collection report window, until
 	// shutdown cancels it.
-	go self.reporter(gw, serverComponentID, log).Run(notifyCtx)
+	go self.reporter(gw, serverComponentID, log, busSrv.Sampler()).Run(notifyCtx)
 
 	errc := make(chan error, 1)
 	go func() {
@@ -211,7 +212,7 @@ func runServer(ctx context.Context, version string, lab bool) error {
 // startBus parses the configured NATS listen address and starts the embedded
 // server. A "host:" or bare port resolves through net.SplitHostPort; a parse
 // failure is a config error surfaced at boot.
-func startBus(c config.Config, gw *storage.PG) (*bus.Server, error) {
+func startBus(c config.Config, gw *storage.PG, rec *platformmetric.Recorder) (*bus.Server, error) {
 	host, portStr, err := net.SplitHostPort(c.NatsAddr)
 	if err != nil {
 		return nil, err
@@ -222,7 +223,7 @@ func startBus(c config.Config, gw *storage.PG) (*bus.Server, error) {
 	}
 	// The worklist pool is held under the database pool, keeping one
 	// connection for ingest (#1577).
-	return bus.New(bus.Config{Host: host, Port: port, StoreDir: c.NatsStoreDir, DBPoolSize: gw.PoolSize()}, gw)
+	return bus.New(bus.Config{Host: host, Port: port, StoreDir: c.NatsStoreDir, DBPoolSize: gw.PoolSize(), Metrics: rec}, gw)
 }
 
 // auditWriterRuling holds, once at boot, what was stored before the

@@ -5,7 +5,9 @@
   record step does not tell the two apart. A second instance: an auth step that answers from the
   endpoint's gate (the websocket and http stream dialers' `Gate`) replays the gate as a newly
   allocated refusal on every attempt under the same fingerprint, so an identity check on the
-  started-with refusal cannot recognise it.
+  started-with refusal cannot recognise it. A third (found by the #1628 review): a measure that
+  observes a delivery rather than what the delivery wrote, so a redelivery the receipt held to a
+  no-op counts as a fresh landing.
 - **Failure:** the replay is re-recorded as new and drops its provenance marker. A restarted
   node's held session started rejected under an adopted gate reported the gate's placeholder
   refusal back through `OnTransition`; `refuse` recorded it as a fresh gate, so the next publish
@@ -21,4 +23,6 @@
   (`TestAnAdoptedGatesSessionReplayPublishesNoReason`,
   `TestAReprobedRefusalPublishesItsReasonUnderAnUnchangedGate`). Keep re-probes off a transport
   whose auth step reads the gate: an http session and a websocket one refuse `reprobe` at
-  validation.
+  validation. A pipeline figure reads the store's own verdict: `land` and `landNode` in
+  internal/bus/consumer.go record only when `LandBatch` returns `Landed`, and only the groups that
+  landed (`TestAHeldRedeliveryCountsNoLanding`).

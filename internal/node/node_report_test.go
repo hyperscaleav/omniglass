@@ -225,6 +225,27 @@ func TestNodeReportIsNilSafe(t *testing.T) {
 	}
 }
 
+// TestNodeReportReadsCPUThroughTheSharedRuntime: the node reads its process
+// through platformmetric.Runtime, the sampler the server shares, so its CPU
+// time is the time spent between two ticks and the first tick reads none.
+func TestNodeReportReadsCPUThroughTheSharedRuntime(t *testing.T) {
+	t.Parallel()
+	t0 := time.Unix(1_800_000_000, 0)
+	r := newNodeReport(time.Minute, t0)
+	r.process(platformmetric.Process{CPU: 4 * time.Second, FDs: 12}, t0)
+	first := readings(r.take(t0))
+	if _, ok := first[writerclass.ProcessCPUSeconds]; ok {
+		t.Fatalf("the first tick read cpu %v with nothing to subtract", first)
+	}
+	if first[writerclass.ProcessFDCount] != 12 {
+		t.Errorf("fd count = %v, want 12", first[writerclass.ProcessFDCount])
+	}
+	r.process(platformmetric.Process{CPU: 5500 * time.Millisecond, FDs: 12}, t0.Add(30*time.Second))
+	if got := readings(r.take(t0.Add(30 * time.Second)))[writerclass.ProcessCPUSeconds]; got != 1.5 {
+		t.Errorf("cpu = %v, want the 1.5 s spent since the last tick", got)
+	}
+}
+
 // TestNodeReportCountsAFailedCommandPullOncePerWindow (#1626): every failed
 // pull of the command queue is tallied, and the window's tally is sent once
 // when it ends; a window with no failure sends zero, so the count returns to
