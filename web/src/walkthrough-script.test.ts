@@ -354,3 +354,32 @@ describe("the shipped walkthroughs", () => {
     });
   }
 });
+
+// Platform health's walkthrough (#1730) teaches the page as it is: it opens a
+// hop under "Where work is lost" (#1646) and reads the simulation section
+// (#1647), each captioned as a loss ratio where 0 is healthy. The recording
+// replays these steps, so the stills carry what the script reaches.
+describe("read-platform-health", () => {
+  const file = join(__dirname, "../e2e/walkthroughs/read-platform-health.yaml");
+  const w = parseWalkthrough(readFileSync(file, "utf8"), file);
+  // A click's target is its selector; a wait's is { selector }.
+  const selector = (t: unknown) => (typeof t === "string" ? t : ((t as { selector?: string } | undefined)?.selector ?? ""));
+  const on = (needle: string) => w.steps.filter((s) => selector(s.target).includes(needle));
+
+  it("opens a hop under Where work is lost and waits on its explainer", () => {
+    expect(on("pipeline-hop-").some((s) => s.kind === "click")).toBe(true);
+    expect(on("pipeline-hop-detail").some((s) => s.kind === "wait")).toBe(true);
+  });
+
+  it("reads the hops as a loss ratio where 0 is healthy", () => {
+    const captions = on("pipeline").map((s) => s.caption).join(" ");
+    expect(captions).toMatch(/loss ratio/);
+    expect(captions).toMatch(/0% is healthy/);
+  });
+
+  it("reads the simulation section as a loss ratio where 0 is healthy", () => {
+    const sim = on("platform-simulation");
+    expect(sim.some((s) => s.kind === "wait")).toBe(true);
+    expect(sim.map((s) => s.caption).join(" ")).toMatch(/loss ratio.*0 is healthy/);
+  });
+});
