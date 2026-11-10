@@ -173,8 +173,8 @@ never zero, so the command reads not-reported the same way the page does.
 
 ## Walkthrough
 
-From Home, open the tile, read the header, the node table and the server's Requests panel, then
-follow the slowest route's figure from its tooltip onto its series on the server's platform
-component.
+From Home, open the tile and read the header, fold the server's panels to read the node table,
+open them again on the Requests panel, then follow the slowest route's figure from its tooltip onto
+its series on the server's platform component.
 
 ::walkthrough{#read-platform-health}

@@ -10,7 +10,7 @@
 # default), so the script is ready only once it has: that wait is off camera,
 # and the recording never spends its budget on a lab that has just come up.
 title: Read the platform's health
-description: From Home, open Platform health, read the build, the nodes and the server's Requests panel, then follow the slowest route's figure onto its series on the server's platform component.
+description: From Home, open Platform health, read the build, fold the server's panels to read the nodes, open them on the Requests panel, then follow the slowest route's figure onto its series on the server's platform component.
 ready:
   goto: /platform
   wait: { selector: '[data-testid=server-panel-requests] tr[data-testid=panel-row-http-request-duration-max][aria-expanded]', timeout: 150000 }
@@ -22,12 +22,14 @@ steps:
   - wait: { selector: '[data-testid=platform-version]' }
     caption: The build, its uptime and the verdict, each read from the platform's own components.
     hold: 1500
+  - click: '[data-testid=server-panels-server] > summary .eyebrow'
+    caption: Each server's panels fold to its name and verdict. Close them to reach the node table under them.
   - wait: { selector: '[data-testid=platform-node-edge-hq]' }
     caption: One row per node. A figure the node never reported reads not reported, never 0.
     hold: 1500
-  - wait: { selector: '[data-testid=server-panel-requests] tr[data-testid=panel-row-http-request-duration-max][aria-expanded]' }
-    caption: Each server has its own panels. Requests ranks the slowest routes of the newest report window, highest first.
-    hold: 2000
+  - click: '[data-testid=server-panels-server] > summary .eyebrow'
+    caption: Open the server's panels again. Requests ranks the slowest routes of the newest report window, highest first.
+    hold: 1500
   - hover: '[data-testid=server-panel-requests] button[aria-label="HTTP Request Time (max)"] >> nth=0'
     caption: A key's name teaches it. Rest on it to read what it measures.
   - wait: { role: link, name: Open its series on }
