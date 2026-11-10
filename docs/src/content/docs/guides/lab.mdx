@@ -169,6 +169,17 @@ stale the moment every owner it covers carries the tier, so a closed issue canno
 `make test-lab`, which CI may run on lab-touching changes only. The check is a function of a base URL and a client, so
 the scale lab runs the same judgment against a lab of any size.
 
+`make test-lab` builds `omniglass:dev` first and runs the lab's integration tests against it. On a
+machine where that tag is shared (another session's lab runs it), build a private tag instead, with
+the binary stamped to match, and run the tests against it with `make test-lab-image`, which builds
+nothing. `LAB_IMAGE` names the image (it reaches the tests and `lab run` as `OMNIGLASS_LAB_IMAGE`;
+empty runs `omniglass:dev`) and `LAB_RUN` narrows the tests:
+
+```sh
+make build image TAG=mine BUILD_ID=mine
+make test-lab-image LAB_IMAGE=omniglass:mine LAB_RUN=TestIntegrationScaleDelivery
+```
+
 The lab can also be watched whole while it runs. With its simulator connected,
 [Platform health](/guides/operator/platform-health/#with-a-simulator) closes the loop over a window
 that slides every 10 seconds: every hop a request or a batch travels, from the node to the simulated
@@ -582,6 +593,17 @@ end to end  metric 0  property 0  event -  log -
   ran out (no later batch said the spool had cleared past them, or the stream still held batches),
   with no ratio for it rather than a guess. A note under the table gives the stream's pending and
   unacked counts when the stream was the cause.
+
+A refusal can be shown on purpose. The hidden `--induce-unregistered` brings a scale lab up with one
+simulated device answering a property key no driver registers: the seed registers the key, writes a
+copy of that device's driver whose extra poll emits it, attaches the copy, and unregisters the key
+again, so the device's tasks keep collecting a name the catalog no longer has. The property row then
+reads a loss above 0 with cause `refused-unregistered`, the metric rows still read 0, and the seed's
+summary names the device and the driver copy. It is off unless asked, and only a scale lab takes it:
+
+```
+./bin/omniglass lab run --scenario corporate --systems 30 --induce-unregistered
+```
 
 Two limitations, both closed by the node hop (#1692):
 
