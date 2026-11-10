@@ -409,3 +409,40 @@ func TestComponentDependencySchemaRefusesBadEdges(t *testing.T) {
 		t.Errorf("duplicate edge = %v, want refused by component_dependency_edge_key", err)
 	}
 }
+
+// TestComponentDependencyListSplitsByOtherEndScope pins the list's scope
+// split in both directions at once: an edge whose other end the caller reads
+// is listed on its side, one whose other end it cannot read is only counted,
+// and a self root admits its own edges' far end without its subtree.
+func TestComponentDependencyListSplitsByOtherEndScope(t *testing.T) {
+	t.Parallel()
+	f := newDepFixture(t)
+	ctx := context.Background()
+	for _, n := range []string{"mid-l", "up-seen-l", "up-hidden-l", "down-seen-l", "down-hidden-l"} {
+		f.component(t, n)
+	}
+	f.depend(t, "mid-l", "up-seen-l", "power", "1")
+	f.depend(t, "mid-l", "up-hidden-l", "host", "")
+	f.depend(t, "down-seen-l", "mid-l", "host", "")
+	f.depend(t, "down-hidden-l", "mid-l", "host", "")
+	comps, err := f.gw.ListComponents(ctx, scope.Set{All: true})
+	if err != nil {
+		t.Fatalf("list components: %v", err)
+	}
+	ids := map[string]string{}
+	for _, c := range comps {
+		ids[c.Name] = c.ID
+	}
+	read := scope.Set{IDs: []string{ids["mid-l"], ids["up-seen-l"]}, SelfIDs: []string{ids["down-seen-l"]}}
+	l, err := f.gw.ListComponentDependencies(ctx, "mid-l", read)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(l.Upstreams) != 1 || l.Upstreams[0].UpstreamName != "up-seen-l" || l.Upstreams[0].Outlet != "1" ||
+		len(l.Dependents) != 1 || l.Dependents[0].ComponentName != "down-seen-l" || l.Hidden != 2 {
+		t.Fatalf("scoped list = %+v, want up-seen-l upstream, down-seen-l dependent, 2 hidden", l)
+	}
+	if _, err := f.gw.ListComponentDependencies(ctx, "mid-l", scope.Set{IDs: []string{ids["up-seen-l"]}}); !errors.Is(err, storage.ErrComponentNotFound) {
+		t.Errorf("list of an unreadable component = %v, want ErrComponentNotFound", err)
+	}
+}
