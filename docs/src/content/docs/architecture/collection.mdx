@@ -488,8 +488,8 @@ Every platform metric key, rendered from the writer-class ruling and the seed:
 
 <PlatformKeys />
 
-**Who writes them.** A node reports its own keys (every node key but `checkin-age`, the two webhook
-counts and the command queue figures the server measures, and none of the
+**Who writes them.** A node reports the node-self keys of itself (every node key but `checkin-age`,
+the two webhook counts and the command queue figures the server measures, and none of the
 [server's](#self-monitoring-the-servers-account-of-itself)), in the **node-self block** of the batch
 its tick already publishes (`TelemetryBatch.node_self`, field 15). The block names no owner and no
 task: the server takes the node from the subject it published on, lands the rows on that node's
@@ -573,8 +573,14 @@ window (`collection.report_seconds`, the same window collection telemetry uses):
   warning alarm on this component when the server falls 30 s behind its samples for 2 minutes.
 
 The boot seeds the platform system before it ensures the component, and a window whose component is
-gone by the write is dropped rather than failed, as a node's is. The decisions are
-[ADR-1627](/architecture/decisions/#adr-1627-a-server-reports-its-request-and-query-timing-by-route-template-and-statement-fingerprint).
+gone by the write is dropped rather than failed, as a node's is. The same component carries the
+server's retention pass figures ([storage](/architecture/storage/#what-a-retention-pass-reports)). A
+boot whose ensure fails (an identity of only spaces, a database refusing the write) logs a WARN with
+the identity and the cause and serves anyway, reporting none of these until a boot whose ensure
+succeeds (it still re-reads `database.slow_query_ms` each window): self-monitoring never keeps the
+server down. The decisions are
+[ADR-1627](/architecture/decisions/#adr-1627-a-server-reports-its-request-and-query-timing-by-route-template-and-statement-fingerprint)
+and [ADR-1671](/architecture/decisions/#adr-1671-a-server-whose-platform-component-cannot-be-ensured-boots-and-reports-nothing).
 
 **One component, not a bus, a database and a worker pool.** #1094 designed the bus, the database
 and the worker pool as platform components of their own. Their figures land on the server's

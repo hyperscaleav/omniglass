@@ -34,9 +34,9 @@ and the server prunes `metric` and `property` samples to their retention windows
 provenance-aware floor, and `log_line` and `node_log` by severity band
 ([ADR-0080](/architecture/decisions/#adr-0080-retention-is-provenance-aware-never-declared-never-the-latest-row-per-series),
 [ADR-0417](/architecture/decisions/#adr-0417-the-server-prunes-each-sample-lane-to-a-window-in-bounded-chunks)).
-Each pass's figures (per lane removed and behind, the mark lags, the table sizes) are built as
-platform metrics with a seeded `retention-behind` rule, and land once the server has its platform
-component ([below](#what-a-retention-pass-reports), #1671).
+Each pass's figures (per lane removed and behind, the mark lags, the table sizes) land as platform
+metrics on the server's own platform component, from the pass the boot runs onward, with a seeded
+`retention-behind` rule ([below](#what-a-retention-pass-reports), #1671).
 See [implementation status](/architecture/status/).
 :::
 
@@ -630,8 +630,13 @@ reads it 0 clears it (a lane that leaves the report while flagged keeps its alar
 four INFO lines a pass logs stay. Only the behind flag and the failure count are loss readings, 0
 healthy. The rest are counts and levels with no zero to aim at: the deleted counts, the duration and
 the partition roll measure the work a pass did, the mark lags sit at their healthy trail (above)
-rather than at 0, and the sizes, ages and window are levels to read against each other. Until the
-server registers its platform component (#1627, wired in #1671), the server writes none of these.
+rather than at 0, and the sizes, ages and window are levels to read against each other.
+
+The component is the one the boot ensures for the server's identity
+([collection](/architecture/collection/#self-monitoring-the-servers-account-of-itself)), before the
+bus starts, so the pass the boot runs reports too (#1671). A boot whose ensure fails logs a WARN
+naming the identity and the cause and starts anyway: it prunes on its schedule as before and writes
+none of these figures until a boot whose ensure succeeds.
 
 ::::design[Target design: the metric lane is partitioned (#1275); the other append-only tables are tracked in #1417, and the `raw_sample` buffer in #430]
 
