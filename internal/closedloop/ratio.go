@@ -70,9 +70,15 @@ func Ratios(b NodeBracket) []GapRatio {
 	acknowledged := b.End.Node.BatchesAcknowledged - b.Start.Node.BatchesAcknowledged
 	put(GapPublishedNotLanded, "", acknowledged)
 	put(GapSpoolDropped, "", acknowledged+b.End.Node.BatchesDropped-b.Start.Node.BatchesDropped)
+	// Reconcile counts an unhit component once per protocol, however many
+	// of its poll tasks land there, so the figure counts components too.
+	components := map[string]bool{}
 	for _, t := range b.Targets {
 		if p, ok := dueProtocol(t, b.Window); ok {
-			put(GapUnhitEndpoint, p, 1)
+			if !components[p+" "+t.ComponentID] {
+				components[p+" "+t.ComponentID] = true
+				put(GapUnhitEndpoint, p, 1)
+			}
 		} else if t.Transport == "icmp" && due(t, b.Window) {
 			put(GapUnhitEndpoint, "icmp", 1)
 			rows[key{GapUnhitEndpoint, "icmp"}].Reading = ReadingNotObserved

@@ -91,6 +91,23 @@ func TestRatiosShortfallReadsCountOverIn(t *testing.T) {
 	}
 }
 
+// Unhit counts a component once per protocol however many of its poll
+// tasks land there, so its in figure does too: a component whose two http
+// polls both drew nothing is one wholly unhit endpoint, never half of two.
+func TestRatiosUnhitCountsAComponentOncePerProtocol(t *testing.T) {
+	b := balanced()
+	b.Targets = append(b.Targets, PollTarget{ComponentID: "c-tls", Transport: "https", Interval: 2e9},
+		PollTarget{ComponentID: "c-tls", Transport: "http", Interval: 2e9})
+	endSims(&b, func(o *collection.SimObservation) {
+		p := protocol(o, "http")
+		p.Unhit, p.UnhitSample = 1, []string{"c-tls"}
+	})
+	rs := Ratios(b)
+	if u := row(rs, GapUnhitEndpoint, "http"); u == nil || u.Count != 1 || u.In != 2 || *u.Ratio != 0.5 {
+		t.Fatalf("http unhit = %+v, want 1 of 2 components", u)
+	}
+}
+
 // A gap with nothing in reads absent: tcp sends no request, so its
 // sent-not-received has no ratio, and the JSON says null.
 func TestRatiosNothingInReadsAbsent(t *testing.T) {
@@ -108,7 +125,7 @@ func TestRatiosNothingInReadsAbsent(t *testing.T) {
 	}
 }
 
-// Unhit endpoints read per protocol, over the targets due on it; icmp reads
+// Unhit endpoints read per protocol, over the components due on it; icmp reads
 // not observed by the sim; a restarted node reads its one entry, no ratio.
 func TestRatiosUnhitAndRestarted(t *testing.T) {
 	b := balanced()
