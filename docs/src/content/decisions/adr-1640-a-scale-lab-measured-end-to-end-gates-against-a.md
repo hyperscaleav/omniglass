@@ -33,7 +33,8 @@ refs: [1640, 1639, 1641, 1632, 1695, 1719, 1662, 1749, 1750, 1751]
      by `make gen`). A new figure (#1695's) is one row and its reader.
      - **Exact:** every closed-loop gap (#1639), `ingest_lag_not_measured`, `redeliveries`, each telemetry
        kind's `delivery_loss` per hop (#1641), and `delivery_unsettled_boots`. Each must be 0, whatever the
-       baseline holds; a baseline whose runs read otherwise is refused.
+       baseline holds; a baseline whose runs read otherwise is refused. A figure that was not read is not
+       a 0: a closed loop with no node answering, or a delivery read with no kind carrying items, fails.
      - **Host-independent:** metric and property rows a minute per system (2 percent, either way, since
        fewer rows is lost work), database bytes a day per system (5 percent), WAL bytes per sample
        (10 percent, provisional, below), samples per batch (5 percent, either way).
@@ -52,7 +53,8 @@ refs: [1640, 1639, 1641, 1632, 1695, 1719, 1662, 1749, 1750, 1751]
   4. **A run is clean before any figure is read.** The verdict is **invalid**, and the check exits
      nonzero, when the runs measured another size, window or warm-up than the baseline's; when this
      build's scenario places a different device set (the baseline records a digest of the planned fleet,
-     so a catalog change says to regenerate rather than reading as a regression); when a node's endpoint
+     so a catalog change says to regenerate rather than reading as a regression), or a run or the
+     baseline records no digest at all; when a node's endpoint
      report reads restarted; or when a device carried an active impairment. Validity names the run it
      failed in.
   5. **The fingerprint is read only where it describes the lab's host.** The runner reads its own CPU,

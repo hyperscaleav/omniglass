@@ -330,6 +330,11 @@ func exactFamilies() []exactFamily {
 						out = append(out, exactReading{Name: fmt.Sprintf("delivery_loss/%s/%s", d.Hop, d.Kind), Value: *d.Loss})
 					}
 				}
+				// A read with no kind to account is not a 0: a fleet that
+				// delivered nothing in the window lost everything it sent.
+				if len(out) == 0 {
+					return []exactReading{{Name: "delivery_loss", Missing: true, Note: "not measured: no telemetry kind carried items in the window"}}
+				}
 				return out
 			}},
 		{Family: "delivery_unsettled_boots", About: "node boots whose batches had not all settled when the read ran out",
@@ -423,6 +428,11 @@ func invalidRuns(in PerfInputs, runs []ScaleReport) []string {
 	if len(runs) == 0 {
 		return []string{"no runs to compare"}
 	}
+	// The device set is checked on both sides: a baseline or a run that
+	// names none cannot be said to measure the other's fleet.
+	if in.PlanDigest == "" {
+		return []string{"the baseline names no device set: regenerate it with lab perf baseline"}
+	}
 	var order []string
 	byReason := map[string][]string{}
 	add := func(i int, reason string) {
@@ -440,7 +450,10 @@ func invalidRuns(in PerfInputs, runs []ScaleReport) []string {
 			add(i, fmt.Sprintf("the run measured a %s window after %s; the baseline a %s window after %s",
 				window(r.WindowS), window(r.WarmupS), window(in.WindowS), window(in.WarmupS)))
 		}
-		if r.PlanDigest != "" && in.PlanDigest != "" && r.PlanDigest != in.PlanDigest {
+		switch {
+		case r.PlanDigest == "":
+			add(i, "the run recorded no device set (a series from before the gate, or a scenario this build could not plan)")
+		case r.PlanDigest != in.PlanDigest:
 			add(i, "this build places a different device set than the baseline's: regenerate the baseline")
 		}
 		if r.Endpoints == nil {

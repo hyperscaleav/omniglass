@@ -647,7 +647,7 @@ How to read the verdict table it prints, one row a figure:
 Before any figure, the runs themselves must be clean, or the verdict is **invalid** and the check exits
 nonzero with the reason: the runs measured another size, window or warm-up than the baseline's, this
 build places a different device set than the baseline's (the plan digest moved, so regenerate the
-baseline), a node restarted inside the window, or a device carried an impairment. A gated lab is never
+baseline) or a run recorded no device set at all (a series from before the gate), a node restarted inside the window, or a device carried an impairment. A gated lab is never
 impaired, so an impaired gap can only mean a fault left on.
 
 **Regenerating a baseline** is a reviewed act. `make perf-baseline SIZE=...` writes each figure's median,
