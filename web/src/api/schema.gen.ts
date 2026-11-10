@@ -5529,7 +5529,7 @@ export interface paths {
         };
         /**
          * Read Omniglass's own health in one call
-         * @description Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its verdict, each server's running build and start time, the node table's column groups with each key's catalog facts, and one row per node with its last heartbeat and its platform component's current figure per key (a gauge's latest sample, a window count only while its window is the newest). The rows need a fleet-wide node:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, verdicts and servers need a fleet-wide component:read and the system a fleet-wide system:read; short of that each is left out, never zeroed. Gated by node:read.
+         * @description Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its verdict, each server's running build, start time and panels (Requests, Ingest, Queues and Retention: each key's catalog facts and its latest sample per instance, a ranked key cut to the ten highest of its newest window in the database, and the open alarms on the server component with the key each one's rule samples), the node table's column groups with each key's catalog facts, and one row per node with its last heartbeat and its platform component's current figure per key (a gauge's latest sample, a window count only while its window is the newest). The rows need a fleet-wide node:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, verdicts and servers (with their panels) need a fleet-wide component:read and the system a fleet-wide system:read; short of that each is left out, never zeroed. Gated by node:read.
          */
         get: operations["get-platform-view"];
         put?: never;
@@ -9617,6 +9617,16 @@ export interface components {
             /** @description The predicate over the alarm facts (the action expression site); absent always holds */
             when?: string;
         };
+        PlatformAlarmBody: {
+            /** @description The key the raising rule samples, which names the panel the alarm flags; absent for a hand-raised alarm */
+            key?: string;
+            message: string;
+            /** Format: date-time */
+            raised_at: string;
+            /** @description The name of the rule that raised the alarm; absent for a hand-raised alarm */
+            rule?: string;
+            severity: string;
+        };
         PlatformBindingInputBody: {
             /**
              * Format: uri
@@ -9643,6 +9653,19 @@ export interface components {
             label: string;
             /** @description The group's stable handle */
             name: string;
+        };
+        PlatformInstanceFigureBody: {
+            /** @description The series instance (a route and status class, a lane, a table, a reason); empty for an unsplit key */
+            instance: string;
+            /** @description The key the figure is a sample of */
+            key: string;
+            /**
+             * Format: date-time
+             * @description When the sample was taken
+             */
+            observed_at: string;
+            /** Format: double */
+            value: number;
         };
         PlatformKeyBody: {
             /** @description The metric type's catalog description, the column's tooltip */
@@ -9672,9 +9695,40 @@ export interface components {
             /** @description The node's platform component verdict, which tones the row; absent without a fleet-wide component read */
             verdict?: string;
         };
+        PlatformPanelBody: {
+            /** @description The latest sample per key and instance, in key order: a ranked key's newest window highest first, cut to its rank; any other key by instance. A key never sampled has no figure */
+            figures: components["schemas"]["PlatformInstanceFigureBody"][] | null;
+            /** @description The panel's keys, in order, each with its catalog facts */
+            keys: components["schemas"]["PlatformPanelKeyBody"][] | null;
+            /** @description The panel's title */
+            label: string;
+            /** @description The panel's stable handle */
+            name: string;
+        };
+        PlatformPanelKeyBody: {
+            /** @description The metric type's catalog description, the row's tooltip */
+            description?: string;
+            /** @description The metric type's label, the row's title */
+            label: string;
+            /** @description The metric type's name: the key the panel's figures carry */
+            name: string;
+            /** @description The key this one is read against, printed as a pair (connections in use of the pool's size); absent for a key read alone */
+            of?: string;
+            /**
+             * Format: int64
+             * @description Above zero, the key is a ranked list: only its rank highest instances of the newest window are returned, highest first
+             */
+            rank?: number;
+            /** @description The metric type's unit, when it has one */
+            unit?: string;
+        };
         PlatformServerBody: {
+            /** @description The open alarms on the server's platform component, newest first; a panel is flagged when one names a key it carries */
+            alarms: components["schemas"]["PlatformAlarmBody"][] | null;
             /** @description The server's platform component uuid */
             component: string;
+            /** @description The server's panels (Requests, Ingest, Queues, Retention), in order: the page renders these and has no key list of its own */
+            groups: components["schemas"]["PlatformPanelBody"][] | null;
             /** @description The server's platform component name */
             name: string;
             /**
@@ -9714,7 +9768,7 @@ export interface components {
              * @description The server's clock when the view was read: uptime and the liveness pill are both judged against it, so they read one clock
              */
             read_at: string;
-            /** @description Every server's platform component and the identity its boot wrote; empty without a fleet-wide component read */
+            /** @description Every server's platform component, the identity its boot wrote and its panels; empty without a fleet-wide component read */
             servers: components["schemas"]["PlatformServerBody"][] | null;
             /** @description The platform system and its verdict; absent without a fleet-wide system read */
             system?: components["schemas"]["PlatformSystemBody"];

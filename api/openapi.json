@@ -9645,6 +9645,35 @@
         ],
         "type": "object"
       },
+      "PlatformAlarmBody": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "description": "The key the raising rule samples, which names the panel the alarm flags; absent for a hand-raised alarm",
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "raised_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "rule": {
+            "description": "The name of the rule that raised the alarm; absent for a hand-raised alarm",
+            "type": "string"
+          },
+          "severity": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "severity",
+          "message",
+          "raised_at"
+        ],
+        "type": "object"
+      },
       "PlatformBindingInputBody": {
         "additionalProperties": false,
         "properties": {
@@ -9716,6 +9745,35 @@
         ],
         "type": "object"
       },
+      "PlatformInstanceFigureBody": {
+        "additionalProperties": false,
+        "properties": {
+          "instance": {
+            "description": "The series instance (a route and status class, a lane, a table, a reason); empty for an unsplit key",
+            "type": "string"
+          },
+          "key": {
+            "description": "The key the figure is a sample of",
+            "type": "string"
+          },
+          "observed_at": {
+            "description": "When the sample was taken",
+            "format": "date-time",
+            "type": "string"
+          },
+          "value": {
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "key",
+          "instance",
+          "value",
+          "observed_at"
+        ],
+        "type": "object"
+      },
       "PlatformKeyBody": {
         "additionalProperties": false,
         "properties": {
@@ -9782,12 +9840,107 @@
         ],
         "type": "object"
       },
+      "PlatformPanelBody": {
+        "additionalProperties": false,
+        "properties": {
+          "figures": {
+            "description": "The latest sample per key and instance, in key order: a ranked key's newest window highest first, cut to its rank; any other key by instance. A key never sampled has no figure",
+            "items": {
+              "$ref": "#/components/schemas/PlatformInstanceFigureBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "keys": {
+            "description": "The panel's keys, in order, each with its catalog facts",
+            "items": {
+              "$ref": "#/components/schemas/PlatformPanelKeyBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "label": {
+            "description": "The panel's title",
+            "type": "string"
+          },
+          "name": {
+            "description": "The panel's stable handle",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "label",
+          "keys",
+          "figures"
+        ],
+        "type": "object"
+      },
+      "PlatformPanelKeyBody": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "description": "The metric type's catalog description, the row's tooltip",
+            "type": "string"
+          },
+          "label": {
+            "description": "The metric type's label, the row's title",
+            "type": "string"
+          },
+          "name": {
+            "description": "The metric type's name: the key the panel's figures carry",
+            "type": "string"
+          },
+          "of": {
+            "description": "The key this one is read against, printed as a pair (connections in use of the pool's size); absent for a key read alone",
+            "type": "string"
+          },
+          "rank": {
+            "description": "Above zero, the key is a ranked list: only its rank highest instances of the newest window are returned, highest first",
+            "format": "int64",
+            "type": "integer"
+          },
+          "unit": {
+            "description": "The metric type's unit, when it has one",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "label"
+        ],
+        "type": "object"
+      },
       "PlatformServerBody": {
         "additionalProperties": false,
         "properties": {
+          "alarms": {
+            "description": "The open alarms on the server's platform component, newest first; a panel is flagged when one names a key it carries",
+            "items": {
+              "$ref": "#/components/schemas/PlatformAlarmBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
           "component": {
             "description": "The server's platform component uuid",
             "type": "string"
+          },
+          "groups": {
+            "description": "The server's panels (Requests, Ingest, Queues, Retention), in order: the page renders these and has no key list of its own",
+            "items": {
+              "$ref": "#/components/schemas/PlatformPanelBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
           },
           "name": {
             "description": "The server's platform component name",
@@ -9810,7 +9963,9 @@
         "required": [
           "component",
           "name",
-          "verdict"
+          "verdict",
+          "groups",
+          "alarms"
         ],
         "type": "object"
       },
@@ -9882,7 +10037,7 @@
             "type": "string"
           },
           "servers": {
-            "description": "Every server's platform component and the identity its boot wrote; empty without a fleet-wide component read",
+            "description": "Every server's platform component, the identity its boot wrote and its panels; empty without a fleet-wide component read",
             "items": {
               "$ref": "#/components/schemas/PlatformServerBody"
             },
@@ -32826,7 +32981,7 @@
     },
     "/views/platform": {
       "get": {
-        "description": "Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its verdict, each server's running build and start time, the node table's column groups with each key's catalog facts, and one row per node with its last heartbeat and its platform component's current figure per key (a gauge's latest sample, a window count only while its window is the newest). The rows need a fleet-wide node:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, verdicts and servers need a fleet-wide component:read and the system a fleet-wide system:read; short of that each is left out, never zeroed. Gated by node:read.",
+        "description": "Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its verdict, each server's running build, start time and panels (Requests, Ingest, Queues and Retention: each key's catalog facts and its latest sample per instance, a ranked key cut to the ten highest of its newest window in the database, and the open alarms on the server component with the key each one's rule samples), the node table's column groups with each key's catalog facts, and one row per node with its last heartbeat and its platform component's current figure per key (a gauge's latest sample, a window count only while its window is the newest). The rows need a fleet-wide node:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, verdicts and servers (with their panels) need a fleet-wide component:read and the system a fleet-wide system:read; short of that each is left out, never zeroed. Gated by node:read.",
         "operationId": "get-platform-view",
         "responses": {
           "200": {
