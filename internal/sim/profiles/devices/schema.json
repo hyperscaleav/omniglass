@@ -110,6 +110,25 @@
         }
       }
     },
+    "push": {
+      "type": "object",
+      "description": "A push face (#1743): the device is an outside actor that holds a bearer token and posts POST /telemetry:push on its own cadence, for every system its grant names (read off GET /auth/me). The lab seeds its principal and mints its token for a scenario's declared pusher.",
+      "required": [
+        "every",
+        "body"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "every": {
+          "type": "string",
+          "description": "How often it pushes, a Go duration of at least 1s, e.g. 30s."
+        },
+        "body": {
+          "type": "string",
+          "description": "Template rendered per system to the push route's JSON body, over the device's state (.State, .Defaults), .Owner (the system's id) and .Now (the device's clock). bookingsAt .Now <windows> reads a list of HH:MM-HH:MM UTC windows as {State, Remaining}."
+        }
+      }
+    },
     "webhook": {
       "type": "object",
       "description": "How the simulated service is subscribed to a webhook receiver (#1370): subscribe is the path of a POST route on its http interface taking a JSON body of url, scheme and secret, which the simulator calls for a device whose component holds a webhook endpoint (ADR-1370).",
