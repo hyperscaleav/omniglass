@@ -2,7 +2,7 @@
 title: "Every telemetry item is accounted on its batch's receipt and read as a loss ratio"
 date: 2026-11-09
 status: "Accepted"
-summary: "Delivery is measured as one loss ratio per telemetry kind per hop, `(in - out) / in`, 0 healthy (#1641). A node's spool stamps each batch with a ledger (boot, dense seq, minted, resolved, per-kind count and running offset, field 16 of `TelemetryBatch`); the landing transaction writes the ledger and the committed pass's per-kind outcome on the batch's receipt. Refusals and unbound identities are loss, deduplicated items sit beside the ratio, a gap in a boot's seq belongs to its lower neighbor's window and reads as missing from the offsets, and a boot whose gaps could still fill reads unsettled with no ratio."
+summary: "Delivery is measured as one loss ratio per telemetry kind per hop, `(in - out) / in`, 0 healthy (#1641). A node's spool stamps each batch with a ledger (boot, dense seq, minted, resolved, per-kind count and running offset, field 16 of `TelemetryBatch`); the landing transaction writes the ledger and the committed pass's per-kind outcome on the batch's receipt. Refusals are loss, an unbound identity is accounted for (amended by ADR-1659), deduplicated items sit beside the ratio, a gap in a boot's seq belongs to its lower neighbor's window and reads as missing from the offsets, and a boot whose gaps could still fill reads unsettled with no ratio."
 refs: [1641, 1623, 453, 1595, 1639, 1640, 1625, 1628, 1691, 1692, 1696, 1698, 1699]
 ---
 
@@ -24,8 +24,10 @@ refs: [1641, 1623, 453, 1595, 1639, 1640, 1625, 1628, 1691, 1692, 1696, 1698, 16
      counts one more `deliveries` and lands nothing; the first delivery is told by `xmax = 0`, since
      an `on conflict do update` reports one affected row either way.
   4. **Refusal is loss.** Every refusal (`refused-unregistered`, `-writer`, `-instance`, `-invalid`,
-     `-empty`, `-write`), `orphaned`, `unbound` and `unidentified` count as loss, and the read names the
-     largest outcome behind a loss as its cause. Each item takes exactly one outcome.
+     `-empty`, `-write`), `orphaned` and `unidentified` count as loss, and the read names the
+     largest outcome behind a loss as its cause. Each item takes exactly one outcome. **Amended
+     (#1659):** `unbound` counts as out, not loss
+     ([ADR-1659](#adr-1659-a-hop-writes-its-delivery-in-out-and-loss-ratio-per-kind-every-window)).
   5. **Deduplicated sits beside the ratio.** In and out count distinct items; a redelivery's items
      read as `deduplicated` next to the ratio and never move it.
   6. **A gap belongs to its lower neighbor.** A window counts the receipts minted in it and the gaps

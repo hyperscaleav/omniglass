@@ -1,6 +1,6 @@
 // Package delivery is the uniform loss measurement (#1641): every telemetry
 // kind at every hop reads as one ratio, loss = (in - out) / in, where out is
-// what is accounted for in the store. A healthy pipeline reads exactly 0 for
+// what is accounted for (in the store, or held for the operator). A healthy pipeline reads exactly 0 for
 // every kind, so the number needs no knowledge of a kind's internals to read.
 //
 // The package is pure arithmetic and bookkeeping: the node's spool stamps

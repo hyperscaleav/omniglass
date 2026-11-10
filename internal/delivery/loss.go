@@ -120,7 +120,7 @@ func boots(receipts []Receipt) [][]Receipt {
 
 // Reconcile is the ingest hop over a window: per kind, in is the declared
 // items of the window's receipts plus the items of the gaps the window owns,
-// out is their stored and coalesced items, and missing is the gap items plus
+// out is their stored, coalesced and unbound items, and missing is the gap items plus
 // any shortfall the ingest counted between declared and decoded.
 //
 // Every gap has exactly one owner whatever order its batches arrived in: a

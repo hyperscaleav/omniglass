@@ -30,8 +30,11 @@ const (
 	RefusedWrite Outcome = "refused-write"
 	// Orphaned is a group whose task's owner is gone.
 	Orphaned Outcome = "orphaned"
-	// Unbound is an identified sample whose identity has no binding: the
-	// conduit's inbox counts it, but the sample is not stored.
+	// Unbound is an identified sample whose identity has no binding. It is
+	// not stored, but it is accounted for, not lost: the operator has not
+	// assigned the identity, and the conduit's unbound inbox surfaces it
+	// (count, keys, heard count), as configuration state rather than data
+	// the hop dropped.
 	Unbound Outcome = "unbound"
 	// Unidentified is an identified sample with no conduit, nothing
 	// resolved, or no valid identity.
@@ -43,13 +46,14 @@ const (
 
 // Outcomes is every outcome, out first, then the dedup count, then loss.
 var Outcomes = []Outcome{
-	Stored, Coalesced, Deduplicated,
+	Stored, Coalesced, Unbound, Deduplicated,
 	RefusedUnregistered, RefusedWriter, RefusedInstance, RefusedInvalid,
-	RefusedEmpty, RefusedWrite, Orphaned, Unbound, Unidentified, Missing,
+	RefusedEmpty, RefusedWrite, Orphaned, Unidentified, Missing,
 }
 
-// Out reports whether the outcome counts as out: accounted for in the store.
-func (o Outcome) Out() bool { return o == Stored || o == Coalesced }
+// Out reports whether the outcome counts as out: accounted for, in the store
+// or, for an unbound sample, in its conduit's unbound inbox.
+func (o Outcome) Out() bool { return o == Stored || o == Coalesced || o == Unbound }
 
 // Deduplicated reports whether the outcome is the redelivery count, reported
 // beside the ratio.

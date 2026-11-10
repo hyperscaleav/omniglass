@@ -613,6 +613,32 @@ func TestScaleDeliveryCauseAndJSON(t *testing.T) {
 	}
 }
 
+// An unbound sample (an identity no binding places, which the conduit's
+// inbox surfaces) is accounted for, not lost: the row reads 0 and names no
+// cause, while a refusal beside it still reads as loss.
+func TestScaleDeliveryUnboundIsNotLoss(t *testing.T) {
+	rep := SummarizeScale(deliveryRun(
+		receipt("b1", 1, 100, delivery.Declared{delivery.Metric: {Count: 10}, delivery.Property: {Count: 10}}, func(t *delivery.Tally) {
+			t.Add(delivery.Metric, delivery.Stored, 8)
+			t.Add(delivery.Metric, delivery.Unbound, 2)
+			t.Add(delivery.Property, delivery.Stored, 6)
+			t.Add(delivery.Property, delivery.Unbound, 2)
+			t.Add(delivery.Property, delivery.RefusedWriter, 2)
+		}),
+		receipt("b1", 2, 700, delivery.Declared{delivery.Metric: {Count: 10, Before: 10}, delivery.Property: {Count: 10, Before: 10}}, nil),
+	))
+	table := rep.Table()
+	for _, want := range []string{"metric      ingest  10       10       0        0      -",
+		"property    ingest  10       8        0.2      0      refused-writer"} {
+		if !strings.Contains(table, want) {
+			t.Errorf("the table has no %q:\n%s", want, table)
+		}
+	}
+	if rep.Delivery[0].Outcomes[delivery.Unbound] != 2 {
+		t.Errorf("metric outcomes %v, want the 2 unbound still counted", rep.Delivery[0].Outcomes)
+	}
+}
+
 // A boot whose batches are not all known when the read gives up prints as
 // unsettled, with its node, and no ratio comes from it: the ratios are only
 // the settled boots'. A stream still holding batches leaves every boot

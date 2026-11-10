@@ -46,9 +46,10 @@ func (c *Counts) Lost(items map[Kind]int) {
 }
 
 // Landed counts the store's outcome of one batch. Every item counted went
-// in; stored, coalesced and deduplicated items came out (a deduplicated item
-// is one an earlier copy landed, so a replay reads as no loss); the rest,
-// refused or orphaned, were lost here.
+// in; stored, coalesced, unbound and deduplicated items came out (a
+// deduplicated item is one an earlier copy landed, so a replay reads as no
+// loss; an unbound one is in its conduit's inbox, awaiting the operator's
+// binding); the rest, refused, orphaned or unidentified, were lost here.
 func (c *Counts) Landed(t Tally) {
 	for k, os := range t.m {
 		for o, n := range os {

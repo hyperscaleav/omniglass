@@ -54,8 +54,13 @@ func TestEveryOutcomeIsClassedExactlyOnce(t *testing.T) {
 			t.Errorf("outcome %q missing from Outcomes", o)
 		}
 	}
-	if !delivery.Stored.Out() || !delivery.Coalesced.Out() || !delivery.Deduplicated.Deduplicated() || !delivery.Missing.Lost() {
-		t.Fatal("stored and coalesced are out, deduplicated is beside the ratio, missing is loss")
+	if !delivery.Stored.Out() || !delivery.Coalesced.Out() || !delivery.Unbound.Out() || !delivery.Deduplicated.Deduplicated() || !delivery.Missing.Lost() {
+		t.Fatal("stored, coalesced and unbound are out, deduplicated is beside the ratio, missing is loss")
+	}
+	for _, o := range []delivery.Outcome{delivery.RefusedWriter, delivery.Orphaned, delivery.Unidentified, delivery.Missing} {
+		if !o.Lost() {
+			t.Errorf("outcome %q is not loss", o)
+		}
 	}
 }
 

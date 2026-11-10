@@ -102,6 +102,29 @@ func TestALandedTallyCountsDeduplicatedAsHandled(t *testing.T) {
 	}
 }
 
+// TestALandedUnboundItemReadsNoLoss: an identity a conduit reports that no
+// binding places is the operator's unassigned configuration, which the
+// conduit's unbound inbox surfaces, not an item the hop dropped. It counts
+// in and out, so a healthy fleet with an unassigned identity reads 0; a
+// refusal beside it still reads as loss.
+func TestALandedUnboundItemReadsNoLoss(t *testing.T) {
+	var tl delivery.Tally
+	tl.Add(delivery.Metric, delivery.Stored, 3)
+	tl.Add(delivery.Metric, delivery.Unbound, 2)
+	tl.Add(delivery.Property, delivery.Unbound, 1)
+	tl.Add(delivery.Property, delivery.RefusedWriter, 1)
+	var c delivery.Counts
+	c.Landed(tl)
+	got := read(t, c.Readings())
+	if got[writerclass.DeliveryInCount+"/metric"] != 5 || got[writerclass.DeliveryOutCount+"/metric"] != 5 || got[writerclass.DeliveryLossRatio+"/metric"] != 0 {
+		t.Fatalf("metric in %v out %v loss %v, want 5, 5 and 0", got[writerclass.DeliveryInCount+"/metric"],
+			got[writerclass.DeliveryOutCount+"/metric"], got[writerclass.DeliveryLossRatio+"/metric"])
+	}
+	if l := got[writerclass.DeliveryLossRatio+"/property"]; l != 0.5 {
+		t.Fatalf("property loss = %v, want 0.5 (the refusal is loss, the unbound sample is not)", l)
+	}
+}
+
 func TestCountsMergeAddsEveryKind(t *testing.T) {
 	var a, b delivery.Counts
 	a.Delivered(map[delivery.Kind]int{delivery.Metric: 1})
