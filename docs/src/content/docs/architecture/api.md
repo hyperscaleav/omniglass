@@ -1181,7 +1181,12 @@ earns its own tier only when composing the entity reads in the browser would be 
   many nodes there are. Its rows are `/nodes`', so a node read short of all-scope is a **403**, as
   `/nodes` answers, never an empty table. The figures, the verdicts and the servers need an
   all-scope `component:read` and the system an all-scope `system:read`; short of either they are
-  omitted, never zeroed, and `figures_read` says which.
+  omitted, never zeroed, and `figures_read` says which. With the figures come `pipeline`, each
+  hop's delivery in, out and loss per kind and per component (newest window and last hour) and the
+  end to end, a newest window counted only while it is current (two report windows, as a window
+  count is), so a node that stopped reporting adds its last window to the hour and not the newest,
+  and each node's `loss`, the end to end of the hops `loss_hops` names (#1646); a hop, kind or
+  node with nothing in has no loss, never 0.
 
 Two properties are worth stating because they are easy to lose:
 

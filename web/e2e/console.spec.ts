@@ -402,6 +402,51 @@ test.describe("operator console", () => {
     }
   });
 
+  test("platform health: where work is lost draws every hop the view serves, its ratio 0 for every kind it carried, and lists each hop's components", async ({ page }) => {
+    type Figure = { in: number; out: number; loss?: number };
+    type Pipeline = {
+      hops: { id: string; label: string; kinds: { kind: string; last_hour: Figure }[] | null; total: { last_hour: Figure }; by_component: { name: string }[] | null }[] | null;
+    };
+    await page.goto("/web/platform");
+    const flow = page.getByTestId("pipeline");
+    await expect(flow).toBeVisible();
+
+    // The hops are the view's, in its order; the empty scenario enrolls no node,
+    // so a hop here may carry nothing yet (not reported, never a fake 0) and the
+    // find-where-work-is-lost walkthrough drives the live figures on the dev lab.
+    const view = (await (await page.request.get("/api/v1/views/platform")).json()) as { pipeline?: Pipeline };
+    const hops = view.pipeline?.hops ?? [];
+    expect(hops.length).toBeGreaterThan(0);
+    await expect(flow.locator("[data-hop]")).toHaveCount(hops.length);
+    for (const [i, h] of hops.entries()) {
+      const button = flow.locator("[data-hop]").nth(i);
+      await expect(button).toHaveAttribute("data-hop", h.id);
+      await expect(button).toContainText(h.label);
+      const carried = (h.kinds ?? []).filter((k) => k.last_hour.in > 0);
+      if (carried.length === 0) {
+        await expect(button.getByTestId("hop-loss")).toHaveText(/not reported|nothing in/);
+        continue;
+      }
+      // A hop that took work in shows a nonzero in and a 0% ratio, for all kinds
+      // summed and for each kind it carried.
+      await expect(button.getByTestId("hop-in")).not.toHaveText("0");
+      await expect(button.getByTestId("hop-loss")).toHaveText("0%");
+      for (const k of carried) {
+        await flow.getByRole("group", { name: "Kind" }).getByRole("button", { name: new RegExp(`^${k.kind}$`, "i") }).click();
+        await expect(button.getByTestId("hop-loss")).toHaveText("0%");
+      }
+      await flow.getByRole("group", { name: "Kind" }).getByRole("button", { name: "All" }).click();
+
+      // Selecting the hop opens its explainer, a row per component that records it.
+      await button.click();
+      const detail = flow.getByTestId("pipeline-hop-detail");
+      await expect(detail).toContainText(h.label);
+      for (const c of h.by_component ?? []) await expect(detail.getByTestId(`pipeline-component-${c.name}`)).toBeVisible();
+      await button.click();
+      await expect(detail).toHaveCount(0);
+    }
+  });
+
   test("platform health: after a report window each server panel shows a figure and the ingest lag sparkline has points", async ({ page }) => {
     // A report window is a minute by default; the first lands one window after
     // boot, the ingest lag one window after a batch commits.

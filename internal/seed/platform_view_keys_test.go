@@ -6,6 +6,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/hyperscaleav/omniglass/internal/delivery"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
@@ -120,6 +121,62 @@ func TestPlatformServerGroupKeysAreSeeded(t *testing.T) {
 		for _, key := range g.Keys {
 			if prev, dup := seen[key]; dup {
 				t.Errorf("%s is a node column and also in server group %s", key, prev)
+			}
+		}
+	}
+}
+
+// TestPlatformPipelineHopsAreSeeded proves the pipeline's hop list (#1646) is
+// one the page can draw and the catalog can teach: every key of every hop is a
+// seeded metric type, every hop id is one of #1641's hop names and appears
+// once, and no two hops recorded on one component class share an instance
+// form, so a series selects exactly one hop.
+func TestPlatformPipelineHopsAreSeeded(t *testing.T) {
+	var doc metricTypesDoc
+	if err := yaml.Unmarshal(metricTypesYAML, &doc); err != nil {
+		t.Fatal(err)
+	}
+	seeded := map[string]bool{}
+	for _, m := range doc.MetricTypes {
+		seeded[m.Name] = true
+	}
+	named := map[delivery.Hop]bool{}
+	for _, h := range delivery.Hops {
+		named[h] = true
+	}
+	if len(storage.PlatformPipelineHops) == 0 {
+		t.Fatal("the platform view declares no pipeline hops")
+	}
+	ids := map[delivery.Hop]bool{}
+	forms := map[string]delivery.Hop{}
+	for _, h := range storage.PlatformPipelineHops {
+		if !named[h.ID] {
+			t.Errorf("hop %q is not one of #1641's hop names %v", h.ID, delivery.Hops)
+		}
+		if ids[h.ID] {
+			t.Errorf("hop %q is declared twice", h.ID)
+		}
+		ids[h.ID] = true
+		if h.Label == "" || h.Description == "" {
+			t.Errorf("hop %q needs a label and a description: the page teaches the hop from them", h.ID)
+		}
+		if h.ComponentClass != storage.PlatformClassNode && h.ComponentClass != storage.PlatformClassServer {
+			t.Errorf("hop %q is recorded on %q, not a node or a server", h.ID, h.ComponentClass)
+		}
+		if !strings.Contains(h.InstanceForm, "{kind}") {
+			t.Errorf("hop %q instance form %q does not carry the kind", h.ID, h.InstanceForm)
+		}
+		class := h.ComponentClass + "\x00" + h.InstanceForm
+		if prev, dup := forms[class]; dup {
+			t.Errorf("hops %q and %q share the instance form %q on a %s component", prev, h.ID, h.InstanceForm, h.ComponentClass)
+		}
+		forms[class] = h.ID
+		if len(h.Keys()) != 3 {
+			t.Errorf("hop %q reads %v, want the three delivery keys", h.ID, h.Keys())
+		}
+		for _, key := range h.Keys() {
+			if !seeded[key] {
+				t.Errorf("hop %q reads %s, which metric_types.yaml does not seed", h.ID, key)
 			}
 		}
 	}

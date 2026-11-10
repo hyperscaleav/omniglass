@@ -5593,7 +5593,7 @@ export interface paths {
         };
         /**
          * Read Omniglass's own health in one call
-         * @description Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its verdict, each server's running build, start time and panels (Requests, Ingest, Queues and Retention: each key's catalog facts and its latest sample per instance, a ranked key cut to the ten highest of its newest window in the database, and the open alarms on the server component with the key each one's rule samples), the node table's column groups with each key's catalog facts, and one row per node with its last heartbeat and its platform component's current figure per key (a gauge's latest sample, a window count only while its window is the newest). The rows need a fleet-wide node:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, verdicts and servers (with their panels) need a fleet-wide component:read and the system a fleet-wide system:read; short of that each is left out, never zeroed. Gated by node:read.
+         * @description Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its verdict, each server's running build, start time and panels (Requests, Ingest, Queues and Retention: each key's catalog facts and its latest sample per instance, a ranked key cut to the ten highest of its newest window in the database, and the open alarms on the server component with the key each one's rule samples), the node table's column groups with each key's catalog facts, and one row per node with its last heartbeat, its platform component's current figure per key (a gauge's latest sample, a window count only while its window is the newest) and its loss over its own hops, and the pipeline: each hop an item crosses, in order, with its in, out and loss per kind and per component, newest window and last hour, and the end to end. The rows need a fleet-wide node:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, verdicts and servers (with their panels) need a fleet-wide component:read and the system a fleet-wide system:read; short of that each (the pipeline and the node loss with them) is left out, never zeroed. Gated by node:read.
          */
         get: operations["get-platform-view"];
         put?: never;
@@ -9880,6 +9880,11 @@ export interface components {
              * @description The node's last heartbeat; absent when it has never sent one
              */
             last_heartbeat_at?: string;
+            /**
+             * Format: double
+             * @description The share of what the node's own hops (loss_hops) took in over the last hour that they lost, every kind summed per hop and composed across them as the pipeline's end to end is; 0 is healthy. Absent when nothing went in on any of them, or without a fleet-wide component read
+             */
+            loss?: number;
             name: string;
             /** @description The node's platform component verdict, which tones the row; absent without a fleet-wide component read */
             verdict?: string;
@@ -9910,6 +9915,123 @@ export interface components {
             rank?: number;
             /** @description The metric type's unit, when it has one */
             unit?: string;
+        };
+        PlatformPipelineBody: {
+            /** @description Per kind any hop carried, the share lost anywhere on the path: 1 - the product of every hop's survival (1 - loss), over the hops with a loss. Absent where no hop had one */
+            end_to_end: components["schemas"]["PlatformPipelineEndKindBody"][] | null;
+            /** @description The same over every kind summed per hop */
+            end_to_end_total: components["schemas"]["PlatformPipelineEndBody"];
+            /** @description The hops recorded today, in the order an item crosses them: the page draws these and has no hop list of its own */
+            hops: components["schemas"]["PlatformPipelineHopBody"][] | null;
+            /** @description The delivery keys' catalog facts, the explainer the page shows */
+            keys: components["schemas"]["PlatformKeyBody"][] | null;
+        };
+        PlatformPipelineComponentBody: {
+            /** @description The platform component that recorded this share of the hop, where its series live */
+            component: string;
+            /** @description The component's figures per kind it carried */
+            kinds: components["schemas"]["PlatformPipelineKindBody"][] | null;
+            /** @description The component's name */
+            name: string;
+            /** @description The component's figures, every kind summed */
+            total: components["schemas"]["PlatformPipelineSpanBody"];
+        };
+        PlatformPipelineEndBody: {
+            /**
+             * Format: double
+             * @description The last hour's end to end loss
+             */
+            last_hour?: number;
+            /**
+             * Format: double
+             * @description The current newest windows' end to end loss
+             */
+            newest?: number;
+        };
+        PlatformPipelineEndKindBody: {
+            /**
+             * @description The kind of item
+             * @enum {string}
+             */
+            kind: "metric" | "property" | "event" | "log";
+            /**
+             * Format: double
+             * @description The last hour's end to end loss
+             */
+            last_hour?: number;
+            /**
+             * Format: double
+             * @description The current newest windows' end to end loss
+             */
+            newest?: number;
+        };
+        PlatformPipelineFigureBody: {
+            /**
+             * Format: int64
+             * @description Items the hop took in over the span (delivery-in-count summed)
+             */
+            in: number;
+            /**
+             * Format: double
+             * @description (in - out) / in over the span's summed counts, never an average of ratios; 0 is healthy. Absent when nothing went in
+             */
+            loss?: number;
+            /**
+             * Format: int64
+             * @description Items the hop handed on over the span (delivery-out-count summed)
+             */
+            out: number;
+        };
+        PlatformPipelineHopBody: {
+            /** @description Each component's share of the hop, in name order; the shares sum to the hop's figures */
+            by_component: components["schemas"]["PlatformPipelineComponentBody"][] | null;
+            /**
+             * @description Which platform components record the hop
+             * @enum {string}
+             */
+            component_class: "node" | "server";
+            /** @description What the hop does and what counts as out and as lost there */
+            description: string;
+            /**
+             * @description The hop's name, as the delivery model names it
+             * @enum {string}
+             */
+            id: "schedule" | "sim" | "node" | "ingest";
+            /** @description The keys the hop's figures are read from, the same three on every hop */
+            keys: string[] | null;
+            /** @description The hop's figures per kind it carried, across its components; a kind it carried nothing of is absent */
+            kinds: components["schemas"]["PlatformPipelineKindBody"][] | null;
+            /** @description The hop's title */
+            label: string;
+            /** @description The hop's figures, every kind summed */
+            total: components["schemas"]["PlatformPipelineSpanBody"];
+        };
+        PlatformPipelineKindBody: {
+            /**
+             * @description The kind of item, the series instance
+             * @enum {string}
+             */
+            kind: "metric" | "property" | "event" | "log";
+            /** @description Every window over the last hour, summed */
+            last_hour: components["schemas"]["PlatformPipelineFigureBody"];
+            /** @description Each component's newest report window while it is current (within two report windows), summed; a component that stopped reporting adds nothing here, only to the last hour */
+            newest: components["schemas"]["PlatformPipelineFigureBody"];
+            /**
+             * Format: date-time
+             * @description When the newest window was written, current or not
+             */
+            newest_at?: string;
+        };
+        PlatformPipelineSpanBody: {
+            /** @description Every window over the last hour, summed */
+            last_hour: components["schemas"]["PlatformPipelineFigureBody"];
+            /** @description Each component's newest report window while it is current (within two report windows), summed; a component that stopped reporting adds nothing here, only to the last hour */
+            newest: components["schemas"]["PlatformPipelineFigureBody"];
+            /**
+             * Format: date-time
+             * @description When the newest window was written, current or not
+             */
+            newest_at?: string;
         };
         PlatformServerBody: {
             /** @description The open alarms on the server's platform component, newest first; a panel is flagged when one names a key it carries */
@@ -9950,8 +10072,12 @@ export interface components {
             groups: components["schemas"]["PlatformGroupBody"][] | null;
             /** @description True when this server runs as an omniglass lab */
             lab: boolean;
+            /** @description The hops a node's loss composes: the ones its own platform component records */
+            loss_hops: string[] | null;
             /** @description One row per node, in name order */
             nodes: components["schemas"]["PlatformNodeBody"][] | null;
+            /** @description Where work is lost: each hop's in, out and loss per kind, newest window and last hour, and the end to end. Absent without a fleet-wide component read */
+            pipeline?: components["schemas"]["PlatformPipelineBody"];
             /**
              * Format: date-time
              * @description The server's clock when the view was read: uptime and the liveness pill are both judged against it, so they read one clock

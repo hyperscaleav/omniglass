@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/hyperscaleav/omniglass/internal/delivery"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/writerclass"
 )
@@ -222,7 +223,9 @@ type PlatformServer struct {
 // PlatformNode is one node's row. ComponentID is nil for a node the boot has
 // not yet given a platform component. Verdict and Figures are the
 // component's, nil without an all-scope component read; a key the node has
-// never reported is absent from Figures, never zero.
+// never reported is absent from Figures, never zero. Loss is the last hour's
+// end to end over the hops the node's own component records (LossHops), nil
+// without the read or when nothing went in on any of them.
 type PlatformNode struct {
 	Name            string
 	Label           string
@@ -231,12 +234,15 @@ type PlatformNode struct {
 	ComponentID     *string
 	Verdict         *string
 	Figures         map[string]PlatformFigure
+	Loss            *float64
 }
 
 // PlatformView is the whole projection. FiguresRead says whether the caller's
 // component read reached the platform components: false means Servers is
 // empty and every node's Verdict and Figures are nil because the caller may
-// not read them, not because nothing was reported.
+// not read them, not because nothing was reported. Pipeline is the hop by
+// hop delivery read (#1646), nil without that read; LossHops names the hops a
+// node's Loss composes.
 type PlatformView struct {
 	System      *PlatformSystem
 	Servers     []PlatformServer
@@ -244,6 +250,8 @@ type PlatformView struct {
 	Keys        []PlatformKey
 	Nodes       []PlatformNode
 	FiguresRead bool
+	Pipeline    *PlatformPipeline
+	LossHops    []delivery.Hop
 }
 
 // PlatformView reads the platform as the Platform health page shows it. A
@@ -254,11 +262,12 @@ func (p *PG) PlatformView(ctx context.Context, nodeRead, sysRead, compRead scope
 		return nil, err
 	}
 	view := &PlatformView{
-		Servers: []PlatformServer{},
-		Groups:  PlatformViewGroups,
-		Nodes:   make([]PlatformNode, 0, len(nodes)),
+		Servers:  []PlatformServer{},
+		Groups:   PlatformViewGroups,
+		Nodes:    make([]PlatformNode, 0, len(nodes)),
+		LossHops: nodeLossHops(),
 	}
-	if view.Keys, err = p.platformKeys(ctx); err != nil {
+	if view.Keys, err = p.platformKeys(ctx, platformViewKeys()); err != nil {
 		return nil, err
 	}
 	var componentIDs []string
@@ -294,6 +303,9 @@ func (p *PG) PlatformView(ctx context.Context, nodeRead, sysRead, compRead scope
 	if err != nil {
 		return nil, err
 	}
+	if view.Pipeline, err = p.platformPipeline(ctx); err != nil {
+		return nil, err
+	}
 	for i := range view.Nodes {
 		id := view.Nodes[i].ComponentID
 		if id == nil {
@@ -302,6 +314,7 @@ func (p *PG) PlatformView(ctx context.Context, nodeRead, sysRead, compRead scope
 		if v, ok := verdicts[*id]; ok {
 			view.Nodes[i].Verdict = &v
 		}
+		view.Nodes[i].Loss = nodeLoss(*view.Pipeline, *id)
 		view.Nodes[i].Figures = figures[*id]
 		if view.Nodes[i].Figures == nil {
 			view.Nodes[i].Figures = map[string]PlatformFigure{}
@@ -310,15 +323,9 @@ func (p *PG) PlatformView(ctx context.Context, nodeRead, sysRead, compRead scope
 	return view, nil
 }
 
-// platformKeys reads the catalog facts of every key in PlatformViewGroups, in
-// group order. A key the catalog does not hold is left out.
-func (p *PG) platformKeys(ctx context.Context) ([]PlatformKey, error) {
-	return p.catalogKeys(ctx, platformViewKeys())
-}
-
-// catalogKeys reads the catalog facts of each named platform metric, in the
-// order given. A key the catalog does not hold is left out.
-func (p *PG) catalogKeys(ctx context.Context, names []string) ([]PlatformKey, error) {
+// platformKeys reads the catalog facts of names, in their order. A key the
+// catalog does not hold is left out.
+func (p *PG) platformKeys(ctx context.Context, names []string) ([]PlatformKey, error) {
 	rows, err := p.pool.Query(ctx, `
 		select mt.name, coalesce(mt.label, ''), coalesce(mt.unit, ''), coalesce(mt.description, '')
 		from unnest($1::text[]) with ordinality as k(name, ord)
@@ -513,7 +520,7 @@ func (p *PG) platformFigures(ctx context.Context, ids []string) (map[string]map[
 // server key, every server's figures, and every server's open alarms.
 func (p *PG) platformServerPanels(ctx context.Context, servers []PlatformServer) error {
 	names, ranks, windows := platformServerKeys()
-	catalog, err := p.catalogKeys(ctx, names)
+	catalog, err := p.platformKeys(ctx, names)
 	if err != nil {
 		return err
 	}

@@ -1,4 +1,4 @@
-## frozen-fact-served-as-current (fixed; found by the #1035 review, regressed and fixed in the #821, #456, #1297, #1626, #1644 and #1645 reviews, open again from the #1629 review as #1673)
+## frozen-fact-served-as-current (fixed; found by the #1035 review, regressed and fixed in the #821, #456, #1297, #1626, #1644, #1645 and #1646 reviews, open again from the #1629 review as #1673)
 
 - **Cue:** a read that serves a latest-ever sample (a certificate's days left, a handshake's
   result) beside a gate or state that stops the probe from refreshing it.

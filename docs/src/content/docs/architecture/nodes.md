@@ -763,7 +763,9 @@ stream acked) and `delivery-loss-ratio`, `(in - out) / in`, 0 when nothing came 
 when the stream acks its batch (in and out), or when the spool drops it at a cap, the bus refuses it,
 or it never encodes (in only); a batch held for a retry has not settled and counts in the window it
 does. These three replace the old spool-drop and publish-failure counts, so every hop's loss reads
-as the same ratio ([messaging](/architecture/messaging/#accounting-every-item-the-loss-ratio)). The schedule figures read
+as the same ratio ([messaging](/architecture/messaging/#accounting-every-item-the-loss-ratio)), and
+[Platform health](/guides/operator/platform-health/#where-work-is-lost) draws this hop beside the
+server's ingest, with each node's own share as its Loss (#1646). The schedule figures read
 the dispatcher's window ([below](#scheduling-concurrency-and-self-observability)): a poll keeping its
 interval reads a zero `schedule-gap-excess`, and a late pass or a skipped slot reads the distance it
 lost. A node that goes silent sends nothing, so the server writes the one figure that keeps

@@ -107,6 +107,12 @@ type Cadence struct {
 	// measurement of the product's cadence carries as little of the
 	// simulator's own traffic as it can.
 	SimPoll string
+	// ReportSeconds is the platform's collection report window the lab's
+	// seed sets (collection.report_seconds, #1646), so the node's delivery
+	// and poll figures and the server's land within a walkthrough's minute.
+	// Zero leaves the platform's own setting, as a learner's lab and a
+	// measurement at the product's defaults do.
+	ReportSeconds int
 	// For says who runs at it, in the lab guide's words.
 	For string
 }
@@ -132,7 +138,10 @@ func CadenceProfiles() []Cadence {
 		// A script's throwaway lab lives for minutes and probes every 2s, so
 		// a walkthrough waiting on a probe's verdict keeps its recorded
 		// budget.
-		{Name: CadenceWalkthrough, Heartbeat: "2s", ProbeEvery: "2s", WorklistEvery: "2s", SimPoll: "2s",
+		// Its report window is 10s, the setting's floor: at the platform's
+		// 60s the first delivery and poll figures land as a minute's
+		// recording ends (#1646).
+		{Name: CadenceWalkthrough, Heartbeat: "2s", ProbeEvery: "2s", WorklistEvery: "2s", SimPoll: "2s", ReportSeconds: 10,
 			For: "a script's throwaway lab: a walkthrough waiting on a probe's verdict sees it within seconds"},
 		{Name: CadenceDefault, Heartbeat: node.DefaultHeartbeat.String(), ProbeEvery: node.DefaultProbeEvery.String(), WorklistEvery: node.DefaultWorklistEvery.String(), SimPoll: simnode.DefaultPoll.String(),
 			For: "the product's own defaults: what a deployment's node runs at"},
@@ -425,6 +434,11 @@ func Plan(o Options) (Spec, error) {
 		"--user", LoginUser, "--password", LoginPassword}
 	if o.NoNode {
 		seedCmd = append(seedCmd, "--no-node")
+	} else if cadence.ReportSeconds > 0 {
+		// A lab with no node has no collection to report, and its pages
+		// hold still for the docs shots, so only a lab with its node sets
+		// the window.
+		seedCmd = append(seedCmd, "--report-seconds", strconv.Itoa(cadence.ReportSeconds))
 	}
 	seedEnv := append(append([]string{}, appEnv...), "OMNIGLASS_LAB_NODE_TOKEN_HASH="+o.NodeTokenHash,
 		"OMNIGLASS_LAB_PUSH_TOKEN_HASH="+o.PushTokenHash, "OMNIGLASS_LAB_PUSH_TOKEN_PREFIX="+o.PushTokenPrefix)

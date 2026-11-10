@@ -279,6 +279,45 @@ func TestPlanNoNode(t *testing.T) {
 	}
 }
 
+// A throwaway lab's collection report window (#1646): a walkthrough has a
+// minute of video, and the platform's own 60s window would land the first
+// delivery and poll figures as the recording ends, so the walkthrough
+// profile's seed sets collection.report_seconds to 10. A learner's lab keeps
+// the platform's setting (an operator's change to it survives a restart), as
+// does a throwaway lab with no node, which has no collection to report and
+// whose pages hold still for the docs shots.
+func TestPlanWalkthroughLabReportsEvery10s(t *testing.T) {
+	flag := func(cmd []string, name string) string {
+		i := slices.Index(cmd, name)
+		if i < 0 || i+1 >= len(cmd) {
+			return ""
+		}
+		return cmd[i+1]
+	}
+	s, err := Plan(testOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(s.Seed.Cmd, "--report-seconds") {
+		t.Fatalf("a learner's lab: the seed runs %v, want the platform's report window left as it is", s.Seed.Cmd)
+	}
+	o := testOptions()
+	o.Project, o.Ephemeral = "demo-1", true
+	if s, err = Plan(o); err != nil {
+		t.Fatal(err)
+	}
+	if got := flag(s.Seed.Cmd, "--report-seconds"); got != "10" {
+		t.Fatalf("a throwaway lab: --report-seconds %q in %v, want 10", got, s.Seed.Cmd)
+	}
+	o.NoNode = true
+	if s, err = Plan(o); err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(s.Seed.Cmd, "--report-seconds") {
+		t.Fatalf("a throwaway lab with no node: the seed runs %v, want the report window left as it is", s.Seed.Cmd)
+	}
+}
+
 // A cadence profile (#1277) names how often the lab's node checks in and
 // probes, so the lab footprint can measure a lab at the product's default
 // cadence beside the lab's own. A lab given none keeps the cadence it has

@@ -31,7 +31,7 @@ const full: PlatformView = {
   nodes: [
     {
       name: "edge-alpha", label: "Edge Alpha", enrolled: true, last_heartbeat_at: ago(3000),
-      component: uuidFor("alpha"), verdict: "healthy",
+      component: uuidFor("alpha"), verdict: "healthy", loss: 0.03,
       figures: { "checkin-age": { value: 3, observed_at: ago(3000) } },
     },
     {
@@ -40,6 +40,21 @@ const full: PlatformView = {
       figures: { "checkin-age": { value: 400, observed_at: ago(1000) }, "command-pending-count": { value: 0, observed_at: ago(1000) } },
     },
   ],
+  loss_hops: ["node"],
+  pipeline: {
+    keys: [{ name: "delivery-loss-ratio", label: "Delivery Loss", unit: "", description: "The share of what went in that did not come out." }],
+    hops: [
+      {
+        id: "node", label: "Node", description: "The node's spool.", component_class: "node",
+        keys: ["delivery-in-count", "delivery-out-count", "delivery-loss-ratio"],
+        kinds: [{ kind: "metric", newest: { in: 10, out: 10, loss: 0 }, last_hour: { in: 100, out: 97, loss: 0.03 } }],
+        total: { newest: { in: 10, out: 10, loss: 0 }, last_hour: { in: 100, out: 97, loss: 0.03 } },
+        by_component: [],
+      },
+    ],
+    end_to_end: [{ kind: "metric", newest: 0, last_hour: 0.03 }],
+    end_to_end_total: { newest: 0, last_hour: 0.03 },
+  },
 };
 
 // A server's four panels (#1645), as the view returns them: the catalog facts
@@ -158,6 +173,32 @@ describe("PlatformHealth page", () => {
     expect(bravo.className).toContain("bg-error/5");
   });
 
+  // Where work is lost (#1646): the pipeline sits above the node table, and
+  // each node's Loss group is its own hops' composed ratio, headed with a
+  // tooltip that names those hops.
+  it("draws the pipeline above the node table", () => {
+    mount(full);
+    const pipeline = screen.getByTestId("pipeline");
+    expect(within(pipeline).getByTestId("pipeline-hop-node")).toBeInTheDocument();
+    expect(within(pipeline).getByTestId("pipeline-end-to-end")).toHaveTextContent("3%");
+  });
+
+  it("shows each node's composed loss under a Loss group, not reported for a node with none", async () => {
+    mount(full);
+    const table = screen.getByTestId("platform-nodes");
+    expect(within(table).getByText("Loss")).toBeInTheDocument();
+    const alpha = screen.getByTestId("platform-node-edge-alpha");
+    const alphaLoss = alpha.querySelector('[data-figure="loss"]')!;
+    expect(alphaLoss).toHaveTextContent("3%");
+    expect(alphaLoss.className).toContain("text-error");
+    const bravoLoss = screen.getByTestId("platform-node-edge-bravo").querySelector('[data-figure="loss"]')!;
+    expect(bravoLoss).toHaveTextContent("not reported");
+    const trigger = within(table).getByRole("button", { name: "Node Loss" });
+    fireEvent.keyDown(document.body, { key: "Tab" });
+    trigger.focus();
+    expect(await screen.findByText(/own node hop took in over the last hour/)).toBeInTheDocument();
+  });
+
   it("opens a row onto its platform component, with a secondary link to the node's blade", () => {
     mount(full);
     const alpha = screen.getByTestId("platform-node-edge-alpha");
@@ -171,6 +212,7 @@ describe("PlatformHealth page", () => {
       read_at: readAt, lab: false, figures_read: false, servers: [], groups: full.groups,
       system: null as unknown as undefined,
       nodes: [{ name: "edge-alpha", label: "", enrolled: true, last_heartbeat_at: ago(1000) }, { name: "edge-new", label: "", enrolled: false }],
+      loss_hops: ["node"],
     };
     mount(bare);
     expect(screen.getByTestId("platform-node-edge-alpha")).toBeInTheDocument();
@@ -178,6 +220,9 @@ describe("PlatformHealth page", () => {
     expect(screen.getByTestId("platform-reach")).toHaveTextContent(/fleet-wide read/);
     expect(screen.queryByTestId("platform-lab")).toBeNull();
     expect(screen.queryByTestId("platform-verdict")).toBeNull();
+    // No pipeline without platform reach, and the reach line is said once.
+    expect(screen.queryByTestId("pipeline")).toBeNull();
+    expect(screen.getAllByRole("note")).toHaveLength(1);
     expect(errors).not.toHaveBeenCalled();
   });
 

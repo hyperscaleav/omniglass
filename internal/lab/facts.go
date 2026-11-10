@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -44,7 +45,10 @@ type FactCadence struct {
 	Heartbeat     string `json:"heartbeat"`
 	ProbeEvery    string `json:"probe_every"`
 	WorklistEvery string `json:"worklist_every"`
-	For           string `json:"for"`
+	// ReportEvery is the collection report window the profile's seed sets
+	// (#1646), empty when it leaves the platform's own setting.
+	ReportEvery string `json:"report_every"`
+	For         string `json:"for"`
 }
 
 // FactVolume is one named volume the lab keeps.
@@ -136,7 +140,11 @@ func FactsJSON(walkthroughs fs.FS) ([]byte, error) {
 		f.Volumes = append(f.Volumes, FactVolume{Name: v.Name, Holds: v.Holds})
 	}
 	for _, c := range CadenceProfiles() {
-		f.Cadences = append(f.Cadences, FactCadence{Name: c.Name, Heartbeat: c.Heartbeat, ProbeEvery: c.ProbeEvery, WorklistEvery: c.WorklistEvery, For: c.For})
+		report := ""
+		if c.ReportSeconds > 0 {
+			report = (time.Duration(c.ReportSeconds) * time.Second).String()
+		}
+		f.Cadences = append(f.Cadences, FactCadence{Name: c.Name, Heartbeat: c.Heartbeat, ProbeEvery: c.ProbeEvery, WorklistEvery: c.WorklistEvery, ReportEvery: report, For: c.For})
 	}
 	names, err := fs.Glob(walkthroughs, "*.yaml")
 	if err != nil {
