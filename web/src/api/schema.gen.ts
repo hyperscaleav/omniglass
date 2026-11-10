@@ -9848,6 +9848,11 @@ export interface components {
         PlatformSimulationProtocol: {
             /**
              * Format: int64
+             * @description Connections the simulator's listeners on the protocol accepted over the window; 0 for a connectionless protocol. A probe that only connects, or logs in and asks nothing, draws a connection and no request.
+             */
+            accepted: number;
+            /**
+             * Format: int64
              * @description Requests it answered.
              */
             answered: number;

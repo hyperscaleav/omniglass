@@ -210,6 +210,7 @@ function ProtocolTable(props: { node: PlatformSimNode }) {
         <thead>
           <tr>
             <th>Protocol</th>
+            <Head label="Accepted" tip="Connections the simulator's listeners on the protocol accepted over the window; 0 for a connectionless protocol. A probe that only connects, or logs in and asks nothing, draws a connection and no request." />
             <Head label="Received" tip="Requests the simulator received on the protocol over the window: the simulator's count, not the node's." />
             <Head label="Answered" tip="Requests the simulator answered over the window." />
             <Head label="p95 service" tip="The simulator's own service time, 95th percentile, in milliseconds; a dash when it timed nothing." />
@@ -218,10 +219,11 @@ function ProtocolTable(props: { node: PlatformSimNode }) {
           </tr>
         </thead>
         <tbody>
-          <For each={props.node.protocols ?? []} fallback={<tr><td colSpan={6} class="text-base-content/50">No protocol drew a request over the window.</td></tr>}>
+          <For each={props.node.protocols ?? []} fallback={<tr><td colSpan={7} class="text-base-content/50">No protocol drew a connection or a request over the window.</td></tr>}>
             {(p) => (
-              <tr data-testid="platform-sim-protocol" data-protocol={p.protocol} data-received={p.received}>
+              <tr data-testid="platform-sim-protocol" data-protocol={p.protocol} data-accepted={p.accepted} data-received={p.received} data-poll-targets={p.poll_targets}>
                 <td>{p.protocol}</td>
+                <td class="tnum text-right">{p.accepted}</td>
                 <td class="tnum text-right">{p.received}</td>
                 <td class="tnum text-right">{p.answered}</td>
                 <td class="tnum text-right">{p.latency_ms.n > 0 ? `${Math.round(p.latency_ms.p95 * 10) / 10} ms` : "-"}</td>

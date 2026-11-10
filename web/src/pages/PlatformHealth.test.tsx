@@ -169,7 +169,7 @@ const measured: PlatformSimNode = {
     { gap: "sent-not-received", protocol: "icmp", count: 0, in: 0, ratio: null, masked: 0, masked_by: "", answered_late: 0, reading: "not observed by the sim" },
   ],
   receipts: { landed: 42, margin: 1, backlog: 0, after_end: 0 },
-  protocols: [{ protocol: "http", received: 90, answered: 90, latency_ms: { p50: 1, p95: 2.5, p99: 4, n: 90 }, poll_targets: 1, in_flight_high: 2 }],
+  protocols: [{ protocol: "http", accepted: 9, received: 90, answered: 90, latency_ms: { p50: 1, p95: 2.5, p99: 4, n: 90 }, poll_targets: 1, in_flight_high: 2 }],
   in_flight_high: 2, queue_depth: null, busy_workers: null,
   devices: [{ component_id: uuidFor("display"), name: "lobby-display", received: { http: 90 }, impaired: true, unhit: false }],
 };
@@ -205,7 +205,9 @@ describe("PlatformHealth with a simulator", () => {
     const device = screen.getByTestId("platform-sim-device");
     expect(within(device).getByRole("link", { name: "lobby-display" })).toHaveAttribute("href", `/simulation?c=${uuidFor("display")}`);
     expect(within(device).getByText("impaired")).toBeInTheDocument();
+    expect(screen.getByTestId("platform-sim-protocol")).toHaveAttribute("data-accepted", "9");
     expect(screen.getByTestId("platform-sim-protocol")).toHaveAttribute("data-received", "90");
+    expect(screen.getByTestId("platform-sim-protocol")).toHaveAttribute("data-poll-targets", "1");
     expect(screen.getAllByText(NOT_WIRED)).toHaveLength(2);
   });
 

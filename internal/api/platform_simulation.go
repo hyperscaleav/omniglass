@@ -39,6 +39,7 @@ type platformSimulationReceipts struct {
 // the window.
 type platformSimulationProtocol struct {
 	Protocol     string               `json:"protocol"`
+	Accepted     int64                `json:"accepted" doc:"Connections the simulator's listeners on the protocol accepted over the window; 0 for a connectionless protocol. A probe that only connects, or logs in and asks nothing, draws a connection and no request."`
 	Received     int64                `json:"received" doc:"Requests the simulator received on the protocol over the window."`
 	Answered     int64                `json:"answered" doc:"Requests it answered."`
 	Latency      closedloop.Quantiles `json:"latency_ms" doc:"The simulator's service time in milliseconds; n is 0 when it timed nothing."`
@@ -102,7 +103,7 @@ func toPlatformSimulationNode(w closedloop.NodeWindow, names map[string]string) 
 	n.Receipts = platformSimulationReceipts{Landed: rc.Landed, Margin: rc.Margin, Backlog: rc.Backlog, AfterEnd: rc.AfterEnd}
 	sum := closedloop.SummarizeEndpoints([]closedloop.NodeBracket{w.Bracket})
 	for _, p := range sum.Protocols {
-		n.Protocols = append(n.Protocols, platformSimulationProtocol{Protocol: p.Protocol, Received: p.Received,
+		n.Protocols = append(n.Protocols, platformSimulationProtocol{Protocol: p.Protocol, Accepted: p.Accepted, Received: p.Received,
 			Answered: p.Answered, Latency: p.Latency, PollTargets: p.PollTargets, InFlightHigh: p.InFlightHigh[w.Node]})
 	}
 	for _, sn := range sum.Nodes {

@@ -484,6 +484,7 @@ type platformSimulationWire struct {
 		} `json:"receipts"`
 		Protocols []struct {
 			Protocol    string `json:"protocol"`
+			Accepted    int64  `json:"accepted"`
 			Received    int64  `json:"received"`
 			Answered    int64  `json:"answered"`
 			PollTargets int64  `json:"poll_targets"`
@@ -547,8 +548,9 @@ func TestPlatformSimulationViewAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Tick k is k minutes past base: the node sent and the sim received 60k
-	// http requests, all answered, and the bus acknowledged 6k batches.
+	// Tick k is k minutes past base: the node opened 6k connections and sent
+	// 60k http requests, which the sim accepted, received and answered, and
+	// the bus acknowledged 6k batches.
 	base := time.Now().UTC().Add(-time.Hour).Truncate(time.Minute)
 	tick := 0
 	at := func(k int) time.Time { return base.Add(time.Duration(k) * time.Minute) }
@@ -557,11 +559,11 @@ func TestPlatformSimulationViewAPI(t *testing.T) {
 	observe := func(k int) {
 		n := int64(100 + 60*k)
 		sim := collection.SimObservation{Node: "site-a", At: at(k), Started: base.Add(-time.Hour),
-			Protocols: []collection.SimProtocolObservation{{Protocol: "http", Received: n, Answered: n}}}
+			Protocols: []collection.SimProtocolObservation{{Protocol: "http", Accepted: n / 10, Received: n, Answered: n}}}
 		hub.observation = map[string]collection.EndpointObservation{"site-a": {
 			SimBefore: sim,
 			Node: collection.RequestTallySnapshot{Node: "site-a", At: at(k), Started: base.Add(-time.Hour),
-				Transports: []collection.TallyCounters{{Transport: "http", Sent: n, Answered: n}}, BatchesAcknowledged: int64(10 + 6*k)},
+				Transports: []collection.TallyCounters{{Transport: "http", Connections: n / 10, Sent: n, Answered: n}}, BatchesAcknowledged: int64(10 + 6*k)},
 			SimAfter: sim,
 		}}
 		hits := make([]collection.SimHit, 6)
@@ -661,9 +663,9 @@ func TestPlatformSimulationViewAPI(t *testing.T) {
 	}
 	// http is what the sim served; tcp is panel-1's poll target, which the
 	// window counts as due even though this sim's protocol reads carry none.
-	if p := n.Protocols; len(p) != 2 || p[0].Protocol != "http" || p[0].Received != 120 || p[0].Answered != 120 ||
+	if p := n.Protocols; len(p) != 2 || p[0].Protocol != "http" || p[0].Accepted != 12 || p[0].Received != 120 || p[0].Answered != 120 ||
 		p[1].Protocol != "tcp" || p[1].PollTargets != 1 {
-		t.Fatalf("protocols = %+v, want http's window deltas and tcp's one poll target", n.Protocols)
+		t.Fatalf("protocols = %+v, want http's window deltas (12 connections, 120 requests) and tcp's one poll target", n.Protocols)
 	}
 	if n.QueueDepth != nil || n.BusyWorkers != nil {
 		t.Fatalf("queue %v, busy %v: want both null (not wired yet) from a node that reports neither", n.QueueDepth, n.BusyWorkers)

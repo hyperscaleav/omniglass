@@ -7507,6 +7507,10 @@ components:
     PlatformSimulationProtocol:
       additionalProperties: false
       properties:
+        accepted:
+          description: Connections the simulator's listeners on the protocol accepted over the window; 0 for a connectionless protocol. A probe that only connects, or logs in and asks nothing, draws a connection and no request.
+          format: int64
+          type: integer
         answered:
           description: Requests it answered.
           format: int64
@@ -7530,6 +7534,7 @@ components:
           type: integer
       required:
         - protocol
+        - accepted
         - received
         - answered
         - latency_ms
