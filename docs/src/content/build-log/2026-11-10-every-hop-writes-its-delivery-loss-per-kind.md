@@ -12,5 +12,7 @@ spool counts an acked batch in and out and a dropped, refused or unencodable one
 server's consumer counts each landing's store outcome, each held redelivery as in and out, and each
 Termed batch as in only. The keys replace `spool-drop-count`, `publish-failure-count` and
 `bus-telemetry-drop-count`, which are gone from the seed, the writer class and the platform view's
-interim delivery group; the API lane's refused samples now count as lost too. The decisions are
+interim delivery group; the API lane's refused samples now count as lost too. An unbound identity
+(one no binding places, which the conduit's inbox already surfaces) now counts as accounted for, not
+loss, on the server hop and in the lab's ledger read, so the dev seed's unassigned room reads 0. The decisions are
 [ADR-1659](/architecture/decisions/#adr-1659-a-hop-writes-its-delivery-in-out-and-loss-ratio-per-kind-every-window).

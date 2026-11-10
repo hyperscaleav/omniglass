@@ -147,7 +147,8 @@ gateway refuses outright, the rest of its batch landing ([workers](/architecture
 
 A batch landing once says nothing about whether every item in it reached the store. The **loss
 ratio** does, and it reads the same for every telemetry kind (metric, property, event, log) at every
-hop: `loss = (in - out) / in`, where `out` is the items accounted for in the store. A healthy
+hop: `loss = (in - out) / in`, where `out` is the items accounted for (in the store, or held for the
+operator to place). A healthy
 pipeline reads exactly 0 for every kind, so reading it needs no knowledge of a kind's internals. A
 kind with nothing in reads no ratio, never a 0; a hop a kind does not cross has no row
 ([ADR-1641](/architecture/decisions/#adr-1641-every-telemetry-item-is-accounted-on-its-batchs-receipt-and-read-as-a-loss-ratio), #1641).
@@ -168,15 +169,21 @@ every window as platform metrics, 0 when nothing came in (#1659,
   **outcome** (its items by kind and outcome, from the pass that commits) on the batch's receipt, so
   the accounting commits exactly when the data does and adds no rows. A redelivery the receipt
   absorbs counts one more `deliveries` on it and lands nothing.
-- **Each item takes exactly one outcome.** Out: `stored`, and `coalesced` (an unchanged property
-  value the transition guard skipped on purpose). Loss: `refused-unregistered`, `refused-writer`,
-  `refused-instance`, `refused-invalid`, `refused-empty`, `refused-write` (a group the gateway
-  refused while its siblings landed), `orphaned` (its task's owner gone), `unbound` (an identified
-  sample whose identity has no binding), `unidentified`, and `missing` (a hole in a boot's offsets).
+- **Each item takes exactly one outcome.** Out: `stored`, `coalesced` (an unchanged property value
+  the transition guard skipped on purpose), and `unbound` (an identified sample whose identity no
+  binding places). Loss: `refused-unregistered`, `refused-writer`, `refused-instance`,
+  `refused-invalid`, `refused-empty`, `refused-write` (a group the gateway refused while its siblings
+  landed), `orphaned` (its task's owner gone), `unidentified`, and `missing` (a hole in a boot's
+  offsets).
 - **A refusal is loss.** Counting refused items as out would let a fleet refusing a third of its
-  samples read 0, and only someone who knew to look at the refusal counts would notice; so would an
-  unbound identity, which the conduit's inbox names but whose samples are not stored. The read names
-  the largest outcome behind a loss as its **cause** instead.
+  samples read 0, and only someone who knew to look at the refusal counts would notice. The read
+  names the largest outcome behind a loss as its **cause** instead.
+- **An unbound identity is accounted for, not lost.** An identity a conduit reports that no binding
+  places is the operator's configuration, not data omniglass dropped: the operator has not assigned
+  it, and the conduit's [unbound inbox](/architecture/collection/#shared-api-collection-one-component-many-owners)
+  already surfaces it (the count, the keys, how often it was heard). Like a device that fails to
+  answer, it is accounted for, so a healthy fleet with an unassigned identity reads 0. The outcome is
+  still counted on every row.
 - **Deduplicated sits beside the ratio.** `in` and `out` count distinct items, and a redelivery's
   items count as `deduplicated` next to the ratio, never inside it: a retry storm counted on both
   sides would dilute the ratio and could hide real loss.
@@ -297,8 +304,8 @@ failure count has its attempts beside it, so each loss reads as a ratio where 0 
 - **`delivery-in-count`, `delivery-out-count`, `delivery-loss-ratio`**, per item kind as the
   instance (#1659): the server hop's delivery over the window, the same three keys and the same
   ratio a node writes for its own hop ([nodes](/architecture/nodes/#self-monitoring-the-node-reports-itself)).
-  An item is in once its batch settles: landed (stored and coalesced items out, refused and orphaned
-  items not; a deduplicated item is out, since an earlier copy landed it, so a replay reads 0), held
+  An item is in once its batch settles: landed (stored, coalesced and unbound items out, refused and
+  orphaned items not; a deduplicated item is out, since an earlier copy landed it, so a replay reads 0), held
   by its receipt as a redelivery (every item in and out), or Termed (every item it names in, none
   out: refused whole, its fifth delivery failed, unreadable metadata, or naming an owner or a task it
   may not). A batch held for a retry counts in the window it settles. The ratio is written as 0 when

@@ -100,7 +100,7 @@ func TestIntegrationScaleDelivery(t *testing.T) {
 			continue
 		}
 		measured++
-		if *d.Loss != 0 || d.Outcomes[delivery.Unbound] != 0 || d.Outcomes[delivery.Missing] != 0 {
+		if *d.Loss != 0 || d.Outcomes[delivery.Missing] != 0 {
 			t.Errorf("%s across %s: loss %v, outcomes %v; a healthy lab loses nothing", d.Kind, d.Hop, *d.Loss, d.Outcomes)
 		}
 	}

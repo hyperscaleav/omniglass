@@ -492,14 +492,16 @@ end to end  metric 0  property 0  event -  log -
 ```
 
 - **in** is the items the node minted in the window (the batches' ledgers, plus the items of any batch
-  that never landed), **out** the items in the store (`stored`, and for properties `coalesced`, an
-  unchanged value skipped on purpose). A kind with nothing in reads `-`, never 0. Only the ingest hop
+  that never landed), **out** the items accounted for (`stored`; for properties `coalesced`, an
+  unchanged value skipped on purpose; and `unbound`, an identity no binding places, which the
+  conduit's unbound inbox holds for the operator to assign). A kind with nothing in reads `-`, never 0. Only the ingest hop
   is read today; the node, schedule and sim hops follow.
 - **dedup** is the items a redelivery carried again, which the receipt absorbed. It sits beside the
   ratio, never in it, so a retry storm never moves the loss off 0.
 - **cause** is the largest outcome behind a loss: a `refused-<why>` (a key not registered, a writer or
-  instance refused, a value invalid or empty, a group the gateway refused), `orphaned`, `unbound` (an
-  identity with no binding), `unidentified`, or `missing`. A refusal is loss on purpose: the sims emit
+  instance refused, a value invalid or empty, a group the gateway refused), `orphaned`,
+  `unidentified`, or `missing`. An `unbound` identity is not loss: the operator has not assigned it,
+  and the inbox already shows it, so the dev seed's deliberately unbound `zr-boardroom-b` reads 0. A refusal is loss on purpose: the sims emit
   only valid keys, so any refusal in a lab is a bug worth chasing. The JSON (`delivery`) carries every
   outcome's count on every row, with the same keys for every kind.
 - **missing** is a batch that never landed: a hole in a node boot's batch sequence, its items read
