@@ -17,3 +17,4 @@ refs: [1370, 1266, 1024, 1369, 1284]
   - **A seed-supplied fixed token.** It weakens "the server mints the token" for every install to serve a lab.
   - **The token and key on the node's worklist.** Every node pulls its worklist, simulating or not; only the simulator plays the sender.
   - **Fenced on a loopback address alone.** The review's blocker: a production node watching a service on its own host, or a writer able to point an endpoint at a loopback address, would read another component's webhook key off the device list without `secret:reveal`.
+- **Point 3 superseded by** [ADR-1743](#adr-1743-an-outside-actor-is-an-emulator-device-a-scenario-declares): the booking service is now an emulator device a scenario declares, provisioned one way for both lab kinds; its grant shape and per-run token stand.

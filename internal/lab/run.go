@@ -147,8 +147,8 @@ func (r *Runner) Run(ctx context.Context, cfg Config) (*Lab, error) {
 	if spec.Ephemeral {
 		r.say("Stopped, and its data removed with it (a throwaway lab).")
 	} else {
-		r.say("Stopped. Its data is kept in the volumes %s and %s, so `omniglass lab run` picks up where you left off; --fresh starts over from the seed.",
-			spec.Volumes[0].Name, spec.Volumes[1].Name)
+		r.say("Stopped. Its data is kept in the volumes %s and %s, so `%s` picks up where you left off; --fresh starts over from the seed.",
+			spec.Volumes[0].Name, spec.Volumes[1].Name, RestartCommand(cfg.Options))
 	}
 	return lab, err
 }
@@ -742,7 +742,7 @@ func (r *Runner) readyBanner(lab *Lab, cfg Config) {
 		r.say("  Stop it    press Ctrl-C here. The lab is removed with its data.")
 	} else {
 		r.say("  Stop it    press Ctrl-C here. Your lab's data is kept for next time;")
-		r.say("             omniglass lab run --fresh starts over from the seed.")
+		r.say("             %s --fresh starts over from the seed.", RestartCommand(cfg.Options))
 	}
 	r.say("")
 	if cfg.ScaleRun == nil {

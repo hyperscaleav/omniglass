@@ -18,9 +18,11 @@ dropped, so `lab perf check --samples`, which reads runs back from their JSON, c
 not explain and printed a delivery table with no cause. Reading it from the outcomes makes the table and
 the gate say the same thing whether the run was just measured or read back.
 
-The gate reads the hops the delivery table prints on this base, the ingest hop today; as the node,
-schedule and outbound hops land, their per-kind rows join the gate with no change to it. The sim hop's
-rows are one a protocol with no kind (#1742), so when it lands the figure name and the note must carry
-the protocol, or every protocol reads as one `delivery_loss/sim/` figure. The lab guide's delivery
+The gate reads every hop the delivery table prints: the schedule, node and ingest hops' per-kind rows
+join it with no change to it. The sim hop's rows are one a protocol with no kind (#1694), so their
+figure name and note carry the protocol (`delivery_loss/sim/snmp`) rather than every protocol reading as
+one `delivery_loss/sim/` figure, and a push-lane row (#1696) names its lane first
+(`delivery_loss/push/ingest/metric`) rather than folding into the node lane's row for the same hop and
+kind. The lab guide's delivery
 table and baseline sections show a failed row, and the 1640 ADR's and build log's 3000 size references
 now point at #1719, which owns it.

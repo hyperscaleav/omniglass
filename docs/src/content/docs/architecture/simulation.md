@@ -39,7 +39,10 @@ webhook endpoint, and a simulated booking service pushes through `POST /telemetr
 built: [what an endpoint observed](#what-an-endpoint-observed) (#1639), every simulated endpoint
 counting what reached it and how it answered, read beside the node's own tally so a scale lab
 closes the loop. Also built: the same loop on a running server (#1647), bracketed into a sliding
-window per node and read on [Platform health](/guides/operator/platform-health/#with-a-simulator).
+window per node and read on [Platform health](/guides/operator/platform-health/#with-a-simulator). Also
+built: the [push face](#a-pusher-pushes-on-its-own-cadence) (#1743), an outside actor that reports by
+pushing as an emulator device of its profile, declared by a scenario as it declares devices, so the
+dev lab and the scale lab push through the same path.
 Still `Design`: the Helm sidecar (#892).
 :::
 
@@ -396,12 +399,14 @@ Beside those, the fixture's simulated endpoints wire the rest:
   right login and no stale pin); and a bare `icmp` probe. A simulated device's ssh host key, like its
   https key, is derived from its id, so a key the node pinned on first use survives a simulator
   restart.
-- **A first-party pusher**: the simulated booking service, beside the node, pushes the HQ
-  boardroom system's `booking-count` (meetings left in its day) and `booking-state` (`booked` or
-  `free`) through `POST /telemetry:push` on one meeting day that repeats every day. It holds a
-  service principal whose only grant is `telemetry:push` on that one system, and reads that system
-  off its own grant (`GET /auth/me`), so it pushes nowhere else and reads nothing. The lab mints its
-  token on every run, as it does the node's, and hands it to the simulator.
+- **A first-party pusher**: the fleet declares one pusher (`sim_pushers`), the booking service, an
+  emulator device of the `booking-service` profile run by the simulator beside the node. Its
+  [push face](#a-pusher-pushes-on-its-own-cadence) pushes the HQ boardroom system's `booking-count`
+  (meetings left in its day) and `booking-state` (`booked` or `free`) through
+  `POST /telemetry:push` on one meeting day that repeats every day. It holds a service principal
+  whose only grant is `telemetry:push` on that one system, and reads that system off its own grant
+  (`GET /auth/me`), so it pushes nowhere else and reads nothing. The lab mints its token on every
+  run, as it does the node's, and hands it to the simulator.
 
 `TestEveryCollectionMethodRunsOnAHealthyLabComponent` holds the fleet to it: every seeded driver and
 every registry transport is attached, by an endpoint that is no planted fault, on a component a
@@ -539,6 +544,34 @@ carries the platform at headquarters with both endpoints and binds four of its r
 systems; its fifth room, `zr-boardroom-b`, is bound to nothing, so its values land in the conduit's
 unbound inbox until an operator binds it ([ADR-1282](/architecture/decisions/#adr-1282-a-conduit-fans-each-identified-value-out-to-the-owner-its-binding-names-and-a-binding-costs-a-write-on-both-of-its-ends)).
 The lab's per-room UCC services stay beside it until #1390 retires them.
+
+### A pusher pushes on its own cadence
+
+Some outside actors are not devices on the network at all: a scheduling platform's integration
+reports the places it manages by pushing to Omniglass, and nothing polls it. A profile models one
+with a **push face** (#1743): a cadence (`push.every`, at least a second) and a body template
+(`push.body`) rendered for each system the pusher reports for, over the device's state, its id and
+its clock. The face holds a bearer token for a principal granted `telemetry:push` alone on those
+systems; it reads them off its own grant (`GET /auth/me`), renders each one's batch, and posts it
+through `POST /telemetry:push`, then does it again on every tick. A failed push (a server still
+coming up, an item the server refused) drops the grant it read, so the next tick reads it again,
+and it is logged with the device and the reason, never the token. Each system is pushed on its own:
+a grant outlives the system it names, so a refused system costs only its own push, and one tick's
+failures log once, the first named and the rest counted. The face is a primitive of the
+engine, so a pusher is a profile, not code: the shipped `booking-service` is the first, its body
+reading one meeting day (`configuration.calendar.bookings`, windows in UTC) through the
+`bookingsAt` template function.
+
+A pusher is declared, not built in. The dev fleet's fixtures declare theirs under `sim_pushers`
+(a name, a profile, the systems it reports for); a scale scenario declares its own under
+`pushers` (a name, a profile, how many per site and how many of the site's systems each reports
+for), and the shipped `corporate` scenario declares one booking service per site over four
+systems ([the lab guide](/guides/lab/#the-manifest-format)). Either way the lab takes the
+same path: the seed grants each pusher's service principal `telemetry:push` on its systems, the
+lab mints its token on every run and sets it on the principal, and the simulator beside the
+pusher's node runs it as an emulator device holding that token. The token reaches the simulator's
+environment and nowhere else: the seed is handed its hash, and neither the plan nor a log prints
+it ([ADR-1743](/architecture/decisions/#adr-1743-an-outside-actor-is-an-emulator-device-a-scenario-declares)).
 
 ## Adding a simulated component
 

@@ -22,7 +22,10 @@ refs: [1641, 1623, 453, 1595, 1639, 1640, 1625, 1628, 1691, 1692, 1696, 1698, 16
      of the pass that commits on the batch's `telemetry_receipt` row, so the accounting is exactly-once
      with the data and adds no rows to the footprint being measured. A redelivery the receipt absorbs
      counts one more `deliveries` and lands nothing; the first delivery is told by `xmax = 0`, since
-     an `on conflict do update` reports one affected row either way.
+     an `on conflict do update` reports one affected row either way. **Amended (#1691):** a Term
+     receipt is not a landing, so the first delivery is told by `deliveries = 1` after the upsert,
+     which a landing that replaces a Term receipt also leaves
+     ([ADR-1691](#adr-1691-a-batch-the-server-terms-whole-reads-under-its-own-cause-on-a-term-receipt)).
   4. **Refusal is loss.** Every refusal (`refused-unregistered`, `-writer`, `-instance`, `-invalid`,
      `-empty`, `-write`), `orphaned` and `unidentified` count as loss, and the read names the
      largest outcome behind a loss as its cause. Each item takes exactly one outcome. **Amended
@@ -43,9 +46,14 @@ refs: [1641, 1623, 453, 1595, 1639, 1640, 1625, 1628, 1691, 1692, 1696, 1698, 16
   - The outcome is tallied per batch from the committed pass (`IngestBatch.outcome` over the live and
     refused groups and the consumer's own tally), not from per-group written and coalesced counts on
     `LandResult` as the issue proposed; the coalesced count comes from the property write directly.
-  - The push lane records no ledger and reads no row (#1696); a whole-batch Term leaves no receipt
+  - The push lane recorded no ledger and read no row (**closed by #1696**,
+    [ADR-1696](#adr-1696-the-push-lanes-batches-carry-a-ledger-minted-by-the-server-and-read-as-their-own-ingest-row));
+    a whole-batch Term leaves no receipt
     and reads as `missing` (#1691); a node's spool drops and a killed boot's tail read as ingest
     `missing` or not at all until the node hop (#1692).
+    **Amended (#1691):** a whole-batch Term now records a Term receipt and reads under its own cause;
+    only an undecodable batch still reads as `missing`
+    ([ADR-1691](#adr-1691-a-batch-the-server-terms-whole-reads-under-its-own-cause-on-a-term-receipt)).
   - The read finds a boot's lower neighbor by seq, however long before the window it was minted, while
     its receipt is kept (a day): a neighbor pruned before a long outage ends reads the gap below the
     window as `missing`. The window is capped at 23 hours by the receipts' day.

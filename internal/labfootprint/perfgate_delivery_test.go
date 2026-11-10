@@ -234,3 +234,59 @@ func TestDeliveryTableCauseSurvivesJSON(t *testing.T) {
 		t.Fatalf("the table does not name the cause:\n%s", read.String())
 	}
 }
+
+// The hops that joined the table beside the ingest hop each read as their own
+// figure: a sim row by its protocol (#1694), a push-lane row under its lane
+// (#1696) and never folded into the node lane's row for the same hop and
+// kind, and a schedule row naming skipped (#1693), all read back from JSON.
+func TestComparePerfDeliveryNamesEveryHopsFigure(t *testing.T) {
+	base := baselineOf(t, runsWith(3, nil))
+	lossy := func(r DeliveryRow) DeliveryRow {
+		if l, ok := delivery.Loss(r.In, r.Out); ok {
+			r.Loss = &l
+		}
+		return r
+	}
+	runs := runsWith(3, func(_ int, r *ScaleReport) {
+		node := deliveryRow(delivery.Metric, map[delivery.Outcome]uint64{delivery.Stored: 40})
+		node.Lane = LaneNode
+		push := deliveryRow(delivery.Metric, map[delivery.Outcome]uint64{delivery.Stored: 6, delivery.Missing: 4})
+		push.Lane = LanePush
+		r.Delivery = []DeliveryRow{
+			lossy(DeliveryRow{Lane: LaneNode, Hop: delivery.Schedule, Kind: delivery.Metric, In: 10, Out: 8,
+				Outcomes: map[delivery.Outcome]uint64{delivery.Made: 8, delivery.Skipped: 2}}),
+			lossy(DeliveryRow{Lane: LaneNode, Hop: delivery.Sim, Protocol: "snmp", In: 20, Out: 15,
+				Outcomes: map[delivery.Outcome]uint64{delivery.Returned: 15, delivery.Withheld: 5}}),
+			lossy(DeliveryRow{Lane: LaneNode, Hop: delivery.Sim, Protocol: "http", In: 20, Out: 20,
+				Outcomes: map[delivery.Outcome]uint64{delivery.Returned: 20}}),
+			node, push,
+		}
+		*r = viaJSON(t, *r)
+	})
+	v := ComparePerf(base, runs, nil)
+	cases := []struct {
+		figure string
+		status PerfStatus
+		note   []string
+	}{
+		{"delivery_loss/schedule/metric", PerfFail, []string{"metric lost 2 of 10 at schedule", "cause skipped"}},
+		{"delivery_loss/sim/snmp", PerfFail, []string{"snmp lost 5 of 20 at sim", "cause withheld"}},
+		{"delivery_loss/sim/http", PerfPass, nil},
+		{"delivery_loss/ingest/metric", PerfPass, nil},
+		{"delivery_loss/push/ingest/metric", PerfFail, []string{"metric lost 4 of 10 at ingest on the push lane", "cause missing"}},
+	}
+	for _, c := range cases {
+		f := figureNamed(t, v, c.figure)
+		if f.Status != c.status {
+			t.Errorf("%s reads %s, want %s (%+v)", c.figure, f.Status, c.status, f)
+		}
+		for _, want := range c.note {
+			if !strings.Contains(f.Note, want) {
+				t.Errorf("%s note %q does not hold %q", c.figure, f.Note, want)
+			}
+		}
+		if c.note == nil && f.Note != "" {
+			t.Errorf("%s passes with a note %q, want none", c.figure, f.Note)
+		}
+	}
+}

@@ -45,12 +45,12 @@ type Config struct {
 	Impairments bool
 	// Applier realizes impairments; nil is the kernel's (impair.Netlink).
 	Applier applier
-	// PushToken is the simulated booking service's token (#1370): set, the
-	// simulator pushes the bookings of the one system its principal is
-	// granted through POST /telemetry:push every PushEvery (zero takes the
-	// default). Empty, it pushes nothing.
-	PushToken string
-	PushEvery time.Duration
+	// Pushers are the outside actors the lab's scenario declared on this
+	// node (#1743): each runs as an emulator device of its profile with a
+	// push face, holding the token minted for its principal, and pushes the
+	// systems its grant names through POST /telemetry:push. None pushes
+	// nothing.
+	Pushers []Pusher
 }
 
 const (
@@ -160,8 +160,13 @@ func Run(ctx context.Context, cfg Config) error {
 
 	profileFor := func(p string) (string, bool) { name, _, ok := store.ForProduct(p); return name, ok }
 	subs := newSubscriber(cfg.ServerURL, store)
-	if cfg.PushToken != "" {
-		go newPusher(cfg.ServerURL, cfg.PushToken).run(ctx, cfg.PushEvery, log.With("pusher", pusherSource))
+	if len(cfg.Pushers) > 0 {
+		pushers, err := startPushers(store, cfg.ServerURL, cfg.Pushers)
+		if err != nil {
+			return err
+		}
+		defer pushers.StopAll()
+		log.Info("pushers started", "pushers", len(cfg.Pushers))
 	}
 	pull := func() {
 		devices, err := pullList(nc, cfg.Name, caps)

@@ -13,3 +13,10 @@
   `internal/bus/consumer.go`); or resolve the owners before the write and forget the missing ones.
   Pin it with a write carrying a deleted owner beside a live one
   (`TestADeletedComponentCostsOnlyItsOwnWebhookCounts`, `internal/storage/collection_report_test.go`).
+- **Second instance (#1743 review, fixed in the same slice):** the sim push face posted one batch
+  per system its grant names and returned on the first refusal. A grant outlives the system it
+  names (`principal_grant.scope_id` is text, not a foreign key), so deleting one system in a lab
+  404'd its push every tick and starved every system after it in the grant's order. Fixed by
+  pushing each system on its own and collapsing the tick's failures into one error, the first
+  named and the rest counted (`pushOwners`, internal/sim/push.go;
+  `TestPushFaceKeepsPushingPastAGoneSystem`).

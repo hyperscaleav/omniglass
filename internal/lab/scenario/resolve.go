@@ -30,6 +30,8 @@ type Plan struct {
 	Archetypes []ArchetypePlan
 	Sites      []SitePlan
 	Totals     Totals
+	// Pushers counts the pushers placed per profile, in declaration order.
+	Pushers []Count
 }
 
 // ArchetypePlan is one archetype of a plan: how many sites it placed, the
@@ -50,7 +52,18 @@ type SitePlan struct {
 	Archetype string
 	Buildings []BuildingPlan
 	Systems   []SystemPlan
+	Pushers   []PusherPlan
 	Totals    Totals
+}
+
+// PusherPlan is one pusher placed at a site (#1743): its name (the site's,
+// the declaration's and its index), its emulator profile, and the systems of
+// the site it is granted telemetry:push on. Its token is minted per run, never
+// planned.
+type PusherPlan struct {
+	Name    string
+	Profile string
+	Systems []string
 }
 
 // BuildingPlan is one building and its floor count.
@@ -145,6 +158,7 @@ func Resolve(m *Manifest, cat Catalog, size int) (*Plan, error) {
 	for i, s := range sites {
 		sp := resolveSite(m.Name, s.name, s.label, s.arch, perSite[i]+1, c, names)
 		sp.Totals = count(m, sp.Systems)
+		sp.Pushers = placePushers(m.Pushers, sp.Name, sp.Systems)
 		plan.Sites = append(plan.Sites, sp)
 		byArchetype[sp.Archetype] = append(byArchetype[sp.Archetype], sp.Systems...)
 	}
@@ -161,7 +175,43 @@ func Resolve(m *Manifest, cat Catalog, size int) (*Plan, error) {
 			Floors: floors, Totals: count(m, byArchetype[a.Name.Name])})
 	}
 	plan.Totals = count(m, plan.allSystems())
+	for _, d := range m.Pushers {
+		plan.Pushers = addCount(plan.Pushers, d.Profile.Name, d.PerSite*len(plan.Sites))
+	}
 	return plan, nil
+}
+
+// placePushers places a site's pushers in declaration order, each scoped to
+// the next Systems of the site's systems (in plan order, wrapping), so the
+// site's pushers share its systems while it has enough and every one is
+// scoped to at least one.
+func placePushers(decls []Pusher, site string, systems []SystemPlan) []PusherPlan {
+	if len(systems) == 0 {
+		return nil
+	}
+	var out []PusherPlan
+	next := 0
+	for _, d := range decls {
+		for k := 1; k <= d.PerSite; k++ {
+			pp := PusherPlan{Name: fmt.Sprintf("%s-%s-%d", site, d.Name.Name, k), Profile: d.Profile.Name}
+			for i := 0; i < min(d.Systems, len(systems)); i++ {
+				pp.Systems = append(pp.Systems, systems[(next+i)%len(systems)].Name)
+			}
+			next += len(pp.Systems)
+			out = append(out, pp)
+		}
+	}
+	return out
+}
+
+func addCount(cs []Count, name string, n int) []Count {
+	for i := range cs {
+		if cs[i].Name == name {
+			cs[i].Count += n
+			return cs
+		}
+	}
+	return append(cs, Count{Name: name, Count: n})
 }
 
 // SiteCount is how many sites the manifest places at size systems: the

@@ -173,19 +173,14 @@
    "doc": "set by omniglass lab run for a scale lab's seed one-off: each site node's name and the hash of the token it minted for it this run (node=hash, comma-separated), never set by hand"
   },
   {
-   "key": "OMNIGLASS_LAB_PUSH_TOKEN_HASH",
+   "key": "OMNIGLASS_LAB_PUSHER_TOKENS",
    "scope": "cli",
-   "doc": "set by omniglass lab run for its seed one-off: the hash of the simulated pusher's token it minted for this run, never set by hand"
+   "doc": "set by omniglass lab run for its seed one-off: each declared pusher's name and the hash and non-secret prefix of the token it minted for it this run (name=hash:prefix, comma-separated), never set by hand"
   },
   {
-   "key": "OMNIGLASS_LAB_PUSH_TOKEN_PREFIX",
+   "key": "OMNIGLASS_SIM_PUSHERS",
    "scope": "cli",
-   "doc": "set by omniglass lab run for its seed one-off: the non-secret prefix of the simulated pusher's token, never set by hand"
-  },
-  {
-   "key": "OMNIGLASS_SIM_PUSH_TOKEN",
-   "scope": "cli",
-   "doc": "the simulated booking service's token, with which omniglass node run --simulate pushes a system's bookings to the server; set by omniglass lab run, read when the command runs and never printed by help"
+   "doc": "the outside actors omniglass node run --simulate runs as emulator devices with a push face: each pusher's name, profile and token (name=profile:token, comma-separated); set by omniglass lab run, read when the command runs and never printed by help"
   },
   {
    "key": "OMNIGLASS_TEST_ADMIN_DSN",

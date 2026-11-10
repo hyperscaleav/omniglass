@@ -22,7 +22,8 @@ const maxEndpointWindow = 23 * time.Hour
 // bus acknowledged before it, stopped at t1), and how many after t1. A
 // receipt's batch id is the subject the node published on and its message
 // id, so the node's prefix is its subject and a space; starts_with keeps a
-// node name's own characters literal.
+// node name's own characters literal. A Term receipt (#1691) landed
+// nothing, so it never counts.
 func receiptCountQuery(nodeName string, t0, drained, t1 time.Time) string {
 	prefix := collection.TelemetrySubject(nodeName) + " "
 	return fmt.Sprintf(`select count(*),
@@ -31,7 +32,7 @@ func receiptCountQuery(nodeName string, t0, drained, t1 time.Time) string {
 			and landed_at <= to_timestamp(%[4]s)),
 		count(*) filter (where landed_at > to_timestamp(%[4]s))
 		from telemetry_receipt
-		where starts_with(batch_id, %[1]s) and landed_at >= to_timestamp(%[5]s)`,
+		where starts_with(batch_id, %[1]s) and landed_at >= to_timestamp(%[5]s) and not termed`,
 		sqlLiteral(prefix), epochLiteral(t0), epochLiteral(drained), epochLiteral(t1), epochLiteral(t0.Add(-closedloop.ReceiptMargin)))
 }
 

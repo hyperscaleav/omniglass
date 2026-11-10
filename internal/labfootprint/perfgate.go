@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/closedloop"
+	"github.com/hyperscaleav/omniglass/internal/delivery"
 	"github.com/hyperscaleav/omniglass/internal/lab"
 )
 
@@ -327,7 +328,7 @@ func exactFamilies() []exactFamily {
 				var out []exactReading
 				for _, d := range r.Delivery {
 					if d.Loss != nil {
-						out = append(out, exactReading{Name: fmt.Sprintf("delivery_loss/%s/%s", d.Hop, d.Kind), Value: *d.Loss, Note: lossNote(d)})
+						out = append(out, exactReading{Name: deliveryFigure(d), Value: *d.Loss, Note: lossNote(d)})
 					}
 				}
 				// A read with no kind to account is not a 0: a fleet that
@@ -344,13 +345,37 @@ func exactFamilies() []exactFamily {
 	}
 }
 
-// lossNote names a lossy delivery row's kind, hop and cause, empty when the
-// row lost nothing.
+// deliverySubject is what a delivery row counts: its kind, or on the sim hop,
+// whose rows are one a protocol with no kind (#1694), its protocol.
+func deliverySubject(d DeliveryRow) string {
+	if d.Hop == delivery.Sim {
+		return d.Protocol
+	}
+	return string(d.Kind)
+}
+
+// deliveryFigure is a delivery row's exact figure name,
+// delivery_loss/<hop>/<kind>, the sim hop's naming its protocol in place of
+// the kind. A push-lane row (#1696) names its lane first, so it is never
+// folded into the node lane's row for the same hop and kind.
+func deliveryFigure(d DeliveryRow) string {
+	if d.Lane == LanePush {
+		return fmt.Sprintf("delivery_loss/%s/%s/%s", d.Lane, d.Hop, deliverySubject(d))
+	}
+	return fmt.Sprintf("delivery_loss/%s/%s", d.Hop, deliverySubject(d))
+}
+
+// lossNote names a lossy delivery row's kind (or protocol), hop and cause,
+// with its lane when it is the push lane's, empty when the row lost nothing.
 func lossNote(d DeliveryRow) string {
 	if d.Lost() == 0 {
 		return ""
 	}
-	return fmt.Sprintf("%s lost %d of %d at %s, cause %s", d.Kind, d.Lost(), d.In, d.Hop, cmpOr(string(d.Cause()), "unknown"))
+	at := string(d.Hop)
+	if d.Lane == LanePush {
+		at += " on the push lane"
+	}
+	return fmt.Sprintf("%s lost %d of %d at %s, cause %s", deliverySubject(d), d.Lost(), d.In, at, cmpOr(string(d.Cause()), "unknown"))
 }
 
 // unsettledNamed is how many unsettled boots a note names before it counts

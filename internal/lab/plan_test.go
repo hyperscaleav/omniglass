@@ -173,32 +173,102 @@ func TestPlanNodeTokenFlow(t *testing.T) {
 	}
 }
 
-// The simulated pusher's token (#1370) flows as the node's does: minted per
-// run, the node's simulator holds the plaintext, and the seed gets only its
-// hash and its non-secret prefix. A lab with no node runs no simulator, so
-// it carries none.
-func TestPlanPushTokenFlow(t *testing.T) {
+// A declared pusher's token (#1743) flows as a node's does: minted per run,
+// the emulator on the pusher's node holds the plaintext, and the seed gets
+// only its hash and its non-secret prefix, to set the pusher's credential.
+// The token is in no other service's env and not in a config hash.
+func TestPlanPusherTokenFlow(t *testing.T) {
 	o := testOptions()
-	o.PushToken, o.PushTokenHash, o.PushTokenPrefix = "ptok", "pushhash", "0a0b0c0d"
+	o.Pushers = []Pusher{{Name: "sim-booking-service", Profile: "booking-service", Node: NodeName,
+		Token: "bk_0a0b0c0d_secret", TokenHash: "pushhash", TokenPrefix: "0a0b0c0d"}}
 	s, err := Plan(o)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Contains(s.Node.Env, "OMNIGLASS_SIM_PUSH_TOKEN=ptok") {
-		t.Fatalf("node env %v, want the run's push token", s.Node.Env)
+	if want := simnode.PushersEnv + "=sim-booking-service=booking-service:bk_0a0b0c0d_secret"; !slices.Contains(s.Node.Env, want) {
+		t.Fatalf("node env %v, want %s", s.Node.Env, want)
+	}
+	if want := PusherTokensEnv + "=sim-booking-service=pushhash:0a0b0c0d"; !slices.Contains(s.Seed.Env, want) {
+		t.Fatalf("seed env %v, want %s", s.Seed.Env, want)
+	}
+	for _, svc := range []Service{s.DB, s.Seed, s.Server} {
+		for _, e := range svc.Env {
+			if strings.Contains(e, "secret") {
+				t.Fatalf("%s sees the plaintext push token: %s", svc.Name, e)
+			}
+		}
+	}
+	if h := configHash(s.Node); strings.Contains(h, "secret") {
+		t.Fatal("the node's config hash carries the token")
+	}
+}
+
+// A scale lab's pushers (#1743) each ride their own site's node: every site
+// node's emulator holds the plaintext of its site's pushers and no other's,
+// and the one seed gets every pusher's hash and prefix.
+func TestPlanScaleLabGivesEachSiteNodeItsOwnPushers(t *testing.T) {
+	o := scaleOptions()
+	o.Pushers = []Pusher{
+		{Name: "hq-booking-1", Profile: "booking-service", Node: "edge-hq", Token: "bk_1_hq", TokenHash: "hhq", TokenPrefix: "p1"},
+		{Name: "branch-01-booking-1", Profile: "booking-service", Node: "edge-branch-01", Token: "bk_2_br", TokenHash: "hbr", TokenPrefix: "p2"},
+	}
+	s, err := Plan(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{
+		"edge-hq":          simnode.PushersEnv + "=hq-booking-1=booking-service:bk_1_hq",
+		"edge-regional-01": "",
+		"edge-branch-01":   simnode.PushersEnv + "=branch-01-booking-1=booking-service:bk_2_br",
+	}
+	for _, n := range s.Nodes {
+		var got string
+		for _, e := range n.Env {
+			if strings.HasPrefix(e, simnode.PushersEnv+"=") && e != simnode.PushersEnv+"=" {
+				got = e
+			}
+		}
+		if got != want[n.Name] {
+			t.Errorf("node %s carries pushers %q, want %q", n.Name, got, want[n.Name])
+		}
+	}
+	if w := PusherTokensEnv + "=hq-booking-1=hhq:p1,branch-01-booking-1=hbr:p2"; !slices.Contains(s.Seed.Env, w) {
+		t.Errorf("scale seed env %v, want %s", s.Seed.Env, w)
 	}
 	for _, e := range s.Seed.Env {
-		if strings.Contains(e, "=ptok") {
-			t.Fatalf("the seed sees the plaintext push token: %s", e)
+		if strings.Contains(e, "bk_") {
+			t.Errorf("the scale seed sees a plaintext push token: %s", e)
 		}
 	}
-	for _, want := range []string{"OMNIGLASS_LAB_PUSH_TOKEN_HASH=pushhash", "OMNIGLASS_LAB_PUSH_TOKEN_PREFIX=0a0b0c0d"} {
-		if !slices.Contains(s.Seed.Env, want) {
-			t.Fatalf("seed env %v, want %s", s.Seed.Env, want)
-		}
+}
+
+// A pusher planned onto a node the lab does not run would never push, so the
+// plan refuses it rather than seed a principal nothing holds.
+func TestPlanRefusesAPusherOnNoNode(t *testing.T) {
+	o := scaleOptions()
+	o.Pushers = []Pusher{{Name: "x-booking-1", Profile: "booking-service", Node: "edge-nowhere", Token: "t", TokenHash: "h", TokenPrefix: "p"}}
+	if _, err := Plan(o); err == nil || !strings.Contains(err.Error(), "edge-nowhere") {
+		t.Fatalf("plan with a pusher on no node: %v, want refused naming the node", err)
 	}
-	if h := configHash(s.Node); strings.Contains(h, "ptok") {
-		t.Fatal("the node's config hash carries the token")
+}
+
+// The seed's pusher token hashes round-trip, and a malformed list is refused.
+func TestPusherTokensRoundTrip(t *testing.T) {
+	ps := []Pusher{{Name: "a", TokenHash: "h1", TokenPrefix: "p1"}, {Name: "b", TokenHash: "h2", TokenPrefix: "p2"}}
+	got, err := ParsePusherTokens(FormatPusherTokens(ps))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got["a"] != (PusherToken{Hash: "h1", Prefix: "p1"}) || got["b"] != (PusherToken{Hash: "h2", Prefix: "p2"}) {
+		t.Fatalf("round trip = %v", got)
+	}
+	if got, err := ParsePusherTokens(""); err != nil || len(got) != 0 {
+		t.Fatalf("empty = %v, %v; want none", got, err)
+	}
+	for _, bad := range []string{"a", "a=h1", "=h:p", "a=:p", "a=h:", "a=h:p,a=h:p"} {
+		if _, err := ParsePusherTokens(bad); err == nil {
+			t.Errorf("ParsePusherTokens(%q) took it, want refused", bad)
+		}
 	}
 }
 
@@ -485,6 +555,55 @@ func TestPlanScaleLabSeedEnrollsEverySiteNode(t *testing.T) {
 	}
 }
 
+// A kept scale lab (#1633) tells its seed so, with a hidden --keep: the seed
+// then keeps the fleet a database already holds and re-enrolls its nodes. A
+// throwaway one's seed carries no --keep, so a database holding data stays
+// refused.
+func TestPlanScaleLabSeedCarriesKeepOnlyWhenKept(t *testing.T) {
+	for _, tc := range []struct {
+		ephemeral bool
+		want      string
+	}{
+		{true, "lab seed --scenario corporate --systems 100 --user dev --password dev"},
+		{false, "lab seed --scenario corporate --systems 100 --user dev --password dev --keep"},
+	} {
+		o := scaleOptions()
+		o.Ephemeral = tc.ephemeral
+		s, err := Plan(o)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.Join(s.Seed.Cmd, " "); got != tc.want {
+			t.Errorf("ephemeral %v: seed command %q, want %q", tc.ephemeral, got, tc.want)
+		}
+	}
+}
+
+// The stop line's restart hint (#1633) is the command that brings this lab
+// back: a bare lab run for a learner's lab, and for a kept scale lab its own
+// scenario, size and --keep (and its cadence, when not the lab's own), which
+// a bare lab run would not bring back.
+func TestRestartCommandNamesAKeptScaleLabsOwnFlags(t *testing.T) {
+	if got := RestartCommand(testOptions()); got != "omniglass lab run" {
+		t.Errorf("a learner's lab: %q", got)
+	}
+	o := scaleOptions()
+	o.Ephemeral, o.Systems, o.Cadence = false, 3000, CadenceLab
+	if got := RestartCommand(o); got != "omniglass lab run --scenario corporate --systems 3000 --keep" {
+		t.Errorf("a kept scale lab: %q", got)
+	}
+	o.Cadence = CadenceDefault
+	if got := RestartCommand(o); got != "omniglass lab run --scenario corporate --systems 3000 --cadence default --keep" {
+		t.Errorf("a kept scale lab at the default cadence: %q", got)
+	}
+	// A kept scale lab under a project of its own keeps its data there, so a
+	// restart without that project would start an empty lab beside it.
+	o.Cadence, o.Project = CadenceLab, "omniglass-scale-it-7"
+	if got := RestartCommand(o); got != "omniglass lab run --scenario corporate --systems 3000 --project omniglass-scale-it-7 --keep" {
+		t.Errorf("a kept scale lab under its own project: %q", got)
+	}
+}
+
 // A scale lab's Postgres records commit timestamps, which `lab measure` reads
 // the ingest lag from (a row's commit time less its probe time). A dev lab's
 // does not: it pays for nothing it does not read.
@@ -526,5 +645,93 @@ func TestParseSiteNodeTokenHashesRefusesAMalformedPair(t *testing.T) {
 	}
 	if got, err := ParseSiteNodeTokenHashes(""); err != nil || len(got) != 0 {
 		t.Errorf("empty: %v %v", got, err)
+	}
+}
+
+// The induced refusal is off by default and, set, rides to the scale seed
+// (#1698): the seed is what attaches the device that answers the key no
+// catalog holds. A dev lab has no plan for it to ride, so it is refused there.
+func TestPlanScaleLabInducesAnUnregisteredKeyOnlyWhenAsked(t *testing.T) {
+	s, err := Plan(scaleOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(s.Seed.Cmd, "--induce-unregistered") {
+		t.Fatalf("the seed induces by default: %v", s.Seed.Cmd)
+	}
+	o := scaleOptions()
+	o.InduceUnregistered = true
+	if s, err = Plan(o); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(s.Seed.Cmd, "--induce-unregistered") {
+		t.Fatalf("the seed command %v does not carry the knob", s.Seed.Cmd)
+	}
+	dev := testOptions()
+	dev.InduceUnregistered = true
+	if _, err := Plan(dev); err == nil || !strings.Contains(err.Error(), "--systems") {
+		t.Fatalf("a dev lab with the knob: %v, want a refusal naming the scale lab", err)
+	}
+}
+
+// Every service carries the fleet the lab seeded (#1719): the scenario, and
+// for a scale lab its size, so a measurement of the running lab reads them
+// from the lab itself and never from a flag that could disagree with it.
+func TestPlanStampsTheFleetOnEveryService(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		o    Options
+		want Fleet
+	}{
+		{"dev", testOptions(), Fleet{Scenario: DefaultScenario}},
+		{"scale", scaleOptions(), Fleet{Scenario: "corporate", Systems: 100}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, err := Plan(tc.o)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, svc := range s.Services() {
+				got, err := FleetOf(svc.Labels)
+				if err != nil {
+					t.Fatalf("%s: %v", svc.Name, err)
+				}
+				if got != tc.want {
+					t.Errorf("%s: fleet %+v, want %+v", svc.Name, got, tc.want)
+				}
+			}
+		})
+	}
+}
+
+// FleetOf reads the fleet back from a container's labels, and refuses a
+// container a build before the labels started, or one whose size label is
+// not a count, rather than guess.
+func TestFleetOf(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		labels  map[string]string
+		want    Fleet
+		wantErr string
+	}{
+		{"scale", map[string]string{LabelLabScenario: "corporate", LabelLabSystems: "300"}, Fleet{Scenario: "corporate", Systems: 300}, ""},
+		{"dev", map[string]string{LabelLabScenario: "dev"}, Fleet{Scenario: "dev"}, ""},
+		{"unlabelled", map[string]string{LabelLab: "omniglass-scale"}, Fleet{},
+			"name no scenario: it was brought up by a build before the fleet labels, so stop it and bring it up again with this build's `lab run`"},
+		{"bad size", map[string]string{LabelLabScenario: "corporate", LabelLabSystems: "lots"}, Fleet{},
+			`size label omniglass.lab.systems="lots" is not a count of systems`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := FleetOf(tc.labels)
+			if tc.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+					t.Fatalf("err %v, want it to say %q", err, tc.wantErr)
+				}
+				return
+			}
+			if err != nil || got != tc.want {
+				t.Fatalf("FleetOf = %+v, %v; want %+v", got, err, tc.want)
+			}
+		})
 	}
 }

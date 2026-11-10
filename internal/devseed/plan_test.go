@@ -2,6 +2,7 @@ package devseed_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"testing"
@@ -283,4 +284,124 @@ func TestSeedPlanPlacesEachSitesEndpointsOnItsNode(t *testing.T) {
 			t.Errorf("%d endpoints on the one node, result says %d", total, res.Endpoints)
 		}
 	})
+}
+
+// SeedPlan seeds each pusher the plan declares (#1743) as its own service
+// principal holding the pusher role (telemetry:push alone) on exactly the
+// systems the plan scoped it to, and no token: the lab mints one per run.
+func TestSeedPlanGrantsEachPlannedPusherItsSystems(t *testing.T) {
+	t.Parallel()
+	ctx, gw, conn := openSeededGateway(t)
+	p := corporatePlan(t, 20)
+	want := map[string][]string{}
+	for _, site := range p.Sites {
+		for _, ps := range site.Pushers {
+			want[ps.Name] = append([]string(nil), ps.Systems...)
+			sort.Strings(want[ps.Name])
+		}
+	}
+	if len(want) == 0 {
+		t.Fatal("the corporate plan declares no pushers")
+	}
+	res, err := devseed.SeedPlan(ctx, gw, "", p, devseed.PlanOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Pushers != len(want) {
+		t.Errorf("result = %d pushers, want %d", res.Pushers, len(want))
+	}
+	rows, err := conn.Query(ctx, `
+		select s.name, r.name, r.permissions::text, g.scope_kind, g.scope_op, y.name
+		from service s join principal_grant g on g.principal_id = s.principal_id
+		join role r on r.id = g.role_id
+		left join system y on y.id::text = g.scope_id::text`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	got := map[string][]string{}
+	for rows.Next() {
+		var svc, role, perms, kind, op string
+		var sys *string
+		if err := rows.Scan(&svc, &role, &perms, &kind, &op, &sys); err != nil {
+			t.Fatal(err)
+		}
+		if role != devseed.PusherRole || perms != "{telemetry:push}" || kind != "system" || op != "self" || sys == nil {
+			t.Errorf("pusher %s holds %s %s on %s %s, want the pusher role on a system", svc, role, perms, kind, op)
+			continue
+		}
+		got[svc] = append(got[svc], *sys)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	for name := range got {
+		sort.Strings(got[name])
+	}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("pusher grants = %v, want %v", got, want)
+	}
+	var tokens int
+	if err := conn.QueryRow(ctx, `select count(*) from credential c join service s on s.principal_id = c.principal_id`).Scan(&tokens); err != nil {
+		t.Fatal(err)
+	}
+	if tokens != 0 {
+		t.Errorf("the seeded pushers hold %d tokens, want none until the lab mints them", tokens)
+	}
+}
+
+// inducedTasks counts the tasks whose baked spec names the induced key.
+func inducedTasks(t *testing.T, ctx context.Context, conn *pgx.Conn) int {
+	t.Helper()
+	var n int
+	if err := conn.QueryRow(ctx, `select count(*) from task where spec::text like '%' || $1 || '%'`, devseed.InducedKey).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	return n
+}
+
+// The induced refusal (#1698): with the knob on, one simulated device's
+// endpoint is attached through a driver that also answers a key, and that key
+// is then taken out of every catalog. The task still carries it, so the node
+// collects it and the server has no type to land it on: a refusal by design.
+func TestSeedPlanInducesOneUnregisteredKey(t *testing.T) {
+	t.Parallel()
+	ctx, gw, conn := openSeededGateway(t)
+	res, err := devseed.SeedPlan(ctx, gw, "", corporatePlan(t, 3), devseed.PlanOptions{Endpoints: true, InduceUnregistered: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Induced == nil || res.Induced.Key != devseed.InducedKey || res.Induced.Component == "" || res.Induced.Driver == "" {
+		t.Fatalf("induced = %+v, want the component, driver and key named", res.Induced)
+	}
+	t.Logf("induced %+v", *res.Induced)
+	if n := inducedTasks(t, ctx, conn); n != 1 {
+		t.Errorf("%d tasks carry the induced key, want 1", n)
+	}
+	if _, err := gw.GetPropertyType(ctx, devseed.InducedKey); !errors.Is(err, storage.ErrPropertyTypeNotFound) {
+		t.Errorf("the induced key's type: %v, want it in no catalog", err)
+	}
+	var drivers int
+	if err := conn.QueryRow(ctx, `select count(distinct d.name) from endpoint e join driver d on d.id = e.driver_id where not d.official`).Scan(&drivers); err != nil {
+		t.Fatal(err)
+	}
+	if drivers != 1 {
+		t.Errorf("%d custom drivers attached, want the one induced", drivers)
+	}
+}
+
+// Off by default: a plain seed answers no unregistered key.
+func TestSeedPlanInducesNothingByDefault(t *testing.T) {
+	t.Parallel()
+	ctx, gw, conn := openSeededGateway(t)
+	res, err := devseed.SeedPlan(ctx, gw, "", corporatePlan(t, 3), devseed.PlanOptions{Endpoints: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Induced != nil {
+		t.Errorf("induced = %+v by default", res.Induced)
+	}
+	if n := inducedTasks(t, ctx, conn); n != 0 {
+		t.Errorf("%d tasks carry the induced key by default", n)
+	}
 }

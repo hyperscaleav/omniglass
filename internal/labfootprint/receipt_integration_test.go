@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/hyperscaleav/omniglass/internal/closedloop"
+	"github.com/hyperscaleav/omniglass/internal/delivery"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
@@ -16,7 +17,8 @@ import (
 // window's start minus the margin, splits off the margin, the backlog the
 // lane landed before it drained past the start, and the receipts after the
 // end, and reads the same after the server's 24 h prune. A backlog that
-// outlasts the window stops at its end, so no receipt is masked twice.
+// outlasts the window stops at its end, so no receipt is masked twice. A
+// Term receipt never counts.
 func TestIntegrationReceiptCountReadsOneNodesWindow(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -55,6 +57,15 @@ func TestIntegrationReceiptCountReadsOneNodesWindow(t *testing.T) {
 	land("og.v1.telemetry.e_ge-2 1", t0.Add(time.Minute))  // a node whose name extends it
 	land("og.v1.telemetry.edge 1", t0.Add(time.Minute))    // a node a LIKE pattern would match
 	land("og.v1.telemetry.e_ge", t0.Add(time.Minute))      // no message id
+	// A batch the server Termed (#1691) landed nothing: its receipt never counts.
+	termed := "og.v1.telemetry.e_ge 7"
+	if err := gw.RecordTermedBatch(ctx, storage.TermedBatch{BatchID: termed, Node: "e_ge",
+		Ledger: delivery.Stamp{Boot: "boot-1", Seq: 7, Minted: t0, Kinds: delivery.Declared{delivery.Log: {Count: 1}}}}); err != nil {
+		t.Fatalf("record %s: %v", termed, err)
+	}
+	if _, err := conn.Exec(ctx, `update telemetry_receipt set landed_at = $2 where batch_id = $1`, termed, t0.Add(time.Minute)); err != nil {
+		t.Fatalf("age %s: %v", termed, err)
+	}
 
 	count := func(drained time.Time) closedloop.ReceiptCount {
 		t.Helper()
