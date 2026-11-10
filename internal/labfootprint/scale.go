@@ -415,6 +415,11 @@ type ScaleRun struct {
 	EndpointsGap string
 	// Delivery is the receipts the delivery table reconciles (#1641).
 	Delivery DeliveryRead
+	// Host is the machine the lab ran on, nil when the daemon was not this
+	// one; PlanDigest is the device set the scenario at its size places
+	// (#1640). The perf gate reads both.
+	Host       *Fingerprint
+	PlanDigest string
 }
 
 // ScaleContainer is one container's figures over the window.
@@ -488,6 +493,13 @@ type ScaleReport struct {
 	// DeliveryNote qualifies a read that was.
 	DeliveryNotRead string `json:"delivery_not_measured,omitempty"`
 	DeliveryNote    string `json:"delivery_note,omitempty"`
+
+	// Host is the machine the lab ran on, absent when the lab's daemon was
+	// not this machine's; PlanDigest is the device set the scenario at its
+	// size places. The perf gate (#1640) compares a host-dependent figure
+	// only on the baseline's host, and a run only with the baseline's plan.
+	Host       *Fingerprint `json:"host,omitempty"`
+	PlanDigest string       `json:"plan_digest,omitempty"`
 }
 
 // SummarizeScale turns a run into its report. The containers list the server
@@ -518,6 +530,8 @@ func SummarizeScale(r ScaleRun) ScaleReport {
 		Absolutes:             r.Absolutes,
 		SystemPageFigures:     SummarizePage(r.Page),
 		EndpointsGap:          r.EndpointsGap,
+		Host:                  r.Host,
+		PlanDigest:            r.PlanDigest,
 	}
 	if len(r.Endpoints) > 0 {
 		e := closedloop.SummarizeEndpoints(r.Endpoints)

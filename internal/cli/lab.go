@@ -40,7 +40,7 @@ func newLabCmd(version string) *cobra.Command {
 		Use:   "lab",
 		Short: "A working omniglass on Docker, to learn on",
 	}
-	group.AddCommand(newLabRunCmd(version), newLabMeasureCmd(), newLabSeedCmd())
+	group.AddCommand(newLabRunCmd(version), newLabMeasureCmd(), newLabPerfCmd(), newLabSeedCmd())
 	return group
 }
 

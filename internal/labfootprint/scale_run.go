@@ -27,6 +27,17 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/lab"
 )
 
+// fleetSizeSQL reads a lab's fleet: its systems, components and enabled
+// tasks. The platform system (og/platform, which the boot seed plants on
+// every server since #1625) is the server's own, not the scenario's, so it
+// is not counted: a scale lab at 300 systems reads 300, which the perf gate
+// compares with its baseline's size (#1640).
+const fleetSizeSQL = `select
+	(select count(*) from system s left join system_type st on st.id = s.system_type_id
+	 where st.id is null or not (st.namespace = 'og' and st.name = 'platform')),
+	(select count(*) from component),
+	(select count(*) from task where enabled)`
+
 // ScaleConfig is one scale measurement (#1556).
 type ScaleConfig struct {
 	// Binary, when set, is the omniglass binary whose `lab run` brings up a
@@ -35,6 +46,9 @@ type ScaleConfig struct {
 	Binary   string
 	Scenario string
 	Systems  int
+	// Image, when set, is the omniglass image the brought-up lab runs (lab
+	// run's own --image); empty is the binary's own build.
+	Image string
 	// DockerHost is the daemon the lab runs on.
 	DockerHost string
 	// ReadyTimeout bounds a bring-up (lab run's own --ready-timeout).
@@ -124,11 +138,14 @@ func MeasureScale(ctx context.Context, cfg ScaleConfig) (rep ScaleReport, err er
 
 // scaleRunArgs is the `lab run` a scale bring-up execs: the scenario at its
 // size on a free port, saying how to reach it in ready, held for the process
-// pid.
+// pid, on the config's image when it names one.
 func scaleRunArgs(cfg ScaleConfig, ready string, pid int) []string {
 	args := []string{"lab", "run", "--scenario", cfg.Scenario, "--systems", strconv.Itoa(cfg.Systems),
 		"--port", "0", "--ready-file", ready, "--while-pid", strconv.Itoa(pid),
 		"--ready-timeout", cfg.ReadyTimeout.String()}
+	if cfg.Image != "" {
+		args = append(args, "--image", cfg.Image)
+	}
 	if cfg.InduceUnregistered {
 		args = append(args, "--induce-unregistered")
 	}
@@ -336,7 +353,7 @@ func (h *harness) prepareScale(ctx context.Context, cfg ScaleConfig) (scaleSessi
 	if img, err := h.dc.ImageInspect(ctx, l.image); err == nil && img.Config != nil {
 		run.Build = img.Config.Labels[lab.VersionLabel]
 	}
-	fleet, err := h.psql(ctx, `select (select count(*) from system), (select count(*) from component), (select count(*) from task where enabled)`)
+	fleet, err := h.psql(ctx, fleetSizeSQL)
 	if err != nil {
 		return scaleSession{}, fmt.Errorf("read the fleet's size: %w", err)
 	}
@@ -348,6 +365,18 @@ func (h *harness) prepareScale(ctx context.Context, cfg ScaleConfig) (scaleSessi
 		}
 		run.Components, _ = strconv.Atoi(f[1])
 		run.Tasks, _ = strconv.Atoi(f[2])
+	}
+	// The perf gate (#1640) names the host a run measured on and the device
+	// set its scenario places. A lab on a remote daemon ran elsewhere, so
+	// its runs carry no host rather than this one's.
+	if cfg.DockerHost == "" || lab.IsLocal(cfg.DockerHost) {
+		host := ReadFingerprint()
+		run.Host = &host
+	}
+	// The device set is the one the lab's labelled scenario and size place
+	// (#1719), which a lab this run brought up shares with cfg.
+	if digest, err := lab.PerfPlanDigest(run.Scenario, run.Systems); err == nil {
+		run.PlanDigest = digest
 	}
 	// One read before anything is timed, so an API that refuses the fleet
 	// view fails the run in seconds, not after its window. Its answer names

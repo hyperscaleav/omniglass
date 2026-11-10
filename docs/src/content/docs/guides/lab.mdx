@@ -9,6 +9,7 @@ sidebar:
 
 import LabTopology from '../../../components/LabTopology.astro';
 import LabWalkthroughs from '../../../components/LabWalkthroughs.astro';
+import PerfGateFigures from '../../../components/PerfGateFigures.astro';
 
 A **lab** is a working omniglass on your own machine, brought up by one command, to learn on. It
 runs the real server and console, its own Postgres, and an edge node that runs the simulator in its
@@ -350,7 +351,7 @@ with a corporate fleet, and it is never a measurement basis.
 | `make lab-footprint` | corporate, 20 systems | the per-container footprint on a developer machine |
 | `make scale-lab`, `make scale-measure` | corporate, 300 systems by default | the ladder's first level; any size for an ad hoc run |
 | the ladder | corporate, 300, 1,000 and 3,000 systems | the three scale levels the platform is sized against |
-| the perf gate ([#1640](https://github.com/hyperscaleav/omniglass/issues/1640), not built yet) | corporate, at its baseline's size on the ladder | will refuse a run of another scenario or size as invalid |
+| `make perf-check` ([checking against the baseline](#checking-against-the-baseline)) | corporate, at the named size (`ci` or `laptop`) its baseline states | refuses a run of another scenario, size or device set as invalid |
 | the soak ([#1633](https://github.com/hyperscaleav/omniglass/issues/1633), not built yet) | corporate, 3,000 systems | the goal size, held for hours |
 
 20 is the smallest round size past the last one that drops a product the corporate manifest names:
@@ -424,8 +425,10 @@ assignment triggers rather than round trips ([#1562](https://github.com/hypersca
 ### Measuring a scale lab
 
 `omniglass lab measure` says what a fleet of a size costs to run: one table, measured over a window you
-state, from a running scale lab. It is diagnostic and never a gate (ADR-0094): on a shared host the
-figures move with the neighbours, so compare runs from one machine. It is outside `make test` and CI.
+state, from a running scale lab. One measurement is diagnostic and never a gate (ADR-0094): on a shared
+host the figures move with the neighbours, so compare runs from one machine. It is outside `make test`.
+What gates is several measurements of a named size checked against a committed baseline, below in
+[Checking against the baseline](#checking-against-the-baseline).
 
 ```bash
 make scale-measure SYSTEMS=300                                    # brings a lab up, measures it, removes it
@@ -748,6 +751,72 @@ endpoints block reads `endpoints not measured`), the table has no sim rows, its 
 ingest hop alone, and it says so under the rows: `sim not measured` and the same reason.
 
 The window and the warm-up are printed above the table, and belong beside any figure you quote from it.
+
+#### Checking against the baseline
+
+`omniglass lab perf` turns the measurement into a regression gate
+([ADR-1640](/architecture/decisions/#adr-1640-a-scale-lab-measured-end-to-end-gates-against-a-committed-baseline)):
+it measures fresh throwaway labs of a named size and compares them with that size's committed baseline,
+so a change that makes the fleet costlier to run fails before it merges.
+
+```bash
+make perf-check SIZE=ci                  # three labs of the ci size against corporate-300.ci.json
+make perf-check SIZE=laptop              # three of the laptop size against corporate-1000.laptop.json
+make perf-baseline SIZE=ci               # three labs, then rewrite the ci baseline from them
+./bin/omniglass lab perf check --size ci --runs 1 --image omniglass:mine   # one lab, a private image
+```
+
+A size fixes everything a run measures with, so two runs of it are comparable: the scenario and its
+systems, the warm-up, the window, the timed fleet view reads, no backlog and no system page clients. The
+window is a whole multiple of every poll interval the scenario's drivers and cadence declare, so each
+run counts the same whole rounds:
+
+<PerfGateFigures part="sizes" />
+
+Each figure is in one of three classes. **Exact** figures must be 0 whatever the baseline holds: a lost
+request, a redelivery or a dropped sample is a bug, not a cost. **Host-independent** figures are counts
+(rows, bytes, samples), which gate on any host. **Host-dependent** figures are times and container
+usage, which gate only on the host the baseline was generated on:
+
+<PerfGateFigures />
+
+How to read the verdict table it prints, one row a figure:
+
+- **pass**: inside its tolerance, or past it by no more than the baseline's spread plus the fresh runs'
+  spread. A gated figure is the median of the runs, with the spread (highest less lowest) beside it.
+- **fail**: past its tolerance and past the combined spread. The check exits nonzero. Rows a minute and
+  samples a batch fail in either direction, since fewer rows means lost work; every other figure fails
+  only on the worse side.
+- **noisy**: the fresh runs spread wider than the tolerance, so they could not have seen a regression of
+  that size. It does not fail the check, and the table prints it first: run more labs, or run on a
+  quieter host.
+- **improved**: better than the baseline by more than its tolerance. It never fails; regenerate the
+  baseline so the gain is held.
+- **reported**: a host-dependent figure measured on a host other than the baseline's (another CPU, core
+  count or memory size). The figure is printed for the reader and gates nothing; the counted figures
+  still gate in full. The table's host line names both hosts. Run on the baseline's host class (CI for
+  `ci`, the architect's laptop for `laptop`) to gate them.
+
+Before any figure, the runs themselves must be clean, or the verdict is **invalid** and the check exits
+nonzero with the reason: the runs measured another size, window or warm-up than the baseline's, this
+build places a different device set than the baseline's (the plan digest moved, so regenerate the
+baseline) or a run recorded no device set at all (a series from before the gate), a node restarted inside the window, or a device carried an impairment. A gated lab is never
+impaired, so an impaired gap can only mean a fault left on.
+
+**Regenerating a baseline** is a reviewed act. `make perf-baseline SIZE=...` writes each figure's median,
+spread and values, the inputs and the host fingerprint, and refuses, naming each figure, when an exact
+figure is not 0, a figure was not measured in every run, or a figure's runs spread past its tolerance
+(a check could never gate it). Generate it on the host class it gates: the `ci` baseline from the `perf`
+workflow's dispatch with `update` set, which uploads the file as an artifact, and the `laptop` baseline on
+the architect's laptop. Neither is committed yet ([#1751](https://github.com/hyperscaleav/omniglass/issues/1751)),
+so until then a check without `--baseline` says there is no baseline and how to make one. A PR that
+changes a baseline file says why in its body. `--append FILE` keeps each
+run's report as a line, so runs a baseline refused can be read again with `--samples FILE` instead of
+measured again; `--samples` also reads the last `--runs` (or `--last`) lines of a sampling run's series.
+
+In CI the gate is opt in and never a required check: the `run:perf` label on a PR runs
+`make perf-check SIZE=ci` on its branch and posts the verdict table as one comment, updated on every
+run. Every flag is in the [CLI reference](/reference/cli/#omniglass-lab-perf-check).
 
 ### Sampling a scale lab over time
 

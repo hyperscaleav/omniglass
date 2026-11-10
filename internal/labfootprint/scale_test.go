@@ -1154,6 +1154,20 @@ func TestScaleRunArgsInduceTheRefusalOnlyWhenAsked(t *testing.T) {
 	}
 }
 
+// A scale bring-up the perf gate runs on a named image (#1640) passes it to
+// `lab run`; with none, the lab runs the binary's own build.
+func TestScaleRunArgsNameTheImageOnlyWhenSet(t *testing.T) {
+	cfg := ScaleConfig{Scenario: "corporate", Systems: 30, ReadyTimeout: 10 * time.Minute}
+	if off := strings.Join(scaleRunArgs(cfg, "/tmp/x/lab.env", 42), " "); strings.Contains(off, "--image") {
+		t.Errorf("args = %q, want no --image when the config names none", off)
+	}
+	cfg.Image = "omniglass:mine"
+	on := strings.Join(scaleRunArgs(cfg, "/tmp/x/lab.env", 42), " ")
+	if !strings.Contains(on, " --image omniglass:mine") {
+		t.Errorf("args = %q, want --image omniglass:mine", on)
+	}
+}
+
 // The attached measurement reads the fleet from the lab it measures (#1719):
 // the scenario and size come from the server container's labels, and the
 // --scenario and --systems flags, which only size a lab the run brings up,

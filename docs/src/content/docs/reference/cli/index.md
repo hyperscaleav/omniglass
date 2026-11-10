@@ -2808,6 +2808,63 @@ The retention probe plants a backlog of aged property rows and restarts the serv
 | `--warmup` | duration | `2m0s` | how long the lab runs before the window starts (once, before the first sample) |
 | `--window` | duration | `5m0s` | the window the rates, growth and usage are read over |
 
+### `omniglass lab perf`
+
+Check a fresh scale lab against the committed performance baseline, or regenerate it
+
+#### `omniglass lab perf baseline`
+
+Measure fresh scale labs and write the size's baseline from them
+
+```
+omniglass lab perf baseline [flags]
+```
+
+Brings up --runs throwaway scale labs of the size, one after another, and writes the baseline the check compares with: each gated figure's median, spread and values, the inputs the runs measured with and the host they ran on. It refuses, naming each, when an exact figure is not 0, a figure was not measured in every run, or a figure's runs spread past its tolerance, which a check could never gate. The baseline is a host's: generate it on the host class it gates, and commit the file in a reviewed change.
+
+--systems, --warmup, --window and --fleet-reads override the size's inputs, for a throwaway baseline a quick check can run against; the committed baselines use the size's own.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--append` | string | (none) | keep each fresh run's report as a line in this file, which --samples reads again |
+| `--fleet-reads` | int | `0` | override the size's timed fleet view reads; 0 is the size's |
+| `--image` | string | (none) | the omniglass image each lab runs (lab run's --image); empty is this binary's own build |
+| `--last` | int | `0` | with --samples: how many samples from the series' end to read; 0 reads --runs |
+| `--out` | string | (none) | where to write the baseline; empty is the size's committed file under internal/labfootprint/baseline |
+| `--runs` | int | `3` | how many throwaway labs to measure, one after another; every gated figure is their median |
+| `--samples` | string | (none) | read a sampling run's series (lab measure --every --append) in place of fresh labs |
+| `--settle-timeout` | duration | `3m0s` | how long each run's delivery read waits for its window's batches to land |
+| `--size` | string | `ci` | the gated size: ci (corporate at 300 systems) or laptop (corporate at 1000) |
+| `--systems` | int | `0` | override the size's systems; 0 is the size's |
+| `--warmup` | duration | `0s` | override the size's warmup; 0 is the size's |
+| `--window` | duration | `0s` | override the size's window; 0 is the size's |
+
+#### `omniglass lab perf check`
+
+Measure fresh scale labs and fail when a figure regressed past the baseline
+
+```
+omniglass lab perf check [flags]
+```
+
+Brings up --runs throwaway scale labs one after another, each measured with the baseline's own inputs (scenario, systems, warmup, window and fleet reads, with the retention probe off), and compares the runs with the baseline. It prints one row a figure and exits nonzero when any reads fail, or when the runs are invalid.
+
+The exact figures (every closed-loop gap, an ingest lag not measured, redeliveries, each kind's delivery loss) fail at any value but 0. The host-independent figures (rows a minute, growth and WAL per system, samples a batch) gate on any host. The host-dependent figures (latency, CPU, memory, fleet view time) gate only on the host the baseline was generated on; on another they read reported. A gated figure is the median of the runs, and fails only past its tolerance and past the runs' combined spread. Runs that spread past the tolerance read noisy, which does not fail. A figure better than its tolerance reads improved: refresh the baseline.
+
+Runs are invalid, and no figure is compared, when they measured another fleet, window or device set than the baseline's, or a node restarted or carried an impairment during the window.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--append` | string | (none) | keep each fresh run's report as a line in this file, which --samples reads again |
+| `--baseline` | string | (none) | the baseline to check against; empty is the size's committed one under internal/labfootprint/baseline |
+| `--image` | string | (none) | the omniglass image each lab runs (lab run's --image); empty is this binary's own build |
+| `--json` | string | (none) | also write the verdict here as JSON |
+| `--last` | int | `0` | with --samples: how many samples from the series' end to read; 0 reads --runs |
+| `--runs` | int | `3` | how many throwaway labs to measure, one after another; every gated figure is their median |
+| `--samples` | string | (none) | read a sampling run's series (lab measure --every --append) in place of fresh labs |
+| `--settle-timeout` | duration | `3m0s` | how long each run's delivery read waits for its window's batches to land |
+| `--size` | string | `ci` | the gated size: ci (corporate at 300 systems) or laptop (corporate at 1000) |
+
 ### `omniglass lab run`
 
 Bring up a lab: omniglass, its database and a node collecting from a simulated fleet, until Ctrl-C
