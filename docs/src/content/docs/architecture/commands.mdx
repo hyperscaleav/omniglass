@@ -82,7 +82,7 @@ takes nothing down, so it is not disruptive and holds nothing. Both are fire-and
 outlet's state is read back by the PDU's own polls, not settled), and both carry a
 `params_schema` that requires `outlet` as an integer from 1 to 4, so an issue naming no outlet,
 or one the PDU does not have, is refused with a 422 before anything is recorded. A driver binds
-them as any command: the shipped `ferrite-pdu-api` renders `POST /api/outlets/state` with
+them as any command: the shipped `ferrite-pdu-api` renders a POST to the PDU's `/api/outlets/state` with
 `{"outlet": ${arg.outlet}, "state": "off"}`, a whole-leaf reference keeping the outlet a number:
 
 ```bash

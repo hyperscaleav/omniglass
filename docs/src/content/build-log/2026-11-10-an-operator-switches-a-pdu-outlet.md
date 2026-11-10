@@ -8,7 +8,7 @@ The boot seed ships the first power commands. `outlet-off` is disruptive (quiet 
 and names `outlet` as its `power_outlet_param`, so its delivery holds every endpoint of what that
 outlet feeds, out-of-band included, through the dependency edges of #1648; `outlet-on` takes
 nothing down. Both are fire-and-forget and refuse params without an `outlet` from 1 to 4 at the
-issue. The simulated Ferrite PDU 4C gains a control face, `POST /api/outlets/state` behind its basic
+issue. The simulated Ferrite PDU 4C gains a control face, a POST to its `/api/outlets/state` behind its basic
 auth, which switches one outlet so the next SNMP read and `/pdu.json` both show it and the outlet's
 current drifts to 0; a bad outlet, a bad state or a wrong password moves nothing. A new shipped
 driver, `ferrite-pdu-api`, carries both commands over that face beside `ferrite-pdu-snmp`, which

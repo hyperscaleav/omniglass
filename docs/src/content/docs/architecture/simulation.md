@@ -100,7 +100,7 @@ The Ferrite PDU 4C (#1368) is the rack power conditioner: it answers, under the 
 arc, the mains voltage in millivolts, the total current in milliamps, and an outlet table of name, state
 and current for its four outlets, and the `ferrite-pdu-snmp` driver reads the voltage, the current and
 each outlet's state. Its control face (#1653) is a JSON API behind basic auth: `GET /pdu.json` carries the
-same state, and `POST /api/outlets/state` with `{"outlet": 2, "state": "off"}` switches one outlet, so the
+same state, and a POST to its `/api/outlets/state` with `{"outlet": 2, "state": "off"}` switches one outlet, so the
 next SNMP read and the next document both show it. An outlet outside 1 to 4, a state other than `on` or
 `off`, or a wrong password is refused and moves nothing. The `ferrite-pdu-api` driver carries the
 `outlet-off` and `outlet-on` commands over that face. Its outlets drift as behaviors, an outlet that is
