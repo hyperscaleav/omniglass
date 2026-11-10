@@ -97,7 +97,10 @@ faults below), and a plain ping. Beside them:
   so the endpoint's page reads last heard within the first two minutes.
 - **An integration pushes.** A simulated booking service pushes the HQ boardroom system's bookings
   (`booking-count`, `booking-state`) through `POST /telemetry:push`, with a token the lab mints on
-  every run for a service account that may push to that one system and do nothing else. Open the
+  every run for a service account that may push to that one system and do nothing else. It is an
+  outside actor, not a device on the network: the fleet declares it as a pusher, the way a scale
+  scenario declares its own, and the simulator beside the node runs it as an emulator device with
+  a [push face](/architecture/simulation/#a-pusher-pushes-on-its-own-cadence). Open the
   boardroom's system page to see them; a push carries no endpoint, so there is no reachability to
   read, only the values.
 
@@ -550,9 +553,13 @@ Below the endpoints block, the delivery table says how much telemetry the lab lo
 **loss ratio** per kind per hop, `(in - out) / in`, read the same way for every kind
 ([messaging](/architecture/messaging/#accounting-every-item-the-loss-ratio)). Each lane reads apart:
 `node` is what the nodes collected and shipped, `push` what was pushed to the server (`POST
-/telemetry:push` and the webhook receivers). The scale lab runs no pusher of its own yet (#1743), so its
-push rows appear only when something pushes to the lab's server during the window, as `omniglass
-telemetry push` against it does. A healthy lab reads exactly 0 for every kind on both:
+/telemetry:push` and the webhook receivers). The scale lab's push lane comes from the pushers its
+scenario declares ([the manifest format](#the-manifest-format)): `corporate` places one booking
+service a site, each pushing its four systems' bookings every 30 seconds from the simulator beside
+the site's node, so every corporate lab reads push rows (metrics and properties; a booking service
+pushes no event or log line). Anything else that pushes to the lab's server during the window, as
+`omniglass telemetry push` against it does, reads on the same lane. A healthy lab reads exactly 0
+for every kind on both:
 
 ```
 delivery    lane  hop     in       out      loss     dedup  cause
@@ -670,6 +677,11 @@ archetypes:
     systems:
       huddle-room: 40
       mr65: 25
+pushers:                        # outside actors that report by pushing, placed at every site
+  - name: booking               # each placed one is <site>-booking-<k>
+    profile: booking-service    # a simulator profile with a push face
+    per_site: 1                 # how many each site has
+    systems: 4                  # how many of the site's systems each one pushes for
 ```
 
 The vocabulary is the platform's own, so a scenario never invents a device. Each standard is a
@@ -678,7 +690,12 @@ the same planner: a role with a quorum of two takes two of its product, and a ch
 naming the roles of one alternate. Every product is a catalog product a simulator profile serves, so
 the lab can simulate every component it plans. Exactly one archetype is the headquarters, which takes
 no weight; every other archetype repeats and takes one. The site bounds must have a minimum of at least
-one and a maximum no lower than the minimum. The validator collects every problem at once and names
+one and a maximum no lower than the minimum. A pusher is declared like the devices are: its profile
+must have a [push face](/architecture/simulation/#a-pusher-pushes-on-its-own-cadence), and it needs
+at least one a site and at least one system to push for, since a pusher scoped to nothing could
+push nowhere. Each placed pusher is a service account granted `telemetry:push` on its systems alone;
+the lab mints its token on every run and hands it only to the simulator that runs it, never the plan
+or a log. The validator collects every problem at once and names
 each with the manifest line to fix:
 
 ```text
