@@ -383,7 +383,9 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	// at-least-once delivery means redelivery, and idempotence per command id
 	// lives here (the report repeats, the device is not touched twice). It is
 	// pruned past the redelivery window so it does not grow for the life of the run.
-	executedCommands := map[int64]commandOutcome{}
+	// It also carries whether the last pull failed, so a failing pull is logged
+	// on the transition only (#1630).
+	executedCommands := newCommandState()
 	// report accumulates each endpoint's collection telemetry over a report
 	// window (#1369), published when the window is due.
 	report := newCollectionReport(cfg.ReportEvery, time.Now())

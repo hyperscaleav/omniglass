@@ -6330,7 +6330,7 @@ export interface components {
             component_id: string;
             /**
              * Format: date-time
-             * @description When its settle window closes; a command still issued past it is timed out by the next sweep
+             * @description When its window closes (its settle window, or a fire-and-forget command's delivery window); a command still issued past it is timed out by the next sweep
              */
             deadline: string;
             /**
@@ -6386,7 +6386,7 @@ export interface components {
             /** @description The invocation params */
             params?: unknown;
             /**
-             * @description Where it sits now: queued for its node; delivered to it (a binding that settles on observation); awaiting the reply that settles it; awaiting the observation that does, within its window; or, once terminal, its status
+             * @description Where it sits now: queued for its node; delivered to it (a binding that settles on observation, or a fire-and-forget command its node's execution report decides); awaiting the reply that settles it; awaiting the observation that does, within its window; or, once terminal, its status
              * @enum {string}
              */
             phase: "queued" | "delivered" | "awaiting-reply" | "awaiting-observation" | "settled" | "failed" | "timed-out";
@@ -6395,7 +6395,7 @@ export interface components {
             /** @description The component's answer, as its execution report carried it, masked of the endpoint's credentials and anything labeled a credential, and capped; absent until a report lands */
             reply?: string;
             /**
-             * @description How its driver binding says it settles: from the component's reply, from the next observation of its target, or not at all (it sets nothing)
+             * @description How its driver binding says it settles: from the component's reply, from the next observation of its target, or none (it sets nothing, so its node's execution report decides it)
              * @enum {string}
              */
             settle_mode: "reply" | "observation" | "none";
@@ -6410,7 +6410,7 @@ export interface components {
              */
             settled_at?: string;
             /**
-             * @description What decided it, once terminal: its issue (it sets nothing), its reply, an observation of its target, or its window closing on no evidence
+             * @description What decided it, once terminal: its reply (for a fire-and-forget command, its node's execution report), an observation of its target, or its window closing on no evidence; issue marks a fire-and-forget command recorded before it waited on its report
              * @enum {string}
              */
             settled_by?: "issue" | "reply" | "observation" | "window";

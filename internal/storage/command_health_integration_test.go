@@ -16,7 +16,8 @@ import (
 )
 
 // commandQueueSpec is lineProtoSpec binding reboot too, so a fire-and-forget
-// command (reboot settles at issue) has an endpoint to be delivered over.
+// command (reboot, decided by its execution report) has an endpoint to be
+// delivered over.
 var commandQueueSpec = strings.Replace(lineProtoSpec,
 	`{"command_type": "set-input", "request": {"line": "SET INPUT ${value}", "reply": {"prefix": "INPUT "}}}`,
 	`{"command_type": "set-input", "request": {"line": "SET INPUT ${value}", "reply": {"prefix": "INPUT "}}},
@@ -369,8 +370,8 @@ func TestCommandStuckAndExpiredCounts(t *testing.T) {
 	if err := f.conn.QueryRow(f.ctx, `select status from command where id = $1`, ignored).Scan(&status); err != nil {
 		t.Fatal(err)
 	}
-	if status != "settled" {
-		t.Fatalf("the reboot reads %q, want the fire-and-forget settled at issue", status)
+	if status != "issued" {
+		t.Fatalf("the reboot reads %q, want the fire-and-forget issued until its report (#1630)", status)
 	}
 	first, _ := f.health(t, time.Time{})
 	// Both cross deliveryTTL a moment after the first pass.
@@ -393,6 +394,24 @@ func TestCommandStuckAndExpiredCounts(t *testing.T) {
 	_, q = f.health(t, second.Now)
 	if got := q["edge-s"]; got.ExpiredUndelivered != 0 || got.ExpiredUnexecuted != 0 {
 		t.Errorf("the next window counts them again: %+v", got)
+	}
+}
+
+// TestCommandPendingCountSkipsATerminalCommand (#1630): a command its
+// settlement already stamped terminal inside its delivery window is never
+// handed to a node, so the live queue does not count it either: pending and
+// its oldest agree with a pull that delivers nothing.
+func TestCommandPendingCountSkipsATerminalCommand(t *testing.T) {
+	t.Parallel()
+	f := newCommandQueueFixture(t, "edge-t")
+	id := f.issue(t, "edge-t", "set-input")
+	f.exec(t, `update command set status = 'timed-out', settled_at = now(), settled_by = 'window' where id = $1`, id)
+	_, q := f.health(t, time.Time{})
+	if got := q["edge-t"]; got.Pending != 0 || got.Oldest != nil || got.Stuck != 0 {
+		t.Errorf("a timed-out command reads in the live queue: %+v, want nothing pending", got)
+	}
+	if got := f.pull(t, "edge-t"); len(got) != 0 {
+		t.Errorf("the pull delivered %d commands, want the timed-out one withheld", len(got))
 	}
 }
 

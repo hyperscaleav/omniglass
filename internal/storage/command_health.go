@@ -54,18 +54,21 @@ const redeliveryCountLag = "5 seconds"
 // window's start, null for none). The candidates are the pull's own resolution
 // (commandCandidates), widened to the commands live at the window's start so
 // a command that expired in the window is still resolved to its node. Each
-// command is attributed to the node its chosen endpoint is placed on.
+// command is attributed to the node its chosen endpoint is placed on. The
+// live queue (pending, oldest, stuck) counts only the commands still issued,
+// as the pull delivers only those (#1630); the expired counts take every
+// unexecuted command, whatever status its settlement stamped after.
 // Redeliveries are read apart: a command redelivered and then executed has
 // left the candidates, and the redelivered rows are few
 // (command_redelivered_idx). Their window is the same one shifted back by
 // redeliveryCountLag.
 var commandHealthSQL = `
-	with candidate as (` + commandCandidates("coalesce($1::timestamptz, now()) - interval '"+deliveryTTL+"'", "") + `),
+	with candidate as (` + commandCandidates("coalesce($1::timestamptz, now()) - interval '"+deliveryTTL+"'", "", false) + `),
 	queue as (
 		select k.node_name,
-			count(*) filter (where k.ts > now() - interval '` + deliveryTTL + `') as pending,
-			min(k.ts) filter (where k.ts > now() - interval '` + deliveryTTL + `') as oldest,
-			count(*) filter (where k.ts > now() - interval '` + deliveryTTL + `'
+			count(*) filter (where k.ts > now() - interval '` + deliveryTTL + `' and k.status = 'issued') as pending,
+			min(k.ts) filter (where k.ts > now() - interval '` + deliveryTTL + `' and k.status = 'issued') as oldest,
+			count(*) filter (where k.ts > now() - interval '` + deliveryTTL + `' and k.status = 'issued'
 				and k.dispatched_at < now() - interval '` + redeliverAfter + `') as stuck,
 			count(*) filter (where k.ts <= now() - interval '` + deliveryTTL + `' and k.first_dispatched_at is null) as expired_undelivered,
 			count(*) filter (where k.ts <= now() - interval '` + deliveryTTL + `' and k.first_dispatched_at is not null) as expired_unexecuted

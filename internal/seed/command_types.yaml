@@ -20,9 +20,10 @@ command_types:
   - name: reboot
     label: Reboot
     description: >-
-      Tell a component to restart. A fire-and-forget command: it records the
-      invocation and a caused event, with no intended value to settle. A
-      disruptive one: its delivery closes the gates of its hold set on that
+      Tell a component to restart. A fire-and-forget command: it opens no
+      intended value, so its node's execution report settles or fails it, and it
+      times out when no report arrives within its delivery window. A disruptive
+      one: its delivery closes the gates of its hold set on that
       node (the component's in-band endpoints and those of what it hosts), the
       node runs nothing against them for the quiet period, then each reopens
       on its own first up verdict, with the hold as the backstop for one that

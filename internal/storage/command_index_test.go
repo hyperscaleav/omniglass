@@ -104,6 +104,15 @@ func (f *commandPullFixture) pull(t *testing.T) []storage.CommandDelivery {
 // component_id, so the rows the pull reads are found BY the node's own
 // components rather than read and discarded. The statement is the one the
 // gateway really issued, captured off the pool tracer.
+//
+// The pull reads only issued commands (#1630), so command_issued_component_idx
+// (status = 'issued', keyed by component) is a usable path too, and on a
+// fixture with no statistics the planner may take either. Which one it takes is
+// a preference, which accesspath must never assert. So the test asks two
+// usability questions: whatever index the planner picks, the command scan is
+// searched by component; and with the settlement index out of the way inside a
+// rolled-back transaction, command_deliverable_idx is still reachable, which is
+// what breaks if its predicate stops being implied by the pull's clauses.
 func TestCommandPullReachesTheDeliverableIndex(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
@@ -125,13 +134,30 @@ func TestCommandPullReachesTheDeliverableIndex(t *testing.T) {
 	if err != nil {
 		t.Fatalf("explain the captured statement: %v", err)
 	}
-	if ok, why := plan.MustReach("command", "command_deliverable_idx"); !ok {
-		t.Fatalf("the command pull cannot reach the index it exists for: %s", why)
+	scans := plan.Scans("command")
+	if len(scans) == 0 {
+		t.Fatalf("the plan never scans command:\n\t%s", plan)
 	}
-	for _, s := range plan.Scans("command") {
-		if !strings.Contains(s.Cond, "component_id") {
+	for _, s := range scans {
+		if s.Disabled || !strings.Contains(s.Cond, "component_id") {
 			t.Errorf("the command scan is not searched by component, so a pull still reads other nodes' commands: %s", s)
 		}
+	}
+
+	tx, err := conn.Begin(f.ctx)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	defer func() { _ = tx.Rollback(f.ctx) }()
+	if _, err := tx.Exec(f.ctx, "drop index command_issued_component_idx"); err != nil {
+		t.Fatalf("set the settlement index aside: %v", err)
+	}
+	plan, err = accesspath.Explain(f.ctx, conn, call.SQL, call.Args...)
+	if err != nil {
+		t.Fatalf("explain the captured statement: %v", err)
+	}
+	if ok, why := plan.MustReach("command", "command_deliverable_idx"); !ok {
+		t.Fatalf("the command pull cannot reach the index it exists for: %s", why)
 	}
 }
 
@@ -215,6 +241,15 @@ func TestCommandDeliverableIndexMigrationRoundTrips(t *testing.T) {
 	const exists = `select count(*) from pg_indexes where indexname = 'command_deliverable_idx'`
 	if count(t, conn, exists) != 1 {
 		t.Fatal("command_deliverable_idx is missing after migrate up")
+	}
+	// The pull reads only issued commands (#1630), so the index holds only
+	// those: a terminal command left unexecuted is no row a pull can deliver.
+	var def string
+	if err := conn.QueryRow(context.Background(), `select indexdef from pg_indexes where indexname = 'command_deliverable_idx'`).Scan(&def); err != nil {
+		t.Fatalf("read the index definition: %v", err)
+	}
+	if !strings.Contains(def, "status") || !strings.Contains(def, "'issued'") {
+		t.Errorf("command_deliverable_idx holds terminal commands too: %s", def)
 	}
 	if err := migrate.RollbackBelow(dsn, commandDeliverableVersion); err != nil {
 		t.Fatalf("roll back: %v", err)

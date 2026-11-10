@@ -38,7 +38,7 @@ func TestCommandPullAgainstAStoppedBusLandsTheFailureCount(t *testing.T) {
 
 	start := time.Now().Add(-time.Minute)
 	self := newNodeReport(time.Minute, start)
-	runCommands(f.ctx, down, "edge-1", nil, nil, nil, map[int64]commandOutcome{}, self)
+	runCommands(f.ctx, down, "edge-1", nil, nil, nil, newCommandState(), self)
 	report := self.take(time.Now())
 	if got := readings(report)[writerclass.CommandPullFailureCount]; got != 1 {
 		t.Fatalf("the report's command-pull-failure-count = %v, want the one failed pull: %v", got, readings(report))
