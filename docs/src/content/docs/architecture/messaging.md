@@ -327,6 +327,10 @@ failure count has its attempts beside it, so each loss reads as a ratio where 0 
   silent`, and not again until a heartbeat from that node lands, so a database outage under a fleet
   heartbeating every few seconds is one line a node, not one a beat. Healthy is 0 failures.
 
+[Platform health](/guides/operator/platform-health/#where-work-is-lost) reads the delivery keys hop
+by hop, the node's spool then this ingest, each hop's loss over its components' summed counts and the
+end to end as one minus the product of each hop's survival (#1646).
+
 A count reads its window's sum, then one zero the window after its last activity, then nothing; a
 gauge, mean or max reads nothing in a window with no observation, so a missing figure is no activity,
 never a zero that did not happen. What the figures say about scaling is
