@@ -4,7 +4,10 @@
 # items of each kind it holds. The server writes what became of each item onto the batch's
 # receipt (stored, coalesced, deduplicated, or refused and why), and omniglass lab measure
 # reconciles the ledgers against the receipts once every node has settled. Each kind and hop reads
-# as one loss ratio, 0 healthy, with the cause of any loss named beside it (#1641, ADR-1641).
+# as one loss ratio, 0 healthy, with the cause of any loss named beside it (#1641, ADR-1641). The
+# node hop comes first: what each node minted against what its spool shipped, with a batch the
+# spool dropped named by the batches after it under its own cause, so the ingest row reads only
+# what was lost after the node shipped it (#1692, ADR-1692).
 
 # demo-needs: docker-socket
 
@@ -22,16 +25,22 @@ Wait
 Type "grep -E '^(ready|measuring|delivery|torn down)' /tmp/lab-measure.err"
 Enter
 Wait
-Type "# The delivery table: each kind across the ingest hop, in and out, the loss ratio and its cause"
+Type "# The delivery table: each kind across the node hop, then the ingest hop, with the loss ratio and its cause"
 Enter
 Wait
 Type "sed -n '/^delivery /,$p' /tmp/lab-measure.txt"
 Enter
 Wait
-Type "# The same figures in the JSON a second run compares against: each kind that sent items reads 0"
+Type "# The same figures in the JSON a second run compares against: each kind that sent items reads 0 on both hops"
 Enter
 Wait
 Type `jq -c '.delivery[] | {kind, hop, in, out, loss, deduplicated, outcomes}' /tmp/lab-measure.json`
+Enter
+Wait
+Type "# The node's out is the ingest's in: a hole the node accounts for is its loss, never ingest missing"
+Enter
+Wait
+Type `jq -c '.delivery | group_by(.kind)[] | {kind: .[0].kind, node_out: (map(select(.hop == "node"))[0].out), ingest_in: (map(select(.hop == "ingest"))[0].in)}' /tmp/lab-measure.json`
 Enter
 Wait
 Type `jq -c '.delivery_end_to_end' /tmp/lab-measure.json`
