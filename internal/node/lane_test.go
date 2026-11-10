@@ -132,11 +132,16 @@ func TestACommandAndARunNowQueuedBehindAGateClosingCommandAnswerWithTheGate(t *t
 	rig.l.sessions.now = func() time.Time { return gateT0 }
 	release := blockLane(t, rig.d.pool, "ep-1")
 
-	type outcome struct{ reply, out string }
+	// Each answer is keyed by its command: the two delivering goroutines
+	// report in whatever order the scheduler runs them, not lane order.
+	type outcome struct {
+		id         int64
+		reply, out string
+	}
 	outcomes := make(chan outcome, 2)
 	deliver := func(d collection.CommandDelivery) {
 		reply, out := deliverOnLane(t.Context(), rig.l.runner, d, rig.l.sessions, rig.d.pool)
-		outcomes <- outcome{reply, out}
+		outcomes <- outcome{d.ID, reply, out}
 	}
 	go deliver(reboot(15, 300))
 	waitFor(t, func() bool { return rig.d.pool.queued() == 1 }, "the reboot to queue on the lane")
@@ -151,7 +156,12 @@ func TestACommandAndARunNowQueuedBehindAGateClosingCommandAnswerWithTheGate(t *t
 	release()
 
 	named := "disrupted by reboot (command 42) since 2026-11-09T14:03:00Z"
-	first, second := <-outcomes, <-outcomes
+	byID := map[int64]outcome{}
+	for range 2 {
+		o := <-outcomes
+		byID[o.id] = o
+	}
+	first, second := byID[42], byID[43]
 	if first.out != "" {
 		t.Fatalf("the reboot failed: %s", first.out)
 	}
