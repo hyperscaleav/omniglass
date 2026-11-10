@@ -1,6 +1,7 @@
 import { createSignal, For, Show, type JSX } from "solid-js";
 import { A } from "@solidjs/router";
 import InfoTip from "./InfoTip";
+import KeyedFor from "./KeyedFor";
 import { ArrowRight } from "./icons";
 import {
   NOT_REPORTED,
@@ -65,16 +66,16 @@ export default function PipelineFlow(props: { pipeline: PlatformPipeline }): JSX
 
         <div class="flex flex-wrap items-center gap-2">
           <ol aria-label="Pipeline hops" class="flex flex-wrap items-stretch gap-2">
-            <For each={hops()}>
+            <KeyedFor each={hops()} by={(h) => h.id}>
               {(h, i) => (
                 <li class="flex items-center gap-2">
                   <Show when={i() > 0}>
                     <span class="text-base-content/30" aria-hidden="true"><ArrowRight size={14} /></span>
                   </Show>
-                  <HopButton hop={h} kind={kind()} pressed={selected() === h.id} onSelect={() => setSelected(selected() === h.id ? undefined : h.id)} />
+                  <HopButton hop={h()} kind={kind()} pressed={selected() === h().id} onSelect={() => setSelected(selected() === h().id ? undefined : h().id)} />
                 </li>
               )}
-            </For>
+            </KeyedFor>
           </ol>
           <div class="ml-auto flex items-center gap-1.5 text-sm">
             <span class="text-base-content/60">End to end</span>
@@ -169,14 +170,14 @@ function HopDetail(props: { hop: PlatformPipelineHop; pipeline: PlatformPipeline
       <div class="flex flex-col gap-2">
         <div class="eyebrow">By component</div>
         <ul class="flex flex-col gap-1.5">
-          <For each={props.hop.by_component ?? []} fallback={<li class="text-xs text-base-content/50">No component has recorded this hop yet.</li>}>
+          <KeyedFor each={props.hop.by_component} by={(c) => c.component} fallback={<li class="text-xs text-base-content/50">No component has recorded this hop yet.</li>}>
             {(c) => (
-              <li data-testid={`pipeline-component-${c.name}`} class="flex flex-wrap items-baseline justify-between gap-2">
-                <A href={`/components/${c.component}`} class="font-medium hover:underline" title="Open the component, where each delivery series lives">{c.name}</A>
-                <Figures figure={componentFigure(c, props.kind)} />
+              <li data-testid={`pipeline-component-${c().name}`} class="flex flex-wrap items-baseline justify-between gap-2">
+                <A href={`/components/${c().component}`} class="font-medium hover:underline" title="Open the component, where each delivery series lives">{c().name}</A>
+                <Figures figure={componentFigure(c(), props.kind)} />
               </li>
             )}
-          </For>
+          </KeyedFor>
         </ul>
       </div>
     </div>
