@@ -548,6 +548,14 @@ server down. The decisions are
 [ADR-1627](/architecture/decisions/#adr-1627-a-server-reports-its-request-and-query-timing-by-route-template-and-statement-fingerprint)
 and [ADR-1671](/architecture/decisions/#adr-1671-a-server-whose-platform-component-cannot-be-ensured-boots-and-reports-nothing).
 
+**One component, not a bus, a database and a worker pool.** #1094 designed the bus, the database
+and the worker pool as platform components of their own. Their figures land on the server's
+component instead, told apart by key and instance, since each is one server's own view: its
+consumer, its connection pool, its ticks (there is no separate worker pool). Two servers report two
+pools, never one merged database figure. A component for the NATS or Postgres service itself, read
+from its own side, is not built
+([ADR-1628.2](/architecture/decisions/#adr-16282-the-servers-platform-component-carries-the-bus-database-and-worker-pool-figures)).
+
 ## Endpoint types and their config
 
 The poll types and listeners in the `transport` registry and the operator config they read. How the node *executes* these (tick scheduling, reachability gating, the task queue) is [nodes](/architecture/nodes/).
