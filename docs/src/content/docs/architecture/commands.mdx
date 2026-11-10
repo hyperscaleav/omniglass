@@ -121,8 +121,9 @@ cannot loop it, and each endpoint is held once. Only endpoints placed on the del
 sent; holding one on another node is [#1655](https://github.com/hyperscaleav/omniglass/issues/1655).
 A component with no edges holds what it held before, less its out-of-band endpoints. The
 power-command marker is set only on a disruptive type (a CHECK and a 422 refuse it on any other),
-and no shipped type sets it until the outlet command ships
-([#1653](https://github.com/hyperscaleav/omniglass/issues/1653)).
+and the one shipped type that sets it is [`outlet-off`](#the-command_type-registry). The outlet is
+read from the params as the dependency names it, a whole number as its digits however the JSON
+spells it, so `{"outlet": 2.0}` holds what outlet 2 feeds just as `{"outlet": 2}` does.
 
 ## Issuing a command composes the whole model
 
