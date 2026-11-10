@@ -794,3 +794,36 @@ func TestScaleDeliveryScheduleHopRow(t *testing.T) {
 		t.Errorf("the JSON schedule row: %s", b)
 	}
 }
+
+// End to end composes the hops a kind has a ratio on and reads a hop with
+// nothing in as passing nothing on to lose: a schedule that skipped every due
+// leaves the ingest nothing to carry, and end to end reads that kind's whole
+// loss, not "-". With no ingest row (every boot unsettled) the kind's end to
+// end is not known, and the schedule hop alone does not stand for it.
+func TestScaleDeliveryEndToEndOverASilencedHop(t *testing.T) {
+	d := func(m, p uint64, before uint64) delivery.Declared {
+		return delivery.Declared{delivery.Metric: {Count: m, Before: before * m}, delivery.Property: {Count: p, Before: before * p}}
+	}
+	run := deliveryRun(
+		receipt("b1", 1, 100, d(40, 0, 0), nil),
+		receipt("b1", 2, 200, d(40, 0, 1), nil),
+		receipt("b1", 3, 700, d(40, 0, 2), nil),
+	)
+	run.Delivery.Schedule = []ScheduleCount{{Kind: delivery.Metric, Due: 10, Made: 10}, {Kind: delivery.Property, Due: 10}}
+	rep := SummarizeScale(run)
+	if got, ok := rep.DeliveryEndToEnd[delivery.Property]; !ok || got != 1 {
+		t.Errorf("property end to end = %v (%v), want 1: every due skipped", got, ok)
+	}
+	if table := rep.Table(); !strings.Contains(table, "end to end  metric 0  property 1  event -  log -") {
+		t.Errorf("the end to end line does not read the skipped kind's loss:\n%s", table)
+	}
+
+	run.Delivery.StreamClear = false
+	rep = SummarizeScale(run)
+	if len(rep.DeliveryEndToEnd) != 0 {
+		t.Errorf("end to end = %v with every boot unsettled, want none", rep.DeliveryEndToEnd)
+	}
+	if table := rep.Table(); !strings.Contains(table, "end to end  metric -  property -  event -  log -") {
+		t.Errorf("the end to end line reads a ratio with no ingest settled:\n%s", table)
+	}
+}

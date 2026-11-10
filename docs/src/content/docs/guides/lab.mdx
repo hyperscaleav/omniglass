@@ -552,11 +552,13 @@ Below the endpoints block, the delivery table says how much telemetry the lab lo
 exactly 0 for every kind:
 
 ```
-delivery    hop     in       out      loss     dedup  cause
-metric      ingest  1275     1275     0        0      -
-property    ingest  166      166      0        0      -
-event       ingest  0        0        -        0      -
-log         ingest  0        0        -        0      -
+delivery    hop       in       out      loss     dedup  cause
+metric      schedule  4100     4100     0        0      -
+metric      ingest    1275     1275     0        0      -
+property    schedule  3020     3020     0        0      -
+property    ingest    166      166      0        0      -
+event       ingest    0        0        -        0      -
+log         ingest    0        0        -        0      -
 end to end  metric 0  property 0  event -  log -
 ```
 
@@ -591,7 +593,10 @@ end to end  metric 0  property 0  event -  log -
   from its neighbors' offsets. At this stage it cannot say why; the footer reads `never landed:
   Termed at ingest, dropped at the node, or lost in between`.
 - **end to end** is each kind's loss over every hop it crosses, `1 - prod(1 - loss)`: in the example
-  above, 0.1 for metrics, the schedule hop's.
+  above, 0.1 for metrics, the schedule hop's. A hop with nothing in loses nothing, so a schedule that
+  skipped every due of a kind reads that kind's end to end as 1 though its ingest row reads `-`. A
+  kind with no ingest row (every boot unsettled) reads `-`: the schedule hop alone does not stand
+  for the end to end.
 - **unsettled** names a node boot whose window's batches were not all known when `--settle-timeout`
   ran out (no later batch said the spool had cleared past them, or the stream still held batches),
   with no ratio for it rather than a guess. A note under the table gives the stream's pending and

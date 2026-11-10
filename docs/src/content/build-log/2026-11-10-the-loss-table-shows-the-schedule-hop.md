@@ -11,7 +11,8 @@ pass, reads as that hop's loss with the cause `skipped`. A probe an upstream hol
 run off the schedule is no due. The node writes the three delivery keys at the instance
 `schedule/{kind}` on its own component every report window, beside its spool's. `omniglass lab
 measure` reads them over the window and prints a `schedule` row ahead of each kind's `ingest` row, in
-the same form as every hop, with no row for a kind no scheduled task produces; end to end composes it.
+the same form as every hop, with no row for a kind no scheduled task produces; end to end composes it,
+a hop with nothing in losing nothing, so a kind whose every due was skipped reads 1, not `-`.
 The integration test points a 1 s poll at a device that never answers and reads the schedule loss
 above 0 while the ingest hop reads 0: a skipped due made no item to lose. Platform health draws the
 hop next (#1739).

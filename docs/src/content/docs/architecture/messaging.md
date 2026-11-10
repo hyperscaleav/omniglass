@@ -202,7 +202,8 @@ every window as platform metrics, 0 when nothing came in (#1659,
   per-kind instances.
 - **End to end composes.** A kind's loss over every hop it crosses is `1 - prod(1 - loss)`: a node
   that skips a fifth of its dues and lands every item it made reads 0.2 end to end, the schedule
-  hop's.
+  hop's. A hop with nothing in loses nothing, so a kind whose every due was skipped reads 1 end to
+  end, not unknown; a kind with no settled ingest reading has no end to end at all.
 
 A batch the consumer Terms whole (undecodable, an owner or a task row it may not assert, refused
 whole, unreadable metadata, its fifth delivery) leaves no receipt, so its items read as `missing`
