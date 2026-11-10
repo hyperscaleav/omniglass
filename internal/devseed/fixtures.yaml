@@ -2118,6 +2118,12 @@ sim_secrets:
     label: Simulated Boreal display login
     secret_type: basic-auth
     fields: { username: admin, password: boreal }
+  # The simulated Ferrite PDU's control login (its http-api face, #1653),
+  # for the boardroom PDU's switching endpoint below.
+  - name: sim-ferrite-login
+    label: Simulated Ferrite PDU login
+    secret_type: basic-auth
+    fields: { username: ferrite, password: ferrite }
   # The key the simulated UCC service signs its webhooks with (#1024).
   - name: sim-ucc-signing
     label: Simulated UCC webhook signing key
@@ -2229,6 +2235,14 @@ sim_endpoints:
     driver: newtron-nvp-telnet
     label: Panel Telnet
     inputs: { login: sim-panel-login-rotated }
+  # The boardroom PDU's control face (#1653): its JSON API behind basic auth,
+  # beside the SNMP agent its product attaches. It carries outlet-off and
+  # outlet-on; a component given a power dependency on one of its outlets is
+  # held while that outlet is switched off.
+  - component: power
+    driver: ferrite-pdu-api
+    label: PDU control
+    inputs: { login: sim-ferrite-login }
   # A bare ping: icmp has no device API, so it is the one method that counts
   # on its connection tier alone.
   - component: touch-a
