@@ -178,18 +178,21 @@ func TestSampleTimeRule(t *testing.T) {
 }
 
 // fakeMsg is a minimal jetstream.Msg double so nakOrTerm's decision (redeliver
-// vs. drop) can be unit-tested without a real embedded NATS server: only
-// Metadata, Nak, and Term are exercised, the rest are unused stubs.
+// vs. drop) can be unit-tested without a real embedded NATS server, and so a
+// test can hand handleTelemetry a batch (data and its Msg-Id header). The
+// rest are unused stubs.
 type fakeMsg struct {
 	meta    *jetstream.MsgMetadata
 	metaErr error
+	data    []byte
+	header  nats.Header
 	naked   bool
 	termed  bool
 }
 
 func (m *fakeMsg) Metadata() (*jetstream.MsgMetadata, error) { return m.meta, m.metaErr }
-func (m *fakeMsg) Data() []byte                              { return nil }
-func (m *fakeMsg) Headers() nats.Header                      { return nil }
+func (m *fakeMsg) Data() []byte                              { return m.data }
+func (m *fakeMsg) Headers() nats.Header                      { return m.header }
 func (m *fakeMsg) Subject() string                           { return "og.v1.telemetry.node-a" }
 func (m *fakeMsg) Reply() string                             { return "" }
 func (m *fakeMsg) Ack() error                                { return nil }
@@ -210,7 +213,7 @@ func TestNakOrTerm(t *testing.T) {
 	t.Run("below the bound redelivers", func(t *testing.T) {
 		s := &Server{}
 		m := &fakeMsg{meta: &jetstream.MsgMetadata{NumDelivered: 1}}
-		s.nakOrTerm(m, items)
+		s.nakOrTerm(m, termed{}, items)
 		if !m.naked || m.termed {
 			t.Fatalf("delivery 1 of %d: want Nak only, got naked=%v termed=%v", maxTelemetryDeliveries, m.naked, m.termed)
 		}
@@ -231,7 +234,7 @@ func TestNakOrTerm(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s := &Server{}
-			s.nakOrTerm(tc.msg, items)
+			s.nakOrTerm(tc.msg, termed{}, items)
 			if !tc.msg.termed || tc.msg.naked {
 				t.Fatalf("want Term only, got naked=%v termed=%v", tc.msg.naked, tc.msg.termed)
 			}

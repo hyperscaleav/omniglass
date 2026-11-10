@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/delivery"
 	"github.com/hyperscaleav/omniglass/internal/driver"
 )
 
@@ -114,6 +115,10 @@ type dispatchWindow struct {
 	// queue's cap (operator-refused-count), #1249.
 	operatorOffers   int
 	operatorRefusals int
+	// schedule is the schedule hop (#1693): every due on the schedule in,
+	// every run made out, per kind the task's run produces, so a due passed
+	// over reads as that hop's loss. A run off the schedule is no due.
+	schedule delivery.Counts
 }
 
 type dueEntry struct {
@@ -165,6 +170,7 @@ type dispatcher struct {
 	due      dueHeap
 	entries  map[string]*dueEntry
 	tasks    map[string]collection.TaskSpec
+	kinds    map[string][]delivery.Kind // each task's taskKinds, read at sync
 	inflight map[string]bool
 	held     map[string]string // held poll id to its endpoint
 	// heldProbes is each probe a path upstream holds (#1652) to its
@@ -191,7 +197,7 @@ func newDispatcher(cfg dispatchConfig) *dispatcher {
 		cfg.sched = newPollSchedule()
 	}
 	return &dispatcher{cfg: cfg, pool: newLanePool(cfg.workers), wake: make(chan struct{}, 1),
-		entries: map[string]*dueEntry{}, tasks: map[string]collection.TaskSpec{},
+		entries: map[string]*dueEntry{}, tasks: map[string]collection.TaskSpec{}, kinds: map[string][]delivery.Kind{},
 		inflight: map[string]bool{}, held: map[string]string{}, heldProbes: map[string]string{},
 		started: map[string]time.Time{}}
 }
@@ -210,6 +216,30 @@ func (d *dispatcher) interval(t collection.TaskSpec) time.Duration {
 		return DefaultProbeEvery
 	}
 	return d.cfg.probeEvery
+}
+
+// taskKinds is the telemetry kinds a task's run produces (#1693), in the
+// order the loss table prints them: a reachability probe's metrics and its
+// verdict property, a driver poll's the lanes its emits declare. A spec the
+// node cannot read produces nothing, so its runs count toward no kind.
+func taskKinds(t collection.TaskSpec) []delivery.Kind {
+	if !driver.IsBaked(t.Spec) {
+		return []delivery.Kind{delivery.Metric, delivery.Property}
+	}
+	fn, err := driver.ParseBaked(t.Spec)
+	if err != nil {
+		return nil
+	}
+	var out []delivery.Kind
+	for _, k := range delivery.Kinds {
+		for _, em := range fn.Emits {
+			if em.Lane == string(k) {
+				out = append(out, k)
+				break
+			}
+		}
+	}
+	return out
 }
 
 // laneKey is the lane a task runs on: its endpoint, else the task alone.
@@ -239,6 +269,7 @@ func (d *dispatcher) sync(wl collection.WorklistReply, now time.Time) {
 			heap.Remove(&d.due, e.idx)
 			delete(d.entries, id)
 			delete(d.tasks, id)
+			delete(d.kinds, id)
 			delete(d.held, id)
 			delete(d.heldProbes, id)
 			delete(d.started, id)
@@ -249,6 +280,7 @@ func (d *dispatcher) sync(wl collection.WorklistReply, now time.Time) {
 			continue
 		}
 		d.tasks[t.ID] = t
+		d.kinds[t.ID] = taskKinds(t)
 		moved := d.cfg.sched.rebook(t.ID, t.Fingerprint)
 		e, known := d.entries[t.ID]
 		if !known {
@@ -287,6 +319,7 @@ func (d *dispatcher) pass(ctx context.Context, now time.Time) int {
 			missed := 1 + missedSlots(e.at, now, phase, every)
 			d.window.overruns++
 			d.window.skips += missed
+			d.window.schedule.Scheduled(d.kinds[e.id], 0, missed)
 			if poll {
 				for range missed {
 					d.cfg.report.pollDue(t.EndpointID)
@@ -324,6 +357,14 @@ func (d *dispatcher) pass(ctx context.Context, now time.Time) int {
 			missed = missedSlots(e.at, now, phase, every)
 		}
 		d.window.skips += missed
+		made := 0
+		if !e.extra {
+			made = 1
+		}
+		// A probe an upstream holds below counts made: held on purpose and
+		// run the moment the upstream opens, as a poll its gate holds is due
+		// and never skipped.
+		d.window.schedule.Scheduled(d.kinds[e.id], made, missed)
 		next := nextBooking(e.at, now, phase, every)
 		if e.extra && e.slot.After(now) {
 			// A run off the schedule keeps the slot its last pass booked.

@@ -65,8 +65,9 @@ type IngestBatch struct {
 	// can name a boot's node (#1641). Empty on the push lane.
 	Node string
 	// Ledger is the delivery ledger the node stamped the batch with (#1641),
-	// recorded on the receipt with the batch's outcome. Nil on the push lane,
-	// which records no outcome.
+	// or on the push lane the server's (#1696), recorded on the receipt with
+	// the batch's outcome. Nil from a publisher that stamps none, which
+	// records no outcome.
 	Ledger *delivery.Stamp
 	// Tally is what the consumer counted before the batch reached the
 	// gateway (#1641): the items it refused, orphaned, could not place, or
