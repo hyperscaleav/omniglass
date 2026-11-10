@@ -73,22 +73,22 @@ type Config struct {
 	// and one-shot invocations.
 	Once bool
 	// Dialer is the tcp probe primitive the node runs its tcp tasks with. Nil
-	// defaults to the real collection.NewTCPDialer(); tests inject a fake.
+	// defaults to the real collection.NewTalliedTCPDialer(Tally); tests inject a fake.
 	Dialer collection.TCPDialer
 	// Pinger is the icmp probe primitive the node runs its icmp tasks with. Nil
 	// defaults to the real collection.NewICMPPinger(); tests inject a fake.
 	Pinger collection.Pinger
 	// HTTP is the layer-7 http probe primitive (#812). Nil defaults to the
-	// real collection.NewHTTPProber(); tests inject a fake.
+	// real collection.NewTalliedHTTPProber(Tally); tests inject a fake.
 	HTTP collection.HTTPProber
 	// HTTPFetch sends a driver's http and https requests (#902). Nil
-	// defaults to the real collection.NewHTTPFetcher().
+	// defaults to the real collection.NewTalliedHTTPFetcher(Tally).
 	HTTPFetch collection.HTTPFetcher
 	// SSH is the layer-7 ssh probe primitive (#812). Nil defaults to the
 	// real collection.NewSSHProber(); tests inject a fake.
 	SSH collection.SSHProber
 	// SNMP is the driver-poll v2c GET client (#814). Nil defaults to the
-	// real collection.NewSNMPGetter(); tests inject a fake.
+	// real collection.NewTalliedSNMPGetter(Tally); tests inject a fake.
 	SNMP collection.SNMPGetter
 	// Line is the driver-poll stateless line-protocol client (#814). Nil
 	// defaults to the real collection.NewLineExchanger(); tests inject a fake.
@@ -116,6 +116,11 @@ type Config struct {
 	// wss. Nil defaults to the real collection.NewWebSocketDialer(); tests
 	// shorten its keepalive.
 	WebSocketSession collection.SessionDialer
+	// Tally counts what the node sends (#1639), read by a scale lab on the
+	// node's tally subject. Nil defaults to a fresh tally; the transports the
+	// node builds itself count into it, and an injected transport counts
+	// only if it was built with the same tally.
+	Tally *collection.RequestTally
 }
 
 // Run claims the node's NATS credential, connects outbound-only to the bus,
@@ -159,11 +164,16 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	if err != nil {
 		return collection.WorklistReply{}, fmt.Errorf("node: jetstream: %w", err)
 	}
+	tally := cfg.Tally
+	if tally == nil {
+		tally = collection.NewRequestTally()
+	}
 	spool := newTelemetrySpool(collection.TelemetrySubject(cfg.Name), cfg.Name, jetStreamPublish(js))
+	spool.tally = tally
 
 	dialer := cfg.Dialer
 	if dialer == nil {
-		dialer = collection.NewTCPDialer()
+		dialer = collection.NewTalliedTCPDialer(tally)
 	}
 	pinger := cfg.Pinger
 	if pinger == nil {
@@ -171,7 +181,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	}
 	httpProber := cfg.HTTP
 	if httpProber == nil {
-		httpProber = collection.NewHTTPProber()
+		httpProber = collection.NewTalliedHTTPProber(tally)
 	}
 	sshProber := cfg.SSH
 	if sshProber == nil {
@@ -179,7 +189,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	}
 	snmpGetter := cfg.SNMP
 	if snmpGetter == nil {
-		snmpGetter = collection.NewSNMPGetter()
+		snmpGetter = collection.NewTalliedSNMPGetter(tally)
 	}
 	lineExchanger := cfg.Line
 	if lineExchanger == nil {
@@ -195,7 +205,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	}
 	httpFetcher := cfg.HTTPFetch
 	if httpFetcher == nil {
-		httpFetcher = collection.NewHTTPFetcher()
+		httpFetcher = collection.NewTalliedHTTPFetcher(tally)
 	}
 	runner := &collection.Runner{TCP: dialer, Ping: pinger, HTTP: httpProber, SSH: sshProber, SNMP: snmpGetter, Line: lineExchanger, Telnet: telnetProber, TLS: tlsProber, HTTPFetch: httpFetcher}
 
@@ -421,6 +431,11 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 		return wl, fmt.Errorf("node: subscribe runs: %w", err)
 	}
 	defer func() { _ = runSub.Unsubscribe() }()
+	tallySub, err := subscribeTally(nc, cfg.Name, tally)
+	if err != nil {
+		return wl, fmt.Errorf("node: subscribe tally: %w", err)
+	}
+	defer func() { _ = tallySub.Unsubscribe() }()
 
 	// The worklist is pulled on its own goroutine and interval (#1577); the
 	// loop takes the latest one pulled and runs the one it has until then.

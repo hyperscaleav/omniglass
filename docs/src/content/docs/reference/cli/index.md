@@ -289,7 +289,7 @@ omniglass auth logout
 The authenticated principal, its permissions, and grants
 
 ```
-omniglass auth me [flags]
+omniglass auth me
 ```
 
 Returns the caller's principal, flattened permissions (a UI hint and the fast-reject set), the permissions held on an all-scope grant (fleet_permissions), and grants. Requires authentication.
@@ -3466,7 +3466,7 @@ omniglass location-type update room
 Serve the omniglass MCP tools over stdio, for a local agent
 
 ```
-omniglass mcp [flags]
+omniglass mcp
 ```
 
 Serves the omniglass MCP server over stdio by relaying to the server's /mcp endpoint with your token, so a local agent (Claude Code, or any MCP client that launches a command) drives omniglass through the same generated tools, with your permissions and scope, audited as you via MCP. Configure the agent to run `omniglass mcp` with OMNIGLASS_SERVER and OMNIGLASS_TOKEN in its environment. Standard output carries only the MCP protocol; anything else goes to standard error.
@@ -3861,6 +3861,26 @@ Example:
 
 ```sh
 omniglass node simulation <name>
+```
+
+#### `omniglass node simulation observation`
+
+Commands for the observation resource
+
+##### `omniglass node simulation observation list`
+
+Get a node's endpoint observation
+
+```
+omniglass node simulation observation list <name>
+```
+
+What the simulated endpoints beside a node saw arrive and how each request settled, and what the node tallied sending, read in that order: the simulator, then the node, then the simulator again, so a request in transit between reads is never a false gap. A scale lab reconciles the three. Totals are per protocol with a capped sample of device ids, bounded at any fleet size, and count since each process started. Gated by simulation:read, and only for a caller whose component read scope is all, since the totals span every component the node simulates. A node that does not exist is a 404; no simulator answering, or the node not answering, a 503.
+
+Example:
+
+```sh
+omniglass node simulation observation list <name>
 ```
 
 ### `omniglass node update`
@@ -6230,7 +6250,7 @@ omniglass system get <name>
 Read every system's health verdict
 
 ```
-omniglass system health [flags]
+omniglass system health
 ```
 
 The current verdict for every system in the caller's read scope, in one call: the bulk counterpart of the per-system health read, carrying the one fact a list's health column renders and none of the explanation. A console painting a page of systems reads this once instead of resolving every role, occupant, alarm and transition per row. A system that has never been recomputed reads healthy. Gated by system:read; an empty scope is an empty list, not a 403.

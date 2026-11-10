@@ -475,9 +475,58 @@ How to read each row:
   mostly drops whole daily partitions, which has no rate to read. The probe removes its rows when it
   is done, and `--backlog 0` skips it, leaving the server running as it was.
 
+#### Every request reached its endpoint and was answered
+
+Below the table, an **endpoints** block closes the loop: what every node sent, what each simulated
+endpoint saw arrive and how it answered, and what landed in the database, reconciled hop by hop.
+Each node is read through `GET /nodes/{name}/simulation/observation` at the window's start and at its
+end, and each read is a bracket of three (the simulator, the node, the simulator again; see
+[what an endpoint observed](/architecture/simulation/#what-an-endpoint-observed)). The start's
+reads follow a read of the database's clock and the end's precede one, so the telemetry receipts
+that clock bounds fall inside the reads. Per protocol it prints:
+
+- **received**: the requests the node's simulators saw arrive over the window, beside how many
+  **poll targets** the window should have drawn on that protocol at least twice (each enabled poll
+  task's endpoint, at the interval its node actually runs it: a driver poll at its function's
+  schedule, a reachability probe at the node's probe interval), the connections accepted, and each
+  outcome. Many http requests read `refused`, which is not a loss: a digest-authenticated device
+  answers each first request 401 before the one that carries the credentials, as real gear does.
+- **service time**: the simulators' own time to answer, p50, p95 and p99, merged over the nodes.
+- **overlap-ratio**: the share of requests that found their face already serving one. A node sends a
+  face one request at a time, so anything above zero is a finding; the five worst faces since each
+  simulator started are named under the block.
+- **in flight high** and **arrival high**: the most requests a node's simulators held at once, per
+  protocol and over all of them, beside the node's dispatch gauges once a pool reports them.
+
+Then one line per gap, in the order a request travels:
+
+| Gap | Lost means | Masked by |
+| --- | --- | --- |
+| `connect-not-accepted` | a connection the node opened that no simulator accepted | connections still in the kernel's backlog at the end read |
+| `sent-not-received` | a request whose bytes left the node and never arrived | requests in flight at the node's end read |
+| `received-not-settled` | a request a simulator received and never settled | |
+| `answered-not-returned` | an answer a simulator gave that the node never got | answers in flight, answers late past the node's timeout (shown as `answered late`), and traffic on the protocol the node does not tally yet (#1661) |
+| `published-not-landed` | a batch the bus acknowledged with no receipt in the database | receipts landed in the 30 s before the window (the bus's acknowledgement wait), before the ingest lane drained past the start read (batches from before the window), or after its end |
+| `spool-dropped` | a batch the node's spool gave up on | |
+| `unhit-endpoint` | a poll target due at least twice whose device saw nothing on its protocol | devices past the simulator's sample of twenty, not checked against the targets (#1663) |
+
+Every figure is a lower bound: positive only where something was lost, with what could hide a loss
+printed beside it as `masked`, never folded into it. A clean run reads `0 lost` on every line.
+A loss is named per node under the totals, with the protocol and, for an unhit endpoint, the
+component. An icmp target reads `not observed by the sim`, since the kernel answers a ping. A node
+whose simulator carries an applied impairment reads `impaired` instead of lost on every gap (an
+impairment loses traffic on purpose; telling it apart per protocol is #1662), and a node or
+simulator that restarted inside the window reads `restarted`, since none of its figures compare.
+The window is refused past 23 hours, since the server prunes receipts at a day. Each mark waits for
+the ingest lane to land a sample a node probed after it, so a lagging lane delays the count rather
+than reading as a lost batch. When the block cannot be read (a simulator or node not answering, or
+a lane still behind three minutes after a mark) the table ends with
+`endpoints not measured` and why, and the JSON carries it as `endpoints_not_measured`; every other
+figure is still reported.
+
 #### Reading the delivery table
 
-Below the figures, the delivery table says how much telemetry the lab lost on the way in, as a
+Below the endpoints block, the delivery table says how much telemetry the lab lost on the way in, as a
 **loss ratio** per kind per hop, `(in - out) / in`, read the same way for every kind
 ([messaging](/architecture/messaging/#accounting-every-item-the-loss-ratio)). A healthy lab reads
 exactly 0 for every kind:
@@ -521,7 +570,7 @@ Two limitations, both closed by the node hop (#1692):
 - `missing` also counts batches the node's spool dropped (an overflow, a bus refusal), which take a
   sequence number and never ship.
 
-The window must stay under 23 hours, since receipts are kept a day; a longer one is refused. A lab
+The same 23-hour window limit applies, since receipts are kept a day. A lab
 whose server predates the ledger reads `delivery not measured` with the reason, and every other figure
 is still reported.
 

@@ -35,8 +35,10 @@ drawer and component section over them. Also built: the simulator in the node's 
 in a container of its own with every privilege the simulator can use. Also built: every
 collection method healthy in the lab (#1370): each seeded driver and each registry transport runs on
 a dev-fleet component that is no planted fault, the simulator subscribes a simulated service to its
-webhook endpoint, and a simulated booking service pushes through `POST /telemetry:push`. Still
-`Design`: the Helm sidecar (#892).
+webhook endpoint, and a simulated booking service pushes through `POST /telemetry:push`. Also
+built: [what an endpoint observed](#what-an-endpoint-observed) (#1639), every simulated endpoint
+counting what reached it and how it answered, read beside the node's own tally so a scale lab
+closes the loop. Still `Design`: the Helm sidecar (#892).
 :::
 
 ## The catalog
@@ -293,6 +295,48 @@ its last pull, or handed over in the last five seconds); `failed` (handed over a
 reachability's up and down or health's verdicts. A
 connection a device accepts counts as a hit, so a collector's bare reachability probe shows there
 as `tcp`, beside the requests it answers.
+
+### What an endpoint observed
+
+A hit says a device was touched; it does not say whether every request a node sent arrived, or how
+each one ended. For that, every simulated endpoint keeps an **observation**
+(`internal/sim/observe.go`): counters that never reset on read, so a reader brackets a window
+with two reads and takes the difference. It counts three units, matched one for one with what the
+node tallies sending:
+
+- a **connection**, counted where a TCP face accepts it, with a gauge of those open;
+- a **request**, one exchange (an http request, an SNMP datagram, an ssh exec, a telnet or tcp line,
+  a udp datagram, a websocket frame), counted received when it arrives and settled with exactly one
+  **outcome**: `answered` (any reply that is not a refusal or an error, a 404 included),
+  `refused` (a 401 or 403, a wrong community, a wrong password), `error` (a 5xx, a command the
+  device does not know), `dropped` (the client hung up before the answer was written) or `withheld`
+  (the simulator chose not to answer, its own planted datagram loss, so a fault never reads as
+  loss);
+- a **stream** (an event stream, a websocket upgrade), counted once as opened with a gauge of those
+  open, never a request in flight, so a held stream cannot read as stuck.
+
+Beside the counters each protocol keeps a service-time histogram (fixed buckets, eight to a power of
+two of microseconds, so histograms from many nodes merge by summing and a quantile is good to an
+eighth of its octave) and the most requests it held at once in each ten-second epoch, so a reader
+takes the peak of its own window. Each face also counts how often a request found it already
+serving one: a node should never send a face two requests at once, so an overlap names the face.
+The hot path is a fixed row per device and a few atomic adds, no map and no allocation, and a nil
+row (a test engine with no observation) is a no-op.
+
+Counters are raised and read in an order that never shows a false gap: a request is counted in
+flight before it is counted received, and its outcome is counted before it leaves flight; a reader
+takes received, then in flight, then outcomes. The node keeps the same three units where its bytes
+leave (`collection.RequestTally`, for http, snmp and tcp reachability today; session and stream
+traffic is #1661), and its spool counts every telemetry batch the bus acknowledged or dropped.
+
+`GET /nodes/{name}/simulation/observation` (`omniglass node simulation observation list <node>`)
+reads all three in order over the bus: the simulator, the node, the simulator again, so a request
+in transit between two reads is inside the bracket, never a gap. The answer is per protocol, summed
+over the node's devices, with a count of devices that saw nothing on a protocol and a sample of
+their ids (capped at twenty), and the overlapping faces likewise capped, so it stays the same size
+at any fleet. It needs `simulation:read` and an all-scope component read, since the totals span
+every component the node simulates. A scale lab reconciles it hop by hop
+([measuring a scale lab](/guides/lab/#measuring-a-scale-lab)).
 
 ### In the node's own process
 

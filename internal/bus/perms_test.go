@@ -29,6 +29,8 @@ func TestNodePermissionsScoped(t *testing.T) {
 		collection.InboxPrefix("node-a") + ".>",
 		collection.SimopSubject("node-a"),
 		collection.RunSubject("node-a"),
+		collection.SimobsSubject("node-a"),
+		collection.RequestTallySubject("node-a"),
 	}
 	if got := perms.Subscribe.Allow; !equal(got, wantSub) {
 		t.Errorf("subscribe allow = %v, want %v", got, wantSub)

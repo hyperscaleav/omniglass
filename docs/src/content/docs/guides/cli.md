@@ -257,6 +257,7 @@ devices placed on it, and the node's simulation view shows what it serves and wh
 ```sh
 omniglass sim run --server https://omniglass.example --name edge-hq --token ogp_... --port-offset 10000   # serve edge-hq's simulated devices
 omniglass node simulation edge-hq   # connected?, capabilities, and hits per simulated device
+omniglass node simulation observation list edge-hq   # what its endpoints saw arrive and answered, and what the node sent
 omniglass component impairment set panel-1 --unplugged       # break it: dark on every protocol
 omniglass component impairment set panel-1 --latency-ms 300  # or slow it
 omniglass component impairment set panel-1                   # repair it

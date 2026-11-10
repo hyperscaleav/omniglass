@@ -156,6 +156,7 @@ type telemetrySpool struct {
 	flushEvery time.Duration                       // the longest a group waits for its batch
 	flushBytes int                                 // the pending group bytes that flush at once
 	afterFunc  func(time.Duration, func()) stopper // the flush timer, a test's to fake
+	tally      *collection.RequestTally            // counts each batch acknowledged or dropped (#1639); nil counts nothing
 
 	mu         sync.Mutex
 	queue      []spooledBatch // queue[:sent] are with the stream: never dropped
@@ -410,6 +411,7 @@ func (s *telemetrySpool) dropLocked(i int) bool {
 	s.flow.Lost(s.queue[i].kinds)
 	s.queue = append(s.queue[:i], s.queue[i+1:]...)
 	s.dropped++
+	s.tally.BatchDropped()
 	s.overflowed = true
 	if !s.dropping {
 		s.dropping = true
@@ -521,6 +523,9 @@ func (s *telemetrySpool) ship() {
 			if err != nil {
 				s.dropped++
 				s.overflowed = true
+				s.tally.BatchDropped()
+			} else {
+				s.tally.BatchAcknowledged()
 			}
 			s.mu.Unlock()
 			if err != nil {
