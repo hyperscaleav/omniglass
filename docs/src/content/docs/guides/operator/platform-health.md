@@ -9,7 +9,7 @@ screenshots:
   # the check-in cell.
   - id: platform-health
     path: /web/platform
-    alt: "Platform health: the platform system's verdict linking to its system, the build the server runs and how long it has been up, then a table with one row per node, its liveness pill and verdict, and one column per platform key grouped as Checkin, Schedule, Delivery and Commands."
+    alt: "Platform health: the platform system's verdict linking to its system, the build the server runs and how long it has been up, then a table with one row per node, its liveness pill and verdict, and one column per platform key grouped as Checkin, Schedule and Commands."
     mask:
       - "[data-testid=platform-version] >> xpath=ancestor::div[3]"
       - "[data-testid=platform-uptime] >> xpath=ancestor::div[3]"
@@ -51,18 +51,21 @@ The columns are the platform keys, grouped:
 
 - **Checkin**: how long since the node last checked in.
 - **Schedule**: how late its collection ticks run, and how many overran or were skipped.
-- **Delivery**: the node's own counts of samples dropped from its spool and publishes that failed.
 - **Commands**: how many commands wait for it, the oldest one's age, and how many are stuck or
   expired.
+
+The node's delivery (the items of each kind its spool took in, handed on and lost, as a loss ratio
+where 0 is healthy) lands on its platform component every window (#1659); its column group on this
+page is #1646's.
 
 Hover a column's header, or tab to it, for what the key measures; the text is the key's description from the
 [metrics catalog](/guides/admin/metrics/), not prose written into the page. A figure the node has
 never reported reads **not reported**, never 0: a 0 would claim the node measured nothing wrong.
 
-The overrun, skip, drop, failure and expired columns are counts over a window (the collection report
+The overrun, skip and expired columns are counts over a window (the collection report
 window, or the server's command pass for expired commands), and a window that counted nothing writes
 nothing. So a count shows only while it is the newest window's, and reads **not reported** again once
-two report windows pass with nothing new: a node that dropped five batches last week does not show
+two report windows pass with nothing new: a node that skipped five polls last week does not show
 five today. Expired commands are the newest pass's total, the undelivered and the unexecuted
 together; the node's platform component splits them by instance.
 

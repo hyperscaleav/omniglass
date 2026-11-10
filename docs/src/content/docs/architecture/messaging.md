@@ -152,6 +152,9 @@ pipeline reads exactly 0 for every kind, so reading it needs no knowledge of a k
 kind with nothing in reads no ratio, never a 0; a hop a kind does not cross has no row
 ([ADR-1641](/architecture/decisions/#adr-1641-every-telemetry-item-is-accounted-on-its-batchs-receipt-and-read-as-a-loss-ratio), #1641).
 Only the ingest hop is read today; the node, schedule and sim hops follow (#1692, #1693, #1694).
+Apart from this read, the node and the server each write their own hop's in, out and ratio per kind
+every window as platform metrics, 0 when nothing came in (#1659,
+[below](#measuring-the-pipeline)).
 
 - **The ledger rides on the batch.** A node's spool stamps each batch it flushes with a
   `DeliveryLedger` (field 16 of `TelemetryBatch`): the spool's `boot` (a UUIDv7 minted when the
@@ -291,12 +294,18 @@ failure count has its attempts beside it, so each loss reads as a ratio where 0 
   and the samples they landed, the throughput. Their ratio is samples per batch. A redelivery its
   receipt held to a no-op landed nothing, so it adds no batch, no sample and no lag; nor does a
   node's group the fence or the gateway dropped.
-- **`bus-telemetry-drop-count`**, per reason: the batches the consumer gave up on. `refused` is a
-  batch the gateway refused whole (a refused group alone drops nothing:
-  [above](#delivery-a-batch-lands-once)); `metadata` a delivery whose count could not be read;
-  `max-deliver` a batch that failed its fifth delivery; `malformed` one that will never land as sent
-  (undecodable, or naming an owner or a task it may not). The drop ratio is the drops over
-  themselves plus `ingest-batch-count`; healthy is 0.
+- **`delivery-in-count`, `delivery-out-count`, `delivery-loss-ratio`**, per item kind as the
+  instance (#1659): the server hop's delivery over the window, the same three keys and the same
+  ratio a node writes for its own hop ([nodes](/architecture/nodes/#self-monitoring-the-node-reports-itself)).
+  An item is in once its batch settles: landed (stored and coalesced items out, refused and orphaned
+  items not; a deduplicated item is out, since an earlier copy landed it, so a replay reads 0), held
+  by its receipt as a redelivery (every item in and out), or Termed (every item it names in, none
+  out: refused whole, its fifth delivery failed, unreadable metadata, or naming an owner or a task it
+  may not). A batch held for a retry counts in the window it settles. The ratio is written as 0 when
+  nothing came in, and all three land every window, 0 when quiet; healthy is 0. An undecodable batch
+  names no items, so it counts nothing here (#1712) and its items read as `missing` on the ledger
+  ([above](#accounting-every-item-the-loss-ratio)). The API lane counts its refused samples the same
+  way.
 - **`bus-telemetry-ack-failure-count`**: deliveries whose double ack the stream did not confirm,
   a redelivery its receipt held included. The receipt holds the redelivery to a no-op, so this costs
   work, not rows; as a share of `ingest-batch-count`, healthy is 0.

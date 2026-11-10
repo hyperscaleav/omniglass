@@ -497,7 +497,7 @@ node-silent rule reads. The webhook counts are the receiver's
 **How a node samples.** Two shapes, as collection telemetry has. The each-tick figures (the
 dispatcher's longest pass, the worst lateness and gap excess of the runs it dispatched, the spool's
 depth, the sessions held by state, the process figures) are one observation per sample, never a
-stored average. The counts (dues met in flight, skipped intervals, spool drops, publish failures) are
+stored average. The counts (dues met in flight, skipped intervals, the node hop's delivery) are
 tallied over the node's report window and land once when it ends, every window, 0 when quiet, so a
 count's latest value returns to 0 after the window that had it rather than standing on the last
 event; the first window runs from the node's start and lands too. The schedule figures come from the
@@ -510,7 +510,12 @@ task's first run, and a run off the schedule (a held or refused poll released), 
 `tick-duration` is the longest dispatch pass of the window and `tick-overrun-count` the dues that met
 their own run still in flight. Every count is a loss count, 0
 healthy: the schedule's drops are the schedule hop of the delivery loss ratio #1641 defines, and a
-later slice folds them into it. The `process-*` figures come from one runtime sampler
+later slice folds them into it. The node hop already reads as that ratio (#1659): per item kind as
+the instance, `delivery-in-count` is the items that settled at the spool in the window,
+`delivery-out-count` the ones the stream acked, and `delivery-loss-ratio` their `(in - out) / in`,
+written as 0 when nothing came in, so all three land every window and a past window's loss never
+stands as the latest reading. A batch dropped at a spool cap, refused by the bus or never encoded is
+in and not out; one held for a retry counts in the window it settles. The `process-*` figures come from one runtime sampler
 (`internal/platformmetric`), the same one the server reports its own through.
 
 ### Self-monitoring: the server's account of itself
@@ -551,7 +556,8 @@ window (`collection.report_seconds`, the same window collection telemetry uses):
   server's `process-cpu-seconds` is the CPU time since the previous window, as the Go runtime
   estimates it rather than the kernel's account, so over the window's length it is the cores the
   server kept busy.
-- **The pipeline**: ingest lag and throughput, the telemetry consumer's backlog and drops, the bus
+- **The pipeline**: ingest lag and throughput, the telemetry consumer's backlog, the server hop's
+  `delivery-in-count`, `delivery-out-count` and `delivery-loss-ratio` per item kind, the bus
   request-reply paths' failures ([messaging](/architecture/messaging/#measuring-the-pipeline)), and
   the calc, notification and settlement ticks' depth, pace and failures
   ([workers](/architecture/workers/#measuring-the-ticks)). The seeded `ingest-lag-high` rule raises a

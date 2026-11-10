@@ -1,12 +1,12 @@
 ---
 title: "Ingest lag is the commit time minus the sample ts, read on the server"
 date: 2026-11-09
-status: Accepted
+status: "Accepted, amended by ADR-1659"
 summary: "Accepted: the server reports its pipeline on its own platform component each report window through the #1627 recorder. Ingest lag is the server's clock when a batch's transaction has committed minus each sample's ts, read on the server: the window mean over each batch's newest and oldest sample is `ingest-lag`, the worst oldest is `ingest-lag-max`, an untimed sample counts toward throughput and never toward lag, and a negative lag is kept as the evidence of a node clock ahead (#419). Every failure count is paired with its attempts so each loss reads as a ratio where 0 is healthy; the server and a node read the `process-*` figures through one runtime sampler; the seeded `ingest-lag-high` rule warns at 30 s held 2 minutes."
-refs: [1628, 1094, 1625, 1627, 419, 1517, 1577, 1630, 1641]
+refs: [1628, 1094, 1625, 1627, 419, 1517, 1577, 1630, 1641, 1659]
 ---
 
-- **Date:** 2026-11-09 | **Status:** Accepted | **Pages:** [messaging](/architecture/messaging/), [workers](/architecture/workers/), [scaling](/architecture/scaling/), [collection](/architecture/collection/), [alarms and actions](/architecture/alarms-actions/)
+- **Date:** 2026-11-09 | **Status:** Accepted, amended by ADR-1659 | **Pages:** [messaging](/architecture/messaging/), [workers](/architecture/workers/), [scaling](/architecture/scaling/), [collection](/architecture/collection/), [alarms and actions](/architecture/alarms-actions/)
 - **Decision:**
   1. **Ingest lag is landing time at commit minus the sample's `ts`, server side.** The consumer reads
      the server's clock once a batch's transaction has committed and subtracts each sample's
@@ -31,10 +31,14 @@ refs: [1628, 1094, 1625, 1627, 419, 1517, 1577, 1630, 1641]
      `bus-telemetry-ack-failure-count`, a new `bus-request-count` per path for
      `bus-request-failure-count`, and a new `sweep-count` per sweep for `sweep-failure-count`. The
      worklist outcomes are their own denominator (every outcome but `served` over the sum).
+     Amended (#1659): `bus-telemetry-drop-count` is retired; the server hop's drops read as its
+     `delivery-loss-ratio` per item kind, items rather than batches, [ADR-1659](/architecture/decisions/#adr-1659-a-hop-writes-its-delivery-in-out-and-loss-ratio-per-kind-every-window).
   5. **A fourth drop reason, `malformed`.** The spec named `refused`, `metadata` and `max-deliver`. A
      batch that will never land as sent (undecodable, an API push with no usable owner, a node batch
      naming an owner or a top-level task) was terminated silently too, so it counts as `malformed`
-     rather than vanishing from the ratio.
+     rather than vanishing from the ratio. Amended (#1659): the reasons went with the count; a
+     Termed batch's items count as in and not out on the server hop, and an undecodable one names
+     no items, so it counts nothing there and its items read as `missing` on the ledger.
   6. **Worklist pulls are window deltas of the running totals.** The counters #1577 built stay
      running totals; the window reading keeps its previous read and lands the difference by outcome,
      never negative (a lower read is a fresh tally) and only for outcomes that moved.
