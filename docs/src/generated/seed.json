@@ -609,33 +609,33 @@
    "data_type": "float",
    "unit": "ms",
    "label": "Tick Duration",
-   "description": "Time one pass of the node's heartbeat loop took, sampled each pass; describes today's serial loop and is redefined when the loop changes (#1634)."
+   "description": "The longest pass the node's dispatcher took over one heartbeat window, sampled each heartbeat."
   },
   {
    "name": "tick-overrun-count",
    "data_type": "int",
    "label": "Tick Overruns",
-   "description": "Passes that ran past the heartbeat plus the ticks the ticker dropped meanwhile, over the report window; reported every window, 0 when quiet."
+   "description": "Dues that met their task's previous run still in flight, so were skipped, over the report window; reported every window, 0 when quiet."
   },
   {
    "name": "schedule-lateness",
    "data_type": "float",
    "unit": "ms",
    "label": "Schedule Lateness",
-   "description": "The worst gap between a task's due time and its actual start over one tick's due runs."
+   "description": "The worst gap between a task's due time and its dispatch over one heartbeat window's scheduled runs."
   },
   {
    "name": "schedule-gap-excess",
    "data_type": "float",
    "unit": "ms",
    "label": "Schedule Gap Excess",
-   "description": "The worst deviation between a task's actual gap since its previous run and its configured interval over one tick; a 45 s poll on a 30 s heartbeat reads 15 s every run."
+   "description": "The worst deviation between a task's gap since its previous scheduled start and its interval over one heartbeat window; a poll keeping its interval reads 0, a skipped slot a whole interval."
   },
   {
    "name": "schedule-skip-count",
    "data_type": "int",
    "label": "Schedule Skips",
-   "description": "Whole task intervals the schedule skipped because a run came late, over the report window; reported every window, 0 when quiet."
+   "description": "Task dues the dispatcher passed over (a run still in flight, a late pass), over the report window; reported every window, 0 when quiet."
   },
   {
    "name": "spool-batch-count",
