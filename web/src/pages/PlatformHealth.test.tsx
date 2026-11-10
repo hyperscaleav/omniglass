@@ -1,6 +1,6 @@
 import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { fireEvent, render, screen, within } from "@solidjs/testing-library";
+import { fireEvent, render, screen, waitFor, within } from "@solidjs/testing-library";
 import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import PlatformHealth from "./PlatformHealth";
@@ -91,9 +91,11 @@ function mount(view: PlatformView | null) {
   const qc = new QueryClient({ defaultOptions: { queries: view ? { staleTime: Infinity, retry: false } : { staleTime: Infinity } } });
   if (view) qc.setQueryData([...PLATFORM_VIEW_KEY], view);
   qc.setQueryData([...ME_KEY], viewer);
+  // Under the console's own base, so an in-app link proves it routes there.
+  window.history.pushState({}, "", "/web/platform");
   return render(() => (
     <QueryClientProvider client={qc}>
-      <Router>
+      <Router base="/web">
         <Route path="*" component={PlatformHealth} />
       </Router>
     </QueryClientProvider>
@@ -122,7 +124,7 @@ describe("PlatformHealth page", () => {
     expect(within(header).getByText("v9.9.9")).toBeInTheDocument();
     expect(within(header).getByText("2h 5m")).toBeInTheDocument();
     const verdict = within(header).getByTestId("platform-verdict");
-    expect(verdict.closest("a")).toHaveAttribute("href", `/systems/${uuidFor("platform")}`);
+    expect(verdict.closest("a")).toHaveAttribute("href", `/web/systems/${uuidFor("platform")}`);
     expect(verdict).toHaveTextContent("degraded");
     expect(screen.getByTestId("platform-lab")).toBeInTheDocument();
   });
@@ -158,8 +160,8 @@ describe("PlatformHealth page", () => {
   it("opens a row onto its platform component, with a secondary link to the node's blade", () => {
     mount(full);
     const alpha = screen.getByTestId("platform-node-edge-alpha");
-    expect(within(alpha).getByRole("link", { name: "Edge Alpha" })).toHaveAttribute("href", `/components/${uuidFor("alpha")}`);
-    expect(within(alpha).getByRole("link", { name: "Open edge-alpha in Nodes" })).toHaveAttribute("href", "/nodes?n=edge-alpha");
+    expect(within(alpha).getByRole("link", { name: "Edge Alpha" })).toHaveAttribute("href", `/web/components/${uuidFor("alpha")}`);
+    expect(within(alpha).getByRole("link", { name: "Open edge-alpha in Nodes" })).toHaveAttribute("href", "/web/nodes?n=edge-alpha");
   });
 
   it("without platform reach renders the node rows and the fleet-wide-read line, with no console error", () => {
@@ -257,6 +259,9 @@ describe("PlatformHealth page", () => {
     fireEvent.keyDown(document.body, { key: "Tab" });
     trigger.focus();
     expect(await screen.findByText("The slowest request in the window, per route.")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /series on lab-server/ })).toHaveAttribute("href", `/components/${uuidFor("server")}`);
+    const link = screen.getByRole("link", { name: /series on lab-server/ });
+    expect(link).toHaveAttribute("href", `/web/components/${uuidFor("server")}`);
+    fireEvent.click(link);
+    await waitFor(() => expect(window.location.pathname).toBe(`/web/components/${uuidFor("server")}`));
   });
 });
