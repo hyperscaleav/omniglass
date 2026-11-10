@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/internal/closedloop"
 	"github.com/hyperscaleav/omniglass/internal/collection"
 )
 
@@ -41,20 +42,20 @@ func receiptCountQuery(nodeName string, t0, drained, t1 time.Time) string {
 }
 
 // parseReceiptCount reads the query's one row as psql -At prints it.
-func parseReceiptCount(out string) (ReceiptCount, error) {
+func parseReceiptCount(out string) (closedloop.ReceiptCount, error) {
 	f := strings.Split(strings.TrimSpace(out), "|")
 	if len(f) != 4 {
-		return ReceiptCount{}, fmt.Errorf("receipt count: want 4 columns, got %q", strings.TrimSpace(out))
+		return closedloop.ReceiptCount{}, fmt.Errorf("receipt count: want 4 columns, got %q", strings.TrimSpace(out))
 	}
 	var n [4]int64
 	for i, s := range f {
 		v, err := strconv.ParseInt(s, 10, 64)
 		if err != nil {
-			return ReceiptCount{}, fmt.Errorf("receipt count: column %d: %w", i+1, err)
+			return closedloop.ReceiptCount{}, fmt.Errorf("receipt count: column %d: %w", i+1, err)
 		}
 		n[i] = v
 	}
-	return ReceiptCount{Landed: n[0], Margin: n[1], Backlog: n[2], AfterEnd: n[3]}, nil
+	return closedloop.ReceiptCount{Landed: n[0], Margin: n[1], Backlog: n[2], AfterEnd: n[3]}, nil
 }
 
 // drainedQuery reads whether the ingest lane has drained past at, and the

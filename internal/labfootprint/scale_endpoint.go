@@ -13,6 +13,7 @@ import (
 
 	"github.com/moby/moby/client"
 
+	"github.com/hyperscaleav/omniglass/internal/closedloop"
 	"github.com/hyperscaleav/omniglass/internal/collection"
 )
 
@@ -196,7 +197,7 @@ func endpointWindow(start, end endpointMark) (time.Duration, error) {
 // endpointBrackets closes the loop on every node: the two marks, the
 // receipts each node's batches left between them, and the poll targets each
 // node held.
-func (h *harness) endpointBrackets(ctx context.Context, l scaleLab, start, end endpointMark) ([]NodeBracket, error) {
+func (h *harness) endpointBrackets(ctx context.Context, l scaleLab, start, end endpointMark) ([]closedloop.NodeBracket, error) {
 	window, err := endpointWindow(start, end)
 	if err != nil {
 		return nil, err
@@ -213,7 +214,7 @@ func (h *harness) endpointBrackets(ctx context.Context, l scaleLab, start, end e
 	if err != nil {
 		return nil, err
 	}
-	var brackets []NodeBracket
+	var brackets []closedloop.NodeBracket
 	for node := range l.nodes {
 		out, err := h.psql(ctx, receiptCountQuery(node, start.At, start.Drained, end.At))
 		if err != nil {
@@ -223,7 +224,7 @@ func (h *harness) endpointBrackets(ctx context.Context, l scaleLab, start, end e
 		if err != nil {
 			return nil, err
 		}
-		brackets = append(brackets, NodeBracket{Node: node, Start: start.Obs[node], End: end.Obs[node],
+		brackets = append(brackets, closedloop.NodeBracket{Node: node, Start: start.Obs[node], End: end.Obs[node],
 			Receipts: receipts, Targets: targets[node], Window: window})
 	}
 	sort.Slice(brackets, func(i, j int) bool { return brackets[i].Node < brackets[j].Node })

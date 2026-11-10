@@ -3,6 +3,8 @@ package labfootprint
 import (
 	"fmt"
 	"strings"
+
+	"github.com/hyperscaleav/omniglass/internal/closedloop"
 )
 
 // pollTargetsQuery lists every enabled poll task's endpoint with a component,
@@ -23,8 +25,8 @@ const pollTargetsQuery = `select n.name, i.component, i.transport,
 // parsePollTargets reads pollTargetsQuery's rows into each node's targets,
 // each at the interval its node actually runs it. A node with no cadence
 // (not one of the lab's node containers) keeps the node's defaults.
-func parsePollTargets(out string, cadence map[string]NodeCadence) (map[string][]PollTarget, error) {
-	targets := map[string][]PollTarget{}
+func parsePollTargets(out string, cadence map[string]NodeCadence) (map[string][]closedloop.PollTarget, error) {
+	targets := map[string][]closedloop.PollTarget{}
 	for line := range strings.Lines(out) {
 		line = strings.TrimRight(line, "\r\n")
 		if line == "" {
@@ -38,7 +40,7 @@ func parsePollTargets(out string, cadence map[string]NodeCadence) (map[string][]
 		if !ok {
 			c = ParseNodeCadence(nil)
 		}
-		targets[f[0]] = append(targets[f[0]], PollTarget{ComponentID: f[1], Transport: f[2], Interval: c.Interval(f[3])})
+		targets[f[0]] = append(targets[f[0]], closedloop.PollTarget{ComponentID: f[1], Transport: f[2], Interval: c.Interval(f[3])})
 	}
 	return targets, nil
 }

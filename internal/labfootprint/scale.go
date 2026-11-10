@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/hyperscaleav/omniglass/internal/closedloop"
 )
 
 // This file is the scale lab's measurement (#1556): the arithmetic of one
@@ -403,7 +405,7 @@ type ScaleRun struct {
 	Drain     Drain
 	// Endpoints is each node's bracketed endpoint observation; when none was
 	// read, EndpointsGap says why.
-	Endpoints    []NodeBracket
+	Endpoints    []closedloop.NodeBracket
 	EndpointsGap string
 }
 
@@ -454,8 +456,8 @@ type ScaleReport struct {
 	Drain        Drain        `json:"retention_drain"`
 	// Endpoints is the closed loop, nil when it was not read; EndpointsGap
 	// then says why.
-	Endpoints    *EndpointReport `json:"endpoints,omitempty"`
-	EndpointsGap string          `json:"endpoints_not_measured,omitempty"`
+	Endpoints    *closedloop.EndpointReport `json:"endpoints,omitempty"`
+	EndpointsGap string                     `json:"endpoints_not_measured,omitempty"`
 }
 
 // SummarizeScale turns a run into its report. The containers list the server
@@ -486,7 +488,7 @@ func SummarizeScale(r ScaleRun) ScaleReport {
 		EndpointsGap:          r.EndpointsGap,
 	}
 	if len(r.Endpoints) > 0 {
-		e := SummarizeEndpoints(r.Endpoints)
+		e := closedloop.SummarizeEndpoints(r.Endpoints)
 		out.Endpoints = &e
 	}
 	ms := make([]float64, len(r.Lag))
@@ -573,7 +575,7 @@ func (r ScaleReport) Table() string {
 	line("fleet view p95", ms(r.FleetView.P95)+fmt.Sprintf("   (%d reads)", r.FleetView.N))
 	line("retention drain", r.Drain.describe())
 	if r.Endpoints != nil {
-		r.Endpoints.table(&b)
+		endpointTable(*r.Endpoints, &b)
 	} else if r.EndpointsGap != "" {
 		b.WriteString("\nendpoints not measured: " + r.EndpointsGap + "\n")
 	}

@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/hyperscaleav/omniglass/internal/closedloop"
 	"github.com/hyperscaleav/omniglass/internal/driver"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/seed"
@@ -156,8 +157,8 @@ func TestIntegrationPollTargetsMatchEachNodesWorklist(t *testing.T) {
 }
 
 // sortedTargets orders targets by transport.
-func sortedTargets(ts []PollTarget) []PollTarget {
+func sortedTargets(ts []closedloop.PollTarget) []closedloop.PollTarget {
 	out := slices.Clone(ts)
-	slices.SortFunc(out, func(a, b PollTarget) int { return strings.Compare(a.Transport, b.Transport) })
+	slices.SortFunc(out, func(a, b closedloop.PollTarget) int { return strings.Compare(a.Transport, b.Transport) })
 	return out
 }
