@@ -279,3 +279,27 @@ func (l lockedWriter) Write(p []byte) (int, error) {
 	defer l.mu.Unlock()
 	return l.w.Write(p)
 }
+
+// A credential that arrives before the loop starts (the simulator loads its
+// pushers, then hands each its token) is pushed on once, not twice: the
+// loop's first tick already holds it, so the wake it left is spent.
+func TestPushLoopPushesOnceForACredentialHeldAtStart(t *testing.T) {
+	srv := &pushServer{grants: []map[string]string{{"scope_kind": "system", "scope_id": "sys-1"}}}
+	ts := httptest.NewServer(srv.handler())
+	defer ts.Close()
+	d := bookingService(t, time.Date(2026, 10, 29, 9, 30, 0, 0, time.UTC))
+	d.SetPushCredential(ts.URL, "tok")
+	d.StartPush()
+	defer d.StopPush()
+	deadline := time.Now().Add(5 * time.Second)
+	for len(srv.refs()) == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("the loop did not push the credential it held at start")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	time.Sleep(300 * time.Millisecond)
+	if n := len(srv.refs()); n != 1 {
+		t.Errorf("pushed %d times at start, want once (the cadence is 30s)", n)
+	}
+}

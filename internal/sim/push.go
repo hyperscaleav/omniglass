@@ -351,6 +351,12 @@ func (d *Device) pushLoop(stop, done chan struct{}) {
 			slog.Warn("sim: push failed", "device", d.DeviceID, "error", err)
 		}
 	}
+	// A credential set before the loop started left a wake the first tick
+	// already answers; spend it, so the pusher does not push twice at once.
+	select {
+	case <-d.push.kick:
+	default:
+	}
 	tick()
 	for {
 		select {
