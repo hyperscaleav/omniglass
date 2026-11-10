@@ -46,11 +46,6 @@ var PlatformViewGroups = []PlatformViewGroup{
 	{Name: "schedule", Label: "Schedule", Keys: []string{
 		writerclass.ScheduleLateness, writerclass.TickOverrunCount, writerclass.ScheduleSkipCount,
 	}},
-	// The node's own delivery counts, until #1646 folds them into its Loss
-	// group: this slice prints no loss figure.
-	{Name: "delivery", Label: "Delivery", Keys: []string{
-		writerclass.SpoolDropCount, writerclass.PublishFailureCount,
-	}},
 	{Name: "commands", Label: "Commands", Keys: []string{
 		writerclass.CommandPendingCount, writerclass.CommandPendingAge,
 		writerclass.CommandStuckCount, writerclass.CommandExpiredCount,

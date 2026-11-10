@@ -118,8 +118,6 @@ const (
 	ScheduleGapExcess     = "schedule-gap-excess"
 	ScheduleSkipCount     = "schedule-skip-count"
 	SpoolBatchCount       = "spool-batch-count"
-	SpoolDropCount        = "spool-drop-count"
-	PublishFailureCount   = "publish-failure-count"
 	SessionHeldCount      = "session-held-count"
 	ProcessGoroutineCount = "process-goroutine-count"
 	ProcessHeapSize       = "process-heap-size"
@@ -163,7 +161,6 @@ const (
 	BusConsumerAckPending       = "bus-consumer-ack-pending"
 	BusConsumerRedelivered      = "bus-consumer-redelivered"
 	BusTelemetryAckFailureCount = "bus-telemetry-ack-failure-count"
-	BusTelemetryDropCount       = "bus-telemetry-drop-count"
 	BusWorklistPullCount        = "bus-worklist-pull-count"
 	BusWorklistReplyBytesMax    = "bus-worklist-reply-bytes-max"
 	BusRequestCount             = "bus-request-count"
@@ -218,6 +215,22 @@ const (
 // serverBootWriter is what writes the server's identity properties.
 const serverBootWriter = "the server boot"
 
+// A hop's delivery (#1659): the items per kind that arrived at it and the
+// items it handed on, and the loss between them, each one series per
+// telemetry kind (the kind is the instance), written every window, zero when
+// quiet. The node writes its spool's side on its node-self report; the
+// server writes its ingest's side on its own component.
+const (
+	DeliveryInCount   = "delivery-in-count"
+	DeliveryOutCount  = "delivery-out-count"
+	DeliveryLossRatio = "delivery-loss-ratio"
+)
+
+// deliveryWriter is what writes a hop's delivery keys: any Omniglass process
+// that is a hop, of itself. A node reports them on its node-self lane, so they
+// are node-self keys too.
+const deliveryWriter = "a hop, of itself (a node's spool on its node-self report, the server's ingest on its own component)"
+
 // nodeSelfWriter is what writes a node's self-report: the node, of itself,
 // landed by the process on the node's platform component.
 const nodeSelfWriter = "a node, of itself (its node-self report)"
@@ -242,14 +255,15 @@ var platform = map[string]string{
 	ScheduleGapExcess:     nodeSelfWriter,
 	ScheduleSkipCount:     nodeSelfWriter,
 	SpoolBatchCount:       nodeSelfWriter,
-	SpoolDropCount:        nodeSelfWriter,
-	PublishFailureCount:   nodeSelfWriter,
 	SessionHeldCount:      nodeSelfWriter,
 	ProcessGoroutineCount: processSelfWriter,
 	ProcessHeapSize:       processSelfWriter,
 	ProcessGCPause:        processSelfWriter,
 	ProcessCPUSeconds:     processSelfWriter,
 	ProcessFDCount:        processSelfWriter,
+	DeliveryInCount:       deliveryWriter,
+	DeliveryOutCount:      deliveryWriter,
+	DeliveryLossRatio:     deliveryWriter,
 
 	// The server, of itself (#1627).
 	HTTPRequestCount:       serverSelfWriter,
@@ -273,7 +287,6 @@ var platform = map[string]string{
 	BusConsumerAckPending:       serverPipelineWriter,
 	BusConsumerRedelivered:      serverPipelineWriter,
 	BusTelemetryAckFailureCount: serverPipelineWriter,
-	BusTelemetryDropCount:       serverPipelineWriter,
 	BusWorklistPullCount:        serverPipelineWriter,
 	BusWorklistReplyBytesMax:    serverPipelineWriter,
 	BusRequestCount:             serverPipelineWriter,
@@ -308,7 +321,9 @@ var platform = map[string]string{
 func NodeSelf(key string) bool { return nodeSelf(platform[key]) }
 
 // nodeSelf reports a writer whose keys a node reports of itself.
-func nodeSelf(by string) bool { return by == nodeSelfWriter || by == processSelfWriter }
+func nodeSelf(by string) bool {
+	return by == nodeSelfWriter || by == processSelfWriter || by == deliveryWriter
+}
 
 // NodeSelfKeys is every key a node reports of itself, sorted.
 func NodeSelfKeys() []string {

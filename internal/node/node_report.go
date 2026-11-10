@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/delivery"
 	"github.com/hyperscaleav/omniglass/internal/platformmetric"
 	"github.com/hyperscaleav/omniglass/internal/writerclass"
 	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
@@ -13,15 +14,15 @@ import (
 
 // nodeReport is the node's account of itself (#1625): how long the
 // dispatcher's passes take and the dues it could not meet, how late its
-// tasks run against their intervals, how deep its spool is and what it drops, the
-// sessions it holds, and what its process costs. They are platform metrics
+// tasks run against their intervals, how deep its spool is and what it
+// delivers, the sessions it holds, and what its process costs. They are platform metrics
 // on the node's own platform component, sent in the node-self block of the
 // batch the tick publishes; the server lands them under the platform writer.
 //
 // Two shapes, per the key table. The each-tick figures are one observation
 // per sample, taken every heartbeat tick. The windowed counts (dues met in
-// flight, skipped intervals, spool drops, publish failures, failed command
-// pulls) are tallied over the node's
+// flight, skipped intervals, failed command pulls, and the spool's delivery
+// per telemetry kind, #1659) are tallied over the node's
 // report window, the collection report's (report.go), and emitted once when
 // it ends, every window, a quiet window's as zero: a count written only when
 // nonzero would leave the last event's count standing as the series' latest
@@ -33,8 +34,10 @@ type nodeReport struct {
 
 	overruns int
 	skipped  int
-	drops    int
-	failures int
+	// flow is the items the spool settled in the window, per kind: in for
+	// every item a batch carried once it was acked or lost, out for the
+	// acked (#1659).
+	flow delivery.Counts
 	// pullFailures is the command queue pulls that failed in the window
 	// (#1626): no answer from the bus, or one the node could not read. The
 	// command cycle runs off the heartbeat (#1634), so it tallies atomically.
@@ -48,12 +51,10 @@ type nodeReport struct {
 }
 
 // spoolFigures is what the spool reports to one tick: its queue depth now,
-// and the batches it dropped and the publishes that failed since it last
-// reported.
+// and the items its batches settled since it last reported.
 type spoolFigures struct {
-	batches  int
-	drops    int
-	failures int
+	batches int
+	flow    delivery.Counts
 }
 
 func newNodeReport(every time.Duration, now time.Time) *nodeReport {
@@ -94,14 +95,13 @@ func (r *nodeReport) dispatch(w dispatchWindow, at time.Time) {
 	}
 }
 
-// spool records the spool's depth now and tallies its drops and failures.
+// spool records the spool's depth now and tallies its delivery.
 func (r *nodeReport) spool(f spoolFigures, at time.Time) {
 	if r == nil {
 		return
 	}
 	r.sample(writerclass.SpoolBatchCount, float64(f.batches), at, "")
-	r.drops += f.drops
-	r.failures += f.failures
+	r.flow.Merge(f.flow)
 }
 
 // sessions records the sessions the node holds, one sample per state, a
@@ -156,13 +156,14 @@ func (r *nodeReport) take(now time.Time) []*ogv1.MetricSample {
 		}{
 			{writerclass.TickOverrunCount, r.overruns},
 			{writerclass.ScheduleSkipCount, r.skipped},
-			{writerclass.SpoolDropCount, r.drops},
-			{writerclass.PublishFailureCount, r.failures},
 			{writerclass.CommandPullFailureCount, int(r.pullFailures.Swap(0))},
 		} {
 			r.sample(c.key, float64(c.n), now, "")
 		}
-		r.overruns, r.skipped, r.drops, r.failures = 0, 0, 0, 0
+		for _, rd := range r.flow.Readings() {
+			r.sample(rd.Key, rd.Value, now, rd.Instance)
+		}
+		r.overruns, r.skipped, r.flow = 0, 0, delivery.Counts{}
 		r.since = now
 	}
 	out := r.samples
