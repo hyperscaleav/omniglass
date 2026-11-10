@@ -270,6 +270,8 @@ command itself; here is when you would reach for each:
 
 - `--systems` and `--plan` size a [scale lab scenario](#scale-lab-scenarios) instead of a seeded
   fleet, and preview it with its preflight.
+- `--keep` keeps a scale lab's data when it stops, for a run that lasts days ([a soak
+  run](#a-soak-run)). A seeded fleet's lab keeps its data already, so it refuses the flag.
 
 A few more flags are hidden from the help because they are for scripts, not for you: the repo's
 own browser tests, docs screenshots, demo recorders and probe each bring up a throwaway lab of their
@@ -307,7 +309,12 @@ omniglass lab run --scenario corporate --systems 300
 ```
 
 A scale lab is its own Docker project, `omniglass-scale`, so it runs beside your learning lab, and
-it is throwaway: Ctrl-C removes every container, network and volume it started. Add `--plan` to
+it is throwaway: Ctrl-C removes every container, network and volume it started. With `--keep` it
+keeps its two volumes instead, the way the learning lab does, and the stop line names the command
+that picks it up again: the same scenario, size and `--keep` (and its `--project`, when not
+`omniglass-scale`). The next run re-attaches the volumes, keeps the fleet it seeded rather than
+seeding again, and enrolls each site's node afresh; a kept lab started at another scenario or size,
+or without `--keep`, is refused, naming `--fresh` to start over. Add `--plan` to
 print what a size would build without starting anything: three tables (each archetype's sites,
 floors per site, systems of each standard and totals; each site's systems and components; the
 components of each product) and the [preflight](#how-big-a-lab-your-machine-can-run). Without
@@ -657,6 +664,115 @@ Sampling never restarts the server: it skips the retention probe, `--backlog` de
 `--backlog` you give is refused, as are `--systems` (sample a lab you brought up), an `--every`
 shorter than the `--window` it measures, and `--json`. The schedule's health on the nodes and command
 latency are not in a sample yet (#1625, #1626).
+
+### A soak run
+
+A soak run holds a kept scale lab up for days, at production cadence, under a service manager, with
+the sampler writing one line every interval: the evidence of whether growth, retention and vacuum
+keep up. It runs on a host of its own, so nothing else competes for the machine it measures.
+
+**Pin the build.** A soak measures one build. Build its image once and give it a tag of its own,
+named for the commit (`omniglass:soak-<shortsha>`), and run the binary built from the same commit:
+`--image` runs a server the binary does not check against itself, and a shared tag rebuilt mid-soak
+would measure two builds in one series.
+
+**The lab unit.** The service manager starts the lab, restarts it if it fails, and stops it with
+SIGTERM, which the lab treats as Ctrl-C: it removes its containers and network and keeps its volumes,
+so the restart picks up the same fleet and data. A systemd unit:
+
+```ini
+[Unit]
+Description=omniglass soak lab
+After=docker.service
+Requires=docker.service
+
+[Service]
+ExecStart=/usr/local/bin/omniglass lab run --scenario corporate --systems 3000 --cadence default --keep --image omniglass:soak-<shortsha>
+Restart=on-failure
+RestartSec=30
+# SIGTERM to the lab alone; it stops its containers and keeps its volumes.
+KillMode=mixed
+TimeoutStopSec=5min
+
+[Install]
+WantedBy=multi-user.target
+```
+
+**The sampler unit.** The sampler runs beside the lab, bound to it, and appends to one series file,
+so a sampler restarted mid-soak continues the same series:
+
+```ini
+[Unit]
+Description=omniglass soak sampler
+After=omniglass-soak-lab.service
+BindsTo=omniglass-soak-lab.service
+
+[Service]
+ExecStart=/usr/local/bin/omniglass lab measure --every 15m --window 5m --append /var/lib/omniglass-soak/series.jsonl --page-clients 4
+Restart=on-failure
+RestartSec=60
+
+[Install]
+WantedBy=omniglass-soak-lab.service
+```
+
+A sample taken while the lab restarts writes its `error` line and the series goes on; the restart
+shows as `uptime_seconds` falling.
+
+**Retention inside the run.** A soak shorter than the retention windows never sees retention remove
+anything. Once the lab is up, shorten the metric window so the run crosses it: retention's
+`metric_days` on **Admin > Settings** ([how long data is kept](/guides/admin/#how-long-data-is-kept)),
+or over the API with a token of the lab's:
+
+```sh
+curl -X PATCH "$OMNIGLASS_SERVER/api/v1/settings/retention" -H "Authorization: Bearer $OMNIGLASS_TOKEN" \
+  -H 'Content-Type: application/merge-patch+json' -d '{"metric_days": 2}'
+```
+
+The setting lives in the kept database, so it survives the lab's restarts.
+
+**Reading the series.** Each line reads at the same paths as one measurement. One row a sample (a
+failed sample's `error` line skipped): when, the build, ingest lag p95, system page p95 (ms), database
+bytes, metric partitions and the server's memory (MiB):
+
+```bash
+jq -r 'select(.error == null) | [.at, .build, .ingest_lag_ms.p95, .system_page_ms.p95,
+  .absolutes.database_bytes, .absolutes.metric_partitions,
+  (.containers[] | select(.name == "server") | .working_set_mib)] | @tsv' series.jsonl
+```
+
+The first sample beside the last states the growth over the run:
+
+```bash
+jq -s 'map(select(.error == null)) | first, last | {at, build, lag_p95: .ingest_lag_ms.p95,
+  page_p95: .system_page_ms.p95, database_bytes: .absolutes.database_bytes,
+  metric_partitions: .absolutes.metric_partitions,
+  server_mib: (.containers[] | select(.name == "server") | .working_set_mib)}' series.jsonl
+```
+
+With the metric window at 2 days, retention drops its first partition on day 3, and from then the
+partition count should stop growing.
+
+**Upgrading mid-soak** keeps the data and the series: stop the sampler and the lab, install the new
+binary and its pinned image, point the lab unit at the new tag, and start both again. The kept fleet
+carries over (the seed migrates the database on every start), and the sampler appends to the same
+file, so the series goes on under a new `build`. To split it at upgrades, list the builds in order
+with how many samples each took:
+
+```bash
+jq -r 'select(.error == null) | .build' series.jsonl | uniq -c
+```
+
+A build whose scenario plan differs at the soak's size (its manifest or catalog changed) is refused by
+the kept check, and so is a rollback across a schema change, since migrations only move forward: both
+need one run with `--fresh`, which seeds the fleet over, so start a new series file with it.
+
+**Looking at it.** The lab publishes its console on the host's loopback only; reach it from your own
+machine through a tunnel, then open `http://127.0.0.1:8080/web`:
+
+```sh
+ssh -L 8080:127.0.0.1:8080 <soak-host>
+```
 
 ### The manifest format
 
