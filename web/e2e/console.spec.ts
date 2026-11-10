@@ -401,4 +401,61 @@ test.describe("operator console", () => {
       if (n.last_heartbeat_at) await expect(row.locator("[data-figure=checkin-age]")).not.toHaveText(/not reported/);
     }
   });
+
+  // The closed loop (#1647), on the second lab run.sh brings up: the dev fleet
+  // with its node and the simulator beside it, nothing impaired. Once the ring
+  // holds a window the section reads measured for every node, and a healthy
+  // lab loses nothing at any hop: every gap reads 0 (or no figure, where the
+  // sim does not observe the hop), and every protocol with a poll target
+  // reached the simulator: requests it received, or, for a probe that only
+  // connects or logs in and asks nothing (ssh, telnet), connections its
+  // listener accepted.
+  test("platform health @simulator: every simulated node reads measured, no gap open, every polled protocol reached", async ({ page }) => {
+    test.skip(!process.env.OG_E2E_SIMULATOR, "needs a lab with a simulator (run.sh's second phase)");
+    test.setTimeout(150_000);
+    await page.goto("/web/platform");
+    const section = page.getByTestId("platform-simulation");
+    await expect(section).toBeVisible({ timeout: 30_000 });
+    const cards = section.locator("[data-testid^=platform-sim-][data-state]");
+    await expect(cards.first()).toBeVisible({ timeout: 30_000 });
+
+    // The ring fills: a window and the bracket after it, at the lab's bracket,
+    // over a fleet the scenario has finished seeding (a window bracketed
+    // before its poll tasks existed counts no target).
+    await expect
+      .poll(
+        async () =>
+          (
+            await cards.evaluateAll((els) =>
+              els.map((e) => {
+                const polled = [...e.querySelectorAll("[data-testid=platform-sim-protocol]")].some((r) => Number(r.getAttribute("data-poll-targets")) > 0);
+                return `${e.getAttribute("data-state")}${polled ? " polled" : ""}`;
+              }),
+            )
+          ).join(","),
+        { timeout: 120_000, intervals: [2_000] },
+      )
+      .toMatch(/^measured polled(,measured polled)*$/);
+
+    for (const card of await cards.all()) {
+      const node = await card.getAttribute("data-testid");
+      const gaps = await card.getByTestId("platform-sim-gap").evaluateAll((els) =>
+        els.map((e) => ({ gap: e.getAttribute("data-gap"), protocol: e.getAttribute("data-protocol"), ratio: e.getAttribute("data-ratio") })),
+      );
+      expect(gaps.length, `${node} reads its gaps`).toBeGreaterThan(0);
+      for (const g of gaps) expect(["0", ""], `${node} ${g.gap} ${g.protocol} ratio`).toContain(g.ratio);
+
+      const polled = await card.getByTestId("platform-sim-protocol").evaluateAll((els) =>
+        els.map((e) => ({
+          protocol: e.getAttribute("data-protocol"),
+          targets: Number(e.getAttribute("data-poll-targets")),
+          accepted: Number(e.getAttribute("data-accepted")),
+          received: Number(e.getAttribute("data-received")),
+        })),
+      );
+      expect(polled.filter((p) => p.targets > 0).length, `${node} has a polled protocol`).toBeGreaterThan(0);
+      expect(polled.some((p) => p.targets > 0 && p.received > 0), `${node} received a polled request`).toBe(true);
+      for (const p of polled.filter((x) => x.targets > 0)) expect(p.received + p.accepted, `${node} ${p.protocol} received or accepted`).toBeGreaterThan(0);
+    }
+  });
 });
