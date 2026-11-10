@@ -26,6 +26,22 @@ var Kinds = []Kind{Metric, Property, Event, Log}
 // Hop is a stretch of the pipeline a kind crosses, measured on its own.
 type Hop string
 
-// Ingest is the hop from a node's spool to the store: a batch the node
-// minted, landed (or not) by the server.
-const Ingest Hop = "ingest"
+// The hops #1641 names. Only ingest is read from the
+// receipts; the node and the server write their own hop's delivery as platform
+// metrics (#1659), and the schedule and sim hops follow (#1693, #1694).
+const (
+	// Schedule is the hop from a run falling due to the run being made.
+	Schedule Hop = "schedule"
+	// Sim is the hop between a simulated device and the node's task: the
+	// lab's closed loop, a lab measure row and never a platform metric.
+	Sim Hop = "sim"
+	// Node is the hop from a run's output to the stream: the node's spool,
+	// settled when the stream acks a batch or the spool gives it up.
+	Node Hop = "node"
+	// Ingest is the hop from a node's spool to the store: a batch the node
+	// minted, landed (or not) by the server.
+	Ingest Hop = "ingest"
+)
+
+// Hops is every hop name #1641 defines.
+var Hops = []Hop{Schedule, Sim, Node, Ingest}

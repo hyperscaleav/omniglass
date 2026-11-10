@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/hyperscaleav/omniglass/internal/delivery"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/writerclass"
@@ -230,5 +231,183 @@ func TestPlatformViewReadsAWindowCountAsItsNewestWindow(t *testing.T) {
 	}
 	if got := alpha.Figures[writerclass.CheckinAge]; got.Value != 3 {
 		t.Errorf("edge-alpha checkin-age = %+v, want the gauge's latest, 3, however old", got)
+	}
+}
+
+// deliveryWindow is one window of a hop's three keys for one kind on one
+// platform component, as the node's report or the server's recorder writes it.
+func deliveryWindow(id, kind string, in, out float64, ts time.Time) []storage.PlatformMetric {
+	loss := 0.0
+	if in > 0 {
+		loss = (in - out) / in
+	}
+	return []storage.PlatformMetric{
+		{ComponentID: id, Key: writerclass.DeliveryInCount, Instance: kind, Value: in, TS: ts},
+		{ComponentID: id, Key: writerclass.DeliveryOutCount, Instance: kind, Value: out, TS: ts},
+		{ComponentID: id, Key: writerclass.DeliveryLossRatio, Instance: kind, Value: loss, TS: ts},
+	}
+}
+
+func pipelineHop(t *testing.T, p *storage.PlatformPipeline, id delivery.Hop) storage.PlatformPipelineHopFigures {
+	t.Helper()
+	for _, h := range p.Hops {
+		if h.Hop.ID == id {
+			return h
+		}
+	}
+	t.Fatalf("hop %s absent: %+v", id, p.Hops)
+	return storage.PlatformPipelineHopFigures{}
+}
+
+func pipelineKind(t *testing.T, cells []storage.PlatformPipelineCell, kind delivery.Kind) storage.PlatformPipelineCell {
+	t.Helper()
+	for _, c := range cells {
+		if c.Kind == kind {
+			return c
+		}
+	}
+	t.Fatalf("kind %s absent: %+v", kind, cells)
+	return storage.PlatformPipelineCell{}
+}
+
+func ratio(f *float64) float64 {
+	if f == nil {
+		return -1
+	}
+	return *f
+}
+
+// TestPlatformViewReadsThePipelineHopByHop: two nodes and a server each write
+// two windows of their hop's delivery. Each hop reads its newest window and
+// its last hour per kind, composed from the summed counts; its components'
+// in and out sum to its own; the node rows carry their own hop's last-hour
+// loss; and a window older than the hour is not in it.
+func TestPlatformViewReadsThePipelineHopByHop(t *testing.T) {
+	t.Parallel()
+	f := newPlatformViewFixture(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	older, newer, stale := now.Add(-2*time.Minute), now.Add(-time.Minute), now.Add(-3*time.Hour)
+	var ms []storage.PlatformMetric
+	// edge-alpha's spool lost 2 of 10 metrics in the older window and none of
+	// 10 in the newer; edge-bravo lost none of 80 then none of 100. Three
+	// hours ago edge-bravo lost all 50, outside the hour.
+	ms = append(ms, deliveryWindow(f.alpha.ID, "metric", 10, 8, older)...)
+	ms = append(ms, deliveryWindow(f.alpha.ID, "metric", 10, 10, newer)...)
+	ms = append(ms, deliveryWindow(f.bravo.ID, "metric", 50, 0, stale)...)
+	ms = append(ms, deliveryWindow(f.bravo.ID, "metric", 80, 80, older)...)
+	ms = append(ms, deliveryWindow(f.bravo.ID, "metric", 100, 100, newer)...)
+	ms = append(ms, deliveryWindow(f.alpha.ID, "property", 0, 0, newer)...)
+	// The server landed 98 of 98 metrics then 108 of 110.
+	ms = append(ms, deliveryWindow(f.server, "metric", 98, 98, older)...)
+	ms = append(ms, deliveryWindow(f.server, "metric", 110, 108, newer)...)
+	if err := f.gw.RecordPlatformMetrics(f.ctx, ms); err != nil {
+		t.Fatalf("record delivery windows: %v", err)
+	}
+
+	v, err := f.gw.PlatformView(f.ctx, all, all, all)
+	if err != nil {
+		t.Fatalf("platform view: %v", err)
+	}
+	if v.Pipeline == nil {
+		t.Fatal("pipeline = nil for an all-scope component read")
+	}
+	if len(v.Pipeline.Hops) != len(storage.PlatformPipelineHops) {
+		t.Fatalf("hops = %d, want %d", len(v.Pipeline.Hops), len(storage.PlatformPipelineHops))
+	}
+	for i, h := range v.Pipeline.Hops {
+		if h.Hop.ID != storage.PlatformPipelineHops[i].ID {
+			t.Errorf("hop %d = %s, want %s (declared order)", i, h.Hop.ID, storage.PlatformPipelineHops[i].ID)
+		}
+	}
+	if len(v.Pipeline.Keys) != 3 {
+		t.Errorf("pipeline keys = %+v, want the three delivery keys' catalog facts", v.Pipeline.Keys)
+	}
+
+	node := pipelineHop(t, v.Pipeline, delivery.Node)
+	m := pipelineKind(t, node.Kinds, delivery.Metric)
+	if m.Newest.In != 110 || m.Newest.Out != 110 || ratio(m.Newest.Loss) != 0 {
+		t.Errorf("node metric newest = %+v loss %v, want 110 in, 110 out, 0", m.Newest, ratio(m.Newest.Loss))
+	}
+	if m.LastHour.In != 200 || m.LastHour.Out != 198 || ratio(m.LastHour.Loss) != 0.01 {
+		t.Errorf("node metric last hour = %+v loss %v, want 200 in, 198 out, 0.01", m.LastHour, ratio(m.LastHour.Loss))
+	}
+	if m.NewestAt == nil || !m.NewestAt.Equal(newer) {
+		t.Errorf("node metric newest at = %v, want %s", m.NewestAt, newer)
+	}
+	p := pipelineKind(t, node.Kinds, delivery.Property)
+	if p.Newest.In != 0 || p.Newest.Loss != nil {
+		t.Errorf("node property = %+v, want a row with nothing in and no ratio", p.Newest)
+	}
+	var in, out uint64
+	for _, c := range node.ByComponent {
+		in += c.Total.LastHour.In
+		out += c.Total.LastHour.Out
+	}
+	if len(node.ByComponent) != 2 || in != node.Total.LastHour.In || out != node.Total.LastHour.Out {
+		t.Errorf("node components %+v sum to %d in, %d out; hop total %+v", node.ByComponent, in, out, node.Total.LastHour)
+	}
+
+	ingest := pipelineHop(t, v.Pipeline, delivery.Ingest)
+	im := pipelineKind(t, ingest.Kinds, delivery.Metric)
+	if im.Newest.In != 110 || im.Newest.Out != 108 || im.LastHour.In != 208 || im.LastHour.Out != 206 {
+		t.Errorf("ingest metric = newest %+v, last hour %+v; want 110/108 and 208/206", im.Newest, im.LastHour)
+	}
+	if len(ingest.ByComponent) != 1 || ingest.ByComponent[0].ComponentID != f.server {
+		t.Errorf("ingest components = %+v, want the server alone", ingest.ByComponent)
+	}
+	if len(ingest.Kinds) != 1 {
+		t.Errorf("ingest kinds = %+v, want metric alone: a kind with no series has no row", ingest.Kinds)
+	}
+
+	rows := map[string]storage.PlatformNode{}
+	for _, n := range v.Nodes {
+		rows[n.Name] = n
+	}
+	if l := rows["edge-alpha"].Loss; l == nil || *l != 0.1 {
+		t.Errorf("edge-alpha loss = %v, want 2 of 20 over the hour, 0.1", ratio(l))
+	}
+	if l := rows["edge-bravo"].Loss; l == nil || *l != 0 {
+		t.Errorf("edge-bravo loss = %v, want 0: its loss three hours ago is outside the hour", ratio(l))
+	}
+	if v.LossHops == nil || len(v.LossHops) != 1 || v.LossHops[0] != delivery.Node {
+		t.Errorf("loss hops = %v, want the node hop", v.LossHops)
+	}
+}
+
+// TestPlatformViewOmitsThePipelineWithoutPlatformReach: the pipeline's
+// figures are platform component figures, so a location-scoped component
+// read gets no pipeline and no node loss.
+func TestPlatformViewOmitsThePipelineWithoutPlatformReach(t *testing.T) {
+	t.Parallel()
+	f := newPlatformViewFixture(t)
+	if err := f.gw.RecordPlatformMetrics(f.ctx, deliveryWindow(f.alpha.ID, "metric", 10, 9, time.Now().UTC())); err != nil {
+		t.Fatalf("record delivery window: %v", err)
+	}
+	located := scope.Set{IDs: []string{"00000000-0000-0000-0000-0000000000aa"}}
+	v, err := f.gw.PlatformView(f.ctx, all, all, located)
+	if err != nil {
+		t.Fatalf("platform view: %v", err)
+	}
+	if v.Pipeline != nil {
+		t.Errorf("pipeline = %+v, want omitted for a location-scoped component read", v.Pipeline)
+	}
+	for _, n := range v.Nodes {
+		if n.Loss != nil {
+			t.Errorf("%s loss = %v, want omitted", n.Name, *n.Loss)
+		}
+	}
+}
+
+// TestPlatformViewGroupsCarryNoFoldedDropCount: the drop counts #1659 folded
+// into the delivery keys read one way, on the pipeline, never as a column.
+func TestPlatformViewGroupsCarryNoFoldedDropCount(t *testing.T) {
+	t.Parallel()
+	gone := map[string]bool{"spool-drop-count": true, "publish-failure-count": true, "bus-telemetry-drop-count": true}
+	for _, g := range storage.PlatformViewGroups {
+		for _, k := range g.Keys {
+			if gone[k] {
+				t.Errorf("group %s carries %s, folded into the delivery keys", g.Name, k)
+			}
+		}
 	}
 }
