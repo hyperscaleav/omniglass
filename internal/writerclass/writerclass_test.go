@@ -275,3 +275,35 @@ func TestTheWebhookCountsArePlatformKeys(t *testing.T) {
 		}
 	}
 }
+
+// The platform's self-monitoring keys (#1625) are platform keys with no
+// prefix, written by the process alone. A node's self-report lane admits only
+// the keys a node reports of itself: never health, a webhook count, or the
+// server's checkin-age, so a node cannot speak for another writer.
+func TestTheNodeSelfKeysArePlatformKeys(t *testing.T) {
+	keys := NodeSelfKeys()
+	if len(keys) != 13 {
+		t.Fatalf("node-self keys %v, want the 13 a node reports of itself", keys)
+	}
+	for _, key := range append(keys, CheckinAge) {
+		if strings.Contains(key, ".") || strings.HasPrefix(key, "platform") || strings.HasPrefix(key, "node-") {
+			t.Errorf("%s carries a prefix; platform keys carry none", key)
+		}
+		if c, ok := Reserved(key); !ok || c != Platform {
+			t.Errorf("%s resolves to %q (%v), want platform", key, c, ok)
+		}
+		if !Admits(Platform, Process, key) || Admits(Platform, Node, key) || Admits(Platform, Push, key) {
+			t.Errorf("%s: only the process writes a platform key", key)
+		}
+	}
+	for _, key := range keys {
+		if !NodeSelf(key) {
+			t.Errorf("%s is not admitted on the node-self lane", key)
+		}
+	}
+	for _, key := range []string{Health, WebhookPostCount, CheckinAge, "poll-duration", "TICK-DURATION", "made-up"} {
+		if NodeSelf(key) {
+			t.Errorf("the node-self lane admits %s", key)
+		}
+	}
+}

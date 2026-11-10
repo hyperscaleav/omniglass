@@ -104,7 +104,9 @@ type dispatchWindow struct {
 	passMax  time.Duration // tick-duration: the longest pass
 	overruns int           // tick-overrun-count: dues that met their run in flight
 	skips    int           // schedule-skip-count: dues passed over, overruns and late passes
-	lateMax  time.Duration // the latest a task was dispatched past its due
+	lateMax  time.Duration // schedule-lateness: the latest a task was dispatched past its due
+	gapMax   time.Duration // schedule-gap-excess: the worst a scheduled start's gap since the task's last missed its interval
+	runs     int           // tasks dispatched on the schedule
 	busyMax  int           // worker-busy-count: most workers busy at once
 	queueMax int           // dispatch-queue-depth: most dispatches waiting at once
 	// operatorOffers and operatorRefusals are operator work offered to the
@@ -169,7 +171,10 @@ type dispatcher struct {
 	// endpoint: released when the upstream opens, as its polls stay held
 	// until the probe reads the endpoint up.
 	heldProbes map[string]string
-	window     dispatchWindow
+	// started is when each task's last scheduled run was dispatched, the
+	// start the next one's gap is read from (#1625).
+	started map[string]time.Time
+	window  dispatchWindow
 }
 
 func newDispatcher(cfg dispatchConfig) *dispatcher {
@@ -187,7 +192,8 @@ func newDispatcher(cfg dispatchConfig) *dispatcher {
 	}
 	return &dispatcher{cfg: cfg, pool: newLanePool(cfg.workers), wake: make(chan struct{}, 1),
 		entries: map[string]*dueEntry{}, tasks: map[string]collection.TaskSpec{},
-		inflight: map[string]bool{}, held: map[string]string{}, heldProbes: map[string]string{}}
+		inflight: map[string]bool{}, held: map[string]string{}, heldProbes: map[string]string{},
+		started: map[string]time.Time{}}
 }
 
 // interval is how often a task runs: a driver poll at its declared
@@ -235,6 +241,7 @@ func (d *dispatcher) sync(wl collection.WorklistReply, now time.Time) {
 			delete(d.tasks, id)
 			delete(d.held, id)
 			delete(d.heldProbes, id)
+			delete(d.started, id)
 		}
 	}
 	for _, t := range wl.Tasks {
@@ -323,7 +330,7 @@ func (d *dispatcher) pass(ctx context.Context, now time.Time) int {
 			next = e.slot
 		}
 		d.cfg.sched.book(e.id, next)
-		extra := e.extra
+		extra, fresh := e.extra, e.fresh
 		e.at, e.slot, e.fresh, e.extra = next, next, false, false
 		heap.Fix(&d.due, e.idx)
 		if !poll && d.cfg.sessions.upstreamHeld(t.EndpointID) {
@@ -347,6 +354,15 @@ func (d *dispatcher) pass(ctx context.Context, now time.Time) int {
 		delete(d.held, e.id)
 		delete(d.heldProbes, e.id)
 		d.inflight[e.id] = true
+		if !extra {
+			d.window.runs++
+			if prev, ok := d.started[e.id]; ok && !fresh {
+				if excess := gapExcess(now.Sub(prev), every); excess > d.window.gapMax {
+					d.window.gapMax = excess
+				}
+			}
+			d.started[e.id] = now
+		}
 		jobs = append(jobs, t)
 	}
 	d.mu.Unlock()
@@ -367,6 +383,16 @@ func (d *dispatcher) pass(ctx context.Context, now time.Time) int {
 	}
 	d.mu.Unlock()
 	return len(jobs)
+}
+
+// gapExcess is how far a gap between two scheduled starts of a task missed
+// its interval, either way: a skipped slot reads a whole interval, a run
+// started early or late against the last its own distance (#1625).
+func gapExcess(gap, every time.Duration) time.Duration {
+	if d := gap - every; d >= 0 {
+		return d
+	}
+	return every - gap
 }
 
 // admit asks the endpoint's gate as a job is taken off its lane (#1249):

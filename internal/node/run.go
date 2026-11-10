@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
+	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )
@@ -364,9 +365,15 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	// report accumulates each endpoint's collection telemetry over a report
 	// window (#1369), published when the window is due.
 	report := newCollectionReport(cfg.ReportEvery, time.Now())
+	// self is the node's account of itself (#1625): its dispatch, schedule,
+	// spool, sessions and process, sent as platform metrics in the node-self
+	// block of the batch each tick publishes, on the same window.
+	self := newNodeReport(cfg.ReportEvery, time.Now())
 	if cfg.ReportEvery <= 0 {
 		report.setEvery(wl.ReportEvery())
+		self.setEvery(wl.ReportEvery())
 	}
+	self.worklist(len(wl.Tasks), time.Now())
 	// Each poll and probe runs on its own interval (#1634): the dispatcher
 	// keeps every task's next due and hands what is due to a lane per
 	// endpoint, on its own timer; the heartbeat below keeps the node's
@@ -389,7 +396,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	// flight, with no reconnect buffer) is retried next tick, as in the loop
 	// below; it never ends the node (#1577).
 	_ = publishHeartbeat(nc, cfg.Name)
-	publishSelfLogs(spool, cfg.Name, sink)
+	publishSelf(spool, cfg.Name, sink, self.account(d.takeWindow(), spool, sessions))
 
 	if cfg.Once {
 		// A one-shot run ends only once the stream has acked what it
@@ -471,6 +478,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 			// Sessions and the dispatcher take the new worklist at once: a
 			// new task runs now, one gone stops, the rest keep their dues.
 			wl = next
+			self.worklist(len(wl.Tasks), time.Now())
 			sessions.reconcile(wl.Tasks)
 			d.sync(wl, time.Now())
 			d.pass(ctx, time.Now())
@@ -493,6 +501,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 			sessions.reconcile(wl.Tasks)
 			if cfg.ReportEvery <= 0 {
 				report.setEvery(wl.ReportEvery())
+				self.setEvery(wl.ReportEvery())
 			}
 			// Pull and actuate the pending command queue (#815).
 			if commandsBusy.CompareAndSwap(false, true) {
@@ -512,9 +521,12 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 					_ = publishBatch(spool, cfg.Name, row.task, row.samples)
 				}
 			}
-			logDispatchWindow(logger, d.takeWindow())
-			// Ship whatever the node logged this tick as self-logs.
-			publishSelfLogs(spool, cfg.Name, sink)
+			// The dispatcher's account of the heartbeat window just ended
+			// (#1634) is said in the log when it passed a due over, and sent as
+			// the node's account of itself (#1625) beside the self-logs.
+			w := d.takeWindow()
+			logDispatchWindow(logger, w)
+			publishSelf(spool, cfg.Name, sink, self.account(w, spool, sessions))
 		}
 		arm()
 	}
@@ -686,15 +698,22 @@ func sleepCtx(ctx context.Context, d time.Duration) bool {
 	}
 }
 
-// publishSelfLogs drains the node's captured log records and hands them to the
-// spool as a logs-only telemetry batch on the node's own subject, where the
-// ingest consumer lands them in node_log (ADR-0066, #589). The spool holds a
-// batch the stream has not acked, so a drained line survives a publish
-// outage up to the spool's cap (#454). It deliberately does not log its own
-// failure, since emitting from the drain path would feed the buffer it just
-// emptied.
-func publishSelfLogs(out *telemetrySpool, name string, sink *logSink) {
+// publishSelf drains the node's captured log records and hands them to the
+// spool, with the node's self-report samples, as one task-less telemetry
+// batch on the node's own subject: the ingest consumer lands the lines in
+// node_log (ADR-0066, #589) and the samples on the node's platform component
+// (#1625). The spool holds a batch the stream has not acked, so a drained
+// line survives a publish outage up to the spool's cap (#454). It
+// deliberately does not log its own failure, since emitting from the drain
+// path would feed the buffer it just emptied.
+func publishSelf(out *telemetrySpool, name string, sink *logSink, self []*ogv1.MetricSample) {
 	ev := selfLogBatch(name, sink.drain())
+	if len(self) > 0 {
+		if ev == nil {
+			ev = &ogv1.TelemetryBatch{NodeId: name}
+		}
+		ev.NodeSelf = &ogv1.NodeSelf{Metrics: self}
+	}
 	if ev == nil {
 		return
 	}

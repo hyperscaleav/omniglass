@@ -55,6 +55,11 @@ type IngestBatch struct {
 	// receipt. A group a row of which is refused (IsRefusedWrite) is dropped
 	// on its own and reported in LandResult.Refused; its siblings land.
 	Groups []IngestGroup
+	// NodeSelf is a node's report of itself (#1625), landed on the node's
+	// platform component under the node-self writer, beside the tick's
+	// groups and dropped on its own like one of them (its refusal carries
+	// NodeSelfIndex). Nil on every batch but a node's tick.
+	NodeSelf *NodeSelfReport
 }
 
 // ErrFanoutStale marks a batch whose fanned rows name an owner the
@@ -194,8 +199,17 @@ func (p *PG) landBatch(ctx context.Context, b IngestBatch, isolate bool, drop ma
 			}
 		}
 		groups := b.groups()
-		if err := p.preloadArcs(ctx, bt, groups, b.NodeLogs); err != nil {
+		var selfNode string
+		if b.NodeSelf != nil && len(b.NodeSelf.Metrics) > 0 {
+			selfNode = b.NodeSelf.Node
+		}
+		if err := p.preloadArcs(ctx, bt, groups, b.NodeLogs, selfNode); err != nil {
 			return err
+		}
+		if g, refused, ok := b.nodeSelfGroup(bt); refused != nil {
+			res.Refused = append(res.Refused, GroupRefusal{Index: NodeSelfIndex, Err: refused})
+		} else if ok {
+			groups = append(groups, g)
 		}
 		if err := fanGroups(ctx, bt, groups); err != nil {
 			return err

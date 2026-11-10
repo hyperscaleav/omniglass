@@ -50,8 +50,9 @@ func TestSystemScopeCRUD(t *testing.T) {
 		t.Error("av located-at not set")
 	}
 
-	if got, err := gw.ListSystems(ctx, all); err != nil || len(got) != 4 {
-		t.Fatalf("list all = %d, err %v, want 4", len(got), err)
+	// All scope sees the four, and the boot seed's platform system (#1625).
+	if got, err := gw.ListSystems(ctx, all); err != nil || len(got) != 5 {
+		t.Fatalf("list all = %d, err %v, want 5", len(got), err)
 	}
 
 	// Read scope rooted at av sees av + 2 descendants, never lab.
@@ -127,7 +128,9 @@ func TestSystemScopeCRUD(t *testing.T) {
 	}
 	defer conn.Close(ctx)
 	var n int
-	if err := conn.QueryRow(ctx, `select count(*) from audit_log where resource = 'system'`).Scan(&n); err != nil {
+	// The boot seed's platform system (#1625) writes its own create row; the
+	// count is the operator's acts.
+	if err := conn.QueryRow(ctx, `select count(*) from audit_log where resource = 'system' and resource_id::text not in (select id::text from system where name = 'platform')`).Scan(&n); err != nil {
 		t.Fatalf("count audit: %v", err)
 	}
 	if n != 7 {

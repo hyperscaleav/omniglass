@@ -46,10 +46,13 @@ websocket or wss endpoint's socket (#1034), held as a session whose upgrade ride
 frames routed as a line is, a poll's or a command's answer matched by the id the node minted into it,
 kept alive by ping and pong ([websocket and wss](/architecture/collection/#websocket-and-wss)). Also built: a
 node serving its own simulated components, `omniglass node run --simulate` (#1198,
-[below](#serving-its-own-simulated-components)). Still `Design`: the
+[below](#serving-its-own-simulated-components)). Also built: the node's account of itself (#1625,
+[below](#self-monitoring-the-node-reports-itself)), its schedule, spool, session and process figures
+landed each tick on its own platform component, and the server's check-in age for every claimed node.
+Still `Design`: the
 durable JetStream command queue, the session pool knobs and the held transports beyond these
 (#1036 (mqtt), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip), [ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)),
-node self-telemetry, the node-down sweep, the
+the node-down sweep (its input, `checkin-age`, is built), the
 cascade-resolved buffer knobs, a probe concurrency apart from the worker pool and a per-task
 deadline. The credential is a shared
 secret (the enrollment token doubles as the NATS password); the decentralized nkey/JWT model is
@@ -63,7 +66,7 @@ The node is the edge process (`omniglass node run`), one per site, or the **serv
 
 A node carries the identity triad with one exception. Its **`id`** is `principal_id`, the immutable primary key every reference stores (a node is the detail row of a principal, and `endpoint.node_name` holds that uuid whatever its column name suggests). Its **`name`** is the operator-typed identifier and fleet address, the NATS subject token and the enrollment identity, and it is the one name with no `:rename` custom method: moving it would move a live subject, so the PATCH body carries no name at all. Its **`label`** is the operator label (console falls back to the name). Its optional `location` is **descriptive**, **not** a scope: a node stays fleet-wide, `location` clearing if that location is deleted (`ON DELETE SET NULL`). Descriptive does not mean unguarded: the create and the update resolve that reference within the caller's own `location:read` scope, the seam every other placement bind uses, and a location outside it is refused as **absent** rather than as forbidden ([ADR-0089](/architecture/decisions/#adr-0089-a-uuid-is-the-address-a-dotted-path-is-a-positional-lookup), amended by [#705](https://github.com/hyperscaleav/omniglass/issues/705)). The console blade is read-edit-save via `PATCH /nodes/{name}` (Edit primary, gated `node:update`, editing label, description, location; name read-only; enrolling secondary).
 
-A node is a **taggable owner**: governed [tags](/architecture/tags/) whose `applies_to` includes `node` bind to it (fleet-wide, all-scope, `node:update`); effective tags are the `platform` layer plus direct bindings, no cascade (a node is not a scope tree); the blade carries a **Tags** panel, the list a Tags column and per-key facet. **Decommissioning** (`DELETE /nodes/{name}`, `node:delete`) hard-deletes, cascading its endpoints, their derived tasks, its node-owned tags and self-telemetry, and its enrollment credential; collected component telemetry is untouched.
+A node is a **taggable owner**: governed [tags](/architecture/tags/) whose `applies_to` includes `node` bind to it (fleet-wide, all-scope, `node:update`); effective tags are the `platform` layer plus direct bindings, no cascade (a node is not a scope tree); the blade carries a **Tags** panel, the list a Tags column and per-key facet. **Decommissioning** (`DELETE /nodes/{name}`, `node:delete`) hard-deletes, cascading its endpoints, their derived tasks, its node-owned tags and self-telemetry, its platform component ([below](#self-monitoring-the-node-reports-itself)), and its enrollment credential; collected component telemetry is untouched.
 
 ### Serving its own simulated components
 
@@ -652,6 +655,29 @@ not at the durable write. The server never re-derives observed samples; the node
 ship.
 :::
 
+## Self-monitoring: the node reports itself
+
+Every node reports its own health as platform metrics on its own component (#1625,
+[ADR-1625](/architecture/decisions/#adr-1625-a-node-reports-itself-on-its-platform-component-and-platform-keys-take-no-prefix)).
+Registering a node gives it an `omniglass-node` component in the reserved, unplaced `platform`
+system, named on the node row (`node.platform_component_id`); decommissioning the node removes it.
+An operator may relabel either and reshape neither, and only an all-scope read sees them.
+
+Each heartbeat tick the node takes its own figures and sends them in the **node-self block** of the batch
+the tick already publishes (`TelemetryBatch.node_self`). The block names no owner: the server lands it
+on the publishing node's platform component under the platform writer class, so a node speaks only for
+itself, and only in the keys declared as its own. Figures the node reads every tick (the dispatcher's longest pass,
+the worst lateness and gap excess of the runs it dispatched, the spool depth, the sessions held by
+state, the Go process figures) go every tick; counts (dues met in flight, skipped intervals, spool
+drops, publish failures) go once per report window, every window, 0 when quiet, so a count returns
+to 0 after the window that had it. The schedule figures read the dispatcher's window
+([below](#scheduling-concurrency-and-self-observability)): a poll keeping its interval reads a zero
+`schedule-gap-excess`, and a late pass or a skipped slot reads the distance it lost. A node that goes silent sends nothing, so the server writes the one figure that keeps
+moving: `checkin-age`, every claimed node's seconds since its last heartbeat (or its claim, before the
+first), every 15 s; it grows while the node is silent and is the input of the node-down sweep
+below. The keys, their units and how each is sampled are in
+[collection](/architecture/collection/#self-monitoring-every-nodes-account-of-itself).
+
 ## Scheduling, concurrency, and self-observability
 
 Built (#1634): each poll and probe runs on **its own interval**, from a dispatcher with a timer of
@@ -705,17 +731,22 @@ over due is the endpoint's schedule loss, 0 when healthy. Each heartbeat window 
 keeps its own account: the longest pass (`tick-duration`), the dues that met their run in flight
 (`tick-overrun-count`), every due passed over (`schedule-skip-count`), the latest dispatch past its
 due (`dispatch-late-ms`), and the most workers busy (`worker-busy-count`) and dispatches waiting
-(`dispatch-queue-depth`) at once. Today the node says these in a `dispatch window` self-log line,
-only for a window that passed a due over, so a node keeping its schedule logs nothing; landing them
-as the node's own platform metrics is #1625.
+(`dispatch-queue-depth`) at once. The node sends them as its own platform metrics in the node-self
+block ([above](#self-monitoring-the-node-reports-itself)), the latest dispatch as
+`schedule-lateness` and, beside it, the worst gap between two scheduled starts of a task off its
+interval as `schedule-gap-excess`; it also says the window in a `dispatch window` self-log line, only
+for a window that passed a due over, so a node keeping its schedule logs nothing.
 
-::::design[Target design: a probe concurrency apart from the pool, a per-task deadline, `node.self` and the node-down sweep, tracked in #1625, #1094 and #430; the seeded node rules are the `event_rule` (ADR-0050)]
+::::design[Target design: a probe concurrency apart from the pool, a per-task deadline, the remaining `node.self` counts and the node-down sweep, tracked in #1094 and #430; the seeded node rules are the `event_rule` (ADR-0050)]
 The probes run at a **high fixed concurrency** (`gateConcurrency`) with short timeouts, so the cheap
 gate is never throttled by a small `--lane-workers`, and a node facing many dead targets is bounded
 by concurrency, not the serial sum of probe timeouts (a dead SNMP get costs `timeout * (retries+1)`,
 via `--snmp-timeout` / `--snmp-retries`, default 3s x2). Each poll task gets a per-task deadline
 (`--task-deadline`, default 30s).
 
+The node's account of itself is built as the node-self block on the node's platform component
+([above](#self-monitoring-the-node-reports-itself)), not as node-owned samples; the paragraph below
+is the earlier design it replaces, kept for the counts it names that are not yet sent.
 On its housekeeping timer the node publishes a `node.self` envelope: the dispatcher's window above,
 task attempted/ran/skipped/failed counts, endpoint probed/up/down counts, the `node.overrun` state (a
 due skipped because its run was still in flight). Not

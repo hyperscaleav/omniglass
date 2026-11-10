@@ -63,6 +63,7 @@ type Server struct {
 	stopReconcile   context.CancelFunc // ends the rule reconcile loop
 	stopCalc        context.CancelFunc // ends the calc tick
 	stopPrune       context.CancelFunc // ends the receipt retention pass
+	stopCheckinAge  context.CancelFunc // ends the check-in age timer (#1625)
 	stopRetention   context.CancelFunc // ends the sample retention pass (#417)
 	orphans         *orphanTally       // the node lane's orphaned batches, warned and counted (#1200)
 	unboundWarn     unboundWarner      // a conduit's unbound identities, warned once per window (#1282)
@@ -234,6 +235,7 @@ func (s *Server) subscribe() error {
 		return err
 	}
 	s.startSettlementSweep()
+	s.startCheckinAge()
 	s.startRuleReconcile()
 	s.startCalcTick()
 
@@ -315,6 +317,9 @@ func (s *Server) Shutdown() {
 	}
 	if s.stopPrune != nil {
 		s.stopPrune()
+	}
+	if s.stopCheckinAge != nil {
+		s.stopCheckinAge()
 	}
 	if s.stopRetention != nil {
 		s.stopRetention()

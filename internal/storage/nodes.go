@@ -46,8 +46,13 @@ type Node struct {
 	// per batch, so a node stuck on a moved task is visible without a flood.
 	OrphanedBatches int64
 	LastOrphanedAt  *time.Time
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	// PlatformComponentID is the node's own component in the platform system
+	// (#1625), which its self-monitoring metrics land on. nil only for a node
+	// registered before the boot seed created the platform system; the next
+	// boot adopts it.
+	PlatformComponentID *string
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
 }
 
 // NodeSpec is the create input. Label is the operator label (empty falls
@@ -150,11 +155,11 @@ type Worklist struct {
 // list alike, so the insert and update paths need no join.
 const nodeCols = `principal_id, name, coalesce(label, ''), description,
 	(select l.name from location l where l.id = node.location_id) as location_name, location_id,
-	last_heartbeat_at, enrolled_at, orphaned_batches, last_orphaned_at, created_at, updated_at`
+	last_heartbeat_at, enrolled_at, orphaned_batches, last_orphaned_at, platform_component_id, created_at, updated_at`
 
 func scanNode(row pgx.Row) (*Node, error) {
 	var n Node
-	if err := row.Scan(&n.PrincipalID, &n.Name, &n.Label, &n.Description, &n.LocationName, &n.LocationID, &n.LastHeartbeatAt, &n.EnrolledAt, &n.OrphanedBatches, &n.LastOrphanedAt, &n.CreatedAt, &n.UpdatedAt); err != nil {
+	if err := row.Scan(&n.PrincipalID, &n.Name, &n.Label, &n.Description, &n.LocationName, &n.LocationID, &n.LastHeartbeatAt, &n.EnrolledAt, &n.OrphanedBatches, &n.LastOrphanedAt, &n.PlatformComponentID, &n.CreatedAt, &n.UpdatedAt); err != nil {
 		return nil, err
 	}
 	n.Enrolled = n.EnrolledAt != nil
@@ -192,6 +197,21 @@ func (p *PG) CreateNode(ctx context.Context, actorID string, spec NodeSpec, crea
 		returning `+nodeCols, pid, spec.Name, labelOrNull(spec.Label), spec.Description, locationID))
 	if err != nil {
 		return nil, mapNodeWriteErr(err)
+	}
+	// The node's own component in the platform system, in the same
+	// transaction so no node exists without it (#1625). An unseeded database
+	// has no platform system yet; the next boot's EnsurePlatform adopts the
+	// node then.
+	sysID, err := platformSystemID(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	if sysID != nil {
+		cid, err := p.createPlatformComponent(ctx, tx, actorID, n.Name, *sysID, false)
+		if err != nil {
+			return nil, err
+		}
+		n.PlatformComponentID = &cid
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "create", "node", n.PrincipalID, nil, n); err != nil {
 		return nil, err
@@ -274,7 +294,8 @@ func (p *PG) DeleteNode(ctx context.Context, actorID, name string, read, action 
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	var pid string
-	err = tx.QueryRow(ctx, `select principal_id from node where name = $1`, name).Scan(&pid)
+	var componentID *string
+	err = tx.QueryRow(ctx, `select principal_id, platform_component_id from node where name = $1`, name).Scan(&pid, &componentID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrNodeNotFound
 	} else if err != nil {
@@ -290,6 +311,17 @@ func (p *PG) DeleteNode(ctx context.Context, actorID, name string, read, action 
 	}
 	if _, err := tx.Exec(ctx, `delete from principal where id = $1`, pid); err != nil {
 		return fmt.Errorf("storage: delete node principal: %w", err)
+	}
+	// Its platform component goes with it (#1625), once the node row that
+	// names it is gone.
+	if componentID != nil {
+		c, err := scanComponent(tx.QueryRow(ctx, `delete from component where id = $1 returning `+componentCols, *componentID))
+		if err != nil {
+			return fmt.Errorf("storage: delete node %q's platform component: %w", name, err)
+		}
+		if err := writeAuditRes(ctx, tx, actorID, "delete", "component", c.ID, c, nil); err != nil {
+			return err
+		}
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("storage: commit delete node: %w", err)

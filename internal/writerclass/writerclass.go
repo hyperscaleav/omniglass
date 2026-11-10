@@ -7,8 +7,8 @@
 // Three classes form the reserved system family, fixed and internal: node-probe
 // (the keys a node's own probes and session machine write, declared in
 // probekeys), platform (keys only the Omniglass process itself writes: the
-// health rollup's verdict and the webhook receiver's counts today, its
-// self-monitoring later) and
+// health rollup's verdict, the webhook receiver's counts, and its
+// self-monitoring, a node's self-report among it) and
 // command-lifecycle (the events a command's own lifecycle writes:
 // command-issued, and its terminal command-settled, command-failed or
 // command-timed-out). Their names are declared in code and reserved against
@@ -104,13 +104,71 @@ const (
 	WebhookRefusalCount = "webhook-refusal-count"
 )
 
+// The platform's self-monitoring keys (#1094, #1625), with no prefix: the
+// platform class reserves them by name, as it does health. CheckinAge is the
+// server's reading of a node's last check-in; the rest a node reports of
+// itself, on its own platform component. The process-* keys are generic: any
+// Omniglass process reports them of itself.
+const (
+	CheckinAge            = "checkin-age"
+	WorklistTaskCount     = "worklist-task-count"
+	TickDuration          = "tick-duration"
+	TickOverrunCount      = "tick-overrun-count"
+	ScheduleLateness      = "schedule-lateness"
+	ScheduleGapExcess     = "schedule-gap-excess"
+	ScheduleSkipCount     = "schedule-skip-count"
+	SpoolBatchCount       = "spool-batch-count"
+	SpoolDropCount        = "spool-drop-count"
+	PublishFailureCount   = "publish-failure-count"
+	SessionHeldCount      = "session-held-count"
+	ProcessGoroutineCount = "process-goroutine-count"
+	ProcessHeapSize       = "process-heap-size"
+	ProcessGCPause        = "process-gc-pause"
+)
+
+// nodeSelfWriter is what writes a node's self-report: the node, of itself,
+// landed by the process on the node's platform component.
+const nodeSelfWriter = "a node, of itself (its node-self report)"
+
 // platform maps each platform key to the part of the process that writes it.
 // A key only the Omniglass process writes about itself joins here with its
-// writer (the self-monitoring follow-on, #1094, is its planned consumer).
+// writer.
 var platform = map[string]string{
-	Health:              "the health rollup",
-	WebhookPostCount:    "the webhook receiver",
-	WebhookRefusalCount: "the webhook receiver",
+	Health:                "the health rollup",
+	WebhookPostCount:      "the webhook receiver",
+	WebhookRefusalCount:   "the webhook receiver",
+	CheckinAge:            "the server's check-in timer",
+	WorklistTaskCount:     nodeSelfWriter,
+	TickDuration:          nodeSelfWriter,
+	TickOverrunCount:      nodeSelfWriter,
+	ScheduleLateness:      nodeSelfWriter,
+	ScheduleGapExcess:     nodeSelfWriter,
+	ScheduleSkipCount:     nodeSelfWriter,
+	SpoolBatchCount:       nodeSelfWriter,
+	SpoolDropCount:        nodeSelfWriter,
+	PublishFailureCount:   nodeSelfWriter,
+	SessionHeldCount:      nodeSelfWriter,
+	ProcessGoroutineCount: nodeSelfWriter,
+	ProcessHeapSize:       nodeSelfWriter,
+	ProcessGCPause:        nodeSelfWriter,
+}
+
+// NodeSelf reports a platform key a node may report of itself on the
+// node-self lane (#1625), exactly (the wire carries the declared name). A
+// node's self-report never speaks for another writer's key: a node naming
+// health or checkin-age on the lane is refused like any undeclared key.
+func NodeSelf(key string) bool { return platform[key] == nodeSelfWriter }
+
+// NodeSelfKeys is every key a node reports of itself, sorted.
+func NodeSelfKeys() []string {
+	var out []string
+	for k, by := range platform {
+		if by == nodeSelfWriter {
+			out = append(out, k)
+		}
+	}
+	slices.Sort(out)
+	return out
 }
 
 // CommandIssued is the event a command's issue lands on its owner's timeline,
@@ -303,7 +361,7 @@ var writerDoc = map[Writer]string{
 	Push:         "the telemetry push lane",
 	Fanout:       "a conduit's value fanned out to the owner its identity binding names (ADR-1282)",
 	CalcRule:     "the calc rule's tick",
-	Process:      "the Omniglass process (the health rollup)",
+	Process:      "the Omniglass process: the health rollup, the webhook receiver, and the platform's self-monitoring, a node's self-report landed on its platform component",
 	Command:      "a command's intended value and caused event",
 	CommandReply: "a command's reply, read through its driver binding",
 	Operator:     "an operator's declared value",

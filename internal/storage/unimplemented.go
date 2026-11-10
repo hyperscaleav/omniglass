@@ -481,6 +481,9 @@ func (UnimplementedGateway) UpdateNode(context.Context, string, string, NodePatc
 func (UnimplementedGateway) DeleteNode(context.Context, string, string, scope.Set, scope.Set) error {
 	return nil
 }
+func (UnimplementedGateway) EnsurePlatform(context.Context) error {
+	return nil
+}
 func (UnimplementedGateway) SetEnrollmentToken(context.Context, string, string, string, scope.Set) (*Node, error) {
 	return nil, nil
 }
@@ -780,6 +783,12 @@ func (UnimplementedGateway) RecordWebhookCounts(context.Context, []WebhookCount)
 }
 func (UnimplementedGateway) CollectionSettings(context.Context) (settings.CollectionSettings, error) {
 	return settings.CollectionSettings{}, nil
+}
+func (UnimplementedGateway) RecordPlatformMetrics(context.Context, []PlatformMetric) error {
+	return nil
+}
+func (UnimplementedGateway) NodeCheckins(context.Context) ([]NodeCheckin, error) {
+	return nil, nil
 }
 func (UnimplementedGateway) ListTags(context.Context) ([]Tag, error) {
 	return nil, nil

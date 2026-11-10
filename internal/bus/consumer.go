@@ -233,8 +233,40 @@ const topLevelTaskLog = "node-lane batch carried task rows outside its groups, d
 // Gateway refused (#1582): that group is dropped and its siblings land.
 const refusedGroupLog = "task group refused, dropped; its siblings landed"
 
-// landNode lands one node tick (#1582): the node's self-logs and each task
-// group under its own writer, in ONE LandBatch under the tick's receipt.
+// nodeSelfRefusedLog is the warning for a node's self-report the Storage
+// Gateway refused (#1625): the report drops and the tick's groups land.
+const nodeSelfRefusedLog = "node-self report refused, dropped; the tick's groups landed"
+
+// nodeSelfOwnerLog is the warning for a node-self block one of whose samples
+// names an identity (#1625): the report is the node's own, never about an
+// owner it names, so the block drops and the tick's groups land.
+const nodeSelfOwnerLog = "node-self report named an identity, dropped; the tick's groups landed"
+
+// nodeSelfReport is the tick's node-self block as the report the gateway
+// lands on node's platform component (#1625), each sample's time resolved
+// against the batch's. It is nil for a tick with no block. named reports a
+// block one of whose samples names an identity: such a block is no report of
+// the node's own, so it is nil too. The keys are not filtered here: the
+// gateway's node-self writer refuses a key that is not the node's. Pure.
+func nodeSelfReport(ev *ogv1.TelemetryBatch, node string) (r *storage.NodeSelfReport, named bool) {
+	ms := ev.GetNodeSelf().GetMetrics()
+	if len(ms) == 0 {
+		return nil, false
+	}
+	r = &storage.NodeSelfReport{Node: node, Metrics: make([]storage.NodeSelfSample, 0, len(ms))}
+	for _, m := range ms {
+		if m.GetIdentity() != nil {
+			return nil, true
+		}
+		r.Metrics = append(r.Metrics, storage.NodeSelfSample{Key: m.GetName(), Instance: m.GetInstance(),
+			Value: m.GetValue(), TS: sampleTime(ev, m.GetTs())})
+	}
+	return r, false
+}
+
+// landNode lands one node tick (#1582): the node's self-logs, its self-report
+// (#1625, on its platform component) and each task group under its own
+// writer, in ONE LandBatch under the tick's receipt.
 // Every group's task resolves in one read; a group whose task the node does
 // not hold (another node's, unknown, a shared interface) is an orphan the
 // fence drops (#1200) while its siblings land. A group the gateway refuses is
@@ -243,6 +275,11 @@ const refusedGroupLog = "task group refused, dropped; its siblings landed"
 // resolve's, the registry's or the batch's (failed decides what it means).
 func (s *Server) landNode(ctx context.Context, id, node string, ev *ogv1.TelemetryBatch) ([]string, error) {
 	batch := storage.IngestBatch{BatchID: id, NodeLogs: nodeLogWrites(ev, node)}
+	self, named := nodeSelfReport(ev, node)
+	if named {
+		slog.Warn(nodeSelfOwnerLog, "facility", "ingest", "node", node)
+	}
+	batch.NodeSelf = self
 
 	views := make([]*ogv1.TelemetryBatch, 0, len(ev.GetGroups()))
 	var tasks []string
@@ -322,6 +359,10 @@ func (s *Server) landNode(ctx context.Context, id, node string, ev *ogv1.Telemet
 		cause := ""
 		if r.Err != nil {
 			cause = r.Err.Error()
+		}
+		if r.Index == storage.NodeSelfIndex {
+			slog.Warn(nodeSelfRefusedLog, "facility", "ingest", "node", node, "error", cause)
+			continue
 		}
 		slog.Warn(refusedGroupLog, "facility", "ingest", "node", node, "task", r.TaskID, "error", cause)
 	}

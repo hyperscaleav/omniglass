@@ -60,6 +60,72 @@ metric_types:
     data_type: int
     label: Webhook Refusals
     description: Webhook posts to the endpoint the server refused (a bad signature, a missing credential) in the report window; reported only when nonzero.
+  # Platform self-monitoring (#1625, #1094): a node's account of its own
+  # schedule, spool, sessions and process, landed on the node's component in
+  # the platform system under the platform writer class. Only the node (and the
+  # server, for checkin-age) may write them; no driver, rule or operator can.
+  - name: checkin-age
+    data_type: float
+    unit: s
+    label: Check-in Age
+    description: Seconds since the node's last heartbeat reached the server (since its enrollment, before its first), written by the server every platform tick; keeps growing while the node is silent.
+  - name: worklist-task-count
+    data_type: int
+    label: Worklist Tasks
+    description: Tasks in the worklist the node installed, sampled on each install.
+  - name: tick-duration
+    data_type: float
+    unit: ms
+    label: Tick Duration
+    description: The longest pass the node's dispatcher took over one heartbeat window, sampled each heartbeat.
+  - name: tick-overrun-count
+    data_type: int
+    label: Tick Overruns
+    description: Dues that met their task's previous run still in flight, so were skipped, over the report window; reported every window, 0 when quiet.
+  - name: schedule-lateness
+    data_type: float
+    unit: ms
+    label: Schedule Lateness
+    description: The worst gap between a task's due time and its dispatch over one heartbeat window's scheduled runs.
+  - name: schedule-gap-excess
+    data_type: float
+    unit: ms
+    label: Schedule Gap Excess
+    description: The worst deviation between a task's gap since its previous scheduled start and its interval over one heartbeat window; a poll keeping its interval reads 0, a skipped slot a whole interval.
+  - name: schedule-skip-count
+    data_type: int
+    label: Schedule Skips
+    description: Task dues the dispatcher passed over (a run still in flight, a late pass), over the report window; reported every window, 0 when quiet.
+  - name: spool-batch-count
+    data_type: int
+    label: Spool Depth
+    description: Batches waiting in the node's spool for the bus, sampled each tick.
+  - name: spool-drop-count
+    data_type: int
+    label: Spool Drops
+    description: Batches the spool dropped as full or overflowed, over the report window; reported every window, 0 when quiet.
+  - name: publish-failure-count
+    data_type: int
+    label: Publish Failures
+    description: Batches the bus refused, never acknowledged, or the node failed to encode, over the report window; reported every window, 0 when quiet.
+  - name: session-held-count
+    data_type: int
+    label: Sessions Held
+    description: Device sessions the node holds, one sample per session state as the instance, sampled each tick.
+  - name: process-goroutine-count
+    data_type: int
+    label: Goroutines
+    description: Goroutines the Omniglass process runs, sampled each tick.
+  - name: process-heap-size
+    data_type: int
+    unit: bytes
+    label: Heap Size
+    description: Bytes of heap the Omniglass process holds in live and unswept objects, sampled each tick.
+  - name: process-gc-pause
+    data_type: float
+    unit: ms
+    label: GC Pause
+    description: The most recent garbage collection pause of the Omniglass process; absent until the first collection.
   # Room-level series: the first standard-contract metrics (#790). A meeting
   # room's standard declares them, so every conforming system's zoom shows the
   # same KPI tiles; the sensor feeding them is whatever the room's build wires

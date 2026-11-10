@@ -724,6 +724,10 @@ type Gateway interface {
 	CreateNode(ctx context.Context, actorID string, spec NodeSpec, create, locationRead scope.Set) (*Node, error)
 	UpdateNode(ctx context.Context, actorID, name string, patch NodePatch, read, action, locationRead scope.Set) (*Node, error)
 	DeleteNode(ctx context.Context, actorID, name string, read, action scope.Set) error
+	// EnsurePlatform is the boot seed's platform step (#1625): it creates the
+	// reserved platform system if absent and gives every node without one its
+	// platform component. Idempotent.
+	EnsurePlatform(ctx context.Context) error
 	SetEnrollmentToken(ctx context.Context, actorID, name, tokenHashHex string, action scope.Set) (*Node, error)
 	ClaimNode(ctx context.Context, name, tokenHashHex string) (*Node, error)
 	AuthenticateNode(ctx context.Context, name, tokenHashHex string) (bool, error)
@@ -916,6 +920,12 @@ type Gateway interface {
 	RecordWebhookCounts(ctx context.Context, counts []WebhookCount) error
 	// CollectionSettings is the effective collection namespace (#1369).
 	CollectionSettings(ctx context.Context) (settings.CollectionSettings, error)
+	// RecordPlatformMetrics lands the process's own observations on the
+	// platform components, written by the process (#1625).
+	RecordPlatformMetrics(ctx context.Context, rows []PlatformMetric) error
+	// NodeCheckins reads every claimed node's platform component and the time
+	// it last spoke, the check-in age's input (#1625).
+	NodeCheckins(ctx context.Context) ([]NodeCheckin, error)
 
 	// Membership: the binding a role attaches to. Many-valued on purpose, since a
 	// shared device belongs to every system it serves, which a single pointer on

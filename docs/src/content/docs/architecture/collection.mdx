@@ -9,6 +9,7 @@ sidebar:
 
 import SchemaTable from '../../../components/SchemaTable.astro';
 import SeededSet from '../../../components/SeededSet.astro';
+import PlatformKeys from '../../../components/PlatformKeys.astro';
 
 :::note[Partial]
 The first collection path is live end to end: an edge node runs **reachability probes** against a
@@ -467,6 +468,56 @@ and the live lab check are in [simulation](/architecture/simulation/#the-dev-fle
 One window for every endpoint type is the first step of the cadence model (#1373): each endpoint type's
 catalog entry holds its built-in data's defaults, a driver overrides them per endpoint type it uses, and
 an operator overrides them down the cascade.
+
+### Self-monitoring: every node's account of itself
+
+Collection telemetry is an endpoint's account of its collection; **self-monitoring** is the
+platform's account of itself (#1094, first built by #1625). The boot seed creates one reserved
+system, `platform`, of the reserved og system type of the same name, and node registration gives
+every node a component in it, an `omniglass-node`, named for the node and named back on the node row
+(`node.platform_component_id`). The platform's own metrics land there, under the `platform` writer
+class, so an operator reads whether a node keeps up the way they read any component: its metrics,
+its trend, and later a rule on them. An operator may relabel the system and the components and
+reshape neither: the Storage Gateway refuses a rename, retype, move or delete of the system, a
+rename, move, reparent or delete of a node's component, and any other component joining the system,
+each a 409 naming the reservation. The system is unplaced, so it resolves through the unplaced root
+and only an all-scope read sees it: a location-scoped operator does not see platform rows
+([ADR-1625](/architecture/decisions/#adr-1625-a-node-reports-itself-on-its-platform-component-and-platform-keys-take-no-prefix)).
+
+Every platform metric key, rendered from the writer-class ruling and the seed:
+
+<PlatformKeys />
+
+**Who writes them.** A node reports all but three of itself, in the **node-self block** of the batch
+its tick already publishes (`TelemetryBatch.node_self`, field 15). The block names no owner and no
+task: the server takes the node from the subject it published on, lands the rows on that node's
+platform component as the process, and holds every row to the node-self keys, so a node writes no
+other platform key (`health`, `checkin-age`, the webhook counts) and no other component's. A node-self
+sample that names an identity, or a batch that names an owner, never lands; a refused block drops
+alone and the tick's task groups still land. A platform key in a task group, a push, a command or a
+calc is refused like any reserved key. `checkin-age` is the server's: a timer writes every claimed
+node's age every 15 s, half the default heartbeat, as the seconds since its last heartbeat (or since
+its claim, before its first). It keeps growing while a node is silent, which is the series a
+node-silent rule reads. The webhook counts are the receiver's
+([above](#collection-telemetry-every-endpoints-account-of-itself)).
+
+**How a node samples.** Two shapes, as collection telemetry has. The each-tick figures (the
+dispatcher's longest pass, the worst lateness and gap excess of the runs it dispatched, the spool's
+depth, the sessions held by state, the process figures) are one observation per sample, never a
+stored average. The counts (dues met in flight, skipped intervals, spool drops, publish failures) are
+tallied over the node's report window and land once when it ends, every window, 0 when quiet, so a
+count's latest value returns to 0 after the window that had it rather than standing on the last
+event; the first window runs from the node's start and lands too. The schedule figures come from the
+dispatcher's window, taken each heartbeat
+([nodes](/architecture/nodes/#scheduling-concurrency-and-self-observability)), and are measured per
+scheduled start: a run's lateness is its dispatch against its due time, and its gap excess is how far
+the gap since the task's own previous scheduled start strays from its interval, early or late, so a
+poll keeping its interval reads 0 and a skipped slot reads a whole interval. A task's first run, and a
+run off the schedule (a held or refused poll released), reads no gap. `tick-duration` is the longest
+dispatch pass of the window and `tick-overrun-count` the dues that met their own run still in flight.
+Every count is a loss count, 0 healthy: the schedule's drops are the schedule hop of the delivery loss ratio #1641 defines, and a
+later slice folds them into it. The `process-*` figures come from one runtime sampler
+(`internal/platformmetric`), which the server reuses for its own component.
 
 ## Endpoint types and their config
 

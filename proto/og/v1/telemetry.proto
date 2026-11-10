@@ -110,6 +110,21 @@ message TelemetryBatch {
   // top-level lanes (task_id, metrics, properties, events, task_logs) instead
   // of in groups is refused. The API push lane keeps using the top-level fields.
   repeated TaskGroup groups = 14;
+
+  // node_self is the node's report of itself (#1625): its schedule, spool,
+  // sessions and process, platform metrics on the node's own platform
+  // component. Like logs (field 7) it names no task and no owner: the server
+  // resolves the owner from the publishing node, never from the batch, and
+  // lands each sample under the platform writer. A sample whose name is not a
+  // declared node-self platform key is refused. Set only on a node's lane.
+  NodeSelf node_self = 15;
+}
+
+// NodeSelf is a node's self-report (#1625): platform metrics about the node
+// itself. Each sample's instance is empty but where the key discriminates
+// (session-held-count carries the session state).
+message NodeSelf {
+  repeated MetricSample metrics = 1;
 }
 
 // TaskGroup is one task's samples from one node tick (#1582). It is the unit of

@@ -25,6 +25,11 @@ type Store interface {
 	// simulator serves (ADR-1370), for its device list alone.
 	NodeSimWebhooks(ctx context.Context, name string) (map[string]storage.SimWebhook, error)
 	RecordHeartbeat(ctx context.Context, name string) error
+	// NodeCheckins and RecordPlatformMetrics are the check-in age timer's
+	// read and write (#1625): every claimed node's last word, and the age
+	// written on its platform component.
+	NodeCheckins(ctx context.Context) ([]storage.NodeCheckin, error)
+	RecordPlatformMetrics(ctx context.Context, rows []storage.PlatformMetric) error
 	// RecordOrphanedBatches counts a node's batches the confinement fence
 	// orphaned (#1200), once per flush rather than per batch.
 	RecordOrphanedBatches(ctx context.Context, name string, batches int64, at time.Time) error

@@ -74,16 +74,31 @@ func TestFleetViewAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "bar-1", "product": bar.Name}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPut, "/systems/hq-1/roles/table-mic/assignments/bar-1", nil, http.StatusNoContent)
 
+	// view reads the fleet and sets aside the boot seed's platform system
+	// (#1625), which an all-scope caller sees beside the operator's systems.
+	sawPlatform := false
 	view := func(tok string) fleetViewWire {
 		t.Helper()
 		var w fleetViewWire
 		if err := json.Unmarshal(c.do(tok, http.MethodGet, "/views/fleet", nil, http.StatusOK), &w); err != nil {
 			t.Fatalf("decode fleet view: %v", err)
 		}
+		systems := w.Systems[:0]
+		for _, s := range w.Systems {
+			if s.Name == storage.PlatformSystemName {
+				sawPlatform = true
+				continue
+			}
+			systems = append(systems, s)
+		}
+		w.Systems = systems
 		return w
 	}
 
 	v := view(ownerTok)
+	if !sawPlatform {
+		t.Error("the owner's fleet view lacks the platform system; an all-scope read sees it")
+	}
 
 	// The tree arrives flat, each node carrying its parent, because the client
 	// assembles it and decides how the fleet is gathered into bands.

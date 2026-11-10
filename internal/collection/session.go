@@ -59,6 +59,10 @@ const (
 	SessionRejected SessionState = "rejected"
 )
 
+// SessionStates is every SessionState, in the order a session moves through
+// them: the instances a node's session-held-count reports (#1625).
+var SessionStates = []SessionState{SessionEstablishing, SessionUp, SessionRecovering, SessionDown, SessionRejected}
+
 // The recovery bounds. A failed attempt waits SessionBackoff(attempt), an
 // exponential curve from SessionBackoffBase capped at SessionBackoffMax and
 // jittered by SessionBackoffJitter either way, so a fleet of sessions that
