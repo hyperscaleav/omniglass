@@ -1088,12 +1088,12 @@ func TestSeededStaffingLandsOnTheRightDevices(t *testing.T) {
 	}
 }
 
-// TestSeededDependenciesTeachPowerAndHost pins the fleet's worked dependency
-// example (#1648): in boardroom A the power conditioner feeds the video bar
-// from outlet 1 and the amplifier from outlet 2, and the touch panel is hosted
-// by the bar. Read by minted name in the room, so an edge landed on the wrong
+// TestSeededDependenciesTeachPowerHostAndPath pins the fleet's worked
+// dependency example (#1648, #1652): in boardroom A the power conditioner feeds
+// the video bar from outlet 1 and the amplifier from outlet 2, and the touch
+// panel is hosted by the bar and reached through it. Read by minted name in the room, so an edge landed on the wrong
 // device by a key mix-up fails here.
-func TestSeededDependenciesTeachPowerAndHost(t *testing.T) {
+func TestSeededDependenciesTeachPowerHostAndPath(t *testing.T) {
 	t.Parallel()
 	ctx, conn, _ := seededFleet(t)
 	rows, err := conn.Query(ctx, `
@@ -1119,7 +1119,7 @@ func TestSeededDependenciesTeachPowerAndHost(t *testing.T) {
 	if err := rows.Err(); err != nil {
 		t.Fatalf("iterate dependency edges: %v", err)
 	}
-	want := []string{"panel-1 host videobar-1 ", "amp-1 power power-1 2", "videobar-1 power power-1 1"}
+	want := []string{"panel-1 host videobar-1 ", "panel-1 path videobar-1 ", "amp-1 power power-1 2", "videobar-1 power power-1 1"}
 	if strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Errorf("seeded dependency edges = %q, want %q", got, want)
 	}

@@ -2064,11 +2064,15 @@ role_assignments:
 # holds the panel's endpoints too. All four sit in the same room, which is
 # containment, and says nothing of either. The huddle's touch panel is paired
 # to its bar the same way, and the huddle is a room a large scenario copies,
-# so every copy carries its own edge.
+# so every copy carries its own edge. The panel is also reached through the
+# bar (#1652): its traffic rides the bar's switch port, so a bar that stops
+# answering holds the panel's polls and probes under the upstream reason
+# naming the bar, rather than raising a second outage behind the first.
 component_dependencies:
   - { component: bar-a, upstream: power, kind: power, outlet: "1" }
   - { component: div-amp, upstream: power, kind: power, outlet: "2" }
   - { component: touch-a, upstream: bar-a, kind: host }
+  - { component: touch-a, upstream: bar-a, kind: path }
   - { component: huddle-touch, upstream: huddle-bar, kind: host }
 
 alarms:

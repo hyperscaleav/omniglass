@@ -91,9 +91,10 @@ const (
 	PollFailureCount = "poll-failure-count"
 	// PollHeldCount is how many of an endpoint's due polls its gate held in
 	// a report window (#1650) because the endpoint's own probe reads it
-	// unreachable, or a disruptive command it was sent holds it (#1651):
-	// never sent, so not a failure and no backoff, counted once in each
-	// interval it waits through. Landed only when nonzero.
+	// unreachable, a disruptive command it was sent holds it (#1651), or a
+	// path upstream holds it (#1652, which holds its due probes too, counted
+	// here): never sent, so not a failure and no backoff, counted once in
+	// each interval it waits through. Landed only when nonzero.
 	PollHeldCount = "poll-held-count"
 	// HoldExpiryCount is how many disruptions (#1651) of an endpoint the
 	// hold backstop released in a report window: a disruptive command (a

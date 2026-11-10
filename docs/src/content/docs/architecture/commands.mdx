@@ -113,8 +113,9 @@ reachable from the target and the endpoints of the components they name
   through a reboot of its device, so a reboot leaves its gate open.
 - **Containment holds nothing.** A child component is not held because its parent rebooted, and a
   `path` dependent is not held either: reaching it through a closed upstream is the `upstream`
-  gate reason's question ([#1652](https://github.com/hyperscaleav/omniglass/issues/1652)), not a
-  disruption.
+  gate reason's question ([nodes](/architecture/nodes/#implicit-reachability)), not a disruption.
+  It follows anyway: the reboot closes the upstream's gates, and the node holds what is reached
+  through it in the same pass.
 
 The walk keeps a visited set, so a cycle that slipped past the create check (two creates racing)
 cannot loop it, and each endpoint is held once. Only endpoints placed on the delivering node are

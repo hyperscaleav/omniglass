@@ -33,6 +33,10 @@ import (
 // the most causal reason; the ladder asks refusedAt, which sees the refused
 // reason alone, so an unreachable endpoint keeps its probe credential, starts
 // its held sessions and re-arms its listeners, and only the probe reopens it.
+//
+// A component reached through another (a path dependency, #1652) adds a
+// third: upstream, which the node derives from the upstream's gate and not
+// from anything the endpoint did (upstream.go).
 
 // rung is a ladder rung a gate holds at.
 type rung string
@@ -97,6 +101,10 @@ func rejectionOf(r rung, class, fingerprint string) string {
 type reasonKind string
 
 const (
+	// reasonUpstream is a path upstream's gate closed (#1652): derived on
+	// the node from the upstream endpoints' reasons, held while it is closed,
+	// then waiting for the endpoint's own probe to read up.
+	reasonUpstream reasonKind = "upstream"
 	// reasonDisrupted is a disruptive command (a reboot) delivered to the
 	// endpoint's component (#1651): added before the command is sent,
 	// removed by the endpoint's first up verdict after the quiet period, or
@@ -112,8 +120,8 @@ const (
 // reasonRule is what a kind of reason does. rank orders the kinds by cause,
 // lowest first, so the reason a gate is named for is the one nearest the
 // root: disrupted (#1651) names the command that took the device down ahead
-// of the refusal and the unreachable reading it causes (a later slice adds
-// upstream at 0).
+// of the refusal and the unreachable reading it causes, and upstream (#1652)
+// names the gateway an endpoint is reached through ahead of all of them.
 // rungScoped holds only at its rung and above, read by refusedAt; every other
 // kind holds the whole endpoint. host closes every connection to the
 // endpoint's host, a preview's included. release is how it reopens, for an
@@ -127,6 +135,7 @@ type reasonRule struct {
 
 // reasonRules is the kind table.
 var reasonRules = map[reasonKind]reasonRule{
+	reasonUpstream:    {rank: 0, host: true, release: "it reopens when its upstream's gate opens and then the endpoint's own probe reads up"},
 	reasonDisrupted:   {rank: 1, host: true, release: "it reopens on the endpoint's first up verdict after its quiet period, or at its hold backstop"},
 	reasonRefused:     {rank: 2, rungScoped: true, release: "it reopens when the connection fingerprint changes or the rung passes"},
 	reasonUnreachable: {rank: 3, host: true, release: "it reopens on the probe's next up verdict"},
@@ -161,6 +170,20 @@ func mostCausal(rs []reason) reason {
 // unreachableText is the words an unreachable reason is named with.
 func unreachableText(since time.Time, source string) string {
 	return "unreachable since " + since.UTC().Format(time.RFC3339) + " (probe " + source + ")"
+}
+
+// upstreamText is the words an upstream reason is named with: the component
+// it names and since when, and, in its wait phase, what it waits for.
+func upstreamText(h upstreamHold) string {
+	name := h.name
+	if name == "" {
+		name = h.component
+	}
+	text := "held by upstream " + name + " since " + h.since.UTC().Format(time.RFC3339)
+	if h.wait {
+		text += ", waiting for its own probe to read up"
+	}
+	return text
 }
 
 // disruptedText is the words a disrupted reason is named with: the command
@@ -235,15 +258,120 @@ type gates struct {
 	hosts   map[string]string
 	// quiet is each disrupted endpoint's quiet and hold clock (#1651).
 	quiet map[string]disruption
+	// upstream is each endpoint's upstream reason (#1652), derived from
+	// topo and every other reason by deriveUpstream after each change;
+	// moved collects the endpoints a derive moved, for the caller to
+	// publish (takeMoved).
+	upstream map[string]upstreamHold
+	topo     upstreamTopology
+	moved    map[string]bool
+	clock    func() time.Time
+	// upSeen is every endpoint whose probe has read up since the node
+	// started, which an adopted hold waits on (#1652).
+	upSeen map[string]bool
 	// routes resolves a preview to an endpoint's lane (#1249): transport
 	// and target to endpoint id, rebuilt from each worklist.
 	routes map[string]string
 }
 
+// upstreamTopology is the path dependencies the worklist carries (#1652):
+// each endpoint's component, its path upstreams, the endpoints with a probe
+// task, and each component's name.
+type upstreamTopology struct {
+	componentOf map[string]string
+	edges       map[string][]pathUpstream
+	probed      map[string]bool
+}
+
 func newGates() *gates {
 	return &gates{held: map[string]gate{}, current: map[string]string{},
 		others: map[string]map[reasonKind]reason{}, streak: map[string]downStreak{}, hosts: map[string]string{},
-		quiet: map[string]disruption{}, routes: map[string]string{}}
+		quiet: map[string]disruption{}, upstream: map[string]upstreamHold{}, moved: map[string]bool{}, clock: time.Now,
+		upSeen: map[string]bool{}, routes: map[string]string{}}
+}
+
+// topology takes the path dependencies off the worklist and derives the
+// upstream reasons anew. An adopted reason whose name the node did not know
+// takes it from the edges now.
+func (g *gates) topology(t upstreamTopology, now time.Time) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.topo = t
+	names := map[string]string{}
+	for _, ups := range t.edges {
+		for _, pu := range ups {
+			names[pu.component] = pu.name
+		}
+	}
+	for ep, h := range g.upstream {
+		if h.name == "" && names[h.component] != "" {
+			h.name = names[h.component]
+			g.upstream[ep] = h
+		}
+	}
+	g.propagateAtLocked(now)
+}
+
+// propagateLocked derives every endpoint's upstream reason from the
+// topology and every other reason, at the gates' clock. Caller holds mu.
+func (g *gates) propagateLocked() {
+	g.propagateAtLocked(g.clock())
+}
+
+func (g *gates) propagateAtLocked(now time.Time) {
+	own := map[string]bool{}
+	unreachable := map[string]bool{}
+	for ep := range g.topo.componentOf {
+		if len(g.ownReasonsLocked(ep)) > 0 {
+			own[ep] = true
+		}
+		if _, ok := g.others[ep][reasonUnreachable]; ok {
+			unreachable[ep] = true
+		}
+	}
+	next := deriveUpstream(upstreamState{componentOf: g.topo.componentOf, edges: g.topo.edges, ownClosed: own,
+		unreachable: unreachable, probed: g.topo.probed, upSeen: g.upSeen, prior: g.upstream, now: now})
+	for ep, h := range next {
+		// A held endpoint's probe is not run, so the downs it read before
+		// the hold (the same outage, seen through the upstream) are not its
+		// own: its wait phase counts afresh.
+		if !h.wait {
+			delete(g.streak, ep)
+		}
+	}
+	for ep, h := range g.upstream {
+		if n, ok := next[ep]; !ok || n != h {
+			g.moved[ep] = true
+		}
+	}
+	for ep := range next {
+		if _, ok := g.upstream[ep]; !ok {
+			g.moved[ep] = true
+		}
+	}
+	g.upstream = next
+}
+
+// takeMoved is every endpoint whose upstream reason moved since the last
+// call, sorted.
+func (g *gates) takeMoved() []string {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	out := sortedKeys(g.moved)
+	g.moved = map[string]bool{}
+	return out
+}
+
+// upstreamHeld is whether the endpoint's upstream reason is in its held
+// phase: its probes are not run (#1652).
+func (g *gates) upstreamHeld(endpointID string) bool {
+	if g == nil {
+		return false
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	h, ok := g.upstream[endpointID]
+	return ok && !h.wait
 }
 
 // observe records the endpoint's fingerprint from the worklist and the
@@ -252,7 +380,11 @@ func newGates() *gates {
 func (g *gates) observe(endpointID, fingerprint, published string) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	_, seen := g.current[endpointID]
 	g.current[endpointID] = fingerprint
+	if !seen {
+		g.adoptUpstreamLocked(endpointID, published)
+	}
 	if gt, ok := g.held[endpointID]; ok && gt.fingerprint != fingerprint {
 		delete(g.held, endpointID)
 	}
@@ -266,6 +398,22 @@ func (g *gates) observe(endpointID, fingerprint, published string) {
 			offered: gt.OfferedKey,
 			adopted: true,
 			since:   time.Now().UTC()}
+	}
+}
+
+// adoptUpstreamLocked takes the upstream reason a restarted node published
+// before it (#1652) as the endpoint's prior hold, the first time the node
+// sees the endpoint: it stays held until its upstream's probes read up (the
+// upstream's own unreachable is re-earned, not adopted), then waits on its
+// own probe, so a restart never drops a hold unseen nor probes through a
+// dead upstream. Caller holds mu.
+func (g *gates) adoptUpstreamLocked(endpointID, published string) {
+	_, _, others := rejection.ParseSet(published)
+	for _, r := range others {
+		if reasonKind(r.Kind) == reasonUpstream {
+			g.upstream[endpointID] = upstreamHold{root: r.Source, component: r.Source, since: r.Since, adopted: true}
+			return
+		}
 	}
 }
 
@@ -287,6 +435,7 @@ func (g *gates) recordAt(endpointID, fingerprint string, terr *collection.Termin
 	}
 	g.held[endpointID] = gate{fingerprint: fingerprint, rung: at, class: terr.Class, reason: terr.Error(),
 		pinned: terr.Pinned, offered: terr.Offered, since: time.Now().UTC()}
+	g.propagateLocked()
 	return true
 }
 
@@ -304,6 +453,7 @@ func (g *gates) clear(endpointID string) bool {
 	defer g.mu.Unlock()
 	_, ok := g.held[endpointID]
 	delete(g.held, endpointID)
+	g.propagateLocked()
 	return ok
 }
 
@@ -325,6 +475,26 @@ func (g *gates) refusedAt(endpointID string, r rung) (gate, bool) {
 // reasonsLocked is every reason the endpoint's gate holds, the refused one
 // only while its fingerprint is current. Caller holds mu.
 func (g *gates) reasonsLocked(endpointID string) []reason {
+	rs := g.ownReasonsLocked(endpointID)
+	if r, ok := g.upstreamReasonLocked(endpointID); ok {
+		rs = append(rs, r)
+	}
+	return rs
+}
+
+// upstreamReasonLocked is the endpoint's upstream reason (#1652), held or
+// waiting, as a reason. Caller holds mu.
+func (g *gates) upstreamReasonLocked(endpointID string) (reason, bool) {
+	h, ok := g.upstream[endpointID]
+	if !ok {
+		return reason{}, false
+	}
+	return reason{kind: reasonUpstream, since: h.since, source: h.component, text: upstreamText(h)}, true
+}
+
+// ownReasonsLocked is every reason the endpoint's gate holds of its own:
+// all but upstream, which is derived from these. Caller holds mu.
+func (g *gates) ownReasonsLocked(endpointID string) []reason {
 	var rs []reason
 	if gt, ok := g.held[endpointID]; ok && gt.fingerprint == g.current[endpointID] {
 		rs = append(rs, reason{kind: reasonRefused, since: gt.since, text: gt.reason})
@@ -424,6 +594,11 @@ func (g *gates) retain(endpoints, taskIDs map[string]bool) {
 			delete(g.streak, id)
 		}
 	}
+	for id := range g.upSeen {
+		if !endpoints[id] {
+			delete(g.upSeen, id)
+		}
+	}
 	for id := range g.quiet {
 		if !endpoints[id] {
 			delete(g.quiet, id)
@@ -438,6 +613,7 @@ func (g *gates) retain(endpoints, taskIDs map[string]bool) {
 			delete(g.others, id)
 		}
 	}
+	g.propagateLocked()
 }
 
 // rejectedReason prefixes the reason a rung's responsive reading carries when
@@ -487,9 +663,23 @@ func (g *gates) verdict(endpointID, taskID string, up bool, at time.Time) bool {
 	if q, ok := g.quiet[endpointID]; ok && at.Before(q.quietUntil) {
 		return false
 	}
+	if h, ok := g.upstream[endpointID]; ok && !h.wait {
+		// A held dependent's probe is not run (#1652): a verdict that lands
+		// anyway (a probe in flight as the upstream closed) read it through
+		// a closed upstream, which says nothing of the endpoint.
+		return false
+	}
+	defer g.propagateLocked()
 	if up {
 		delete(g.streak, endpointID)
+		g.upSeen[endpointID] = true
 		changed := false
+		if _, ok := g.upstream[endpointID]; ok {
+			// The wait phase ends on the endpoint's own up verdict.
+			delete(g.upstream, endpointID)
+			g.moved[endpointID] = true
+			changed = true
+		}
 		if _, ok := g.others[endpointID][reasonUnreachable]; ok {
 			delete(g.others[endpointID], reasonUnreachable)
 			changed = true
@@ -546,6 +736,7 @@ func (g *gates) disrupt(endpoints []string, commandType string, commandID int64,
 		g.quiet[ep] = disruption{quietUntil: since.Add(quiet), holdUntil: since.Add(hold)}
 		delete(g.streak, ep)
 	}
+	g.propagateLocked()
 }
 
 // quietUntil is when the endpoint's quiet period ends; false when it is not
@@ -589,6 +780,9 @@ func (g *gates) expire(now time.Time) []expiredHold {
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].endpoint < out[j].endpoint })
+	if len(out) > 0 {
+		g.propagateLocked()
+	}
 	return out
 }
 
@@ -616,6 +810,9 @@ func (g *gates) rejectionOf(endpointID string) (value, why string) {
 	var others []rejection.Reason
 	for _, r := range g.others[endpointID] {
 		others = append(others, rejection.Reason{Kind: string(r.kind), Since: r.since, Source: r.source})
+	}
+	if h, ok := g.upstream[endpointID]; ok {
+		others = append(others, rejection.Reason{Kind: string(reasonUpstream), Since: h.since, Source: h.component})
 	}
 	sort.Slice(others, func(i, j int) bool {
 		ri, rj := reasonRules[reasonKind(others[i].Kind)].rank, reasonRules[reasonKind(others[j].Kind)].rank

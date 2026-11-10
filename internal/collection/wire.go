@@ -117,6 +117,24 @@ type TaskSpec struct {
 	// Ladder is the endpoint's resolved reachability ladder (ADR-0158);
 	// nil for a bare endpoint.
 	Ladder *driver.EffectiveLadder `json:"ladder,omitempty"`
+	// ComponentID is the component the endpoint hangs off (#1652), which a
+	// path dependency names; carried only beside PathUpstreams, since an
+	// upstream's component rides the edge that names it.
+	ComponentID string `json:"component_id,omitempty"`
+	// PathUpstreams is every component the endpoint's component is reached
+	// through (a path dependency, #1652), with the upstream's in-band
+	// endpoints placed on this node. None for an out-of-band endpoint,
+	// which is never held by a path upstream.
+	PathUpstreams []PathUpstream `json:"path_upstreams,omitempty"`
+}
+
+// PathUpstream is one path upstream of a task's component (#1652): the
+// upstream component, its name, and its in-band endpoints on the task's node,
+// whose gates hold the task's endpoint.
+type PathUpstream struct {
+	ComponentID   string   `json:"component_id"`
+	ComponentName string   `json:"component_name"`
+	EndpointIDs   []string `json:"endpoint_ids"`
 }
 
 // WorklistReply is the server's response to a worklist request: the node's

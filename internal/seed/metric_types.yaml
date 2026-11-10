@@ -31,7 +31,7 @@ metric_types:
   - name: poll-held-count
     data_type: int
     label: Held Polls
-    description: The endpoint's due driver polls its gate held in the report window because its probe reads it unreachable or a disruptive command (a reboot) holds it; never sent, so not failures; reported only when nonzero.
+    description: The endpoint's due driver polls its gate held in the report window because its probe reads it unreachable, a disruptive command (a reboot) holds it, or a component it is reached through is down (which holds its probes too, counted here); never sent, so not failures; reported only when nonzero.
   - name: hold-expiry-count
     data_type: int
     label: Hold Expiries

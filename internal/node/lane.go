@@ -24,7 +24,8 @@ type closure struct {
 }
 
 // consult is the endpoint's gate as a job about to send at rung at reads
-// it. Every reason that holds the whole endpoint counts; the refused reason
+// it. Every reason that holds the whole endpoint counts, a path upstream's
+// (#1652) in either phase included; the refused reason
 // counts only when the job sends its own request (own) at or above the
 // refused rung, since a job riding a held session is answered by that
 // session's own state. false when nothing holds the job.
@@ -41,6 +42,9 @@ func (g *gates) consult(endpointID string, at rung, own bool) (closure, bool) {
 		refusal = gt.refusal()
 	}
 	for _, r := range g.others[endpointID] {
+		rs = append(rs, r)
+	}
+	if r, ok := g.upstreamReasonLocked(endpointID); ok {
 		rs = append(rs, r)
 	}
 	if len(rs) == 0 {

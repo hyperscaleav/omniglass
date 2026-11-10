@@ -694,6 +694,20 @@ omniglass component dependency list codec-1   # upstreams, dependents, hidden
 omniglass command-type create --name outlet-cycle --disruptive --quiet-seconds 10 --hold-seconds 300 --power-outlet-param outlet
 ```
 
+A `path` edge says the dependent is reached through the upstream (a peripheral behind a codec, a
+device behind a gateway). It holds without a command: while any in-band endpoint of the upstream has
+a closed gate on the same node, the dependent's in-band endpoints carry an `upstream` reason naming
+it, so their polls are held and their probes are not run, and the gateway alone raises an alarm.
+Once the upstream opens, each dependent waits for its own probe to read up. The reason's `source` is
+the upstream's uuid and `component` its name, when you can read it
+([implicit reachability](/architecture/nodes/#implicit-reachability)):
+
+```sh
+omniglass component dependency create touch-1 --upstream gateway-1 --kind path
+omniglass component reachability list touch-1 | jq -c '.endpoints[] | {endpoint, gate_reasons}'
+# {"endpoint":"http","gate_reasons":[{"kind":"upstream","since":"...","source":"...","component":"gateway-1"}]}
+```
+
 ### A command's status, from issue to settlement
 
 The issue answers with the command as it stands: its `status`, its `phase` (where it sits while in

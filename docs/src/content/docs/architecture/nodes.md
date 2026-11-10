@@ -447,8 +447,9 @@ side, so a slow device holds only its own lane. The node's work splits by shape:
 job taken off it consults the endpoint's [gate](#implicit-reachability) first, so work queued behind
 a request that closed the gate (a reboot's `disrupted`, a refusal) answers with the gate's reason
 and sends nothing. A queued command fails naming the reason, a run now answers `Gated` (the API's
-409), and a scheduled poll is held and counted. Where more than one reason holds, the most causal
-answers: `disrupted` before `refused` before `unreachable`, the oldest within a kind. The wait after
+409), and a scheduled poll is held and counted; a probe a path upstream holds is not run, and is
+counted held the same way. Where more than one reason holds, the most causal answers: `upstream`
+before `disrupted` before `refused` before `unreachable`, the oldest within a kind. The wait after
 a disruptive command that this section once designed (a lane blocked until the host reads up) is
 not a lane at all: it is the gate's `disrupted` reason (#1651, [below](#implicit-reachability)), so
 the lane stays free while the endpoint is held.
@@ -520,8 +521,39 @@ The type's hold is the backstop: an endpoint still held then reopens anyway and 
 it as `hold-expiry-count`, so a device that never comes back is seen rather than silently resumed.
 The lane is never blocked: work on other endpoints runs throughout. A failed send leaves the
 gates closed until up or the backstop, since whether the device received the command is unknown. A
-restarted node does not adopt `disrupted` from its worklist (only a refusal is adopted): the
+restarted node does not adopt `disrupted` from its worklist (only a refusal and an `upstream` hold are adopted): the
 restart itself outlasts the moment, and the probe reads the device fresh.
+
+**A path upstream holds what is reached through it** (built, #1652,
+[ADR-1652](/architecture/decisions/#adr-1652-a-path-upstream-holds-its-dependents-on-the-node)).
+A component reached through another (a `path`
+[dependency edge](/architecture/core-entities/#dependency-edges-what-a-component-needs-apart-from-where-it-sits): a peripheral
+behind a codec, a device behind a gateway) gains the `upstream` reason on each of its in-band
+endpoints while **any** endpoint of its upstream has a closed gate, for any reason, a refusal
+included. The worklist carries each task's path upstreams (the upstream component and its in-band
+endpoints on this node; an out-of-band endpoint carries none and is never held), and the node
+derives every endpoint's `upstream` reason with one pure function each time any reason set moves, so
+the dependent closes in the same pass as its upstream, not on the next pull. The reason has two
+phases. **Held**, while the upstream is closed: due polls are held and counted as
+`poll-held-count`, the probe does not run (its skipped runs count as held too), so the dependent's
+probe result never moves and nothing fires on it, and a command, run now or preview answers at once
+(`held by upstream gateway-1 since <time>`). A gateway going down raises one root cause on the
+gateway, not a storm on everything behind it. **Waiting**, once every upstream opens: the probe
+resumes, polls stay held, and the dependent's own next up verdict releases it; a dependent with no
+probe has nothing to wait for and is released at once, and one that earns its own `unreachable`
+while waiting drops `upstream`, so its gate names its own cause. Downs its probe read before the hold do
+not count toward that: they saw the same outage through the upstream. **The reason names the root.** Down
+a chain A to B to C, while A is closed B and C both read `upstream A`; once A opens and B waits on
+its probe, C reads `upstream B`, since B is now the closure nearest it. The derivation never takes a
+dependent's reason from a closure rooted in its own component, and a waiting upstream never holds a
+component it depends on itself, so a path cycle terminates and never holds itself up. The reason is
+published in the endpoint's rejection row naming the upstream's component id, the reachability read
+serves that component's current name when the caller may read it. A restarted node adopts it from
+the worklist and keeps it held until the upstream's probes read up (the upstream's own
+`unreachable` is re-earned, not adopted, so until then nothing says the path is open), then
+re-derives it live, so a restart neither drops a hold unseen nor probes through a dead upstream. An upstream
+on another node is not followed (#1655), and a held session's own reconnect is not yet gated by
+`upstream` (#1703).
 
 **The layered availability gate** is built (#1650, #1249,
 [ADR-1249](/architecture/decisions/#adr-1249-the-endpoint-lane-runs-one-request-at-a-time-operator-work-first)):
