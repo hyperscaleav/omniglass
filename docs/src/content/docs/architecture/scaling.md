@@ -199,7 +199,7 @@ flush while the lane is mostly idle is not a consumer bottleneck
 ([#1517](https://github.com/hyperscaleav/omniglass/issues/1517)).
 
 A faster lane is only a win if it still lands everything, so the same run reads every telemetry
-kind's **loss ratio** across the ingest hop, `(in - out) / in` with 0 healthy, from the ledger each
+kind's **loss ratio** across the node hop and the ingest hop, `(in - out) / in` with 0 healthy, from the ledger each
 batch carries on its receipt
 ([messaging](/architecture/messaging/#accounting-every-item-the-loss-ratio), #1641). It is the one
 delivery measurement for every kind and hop: a change that gets faster by dropping data reads a loss

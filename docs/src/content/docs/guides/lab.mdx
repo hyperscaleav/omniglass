@@ -553,18 +553,32 @@ exactly 0 for every kind:
 
 ```
 delivery    hop     in       out      loss     dedup  cause
+metric      node    1275     1275     0        0      -
 metric      ingest  1275     1275     0        0      -
+property    node    166      166      0        0      -
 property    ingest  166      166      0        0      -
+event       node    0        0        -        0      -
 event       ingest  0        0        -        0      -
+log         node    0        0        -        0      -
 log         ingest  0        0        -        0      -
 end to end  metric 0  property 0  event -  log -
 ```
 
-- **in** is the items the node minted in the window (the batches' ledgers, plus the items of any batch
-  that never landed), **out** the items accounted for (`stored`; for properties `coalesced`, an
-  unchanged value skipped on purpose; and `unbound`, an identity no binding places, which the
-  conduit's unbound inbox holds for the operator to assign). A kind with nothing in reads `-`, never 0. Only the ingest hop
-  is read today; the node, schedule and sim hops follow.
+Each kind reads two hops, in the order its items cross them:
+
+- The **node** row is what the node minted against what its spool shipped (#1692). **in** is the
+  items the node minted in the window and the items it lost before minting them into a batch, **out**
+  the items it handed to the stream (`shipped`). Its causes are the node's own: `spool-overflow` (the
+  spool dropped its oldest batch at the count or byte cap, usually a bus outage outlasting the
+  spool), `spool-expired` (a batch aged out at 12 hours), `bus-refused` (the bus refused the batch for
+  good, too large or a bad subject), `self-log-overflow` (the node's self-log buffer dropped lines
+  before it could ship them) and `encode-failed`.
+- The **ingest** row is what the node shipped against what the server accounted for: its **in** is
+  exactly the node row's **out**. **out** is the items accounted for (`stored`; for properties
+  `coalesced`, an unchanged value skipped on purpose; and `unbound`, an identity no binding places,
+  which the conduit's unbound inbox holds for the operator to assign).
+
+A kind with nothing in reads `-`, never 0. The schedule and sim hops follow.
 - **dedup** is the items a redelivery carried again, which the receipt absorbed. It sits beside the
   ratio, never in it, so a retry storm never moves the loss off 0.
 - **cause** is the largest outcome behind a loss: a `refused-<why>` (a key not registered, a writer or
@@ -573,22 +587,28 @@ end to end  metric 0  property 0  event -  log -
   and the inbox already shows it, so the dev seed's deliberately unbound `zr-boardroom-b` reads 0. A refusal is loss on purpose: the sims emit
   only valid keys, so any refusal in a lab is a bug worth chasing. The JSON (`delivery`) carries every
   outcome's count on every row, with the same keys for every kind.
-- **missing** is a batch that never landed: a hole in a node boot's batch sequence, its items read
-  from its neighbors' offsets. At this stage it cannot say why; the footer reads `never landed:
-  Termed at ingest, dropped at the node, or lost in between`.
-- **end to end** is each kind's loss over every hop it crosses, `1 - prod(1 - loss)`; with one hop it
-  equals the ingest row.
+- **missing** is a batch the node shipped that never landed: a hole in a node boot's batch sequence the
+  node did not account for, its items read from its neighbors' offsets. A batch the node dropped
+  leaves the same hole, but the batches after it name it, so it reads on the node row under its cause
+  and never as `missing`. The footer reads `shipped by the node, never landed: Termed at ingest, or
+  lost between the stream and the store`; naming each Term under its own cause is #1691.
+- **end to end** is each kind's loss over every hop it crosses, `1 - prod(1 - loss)`: a third lost at
+  the node and nothing at ingest reads 0.3333 end to end.
 - **unsettled** names a node boot whose window's batches were not all known when `--settle-timeout`
   ran out (no later batch said the spool had cleared past them, or the stream still held batches),
   with no ratio for it rather than a guess. A note under the table gives the stream's pending and
   unacked counts when the stream was the cause.
 
-Two limitations, both closed by the node hop (#1692):
+- **unshipped** names a node boot that will never settle because its node started again while its spool
+  still held batches: the spool is memory, so they went with the process. The boot is read as far as
+  it landed, and the line gives its last landed seq and when the next boot began:
 
-- A node killed while it still holds unshipped batches loses its old boot's tail, and nothing later
-  in that boot reveals it.
-- `missing` also counts batches the node's spool dropped (an overflow, a bus refusal), which take a
-  sequence number and never ship.
+  ```
+  unshipped   node edge-1, boot 0193...: last seq 412 landed, boot 0193... began 2026-11-10T14:02:11Z; anything after 412 never shipped, uncounted
+  ```
+
+  Nothing that landed says how many items the dead boot minted after its last landed batch, so the
+  line names the tail without counting it; #1733 counts it on the node row.
 
 The same 23-hour window limit applies, since receipts are kept a day. A lab
 whose server predates the ledger reads `delivery not measured` with the reason, and every other figure

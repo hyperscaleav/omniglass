@@ -52,6 +52,8 @@ node serving its own simulated components, `omniglass node run --simulate` (#119
 [below](#serving-its-own-simulated-components)). Also built: the node's account of itself (#1625,
 [below](#self-monitoring-the-node-reports-itself)), its schedule, spool, session and process figures
 landed each tick on its own platform component, and the server's check-in age for every claimed node;
+its own losses on every batch's ledger, read as the node hop of the loss table (#1692,
+[below](#delivery-a-batch-lands-once));
 and its command queue's health (#1626, [below](#self-monitoring-the-node-reports-itself)): depth,
 oldest age, latencies, redeliveries, stuck and expired commands, and the node's failed pulls.
 Still `Design`: the
@@ -247,10 +249,20 @@ minted before it, and `resolved`, the highest seq below which nothing is still q
 removes batches from the head only, on an ack or a bus refusal). A self-log batch counts its lines as
 kind `log`. The ledger is encoded into the batch's bytes at the flush, so a retry carries it
 unchanged, and a batch that never lands leaves a hole in the boot's `seq` that the server's read
-counts by kind ([messaging](/architecture/messaging/#accounting-every-item-the-loss-ratio)). A
-dropped batch takes a seq too, so it reads as missing at ingest until the node hop names it
-(#1692); the spool is memory, so a restart mints a new boot and a killed boot's unshipped tail is not
-revealed by any later batch.
+counts by kind ([messaging](/architecture/messaging/#accounting-every-item-the-loss-ratio)).
+
+The ledger also carries the **node's own losses** (#1692), so the read can tell the node hop from the
+ingest hop. A batch the spool drops (`spool-overflow` at the count or byte cap, `spool-expired` at the
+age cap, `bus-refused` when the bus refuses it for good) took a seq, so it leaves a hole; the spool
+notes the drop as a **run** (its cause, its first and last seq, its items by kind) and every batch it
+mints after carries the run, until the stream acks one of them. A run is then in the stream for good,
+and the next batches stop carrying it. Items lost before any batch carried them have no seq at all:
+self-log lines the bounded buffer dropped (`self-log-overflow`) and a group or batch that failed to
+encode (`encode-failed`). For those the ledger carries a **running total** per cause and kind since
+the boot began, so a window reads them as the most it carries less the most a batch before the window
+carried. The spool is memory, so a restart mints a new boot: a boot killed with batches still spooled
+can never settle, and the read names it **unshipped** (its last landed seq against its next boot's
+first) and reads it as far as it landed, but cannot count what it held; #1733 counts it.
 
 ### On-demand runs: asked, answered once
 
