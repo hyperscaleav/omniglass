@@ -270,7 +270,7 @@ neither falls back to a throwaway connection, which would retry the bad credenti
 - anything it connects with changes: the attached secret rotated in the secret store (the endpoint
   row untouched), the address, port or attached secret (a driver-attached endpoint's inputs edit
   in place, `PATCH /endpoints/{endpoint}` with `inputs`), the transport, the driver's login or terminal declaration (re-derived to the endpoint, #823), or
-  its pin. The session is recycled and reconnects within a tick;
+  its pin. The session is recycled and reconnects as soon as the worklist carrying the change lands (#1636);
 - an operator retries it (`POST /endpoints/{endpoint}:retry`, gated by `endpoint:retry` and audited): the
   endpoint's retry counter, part of the fingerprint, moves;
 - the driver declares a slow re-probe (`session.reprobe`, at least 5m; the default is never).
@@ -1207,9 +1207,9 @@ Every inbound line on a held session is routed by one precedence
    listener claims. When the shape also declares an `error` shape, an unclaimed line matching it
    answers the exchange as a **refusal** carrying the device's text. A line that began before the
    request was written is never its answer.
-3. Anything left is **unclaimed**: counted, and once per tick the node logs the count and the last
-   such line; a spec declaring `unmatched: collection-failed` also lands one `collection-failed`
-   per tick naming them, and one declaring `unmatched: log` lands each as a log line on the
+3. Anything left is **unclaimed**: counted, and once per housekeeping pass (the report window,
+   never longer than a heartbeat, #1636) the node logs the count and the last such line; a spec
+   declaring `unmatched: collection-failed` also lands one `collection-failed` per pass naming them, and one declaring `unmatched: log` lands each as a log line on the
    endpoint's component, the whole message as raw arrival (#1145); the default is `discard`.
 
 A request with a reply shape closes the window #816 left open (a stray line arriving just before

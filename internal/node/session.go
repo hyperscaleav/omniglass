@@ -540,6 +540,9 @@ func (h *heldSession) publishTo() (string, string) {
 type sessionManager struct {
 	dialers map[string]collection.SessionDialer
 	hooks   sessionHooks
+	// dials bounds how many of the node's sessions dial and handshake at
+	// once (#1636), shared by every session it starts; nil is unbounded.
+	dials collection.DialSlots
 	// mapsMu guards held, certPins, datagrams, datagramRefused and
 	// httpEndpoints (#1634): the run loop alone writes them, under the write
 	// lock, and the dispatcher's workers read them, under the read lock, while
@@ -1241,6 +1244,7 @@ func (m *sessionManager) start(id string, w sessionWant) {
 		Target:   w.conn.target,
 		Timeout:  w.conn.timeout,
 		Dialer:   m.dialers[w.conn.transport],
+		Dials:    m.dials,
 		Inbound:  h.router,
 		Arm:      arm,
 		Auth:     w.auth,
@@ -1294,10 +1298,10 @@ func (m *sessionManager) teardown(id string, h *heldSession, why string) {
 	slog.Info("session torn down", "facility", "session", "task", taskID, "endpoint", endpoint, "target", h.conn.target, "reason", why)
 }
 
-// flushUnclaimed reports, once per tick, the inbound lines no listener
-// claimed: a self-log with the count and the last, and, when the spec's
-// policy is collection-failed, one collection-failed under the session's
-// listen task.
+// flushUnclaimed reports, once per housekeeping pass, the inbound lines no
+// listener claimed: a self-log with the count and the last, and, when the
+// spec's policy is collection-failed, one collection-failed under the
+// session's listen task.
 func (m *sessionManager) flushUnclaimed() {
 	if m == nil {
 		return
@@ -1314,7 +1318,7 @@ func (m *sessionManager) flushUnclaimed() {
 		}
 		slog.Info("unclaimed lines", "facility", "session", "task", taskID, "endpoint", endpoint, "count", n, "last", last, "policy", policy)
 		if policy == driver.UnmatchedCollectionFailed && m.hooks.fault != nil {
-			m.hooks.fault(taskID, fmt.Errorf("%d inbound lines no listener claimed since the last tick, last: %q", n, last))
+			m.hooks.fault(taskID, fmt.Errorf("%d inbound lines no listener claimed since the last flush, last: %q", n, last))
 		}
 	}
 }

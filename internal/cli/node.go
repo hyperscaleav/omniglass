@@ -35,7 +35,9 @@ func newNodeRunCmd() *cobra.Command {
 		laneWorkers int
 		// worklistEvery is the pull interval (#1577), apart from the heartbeat.
 		worklistEvery time.Duration
-		once          bool
+		// sessionDials bounds the held sessions dialing at once (#1636).
+		sessionDials int
+		once         bool
 		// The simulator in process (--simulate) and its own settings, which
 		// mean nothing without it.
 		simulate    bool
@@ -90,9 +92,14 @@ func newNodeRunCmd() *cobra.Command {
 			if laneWorkers <= 0 {
 				return fmt.Errorf("node: --lane-workers %d: a node needs at least one lane worker to run its tasks", laneWorkers)
 			}
+			dials, err := sessionDialsFrom(sessionDials, cmd.Flags().Changed("session-dials"), config.Get("OMNIGLASS_NODE_SESSION_DIALS"))
+			if err != nil {
+				return err
+			}
 			nodeCfg := node.Config{
 				ServerURL: serverURL, Name: name, Token: token,
-				HeartbeatEvery: heartbeat, ProbeEvery: probeEvery, LaneWorkers: laneWorkers, WorklistEvery: worklistEvery, Once: once,
+				HeartbeatEvery: heartbeat, ProbeEvery: probeEvery, LaneWorkers: laneWorkers, WorklistEvery: worklistEvery,
+				SessionDials: dials, Once: once,
 			}
 			if simulate {
 				// A signal stops both halves gracefully, so the simulator
@@ -120,10 +127,28 @@ func newNodeRunCmd() *cobra.Command {
 	cmd.Flags().DurationVar(&probeEvery, "probe-every", node.DefaultProbeEvery, "how often each reachability probe runs, on the node's own timer, apart from the heartbeat. Keep it under the console's 150s staleness window, past which a probe-only endpoint reads stale between probes")
 	cmd.Flags().IntVar(&laneWorkers, "lane-workers", node.DefaultLaneWorkers, "how many endpoint lanes run at once, each sending one request to its endpoint at a time, an operator's ahead of the scheduled (env OMNIGLASS_LANE_WORKERS)")
 	cmd.Flags().DurationVar(&worklistEvery, "worklist-every", node.DefaultWorklistEvery, "how often the node pulls its worklist, apart from the heartbeat; a change made on the server reaches the node at its next pull")
+	cmd.Flags().IntVar(&sessionDials, "session-dials", node.DefaultSessionDials, "how many held sessions make their first dial and handshake at once (a redial takes no slot); a session waiting for a slot reads establishing (env OMNIGLASS_NODE_SESSION_DIALS)")
 	cmd.Flags().BoolVar(&once, "once", false, "run a single claim + pull + heartbeat cycle and exit")
 	cmd.Flags().BoolVar(&simulate, "simulate", false, "also run the simulator in this process, serving the simulated components placed on this node on its own loopback")
 	cmd.Flags().BoolVar(&impairments, "impairments", false, "with --simulate: apply impairments (unplug, latency, loss) and truthful ping by rewriting the firewall and traffic shaping of this network namespace; needs NET_ADMIN, and is meant for a namespace of the node's own (a container)")
 	cmd.Flags().IntVar(&portOffset, "port-offset", 0, "with --simulate: lift the simulated ports below 1024 by this much, to serve without the privilege to bind them")
 	cmd.Flags().DurationVar(&poll, "poll", simnode.DefaultPoll, "with --simulate: how often the simulator re-pulls its component list")
 	return cmd
+}
+
+// sessionDialsFrom is the node's session-dials bound: the flag when given,
+// else OMNIGLASS_NODE_SESSION_DIALS when set, else the flag's default.
+func sessionDialsFrom(flag int, changed bool, env string) (int, error) {
+	n, from := flag, "--session-dials"
+	if !changed && env != "" {
+		parsed, err := strconv.Atoi(env)
+		if err != nil {
+			return 0, fmt.Errorf("node: OMNIGLASS_NODE_SESSION_DIALS %q is not a count of dials", env)
+		}
+		n, from = parsed, "OMNIGLASS_NODE_SESSION_DIALS"
+	}
+	if n < 1 {
+		return 0, fmt.Errorf("node: %s is %d; it must be at least 1", from, n)
+	}
+	return n, nil
 }

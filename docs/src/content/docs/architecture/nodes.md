@@ -44,7 +44,10 @@ listeners as a line is, resumed from its last event id after a drop
 ([a server-sent events stream](/architecture/collection/#a-server-sent-events-stream)); and a
 websocket or wss endpoint's socket (#1034), held as a session whose upgrade rides that state, its
 frames routed as a line is, a poll's or a command's answer matched by the id the node minted into it,
-kept alive by ping and pong ([websocket and wss](/architecture/collection/#websocket-and-wss)). Also built: a
+kept alive by ping and pong ([websocket and wss](/architecture/collection/#websocket-and-wss)). Every
+held session reconciles the moment its worklist lands, runs supervised (a panic costs that one
+session, never the node), and makes its first dial through node-wide slots (`--session-dials`, #1636,
+[below](#sessions)). Also built: a
 node serving its own simulated components, `omniglass node run --simulate` (#1198,
 [below](#serving-its-own-simulated-components)). Also built: the node's account of itself (#1625,
 [below](#self-monitoring-the-node-reports-itself)), its schedule, spool, session and process figures
@@ -55,8 +58,8 @@ Still `Design`: the
 durable JetStream command queue, the session pool knobs and the held transports beyond these
 (#1036 (mqtt), #1039 (modbus/tcp), #1040 (bacnet/ip), #1041 (knxnet/ip), [ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)),
 the node-down sweep (its input, `checkin-age`, is built), the
-cascade-resolved buffer knobs, a probe concurrency apart from the worker pool and a per-task
-deadline. The credential is a shared
+cascade-resolved buffer knobs, per-poll intervals (#1634), a probe concurrency apart from the
+worker pool and a per-task deadline. The credential is a shared
 secret (the enrollment token doubles as the NATS password); the decentralized nkey/JWT model is
 deferred. See [implementation status](/architecture/status/) and
 [decision log](/architecture/decisions/) (ADR-0036).
@@ -105,9 +108,10 @@ materialized, resolved task and command instances.
 The node keeps no endpoint config apart from its worklist: it **re-pulls the whole worklist on its
 own interval** (`--worklist-every`, [below](#pulling-the-worklist)) and runs what the latest pull
 carried, so a change the server has written is running within one pull interval (the pull
-carries it, and the node reconciles its sessions and hands the new worklist to its dispatcher at
-once, a new or moved task running then, [below](#scheduling-concurrency-and-self-observability)), with
-no restart and nothing to apply. The server side is the re-derive: an endpoint edit
+carries it, and the node reconciles its held sessions the moment it lands, #1636, and hands the
+new worklist to its dispatcher at once, a new or moved task running then,
+[below](#scheduling-concurrency-and-self-observability)), with no restart and nothing to apply.
+The server side is the re-derive: an endpoint edit
 (`PATCH /endpoints/{endpoint}`, its driver inputs included) and a driver spec change (#823) rewrite
 the affected tasks in the same transaction, and a held session whose
 [connection fingerprint](/architecture/collection/#the-connection-fingerprint-and-the-layered-gate)
@@ -386,6 +390,35 @@ is a `certificate` refusal that gates the transport rung, beneath which the prob
 connect
 ([tls](/architecture/collection/#tls),
 [ADR-0160](/architecture/decisions/#adr-0160-tls-is-its-own-transport-over-a-shared-primitive-and-its-pin-is-the-public-key)).
+
+Built with #1636: the held sessions are a **supervised, independent pool** that no longer rides the
+heartbeat ([ADR-1636](/architecture/decisions/#adr-1636-held-sessions-reconcile-on-arrival-are-supervised-and-dial-through-node-wide-slots)).
+
+- **Reconcile on arrival.** A worklist reconciles the held sessions and datagram sockets the moment
+  it lands: a held endpoint added, removed, re-addressed or re-keyed is started, torn down or
+  recycled then, not at the next heartbeat. A reconcile on its own timer (the heartbeat interval)
+  stays as the safety net for a gate or a retry that changed between worklists. Every reconcile
+  runs on the node's one run-loop goroutine, the session maps' one writer, and a lane worker
+  borrowing a session reads them under their lock (#1634), so a reconcile, a poll borrowing a
+  session and a housekeeping pass never race.
+- **Supervision.** Every session-layer goroutine (the session machine, each connection's reader,
+  the arm conversation, the datagram arm) runs under a recover. A recovered panic is logged at
+  error with its stack (facility `collection`), counted, and becomes that session's ordinary
+  failure: the connection closes, the session reads `recovering` with the reason `panic: <value>`,
+  and the normal backoff redials it, so one that panics on every attempt still reaches `down`
+  after the attempt budget. A panic on one device's bytes costs that one session; the node and
+  every other session keep running. A datagram arm that panics closes its socket, and the next
+  reconcile binds and arms it again.
+- **Bounded establish.** A session's first dial and handshake (the connect, the TLS or ssh
+  handshake, the login dialog) share node-wide slots, `node run --session-dials` (env
+  `OMNIGLASS_NODE_SESSION_DIALS`, default 16), so a node restarting with hundreds of held endpoints
+  opens them a few at a time. A session waiting for a slot reads `establishing`, and an exchange
+  against it follows the first-dial wait. A redial takes no slot, so endpoints that never answer a
+  dial cannot hold up a healthy session's recovery; the jittered backoff spreads a mass redial.
+- **Housekeeping on its own clock.** Unclaimed lines are flushed and pushes are counted into the
+  collection report on a housekeeping timer at the report window, never longer than the
+  heartbeat, so a long heartbeat does not hold them.
+
 Still design below: the pool knobs.
 
 A stateful endpoint (`ssh`, `mqtt`, anything held open) becomes a **session** at runtime: one
@@ -422,8 +455,8 @@ size per endpoint, a shared versus dedicated session for a stream).
 Built for the line protocol (#817): one reader per held connection routes every inbound line,
 **listeners first** (a claimed line is never an answer unless it also matches the exchange's
 declared reply shape), then the exchange in flight by its reply shape (or, with none declared, the
-first unclaimed line), then unclaimed (counted, and a `collection-failed` per tick when the spec
-says so). This reverses the design's order below, which tried an outstanding poll's matcher first
+first unclaimed line), then unclaimed (counted, and a `collection-failed` per housekeeping pass
+when the spec says so). This reverses the design's order below, which tried an outstanding poll's matcher first
 ([ADR-0151](/architecture/decisions/#adr-0151-a-held-line-session-routes-every-inbound-line-listeners-first-answers-by-reply-shape)); the precedence and its reasons are on
 [collection](/architecture/collection/#listeners-over-a-held-session).
 
@@ -438,7 +471,8 @@ this, above). Where the protocol itself frames responses vs events (xAPI `*r` vs
 id; built for a correlated websocket exchange's id), framing drives routing and the regex only
 extracts within the matched frame, and a driver's declared prompt delimits a held answer (#1057).
 An **unmatched** frame lands as `raw` (orphan, logged): a missing matcher surfaces, never fails
-silently. Today it is counted and logged once per tick, counted once a report window as the
+silently. Today it is counted and logged once a housekeeping pass (the report window, never longer
+than a heartbeat, #1636), counted once a report window as the
 endpoint's `push-unclaimed-count` ([collection telemetry](/architecture/collection/#collection-telemetry-every-endpoints-account-of-itself)),
 and lands as a log line only where the spec asks (`unmatched: log`).
 :::
