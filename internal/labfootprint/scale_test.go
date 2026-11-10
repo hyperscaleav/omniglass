@@ -739,6 +739,22 @@ func tallyOf(k delivery.Kind, o delivery.Outcome, n int) delivery.Tally {
 	return t
 }
 
+// A scale bring-up runs `lab run` at the asked size, held for this process,
+// and asks for the induced refusal (#1698) only when the run says so: off,
+// the lab is the plain one every other measurement reads.
+func TestScaleRunArgsInduceTheRefusalOnlyWhenAsked(t *testing.T) {
+	cfg := ScaleConfig{Scenario: "corporate", Systems: 30, ReadyTimeout: 10 * time.Minute}
+	off := strings.Join(scaleRunArgs(cfg, "/tmp/x/lab.env", 42), " ")
+	want := "lab run --scenario corporate --systems 30 --port 0 --ready-file /tmp/x/lab.env --while-pid 42 --ready-timeout 10m0s"
+	if off != want {
+		t.Errorf("args = %q, want %q", off, want)
+	}
+	cfg.InduceUnregistered = true
+	if on := strings.Join(scaleRunArgs(cfg, "/tmp/x/lab.env", 42), " "); on != want+" --induce-unregistered" {
+		t.Errorf("induced args = %q, want the flag appended", on)
+	}
+}
+
 // The attached measurement reads the fleet from the lab it measures (#1719):
 // the scenario and size come from the server container's labels, and the
 // --scenario and --systems flags, which only size a lab the run brings up,

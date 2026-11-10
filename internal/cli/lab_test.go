@@ -30,6 +30,21 @@ func TestLabRunScriptFlagsAreHidden(t *testing.T) {
 	if strings.Contains(cmd.UsageString(), "ready-file") {
 		t.Error("the usage names --ready-file")
 	}
+	// A scale lab's proving knobs are for the integration tests, not a
+	// learner's help, and the induced refusal is off unless asked (#1698).
+	for _, name := range []string{"host-memory", "ready-timeout", "induce-unregistered"} {
+		f := cmd.Flags().Lookup(name)
+		if f == nil {
+			t.Errorf("lab run has no --%s", name)
+			continue
+		}
+		if !f.Hidden {
+			t.Errorf("--%s shows in a learner's help", name)
+		}
+	}
+	if f := cmd.Flags().Lookup("induce-unregistered"); f != nil && f.DefValue != "false" {
+		t.Errorf("--induce-unregistered defaults to %s, want off", f.DefValue)
+	}
 }
 
 // Every walkthrough's setup, as the lab guide lists it for a learner, is a
@@ -142,6 +157,7 @@ func TestLabRunScenarioRefusals(t *testing.T) {
 		{[]string{"--scenario", "dev", "--keep"}, `--keep keeps a scale lab scenario's data`},
 		{[]string{"--scenario", "corporate", "--systems", "20", "--keep", "--ephemeral"}, "--keep and --ephemeral"},
 		{[]string{"--scenario", "nope", "--plan"}, "scale lab scenarios: corporate"},
+		{[]string{"--scenario", "dev", "--induce-unregistered"}, "--induce-unregistered is a scale lab's"},
 	} {
 		root := newRoot("test")
 		var out strings.Builder

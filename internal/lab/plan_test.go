@@ -578,6 +578,32 @@ func TestParseSiteNodeTokenHashesRefusesAMalformedPair(t *testing.T) {
 	}
 }
 
+// The induced refusal is off by default and, set, rides to the scale seed
+// (#1698): the seed is what attaches the device that answers the key no
+// catalog holds. A dev lab has no plan for it to ride, so it is refused there.
+func TestPlanScaleLabInducesAnUnregisteredKeyOnlyWhenAsked(t *testing.T) {
+	s, err := Plan(scaleOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(s.Seed.Cmd, "--induce-unregistered") {
+		t.Fatalf("the seed induces by default: %v", s.Seed.Cmd)
+	}
+	o := scaleOptions()
+	o.InduceUnregistered = true
+	if s, err = Plan(o); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(s.Seed.Cmd, "--induce-unregistered") {
+		t.Fatalf("the seed command %v does not carry the knob", s.Seed.Cmd)
+	}
+	dev := testOptions()
+	dev.InduceUnregistered = true
+	if _, err := Plan(dev); err == nil || !strings.Contains(err.Error(), "--systems") {
+		t.Fatalf("a dev lab with the knob: %v, want a refusal naming the scale lab", err)
+	}
+}
+
 // Every service carries the fleet the lab seeded (#1719): the scenario, and
 // for a scale lab its size, so a measurement of the running lab reads them
 // from the lab itself and never from a flag that could disagree with it.

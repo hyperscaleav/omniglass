@@ -39,8 +39,12 @@ type ScaleConfig struct {
 	DockerHost string
 	// ReadyTimeout bounds a bring-up (lab run's own --ready-timeout).
 	ReadyTimeout time.Duration
-	Warmup       time.Duration
-	Window       time.Duration
+	// InduceUnregistered brings the lab up with one device answering a
+	// property key no driver registers (lab run's --induce-unregistered,
+	// #1698), so the delivery table shows a refusal as property loss.
+	InduceUnregistered bool
+	Warmup             time.Duration
+	Window             time.Duration
 	// FleetReads is how many console fleet-view reads are timed, spread
 	// evenly over the window.
 	FleetReads int
@@ -118,6 +122,19 @@ func MeasureScale(ctx context.Context, cfg ScaleConfig) (rep ScaleReport, err er
 	return h.measureScale(ctx, cfg)
 }
 
+// scaleRunArgs is the `lab run` a scale bring-up execs: the scenario at its
+// size on a free port, saying how to reach it in ready, held for the process
+// pid.
+func scaleRunArgs(cfg ScaleConfig, ready string, pid int) []string {
+	args := []string{"lab", "run", "--scenario", cfg.Scenario, "--systems", strconv.Itoa(cfg.Systems),
+		"--port", "0", "--ready-file", ready, "--while-pid", strconv.Itoa(pid),
+		"--ready-timeout", cfg.ReadyTimeout.String()}
+	if cfg.InduceUnregistered {
+		args = append(args, "--induce-unregistered")
+	}
+	return args
+}
+
 // bringUpScale starts `lab run` for the scale lab, waits for its ready file,
 // and returns the function that stops it and checks nothing is left.
 func (h *harness) bringUpScale(ctx context.Context, cfg ScaleConfig) (func() error, error) {
@@ -137,9 +154,7 @@ func (h *harness) bringUpScale(ctx context.Context, cfg ScaleConfig) (func() err
 	}
 	ready := filepath.Join(dir, "lab.env")
 	h.say("bringing up the scale lab: %s at %d systems", cfg.Scenario, cfg.Systems)
-	cmd := exec.Command(cfg.Binary, "lab", "run", "--scenario", cfg.Scenario, "--systems", strconv.Itoa(cfg.Systems),
-		"--port", "0", "--ready-file", ready, "--while-pid", strconv.Itoa(os.Getpid()),
-		"--ready-timeout", cfg.ReadyTimeout.String())
+	cmd := exec.Command(cfg.Binary, scaleRunArgs(cfg, ready, os.Getpid())...)
 	cmd.Stdout, cmd.Stderr = cfg.LabLog, cfg.LabLog
 	if err := cmd.Start(); err != nil {
 		_ = os.RemoveAll(dir)

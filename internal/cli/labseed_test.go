@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/auth"
+	"github.com/hyperscaleav/omniglass/internal/devseed"
 	"github.com/hyperscaleav/omniglass/internal/lab"
 	labscenario "github.com/hyperscaleav/omniglass/internal/lab/scenario"
 	"github.com/hyperscaleav/omniglass/internal/scope"
@@ -166,12 +167,12 @@ func TestLabScaleSeedEnrollsEverySiteNode(t *testing.T) {
 		nodes = append(nodes, lab.SiteNode{Name: name, TokenHash: hex.EncodeToString(hash)})
 	}
 	if err := runLabScaleSeed(ctx, &bytes.Buffer{}, "corporate", 3, lab.LoginUser, lab.LoginPassword,
-		lab.FormatSiteNodeTokenHashes(nodes[1:]), false); err == nil || !strings.Contains(err.Error(), nodes[0].Name) {
+		lab.FormatSiteNodeTokenHashes(nodes[1:]), false, false); err == nil || !strings.Contains(err.Error(), nodes[0].Name) {
 		t.Fatalf("a missing site hash: %v, want a refusal naming %s", err, nodes[0].Name)
 	}
 
 	var out bytes.Buffer
-	if err := runLabScaleSeed(ctx, &out, "corporate", 3, lab.LoginUser, lab.LoginPassword, lab.FormatSiteNodeTokenHashes(nodes), false); err != nil {
+	if err := runLabScaleSeed(ctx, &out, "corporate", 3, lab.LoginUser, lab.LoginPassword, lab.FormatSiteNodeTokenHashes(nodes), false, false); err != nil {
 		t.Fatalf("lab seed --systems 3: %v", err)
 	}
 	if res := lab.ParseSeedResult(out.String()); !res.Node || !strings.Contains(res.Summary, "3 systems") {
@@ -229,7 +230,7 @@ func TestLabScaleSeedEnrollsEverySiteNode(t *testing.T) {
 		t.Errorf("%d addresses for %d components", len(addresses), plan.Totals.Components)
 	}
 	if err := runLabScaleSeed(ctx, &bytes.Buffer{}, "corporate", 3, lab.LoginUser, lab.LoginPassword,
-		lab.FormatSiteNodeTokenHashes(nodes), false); err == nil || !strings.Contains(err.Error(), "holds data") {
+		lab.FormatSiteNodeTokenHashes(nodes), false, false); err == nil || !strings.Contains(err.Error(), "holds data") {
 		t.Fatalf("a second seed: %v, want a refusal of a database holding data", err)
 	}
 }
@@ -263,7 +264,7 @@ func TestLabScaleSeedKeptReEnrollsWithoutReseeding(t *testing.T) {
 		return tokens, lab.FormatSiteNodeTokenHashes(nodes)
 	}
 	firstTokens, firstHashes := mint()
-	if err := runLabScaleSeed(ctx, &bytes.Buffer{}, "corporate", 3, lab.LoginUser, lab.LoginPassword, firstHashes, true); err != nil {
+	if err := runLabScaleSeed(ctx, &bytes.Buffer{}, "corporate", 3, lab.LoginUser, lab.LoginPassword, firstHashes, false, true); err != nil {
 		t.Fatalf("the first seed, kept: %v", err)
 	}
 	gw, err := storage.NewPG(ctx, dsn)
@@ -288,7 +289,7 @@ func TestLabScaleSeedKeptReEnrollsWithoutReseeding(t *testing.T) {
 
 	secondTokens, secondHashes := mint()
 	var out bytes.Buffer
-	if err := runLabScaleSeed(ctx, &out, "corporate", 3, lab.LoginUser, lab.LoginPassword, secondHashes, true); err != nil {
+	if err := runLabScaleSeed(ctx, &out, "corporate", 3, lab.LoginUser, lab.LoginPassword, secondHashes, false, true); err != nil {
 		t.Fatalf("the second seed, kept: %v", err)
 	}
 	res := lab.ParseSeedResult(out.String())
@@ -308,7 +309,7 @@ func TestLabScaleSeedKeptReEnrollsWithoutReseeding(t *testing.T) {
 		}
 	}
 
-	if err := runLabScaleSeed(ctx, &bytes.Buffer{}, "corporate", 3, lab.LoginUser, lab.LoginPassword, secondHashes, false); err == nil ||
+	if err := runLabScaleSeed(ctx, &bytes.Buffer{}, "corporate", 3, lab.LoginUser, lab.LoginPassword, secondHashes, false, false); err == nil ||
 		!strings.Contains(err.Error(), "holds data") || !strings.Contains(err.Error(), "--fresh") {
 		// The kept volumes outlive a throwaway run, so starting it again
 		// throwaway never clears them: the refusal names --fresh.
@@ -320,7 +321,7 @@ func TestLabScaleSeedKeptReEnrollsWithoutReseeding(t *testing.T) {
 		otherNodes = append(otherNodes, lab.SiteNode{Name: labscenario.SiteNode(site.Name), TokenHash: "00"})
 	}
 	if err := runLabScaleSeed(ctx, &bytes.Buffer{}, "corporate", 20, lab.LoginUser, lab.LoginPassword,
-		lab.FormatSiteNodeTokenHashes(otherNodes), true); err == nil || !strings.Contains(err.Error(), "--fresh") {
+		lab.FormatSiteNodeTokenHashes(otherNodes), false, true); err == nil || !strings.Contains(err.Error(), "--fresh") {
 		t.Fatalf("a kept seed at another size: %v, want a refusal naming --fresh", err)
 	}
 	// A first run stopped after the fleet was seeded and before its nodes
@@ -329,7 +330,7 @@ func TestLabScaleSeedKeptReEnrollsWithoutReseeding(t *testing.T) {
 	if _, err := gw.UpdateNode(ctx, "", unplaced, storage.NodePatch{LocationName: &nowhere}, all, all, all); err != nil {
 		t.Fatal(err)
 	}
-	if err := runLabScaleSeed(ctx, &bytes.Buffer{}, "corporate", 3, lab.LoginUser, lab.LoginPassword, secondHashes, true); err == nil ||
+	if err := runLabScaleSeed(ctx, &bytes.Buffer{}, "corporate", 3, lab.LoginUser, lab.LoginPassword, secondHashes, false, true); err == nil ||
 		!strings.Contains(err.Error(), "--fresh") || !strings.Contains(err.Error(), unplaced) {
 		t.Fatalf("a kept seed with %s at no site: %v, want a refusal naming the node and --fresh", unplaced, err)
 	}
@@ -353,4 +354,48 @@ func corporateScalePlan(t *testing.T, systems int) *labscenario.Plan {
 		t.Fatal(err)
 	}
 	return p
+}
+
+// A scale lab seeded with the induced refusal (#1698) says which device
+// answers the unregistered key and through which driver, and the key is gone
+// from the catalog when the seed ends; a seeded fleet's lab seed refuses the
+// knob, before it touches a database.
+func TestLabScaleSeedInducesAnUnregisteredKeyWhenAsked(t *testing.T) {
+	ctx := context.Background()
+	root := newRoot("test")
+	var refusal strings.Builder
+	root.SetOut(&refusal)
+	root.SetErr(&refusal)
+	root.SetArgs([]string{"lab", "seed", "--induce-unregistered"})
+	if err := root.Execute(); err == nil || !strings.Contains(err.Error(), "--systems") {
+		t.Fatalf("lab seed --induce-unregistered without --systems = %v, want a refusal naming --systems", err)
+	}
+
+	dsn := storagetest.NewDSN(t)
+	t.Setenv("OMNIGLASS_DSN", dsn)
+	t.Setenv("OMNIGLASS_DATA_DIR", t.TempDir())
+	var nodes []lab.SiteNode
+	for _, site := range corporateScalePlan(t, 3).Sites {
+		_, hash, _, err := auth.NewBearerToken()
+		if err != nil {
+			t.Fatal(err)
+		}
+		nodes = append(nodes, lab.SiteNode{Name: labscenario.SiteNode(site.Name), TokenHash: hex.EncodeToString(hash)})
+	}
+	var out bytes.Buffer
+	if err := runLabScaleSeed(ctx, &out, "corporate", 3, lab.LoginUser, lab.LoginPassword, lab.FormatSiteNodeTokenHashes(nodes), true, false); err != nil {
+		t.Fatalf("lab seed --systems 3 --induce-unregistered: %v", err)
+	}
+	res := lab.ParseSeedResult(out.String())
+	if !strings.Contains(res.Summary, "refused-unregistered") || !strings.Contains(res.Summary, devseed.InducedKey) {
+		t.Fatalf("seed summary %q, want the induced refusal named", res.Summary)
+	}
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gw.Close()
+	if _, err := gw.GetPropertyType(ctx, devseed.InducedKey); !errors.Is(err, storage.ErrPropertyTypeNotFound) {
+		t.Errorf("the induced key after the seed: %v, want it unregistered", err)
+	}
 }
