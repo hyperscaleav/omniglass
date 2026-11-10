@@ -553,6 +553,8 @@ exactly 0 for every kind:
 
 ```
 delivery    hop     in       out      loss     dedup  cause
+http        sim     540      540      0        -      -
+snmp        sim     310      310      0        -      -
 metric      ingest  1275     1275     0        0      -
 property    ingest  166      166      0        0      -
 event       ingest  0        0        -        0      -
@@ -563,8 +565,19 @@ end to end  metric 0  property 0  event -  log -
 - **in** is the items the node minted in the window (the batches' ledgers, plus the items of any batch
   that never landed), **out** the items accounted for (`stored`; for properties `coalesced`, an
   unchanged value skipped on purpose; and `unbound`, an identity no binding places, which the
-  conduit's unbound inbox holds for the operator to assign). A kind with nothing in reads `-`, never 0. Only the ingest hop
-  is read today; the node, schedule and sim hops follow.
+  conduit's unbound inbox holds for the operator to assign). A kind with nothing in reads `-`, never 0. The node and
+  schedule hops follow (#1692, #1693).
+- **sim** rows come first, one per protocol the nodes tally (`http`, `snmp`), read from the same
+  marks as the endpoints block. They count **requests**, not items, since a simulator cannot know which
+  kinds an answer would have carried: **in** is every request the simulators settled on traffic the
+  nodes tally, **out** the replies that reached the node (`returned`). A refusal or error that came
+  back is returned: the device said no and the task reports it. The rest is loss, by cause:
+  `withheld` (the simulator kept the answer back, a wrong community or its own datagram loss),
+  `dropped` (it could not write the reply), or `not-returned` (the reply left the simulator and never
+  reached the node, lost on the way or late past the node's timeout). A reply still in flight at the
+  node when the mark reads is not lost, and a node that restarted in the window reads no sim row.
+  Dedup reads `-`: a request is never redelivered. The JSON carries each sim row's `protocol` in place
+  of a `kind`, with these four outcomes.
 - **dedup** is the items a redelivery carried again, which the receipt absorbed. It sits beside the
   ratio, never in it, so a retry storm never moves the loss off 0.
 - **cause** is the largest outcome behind a loss: a `refused-<why>` (a key not registered, a writer or
@@ -576,7 +589,9 @@ end to end  metric 0  property 0  event -  log -
 - **missing** is a batch that never landed: a hole in a node boot's batch sequence, its items read
   from its neighbors' offsets. At this stage it cannot say why; the footer reads `never landed:
   Termed at ingest, dropped at the node, or lost in between`.
-- **end to end** is each kind's loss over every hop it crosses, `1 - prod(1 - loss)`; with one hop it
+- **end to end** is each kind's loss over every hop it crosses, `1 - prod(1 - loss)`. The sim hop
+  enters as one loss pooled over every protocol's requests, composed into each kind with an ingest
+  row: an approximation, since a lost request carried some kinds and not others. With no sim rows it
   equals the ingest row.
 - **unsettled** names a node boot whose window's batches were not all known when `--settle-timeout`
   ran out (no later batch said the spool had cleared past them, or the stream still held batches),
@@ -592,7 +607,8 @@ Two limitations, both closed by the node hop (#1692):
 
 The same 23-hour window limit applies, since receipts are kept a day. A lab
 whose server predates the ledger reads `delivery not measured` with the reason, and every other figure
-is still reported.
+is still reported. When the sim rows were read but the ingest hop was not, the table keeps the sim
+rows and ends with `ingest not measured` and the reason.
 
 The window and the warm-up are printed above the table, and belong beside any figure you quote from it.
 
