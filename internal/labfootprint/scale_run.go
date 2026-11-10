@@ -75,6 +75,9 @@ type scaleLab struct {
 	nodes map[string]string
 	// image is the server's image, for its build label.
 	image string
+	// labels are the server container's labels, which name the fleet the
+	// lab seeded (lab.FleetOf).
+	labels map[string]string
 }
 
 // containers is every container the window reads, by the name the table
@@ -178,7 +181,7 @@ func (h *harness) discoverScale(ctx context.Context) (scaleLab, error) {
 		}
 		switch svc {
 		case "server":
-			l.server, l.image = c.ID, c.Image
+			l.server, l.image, l.labels = c.ID, c.Image, c.Labels
 		case "db":
 			l.db = c.ID
 		default:
@@ -293,6 +296,10 @@ func (h *harness) prepareScale(ctx context.Context, cfg ScaleConfig) (scaleSessi
 	if err != nil {
 		return scaleSession{}, err
 	}
+	run, err := scaleRunOf(l.labels, cfg, len(l.nodes))
+	if err != nil {
+		return scaleSession{}, err
+	}
 	h.env = map[string]string{"LAB_DB": l.db, "LAB_SERVER": l.server}
 	base, err := h.hostURL(ctx, l.server)
 	if err != nil {
@@ -311,10 +318,6 @@ func (h *harness) prepareScale(ctx context.Context, cfg ScaleConfig) (scaleSessi
 		return scaleSession{}, errors.New("the lab's Postgres does not record commit timestamps, which the ingest lag reads: stop this lab and bring it up again with this build's `lab run`")
 	}
 
-	run := ScaleRun{Scenario: cfg.Scenario, Warmup: cfg.Warmup, Window: cfg.Window, Sites: len(l.nodes)}
-	if run.Scenario == "" {
-		run.Scenario = lab.DefaultScenario
-	}
 	if img, err := h.dc.ImageInspect(ctx, l.image); err == nil && img.Config != nil {
 		run.Build = img.Config.Labels[lab.VersionLabel]
 	}
@@ -323,7 +326,11 @@ func (h *harness) prepareScale(ctx context.Context, cfg ScaleConfig) (scaleSessi
 		return scaleSession{}, fmt.Errorf("read the fleet's size: %w", err)
 	}
 	if f := strings.Split(strings.TrimSpace(fleet), "|"); len(f) == 3 {
-		run.Systems, _ = strconv.Atoi(f[0])
+		// The size is the one the lab was resolved at; a database holding
+		// another count was changed after the seed, which the run names.
+		if seeded, _ := strconv.Atoi(f[0]); seeded != run.Systems {
+			h.say("note: the lab was brought up at %d systems and its database now holds %d", run.Systems, seeded)
+		}
 		run.Components, _ = strconv.Atoi(f[1])
 		run.Tasks, _ = strconv.Atoi(f[2])
 	}
@@ -343,6 +350,21 @@ func (h *harness) prepareScale(ctx context.Context, cfg ScaleConfig) (scaleSessi
 	h.say("ready: %d systems, %d components, %d enabled tasks, %d node containers; warming up for %s",
 		run.Systems, run.Components, run.Tasks, len(l.nodes), cfg.Warmup)
 	return s, nil
+}
+
+// scaleRunOf is the run's conditions: the fleet as the lab's server
+// container is labelled with it (#1719), never as cfg's --scenario and
+// --systems, which only size a lab the run brings up; the windows as cfg
+// gives them; and the sites as the lab's node containers count them.
+func scaleRunOf(serverLabels map[string]string, cfg ScaleConfig, sites int) (ScaleRun, error) {
+	fleet, err := lab.FleetOf(serverLabels)
+	if err != nil {
+		return ScaleRun{}, err
+	}
+	if fleet.Systems == 0 {
+		return ScaleRun{}, fmt.Errorf("the lab runs the %s scenario, which has no size: measure a scale lab (`omniglass lab run --scenario corporate --systems N`)", fleet.Scenario)
+	}
+	return ScaleRun{Scenario: fleet.Scenario, Systems: fleet.Systems, Warmup: cfg.Warmup, Window: cfg.Window, Sites: sites}, nil
 }
 
 // measureWindow measures one window into run: the readings at its ends, the

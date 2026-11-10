@@ -179,7 +179,7 @@ the same for one group and for fifty. Before the transaction, the identity bindi
 in the tick resolve in one read, however many conduits its groups name. A refused group costs its siblings nothing
 ([ADR-0311](/architecture/decisions/#adr-0311-a-telemetry-batch-lands-once-in-one-transaction-under-its-receipt)).
 
-| At 1,000 systems, the busiest node (18 nodes, about 3,000 tasks) | Before | After (target) |
+| Corporate at 1,000 systems, the busiest node (18 nodes, about 3,000 tasks) | Before | After (target) |
 | --- | --- | --- |
 | Samples per batch | about 1 | 40 or more |
 | Statements per sample | about 18 | about 0.5 |
@@ -192,7 +192,11 @@ prints the measured figures (batches landed, samples per batch, batches a second
 bytes a sample, the ingest lag at p50, p95 and p99, consumer redeliveries, and the ingest consumer
 lane's busy fraction and service time a batch) for a scale lab
 ([the lab guide](/guides/lab/#measuring-a-scale-lab)); the measured run replaces this column's targets
-when the slice's pull request records it. The lane's busy fraction is the figure that says whether the
+when the slice's pull request records it. A figure here is always quoted with the scenario and size it
+was read at, and compares only with the same scenario at the same size: every lab level that measures runs
+the `corporate` scenario on the ladder of 20 (the smoke run), 300, 1,000 and 3,000 systems, and the dev
+fleet is the showcase, never a measurement basis
+([which fleet each level measures](/guides/lab/#which-fleet-each-level-measures), #1719). The lane's busy fraction is the figure that says whether the
 single consumer is the ceiling: the stream is a work queue with one message in flight, so the handler's
 share of the wall clock is the lane's utilisation, and a lag that sits at the node's one-second spool
 flush while the lane is mostly idle is not a consumer bottleneck
@@ -207,7 +211,7 @@ above 0 instead of a win, and the perf gate will fail such a run (#1695). The ac
 rather than on new rows, and its cost shows in the receipts' own figure: on a three-system corporate
 lab the receipt grew from about 290 to about 675 bytes a batch (receipts a day 56 to 129 MiB at about
 2.3 batches a second, WAL a sample 400 to 474 B), part of it the dead tuple the outcome update leaves
-until vacuum. At the 18 batches a second the table above expects of 1,000 systems, that is about
+until vacuum. At the 18 batches a second the table above expects of corporate at 1,000 systems, that is about
 1 GiB a day where the narrow receipt read about 0.4: past the 0.5 GiB target, which predates the
 ledger. Receipts are pruned at a day, so this is the table's standing size, not unbounded growth;
 narrowing the receipt or revising the target is

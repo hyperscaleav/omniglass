@@ -286,7 +286,7 @@ anything itself, so it always runs the code you built. A release binary runs
 
 ## Scale lab scenarios
 
-The dev fleet is one fixed size. The [scale lab](https://github.com/hyperscaleav/omniglass/issues/1357) asks how the platform behaves at 100, 1,000
+The dev fleet is one fixed size. The [scale lab](https://github.com/hyperscaleav/omniglass/issues/1357) asks how the platform behaves at 300, 1,000
 and 3,000 systems, so it describes an environment once and sizes it with a knob: a **scenario
 manifest** names its kinds of site (one headquarters and the offices repeated around it), the
 buildings each kind's rooms sit in, the standards placed at each kind as ratios, and the product
@@ -303,7 +303,7 @@ own loopback address, so a site looks like many devices rather than many ports o
 lab is up once every site's node is collecting from every component (the planted faults aside).
 
 ```sh
-omniglass lab run --scenario corporate --systems 100
+omniglass lab run --scenario corporate --systems 300
 ```
 
 A scale lab is its own Docker project, `omniglass-scale`, so it runs beside your learning lab, and
@@ -312,6 +312,35 @@ print what a size would build without starting anything: three tables (each arch
 floors per site, systems of each standard and totals; each site's systems and components; the
 components of each product) and the [preflight](#how-big-a-lab-your-machine-can-run). Without
 `--systems`, a scenario asks for a size (one system per site at the fewest sites, up to 10,000).
+
+### Which fleet each level measures
+
+A figure from one lab level compares with a figure from the next only when both read the same fleet
+shape, so **every lab level that measures runs the `corporate` scenario at a stated size**, and a size's
+figures are compared only with the same size
+([ADR-1719](/architecture/decisions/#adr-1719-every-measuring-lab-runs-the-corporate-fleet-at-a-stated-size)). The `dev` fleet is the showcase:
+the `make lab` default, the docs screenshots, the demos and the console end-to-end tests. It carries
+broken devices and unassigned identities on purpose, so its rows, its cost and its loss share no shape
+with a corporate fleet, and it is never a measurement basis.
+
+| level | scenario and size | what it is for |
+|---|---|---|
+| `make test-lab` (the footprint and scale measure integration tests) | corporate, 20 systems | smoke: proves every figure is read, never what it is |
+| `make lab-footprint` | corporate, 20 systems | the per-container footprint on a developer machine |
+| `make scale-lab`, `make scale-measure` | corporate, 300 systems by default | the ladder's first level; any size for an ad hoc run |
+| the ladder | corporate, 300, 1,000 and 3,000 systems | the three scale levels the platform is sized against |
+| the perf gate ([#1640](https://github.com/hyperscaleav/omniglass/issues/1640), not built yet) | corporate, at its baseline's size on the ladder | will refuse a run of another scenario or size as invalid |
+| the soak ([#1633](https://github.com/hyperscaleav/omniglass/issues/1633), not built yet) | corporate, 3,000 systems | the goal size, held for hours |
+
+20 is the smallest round size past the last one that drops a product the corporate manifest names:
+16 and 17 drop the headquarters' divisible conference room and its three products, and every size from
+18 up, through each rung of the ladder, seeds them all. A unit test
+(`TestCorporateSmokeSizeSeedsEveryProduct`) pins it, so a manifest edit that breaks the coverage fails
+there rather than in a lab.
+
+A scale lab stamps its scenario and size on its containers as labels (`omniglass.lab.scenario`,
+`omniglass.lab.systems`), and every measure reads them from the lab rather than from its own flags, so
+a report always names the fleet it read.
 
 ### How big a lab your machine can run
 
@@ -354,7 +383,7 @@ the seed included. Past it the lab removes everything it started and names what 
 site whose simulator never connected, and each site's components not up yet, by name and loopback
 address.
 
-`make scale-lab` (with `SYSTEMS=100` and `SCENARIO=corporate` by default) runs the check the scale
+`make scale-lab` (with `SYSTEMS=300` and `SCENARIO=corporate` by default) runs the check the scale
 lab is proven by: it brings a size up through `bin/omniglass lab run`, asserts one node container per
 site and every component at its own loopback address, prints the containers' memory and CPU, and
 stops the lab, asserting it left no container or network. It builds the image and stands up real
@@ -378,8 +407,8 @@ state, from a running scale lab. It is diagnostic and never a gate (ADR-0094): o
 figures move with the neighbours, so compare runs from one machine. It is outside `make test` and CI.
 
 ```bash
-make scale-measure SYSTEMS=100                                    # brings a lab up, measures it, removes it
-./bin/omniglass lab measure --systems 100 --warmup 2m --window 3m # the same, with the window chosen
+make scale-measure SYSTEMS=300                                    # brings a lab up, measures it, removes it
+./bin/omniglass lab measure --systems 300 --warmup 2m --window 3m # the same, with the window chosen
 ./bin/omniglass lab measure                                       # measures the scale lab already running
 ```
 
@@ -388,7 +417,9 @@ With `--systems` it brings up a throwaway scale lab, waits for it to be ready, l
 lab and checks nothing is left. Without it, it measures the scale lab you started with
 `omniglass lab run --scenario corporate --systems N`; that lab must be one this build started, because
 the ingest lag reads the commit times Postgres records only when the lab asks it to
-(`track_commit_timestamp`), and a lab started before that says so and stops. It writes the same figures
+(`track_commit_timestamp`), and a lab started before that says so and stops. The report's first line
+names the scenario and size, read from the lab's labels, so a measure of the running lab never echoes a
+flag; a lab without them, or a `dev` lab (which has no size), says so and stops. It writes the same figures
 as JSON (`--json`, `lab-measure.json` by default, empty for none), so two runs diff.
 
 Every flag, its default and its meaning is in the generated
