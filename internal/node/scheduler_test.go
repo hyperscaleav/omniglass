@@ -11,6 +11,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
+	"github.com/hyperscaleav/omniglass/internal/delivery"
 )
 
 // everyPoll is a driver poll of endpoint on a declared interval.
@@ -386,5 +387,74 @@ func TestTheWindowReportsBusyWorkersAndQueuedDispatches(t *testing.T) {
 	w := h.d.takeWindow()
 	if w.busyMax != 4 || w.queueMax != 6 {
 		t.Fatalf("worker-busy-count %d, dispatch-queue-depth %d, want 4 and 6", w.busyMax, w.queueMax)
+	}
+}
+
+// #1693: a run's telemetry kinds are what its spec can produce: a
+// reachability probe's metrics and its verdict property, a poll's the lanes
+// its emits declare, each once, in the order the loss table prints them.
+func TestATaskRunProducesTheKindsItsSpecDeclares(t *testing.T) {
+	t.Parallel()
+	probe := collection.TaskSpec{ID: "probe-1", Mode: "poll", Transport: "tcp", EndpointID: "ep-1", Spec: json.RawMessage(`{}`)}
+	if got := taskKinds(probe); !slices.Equal(got, []delivery.Kind{delivery.Metric, delivery.Property}) {
+		t.Errorf("a probe produces %v, want metric and property", got)
+	}
+	if got := taskKinds(everyPoll("p-1", "ep-1", "10s")); !slices.Equal(got, []delivery.Kind{delivery.Property}) {
+		t.Errorf("a property poll produces %v, want property", got)
+	}
+	mixed := everyPoll("p-2", "ep-1", "10s")
+	mixed.Spec = json.RawMessage(`{"driver": "edge", "function": "mixed", "emits": [
+		{"name": "a", "lane": "log"}, {"name": "b", "lane": "metric"}, {"name": "c", "lane": "metric"}, {"name": "d", "lane": "property"}]}`)
+	if got := taskKinds(mixed); !slices.Equal(got, []delivery.Kind{delivery.Metric, delivery.Property, delivery.Log}) {
+		t.Errorf("a mixed poll produces %v, want metric, property, log", got)
+	}
+	broken := everyPoll("p-3", "ep-1", "10s")
+	broken.Spec = json.RawMessage(`{"driver": "edge", "nonsense": true}`)
+	if got := taskKinds(broken); len(got) != 0 {
+		t.Errorf("a spec the node cannot read produces %v, want none (its run produces nothing)", got)
+	}
+}
+
+// #1693: the schedule hop is the dispatcher's own account of its dues: every
+// due on the schedule goes in, every run made comes out, and a due met by the
+// run before still in flight is lost, counted once for each kind the task's
+// run produces. A kind no task produces reads nothing in.
+func TestTheScheduleHopCountsRunsDueAgainstRunsMadePerKind(t *testing.T) {
+	t.Parallel()
+	task := everyPoll("p-slow", "ep-1", "10s")
+	start := aligned(schedT0, task.ID, 10*time.Second)
+	h := newSchedHarness(t, start, 4, 30*time.Second)
+	release := h.block()
+	h.d.sync(wl(task), start)
+	h.d.pass(t.Context(), start)
+	h.awaitStarts(1)
+	h.set(start.Add(10 * time.Second))
+	h.d.pass(t.Context(), start.Add(10*time.Second)) // still in flight: skipped
+	h.set(start.Add(15 * time.Second))
+	release()
+	h.d.settle()
+	h.runUntil(start.Add(20 * time.Second))
+
+	got := map[string]float64{}
+	for _, r := range h.d.takeWindow().schedule.HopReadings(delivery.Schedule) {
+		got[r.Key+" "+r.Instance] = r.Value
+	}
+	want := map[string]float64{
+		"delivery-in-count schedule/property":  3, // due at 0s, 10s, 20s
+		"delivery-out-count schedule/property": 2, // made at 0s and 20s
+		"delivery-in-count schedule/metric":    0, // the poll produces no metric
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("%s = %v, want %v", k, got[k], v)
+		}
+	}
+	if l := got["delivery-loss-ratio schedule/property"]; l < 0.333 || l > 0.334 {
+		t.Errorf("schedule property loss = %v, want 1/3", l)
+	}
+	for _, r := range h.d.takeWindow().schedule.HopReadings(delivery.Schedule) {
+		if r.Value != 0 {
+			t.Errorf("the next window kept the last one's dues: %s %s = %v", r.Key, r.Instance, r.Value)
+		}
 	}
 }

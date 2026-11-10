@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"testing"
@@ -28,6 +29,21 @@ func TestLabRunScriptFlagsAreHidden(t *testing.T) {
 	}
 	if strings.Contains(cmd.UsageString(), "ready-file") {
 		t.Error("the usage names --ready-file")
+	}
+	// A scale lab's proving knobs are for the integration tests, not a
+	// learner's help, and the induced refusal is off unless asked (#1698).
+	for _, name := range []string{"host-memory", "ready-timeout", "induce-unregistered"} {
+		f := cmd.Flags().Lookup(name)
+		if f == nil {
+			t.Errorf("lab run has no --%s", name)
+			continue
+		}
+		if !f.Hidden {
+			t.Errorf("--%s shows in a learner's help", name)
+		}
+	}
+	if f := cmd.Flags().Lookup("induce-unregistered"); f != nil && f.DefValue != "false" {
+		t.Errorf("--induce-unregistered defaults to %s, want off", f.DefValue)
 	}
 }
 
@@ -138,7 +154,10 @@ func TestLabRunScenarioRefusals(t *testing.T) {
 		{[]string{"--scenario", "corporate", "--systems", "-3", "--plan"}, "out of range"},
 		{[]string{"--scenario", "corporate", "--systems", "2", "--plan"}, "ask for 3 to 10000"},
 		{[]string{"--scenario", "dev", "--systems", "100"}, `"dev" is a seeded fleet`},
+		{[]string{"--scenario", "dev", "--keep"}, `--keep keeps a scale lab scenario's data`},
+		{[]string{"--scenario", "corporate", "--systems", "20", "--keep", "--ephemeral"}, "--keep and --ephemeral"},
 		{[]string{"--scenario", "nope", "--plan"}, "scale lab scenarios: corporate"},
+		{[]string{"--scenario", "dev", "--induce-unregistered"}, "--induce-unregistered is a scale lab's"},
 	} {
 		root := newRoot("test")
 		var out strings.Builder
@@ -213,5 +232,37 @@ func TestLabRunScenarioPlanPreflight(t *testing.T) {
 	}
 	if out := plan(t, largest+1, "4g", host); !strings.Contains(out, "Decision: refused.") {
 		t.Errorf("--systems %d, one past the named size, fits:\n%s", largest+1, out)
+	}
+}
+
+// --keep (#1633) makes a scale lab one that keeps its data: the run is not
+// throwaway, and --fresh, which the scale path used to drop, reaches the run.
+// Without --keep a scale lab stays throwaway. The run is captured, so no
+// Docker is needed.
+func TestLabRunScaleKeepReachesTheRunConfig(t *testing.T) {
+	for _, tc := range []struct {
+		keep, fresh   bool
+		wantEphemeral bool
+	}{
+		{keep: false, fresh: false, wantEphemeral: true},
+		{keep: true, fresh: true, wantEphemeral: false},
+		{keep: true, fresh: false, wantEphemeral: false},
+	} {
+		var got lab.Config
+		var out strings.Builder
+		err := runLab(context.Background(), &out, "test", labFlags{scenario: "corporate", systems: 20, keep: tc.keep, fresh: tc.fresh,
+			project: lab.DefaultProject, listen: lab.DefaultListen, port: lab.DefaultPort,
+			start: func(_ context.Context, _ io.Writer, cfg lab.Config) error { got = cfg; return nil }})
+		if err != nil {
+			t.Fatalf("keep %v fresh %v: %v", tc.keep, tc.fresh, err)
+		}
+		if got.Ephemeral != tc.wantEphemeral || got.Fresh != tc.fresh {
+			t.Errorf("keep %v fresh %v: run config Ephemeral %v Fresh %v, want Ephemeral %v Fresh %v",
+				tc.keep, tc.fresh, got.Ephemeral, got.Fresh, tc.wantEphemeral, tc.fresh)
+		}
+		if got.Project != lab.ScaleProject || got.ScaleRun == nil || len(got.SiteNodes) == 0 {
+			t.Errorf("keep %v: project %q, scale run %v, %d site nodes; want the scale lab's own project and its nodes",
+				tc.keep, got.Project, got.ScaleRun != nil, len(got.SiteNodes))
+		}
 	}
 }

@@ -14,18 +14,22 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/writerclass"
 )
 
-// The delivery read (#1641): every telemetry kind's loss across the ingest
-// hop over the measured window, reconciled from the ledger each batch's
-// receipt carries. A healthy lab reads exactly 0 for every kind.
+// The delivery read (#1641): every telemetry kind's loss across the node hop
+// (#1692) and the ingest hop over the measured window, reconciled from the
+// ledger each batch's receipt carries. A healthy lab reads exactly 0 for
+// every kind on every hop.
 
 // MaxDeliveryWindow is the longest window the read reconciles: receipts are
 // pruned at a day, and a window near that would read pruned batches as
 // missing.
 const MaxDeliveryWindow = 23 * time.Hour
 
-// missingLabel is what a missing item is, at this stage: the ingest cannot
-// yet tell these apart (see the lab guide).
-const missingLabel = "never landed: Termed at ingest, dropped at the node, or lost in between"
+// missingLabel is what a missing item is: a batch the server Terms whole
+// reads under its own cause (#1691) and what the node dropped is the node
+// row's, under its cause, so what is left is an item the node shipped that
+// never decoded at ingest or was lost between the stream and the store,
+// which the read cannot yet tell apart (see the lab guide).
+const missingLabel = "shipped by the node, never landed: undecodable at ingest, or lost between the stream and the store"
 
 // DeliveryRead is what the run read for the delivery table: the window, the
 // receipts of every boot with a batch minted in it, and whether the
@@ -40,6 +44,8 @@ type DeliveryRead struct {
 	// unacked batch when the settle ended; Backlog is what it last read.
 	StreamClear bool
 	Backlog     Backlog
+	// Schedule is the schedule hop's runs due and made per kind (#1693).
+	Schedule []ScheduleCount
 }
 
 // DeliveryRow is one kind across one hop: the same keys for every kind and
@@ -67,42 +73,74 @@ type UnsettledBoot struct {
 	Boot string `json:"boot"`
 }
 
+// EndedBoot is a boot that cannot settle because its node started again
+// (#1692): it is read up to Last, its highest seq that landed, and whatever
+// it minted after that went with the process, never shipped and uncounted
+// (#1733 counts it). Next is the boot that followed and NextMinted its first
+// landed batch.
+type EndedBoot struct {
+	Node       string    `json:"node"`
+	Boot       string    `json:"boot"`
+	Last       uint64    `json:"last_seq"`
+	Next       string    `json:"next_boot"`
+	NextMinted time.Time `json:"next_minted"`
+}
+
 // DeliveryOf reconciles the read into one row per kind the window's batches
-// carried across the ingest hop, in kind order, over the settled boots only.
-// A boot still unsettled is named instead of read; while the stream still
-// held batches, every boot is.
-func DeliveryOf(d DeliveryRead) ([]DeliveryRow, []UnsettledBoot) {
+// carried across each hop, the node's then the ingest's, in kind order, over
+// the settled boots only. A boot still unsettled is named instead of read;
+// while the stream still held batches, every boot is. With the stream clear,
+// an unsettled boot its node followed with another boot is ended: it will
+// never settle, so it is read as far as it landed and named as ended.
+func DeliveryOf(d DeliveryRead) ([]DeliveryRow, []UnsettledBoot, []EndedBoot) {
 	unsettled := delivery.Unsettled(d.Window, d.Receipts)
+	var ended map[delivery.Boot]delivery.Ended
 	if !d.StreamClear {
 		unsettled = inWindowBoots(d.Window, d.Receipts)
+	} else {
+		ended = delivery.EndedOf(unsettled, d.Receipts)
 	}
 	skip := map[delivery.Boot]bool{}
 	var named []UnsettledBoot
+	var gone []EndedBoot
 	for _, b := range unsettled {
+		if e, ok := ended[b]; ok {
+			gone = append(gone, EndedBoot{Node: b.Node, Boot: b.Boot, Last: e.Last, Next: e.Next, NextMinted: e.NextMinted})
+			continue
+		}
 		skip[b] = true
 		named = append(named, UnsettledBoot{Node: b.Node, Boot: b.Boot})
 	}
 	settled := slices.DeleteFunc(slices.Clone(d.Receipts), func(r delivery.Receipt) bool {
 		return skip[delivery.Boot{Node: r.Node, Boot: r.Boot}]
 	})
-	totals := delivery.Reconcile(d.Window, settled)
+	byHop := map[delivery.Hop]map[delivery.Kind]delivery.Total{
+		delivery.Node:   delivery.ReconcileNode(d.Window, settled),
+		delivery.Ingest: delivery.Reconcile(d.Window, settled),
+	}
 	var rows []DeliveryRow
 	for _, k := range delivery.Kinds {
-		t, ok := totals[k]
-		if !ok {
-			continue
+		for _, h := range []delivery.Hop{delivery.Node, delivery.Ingest} {
+			if t, ok := byHop[h][k]; ok {
+				rows = append(rows, rowOf(h, k, t))
+			}
 		}
-		row := DeliveryRow{Hop: delivery.Ingest, Kind: k, In: t.In, Out: t.Out, Deduplicated: t.Deduplicated,
-			Outcomes: map[delivery.Outcome]uint64{}, Cause: t.Cause()}
-		for _, o := range delivery.Outcomes {
-			row.Outcomes[o] = t.Outcomes[o]
-		}
-		if l, ok := t.Loss(); ok {
-			row.Loss = &l
-		}
-		rows = append(rows, row)
 	}
-	return rows, named
+	return rows, named, gone
+}
+
+// rowOf is one kind's total across one hop as a row: every outcome the hop
+// has, counted.
+func rowOf(h delivery.Hop, k delivery.Kind, t delivery.Total) DeliveryRow {
+	row := DeliveryRow{Hop: h, Kind: k, In: t.In, Out: t.Out, Deduplicated: t.Deduplicated,
+		Outcomes: map[delivery.Outcome]uint64{}, Cause: t.Cause()}
+	for _, o := range delivery.OutcomesOf(h) {
+		row.Outcomes[o] = t.Outcomes[o]
+	}
+	if l, ok := t.Loss(); ok {
+		row.Loss = &l
+	}
+	return row
 }
 
 // SimDeliveryOf is the sim hop (#1694): one row per protocol the nodes
@@ -140,25 +178,28 @@ func inWindowBoots(w delivery.Window, receipts []delivery.Receipt) []delivery.Bo
 }
 
 // EndToEndOf is each kind's loss over every hop it crosses, 1 - prod(1 -
-// loss), for the kinds with a ratio on every row. The sim hop's rows are per
-// protocol, not per kind, so they compose as one: the requests every
-// protocol lost over the requests every protocol settled, read into every
-// kind with a row of its own. That is a lost reply losing every item it
-// would have carried, in proportion to the requests (ADR-1694).
+// loss), for the kinds with a settled ingest row (the last hop; without it
+// the kind's delivery is not known) and a ratio on some hop. A hop with
+// nothing in has no ratio and loses nothing, so it composes as 0: a schedule
+// that skipped every due leaves the ingest nothing to carry, and the kind
+// reads the schedule's whole loss. The sim hop's rows are per protocol, not
+// per kind, so they compose as one: the requests every protocol lost over the
+// requests every protocol settled, read into every kind with a ratio of its
+// own. That is a lost reply losing every item it would have carried, in
+// proportion to the requests (ADR-1694).
 func EndToEndOf(rows []DeliveryRow) map[delivery.Kind]float64 {
 	hops := map[delivery.Kind][]float64{}
-	absent := map[delivery.Kind]bool{}
+	ingested := map[delivery.Kind]bool{}
 	var simIn, simOut uint64
 	for _, r := range rows {
 		if r.Hop == delivery.Sim {
 			simIn, simOut = simIn+r.In, simOut+r.Out
 			continue
 		}
-		if r.Loss == nil {
-			absent[r.Kind] = true
-			continue
+		ingested[r.Kind] = ingested[r.Kind] || r.Hop == delivery.Ingest
+		if r.Loss != nil {
+			hops[r.Kind] = append(hops[r.Kind], *r.Loss)
 		}
-		hops[r.Kind] = append(hops[r.Kind], *r.Loss)
 	}
 	if sim, ok := delivery.Loss(simIn, simOut); ok {
 		for k := range hops {
@@ -167,7 +208,7 @@ func EndToEndOf(rows []DeliveryRow) map[delivery.Kind]float64 {
 	}
 	out := map[delivery.Kind]float64{}
 	for k, ls := range hops {
-		if !absent[k] {
+		if ingested[k] {
 			out[k] = delivery.EndToEnd(ls...)
 		}
 	}
@@ -182,19 +223,27 @@ func EndToEndOf(rows []DeliveryRow) map[delivery.Kind]float64 {
 // in the window on (its batches after the window say whether it has
 // settled), and the lower neighbor of that first batch, the boot's highest
 // seq below it, which owns the gap below it however long before the window
-// it was minted.
+// it was minted. Beside them, the first landed receipt of every other boot
+// of the same nodes minted after from, which says whether a boot that never
+// settled was ended by its node starting again (#1692).
 func ReceiptsQuery(from, to time.Time) string {
 	return fmt.Sprintf(`select row_to_json(r) from (
 		with first_in as (
-			select boot, min(seq) as seq from telemetry_receipt
+			select node, boot, min(seq) as seq from telemetry_receipt
 			where ledger is not null and minted > to_timestamp(%[1]s) and minted <= to_timestamp(%[2]s)
-			group by boot)
-		select t.node, t.boot, t.seq, t.minted, t.resolved, t.deliveries, t.ledger, t.outcome
+			group by node, boot)
+		select t.node, t.boot, t.seq, t.minted, t.resolved, t.deliveries, t.ledger, t.outcome, t.node_loss
 		from telemetry_receipt t join first_in f on f.boot = t.boot
 		where t.ledger is not null and (t.seq >= f.seq or t.seq = (
 			select max(l.seq) from telemetry_receipt l
 			where l.boot = f.boot and l.ledger is not null and l.seq < f.seq))
-		order by t.node, t.boot, t.seq) r`,
+		union all
+		select t.node, t.boot, t.seq, t.minted, t.resolved, t.deliveries, t.ledger, t.outcome, t.node_loss
+		from telemetry_receipt t
+		where t.ledger is not null and t.minted > to_timestamp(%[1]s)
+			and t.node in (select node from first_in) and t.boot not in (select boot from first_in)
+			and t.seq = (select min(n.seq) from telemetry_receipt n where n.boot = t.boot and n.ledger is not null)
+		order by node, boot, seq) r`,
 		epoch(from), epoch(to))
 }
 
@@ -216,12 +265,13 @@ func ParseReceipts(out string) ([]delivery.Receipt, error) {
 			Deliveries int               `json:"deliveries"`
 			Ledger     delivery.Declared `json:"ledger"`
 			Outcome    delivery.Tally    `json:"outcome"`
+			NodeLoss   delivery.NodeLoss `json:"node_loss"`
 		}
 		if err := json.Unmarshal([]byte(line), &row); err != nil {
 			return nil, fmt.Errorf("read a receipt %q: %w", line, err)
 		}
 		r := delivery.Receipt{Boot: row.Boot, Seq: row.Seq, Minted: row.Minted.UTC(), Resolved: row.Resolved,
-			Deliveries: row.Deliveries, Declared: row.Ledger, Outcome: row.Outcome}
+			Deliveries: row.Deliveries, Declared: row.Ledger, Outcome: row.Outcome, Loss: row.NodeLoss}
 		if row.Node != nil {
 			r.Node = *row.Node
 		}
@@ -285,8 +335,14 @@ func (r ScaleReport) deliveryTable(b *strings.Builder) {
 		r.simGap(b)
 		return
 	}
+	// The hop column fits its longest name with two spaces after it, eight
+	// wide at least.
+	hop := 8
+	for _, d := range r.Delivery {
+		hop = max(hop, len(d.Hop)+2)
+	}
 	row := func(cells ...string) {
-		fmt.Fprintf(b, "%-12s%-8s%-9s%-9s%-9s%-7s%s\n", cells[0], cells[1], cells[2], cells[3], cells[4], cells[5], cells[6])
+		fmt.Fprintf(b, "%-12s%-*s%-9s%-9s%-9s%-7s%s\n", cells[0], hop, cells[1], cells[2], cells[3], cells[4], cells[5], cells[6])
 	}
 	row("delivery", "hop", "in", "out", "loss", "dedup", "cause")
 	missing := false
@@ -323,6 +379,10 @@ func (r ScaleReport) deliveryTable(b *strings.Builder) {
 	r.simGap(b)
 	for _, u := range r.DeliveryUnsettled {
 		fmt.Fprintf(b, "%-12snode %s, boot %s: no ratio\n", "unsettled", u.Node, u.Boot)
+	}
+	for _, e := range r.DeliveryEnded {
+		fmt.Fprintf(b, "%-12snode %s, boot %s: last seq %d landed, boot %s began %s; anything after %d never shipped, uncounted\n",
+			"unshipped", e.Node, e.Boot, e.Last, e.Next, e.NextMinted.UTC().Format(time.RFC3339), e.Last)
 	}
 	if missing {
 		b.WriteString("missing: " + missingLabel + "\n")

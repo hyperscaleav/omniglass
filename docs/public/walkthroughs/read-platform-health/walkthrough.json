@@ -1,7 +1,7 @@
 {
   "id": "read-platform-health",
   "title": "Read the platform's health",
-  "description": "From Home, open Platform health, read the build, fold the server's panels to read the nodes, open them on the Requests panel, then follow the slowest route's figure onto its series on the server's platform component.",
+  "description": "From Home, open Platform health, read the build, open a hop under where work is lost, fold the server's panels to read the nodes and the simulator's gaps, open them on the Requests panel, then follow the slowest route's figure onto its series on the server's platform component.",
   "steps": [
     {
       "n": 1,
@@ -23,52 +23,76 @@
     },
     {
       "n": 4,
-      "kind": "click",
-      "caption": "Each server's panels fold to its name and verdict. Close them to reach the node table under them.",
+      "kind": "wait",
+      "caption": "Where work is lost follows a sample from its run to the store, hop by hop. Each hop reads a loss ratio, the share it took in and did not hand on. 0% is healthy.",
       "still": "step-04.png"
     },
     {
       "n": 5,
-      "kind": "wait",
-      "caption": "One row per node. A figure the node never reported reads not reported, never 0.",
+      "kind": "click",
+      "caption": "Open the node hop to read what counts as lost there.",
       "still": "step-05.png"
     },
     {
       "n": 6,
-      "kind": "click",
-      "caption": "Open the server's panels again. Requests ranks the slowest routes of the newest report window, highest first.",
+      "kind": "wait",
+      "caption": "The keys the hop is read from, and each node's own share of it. The same three keys read every hop.",
       "still": "step-06.png"
     },
     {
       "n": 7,
-      "kind": "hover",
-      "caption": "A key's name teaches it. Rest on it to read what it measures.",
+      "kind": "click",
+      "caption": "Each server's panels fold to its name and verdict. Close them to reach the node table under them.",
       "still": "step-07.png"
     },
     {
       "n": 8,
       "kind": "wait",
-      "caption": "The figure is a series on the server's platform component, one link away.",
+      "caption": "One row per node. A figure the node never reported reads not reported, never 0.",
       "still": "step-08.png"
     },
     {
       "n": 9,
-      "kind": "click",
-      "caption": "Follow it.",
+      "kind": "wait",
+      "caption": "With a simulator connected, each gap is what the devices saw against what the platform collected, a loss ratio where 0 is healthy.",
       "still": "step-09.png"
     },
     {
       "n": 10,
+      "kind": "click",
+      "caption": "Open the server's panels again. Requests ranks the slowest routes of the newest report window, highest first.",
+      "still": "step-10.png"
+    },
+    {
+      "n": 11,
+      "kind": "hover",
+      "caption": "A key's name teaches it. Rest on it to read what it measures.",
+      "still": "step-11.png"
+    },
+    {
+      "n": 12,
+      "kind": "wait",
+      "caption": "The figure is a series on the server's platform component, one link away.",
+      "still": "step-12.png"
+    },
+    {
+      "n": 13,
+      "kind": "click",
+      "caption": "Follow it.",
+      "still": "step-13.png"
+    },
+    {
+      "n": 14,
       "kind": "wait",
       "caption": "The server's platform component, the same detail as any device. Its request timing is a series like any other metric.",
-      "still": "step-10.png"
+      "still": "step-14.png"
     }
   ],
-  "poster": "step-10.png",
+  "poster": "step-14.png",
   "preview": "preview.webp",
   "budget": {
-    "seconds": 41,
-    "bytes": 618167,
-    "previewBytes": 432662
+    "seconds": 56.2,
+    "bytes": 1130515,
+    "previewBytes": 786384
   }
 }

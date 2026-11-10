@@ -33,6 +33,10 @@ type PlanOptions struct {
 	NodeFor func(site string) string
 	// PortOffset is the simulator's lift for ports below 1024 (see Options).
 	PortOffset int
+	// InduceUnregistered makes one simulated device answer a property key no
+	// catalog registers (#1698), so its samples are refused: off by default,
+	// and only with Endpoints. See InduceSpec.
+	InduceUnregistered bool
 }
 
 // PlanPhase is the time one stage of a seed took.
@@ -45,6 +49,8 @@ type PlanPhase struct {
 type PlanResult struct {
 	Locations, Systems, Components, Roles, Endpoints int
 	Phases                                           []PlanPhase
+	// Induced is the device InduceUnregistered attached, nil when off.
+	Induced *Induced
 }
 
 // locationRow is one location of a plan; Parent is the key of another, empty
@@ -134,11 +140,13 @@ func SeedPlan(ctx context.Context, gw storage.Gateway, actorID string, p *scenar
 	}
 	res.Locations, res.Systems, res.Components, res.Roles = len(rows.Locations), len(rows.Systems), len(rows.Components), len(rows.Components)
 	if opts.Endpoints {
-		n, err := seedPlanEndpoints(ctx, gw, actorID, rows, compIDs, opts, run)
+		n, induced, err := seedPlanEndpoints(ctx, gw, actorID, rows, compIDs, opts, run)
 		if err != nil {
 			return res, err
 		}
-		res.Endpoints = n
+		res.Endpoints, res.Induced = n, induced
+	} else if opts.InduceUnregistered {
+		return res, fmt.Errorf("devseed: an induced refusal needs the simulated fleet's endpoints")
 	}
 	return res, nil
 }

@@ -636,6 +636,9 @@ type Gateway interface {
 	// Refused (#1582); any other failure fails the batch, for redelivery.
 	// PruneTelemetryReceipts keeps the receipts to their horizon.
 	LandBatch(ctx context.Context, b IngestBatch) (LandResult, error)
+	// RecordTermedBatch writes the Term receipt of a batch the server Termed
+	// whole (#1691): every declared item under the cause, never landed.
+	RecordTermedBatch(ctx context.Context, b TermedBatch) error
 	PruneTelemetryReceipts(ctx context.Context, before time.Time, batch int) (int64, error)
 	// CountTelemetryReceipts and ListClosedLoopPollTargets are the server's
 	// closed-loop window reads (ADR-1647): a node's receipts around a window,

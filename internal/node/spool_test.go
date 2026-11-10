@@ -3,8 +3,10 @@ package node
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"strings"
 	"sync"
@@ -364,10 +366,15 @@ func TestSpoolBoundsItsBytes(t *testing.T) {
 	queueTagged(t, s, "b1")
 	waitIdle(t, s)
 	// The batches behind b1 carry a ledger up to four bytes longer (their
-	// metric offset and resolved are no longer 0, #1641), so the cap holds
-	// two of them and never three.
+	// metric offset and resolved are no longer 0, #1641), and once b1 is
+	// dropped up to 40 more naming the drop (#1692), so the cap holds two of
+	// them and never three.
 	s.mu.Lock()
-	s.maxBytes = 2*(len(s.queue[0].data)+4) + 1
+	size := len(s.queue[0].data)
+	if 3*size <= 2*(size+4+40)+1 {
+		t.Fatalf("a batch of %d bytes is too small for the cap to tell two from three", size)
+	}
+	s.maxBytes = 2*(size+4+40) + 1
 	s.mu.Unlock()
 	for i := 2; i <= 4; i++ {
 		queueTagged(t, s, fmt.Sprintf("b%d", i))
@@ -1094,5 +1101,111 @@ func TestSpoolRetryCarriesTheSameLedger(t *testing.T) {
 	l := delivery.FromProto(ev.GetLedger())
 	if l.Seq != 1 || !l.Minted.Equal(time.Unix(1_000_000, 0)) {
 		t.Fatalf("retried ledger %+v; want seq 1 minted at the first flush", l)
+	}
+}
+
+// TestAnOverflowedBatchIsCountedUnderItsCauseOnTheNextLedger (#1692): a
+// batch the spool drops at its cap leaves a gap in the boot's seqs; the next
+// batch minted names the gap's cause and items, the run grows as later drops
+// extend it, and once a batch carrying it is acked no later batch does.
+func TestAnOverflowedBatchIsCountedUnderItsCauseOnTheNextLedger(t *testing.T) {
+	t.Parallel()
+	pub := &stubPublisher{down: true}
+	s := newTelemetrySpool("og.v1.telemetry.edge", "edge", pub.publish)
+	s.maxBatches = 3
+	queueTagged(t, s, "b1")
+	waitIdle(t, s) // b1 failed: held, nothing with the stream
+	for i := 2; i <= 5; i++ {
+		queueTagged(t, s, fmt.Sprintf("b%d", i)) // b4 drops b1, b5 drops b2
+	}
+	pub.setDown(false)
+	tick(t, s)
+	queueTagged(t, s, "b6") // minted after both drops, before any ack carried them
+	waitIdle(t, s)
+	queueTagged(t, s, "b7") // minted after b6, which carried the run, was acked
+	waitIdle(t, s)
+
+	ls := pub.ledgers(t)
+	if got := fmt.Sprint(pub.tags()); got != "[b3 b4 b5 b6 b7]" {
+		t.Fatalf("shipped %s, want [b3 b4 b5 b6 b7]", got)
+	}
+	want := map[uint64]string{
+		3: "[]",
+		4: "[]",
+		5: `[{"cause":"spool-overflow","from":1,"to":1,"items":{"metric":1}}]`,
+		6: `[{"cause":"spool-overflow","from":1,"to":2,"items":{"metric":2}}]`,
+		7: "[]",
+	}
+	for _, l := range ls {
+		got := "[]"
+		if len(l.Loss.Dropped) > 0 {
+			b, err := json.Marshal(l.Loss.Dropped)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got = string(b)
+		}
+		if got != want[l.Seq] {
+			t.Fatalf("batch seq %d carries dropped %s, want %s", l.Seq, got, want[l.Seq])
+		}
+	}
+}
+
+// TestARefusedBatchIsTheNodesLossOnTheNextLedger (#1692): a batch the bus
+// refuses for good is dropped as bus-refused, and the next batch says so.
+func TestARefusedBatchIsTheNodesLossOnTheNextLedger(t *testing.T) {
+	t.Parallel()
+	pub := &stubPublisher{}
+	refuse := true
+	var mu sync.Mutex
+	publish := func(subject string, data []byte, id string) (ackWait, error) {
+		mu.Lock()
+		r := refuse
+		refuse = false
+		mu.Unlock()
+		if r {
+			return nil, nats.ErrMaxPayload
+		}
+		return pub.publish(subject, data, id)
+	}
+	s := newTelemetrySpool("og.v1.telemetry.edge", "edge", publish)
+	queueTagged(t, s, "b1")
+	waitIdle(t, s)
+	queueTagged(t, s, "b2")
+	waitIdle(t, s)
+	ls := pub.ledgers(t)
+	if len(ls) != 1 || ls[0].Seq != 2 {
+		t.Fatalf("stored %+v, want only seq 2", ls)
+	}
+	d := ls[0].Loss.Dropped
+	if len(d) != 1 || d[0].Cause != delivery.BusRefused || d[0].From != 1 || d[0].To != 1 || d[0].Items[delivery.Metric] != 1 {
+		t.Fatalf("seq 2 carries dropped %+v, want seq 1's one metric as bus-refused", d)
+	}
+}
+
+// TestSelfLogsTheBufferDroppedAreTheNodesLoss (#1692): self-log lines the
+// capture buffer dropped never reached a batch; the self-report that drains
+// it carries their count as self-log-overflow, a running total.
+func TestSelfLogsTheBufferDroppedAreTheNodesLoss(t *testing.T) {
+	t.Parallel()
+	pub := &stubPublisher{}
+	s := newTelemetrySpool("og.v1.telemetry.edge", "edge", pub.publish)
+	sink := newLogSink(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(sink)
+	for i := 0; i < maxBufferedLogs+3; i++ {
+		logger.Info("chatty", "i", i)
+	}
+	publishSelf(s, "edge", sink, nil)
+	logger.Info("one more")
+	publishSelf(s, "edge", sink, nil)
+	waitIdle(t, s)
+	ls := pub.ledgers(t)
+	if len(ls) != 2 {
+		t.Fatalf("%d self-reports stored, want 2", len(ls))
+	}
+	for i, l := range ls {
+		if got := l.Loss.Lost[delivery.SelfLogOverflow][delivery.Log]; got != 3 {
+			t.Fatalf("self-report %d carries %d lines lost, want the boot's running 3", i, got)
+		}
 	}
 }

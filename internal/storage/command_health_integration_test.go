@@ -12,6 +12,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/auth"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
+	"github.com/hyperscaleav/omniglass/internal/storage/storagetest/accesspath"
 	"github.com/hyperscaleav/omniglass/internal/writerclass"
 )
 
@@ -518,43 +519,93 @@ func TestCommandQueueKeysRefuseOtherWriters(t *testing.T) {
 	}
 }
 
-// TestCommandHealthReadUsesTheUnexecutedIndex (#1626): the health read runs
-// every timer pass over a command table that only grows, so its plan reaches
-// the unexecuted rows through a partial index holding only them, never a scan
-// of every executed command. Either such index serves: command_unexecuted_idx,
-// or #1631's command_deliverable_idx, which holds the same rows keyed by
-// component and which the planner may prefer.
-func TestCommandHealthReadUsesTheUnexecutedIndex(t *testing.T) {
+// candidateScans is the plan's scans of command under the candidate
+// fragment's alias (c), leaving out the redelivery count's own scan of command
+// (command_redelivered_idx, a separate query).
+func candidateScans(plan accesspath.Plan) accesspath.Plan {
+	var out accesspath.Plan
+	for _, s := range plan.Scans("command") {
+		if s.Alias == "c" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// TestCommandHealthReadReachesTheUnexecutedIndex (#1626, #1728): the health
+// read runs every timer pass over a command table that only grows, so its
+// candidate scan must be SEARCHED through a partial index holding only the
+// unexecuted rows, never a walk of the executed history. It asks the
+// accesspath usability question, not the planner's preference, so the other
+// command indexes a candidate scan could take are set aside first inside a
+// rolled-back transaction (command_component_ts_idx, which holds every row
+// ever written, and the two status = 'issued' indexes), leaving the partial
+// indexes whose predicates decide reachability (command_unexecuted_idx,
+// command_deliverable_idx, and command_redelivered_idx, which the candidate
+// scan can never take) and the primary key. Two questions, in this order:
+//
+//   - with command_unexecuted_idx also set aside (in a savepoint, restored
+//     after), the candidate scan cannot reach command_deliverable_idx at all.
+//     That is why both indexes stay (ADR-1626 point 4): the deliverable index
+//     holds only status = 'issued' rows (#1630), and the health read takes
+//     every unexecuted command whatever its status, since a command that aged
+//     out unexecuted is a delivery loss after its settlement stamped it timed
+//     out. This is asked first because once the deliverable index is
+//     reachable the planner prefers it, and the second question would fail
+//     with a message blaming the unexecuted index. If it fails, the health
+//     read now narrows to what the deliverable index holds, and
+//     command_unexecuted_idx is a candidate to drop again;
+//   - the candidate scan reaches command_unexecuted_idx with an index
+//     condition, so dropping that index is caught here.
+func TestCommandHealthReadReachesTheUnexecutedIndex(t *testing.T) {
 	t.Parallel()
 	f := newCommandQueueFixture(t, "edge-x")
-	id := f.issue(t, "edge-x", "set-input")
-	f.exec(t, `insert into command (ts, owner_kind, component_id, command_type_id, instance, params, status, actor,
-			dispatched_at, executed_at, first_dispatched_at, delivery_count, settled_at)
-		select c.ts - (g * interval '1 second'), c.owner_kind, c.component_id, c.command_type_id, c.instance, c.params,
-			'settled', c.actor, c.ts, c.ts, c.ts, 1, c.ts
-		from command c, generate_series(1, 20000) g where c.id = $1`, id)
-	f.exec(t, `analyze command`)
-	rows, err := f.conn.Query(f.ctx, "explain (costs off) "+storage.ExportCommandHealthSQL(), time.Now())
+	f.issue(t, "edge-x", "set-input")
+	since := time.Now().Add(-15 * time.Second)
+
+	tx, err := f.conn.Begin(f.ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("begin: %v", err)
 	}
-	var plan []string
-	for rows.Next() {
-		var line string
-		if err := rows.Scan(&line); err != nil {
-			t.Fatal(err)
+	defer func() { _ = tx.Rollback(f.ctx) }()
+	aside := func(on pgx.Tx, index string) {
+		t.Helper()
+		if _, err := on.Exec(f.ctx, "drop index if exists "+index); err != nil {
+			t.Fatalf("set %s aside: %v", index, err)
 		}
-		plan = append(plan, line)
 	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		t.Fatal(err)
+	explain := func() accesspath.Plan {
+		t.Helper()
+		plan, err := accesspath.Explain(f.ctx, f.conn, storage.ExportCommandHealthSQL(), since)
+		if err != nil {
+			t.Fatalf("explain the health read: %v", err)
+		}
+		return plan
 	}
-	text := strings.Join(plan, "\n")
-	if !strings.Contains(text, "command_unexecuted_idx") && !strings.Contains(text, "command_deliverable_idx") {
-		t.Errorf("the health read reaches the unexecuted commands through neither unexecuted index:\n%s", text)
+	for _, index := range []string{"command_component_ts_idx", "command_issued_age_idx", "command_issued_component_idx"} {
+		aside(tx, index)
 	}
-	if strings.Contains(text, "Seq Scan on command") {
-		t.Errorf("the health read scans the command table:\n%s", text)
+
+	sp, err := tx.Begin(f.ctx)
+	if err != nil {
+		t.Fatalf("savepoint: %v", err)
+	}
+	aside(sp, "command_unexecuted_idx")
+	plan := explain()
+	scans := candidateScans(plan)
+	if len(scans) == 0 {
+		t.Fatalf("the health read never scans command as c:\n\t%s", plan)
+	}
+	for _, s := range scans {
+		if s.Index == "command_deliverable_idx" {
+			t.Errorf("the health read reaches command_deliverable_idx (%s), so command_unexecuted_idx may no longer be needed: revisit ADR-1626 point 4", s)
+		}
+	}
+	if err := sp.Rollback(f.ctx); err != nil {
+		t.Fatalf("restore command_unexecuted_idx: %v", err)
+	}
+
+	if ok, why := candidateScans(explain()).MustReach("command", "command_unexecuted_idx"); !ok {
+		t.Errorf("the health read's candidate scan cannot reach the unexecuted index: %s", why)
 	}
 }

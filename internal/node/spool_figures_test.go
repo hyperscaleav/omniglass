@@ -1,6 +1,8 @@
 package node
 
 import (
+	"io"
+	"log/slog"
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/delivery"
@@ -106,4 +108,25 @@ func TestSpoolCountsAGroupItCannotEncodeAsLost(t *testing.T) {
 		t.Fatal("a group whose task id is not UTF-8 encoded")
 	}
 	wantFlow(t, s.takeFigures(), delivery.Metric, 2, 0, 1)
+}
+
+// TestSpoolCountsTheSelfLogLinesTheBufferDroppedAsLost: a self-log line the
+// bounded buffer dropped never reached a batch, so the node hop's figures
+// count it in and not out (#1692), the same loss the lab's node row reads.
+func TestSpoolCountsTheSelfLogLinesTheBufferDroppedAsLost(t *testing.T) {
+	t.Parallel()
+	s := newTelemetrySpool("og.v1.telemetry.edge", "edge", (&stubPublisher{}).publish)
+	sink := newLogSink(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(sink)
+	for i := 0; i < maxBufferedLogs+3; i++ {
+		logger.Info("chatty", "i", i)
+	}
+	publishSelf(s, "edge", sink, nil)
+	waitIdle(t, s)
+	got := flowOf(s.takeFigures())
+	k := "/" + string(delivery.Log)
+	in, out := got[writerclass.DeliveryInCount+k], got[writerclass.DeliveryOutCount+k]
+	if out == 0 || in-out != 3 {
+		t.Fatalf("log in %v out %v, want the 3 lines the buffer dropped in and not out", in, out)
+	}
 }

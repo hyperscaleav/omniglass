@@ -22,7 +22,7 @@ Wait
 Type "grep -E '^(ready|measuring|torn down)' /tmp/lab-measure.err"
 Enter
 Wait
-Type "# The delivery table: a sim row per protocol first, then each kind across the ingest hop"
+Type "# The delivery table: a sim row per protocol first, then each kind across its schedule, node and ingest hops"
 Enter
 Wait
 Type "sed -n '/^delivery /,$p' /tmp/lab-measure.txt"

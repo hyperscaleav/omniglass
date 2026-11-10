@@ -14,8 +14,10 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/lab"
 )
 
-// TestIntegrationScaleEndpointsCloseTheLoop measures a 20-system corporate
-// scale lab and holds its closed loop shut: every protocol the nodes poll
+// TestIntegrationScaleEndpointsCloseTheLoop measures a scale lab at the
+// ladder's smoke size (corporate at 20 systems, #1719, no drain probe), checks
+// every figure is read and the fleet is named from the lab's labels, and holds
+// its closed loop shut: every protocol the nodes poll
 // drew requests, no poll target went unhit, every gap is zero, and no face
 // saw two requests at once. It is what a fake cannot prove: real nodes, real
 // sims and real receipts, bracketed through the server's API. The sim hop
@@ -34,14 +36,16 @@ func TestIntegrationScaleEndpointsCloseTheLoop(t *testing.T) {
 	defer cancel()
 	rep, err := MeasureScale(ctx, ScaleConfig{
 		Binary: "../../bin/omniglass", DockerHost: daemon.Host,
-		Scenario: "corporate", Systems: 20, ReadyTimeout: 5 * time.Minute,
-		Warmup: time.Minute, Window: 2 * time.Minute, FleetReads: 2,
-		Out: &progress, LabLog: &labLog,
+		Scenario: lab.MeasureScenario, Systems: lab.SmokeSystems, ReadyTimeout: 5 * time.Minute,
+		Warmup: time.Minute, Window: 2 * time.Minute, FleetReads: 2, Backlog: 0,
+		SettleTimeout: 3 * time.Minute,
+		Out:           &progress, LabLog: &labLog,
 	})
 	if err != nil {
 		t.Fatalf("the scale measurement failed: %v\n%s\nthe lab:\n%s", err, progress.String(), labLog.String())
 	}
 	t.Logf("%s\n%s", progress.String(), rep.Table())
+	assertScaleFiguresRead(t, rep)
 	e := rep.Endpoints
 	if e == nil {
 		t.Fatalf("the endpoints were not measured: %s", rep.EndpointsGap)
