@@ -304,6 +304,8 @@ type Device struct {
 	// via AddComputedFromProfile, read-only thereafter (so no separate
 	// lock is needed for the slice; reads of d.state still take d.mu).
 	computed []computedEntry
+	// push is the profile's push face (push.go), nil when it declares none.
+	push *pushFace
 	// rand is the per-device math/rand source used by the behavior
 	// runner's randStep helper. Lazily initialized on the first
 	// AddBehaviorFromProfile call so non-behavior tests don't pay for

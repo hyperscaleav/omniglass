@@ -184,6 +184,10 @@ func runLabScenario(ctx context.Context, out io.Writer, m *labscenario.Manifest,
 		nodes[i] = lab.SiteNode{Name: labscenario.SiteNode(site.Name), Token: token, TokenHash: hex.EncodeToString(hash),
 			Components: site.Totals.Components}
 	}
+	pushers, err := scaleLabPushers(plan, auth.NewBearerToken)
+	if err != nil {
+		return err
+	}
 	project := f.project
 	if project == lab.DefaultProject {
 		project = lab.ScaleProject
@@ -205,7 +209,7 @@ func runLabScenario(ctx context.Context, out io.Writer, m *labscenario.Manifest,
 	return start(ctx, out, lab.Config{
 		Options: lab.Options{
 			Project: project, Listen: f.listen, Port: f.port, Image: choice.Ref, Scenario: m.Name,
-			Systems: plan.Totals.Systems, SiteNodes: nodes,
+			Systems: plan.Totals.Systems, SiteNodes: nodes, Pushers: pushers,
 			Owner: lab.Owner{Host: host, PID: os.Getpid(), PIDNS: lab.CurrentPIDNS()}, WorkDir: wd,
 			Ephemeral: !f.keep, Cadence: cadence, InduceUnregistered: f.scale.induce,
 		},
@@ -369,8 +373,12 @@ func runLab(ctx context.Context, out io.Writer, version string, f labFlags) erro
 	if err != nil {
 		return err
 	}
-	// The simulated pusher's token (#1370), minted per run like the node's.
-	pushToken, pushHash, pushPrefix, err := auth.NewBearerToken()
+	// The fleet's pushers' tokens (#1370, #1743), minted per run like the node's.
+	doc, err := devseed.Fixtures()
+	if err != nil {
+		return err
+	}
+	pushers, err := devLabPushers(doc.SimPushers, f.script.noNode, auth.NewBearerToken)
 	if err != nil {
 		return err
 	}
@@ -381,8 +389,8 @@ func runLab(ctx context.Context, out io.Writer, version string, f labFlags) erro
 		Options: lab.Options{
 			Project: f.project, Listen: f.listen, Port: f.port, Image: choice.Ref, Scenario: sc.Name,
 			NodeToken: token, NodeTokenHash: hex.EncodeToString(hash),
-			PushToken: pushToken, PushTokenHash: hex.EncodeToString(pushHash), PushTokenPrefix: pushPrefix,
-			Owner: lab.Owner{Host: host, PID: os.Getpid(), PIDNS: lab.CurrentPIDNS()}, WorkDir: wd,
+			Pushers: pushers,
+			Owner:   lab.Owner{Host: host, PID: os.Getpid(), PIDNS: lab.CurrentPIDNS()}, WorkDir: wd,
 			Ephemeral: f.script.ephemeral, NoNode: f.script.noNode, Cadence: f.script.cadence,
 		},
 		Image: choice, Fresh: f.fresh, PlantedFaults: plantedLabels(faults), Hold: true,
@@ -468,14 +476,18 @@ func newLabSeedCmd() *cobra.Command {
 		Hidden: true,
 		Args:   cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			pushers, err := lab.ParsePusherTokens(config.Get(lab.PusherTokensEnv))
+			if err != nil {
+				return err
+			}
 			if systems > 0 {
-				return runLabScaleSeed(cmd.Context(), cmd.OutOrStdout(), scenario, systems, user, password, config.Get(lab.SiteNodeTokenHashesEnv), induce, keep)
+				return runLabScaleSeed(cmd.Context(), cmd.OutOrStdout(), scenario, systems, user, password, config.Get(lab.SiteNodeTokenHashesEnv), pushers, induce, keep)
 			}
 			if induce {
 				return errors.New("--induce-unregistered is a scale lab's: it needs --systems")
 			}
 			return runLabSeed(cmd.Context(), cmd.OutOrStdout(), scenario, node, user, password, config.Get("OMNIGLASS_LAB_NODE_TOKEN_HASH"), noNode,
-				pushCredential{Hash: config.Get("OMNIGLASS_LAB_PUSH_TOKEN_HASH"), Prefix: config.Get("OMNIGLASS_LAB_PUSH_TOKEN_PREFIX")}, reportSeconds)
+				pushers, reportSeconds)
 		},
 	}
 	cmd.Flags().StringVar(&scenario, "scenario", lab.DefaultScenario, "the fleet to seed on the first run")
@@ -498,15 +510,14 @@ func newLabSeedCmd() *cobra.Command {
 // With noNode (a throwaway lab whose pages hold still, #1267) it seeds the
 // fleet without the simulated wiring, which nothing would collect from, and
 // enrolls no node, so the lab runs none.
-// pushCredential is the simulated pusher's token for this run (#1370): its
+// pushers is each pusher's token for this run (#1370, #1743), by name: its
 // hash and non-secret prefix, never the token itself. Empty, none is set.
-type pushCredential struct{ Hash, Prefix string }
 
 // reportSeconds, when above zero, sets the platform's collection report
 // window (#1646) before the server and the node start, so both read it for
 // their first window: a walkthrough lab's 10s, where the platform's 60s would
 // land the first figures as its recording ends.
-func runLabSeed(ctx context.Context, out io.Writer, scenario, node, user, password, nodeTokenHash string, noNode bool, push pushCredential, reportSeconds int) error {
+func runLabSeed(ctx context.Context, out io.Writer, scenario, node, user, password, nodeTokenHash string, noNode bool, pushers map[string]lab.PusherToken, reportSeconds int) error {
 	sc, err := devseed.LookupScenario(scenario)
 	if err != nil {
 		return err
@@ -557,7 +568,7 @@ func runLabSeed(ctx context.Context, out io.Writer, scenario, node, user, passwo
 		if _, err := gw.SetEnrollmentToken(ctx, "", node, nodeTokenHash, all); err != nil {
 			return err
 		}
-		if err := setPushToken(ctx, out, gw, push); err != nil {
+		if err := setPusherTokens(ctx, out, gw, pushers); err != nil {
 			return err
 		}
 	}
@@ -618,13 +629,15 @@ func bootstrapLabOwner(ctx context.Context, gw storage.Gateway, user string, pwH
 // runLabScaleSeed is a scale lab's seed (#1554): the scale lab scenario
 // resolved at systems, laid down by devseed.SeedPlan (the one function the
 // bulk seed, #1555, replaces) on an empty database, and each site's node
-// enrolled with the hash of the token the lab minted for it. With induce
+// enrolled with the hash of the token the lab minted for it, and each
+// declared pusher (#1743) given the token the lab minted for it. With induce
 // (#1698), one device answers a property key no driver registers, named in
 // the summary. With keep (a kept scale lab, #1633), a database already
 // holding this plan's fleet is kept as it is: its site nodes are re-enrolled
-// with this run's hashes and the login is made to work, and nothing is
-// seeded, so a kept lab induces only if its first seed did.
-func runLabScaleSeed(ctx context.Context, out io.Writer, scenario string, systems int, user, password, tokenHashes string, induce, keep bool) error {
+// with this run's hashes, its pushers given this run's tokens, and the login
+// is made to work, and nothing is seeded, so a kept lab induces only if its
+// first seed did.
+func runLabScaleSeed(ctx context.Context, out io.Writer, scenario string, systems int, user, password, tokenHashes string, pushers map[string]lab.PusherToken, induce, keep bool) error {
 	m, err := labscenario.Shipped(scenario)
 	if err != nil {
 		return err
@@ -646,6 +659,11 @@ func runLabScaleSeed(ctx context.Context, out io.Writer, scenario string, system
 		if node := labscenario.SiteNode(site.Name); hashes[node] == "" {
 			return fmt.Errorf("lab seed: %s carries no token hash for the node %s", lab.SiteNodeTokenHashesEnv, node)
 		}
+		for _, p := range site.Pushers {
+			if _, ok := pushers[p.Name]; !ok {
+				return fmt.Errorf("lab seed: %s carries no token for the pusher %s", lab.PusherTokensEnv, p.Name)
+			}
+		}
 	}
 	gw, st, err := openLabDB(ctx)
 	if err != nil {
@@ -660,7 +678,7 @@ func runLabScaleSeed(ctx context.Context, out io.Writer, scenario string, system
 		if !keep {
 			return errors.New("lab seed: a throwaway scale lab seeds an empty database, and this one holds data; start it again with --keep to keep that data, or with --fresh to start over")
 		}
-		return reenrollKeptScaleLab(ctx, out, gw, plan, hashes, user, pwHash)
+		return reenrollKeptScaleLab(ctx, out, gw, plan, hashes, pushers, user, pwHash)
 	}
 	if err := bootstrapLabOwner(ctx, gw, user, pwHash); err != nil {
 		return err
@@ -691,8 +709,11 @@ func runLabScaleSeed(ctx context.Context, out io.Writer, scenario string, system
 			return err
 		}
 	}
-	summary := fmt.Sprintf("scenario %s at %d systems: %d sites, %d components, seeded in %s",
-		m.Name, plan.Totals.Systems, len(plan.Sites), plan.Totals.Components, time.Since(start).Round(time.Second))
+	if err := setPusherTokens(ctx, out, gw, pushers); err != nil {
+		return err
+	}
+	summary := fmt.Sprintf("scenario %s at %d systems: %d sites, %d components, %d pushers, seeded in %s",
+		m.Name, plan.Totals.Systems, len(plan.Sites), plan.Totals.Components, seeded.Pushers, time.Since(start).Round(time.Second))
 	if in := seeded.Induced; in != nil {
 		summary += fmt.Sprintf("; %s answers %s through %s, refused-unregistered", in.Component, in.Key, in.Driver)
 	}
@@ -704,8 +725,9 @@ func runLabScaleSeed(ctx context.Context, out io.Writer, scenario string, system
 // the database must hold this plan's fleet (a node per site, and each
 // simulating its site's components), or the lab was kept at another size or
 // scenario and is refused, naming --fresh. Then each site node is enrolled
-// with this run's hash, the login is reset, and nothing is seeded.
-func reenrollKeptScaleLab(ctx context.Context, out io.Writer, gw storage.Gateway, plan *labscenario.Plan, hashes map[string]string, user, pwHash string) error {
+// with this run's hash, each pusher given this run's token, the login is
+// reset, and nothing is seeded.
+func reenrollKeptScaleLab(ctx context.Context, out io.Writer, gw storage.Gateway, plan *labscenario.Plan, hashes map[string]string, pushers map[string]lab.PusherToken, user, pwHash string) error {
 	all := scope.Set{All: true}
 	notThisPlan := func(why string) error {
 		return fmt.Errorf("lab seed: this kept scale lab's fleet is not scenario %s at %d systems (%s); "+
@@ -744,6 +766,9 @@ func reenrollKeptScaleLab(ctx context.Context, out io.Writer, gw storage.Gateway
 		if _, err := gw.SetEnrollmentToken(ctx, "", node, hashes[node], all); err != nil {
 			return err
 		}
+	}
+	if err := setPusherTokens(ctx, out, gw, pushers); err != nil {
+		return err
 	}
 	if ok, err := gw.SetPassword(ctx, user, pwHash); err != nil {
 		return err
@@ -785,34 +810,4 @@ func labSeedGate(ctx context.Context, dsn string) error {
 		return err
 	}
 	return storage.CheckLabMark(true, st.Marked, st.HoldsData)
-}
-
-// setPushToken gives the simulated pusher (#1370) this run's token, replacing
-// the last run's, so the simulator beside the node can push with it. A fleet
-// with no pusher, or a run with no token, sets none.
-func setPushToken(ctx context.Context, out io.Writer, gw storage.Gateway, push pushCredential) error {
-	if push.Hash == "" {
-		return nil
-	}
-	doc, err := devseed.Fixtures()
-	if err != nil {
-		return err
-	}
-	if doc.SimPusher == nil {
-		return nil
-	}
-	hash, err := hex.DecodeString(push.Hash)
-	if err != nil {
-		return fmt.Errorf("lab seed: OMNIGLASS_LAB_PUSH_TOKEN_HASH: %w", err)
-	}
-	ok, err := gw.SetServiceToken(ctx, "", doc.SimPusher.Service, hash, push.Prefix)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		// A lab kept from before the pusher (#1370): its fleet was seeded
-		// without one, and a kept lab is never seeded again.
-		fmt.Fprintf(out, "note: this lab's fleet predates the simulated booking service (%s), so nothing pushes; omniglass lab run --fresh adds it\n", doc.SimPusher.Service)
-	}
-	return nil
 }

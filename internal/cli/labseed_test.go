@@ -29,7 +29,7 @@ func TestLabSeedWithNoNodeWiresNothingAndEnrollsNoNode(t *testing.T) {
 		t.Setenv("OMNIGLASS_DSN", dsn)
 		t.Setenv("OMNIGLASS_DATA_DIR", t.TempDir())
 		var out bytes.Buffer
-		if err := runLabSeed(ctx, &out, "dev", lab.NodeName, lab.LoginUser, lab.LoginPassword, tokenHash, noNode, pushCredential{}, 0); err != nil {
+		if err := runLabSeed(ctx, &out, "dev", lab.NodeName, lab.LoginUser, lab.LoginPassword, tokenHash, noNode, nil, 0); err != nil {
 			t.Fatalf("lab seed (no node %v): %v", noNode, err)
 		}
 		gw, err := storage.NewPG(ctx, dsn)
@@ -65,8 +65,8 @@ func TestLabSeedWithNoNodeWiresNothingAndEnrollsNoNode(t *testing.T) {
 	}
 }
 
-// Each lab run mints the simulated pusher a token (#1370), and the seed makes
-// it the pusher's only one, as it re-enrolls the node: the run's token
+// Each lab run mints the dev fleet's declared pusher a token (#1370, #1743),
+// and the seed makes it the pusher's only one, as it re-enrolls the node: the run's token
 // authenticates the booking service, and the last run's no longer does.
 func TestLabSeedGivesThePusherThisRunsToken(t *testing.T) {
 	ctx := context.Background()
@@ -85,7 +85,7 @@ func TestLabSeedGivesThePusherThisRunsToken(t *testing.T) {
 		}
 		var out bytes.Buffer
 		if err := runLabSeed(ctx, &out, "dev", lab.NodeName, lab.LoginUser, lab.LoginPassword, hex.EncodeToString(nodeHash), false,
-			pushCredential{Hash: hex.EncodeToString(hash), Prefix: prefix}, 0); err != nil {
+			map[string]lab.PusherToken{"sim-booking-service": {Hash: hex.EncodeToString(hash), Prefix: prefix}}, 0); err != nil {
 			t.Fatalf("lab seed: %v", err)
 		}
 		return hash
@@ -122,7 +122,7 @@ func TestLabSeedSetsTheReportWindowItIsGiven(t *testing.T) {
 			t.Fatal(err)
 		}
 		var out bytes.Buffer
-		if err := runLabSeed(ctx, &out, "dev", lab.NodeName, lab.LoginUser, lab.LoginPassword, hex.EncodeToString(hash), false, pushCredential{}, seconds); err != nil {
+		if err := runLabSeed(ctx, &out, "dev", lab.NodeName, lab.LoginUser, lab.LoginPassword, hex.EncodeToString(hash), false, nil, seconds); err != nil {
 			t.Fatalf("lab seed (report seconds %d): %v", seconds, err)
 		}
 		gw, err := storage.NewPG(ctx, dsn)
@@ -146,8 +146,9 @@ func TestLabSeedSetsTheReportWindowItIsGiven(t *testing.T) {
 
 // A scale lab's seed (#1554), against a real database: the scenario's plan
 // goes down with a node per site, each enrolled with the token the lab
-// minted for it, and the report tells the lab its nodes are present. A
-// missing site hash is refused before the database is touched, and a
+// minted for it, each declared pusher (#1743) holding the token minted for
+// it, and the report tells the lab its nodes are present. A missing site
+// hash or pusher token is refused before the database is touched, and a
 // database that already holds data is refused.
 func TestLabScaleSeedEnrollsEverySiteNode(t *testing.T) {
 	ctx := context.Background()
@@ -166,13 +167,29 @@ func TestLabScaleSeedEnrollsEverySiteNode(t *testing.T) {
 		tokens[name] = hash
 		nodes = append(nodes, lab.SiteNode{Name: name, TokenHash: hex.EncodeToString(hash)})
 	}
+	minted, err := scaleLabPushers(plan, auth.NewBearerToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(minted) == 0 {
+		t.Fatal("corporate at 3 systems declares no pusher")
+	}
+	pushers, err := lab.ParsePusherTokens(lab.FormatPusherTokens(minted))
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := runLabScaleSeed(ctx, &bytes.Buffer{}, "corporate", 3, lab.LoginUser, lab.LoginPassword,
-		lab.FormatSiteNodeTokenHashes(nodes[1:]), false, false); err == nil || !strings.Contains(err.Error(), nodes[0].Name) {
+		lab.FormatSiteNodeTokenHashes(nodes[1:]), pushers, false, false); err == nil || !strings.Contains(err.Error(), nodes[0].Name) {
 		t.Fatalf("a missing site hash: %v, want a refusal naming %s", err, nodes[0].Name)
+	}
+	short, _ := lab.ParsePusherTokens(lab.FormatPusherTokens(minted[1:]))
+	if err := runLabScaleSeed(ctx, &bytes.Buffer{}, "corporate", 3, lab.LoginUser, lab.LoginPassword,
+		lab.FormatSiteNodeTokenHashes(nodes), short, false, false); err == nil || !strings.Contains(err.Error(), minted[0].Name) {
+		t.Fatalf("a missing pusher token: %v, want a refusal naming %s", err, minted[0].Name)
 	}
 
 	var out bytes.Buffer
-	if err := runLabScaleSeed(ctx, &out, "corporate", 3, lab.LoginUser, lab.LoginPassword, lab.FormatSiteNodeTokenHashes(nodes), false, false); err != nil {
+	if err := runLabScaleSeed(ctx, &out, "corporate", 3, lab.LoginUser, lab.LoginPassword, lab.FormatSiteNodeTokenHashes(nodes), pushers, false, false); err != nil {
 		t.Fatalf("lab seed --systems 3: %v", err)
 	}
 	if res := lab.ParseSeedResult(out.String()); !res.Node || !strings.Contains(res.Summary, "3 systems") {
@@ -187,6 +204,13 @@ func TestLabScaleSeedEnrollsEverySiteNode(t *testing.T) {
 		pr, err := gw.AuthenticateBearer(ctx, hash)
 		if err != nil || pr.Node == nil || pr.Node.Name != name {
 			t.Errorf("%s's token = %+v, %v; want it to authenticate %s", name, pr, err, name)
+		}
+	}
+	for _, p := range minted {
+		hash, _ := hex.DecodeString(p.TokenHash)
+		pr, err := gw.AuthenticateBearer(ctx, hash)
+		if err != nil || pr.Service == nil || pr.Service.Name != p.Name {
+			t.Errorf("pusher %s's token = %+v, %v; want it to authenticate the pusher", p.Name, pr, err)
 		}
 	}
 	// One node per site, at its site, simulating exactly that site's
@@ -230,7 +254,7 @@ func TestLabScaleSeedEnrollsEverySiteNode(t *testing.T) {
 		t.Errorf("%d addresses for %d components", len(addresses), plan.Totals.Components)
 	}
 	if err := runLabScaleSeed(ctx, &bytes.Buffer{}, "corporate", 3, lab.LoginUser, lab.LoginPassword,
-		lab.FormatSiteNodeTokenHashes(nodes), false, false); err == nil || !strings.Contains(err.Error(), "holds data") {
+		lab.FormatSiteNodeTokenHashes(nodes), pushers, false, false); err == nil || !strings.Contains(err.Error(), "holds data") {
 		t.Fatalf("a second seed: %v, want a refusal of a database holding data", err)
 	}
 }
@@ -264,7 +288,8 @@ func TestLabScaleSeedKeptReEnrollsWithoutReseeding(t *testing.T) {
 		return tokens, lab.FormatSiteNodeTokenHashes(nodes)
 	}
 	firstTokens, firstHashes := mint()
-	if err := runLabScaleSeed(ctx, &bytes.Buffer{}, "corporate", 3, lab.LoginUser, lab.LoginPassword, firstHashes, false, true); err != nil {
+	firstPushers, firstPusherTokens := scalePusherTokens(t, plan)
+	if err := runLabScaleSeed(ctx, &bytes.Buffer{}, "corporate", 3, lab.LoginUser, lab.LoginPassword, firstHashes, firstPusherTokens, false, true); err != nil {
 		t.Fatalf("the first seed, kept: %v", err)
 	}
 	gw, err := storage.NewPG(ctx, dsn)
@@ -288,8 +313,9 @@ func TestLabScaleSeedKeptReEnrollsWithoutReseeding(t *testing.T) {
 	components, nodes := counts()
 
 	secondTokens, secondHashes := mint()
+	secondPushers, secondPusherTokens := scalePusherTokens(t, plan)
 	var out bytes.Buffer
-	if err := runLabScaleSeed(ctx, &out, "corporate", 3, lab.LoginUser, lab.LoginPassword, secondHashes, false, true); err != nil {
+	if err := runLabScaleSeed(ctx, &out, "corporate", 3, lab.LoginUser, lab.LoginPassword, secondHashes, secondPusherTokens, false, true); err != nil {
 		t.Fatalf("the second seed, kept: %v", err)
 	}
 	res := lab.ParseSeedResult(out.String())
@@ -308,8 +334,20 @@ func TestLabScaleSeedKeptReEnrollsWithoutReseeding(t *testing.T) {
 			t.Errorf("%s's last-run token still authenticates", name)
 		}
 	}
+	// Each pusher (#1743) holds this run's token alone, as each node does.
+	for i, p := range secondPushers {
+		hash, _ := hex.DecodeString(p.TokenHash)
+		pr, err := gw.AuthenticateBearer(ctx, hash)
+		if err != nil || pr.Service == nil || pr.Service.Name != p.Name {
+			t.Errorf("pusher %s's new token = %+v, %v; want it to authenticate the pusher", p.Name, pr, err)
+		}
+		old, _ := hex.DecodeString(firstPushers[i].TokenHash)
+		if _, err := gw.AuthenticateBearer(ctx, old); err == nil {
+			t.Errorf("pusher %s's last-run token still authenticates", p.Name)
+		}
+	}
 
-	if err := runLabScaleSeed(ctx, &bytes.Buffer{}, "corporate", 3, lab.LoginUser, lab.LoginPassword, secondHashes, false, false); err == nil ||
+	if err := runLabScaleSeed(ctx, &bytes.Buffer{}, "corporate", 3, lab.LoginUser, lab.LoginPassword, secondHashes, secondPusherTokens, false, false); err == nil ||
 		!strings.Contains(err.Error(), "holds data") || !strings.Contains(err.Error(), "--fresh") {
 		// The kept volumes outlive a throwaway run, so starting it again
 		// throwaway never clears them: the refusal names --fresh.
@@ -320,8 +358,9 @@ func TestLabScaleSeedKeptReEnrollsWithoutReseeding(t *testing.T) {
 	for _, site := range other.Sites {
 		otherNodes = append(otherNodes, lab.SiteNode{Name: labscenario.SiteNode(site.Name), TokenHash: "00"})
 	}
+	_, otherPushers := scalePusherTokens(t, other)
 	if err := runLabScaleSeed(ctx, &bytes.Buffer{}, "corporate", 20, lab.LoginUser, lab.LoginPassword,
-		lab.FormatSiteNodeTokenHashes(otherNodes), false, true); err == nil || !strings.Contains(err.Error(), "--fresh") {
+		lab.FormatSiteNodeTokenHashes(otherNodes), otherPushers, false, true); err == nil || !strings.Contains(err.Error(), "--fresh") {
 		t.Fatalf("a kept seed at another size: %v, want a refusal naming --fresh", err)
 	}
 	// A first run stopped after the fleet was seeded and before its nodes
@@ -330,13 +369,28 @@ func TestLabScaleSeedKeptReEnrollsWithoutReseeding(t *testing.T) {
 	if _, err := gw.UpdateNode(ctx, "", unplaced, storage.NodePatch{LocationName: &nowhere}, all, all, all); err != nil {
 		t.Fatal(err)
 	}
-	if err := runLabScaleSeed(ctx, &bytes.Buffer{}, "corporate", 3, lab.LoginUser, lab.LoginPassword, secondHashes, false, true); err == nil ||
+	if err := runLabScaleSeed(ctx, &bytes.Buffer{}, "corporate", 3, lab.LoginUser, lab.LoginPassword, secondHashes, secondPusherTokens, false, true); err == nil ||
 		!strings.Contains(err.Error(), "--fresh") || !strings.Contains(err.Error(), unplaced) {
 		t.Fatalf("a kept seed with %s at no site: %v, want a refusal naming the node and --fresh", unplaced, err)
 	}
 	if c, n := counts(); c != components || n != nodes {
 		t.Fatalf("after the refusals: %d components and %d nodes, want %d and %d", c, n, components, nodes)
 	}
+}
+
+// scalePusherTokens mints a token for each pusher the plan declares, as a
+// scale lab's run does, and returns them as the seed reads them.
+func scalePusherTokens(t *testing.T, plan *labscenario.Plan) ([]lab.Pusher, map[string]lab.PusherToken) {
+	t.Helper()
+	minted, err := scaleLabPushers(plan, auth.NewBearerToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tokens, err := lab.ParsePusherTokens(lab.FormatPusherTokens(minted))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return minted, tokens
 }
 
 func corporateScalePlan(t *testing.T, systems int) *labscenario.Plan {
@@ -375,7 +429,9 @@ func TestLabScaleSeedInducesAnUnregisteredKeyWhenAsked(t *testing.T) {
 	t.Setenv("OMNIGLASS_DSN", dsn)
 	t.Setenv("OMNIGLASS_DATA_DIR", t.TempDir())
 	var nodes []lab.SiteNode
-	for _, site := range corporateScalePlan(t, 3).Sites {
+	induced := corporateScalePlan(t, 3)
+	_, pushers := scalePusherTokens(t, induced)
+	for _, site := range induced.Sites {
 		_, hash, _, err := auth.NewBearerToken()
 		if err != nil {
 			t.Fatal(err)
@@ -383,7 +439,7 @@ func TestLabScaleSeedInducesAnUnregisteredKeyWhenAsked(t *testing.T) {
 		nodes = append(nodes, lab.SiteNode{Name: labscenario.SiteNode(site.Name), TokenHash: hex.EncodeToString(hash)})
 	}
 	var out bytes.Buffer
-	if err := runLabScaleSeed(ctx, &out, "corporate", 3, lab.LoginUser, lab.LoginPassword, lab.FormatSiteNodeTokenHashes(nodes), true, false); err != nil {
+	if err := runLabScaleSeed(ctx, &out, "corporate", 3, lab.LoginUser, lab.LoginPassword, lab.FormatSiteNodeTokenHashes(nodes), pushers, true, false); err != nil {
 		t.Fatalf("lab seed --systems 3 --induce-unregistered: %v", err)
 	}
 	res := lab.ParseSeedResult(out.String())

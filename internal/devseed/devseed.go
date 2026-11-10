@@ -53,9 +53,9 @@ type Doc struct {
 	// SimIdentityBindings tie the simulated conduit's room ids to the
 	// systems they are the rooms of (#1282).
 	SimIdentityBindings []IdentityBinding `yaml:"sim_identity_bindings"`
-	// SimPusher is the simulated first-party pusher (#1370), granted with
-	// the simulated fleet only.
-	SimPusher *SimPusher `yaml:"sim_pusher"`
+	// SimPushers are the simulated fleet's outside actors (#1370, #1743),
+	// granted with the simulated fleet only.
+	SimPushers []SimPusher `yaml:"sim_pushers"`
 }
 
 // ComponentDependency is one fixture dependency edge (#1648): Component
@@ -807,13 +807,18 @@ func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, op
 	if err := seedIdentityBindings(ctx, gw, actorID, base, compIDs, sysIDs); err != nil {
 		return err
 	}
-	if p := base.SimPusher; p != nil {
-		sysID, ok := sysIDs[p.System]
-		if !ok {
-			return fmt.Errorf("devseed: the simulated pusher names unknown system key %q", p.System)
+	for _, p := range base.SimPushers {
+		if len(p.Systems) == 0 {
+			return fmt.Errorf("devseed: the simulated pusher %s names no system", p.Name)
 		}
-		if err := GrantPusher(ctx, gw, actorID, p.Service, sysID); err != nil {
-			return err
+		for _, key := range p.Systems {
+			sysID, ok := sysIDs[key]
+			if !ok {
+				return fmt.Errorf("devseed: the simulated pusher %s names unknown system key %q", p.Name, key)
+			}
+			if err := GrantPusher(ctx, gw, actorID, p.Name, sysID); err != nil {
+				return err
+			}
 		}
 	}
 	// The breadth RTT series, after the endpoints they are the node's account

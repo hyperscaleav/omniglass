@@ -104,12 +104,16 @@ func newNodeRunCmd() *cobra.Command {
 			if simulate {
 				// A signal stops both halves gracefully, so the simulator
 				// clears any impairment it applied before the process exits.
+				pushers, err := simnode.ParsePushers(config.Get(simnode.PushersEnv))
+				if err != nil {
+					return err
+				}
 				ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 				defer stop()
 				return simnode.RunWithNode(ctx, nodeCfg, simnode.Config{
 					ServerURL: serverURL, Name: name, Token: token,
 					PortOffset: portOffset, Poll: poll, Impairments: impairments,
-					PushToken: config.Get("OMNIGLASS_SIM_PUSH_TOKEN"),
+					Pushers: pushers,
 				})
 			}
 			wl, err := node.Run(cmd.Context(), nodeCfg)

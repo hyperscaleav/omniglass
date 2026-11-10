@@ -173,32 +173,102 @@ func TestPlanNodeTokenFlow(t *testing.T) {
 	}
 }
 
-// The simulated pusher's token (#1370) flows as the node's does: minted per
-// run, the node's simulator holds the plaintext, and the seed gets only its
-// hash and its non-secret prefix. A lab with no node runs no simulator, so
-// it carries none.
-func TestPlanPushTokenFlow(t *testing.T) {
+// A declared pusher's token (#1743) flows as a node's does: minted per run,
+// the emulator on the pusher's node holds the plaintext, and the seed gets
+// only its hash and its non-secret prefix, to set the pusher's credential.
+// The token is in no other service's env and not in a config hash.
+func TestPlanPusherTokenFlow(t *testing.T) {
 	o := testOptions()
-	o.PushToken, o.PushTokenHash, o.PushTokenPrefix = "ptok", "pushhash", "0a0b0c0d"
+	o.Pushers = []Pusher{{Name: "sim-booking-service", Profile: "booking-service", Node: NodeName,
+		Token: "bk_0a0b0c0d_secret", TokenHash: "pushhash", TokenPrefix: "0a0b0c0d"}}
 	s, err := Plan(o)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Contains(s.Node.Env, "OMNIGLASS_SIM_PUSH_TOKEN=ptok") {
-		t.Fatalf("node env %v, want the run's push token", s.Node.Env)
+	if want := simnode.PushersEnv + "=sim-booking-service=booking-service:bk_0a0b0c0d_secret"; !slices.Contains(s.Node.Env, want) {
+		t.Fatalf("node env %v, want %s", s.Node.Env, want)
+	}
+	if want := PusherTokensEnv + "=sim-booking-service=pushhash:0a0b0c0d"; !slices.Contains(s.Seed.Env, want) {
+		t.Fatalf("seed env %v, want %s", s.Seed.Env, want)
+	}
+	for _, svc := range []Service{s.DB, s.Seed, s.Server} {
+		for _, e := range svc.Env {
+			if strings.Contains(e, "secret") {
+				t.Fatalf("%s sees the plaintext push token: %s", svc.Name, e)
+			}
+		}
+	}
+	if h := configHash(s.Node); strings.Contains(h, "secret") {
+		t.Fatal("the node's config hash carries the token")
+	}
+}
+
+// A scale lab's pushers (#1743) each ride their own site's node: every site
+// node's emulator holds the plaintext of its site's pushers and no other's,
+// and the one seed gets every pusher's hash and prefix.
+func TestPlanScaleLabGivesEachSiteNodeItsOwnPushers(t *testing.T) {
+	o := scaleOptions()
+	o.Pushers = []Pusher{
+		{Name: "hq-booking-1", Profile: "booking-service", Node: "edge-hq", Token: "bk_1_hq", TokenHash: "hhq", TokenPrefix: "p1"},
+		{Name: "branch-01-booking-1", Profile: "booking-service", Node: "edge-branch-01", Token: "bk_2_br", TokenHash: "hbr", TokenPrefix: "p2"},
+	}
+	s, err := Plan(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{
+		"edge-hq":          simnode.PushersEnv + "=hq-booking-1=booking-service:bk_1_hq",
+		"edge-regional-01": "",
+		"edge-branch-01":   simnode.PushersEnv + "=branch-01-booking-1=booking-service:bk_2_br",
+	}
+	for _, n := range s.Nodes {
+		var got string
+		for _, e := range n.Env {
+			if strings.HasPrefix(e, simnode.PushersEnv+"=") && e != simnode.PushersEnv+"=" {
+				got = e
+			}
+		}
+		if got != want[n.Name] {
+			t.Errorf("node %s carries pushers %q, want %q", n.Name, got, want[n.Name])
+		}
+	}
+	if w := PusherTokensEnv + "=hq-booking-1=hhq:p1,branch-01-booking-1=hbr:p2"; !slices.Contains(s.Seed.Env, w) {
+		t.Errorf("scale seed env %v, want %s", s.Seed.Env, w)
 	}
 	for _, e := range s.Seed.Env {
-		if strings.Contains(e, "=ptok") {
-			t.Fatalf("the seed sees the plaintext push token: %s", e)
+		if strings.Contains(e, "bk_") {
+			t.Errorf("the scale seed sees a plaintext push token: %s", e)
 		}
 	}
-	for _, want := range []string{"OMNIGLASS_LAB_PUSH_TOKEN_HASH=pushhash", "OMNIGLASS_LAB_PUSH_TOKEN_PREFIX=0a0b0c0d"} {
-		if !slices.Contains(s.Seed.Env, want) {
-			t.Fatalf("seed env %v, want %s", s.Seed.Env, want)
-		}
+}
+
+// A pusher planned onto a node the lab does not run would never push, so the
+// plan refuses it rather than seed a principal nothing holds.
+func TestPlanRefusesAPusherOnNoNode(t *testing.T) {
+	o := scaleOptions()
+	o.Pushers = []Pusher{{Name: "x-booking-1", Profile: "booking-service", Node: "edge-nowhere", Token: "t", TokenHash: "h", TokenPrefix: "p"}}
+	if _, err := Plan(o); err == nil || !strings.Contains(err.Error(), "edge-nowhere") {
+		t.Fatalf("plan with a pusher on no node: %v, want refused naming the node", err)
 	}
-	if h := configHash(s.Node); strings.Contains(h, "ptok") {
-		t.Fatal("the node's config hash carries the token")
+}
+
+// The seed's pusher token hashes round-trip, and a malformed list is refused.
+func TestPusherTokensRoundTrip(t *testing.T) {
+	ps := []Pusher{{Name: "a", TokenHash: "h1", TokenPrefix: "p1"}, {Name: "b", TokenHash: "h2", TokenPrefix: "p2"}}
+	got, err := ParsePusherTokens(FormatPusherTokens(ps))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got["a"] != (PusherToken{Hash: "h1", Prefix: "p1"}) || got["b"] != (PusherToken{Hash: "h2", Prefix: "p2"}) {
+		t.Fatalf("round trip = %v", got)
+	}
+	if got, err := ParsePusherTokens(""); err != nil || len(got) != 0 {
+		t.Fatalf("empty = %v, %v; want none", got, err)
+	}
+	for _, bad := range []string{"a", "a=h1", "=h:p", "a=:p", "a=h:", "a=h:p,a=h:p"} {
+		if _, err := ParsePusherTokens(bad); err == nil {
+			t.Errorf("ParsePusherTokens(%q) took it, want refused", bad)
+		}
 	}
 }
 

@@ -286,6 +286,70 @@ func TestSeedPlanPlacesEachSitesEndpointsOnItsNode(t *testing.T) {
 	})
 }
 
+// SeedPlan seeds each pusher the plan declares (#1743) as its own service
+// principal holding the pusher role (telemetry:push alone) on exactly the
+// systems the plan scoped it to, and no token: the lab mints one per run.
+func TestSeedPlanGrantsEachPlannedPusherItsSystems(t *testing.T) {
+	t.Parallel()
+	ctx, gw, conn := openSeededGateway(t)
+	p := corporatePlan(t, 20)
+	want := map[string][]string{}
+	for _, site := range p.Sites {
+		for _, ps := range site.Pushers {
+			want[ps.Name] = append([]string(nil), ps.Systems...)
+			sort.Strings(want[ps.Name])
+		}
+	}
+	if len(want) == 0 {
+		t.Fatal("the corporate plan declares no pushers")
+	}
+	res, err := devseed.SeedPlan(ctx, gw, "", p, devseed.PlanOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Pushers != len(want) {
+		t.Errorf("result = %d pushers, want %d", res.Pushers, len(want))
+	}
+	rows, err := conn.Query(ctx, `
+		select s.name, r.name, r.permissions::text, g.scope_kind, g.scope_op, y.name
+		from service s join principal_grant g on g.principal_id = s.principal_id
+		join role r on r.id = g.role_id
+		left join system y on y.id::text = g.scope_id::text`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	got := map[string][]string{}
+	for rows.Next() {
+		var svc, role, perms, kind, op string
+		var sys *string
+		if err := rows.Scan(&svc, &role, &perms, &kind, &op, &sys); err != nil {
+			t.Fatal(err)
+		}
+		if role != devseed.PusherRole || perms != "{telemetry:push}" || kind != "system" || op != "self" || sys == nil {
+			t.Errorf("pusher %s holds %s %s on %s %s, want the pusher role on a system", svc, role, perms, kind, op)
+			continue
+		}
+		got[svc] = append(got[svc], *sys)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	for name := range got {
+		sort.Strings(got[name])
+	}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("pusher grants = %v, want %v", got, want)
+	}
+	var tokens int
+	if err := conn.QueryRow(ctx, `select count(*) from credential c join service s on s.principal_id = c.principal_id`).Scan(&tokens); err != nil {
+		t.Fatal(err)
+	}
+	if tokens != 0 {
+		t.Errorf("the seeded pushers hold %d tokens, want none until the lab mints them", tokens)
+	}
+}
+
 // inducedTasks counts the tasks whose baked spec names the induced key.
 func inducedTasks(t *testing.T, ctx context.Context, conn *pgx.Conn) int {
 	t.Helper()
