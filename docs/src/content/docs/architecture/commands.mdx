@@ -60,6 +60,16 @@ The issue records; the **wire actuates** (#815). The moving parts:
   (30 s), and past a delivery TTL (10 minutes) it stops being deliverable at all (settlement's
   `timed-out` covers a command no node picked up). The node remembers each command's outcome per
   id, so a redelivery repeats the **report**, never the actuation.
+- **A pull reads only its own components' commands.** Every node pulls once a heartbeat, so the
+  pull starts from the components that carry an attached endpoint on this node and finds their
+  deliverable commands (owned by a component, not yet executed) through
+  `command_deliverable_idx`, keyed `(component_id, ts)`; a command on a component with no attached
+  endpoint on this node is never read (#1631). The actuating-endpoint choice is still made over
+  all of the component's endpoints, so a component with endpoints on two nodes is read by both
+  pulls and delivered by exactly one. Every row a
+  pull delivers is stamped in one statement, so the stamp's round trips do not grow with its
+  deliveries; a first take adds only its own `command-dispatch-latency` sample (below). The command table is not yet pruned: a terminal command stays until
+  retention gains a command lane (#1684).
 - **The report carries the reply; the binding judges it.** The node reports execution on
   `og.v1.commandstatus.<node>` with the device's reply (any device answer counts as actuated; a
   failure carries its story into `exec_error`), and the row stamps `executed_at` once, confined
@@ -81,8 +91,8 @@ sample; it shows up as expired instead. A percentile derives from these per-comm
 never stored.
 
 A server timer beside the settlement sweep reads the whole fleet's queues every 15 s in one
-statement, using the same candidate resolution the pull uses (one SQL fragment, so the depth it
-reports cannot disagree with what a pull delivers), and attributes each command to the node its
+statement, using the same candidate resolution the pull uses (one SQL fragment, which the pull
+narrows to its own components, so the depth it reports cannot disagree with what a pull delivers), and attributes each command to the node its
 chosen endpoint is placed on. Every node with a platform component gets, at each read:
 
 - `command-pending-count`: the commands its next pull would take plus the ones it took that still

@@ -60,7 +60,7 @@ const redeliveryCountLag = "5 seconds"
 // (command_redelivered_idx). Their window is the same one shifted back by
 // redeliveryCountLag.
 var commandHealthSQL = `
-	with candidate as (` + commandCandidates("coalesce($1::timestamptz, now()) - interval '"+deliveryTTL+"'") + `),
+	with candidate as (` + commandCandidates("coalesce($1::timestamptz, now()) - interval '"+deliveryTTL+"'", "") + `),
 	queue as (
 		select k.node_name,
 			count(*) filter (where k.ts > now() - interval '` + deliveryTTL + `') as pending,

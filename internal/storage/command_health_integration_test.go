@@ -329,6 +329,25 @@ func TestCommandLatencySamplesLandOnThePlatformComponent(t *testing.T) {
 	}
 }
 
+// TestCommandFirstTakesInOnePullEachKeepTheirSample: commands first taken
+// in one pull are stamped in one statement at one now() (#1631), yet each
+// writes its own dispatch-latency sample (#1626), all at the same instant on
+// one series. A pull that wrote one sample for its batch would undercount the
+// dispatches the delivery loss ratio divides by.
+func TestCommandFirstTakesInOnePullEachKeepTheirSample(t *testing.T) {
+	t.Parallel()
+	f := newCommandQueueFixture(t, "edge-b")
+	for range 3 {
+		f.issue(t, "edge-b", "set-input")
+	}
+	if got := f.pull(t, "edge-b"); len(got) != 3 {
+		t.Fatalf("pull = %+v, want the three commands", got)
+	}
+	if got := f.latencySamples(t, f.platform["edge-b"], writerclass.CommandDispatchLatency); len(got) != 3 {
+		t.Fatalf("dispatch latency samples %v after three first takes in one pull, want three", got)
+	}
+}
+
 // TestCommandStuckAndExpiredCounts (#1626): a command dispatched and silent
 // past redeliverAfter is stuck; a command that crosses deliveryTTL
 // unexecuted counts once, in the window it crossed, as undelivered (no node
@@ -482,8 +501,10 @@ func TestCommandQueueKeysRefuseOtherWriters(t *testing.T) {
 
 // TestCommandHealthReadUsesTheUnexecutedIndex (#1626): the health read runs
 // every timer pass over a command table that only grows, so its plan reaches
-// the unexecuted rows through command_unexecuted_idx, never a scan of every
-// executed command.
+// the unexecuted rows through a partial index holding only them, never a scan
+// of every executed command. Either such index serves: command_unexecuted_idx,
+// or #1631's command_deliverable_idx, which holds the same rows keyed by
+// component and which the planner may prefer.
 func TestCommandHealthReadUsesTheUnexecutedIndex(t *testing.T) {
 	t.Parallel()
 	f := newCommandQueueFixture(t, "edge-x")
@@ -511,8 +532,8 @@ func TestCommandHealthReadUsesTheUnexecutedIndex(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := strings.Join(plan, "\n")
-	if !strings.Contains(text, "command_unexecuted_idx") {
-		t.Errorf("the health read does not use command_unexecuted_idx:\n%s", text)
+	if !strings.Contains(text, "command_unexecuted_idx") && !strings.Contains(text, "command_deliverable_idx") {
+		t.Errorf("the health read reaches the unexecuted commands through neither unexecuted index:\n%s", text)
 	}
 	if strings.Contains(text, "Seq Scan on command") {
 		t.Errorf("the health read scans the command table:\n%s", text)
