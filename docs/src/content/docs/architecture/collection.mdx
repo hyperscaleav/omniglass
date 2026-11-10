@@ -343,7 +343,13 @@ verdict. **The gate is a set of reasons** (#1650,
 [ADR-1650](/architecture/decisions/#adr-1650-an-endpoint-gate-holds-a-set-of-reasons)): the
 refusal above is one kind, `refused`, scoped to its rung and fingerprint; `unreachable`, added when
 the reachability probe reads down twice running and removed on its next up verdict, is another,
-holding the whole host's polls ([nodes](/architecture/nodes/#implicit-reachability)). The gate is
+holding the whole host's polls ([nodes](/architecture/nodes/#implicit-reachability)), and
+`upstream` (#1652) is the gate a component inherits from what it is reached through: while any
+endpoint of a `path` upstream has a closed gate, the dependent's in-band endpoints are held, polls
+and probes alike, naming the root of the closure (a chain A to B to C reads `upstream A` all the way
+down), and once the upstream opens each dependent waits for its own probe to read up before it is
+released. Upstream ranks first, so a dependent that is also refused or unreachable is named for the
+gateway that caused it. The gate is
 closed while any reason holds, each kind keeps its own release rule, and removing one leaves the
 others; a query that asks only about refusals (the rung checks, the ssh probe's credential, a held
 session's start, a datagram listener) sees only `refused`, so an unreachable endpoint keeps its probe
@@ -352,10 +358,11 @@ credential and starts its session unrejected when the device returns. The gate i
 `<pinned-key> <offered-key>`, its evidence,
 [ADR-0159](/architecture/decisions/#adr-0159-a-refused-keys-evidence-rides-its-gate-and-trusting-a-key-is-checked-against-the-one-offered);
 every other reason follows after a `;` as `<kind> <since> <source>`, which the reachability read serves as
-`gate_reasons`)
+`gate_reasons`, an `upstream` reason with the name of the component it names when the caller may read it)
 and carried back on the worklist, so a restarted node makes no attempt against an unchanged
-fingerprint and keeps the evidence it adopts; it adopts the refusal only, since an unreachable
-reason is the probe's to re-earn. Beside it, in the same batch, the node publishes why:
+fingerprint and keeps the evidence it adopts; it adopts the refusal, and an `upstream` reason,
+which it re-derives at once from the live gates (held while the upstream is still closed, else
+waiting on the endpoint's own probe), but not `unreachable`, which is the probe's to re-earn. Beside it, in the same batch, the node publishes why:
 `endpoint-rejection-reason`, the refusal's class and the component's own text, scrubbed of anything
 the node sent, so a gate on an endpoint holding no session, which has no `session-reason`, still
 says why it holds. A gate adopted after a restart publishes no reason, since the node never saw that

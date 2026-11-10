@@ -586,7 +586,7 @@ from the dependent (`component_id`) to what it depends on (`upstream_id`), of on
 |---|---|---|---|
 | `power` | fed from the named `outlet` of the upstream | a video bar on outlet 1 of the rack's PDU | a power command on that outlet holds the bar |
 | `host` | hosted by the upstream | a touch panel paired to the bar, a line card in its chassis | a reboot of the upstream holds the dependent too |
-| `path` | reached through the upstream | a peripheral behind a gateway | recorded; followed by the `upstream` gate ([#1652](https://github.com/hyperscaleav/omniglass/issues/1652)) |
+| `path` | reached through the upstream | a peripheral behind a gateway | while any of the upstream's gates is closed, the dependent's in-band endpoints hold the `upstream` gate reason ([nodes](/architecture/nodes/#implicit-reachability)) |
 
 Each edge is checked as it is written: a `power` edge names its outlet and no other kind does, a
 component never depends on itself, one edge of a kind joins a pair once, and an edge that would
