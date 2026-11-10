@@ -233,7 +233,7 @@ type platformViewWire struct {
 		} `json:"figures"`
 		Loss *float64 `json:"loss"`
 	} `json:"nodes"`
-	LossHops []string             `json:"loss_hops"`
+	LossHops []string              `json:"loss_hops"`
 	Pipeline *platformPipelineWire `json:"pipeline"`
 }
 

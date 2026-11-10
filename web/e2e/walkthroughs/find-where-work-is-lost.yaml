@@ -1,0 +1,52 @@
+# Where work is lost (#1646): Platform health draws the path a sample takes
+# from its run to the store as the hops the view serves, each read from the
+# same three delivery keys, so one rule (the share of what a hop took in that
+# it did not hand on) reads every hop. The walkthrough reads the path at 0,
+# opens the ingest hop's explainer, then breaks a simulated panel so its polls
+# fail: the failures land on the panel's own component, and the node hop still
+# reads 0, because a failed poll is a device's answer, not work the platform
+# lost. Last it follows the node's row in the node hop to its component, where
+# each delivery series lives.
+#
+# The figures are a report window's (collection.report_seconds); a
+# walkthrough lab's seed sets it to 10s, so the first wait allows for that
+# first window to land.
+title: Find where work is lost
+description: Read the platform's pipeline hop by hop at 0, open a hop's explainer, break a simulated panel and watch its failures land on the panel while the node hop stays at 0, then follow a component's row to its delivery series.
+steps:
+  - goto: /platform
+    caption: Platform health draws the path a sample takes from its run to the store, one hop at a time.
+  - wait: { selector: '[data-testid=pipeline]:has([data-testid=pipeline-hop-node] [data-testid=hop-loss]:text-is("0%"))', timeout: 30000 }
+    caption: Each hop shows what it took in, what it handed on, and the share it lost. 0% is healthy.
+    hold: 1500
+  - click: '[data-testid=pipeline-hop-ingest]'
+    caption: Open the ingest hop. It says what counts as lost there, the keys it is read from, and the server component that records it.
+  - wait: { selector: '[data-testid=pipeline-hop-detail]' }
+    caption: Every hop is read from the same three keys, one series per kind, so one rule reads them all.
+    hold: 2500
+  - goto: /components/panel-2
+    caption: Touch Panel 2 is simulated, so it can be broken on purpose.
+  - click: { role: button, name: Open simulation }
+    caption: Open its simulation.
+  - click: '#sim-unplugged'
+    caption: Unplug it. Every poll of it now fails.
+  - click: { role: button, name: Save impairment }
+    caption: Save. The simulator applies it on its next pull.
+  - press: Escape
+    caption: Close the simulation.
+  - wait: { selector: '[data-testid=vital-poll-failure-count] > span:first-child:not(:text-is("0"))', timeout: 30000 }
+    caption: The failed polls land on the panel's own component, as its poll failures.
+    hold: 1500
+  - goto: /platform
+    caption: Back on Platform health.
+  - wait: { selector: '[data-testid=pipeline]:has([data-testid=pipeline-hop-node] [data-testid=hop-loss]:text-is("0%"))' }
+    caption: The node hop still reads 0%. A failed poll is a device that did not answer, not work the platform dropped. A hop that does lose a share is tinted, so it stands out.
+    poster: true
+    hold: 2000
+  - click: '[data-testid=pipeline-hop-node]'
+    caption: Open the node hop. Each node's own share is a row.
+  - click: '[data-testid=pipeline-hop-detail] [data-testid^=pipeline-component-] a'
+    caption: Follow the node's row to its platform component.
+  - wait: { selector: '[data-testid=vital-delivery-loss-ratio]' }
+    caption: The node's delivery series live on its component, one per kind, like any other metric.
+    hold: 2000
