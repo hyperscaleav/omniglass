@@ -539,19 +539,24 @@ func candidateScans(plan accesspath.Plan) accesspath.Plan {
 // accesspath usability question, not the planner's preference, so the other
 // command indexes a candidate scan could take are set aside first inside a
 // rolled-back transaction (command_component_ts_idx, which holds every row
-// ever written, and the two status = 'issued' indexes), leaving
-// command_deliverable_idx the only other partial index in play:
+// ever written, and the two status = 'issued' indexes), leaving the partial
+// indexes whose predicates decide reachability (command_unexecuted_idx,
+// command_deliverable_idx, and command_redelivered_idx, which the candidate
+// scan can never take) and the primary key. Two questions, in this order:
 //
+//   - with command_unexecuted_idx also set aside (in a savepoint, restored
+//     after), the candidate scan cannot reach command_deliverable_idx at all.
+//     That is why both indexes stay (ADR-1626 point 4): the deliverable index
+//     holds only status = 'issued' rows (#1630), and the health read takes
+//     every unexecuted command whatever its status, since a command that aged
+//     out unexecuted is a delivery loss after its settlement stamped it timed
+//     out. This is asked first because once the deliverable index is
+//     reachable the planner prefers it, and the second question would fail
+//     with a message blaming the unexecuted index. If it fails, the health
+//     read now narrows to what the deliverable index holds, and
+//     command_unexecuted_idx is a candidate to drop again;
 //   - the candidate scan reaches command_unexecuted_idx with an index
-//     condition, so dropping that index is caught here;
-//   - with command_unexecuted_idx set aside too, the candidate scan cannot
-//     reach command_deliverable_idx at all. That is why both indexes stay
-//     (ADR-1626 point 4): the deliverable index holds only status = 'issued'
-//     rows (#1630), and the health read takes every unexecuted command
-//     whatever its status, since a command that aged out unexecuted is a
-//     delivery loss after its settlement stamped it timed out. If this half
-//     fails, the health read now narrows to what the deliverable index holds,
-//     and command_unexecuted_idx is a candidate to drop again.
+//     condition, so dropping that index is caught here.
 func TestCommandHealthReadReachesTheUnexecutedIndex(t *testing.T) {
 	t.Parallel()
 	f := newCommandQueueFixture(t, "edge-x")
@@ -563,9 +568,9 @@ func TestCommandHealthReadReachesTheUnexecutedIndex(t *testing.T) {
 		t.Fatalf("begin: %v", err)
 	}
 	defer func() { _ = tx.Rollback(f.ctx) }()
-	aside := func(index string) {
+	aside := func(on pgx.Tx, index string) {
 		t.Helper()
-		if _, err := tx.Exec(f.ctx, "drop index "+index); err != nil {
+		if _, err := on.Exec(f.ctx, "drop index if exists "+index); err != nil {
 			t.Fatalf("set %s aside: %v", index, err)
 		}
 	}
@@ -578,13 +583,14 @@ func TestCommandHealthReadReachesTheUnexecutedIndex(t *testing.T) {
 		return plan
 	}
 	for _, index := range []string{"command_component_ts_idx", "command_issued_age_idx", "command_issued_component_idx"} {
-		aside(index)
-	}
-	if ok, why := candidateScans(explain()).MustReach("command", "command_unexecuted_idx"); !ok {
-		t.Fatalf("the health read's candidate scan cannot reach the unexecuted index: %s", why)
+		aside(tx, index)
 	}
 
-	aside("command_unexecuted_idx")
+	sp, err := tx.Begin(f.ctx)
+	if err != nil {
+		t.Fatalf("savepoint: %v", err)
+	}
+	aside(sp, "command_unexecuted_idx")
 	plan := explain()
 	scans := candidateScans(plan)
 	if len(scans) == 0 {
@@ -594,5 +600,12 @@ func TestCommandHealthReadReachesTheUnexecutedIndex(t *testing.T) {
 		if s.Index == "command_deliverable_idx" {
 			t.Errorf("the health read reaches command_deliverable_idx (%s), so command_unexecuted_idx may no longer be needed: revisit ADR-1626 point 4", s)
 		}
+	}
+	if err := sp.Rollback(f.ctx); err != nil {
+		t.Fatalf("restore command_unexecuted_idx: %v", err)
+	}
+
+	if ok, why := candidateScans(explain()).MustReach("command", "command_unexecuted_idx"); !ok {
+		t.Errorf("the health read's candidate scan cannot reach the unexecuted index: %s", why)
 	}
 }
